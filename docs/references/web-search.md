@@ -42,7 +42,7 @@ selected. Each request intersects the stored route with the credentials it actua
 
 Configuration readiness is local and makes no health-check request. Explicit denies and per-call
 approvals cannot be bypassed by a native tool. Requests without Host web policy, including probes,
-never gain native tools. Compaction and budget-exhausted final responses suppress them as well.
+never gain native tools. Compaction requests suppress them as well.
 
 Adapters, by the endpoint the model is actually requested on:
 
@@ -198,7 +198,7 @@ Cherry Studio desktop.
 | --- | --- | --- | --- |
 | `zhipu` | yes | | Zhipu model provider key |
 | `tavily`, `exa`, `bocha`, `parallel`, `serply` | yes | | API key required |
-| `querit` | yes | yes | API key required |
+| `querit`, `deepseek` | yes | yes | API key required |
 | `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
 | `jina` | yes | yes | API key required to search, optional to read pages |
 | `firecrawl` | yes | yes | API key optional |

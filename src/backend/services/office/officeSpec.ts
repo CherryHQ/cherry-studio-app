@@ -3,11 +3,15 @@ import * as z from 'zod';
 import { FileEntryIdSchema, SafeNameSchema } from '@/shared/data/types/file';
 
 // XML 1.0 cannot represent these code points, including unpaired UTF-16 surrogates.
-export const officeText = (max: number) =>
+// `excluded` joins the same character class: a second regex exports allOf, which
+// provider tool schemas may reject.
+export const officeText = (max: number, excluded = '') =>
   z
     .string()
     .max(max)
-    .regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]*$/)
+    .regex(
+      new RegExp(String.raw`^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff${excluded}]*$`),
+    )
     // Keep this out of JSON Schema: regex flags are lost during conversion.
     .refine(
       (value) => !/[\ud800-\udfff]/u.test(value),
@@ -16,7 +20,7 @@ export const officeText = (max: number) =>
 
 const imageSchema = z.strictObject({
   file_entry_id: FileEntryIdSchema.describe(
-    'A managed image from the conversation or selected workspace. PNG or JPEG only.',
+    'An existing managed image from the conversation, a generated image or the selected workspace.',
   ),
   width_px: z.number().int().min(1).max(1600),
   height_px: z.number().int().min(1).max(1600),
@@ -67,17 +71,19 @@ export const workbookSpecSchema = z.strictObject({
   sheets: z
     .array(
       z.strictObject({
-        name: officeText(31)
+        name: officeText(31, String.raw`\[\]:*?/\\`)
           .min(1)
-          .regex(/^[^[\]:*?/\\]+$/)
           .refine(
             (name) =>
               !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history',
             'Use an Excel sheet name without edge apostrophes or the reserved name History.',
+          )
+          .describe(
+            'Excel sheet name: 1–31 characters; no [ ] : * ? / \\, no leading/trailing apostrophe, and not History (case-insensitive).',
           ),
         images: z
           .array(imageSchema.extend({ cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/) }))
-          .max(8)
+          .max(50)
           .optional(),
         rows: rectangularRows(
           z.union([officeText(16_000), z.number().finite(), z.boolean(), z.null()]),
@@ -131,7 +137,7 @@ export const presentationSpecSchema = z.strictObject({
       ]),
     )
     .min(1)
-    .max(32),
+    .max(100),
 });
 
 export const officeInputSchemas = {
@@ -145,7 +151,8 @@ export type OfficeRequest = {
   [Format in OfficeFormat]: { format: Format } & z.infer<(typeof officeInputSchemas)[Format]>;
 }[OfficeFormat];
 
-export type OfficeImage = { data: string; mediaType: 'image/png' | 'image/jpeg' };
+/** A prepared image file the job reads; `uri` is host-only and never reaches the model. */
+export type OfficeImage = { uri: string; size: number; mediaType: 'image/png' | 'image/jpeg' };
 
 export const OFFICE_MEDIA_TYPES = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

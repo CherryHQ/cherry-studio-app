@@ -302,9 +302,9 @@ expansion must not disable following just because the viewport has already resiz
 motion starts. Native keyboard motion owns scrolling during the transition; application corrections
 for content and composer-size changes resume once it ends, only if still following. The return button
 moves with the keyboard and any floating composer, and checks the visible bottom including the
-keyboard inset. A local send immediately positions the message at the live edge, keeps
-keyboard geometry updates active during dismissal, and corrects the final inset without replaying
-scroll motion. A dataset switch or committed drag during dismissal cancels that final correction.
+keyboard inset. A local send waits for its message to enter the rendered data and for any keyboard
+transition to finish before scrolling to the live edge. A search window first requests the latest
+data through `onReturnToLatest`. A dataset switch or committed drag cancels a waiting send scroll.
 
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
 wrapping attachment group sits above the optional bubble, keeping every card inside the user

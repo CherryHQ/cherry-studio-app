@@ -265,14 +265,6 @@ export class AiService extends BaseService {
     const providerSettings = hasInputImages
       ? { ...sdkConfig.providerSettings, fetch: expoFetch }
       : sdkConfig.providerSettings;
-    const usageCaptureContext = createCaptureContext({
-      provider,
-      model,
-      sdkModelId: sdkConfig.modelId,
-      credentialReceipt,
-      usageAttribution: request.usageAttribution,
-    });
-
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
       sdkConfig.providerId,
       providerSettings as never,
@@ -291,7 +283,17 @@ export class AiService extends BaseService {
         ...(request.requestOptions?.headers && {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),
-        onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
+        onProviderCallStart: () =>
+          createProviderCallHandler(
+            createCaptureContext({
+              provider,
+              model,
+              sdkModelId: sdkConfig.modelId,
+              credentialReceipt,
+              usageAttribution: request.usageAttribution,
+            }),
+            this.services.aiUsageRecord,
+          ),
       },
     ).catch((error: unknown) => {
       if (signal?.aborted) throw error;

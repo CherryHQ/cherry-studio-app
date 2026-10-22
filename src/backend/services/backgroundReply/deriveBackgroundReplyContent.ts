@@ -24,7 +24,6 @@ const BUILT_IN_TOOL_TITLE_KEYS: Record<string, string> = {
   health_list_data_types: 'chat.builtinTool.health.listDataTypes',
   health_query_data: 'chat.builtinTool.health.queryData',
   health_get_record: 'chat.builtinTool.health.getRecord',
-  health_share_verifiable_records: 'chat.builtinTool.health.shareVerifiableRecords',
   health_get_summary: 'chat.builtinTool.health.summary',
   health_list_workouts: 'chat.builtinTool.health.listWorkouts',
   location_get_current: 'chat.builtinTool.location.current',
@@ -47,7 +46,10 @@ export function deriveBackgroundReplyContent(
   const approval = findLastToolPart(parts, (part) => part.state === 'awaiting-approval');
 
   if (approval) {
-    return createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview);
+    return {
+      ...createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview),
+      attentionId: approval.approvalId ?? approval.toolCallId,
+    };
   }
 
   const question = findLastToolPart(
@@ -58,8 +60,10 @@ export function deriveBackgroundReplyContent(
       part.toolRef.capabilityId === 'ask_user_question',
   );
   if (question) {
-    // Waiting for a question uses the same attention phase and execution lease.
-    return createContent('awaiting-approval', t('chat.question.waiting'), preview);
+    return {
+      ...createContent('awaiting-answer', t('chat.question.waiting'), preview),
+      attentionId: question.toolCallId,
+    };
   }
   const activeTool = findLastToolPart(parts, isActiveToolPart);
   if (activeTool) {

@@ -50,6 +50,7 @@ import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
@@ -63,7 +64,10 @@ type ChatInputProps = {
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
   imageResult?: ConversationImageResult;
+  /** Replaces the default prompt, as when it names the answer the next message continues. */
+  placeholder?: string;
   sessionId?: string;
+  selectionHandoff?: string;
 };
 
 const logger = loggerService.withContext('ChatInput');
@@ -74,8 +78,11 @@ export function ChatInput({
   controls,
   dismissKeyboardOnSend,
   imageResult,
+  placeholder,
   sessionId,
+  selectionHandoff,
 }: ChatInputProps) {
+  useChatSelectionHandoff(selectionHandoff);
   const { draft } = useComposerState();
   const { setDraft } = useComposerActions();
   const previousAgentId = useRef(agentId);
@@ -175,6 +182,7 @@ export function ChatInput({
             skillAction={skillAction}
             controls={controls}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
+            placeholder={placeholder}
             providerSetupReturnTo={providerSetupReturnTo}
             reasoningEfforts={reasoningEfforts}
             reasoningSelection={reasoningSelection}
@@ -198,6 +206,7 @@ function TextChatInput({
   skillAction,
   controls,
   dismissKeyboardOnSend,
+  placeholder,
   providerSetupReturnTo,
   reasoningEfforts,
   reasoningSelection,
@@ -414,7 +423,7 @@ function TextChatInput({
                       placeholder={
                         skillAction
                           ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
-                          : undefined
+                          : placeholder
                       }
                       onStop={() => void cancel()}
                       fieldStyle={isPickerVisible ? compactInputStyle : undefined}

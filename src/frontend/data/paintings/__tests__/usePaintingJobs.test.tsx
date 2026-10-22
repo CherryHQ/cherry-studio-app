@@ -131,15 +131,15 @@ describe('usePaintingJobs', () => {
     await settle();
     const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
 
-    // Enqueueing writes the receipt straight into the database, but the list
-    // the gallery renders from is a cached page that nothing else refetches.
+    // Enqueueing writes the receipt straight into the database, but the board
+    // list the gallery renders from is a cached page that nothing else refetches.
     activeJobs = [jobSnapshot({ id: 'job-a', input: { paintingId: 'painting-1' } })];
     await act(async () => {
       await queryClient.refetchQueries();
     });
     await settle();
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['/paintings'] });
+    expect(refreshesBoardGallery(invalidate)).toBe(true);
   });
 
   it('refreshes the gallery when a generation leaves the active set', async () => {
@@ -154,8 +154,8 @@ describe('usePaintingJobs', () => {
     });
     await settle();
 
-    // Nothing else invalidates `/paintings` while the user sits on the list.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['/paintings'] });
+    // Nothing else invalidates the board list while the user sits on the gallery.
+    expect(refreshesBoardGallery(invalidate)).toBe(true);
   });
 
   it('does not refresh the gallery while the same generation keeps running', async () => {
@@ -172,6 +172,12 @@ describe('usePaintingJobs', () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 });
+
+function refreshesBoardGallery(invalidate: jest.SpyInstance) {
+  return invalidate.mock.calls.some(([filters]) =>
+    filters?.predicate?.({ queryKey: ['/painting-boards', { limit: 20 }] }),
+  );
+}
 
 describe('paintingJobInterruptionReason', () => {
   it('maps diagnostics to a closed user-facing reason', () => {

@@ -60,6 +60,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
   type ConfiguredPaintingModel,
@@ -290,18 +291,8 @@ function createCatalog(
     createWriteFileTool(fileContent, fileAccess),
     ...createFileLibraryTools(fileAccess, files, documentParserMode, workspaceName),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
-    ...(deps.jsSandbox
-      ? createOfficeTools(
-          deps.jsSandbox,
-          {
-            createBytesEntry: fileContent.createBytesEntry,
-            readImage: managedFileResolver.readImage,
-            readAsBytes: managedFileResolver.readAsBytes,
-            resolveAvailable: managedFileResolver.resolveAvailable,
-          },
-          fileAccess,
-        )
-      : []),
+    // Office jobs read and write their files natively, which older clients cannot do.
+    ...(deps.jsSandbox?.files ? createOfficeTools(deps.jsSandbox, officeFiles, fileAccess) : []),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.
     ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),

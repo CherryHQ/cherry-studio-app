@@ -24,7 +24,6 @@ export function BackgroundActivityBridge() {
   const router = useRouter();
   const status = useBackgroundExecutionStatus();
   const [hasSeenGuidance, setHasSeenGuidance] = usePreference('app.background_run_guidance.seen');
-  const [isCompletionNotificationEnabled] = usePreference('chat.completion_notifications.enabled');
   const hasShownGuidance = useRef(false);
   useEffect(() => {
     if (
@@ -42,8 +41,7 @@ export function BackgroundActivityBridge() {
           if (
             cancelled ||
             hasShownGuidance.current ||
-            (permission.status === 'undetermined' &&
-              (Platform.OS === 'android' || isCompletionNotificationEnabled)) ||
+            permission.status === 'undetermined' ||
             AppState.currentState !== 'active'
           )
             return;
@@ -73,15 +71,7 @@ export function BackgroundActivityBridge() {
       changes.remove();
       focus?.remove();
     };
-  }, [
-    alert,
-    hasSeenGuidance,
-    isCompletionNotificationEnabled,
-    router,
-    setHasSeenGuidance,
-    status,
-    t,
-  ]);
+  }, [alert, hasSeenGuidance, router, setHasSeenGuidance, status, t]);
   useEffect(
     () =>
       subscribeForegroundActivityAttention((attention) => {

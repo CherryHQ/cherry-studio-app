@@ -24,6 +24,28 @@ describe('createJsSandbox', () => {
     expect(createJsSandbox(createNative(async () => '{}'))!.startBridge).toBeUndefined();
   });
 
+  test('passes host file URIs to native file runs and reports the capability', async () => {
+    const outcome = JSON.stringify({ status: 'ok', result: '4', ...DONE });
+    expect(createJsSandbox(createNative(async () => outcome))!.files).toBe(false);
+    const native = {
+      ...createNative(async () => outcome),
+      runFiles: jest.fn(async () => outcome),
+    };
+    const sandbox = createJsSandbox(native, () => 'files')!;
+    expect(sandbox.files).toBe(true);
+    const signal = new AbortController().signal;
+    const files = { inputs: ['file:///a.pptx'], output: 'file:///b.pptx' };
+    expect(await sandbox.run({ code: 'x', limits: LIMITS, files, signal })).toMatchObject({
+      result: '4',
+    });
+    await sandbox.run({ code: 'y', limits: LIMITS, files: { inputs: [] }, signal });
+    expect(native.runFiles.mock.calls).toEqual([
+      ['files', 'x', LIMITS, files],
+      ['files', 'y', LIMITS, { inputs: [], output: '' }],
+    ]);
+    expect(native.run).not.toHaveBeenCalled();
+  });
+
   test('routes bridge messages by run and keeps its listener until native cleanup', async () => {
     const finished = deferred<string>();
     const remove = jest.fn();

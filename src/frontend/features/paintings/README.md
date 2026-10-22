@@ -10,27 +10,38 @@ A board is the long-lived canvas that threads generations together. Each generat
 `painting` row belonging to one board; the board itself only stores its title and the node the user
 last focused. Edges are derived, never stored: within a board, a painting whose input file is
 another painting's output was made from it, and an input no painting on the board produced is an
-"imported" node. `utils/paintingBoardGraph.ts` builds that graph and its top-to-bottom layout.
+"imported" node. `utils/paintingBoardGraph.ts` builds that graph and its left-to-right layout.
 
-Every entry opens a board focused on one image: a gallery tile, a generated image in the file
-library, or a task notification passes `paintingId` (and `fileEntryId` for one of several images);
-a new painting, template, or album photo starts a new board through the draft handoff. The board is
-created by its first generation, titled from the request, and renamable from the overview.
+Every entry opens a board. A gallery card passes `boardId` and the board reopens on the node the
+user last focused; a generated image in the file library or a task notification passes `paintingId`
+(and `fileEntryId` for one of several images) and focuses that image. The gallery composer and a
+used template start their first generation themselves and then open the new board by its
+`paintingId`; `/paintings` without parameters is an empty board. The board is created by its first
+generation, titled from the request (a template's title for template generations), and renamable
+from the overview.
 
 ## One Page, Two Layers
+
+A board opened from the gallery lands on the canvas; opening one image (file library, notification)
+lands on that image.
 
 - **Focus** fills the screen with the focused image. A plain tap leaves the page unchanged; tapping
   a note selects it. Long press drops a positional note (or removes the one under the finger),
   pinch and double tap zoom, and a horizontal swipe moves between the images of one generation.
   The header carries back (to wherever
-  the board was opened from), the board pill (to the overview), and one ungrouped menu with save,
+  the board was opened from), the board pill (to the canvas), and one ungrouped menu with save,
   share, generation info, and delete-this-version. Below the image, the lineage strip shows sources,
   the current image, and what was made from it; tapping a cell walks the edge and holding one
   previews it in place for comparison.
-- **Overview** draws every node and edge; drag to pan, pinch to zoom, double tap to reset, tap a
-  thumbnail to focus it. Tap its caption to read the complete prompt in an anchored information
-  popover; long prompts scroll inside it without changing the board's layout or viewport. Its
-  composer starts a new root that references nothing.
+- **Canvas** (the overview) draws every node and edge, generations reading left to right. Each
+  node is labelled with its generation number and model above the image, with a single-line prompt
+  preview below it. Tap either label or preview to read the complete prompt in an anchored
+  information popover. The selected image's size tag sits below the preview. Tapping a node selects
+  it — an outline, corner handles, and its pixel size — and the composer edits that image; tapping
+  the selected node opens it in focus;
+  tapping the empty canvas clears the selection, and the composer then starts a new root. It opens
+  scaled to fit (down to 60%) or around the selection; drag to pan, pinch to zoom, double tap to
+  return to the opening view. Notes belong to focus and are only sent from there.
 
 The composer stays mounted across both layers so a draft survives moving around the board. The
 focused image is attached as the next generation's reference (`usePaintingFocusReference`); removing
@@ -49,7 +60,7 @@ draft, hide when references are removed or the large editor is presented, and ne
 Choosing one saves any selected note and prepares a whole-image request; user-authored text stays
 intact, while untouched shortcut text follows subsequent ratio choices.
 
-Sending moves the focus to the new receipt, which shows the loader until its job finishes; the
+Sending moves the focus to the new receipt (selected on the canvas, or full screen in focus), which shows the loader until its job finishes; the
 generation runs as a durable job, so the user can keep browsing the board. Generating and stopped
 receipts keep the requested image proportions. The shared loader is a text-free holo card with a
 light sweeping across it; it stops when the screen is inactive, the app is backgrounded, or Reduce
@@ -78,6 +89,5 @@ reference-image contract; they are not masks.
 - `hooks/` holds board data, generation control, the focus reference, and annotation drafts.
 - `utils/` holds the board graph, annotation prompts, and change-ratio options.
 
-The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries and job
-observation shared with it live in `src/frontend/data/paintings`; draft handoff lives in
-`src/frontend/utils/paintingDraftHandoff.ts`.
+The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries, the board
+list, starting generations, and job observation shared with it live in `src/frontend/data/paintings`.

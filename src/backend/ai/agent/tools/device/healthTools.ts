@@ -18,7 +18,6 @@ export const HEALTH_TOOL_IDS = {
   listDataTypes: 'health_list_data_types',
   queryData: 'health_query_data',
   getRecord: 'health_get_record',
-  shareVerifiableRecords: 'health_share_verifiable_records',
 } as const;
 
 /** Applied when the model passes the `0` sentinel for the workout limit. */

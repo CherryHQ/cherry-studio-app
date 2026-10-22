@@ -9,16 +9,17 @@ import type { Backend, PaintingGenerationInput, PaintingGenerationStart } from '
 import { usePaintingBoardGeneration } from '../usePaintingBoardGeneration';
 
 const mockDeletePaintings = jest.fn<Promise<void>, [readonly string[]]>();
-const startGeneration = jest.fn<Promise<PaintingGenerationStart>, [PaintingGenerationInput]>();
+const mockStartGeneration = jest.fn<Promise<PaintingGenerationStart>, [PaintingGenerationInput]>();
 
 jest.mock('@/frontend/data/paintings/usePaintings', () => ({
   useDeletePaintings: () => mockDeletePaintings,
+  useStartPaintingGeneration: () => mockStartGeneration,
 }));
 jest.mock('@/frontend/data/paintings/usePaintingJobs', () => ({
   usePaintingJobs: () => ({ activeByPaintingId: new Map() }),
 }));
 
-const backend = { paintings: { startGeneration } } as unknown as Backend;
+const backend = { paintings: { startGeneration: mockStartGeneration } } as unknown as Backend;
 const input: PaintingInputSubmission = {
   attachments: [],
   mode: 'generate',
@@ -55,7 +56,7 @@ async function mount(initialBoardId?: string) {
 beforeEach(() => {
   jest.resetAllMocks();
   mockDeletePaintings.mockResolvedValue(undefined);
-  startGeneration.mockResolvedValue({
+  mockStartGeneration.mockResolvedValue({
     boardId: 'board-1',
     jobId: 'job-1',
     paintingId: 'painting-1',
@@ -81,7 +82,7 @@ it('creates a fresh board when sending again after stopping the first generation
   });
   expect(generation.boardId).toBeUndefined();
 
-  startGeneration.mockResolvedValue({
+  mockStartGeneration.mockResolvedValue({
     boardId: 'board-2',
     jobId: 'job-2',
     paintingId: 'painting-2',
@@ -90,7 +91,7 @@ it('creates a fresh board when sending again after stopping the first generation
     await generation.generate({ ...input, prompt: 'A different city' });
   });
 
-  expect(startGeneration.mock.calls[1]?.[0]).not.toHaveProperty('boardId');
+  expect(mockStartGeneration.mock.calls[1]?.[0]).not.toHaveProperty('boardId');
   expect(generation.boardId).toBe('board-2');
 });
 
@@ -103,7 +104,7 @@ it('keeps the board for the next send when stopping one of several generations',
     await generation.generate(input);
   });
 
-  expect(startGeneration.mock.calls[0]?.[0].boardId).toBe('board-1');
+  expect(mockStartGeneration.mock.calls[0]?.[0].boardId).toBe('board-1');
 });
 
 it('keeps the board when stopping fails to delete its last receipt', async () => {

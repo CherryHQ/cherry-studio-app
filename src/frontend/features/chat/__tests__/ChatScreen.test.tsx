@@ -30,6 +30,15 @@ jest.mock('@cherrystudio/ui/components', () => ({
   getComposerKeyboardStickyOffset: () => 26,
 }));
 
+jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: jest.requireActual('react-native').View },
+  Extrapolation: { CLAMP: 'clamp' },
+  interpolate: () => 1,
+  useAnimatedStyle: () => ({}),
+  useSharedValue: (initial: unknown) => ({ get: () => initial, set: () => undefined }),
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 0 }),
 }));

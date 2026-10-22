@@ -50,7 +50,6 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -141,7 +140,10 @@ describe('createSystemCapabilitySource', () => {
     ];
     const absent = capabilityIds(await resolve({}));
     expect(absent.some((id) => office.includes(id))).toBe(false);
-    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    // Clients whose sandbox predates native file access cannot run Office jobs.
+    const older = capabilityIds(await resolve({ jsSandbox: { run: jest.fn() } }));
+    expect(older.some((id) => office.includes(id))).toBe(false);
+    const tools = await resolve({ jsSandbox: { run: jest.fn(), files: true } });
     for (const name of office) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
         approval: 'auto',
@@ -163,7 +165,6 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -216,7 +217,6 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -267,11 +267,7 @@ describe('createSystemCapabilitySource', () => {
 
   test('keeps extended personal health reads explicit while allowing public catalog lookup', async () => {
     const tools = await resolve({ deviceAccess: { 'health.electrocardiogram.read': 'requested' } });
-    for (const id of [
-      'health_query_data',
-      'health_get_record',
-      'health_share_verifiable_records',
-    ]) {
+    for (const id of ['health_query_data', 'health_get_record']) {
       expect(tools.find((tool) => tool.providerName === id)).toMatchObject({
         approval: 'ask',
         autoApprovalEligible: false,
@@ -431,6 +427,7 @@ describe('createSystemCapabilitySource', () => {
   test('describes every tool with a stable built-in ref and JSON Schema input', async () => {
     const tools = await resolve({
       deviceAccess: { 'location.read': 'granted' },
+      jsSandbox: { run: jest.fn(), startBridge: jest.fn() },
       paintingModel: paintingModel(),
       webSearchProviders: { fetchUrls: true, searchKeywords: true },
     });
@@ -443,6 +440,8 @@ describe('createSystemCapabilitySource', () => {
       expect(tool.description.length).toBeGreaterThan(0);
       expect(tool.inputSchema).toMatchObject({ type: 'object' });
       expect(tool.inputSchema).not.toHaveProperty('$schema');
+      // Strict provider converters reject allOf, such as two regexes on one string.
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"allOf"');
     }
   });
 
@@ -570,17 +569,18 @@ describe('createSystemCapabilitySource', () => {
       provenance: 'generated',
       size: 4,
     });
-    const save = jest.spyOn(fileContent, 'createBytesEntry').mockResolvedValueOnce(entry);
+    const save = jest.spyOn(fileContent, 'createFileEntry').mockResolvedValueOnce(entry);
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(
       SERVICES,
       dependencies({
         jsSandbox: {
+          files: true,
           run: async ({ onSettled }) => {
             onSettled?.();
             return {
               status: 'ok',
-              result: '"UEsDBA=="',
+              result: '4',
               logs: '',
               logsTruncated: false,
               durationMs: 1,

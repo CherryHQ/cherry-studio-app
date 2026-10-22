@@ -2,10 +2,14 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
-import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
+import { type PaintingInputSubmission } from '@/frontend/components/PaintingInput';
+import { paintingGenerationInput } from '@/frontend/components/PaintingInput/paintingGenerationInput';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
-import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
+import {
+  useDeletePaintings,
+  useStartPaintingGeneration,
+} from '@/frontend/data/paintings/usePaintings';
 import type { PaintingGenerationStart } from '@/shared/contracts';
 import type { JobSnapshot } from '@/shared/data/api/schemas/jobs';
 import type { FileEntryId } from '@/shared/data/types/file';
@@ -53,13 +57,12 @@ export function usePaintingBoardGeneration(initialBoardId: string | undefined) {
   const [boardId, setBoardId] = useState(initialBoardId);
   const paintings = useBackendModule('paintings');
   const queryClient = useQueryClient();
+  const startGeneration = useStartPaintingGeneration();
   const deletePaintings = useDeletePaintings();
   const { activeByPaintingId } = usePaintingJobs();
 
   const refresh = useCallback(() => {
-    // The active-job poll stops once nothing runs, so a fresh enqueue wakes it.
     void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
     void queryClient.invalidateQueries({
       predicate: (query) => queryKeys.paintings.isBoardQuery(query.queryKey),
     });
@@ -67,21 +70,13 @@ export function usePaintingBoardGeneration(initialBoardId: string | undefined) {
 
   const generate = useCallback(
     async (input: PaintingInputSubmission) => {
-      const started: PaintingGenerationStart = await paintings.startGeneration({
-        ...(boardId ? { boardId } : {}),
-        ...(input.displayPrompt ? { brief: input.displayPrompt } : {}),
-        fileEntryIds: input.attachments.map((attachment) => attachment.fileEntryId),
-        mode: input.mode,
-        modelId: input.modelId,
-        modelName: input.modelName,
-        paramValues: input.paramValues,
-        prompt: input.prompt,
-      });
+      const started: PaintingGenerationStart = await startGeneration(
+        paintingGenerationInput(input, boardId),
+      );
       setBoardId(started.boardId);
-      refresh();
       return started;
     },
-    [boardId, paintings, refresh],
+    [boardId, startGeneration],
   );
 
   /** Stopping discards the receipt: a generation nobody waited for leaves no node behind. */
@@ -102,7 +97,7 @@ export function usePaintingBoardGeneration(initialBoardId: string | undefined) {
     async (painting: Painting, job: JobSnapshot | undefined) => {
       const input = retryableJobInput(job);
       if (!input) return null;
-      const started = await paintings.startGeneration({
+      return startGeneration({
         boardId: painting.boardId,
         ...(painting.brief ? { brief: painting.brief } : {}),
         fileEntryIds: input.images.map((image) => image.fileEntryId),
@@ -113,10 +108,8 @@ export function usePaintingBoardGeneration(initialBoardId: string | undefined) {
         paramValues: input.paramValues,
         prompt: input.prompt,
       });
-      refresh();
-      return started;
     },
-    [paintings, refresh],
+    [startGeneration],
   );
 
   return { boardId, cancel, generate, retry };

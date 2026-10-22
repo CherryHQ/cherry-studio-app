@@ -2,9 +2,10 @@
 
 This module generates, inspects, reads and patches Office files in the native QuickJS compute pool.
 The Agent adapters in `ai/agent/tools/officeTools.ts`, `officeEditTools.ts` and `officeScriptTool.ts` own file authorization,
-source hashes, image resolution and managed-file publication. Computations receive validated data
-and bytes; they have no file or network port. The existing preview WebView supplies selections.
-There is no new native module, remote service or job queue.
+source hashes, image preparation and managed-file publication. Computations receive validated data
+and read host-chosen input files and write one output file through the sandbox's `__files` port;
+they cannot name paths and have no network port. The existing preview WebView supplies selections.
+There is no remote service or job queue.
 
 ## Implemented Surface
 
@@ -27,6 +28,7 @@ there is no formula authoring or calculation. Creation images require an authori
 `width_px` and `height_px`; these dimensions specify the intended aspect ratio. Images are fitted
 inside the document/slide area. Workbook images additionally specify `cell` (A1 address), with
 size in pixels and a one-cell DrawingML anchor. Images cannot name paths, URLs or arbitrary data URIs.
+Presentations have up to 100 slides and workbooks up to 50 images per sheet.
 
 Example:
 
@@ -45,11 +47,39 @@ Example:
 ```
 
 Exact array, text, sheet-name and dimension limits live in `officeSpec.ts`. Whole inputs are limited
-to 128 KiB of UTF-8 JSON, images to 8 distinct references and 2 MiB in total, and generated files to
-4 MiB. Each native computation gets 30 seconds and 64 MiB. Two Office operations may hold image,
-compute and publication resources at once; cancellation does not release a running native lease
-before cleanup. Code Mode uses its existing separate bridge pool, so a script waiting for an Office
-child tool does not occupy the child's compute slot.
+to 128 KiB of UTF-8 JSON. Two Office operations may hold image, compute and publication resources
+at once; cancellation does not release a running native lease or its temporary files before
+cleanup. Code Mode uses its existing separate bridge pool, so a script waiting for an Office child
+tool does not occupy the child's compute slot.
+
+## Files, Images And Memory
+
+Source documents and images stay on disk until the job reads them: `__files.read(index)` returns
+an input as an ArrayBuffer inside the job's heap, and `saveOffice` writes the finished package with
+`__files.write`, returning only its size. No document or image bytes pass through Hermes, base64 or
+the job's source text, and every input is read at most once per job. The prelude keeps `__files` in
+a closure, so a model script reaches files only through `readInput` and the validating `saveOffice`.
+Clients whose sandbox predates
+`runFiles` omit the Office tools.
+
+A call may use 50 distinct images (create, replace or script inputs), from attachments, generated
+images or workspace files in any still format. PNG/JPEG files up to 1 MiB are embedded unchanged;
+larger or other images get a temporary JPEG copy of at most 2048 px and about 1 MiB, so callers
+never shrink or regenerate an image to fit. Prepared images may total 64 MiB per call.
+
+Sources and outputs are limited to 64 MiB, script inputs to 96 MiB together. A job gets 120 seconds
+and a heap of 128 MiB plus four times the bytes it reads, at most 512 MiB; package transforms,
+which run only app code, always get 512 MiB for XML trees. Measured on a Mac with the
+app's native engine: inspecting a 60 MiB deck needs 128 MiB; adding 50 images (30 MiB) to a 30 MiB
+deck needs 160 MiB and 2 seconds; creating a 50-image document, workbook or deck needs 68-76 MiB and
+about 1 second. Phones are slower; the deadline leaves room for that.
+
+Byte/string conversions use indexed loops. QuickJS materializes `Uint8Array.from(string, fn)` as an
+array of one-character strings first, about 70 bytes of heap per input byte, which made every file
+above about 0.9 MiB fail in 64 MiB. ZIP packing stores already-compressed media (JPEG, PNG, GIF,
+WebP, audio and video) and deflates the rest. docx's Packer is patched the same way, and its
+pure-JavaScript SHA-1 image naming is replaced by object identity; PptxGenJS generation embeds a
+1-pixel stand-in that the real bytes replace after packing, avoiding its JavaScript base64 decoder.
 
 All nine tools are absent without the native compute sandbox. They do not require its interactive
 bridge. Each tool declares `RuntimeTool.deferred`; Pi exposes its schema through `tool_search`,
@@ -72,16 +102,18 @@ workspace placement for validation at commit; edits do not advance the source fi
 `run_office_script` opens the pinned libraries to the model instead of wrapping more of them in
 specs. The output extension selects one generator library (`docx`, `PptxGenJS` or `XLSX`); `zip`
 (fflate), `xml` (xmldom), `atob`/`btoa` and `inputs[id]` (`name`, `mediaType`, `base64`, `bytes`)
-are always present. The script is the body of an async function and returns the file as base64,
-`Uint8Array` or `ArrayBuffer`. A script that returns nothing only inspects its inputs: it reports
-`status: "read"` with its console output (16 KiB) and saves no file.
+are always present; `bytes` and `base64` are read on first use. The script is the body of an async
+function and returns the file as `Uint8Array`, `ArrayBuffer` or base64. A script that returns
+nothing only inspects its inputs: it reports `status: "read"` with its console output (16 KiB) and
+saves no file.
 
 The job rejects a result that is not a ZIP package containing the format's main part, or whose XML
 parts (each up to 1 MiB) do not parse, so hand-edited package XML cannot publish a corrupt file.
-The adapter then publishes the result like generation. Inputs are any authorized managed files,
-6 MiB together; output, time and memory limits match generation. Script and console errors return
-as `status: "error"` so the model can correct and retry. Formula cells must carry their computed
-value because nothing in the app calculates them.
+The adapter then publishes the result like generation. Inputs are up to 50 authorized managed
+files; image inputs arrive as prepared copies. Script and console errors return as a failed call
+with `status: "error"` so the model can correct and retry; a memory failure says that rewriting the
+same work cannot fix it. Formula cells must carry their computed value because nothing in the app
+calculates them.
 
 The QuickJS job has no app, file or network port, so model code can only compute bytes. Changing an
 existing file without losing untouched parts goes through its package XML or `docx.patchDocument`;
@@ -115,8 +147,9 @@ the entire batch before publication; earlier in-memory mutations never escape th
   follower cells, cells carrying rich-value/dynamic-array metadata and protected sheets are refused. Cell writes request full recalculation; image-only edits do not change cells or calculation settings. Replacing
   a formula removes its calculation-chain package bookkeeping. No formula evaluator runs, so
   cached dependent values and preview values may remain stale until a spreadsheet app recalculates.
-- Sources and outputs are limited to 4 MiB. Archives admit at most 2048 entries, 16 MiB expanded
-  data and 4 MiB per part. Duplicate/unsafe paths, DTDs, unsupported relationships, Strict OOXML,
+- Sources and outputs are limited to 64 MiB. Archives admit at most 4096 entries and 128 MiB of
+  expanded data. An XML part parsed for inspection or editing is limited to 2 MiB: xmldom takes
+  about 180 bytes of heap per byte, so these app-only jobs get the full 512 MiB heap. Duplicate/unsafe paths, DTDs, unsupported relationships, Strict OOXML,
   signed/macro packages and protected Word edits fail explicitly. External relationship targets
   are never fetched. The parser accepts UTF-8 and BOM-marked UTF-16 XML.
 - Inspect pages have `total` and `offset`; PPTX shape pages also have `shape_total`/`shape_offset`.
@@ -132,8 +165,8 @@ edit receipts include source id/hash and output hash; there is no new lineage da
 
 Inspect with `kind: "images"` before supplying the edit tool's optional `images` array. Each entry
 contains the returned `anchor` and a replacement managed `file_entry_id`. Image-only and mixed
-text/cell-plus-image edits are supported, with at most 8 replacements and 2 MiB of replacement
-images per call. Workbook image anchors must match the top-level `sheet`. At least one text/cell
+text/cell-plus-image edits are supported, with at most 50 replacement images per call, prepared
+like generation images. Workbook image anchors must match the top-level `sheet`. At least one text/cell
 edit or image replacement is required. Every source and replacement passes file authorization
 before any source or image bytes are read; the source digest is checked before image resolution.
 

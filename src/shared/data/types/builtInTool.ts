@@ -55,7 +55,6 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'health_list_data_types',
   'health_query_data',
   'health_get_record',
-  'health_share_verifiable_records',
   'inspect_office_file',
   'location_get_current',
   'read_file',
@@ -204,11 +203,6 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
       platforms: ['ios'],
     }),
   ),
-  describe('health_share_verifiable_records', 'ask', {
-    agentCapability: 'health',
-    autoApprovalEligible: false,
-    platforms: ['ios'],
-  }),
   describe('location_get_current', 'auto', {
     agentCapability: 'location',
     permissionScopes: ['location.read'],

@@ -162,6 +162,30 @@ describe('FileEntryPreview', () => {
     expect(mockFileAttachmentPreview).not.toHaveBeenCalled();
   });
 
+  it('hides an unavailable assistant artifact and shows it again after restoration', () => {
+    mockUseResolvedFile.mockReturnValue({ data: null, isLoading: false });
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<FileEntryAttachment entryId={entry.id} />);
+    });
+    expect(mockFileAttachmentPreview).not.toHaveBeenCalled();
+    expect(mockFileEntryImage).not.toHaveBeenCalled();
+    expect(mockSkeleton).not.toHaveBeenCalled();
+
+    mockUseResolvedFile.mockReturnValue({
+      data: { entry: { ...entry, mediaType: 'text/markdown' }, uri: 'file:///documents/notes.md' },
+      isLoading: false,
+    });
+    act(() => renderer!.update(<FileEntryAttachment entryId={entry.id} />));
+    expect(mockFileAttachmentPreview).toHaveBeenCalledTimes(1);
+
+    mockFileAttachmentPreview.mockClear();
+    mockUseResolvedFile.mockReturnValue({ data: null, isLoading: false });
+    act(() => renderer!.update(<FileEntryAttachment entryId={entry.id} />));
+    expect(mockFileAttachmentPreview).not.toHaveBeenCalled();
+    act(() => renderer!.unmount());
+  });
+
   it('keeps the reserved image size while resolving the generated file', () => {
     mockUseResolvedFile.mockReturnValue({ data: null, isLoading: true });
     let renderer: ReturnType<typeof create>;

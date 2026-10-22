@@ -68,6 +68,7 @@ type Observation = {
   pendingCommandId?: string;
   reply?: BackgroundReplyTurn;
   executionId?: string;
+  backgroundInteractionKey?: string;
   listeners: Set<(snapshot: RemoteSessionSnapshot) => void>;
   sync?: SessionSync;
   snapshot?: RemoteSessionSnapshot;
@@ -476,7 +477,11 @@ export class RemoteAgentScope implements RemoteAgentSource {
         this.state = { ...this.state, attachments, preupload };
         for (const listener of this.stateListeners) listener();
       }
-      return await this.call(session, method, params, signal);
+      const negotiatedParams =
+        method === 'agent.messages.list' && session.agentMessageSummariesVersion === 1
+          ? { ...params, partsMode: 'paged' as const }
+          : params;
+      return await this.call(session, method, negotiatedParams, signal);
     } finally {
       linked?.dispose();
     }
@@ -873,13 +878,16 @@ export class RemoteAgentScope implements RemoteAgentSource {
         .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
         .join('\n');
       const phase =
-        pending || execution.state === 'awaiting-approval'
-          ? 'awaiting-approval'
-          : tool
-            ? 'using-tool'
-            : text
-              ? 'responding'
-              : 'thinking';
+        pending?.kind === 'question'
+          ? 'awaiting-answer'
+          : pending || execution.state === 'awaiting-approval'
+            ? 'awaiting-approval'
+            : tool
+              ? 'using-tool'
+              : text
+                ? 'responding'
+                : 'thinking';
+      this.updateBackgroundInteraction(observation, pending);
       const detail =
         this.background?.translate(
           execution.state === 'finalizing'
@@ -889,6 +897,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
               : `chat.backgroundReply.${phase === 'awaiting-approval' ? 'awaitingApproval' : phase === 'using-tool' ? 'tool.generic' : phase}`,
         ) ?? '';
       observation.reply?.updateContent({
+        ...(pending ? { attentionId: pending.id } : {}),
         phase,
         detail,
         ...(text ? { preview: text.slice(-160) } : {}),
@@ -914,6 +923,93 @@ export class RemoteAgentScope implements RemoteAgentSource {
             : 'completed',
       );
     }
+  }
+
+  private updateBackgroundInteraction(
+    observation: Observation,
+    pending: RemoteSessionSnapshot['interactions'][number] | undefined,
+  ): void {
+    const key = pending?.respondTarget
+      ? JSON.stringify([observation.executionId, pending.id, pending.input])
+      : undefined;
+    if (key === observation.backgroundInteractionKey) return;
+    observation.backgroundInteractionKey = key;
+    observation.reply?.setInteraction(undefined);
+    if (!pending || !key) return;
+    const currentTarget = () => {
+      const current = observation.snapshot?.interactions.find(
+        (item) =>
+          item.id === pending.id && item.state === 'pending' && item.input === pending.input,
+      );
+      if (
+        !observation.snapshot?.current ||
+        !current?.respondTarget ||
+        observation.backgroundInteractionKey !== key
+      )
+        throw new RemoteAgentError('REVISION_EXPIRED');
+      return current.respondTarget;
+    };
+    if (pending.kind !== 'question') {
+      observation.reply?.setInteraction({
+        kind: 'approval',
+        id: pending.id,
+        title: pending.title,
+        respond: async (decision) => {
+          const result = await this.respond(currentTarget(), { kind: decision });
+          if (result.status === 'rejected' || result.status === 'interrupted')
+            throw new RemoteAgentError(result.error ?? 'COMMAND_INTERRUPTED');
+        },
+      });
+      return;
+    }
+    void this.readResource(pending.input, new AbortController().signal)
+      .then((value) => {
+        if (
+          observation.backgroundInteractionKey !== key ||
+          !observation.snapshot?.current ||
+          value.kind !== 'question' ||
+          value.questions.length !== 1
+        )
+          return;
+        const [question] = value.questions;
+        if (!question || question.multiple) return;
+        observation.reply?.setInteraction({
+          kind: 'question',
+          id: pending.id,
+          question: {
+            questions: [
+              {
+                id: 'question',
+                question: question.question,
+                selection: 'single',
+                options: question.options.map((option, index) => ({
+                  id: String(index),
+                  label: option.label,
+                })),
+              },
+            ],
+          },
+          respond: async ({ answers }) => {
+            const answer = answers[0]!;
+            const selected = answer.selectedOptionIds.map(
+              (id) => question.options[Number(id)]!.label,
+            );
+            const result = await this.respond(currentTarget(), {
+              kind: 'answer',
+              answers: {
+                [question.question]: [...selected, ...(answer.text ? [answer.text] : [])].join(
+                  ', ',
+                ),
+              },
+            });
+            if (result.status === 'rejected' || result.status === 'interrupted')
+              throw new RemoteAgentError(result.error ?? 'COMMAND_INTERRUPTED');
+          },
+        });
+      })
+      .catch(() => {
+        /* An unreadable or expired interaction retains the in-app recovery path. */
+      });
   }
 
   /** A send the desktop never admitted must not settle as the previous turn's outcome. */

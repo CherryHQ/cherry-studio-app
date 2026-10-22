@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cherry Studio",
     "slug": "cherry-studio",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "runtimeVersion": {
       "policy": "fingerprint"
     },
@@ -82,7 +82,6 @@
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
-        "com.apple.developer.healthkit.access": ["health-records"],
         "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
       },
       "infoPlist": {
@@ -93,7 +92,6 @@
           "UIInterfaceOrientationLandscapeRight"
         ],
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
-        "NSHealthClinicalHealthRecordsShareUsageDescription": "Allow Cherry Studio to read selected clinical health records when you ask and, with your approval, share them with your selected AI service for analysis.",
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant and, with your approval, share it with your selected AI service for analysis.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
@@ -112,12 +110,14 @@
       },
       "package": "com.cherryai.cherrystudio_app",
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": ["android.permission.RECEIVE_BOOT_COMPLETED"],
-      "permissions": [
+      "blockedPermissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+      ],
+      "permissions": [
+        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.CAMERA",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
@@ -135,7 +135,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/cherry-studio-logo.png"
+          "icon": "./assets/notification-icon.png"
         }
       ],
       "./scripts/withAndroidBackgroundGeneration.js",
@@ -250,7 +250,7 @@
           "photosPermission": "Allow Cherry Studio to preview photos for drawings and chat messages.",
           "savePhotosPermission": "Allow Cherry Studio to save photos.",
           "preventAutomaticLimitedAccessAlert": true,
-          "granularPermissions": ["photo"]
+          "granularPermissions": []
         }
       ],
       "expo-web-browser",

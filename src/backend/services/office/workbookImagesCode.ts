@@ -1,7 +1,7 @@
 // Adds standard, editable DrawingML image anchors to a newly generated SheetJS workbook.
 // Existing workbooks use the patch-copy editor; they never round-trip through SheetJS.
 export const workbookImagesCode = String.raw`
-const parts = zip.unzipSync(Uint8Array.from(atob(result), c => c.charCodeAt(0)));
+const parts = zip.unzipSync(new Uint8Array(result));
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;'}[c]));
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -19,7 +19,7 @@ for (const [sheetIndex, input] of spec.sheets.entries()) {
     const image = images[picture.file_entry_id];
     const extension = image.mediaType === 'image/png' ? 'png' : 'jpeg';
     const name = 'image' + (++imageNumber) + '.' + extension;
-    parts['xl/media/' + name] = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
+    parts['xl/media/' + name] = readInput(image.index);
     const ref = /^([A-Z]+)([1-9][0-9]*)$/.exec(picture.cell);
     let column = 0;
     for (const char of ref[1]) column = column * 26 + char.charCodeAt(0) - 64;
@@ -49,9 +49,5 @@ for (const [sheetIndex, input] of spec.sheets.entries()) {
   const type = types.createElementNS(CT, 'Override'); type.setAttribute('PartName', '/' + drawingPath); type.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.drawing+xml'); types.documentElement.appendChild(type);
 }
 write('[Content_Types].xml', types);
-const output = zip.zipSync(parts, { level: 6 });
-if (output.length > 4 * 1024 * 1024) throw new Error('Workbook exceeds 4 MiB.');
-let binary = '';
-for (let index = 0; index < output.length; index += 8192) binary += String.fromCharCode(...output.subarray(index, index + 8192));
-return btoa(binary);
+return saveOffice(zip.zipSync(parts, { level: 6 }), 'xlsx');
 `;

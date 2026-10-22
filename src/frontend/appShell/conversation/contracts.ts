@@ -53,6 +53,7 @@ export type Availability =
         | 'discovery-unavailable'
         | 'unreachable'
         | 'suspended'
+        | 'disconnected'
         | 'synchronizing'
         | 'busy'
         | 'not-authorized'

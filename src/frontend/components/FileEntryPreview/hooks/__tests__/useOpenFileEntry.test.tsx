@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { parseChatPreviewSource } from '@/frontend/appShell/navigation/chat';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { useOpenFileEntry } from '../useOpenFileEntry';
@@ -9,13 +10,19 @@ const mockPush = jest.fn();
 const mockOpen = jest.fn();
 const mockToast = jest.fn();
 const mockPrepareFileExport = jest.fn();
+let mockPathname = '/files';
+let mockParams: Record<string, string> = {};
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
   useExportWatermark: () => () => ({ kind: 'cherry', signature: { brandName: 'Cherry Studio' } }),
 }));
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  usePathname: () => mockPathname,
+  useLocalSearchParams: () => mockParams,
+}));
 jest.mock('@cherrystudio/ui/components', () => ({
   openFilePreview: (input: unknown) => mockOpen(input),
   useToast: () => ({ toast: { show: mockToast } }),
@@ -48,6 +55,8 @@ function Probe() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockPathname = '/files';
+  mockParams = {};
   mockOpen.mockResolvedValue(undefined);
   mockPrepareFileExport.mockImplementation(async ({ entry, uri }) => ({
     uri,
@@ -76,6 +85,39 @@ it.each([
     params: { fileEntryId: entry.id },
   });
   expect(mockOpen).not.toHaveBeenCalled();
+});
+
+it('retains the source conversation and message destination when opening a preview', () => {
+  mockPathname = '/';
+  mockParams = { sessionId: 'session-1', messageId: 'message-1', messageRequestId: 'visit-1' };
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file));
+  expect(parseChatPreviewSource(mockPush.mock.calls[0][0].params.sourceChat)).toEqual({
+    kind: 'session',
+    ...mockParams,
+  });
+});
+
+it('retains an unsent chat with its seeded draft and workspace', () => {
+  mockPathname = '/';
+  mockParams = {
+    agentId: 'agent-1',
+    composerHandoff: 'seed-1',
+    workspaceDraftId: '00000000-0000-7000-8000-000000000002',
+  };
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file));
+  expect(parseChatPreviewSource(mockPush.mock.calls[0][0].params.sourceChat)).toEqual({
+    kind: 'draft',
+    ...mockParams,
+  });
+});
+
+it('does not treat a file-library route as a conversation', () => {
+  mockParams = { sessionId: 'unrelated-route-param' };
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file));
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceChat');
 });
 
 it('hands unsupported documents to the platform with the original URI', async () => {

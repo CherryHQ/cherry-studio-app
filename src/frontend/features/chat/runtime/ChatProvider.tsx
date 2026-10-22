@@ -19,6 +19,7 @@ import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
+  type AgentMessageView,
   AgentProtocolError,
   type AgentQueuedInput,
   type AgentSubmitMessageInput,
@@ -48,7 +49,6 @@ type AgentChatSendInput = AgentSubmitMessageInput & {
 export type PendingChatSend = Readonly<{
   sessionId: string;
   isNewSession: boolean;
-  isSubmitting: boolean;
   messages: ReturnType<typeof createPendingChatMessages>;
 }>;
 
@@ -199,6 +199,27 @@ export function useAgentSessionState(sessionId: string | undefined) {
   return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectSessionState);
 }
 
+/** The named answers among the Session's live rows, in `ids` order; the same array while they read the same. */
+export function useAgentLiveAnswers(
+  sessionId: string | undefined,
+  ids: readonly string[],
+): readonly (AgentMessageView | undefined)[] {
+  const idsKey = ids.join('\n');
+  const select = useMemo(() => selectLiveAnswers(idsKey ? idsKey.split('\n') : []), [idsKey]);
+  return useAgentSessionSelection(useAgentChatContext().client, sessionId, select);
+}
+
+function selectLiveAnswers(ids: readonly string[]) {
+  let previous: readonly (AgentMessageView | undefined)[] = [];
+  return (state: AgentSessionChatState) => {
+    const next = ids.map((id) => state.liveMessages.find((message) => message.id === id));
+    if (next.length === previous.length && next.every((message, i) => message === previous[i]))
+      return previous;
+    previous = next;
+    return next;
+  };
+}
+
 /** Retain the result as live messages settle into (or leave) the visible history window. */
 export function useAgentChatImageResult(
   sessionId: string | undefined,
@@ -257,10 +278,39 @@ export function useAgentChatControls(input: {
   const [submission, setSubmission] = useState<{
     composerKey: number;
     userMessageId: string;
+    isSubmitting: boolean;
+    selectedMessageId?: string | null;
     send?: PendingChatSend;
   }>();
   const currentSubmission = submission?.composerKey === composerKey ? submission : undefined;
-  const pendingSend = currentSubmission?.send;
+  const pending = currentSubmission?.send;
+  const isSubmitting = Boolean(currentSubmission?.isSubmitting);
+  const selectedMessageId = currentSubmission?.selectedMessageId;
+  const selectSendReconciled = useCallback(
+    (state: AgentSessionChatState) => {
+      if (!pending) return false;
+      const [user, assistant] = pending.messages;
+      const activeNodeId = state.snapshot?.session.activeNodeId;
+      return (
+        state.queuedInputs.some((input) => input.userMessage.id === user.id) ||
+        pending.messages.every((row) =>
+          state.liveMessages.some((message) => message.id === row.id),
+        ) ||
+        // Admission selects the reserved answer. Any other selection belongs to the reader.
+        (selectedMessageId !== undefined &&
+          activeNodeId !== undefined &&
+          activeNodeId !== selectedMessageId &&
+          activeNodeId !== assistant.id)
+      );
+    },
+    [pending, selectedMessageId],
+  );
+  // Observe the source rows before branch filtering, including queue updates after admission.
+  const isSendReconciled = useAgentSessionSelection(client, sessionId, selectSendReconciled);
+  const pendingSend = isSendReconciled ? undefined : pending;
+  if (isSendReconciled && currentSubmission?.send) {
+    setSubmission({ ...currentSubmission, send: undefined });
+  }
   // A send captures its composer key; a late completion compares it with the
   // mounted key so a composer the user has left cannot navigate or update state.
   const mountedComposerKeyRef = useRef<number | null>(composerKey);
@@ -311,10 +361,17 @@ export function useAgentChatControls(input: {
       const pending: PendingChatSend = {
         sessionId: request.sessionId,
         isNewSession: !sessionId,
-        isSubmitting: true,
         messages: createPendingChatMessages(request),
       };
-      setSubmission({ composerKey, userMessageId: request.userMessageId, send: pending });
+      const state = sessionId ? client.getState(sessionId) : undefined;
+      setSubmission({
+        composerKey,
+        userMessageId: request.userMessageId,
+        isSubmitting: true,
+        selectedMessageId: state?.snapshot?.session.activeNodeId,
+        // A follow-up behind a running answer waits in the queue, which displays it.
+        ...(state && selectRunningAnswerId(state) ? {} : { send: pending }),
+      });
       try {
         await sendMessage({
           ...request,
@@ -325,18 +382,17 @@ export function useAgentChatControls(input: {
         });
         if (isCurrent()) {
           setSubmission((current) =>
-            current?.send === pending
-              ? {
-                  ...current,
-                  send: pending.isNewSession ? { ...pending, isSubmitting: false } : undefined,
-                }
+            current?.composerKey === composerKey && current.userMessageId === request.userMessageId
+              ? { ...current, isSubmitting: false }
               : current,
           );
         }
       } catch (error) {
         if (isCurrent())
           setSubmission((current) =>
-            current?.send === pending ? { ...current, send: undefined } : current,
+            current?.composerKey === composerKey && current.userMessageId === request.userMessageId
+              ? { ...current, isSubmitting: false, send: undefined }
+              : current,
           );
         // Stop during admission: the composer takes the draft back without a failure.
         throw error instanceof AgentProtocolError && error.view.code === 'CANCELLED'
@@ -344,22 +400,20 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, composerKey, sendMessage, sessionId, workspaceFolderId],
+    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {
       setSubmission((current) =>
         current?.composerKey === composerKey &&
         current.userMessageId === userMessageId &&
-        current.send &&
-        !current.send.isSubmitting
+        current.send
           ? { ...current, send: undefined }
           : current,
       );
     },
     [composerKey],
   );
-
   return {
     cancel,
     completePendingSend,
@@ -367,13 +421,14 @@ export function useAgentChatControls(input: {
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
       isAdmitting ||
+      isSubmitting ||
       (isSessionExecuting && !isComposerBusy) ||
-      (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
+      (pendingSend && sessionId && observationStatus !== 'ready')
         ? false
         : undefined,
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
-    isBusy: isComposerBusy || Boolean(pendingSend?.isSubmitting),
+    isBusy: isComposerBusy || isSubmitting,
     sendMessage: send,
   };
 }

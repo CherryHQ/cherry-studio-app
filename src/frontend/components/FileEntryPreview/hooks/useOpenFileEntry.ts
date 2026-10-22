@@ -1,5 +1,5 @@
 import { openFilePreview, useToast } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { prepareFileExport, useExportWatermark } from '@/frontend/appShell/fileExport';
@@ -8,6 +8,11 @@ import {
   useImagePreviewEditRequest,
   type ReplacePreviewImage,
 } from '@/frontend/appShell/imagePreview';
+import {
+  chatRouteParams,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { canEditFileImage } from '@/shared/contracts/fileImageEdit';
@@ -24,6 +29,8 @@ const logger = loggerService.withContext('FileEntryPreview');
 /** Shared by cards and the viewer's explicit system-open escape hatch. */
 export function useOpenFileEntry(options: FileExportOptions = {}) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useLocalSearchParams<ChatRouteParamsInput>();
   const { t } = useTranslation();
   const { toast } = useToast();
   const createWatermark = useExportWatermark(options.watermark);
@@ -60,12 +67,16 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
         replaceImage && canEditFileImage(file.entry.mediaType)
           ? requestImageEdit(file.entry.id, replaceImage)
           : undefined;
+      const chat = pathname === '/' ? parseChatRoute(params) : undefined;
       try {
         router.push({
           pathname: '/files/[fileEntryId]',
           params: {
             fileEntryId: file.entry.id,
             ...(imageEditRequestId ? { imageEditRequestId } : {}),
+            ...(chat?.status === 'ready'
+              ? { sourceChat: JSON.stringify(chatRouteParams(chat.target)) }
+              : {}),
           },
         });
       } catch (error) {

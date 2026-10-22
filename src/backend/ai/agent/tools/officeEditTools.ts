@@ -6,6 +6,8 @@ import {
   officeEditSchemas,
   officeInspectSchema,
   officeReadSchema,
+  OFFICE_MAX_FILE_BYTES,
+  OFFICE_MAX_IMAGES,
   OFFICE_MAX_INPUT_BYTES,
   OFFICE_MEDIA_TYPES,
   transformOfficeFile,
@@ -13,10 +15,15 @@ import {
   type OfficeTransformRequest,
 } from '@/backend/services/office';
 import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
-import { sha256Hex } from '@/shared/utils/sha256';
 
 import type { RuntimeTool } from '../runtime';
-import { officeOperationSlots, readOfficeImages, type OfficeFiles } from './officeToolResources';
+import {
+  mebibytes,
+  officeFailure as invalid,
+  prepareOfficeImages,
+  startOfficeOperation,
+  type OfficeFiles,
+} from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -46,7 +53,7 @@ const definitions = [
     operation: 'edit',
     format,
     schema: officeEditSchemas[format],
-    description: `Create a NEW edited ${format.toUpperCase()} copy; source_sha256 must match a prior inspection/read. ${format === 'xlsx' ? 'Change scalar cells on one worksheet; retain other package parts, images and charts. Strings are literal, null clears a cell. Reject shared/array/data-table formulas and merged followers. Cell edits request recalculation on open; cached formula results may be stale.' : 'Replace one unique literal text occurrence per anchored paragraph (or its optional Word character range); expect_text must match the complete current text. Preserve surrounding runs, formatting and hyperlinks. Fields, drawings, bookmarks, comments and tracked changes in the target paragraph are refused for text edits.'} Optionally replace up to 8 existing pictures through images, using anchors from inspect_office_file kind "images" and authorized PNG/JPEG file_entry_id values. Image-only edits are allowed. Replacement affects only the selected occurrence and keeps its frame, crop, transforms and alt text; it does not auto-fit a different aspect ratio. Images together must fit 2 MiB. Unsupported picture extensions and external images are refused. Never overwrites the original.`,
+    description: `Create a NEW edited ${format.toUpperCase()} copy; source_sha256 must match a prior inspection/read. ${format === 'xlsx' ? 'Change scalar cells on one worksheet; retain other package parts, images and charts. Strings are literal, null clears a cell. Reject shared/array/data-table formulas and merged followers. Cell edits request recalculation on open; cached formula results may be stale.' : 'Replace one unique literal text occurrence per anchored paragraph (or its optional Word character range); expect_text must match the complete current text. Preserve surrounding runs, formatting and hyperlinks. Fields, drawings, bookmarks, comments and tracked changes in the target paragraph are refused for text edits.'} Optionally replace up to ${OFFICE_MAX_IMAGES} existing pictures through images, using anchors from inspect_office_file kind "images" and existing image file ids (attachments, generated images or workspace files; large ones are compressed automatically, never regenerate one). Image-only edits are allowed. Replacement affects only the selected occurrence and keeps its frame, crop, transforms and alt text; it does not auto-fit a different aspect ratio. To add new pictures to an existing file, use run_office_script. Unsupported picture extensions and external images are refused. Never overwrites the original.`,
   })),
 ] as const;
 
@@ -60,17 +67,13 @@ export function createOfficeEditTools(
       ref: { source: 'builtin', capabilityId: definition.name },
       providerName: definition.name,
       displayName: definition.title,
-      description: `${definition.description} Source and output are limited to 4 MiB. Use managed file ids from conversation attachments or the selected workspace; no paths or URLs. Edited copies are saved in the selected workspace, or at the library root without a workspace. ${definition.operation === 'edit' ? 'In Code Mode, success is result.value.status === "created"; use result.value.fileEntryId for the new copy.' : 'In Code Mode, success is result.value.status === "read". Inspection returns items: Word items have excerpt and anchor; Excel items have sheet; PowerPoint items have slide and shapes. Exact reads return text or rows of cells with address and value. Use the returned source_sha256 for edits.'} Status "error" includes a message.`,
+      description: `${definition.description} Source and output are limited to ${mebibytes(OFFICE_MAX_FILE_BYTES)}. Use managed file ids from conversation attachments or the selected workspace; no paths or URLs. Edited copies are saved in the selected workspace, or at the library root without a workspace. ${definition.operation === 'edit' ? 'In Code Mode, use result.value.fileEntryId for the new copy.' : 'Inspection returns items: Word items have excerpt and anchor; Excel items have sheet; PowerPoint items have slide and shapes. Exact reads return text or rows of cells with address and value. Use the returned source_sha256 for edits.'} In Code Mode, a failed call throws its message.`,
       inputSchema: toRuntimeInputSchema(definition.schema),
       outputSchema: officeToolOutputSchemas[definition.name],
       approval: 'auto',
       deferred: true,
       async execute({ input, signal }) {
         signal.throwIfAborted();
-        const invalid = (message: string) => ({
-          value: { status: 'error', message },
-          artifacts: [],
-        });
         if (new TextEncoder().encode(JSON.stringify(input)).length > OFFICE_MAX_INPUT_BYTES)
           return invalid('Office input exceeds 128 KiB.');
         const parsed = definition.schema.safeParse(input);
@@ -85,20 +88,18 @@ export function createOfficeEditTools(
           signal.throwIfAborted();
           await access.resolveRead({ file_entry_id: id });
         }
-        const release = await officeOperationSlots.acquire(signal);
-        let settled = true,
-          finished = false;
+        const operation = await startOfficeOperation(files, signal);
         try {
           const facts = await files.resolveAvailable([sourceId]);
           signal.throwIfAborted();
           const fact = facts.get(sourceId);
-          if (
-            !fact ||
-            !Number.isSafeInteger(fact.size) ||
-            fact.size <= 0 ||
-            fact.size > 4 * 1024 * 1024
-          )
-            return invalid('Source file is unavailable or exceeds 4 MiB.');
+          const uri = fact && files.localUri(fact);
+          const size = uri && files.size(uri);
+          if (!fact || !uri || !size) return invalid('Source file is unavailable.');
+          if (size > OFFICE_MAX_FILE_BYTES)
+            return invalid(
+              `The source file is ${mebibytes(size)}, over the ${mebibytes(OFFICE_MAX_FILE_BYTES)} limit for Office files on this device.`,
+            );
           const format = (Object.keys(OFFICE_MEDIA_TYPES) as OfficeFormat[]).find(
             (format) => OFFICE_MEDIA_TYPES[format] === fact.mediaType,
           );
@@ -108,11 +109,8 @@ export function createOfficeEditTools(
             ('anchor' in parsed.data && parsed.data.anchor.format !== format)
           )
             return invalid('Operation format does not match the source file.');
-          const bytes = await files.readAsBytes(fact, signal);
+          const digest = await files.hash(uri, signal);
           signal.throwIfAborted();
-          if (!bytes || bytes.length !== fact.size || bytes.length > 4 * 1024 * 1024)
-            return invalid('Source bytes changed or are unavailable.');
-          const digest = sha256Hex(bytes);
           if ('source_sha256' in parsed.data && parsed.data.source_sha256 !== digest)
             return invalid('Source file changed. Inspect/read it again before editing.');
           let filename = '';
@@ -127,18 +125,16 @@ export function createOfficeEditTools(
             operation: definition.operation,
             format,
           } as OfficeTransformRequest;
-          const images = await readOfficeImages(imageIds, files, signal);
-          settled = false;
+          const images = await prepareOfficeImages(imageIds, files, operation, signal);
+          const output = definition.operation === 'edit' ? operation.output(format) : undefined;
           const result = await transformOfficeFile({
-            bytes,
+            source: { uri, size },
             request,
             images,
+            output,
             sandbox,
             signal,
-            onSettled: () => {
-              settled = true;
-              if (finished) release();
-            },
+            onSettled: operation.job(),
           });
           signal.throwIfAborted();
           if ('content' in result)
@@ -152,9 +148,10 @@ export function createOfficeEditTools(
               },
               artifacts: [],
             };
-          const entry = await files.createBytesEntry(
+          const sha256 = await files.hash(output!, signal);
+          const entry = await files.createFileEntry(
             {
-              data: result.data,
+              uri: output!,
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
@@ -172,7 +169,7 @@ export function createOfficeEditTools(
               size: entry.size,
               source_file_entry_id: sourceId,
               source_sha256: digest,
-              sha256: sha256Hex(result.data),
+              sha256,
               ...(format === 'xlsx' && 'cells' in parsed.data && parsed.data.cells?.length
                 ? {
                     warnings: [
@@ -195,8 +192,7 @@ export function createOfficeEditTools(
           if (error instanceof OfficeGenerationError) return invalid(error.message);
           throw error;
         } finally {
-          finished = true;
-          if (settled) release();
+          operation.finish();
         }
       },
     }),

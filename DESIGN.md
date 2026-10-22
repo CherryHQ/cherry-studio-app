@@ -92,6 +92,17 @@ Mobile follows desktop's neutral-first interface with green action emphasis. The
 - `--brand` is the fixed Cherry logo red (`#ff5757`), reserved for brand artwork. Actions, selections,
   links, and tool mentions must not consume it.
 
+App identity has two artwork variants: `assets/icon-light.png` (red) and `assets/icon-dark.png`
+(the existing dark-mode mark). Reuse their original artwork, including on background-activity
+surfaces, with downsampled derivatives sized for platform limits. Artwork fidelity does not require
+identical file bytes or launcher-size bitmaps. Never substitute the legacy cherry-and-leaf logo or
+tint the app mark with action or status colors. The black Dynamic Island uses the dark variant;
+other full-color surfaces choose the variant for their own background. Android's mandatory
+monochrome notification mask remains
+system-rendered. Its accent is `#C74444`, `brand` red darkened below Android's 0.179 luminance
+threshold: on a lighter accent the system draws the mask black instead of the app icon's white. Do not repeat the app logo in the
+notification's large-icon content slot.
+
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,
 and neutral `secondary` / `border-selected` for ordinary selection. Default buttons remain neutral.
@@ -172,6 +183,11 @@ In dark mode, temporary drawers use `sidebar` above the page's `background`. Sha
 use `popover` with a neutral `secondary` overlay, matching the raised menu surface. A fine edge
 reinforces separation. Scroll fades match their host surface, and sheet footers inherit the sheet's
 fill so they do not fall back to the page's black background.
+
+A full-screen stage that presents one image at a time, such as the painting template stage, may use
+that image as its backdrop: heavily blurred and covered by a `background` scrim so `foreground` text
+stays readable in both themes. The colour is the content's own, not decoration; do not put it behind
+lists, forms, or other screens.
 
 When a screen feels cluttered, separate **volume** from **loudness**. Volume is fixed by removing, merging, or reordering content. Loudness is fixed by reducing competing colours, sizes, weights, borders, surfaces, and motion. Keep one deliberate anchor — restraint is not flattening everything into having no focus.
 

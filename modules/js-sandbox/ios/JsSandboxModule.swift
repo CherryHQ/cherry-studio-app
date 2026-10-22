@@ -23,6 +23,21 @@ public class JsSandboxModule: Module {
       }
     }
 
+    AsyncFunction("runFiles") { (runId: String, code: String, limits: JsSandboxLimits, files: JsSandboxFiles, promise: Promise) in
+      self.launch(runId, promise: promise) {
+        JsSandboxRunner.run(
+          id: runId,
+          code: code,
+          inputPaths: files.inputs.map(JsSandboxModule.path),
+          outputPath: files.output.isEmpty ? "" : JsSandboxModule.path(files.output),
+          timeoutMs: UInt32(clamping: limits.timeoutMs),
+          memoryBytes: UInt32(clamping: limits.memoryBytes),
+          maxResultBytes: UInt32(clamping: limits.maxResultBytes),
+          maxLogBytes: UInt32(clamping: limits.maxLogBytes)
+        )
+      }
+    }
+
     AsyncFunction("runBridge") { (runId: String, setup: String, data: String, clock: JsSandboxClock, limits: JsSandboxLimits, promise: Promise) in
       self.launch(runId, promise: promise) {
         JsSandboxRunner.runBridge(
@@ -69,6 +84,12 @@ public class JsSandboxModule: Module {
     thread.start()
   }
 
+  /// Hosts pass `file://` URIs; the native core opens plain paths.
+  private static func path(_ uri: String) -> String {
+    guard let url = URL(string: uri), url.isFileURL else { return uri }
+    return url.path
+  }
+
   /// QuickJS stops recursion at 7 MiB of this stack (`kMaxStackBytes`), which
   /// leaves room for the native code below its checks.
   private static let stackSize = 8 << 20
@@ -77,6 +98,11 @@ public class JsSandboxModule: Module {
 struct JsSandboxClock: Record {
   @Field var startedAt: Double = 0
   @Field var seed: Double = 0
+}
+
+struct JsSandboxFiles: Record {
+  @Field var inputs: [String] = []
+  @Field var output: String = ""
 }
 
 struct JsSandboxLimits: Record {

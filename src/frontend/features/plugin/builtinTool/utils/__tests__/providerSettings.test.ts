@@ -19,6 +19,8 @@ function sectionTypes(providerId: ProviderId, capability: Capability = 'searchKe
 describe('web search provider settings', () => {
   test('derives each provider settings from its preset', () => {
     expect(sectionTypes('tavily')).toEqual(['apiKeys', 'apiHost']);
+    expect(sectionTypes('deepseek')).toEqual(['apiKeys', 'apiHost']);
+    expect(sectionTypes('deepseek', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('firecrawl', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('crawl4ai', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     // Zhipu reuses the model provider key; Exa MCP reuses the Exa key.
@@ -43,6 +45,8 @@ describe('web search provider settings', () => {
       getWebSearchProviderCheckPlacement(getWebSearchProviderPreset(id), capability);
 
     expect(placement('tavily', 'searchKeywords')).toBe('apiKeys');
+    expect(placement('deepseek', 'searchKeywords')).toBe('apiKeys');
+    expect(placement('deepseek', 'fetchUrls')).toBe('apiKeys');
     expect(placement('jina', 'fetchUrls')).toBe('apiKeys');
     expect(placement('crawl4ai', 'fetchUrls')).toBe('apiHost');
     expect(placement('searxng', 'searchKeywords')).toBe('apiHost');

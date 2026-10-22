@@ -17,13 +17,18 @@ jest.mock('@cherrystudio/ui/components', () => ({
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
   ContextMenu: (props: ContextMenuProps) => mockContextMenu(props),
   ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+  InfoPopover: ({ children, ...props }: { children: ReactNode }) =>
+    jest.requireActual('react').createElement('InfoPopover', props, children),
 }));
+
+let mockCanSelectBranch = false;
 
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
     copyAssistantMessage: mockCopyMessage,
     deleteMessageTurn: mockDeleteMessageTurn,
     shareAssistantMessage: mockShareMessage,
+    ...(mockCanSelectBranch ? { selectBranch: jest.fn() } : {}),
   }),
 }));
 
@@ -57,10 +62,10 @@ jest.mock('../AssistantMessageToolbar', () => ({
   AssistantMessageToolbar: () => null,
 }));
 
-jest.mock('../MessageAnswerTabs', () => {
+jest.mock('../MessageAnswerCards', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    MessageAnswerTabs: (props: object) => createElement('MessageAnswerTabs', props),
+    MessageAnswerCards: (props: object) => createElement('MessageAnswerCards', props),
   };
 });
 
@@ -73,6 +78,7 @@ describe('ChatMessage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCanSelectBranch = false;
   });
 
   afterEach(() => {
@@ -253,7 +259,7 @@ describe('ChatMessage', () => {
     });
   });
 
-  test('names the models of several answers in the answer tabs instead of the header', () => {
+  test('keeps the agent name whole and drops the model name once the name wraps', () => {
     const model = {
       id: 'qwen::qwen3-max' as const,
       modelId: 'qwen3-max',
@@ -263,25 +269,41 @@ describe('ChatMessage', () => {
     act(() => {
       renderer = create(renderMessage({ ...createMessage('success'), model }));
     });
-    expect(renderer?.root.findAllByType('MessageAnswerTabs' as never)).toHaveLength(0);
+    const texts = () => renderer!.root.findAllByType('Text' as never);
+    const name = texts().find((text) => text.props.onTextLayout)!;
+    expect(name.props.numberOfLines).toBeUndefined();
+    expect(texts().some((text) => text.props.children === 'Qwen3 Max')).toBe(true);
+    expect(renderer?.root.findByType('InfoPopover' as never).props.text).toBe('Qwen3 Max');
 
-    const branched: MessageListItem = {
-      ...createMessage('success'),
-      model,
-      branch: {
-        key: 'answers:user-1',
-        siblings: [
-          { id: 'assistant-1', modelId: model.id, status: 'success' },
-          { id: 'assistant-2', modelId: 'openai::gpt-5', status: 'pending' },
-        ],
-      },
-    };
-    act(() => renderer?.update(renderMessage(branched)));
+    act(() => name.props.onTextLayout({ nativeEvent: { lines: [{}, {}] } }));
+
+    expect(texts().some((text) => text.props.children === 'Qwen3 Max')).toBe(false);
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-model-avatar' }),
+    ).toHaveLength(1);
+  });
+
+  test('shows several answers as cards in place of a single answer', () => {
+    mockCanSelectBranch = true;
+    const branched = branchedMessage();
+    act(() => {
+      renderer = create(renderMessage(branched));
+    });
 
     expect(
       renderer?.root.findAllByProps({ testID: 'assistant-message-model-avatar' }),
     ).toHaveLength(0);
-    expect(renderer?.root.findByType('MessageAnswerTabs' as never).props.message).toBe(branched);
+    expect(renderer!.root.findByType('MessageAnswerCards' as never).props.message).toBe(branched);
+    expect(renderer!.root.findAllByType('AssistantMessage' as never)).toHaveLength(0);
+  });
+
+  test('shows only the selected answer where answers cannot be switched', () => {
+    act(() => {
+      renderer = create(renderMessage(branchedMessage()));
+    });
+
+    expect(renderer!.root.findAllByType('MessageAnswerCards' as never)).toHaveLength(0);
+    expect(renderer!.root.findAllByType('AssistantMessage' as never)).toHaveLength(1);
   });
 });
 
@@ -299,6 +321,20 @@ function renderMessage(
       shouldShowTimestamp
     />
   );
+}
+
+function branchedMessage(): MessageListItem {
+  return {
+    ...createMessage('success'),
+    branch: {
+      key: 'answers:user-1',
+      siblings: [
+        { id: 'assistant-1', modelId: 'qwen::qwen3-max', status: 'success' },
+        { id: 'assistant-2', modelId: 'openai::gpt-5', status: 'pending' },
+      ],
+    },
+    model: { id: 'qwen::qwen3-max', modelId: 'qwen3-max', name: 'Qwen3 Max', providerId: 'qwen' },
+  };
 }
 
 function createMessage(status: MessageListItem['status']): MessageListItem {

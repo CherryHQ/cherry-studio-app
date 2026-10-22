@@ -1,6 +1,7 @@
 import type { WebSearchProviderModule } from '@cherrystudio/web-search';
 import { bocha } from '@cherrystudio/web-search/providers/bocha';
 import { crawl4ai } from '@cherrystudio/web-search/providers/crawl4ai';
+import { deepseek } from '@cherrystudio/web-search/providers/deepseek';
 import { exa } from '@cherrystudio/web-search/providers/exa';
 import { exaMcp } from '@cherrystudio/web-search/providers/exa-mcp';
 import { firecrawl } from '@cherrystudio/web-search/providers/firecrawl';
@@ -22,6 +23,7 @@ export const REMOTE_WEB_SEARCH_PROVIDERS = {
   'exa-mcp': exaMcp,
   bocha,
   querit,
+  deepseek,
   jina,
   firecrawl,
   crawl4ai,

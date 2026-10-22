@@ -48,6 +48,7 @@ const mockTaskNative = {
       ongoing: boolean,
       _alert: boolean,
       _channel: string,
+      _options: { subText?: string },
     ) => {
       mockTaskNotifications.set(id, { title, ongoing });
     },
@@ -620,3 +621,209 @@ function setAppState(state: AppStateStatus): void {
 async function flush(): Promise<void> {
   for (let index = 0; index < 30; index++) await Promise.resolve();
 }
+
+const connectionNotification = {
+  connectionId: 'pc',
+  key: 'remote-connection:pc',
+  title: 'PC',
+  body: 'Connected',
+  url: 'cherrystudio-dev://remote?connectionId=pc',
+  token: 'connection-generation',
+  disconnectLabel: 'Disconnect',
+};
+
+test('a connection stays foreground after a remote task completes and keeps its disconnect action', async () => {
+  const delivery = runtime.setRemoteConnections([connectionNotification]);
+  const connectionLease = runtime.acquire('remote.connection');
+  await delivery;
+  const connectionId = mockTaskIds.get(connectionNotification.key)!;
+  const task = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'task');
+  const taskLease = runtime.acquire('remote.chat');
+  await flush();
+  await task.end('default', props('completed'));
+  taskLease.release();
+  await flush();
+  expect(running).toBe(true);
+  expect(native.start.mock.calls[0][1]).toMatchObject({
+    notificationId: connectionId,
+    taskOngoing: true,
+  });
+  expect(mockTaskNotifications.get(connectionId)).toEqual({
+    title: 'PC',
+    ongoing: true,
+  });
+  expect(mockTaskNative.showBackgroundTaskNotification).toHaveBeenCalledWith(
+    connectionId,
+    connectionNotification.title,
+    '',
+    connectionNotification.url,
+    true,
+    false,
+    'notifications.android.runningTitle',
+    {
+      subText: connectionNotification.body,
+      connection: true,
+      actions: {
+        promoted: false,
+        token: connectionNotification.token,
+        prompt: '',
+        buttons: [{ id: 'disconnect', label: 'Disconnect' }],
+      },
+    },
+  );
+  await runtime.setRemoteConnections([]);
+  connectionLease.release();
+  await flush();
+  expect(running).toBe(false);
+  expect(mockTaskNotifications.has(connectionId)).toBe(false);
+  expect(mockTaskNotifications.get(mockTaskIds.get('task')!)).toEqual({
+    title: 'Chat',
+    ongoing: false,
+  });
+});
+
+test('disconnecting a remote connection transfers protection to local work without ending its task', async () => {
+  const connectionLease = runtime.acquire('remote.connection');
+  await runtime.setRemoteConnections([connectionNotification]);
+  const connectionId = mockTaskIds.get(connectionNotification.key)!;
+  const local = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'local');
+  const interrupted = jest.fn();
+  const localLease = runtime.acquire('local.chat', interrupted);
+  await flush();
+  await runtime.setRemoteConnections([]);
+  connectionLease.release();
+  await flush();
+  expect(running).toBe(true);
+  expect(interrupted).not.toHaveBeenCalled();
+  expect(mockTaskNotifications.has(connectionId)).toBe(false);
+  expect(mockTaskNotifications.get(mockTaskIds.get('local')!)).toEqual({
+    title: 'Chat',
+    ongoing: true,
+  });
+  expect(native.updateNotification).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      notificationId: mockTaskIds.get('local'),
+      taskOngoing: true,
+    }),
+  );
+  await local.end('default', props('completed'));
+  localLease.release();
+});
+
+test('connection state updates reuse their notification identity and identical updates do not post again', async () => {
+  runtime.acquire('remote.connection');
+  await runtime.setRemoteConnections([connectionNotification]);
+  const count = mockTaskNative.showBackgroundTaskNotification.mock.calls.length;
+  await runtime.setRemoteConnections([{ ...connectionNotification }]);
+  expect(mockTaskNative.showBackgroundTaskNotification.mock.calls.length).toBe(count);
+  const next = { ...connectionNotification, body: 'Connecting' };
+  await runtime.setRemoteConnections([next]);
+  expect(mockTaskIds.size).toBe(1);
+  expect(mockTaskNative.showBackgroundTaskNotification.mock.calls.length).toBe(count + 1);
+  expect(mockTaskNotifications.size).toBe(1);
+});
+
+test('PC connection status follows its unfinished sessions and returns to connected after the last ends', async () => {
+  runtime.acquire('remote.connection');
+  await runtime.setRemoteConnections([connectionNotification]);
+  const id = mockTaskIds.get(connectionNotification.key)!;
+  const presenter = runtime.createPresenter<BackgroundReplyActivityProps>();
+  const first = presenter.start(
+    props('preparing'),
+    'cherrystudio-dev://remote?connectionId=pc&sessionId=first',
+  );
+  await flush();
+  const bodies = () =>
+    mockTaskNative.showBackgroundTaskNotification.mock.calls
+      .filter((call) => call[0] === id)
+      .map((call) => call[7].subText);
+  expect(bodies().at(-1)).toBe('session.status.running');
+  expect(native.updateNotification).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      taskDesc: 'session.status.running',
+    }),
+  );
+  const second = presenter.start(
+    props('responding'),
+    'cherrystudio-dev://remote?connectionId=pc&sessionId=second',
+  );
+  await flush();
+  const count = bodies().length;
+  await first.update({ ...props('responding'), preview: 'Streaming text' });
+  await first.end('default', props('completed'));
+  expect(bodies()).toHaveLength(count);
+  await second.update(props('awaiting-approval'));
+  expect(bodies()).toHaveLength(count);
+  await second.end('default', props('failed'));
+  expect(bodies().at(-1)).toBe(connectionNotification.body);
+  expect(
+    mockTaskNative.showBackgroundTaskNotification.mock.calls
+      .filter((call) => call[0] === id)
+      .every((call) => call[5] === false),
+  ).toBe(true);
+});
+
+test('local and other PC sessions do not change a connection status; cancellation releases its running status', async () => {
+  runtime.acquire('remote.connection');
+  await runtime.setRemoteConnections([connectionNotification]);
+  const id = mockTaskIds.get(connectionNotification.key)!;
+  const presenter = runtime.createPresenter<BackgroundReplyActivityProps>();
+  presenter.start(props('responding'), 'cherrystudio-dev:///?sessionId=local');
+  presenter.start(
+    props('responding'),
+    'cherrystudio-dev://remote?connectionId=other&sessionId=remote',
+  );
+  await flush();
+  const body = () =>
+    mockTaskNative.showBackgroundTaskNotification.mock.calls.findLast((call) => call[0] === id)?.[7]
+      .subText;
+  expect(body()).toBe(connectionNotification.body);
+  const own = presenter.start(
+    props('thinking'),
+    'cherrystudio-dev://remote?connectionId=pc&sessionId=own',
+  );
+  await flush();
+  expect(body()).toBe('session.status.running');
+  await own.end('immediate', props('cancelled'));
+  expect(body()).toBe(connectionNotification.body);
+});
+
+test('task notices mark whether the task runs on the PC or on this phone', async () => {
+  const presenter = runtime.createPresenter<BackgroundReplyActivityProps>();
+  presenter.start(props('responding'), 'cherrystudio-dev:///?sessionId=local');
+  presenter.start(
+    props('responding'),
+    'cherrystudio-dev://remote?connectionId=pc&sessionId=remote',
+  );
+  await flush();
+  const label = (key: string) =>
+    mockTaskNative.showBackgroundTaskNotification.mock.calls.findLast(
+      (call) => call[0] === mockTaskIds.get(key),
+    )?.[7].subText;
+  expect(label('cherrystudio-dev:///?sessionId=local')).toBe('notifications.source.phone');
+  expect(label('cherrystudio-dev://remote?connectionId=pc&sessionId=remote')).toBe(
+    'notifications.source.desktop',
+  );
+});
+
+test('alerts once per request, including consecutive questions without an intervening running phase', async () => {
+  const activity = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=s');
+  runtime.acquire('chat');
+  await flush();
+  setAppState('background');
+  await activity.update({ ...props('awaiting-approval'), attentionId: 'a1' });
+  await activity.update({ ...props('awaiting-approval'), attentionId: 'a1', title: 'Renamed' });
+  await activity.update({ ...props('awaiting-answer'), attentionId: 'q1' });
+  await activity.update({ ...props('awaiting-answer'), attentionId: 'q2' });
+  await activity.update({ ...props('awaiting-answer'), attentionId: 'q2' });
+  expect(
+    mockTaskNative.showBackgroundTaskNotification.mock.calls.filter((call) => call[5]),
+  ).toHaveLength(3);
+  expect(running).toBe(true);
+});

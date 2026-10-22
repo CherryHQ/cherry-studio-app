@@ -90,8 +90,8 @@ export class DevicePermissions implements PermissionsModule {
     }, signal);
   }
 
-  /** Backend-only: serialize native operations that may present a system authorization sheet. */
-  runWithSystemPrompt<TResult>(
+  /** Serialize native operations that may present a system authorization sheet. */
+  private runWithSystemPrompt<TResult>(
     operation: () => Promise<TResult>,
     signal?: AbortSignal,
   ): Promise<TResult> {
@@ -154,7 +154,11 @@ export class DevicePermissions implements PermissionsModule {
       case 'camera.read':
         return toPermissionStatus(await ImagePicker.getCameraPermissionsAsync());
       case 'photos.read':
-        return toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
+        // Android selection uses the system picker, which grants access to selected URIs.
+        // The app does not browse the library or declare its read permissions.
+        return Platform.OS === 'android'
+          ? unsupported
+          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
       case 'photos.write':
         // Expo's modern MediaStore writer starts at Android 11; its older writer
         // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.

@@ -62,7 +62,7 @@ native module ownership and the network-independent pairing migration.
 
 - `@cherrystudio/remote-protocol@0.6.0` comes from npm. Its published exports include the Agent,
   configuration, failure, and connection contracts; Mobile owns only its consumers and adapters.
-- `@cherrystudio/remote-transport@0.2.3` comes from npm and depends on the matching protocol
+- `@cherrystudio/remote-transport@0.2.4` comes from npm and depends on the matching protocol
   version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
   along with the service registry. Metro applies the libp2p legacy browser maps so native bundles
   use the pure-JS entries. Android pairing and configuration sync were verified against the former
@@ -170,6 +170,12 @@ applied; the checkpoint lease covers those reads. History is read at the project
 `historyRevision` (`messages.list`, `parts.list`); `REVISION_EXPIRED` restarts that traversal at
 the current revision without touching the live overlay. `history.committed` invalidates the
 history queries; `message.removed` after it releases the live message.
+
+History requests opt into `partsMode: 'paged'` only when the current connection's hello advertises
+`agentMessageSummariesVersion: 1`. Older desktops receive the legacy request. Summary rows omit
+`partIds`; Mobile follows every `agent.parts.list` cursor at the message revision and only caches
+the complete part list. Reconnects negotiate again. Live events and checkpoints keep complete
+message snapshots, and oversized indivisible items retain their non-retryable failure semantics.
 
 **Commands.** `RemoteAgentCommandJournal` persists `commandId` + params before sending. First send
 records both create/send IDs before creating a session and retains the created session if sending

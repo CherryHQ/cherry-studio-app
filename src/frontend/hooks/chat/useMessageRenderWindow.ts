@@ -8,6 +8,7 @@ type MessageWindowItem = {
 
 type MessageWindowSignature = {
   firstId: string | undefined;
+  ids: readonly string[];
   lastId: string | undefined;
   length: number;
 };
@@ -20,6 +21,7 @@ type MessageRenderWindowState = {
 function getMessageWindowSignature(messages: readonly MessageWindowItem[]): MessageWindowSignature {
   return {
     firstId: messages[0]?.id,
+    ids: messages.map((message) => message.id),
     lastId: messages[messages.length - 1]?.id,
     length: messages.length,
   };
@@ -34,23 +36,34 @@ export function getVisibleCountForWindow(
     return 0;
   }
 
-  if (!previous || currentVisibleCount === 0 || current.length < previous.length) {
+  if (!previous || currentVisibleCount === 0) {
     return Math.min(messageWindowPolicy.initialRenderCount, current.length);
   }
 
-  if (previous.lastId === current.lastId) {
-    const prependedCount = current.length - previous.length;
-    if (prependedCount > 0 && previous.firstId !== current.firstId) {
-      return Math.min(current.length, currentVisibleCount + prependedCount);
-    }
-
+  if (
+    previous.firstId === current.firstId &&
+    previous.lastId === current.lastId &&
+    previous.length === current.length
+  ) {
     return Math.min(currentVisibleCount, current.length);
   }
 
-  if (previous.firstId === current.firstId) {
-    const appendedCount = current.length - previous.length;
-    return Math.min(current.length, currentVisibleCount + appendedCount);
+  const prependedCount = current.length - previous.length;
+  if (
+    previous.lastId === current.lastId &&
+    previous.firstId !== current.firstId &&
+    prependedCount > 0
+  ) {
+    return Math.min(current.length, currentVisibleCount + prependedCount);
   }
+
+  // A bounded refetch can move both ends without replacing the conversation.
+  // Keep its earliest surviving rendered row, including any new tail messages.
+  const previouslyVisibleIds = new Set(
+    previous.ids.slice(Math.max(0, previous.length - currentVisibleCount)),
+  );
+  const firstVisibleIndex = current.ids.findIndex((id) => previouslyVisibleIds.has(id));
+  if (firstVisibleIndex >= 0) return current.length - firstVisibleIndex;
 
   return Math.min(messageWindowPolicy.initialRenderCount, current.length);
 }
@@ -106,6 +119,7 @@ function areMessageWindowSignaturesEqual(
   return (
     first.firstId === second.firstId &&
     first.lastId === second.lastId &&
-    first.length === second.length
+    first.length === second.length &&
+    first.ids.every((id, index) => id === second.ids[index])
   );
 }

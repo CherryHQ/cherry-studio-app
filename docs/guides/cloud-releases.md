@@ -70,8 +70,17 @@ build numbers even when they share a release tag.
 4. Publish the files and notes to GitHub Releases.
 
 GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
-published manually from the matching tag using the same APK, `SHA256SUMS`, and release notes from
-the GitHub release.
+published manually from the matching tag using the same APK and `SHA256SUMS` from the GitHub release.
+Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
+Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
+download information; do not copy one platform's notes verbatim to the other. Keep version tags,
+artifact filenames, checksums, and technical identifiers unchanged.
+
+GitHub's generated notes reuse pull request titles without translating them. Review their language
+and keep any manually curated replacement in English. Published GitHub release notes can be updated
+with `gh release edit <tag> --notes-file <english-notes.md>` without rebuilding or uploading the APK.
+When using `scripts/publishGitcodeRelease.ts`, supply the Chinese version as `release-notes.md` in
+its `RELEASE_DIRECTORY`; the script reads that file as-is and does not translate it.
 
 The public APK uses `production`, which enables Android update checks against GitCode's
 latest stable mobile release after app startup. Settings marks the update row with `NEW` when a newer
@@ -85,7 +94,7 @@ must be built with their own profiles rather than reusing this APK.
 Tags with a prerelease suffix are marked as prereleases on GitHub. Plain version tags publish regular
 releases. The workflow does not replace an existing attachment with different contents.
 
-The shared notes describe Android installation and explain that store distribution is independent.
+Both language versions describe Android installation and explain that store distribution is independent.
 The APK becomes public when this workflow succeeds; it does not wait for either store's review.
 Store links can be added to the release page after the listings are available.
 

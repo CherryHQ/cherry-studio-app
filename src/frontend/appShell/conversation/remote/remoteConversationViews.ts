@@ -128,6 +128,8 @@ export function remoteAvailability(source: RemoteSourceState, disposed: boolean)
             ? 'not-authorized'
             : 'retired',
     };
+  if (source.status === 'suspended' && source.reason === 'disconnected')
+    return { state: 'disabled', reason: 'disconnected' };
   if (source.status === 'offline' || source.status === 'connecting') {
     switch (source.reason) {
       case 'no-location':

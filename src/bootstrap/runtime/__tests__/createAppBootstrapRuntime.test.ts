@@ -298,6 +298,7 @@ describe('createAppBootstrapRuntime', () => {
       // The jest host runs the iOS preset, so the reply completion notifier is composed in.
       replyNotifications: expect.any(Object),
       subscribePresentationEnabled: expect.any(Function),
+      subscribeActions: expect.any(Function),
       onForegroundAttention: expect.any(Function),
       paintingPresenter: expect.any(Object),
       subscribeVisibleTask: expect.any(Function),

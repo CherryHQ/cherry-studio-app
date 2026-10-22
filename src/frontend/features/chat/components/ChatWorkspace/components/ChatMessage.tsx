@@ -3,9 +3,10 @@ import {
   Button,
   ContextMenu,
   ContextMenuExclusion,
+  InfoPopover,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, type ReactElement, type ReactNode } from 'react';
+import { memo, type ReactElement, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -16,7 +17,7 @@ import { useAssistantMessageActions } from '../context/AssistantMessageActionsPr
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageAnswerTabs } from './MessageAnswerTabs';
+import { MessageAnswerCards } from './MessageAnswerCards';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -37,54 +38,138 @@ type ChatMessageProps = {
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
-function renderChatAssistantMessage(
-  message: MessageListItem,
-  presentation: AssistantMessagePresentation,
-  attachments: ReactNode,
-  accessories: ReactNode,
-  renderUsage: ((message: MessageListItem) => ReactNode) | undefined,
-) {
+// Keeps the model icon on the line of the name's last character.
+const WORD_JOINER = '\u2060';
+
+/**
+ * The agent's name always shows in full and wraps rather than truncating. The
+ * model gives way first: its name shows only when it fits whole on the name's
+ * line, and otherwise its icon alone trails the name. Tapping the header names
+ * the model either way.
+ */
+function AssistantMessageHeader({
+  message,
+  presentation,
+}: {
+  message: MessageListItem;
+  presentation: AssistantMessagePresentation;
+}) {
+  const { t } = useTranslation();
+  const [isNameWrapped, setIsNameWrapped] = useState(false);
+  // Several answers name their models on their own cards instead.
+  const model = message.branch ? undefined : message.model;
+
+  const header = (
+    <View className="w-full flex-row items-start gap-2">
+      <AgentAvatar
+        accessibilityLabel={presentation.name}
+        avatar={presentation.avatar}
+        emoji={presentation.emoji}
+        name={presentation.name}
+        size={24}
+        uri={presentation.avatarUri}
+      />
+      {/* Centres the first line on the avatar. A model name that does not fit wraps onto a
+          zero-height line below the name, which this row clips away. */}
+      <View className="mt-0.5 min-w-0 flex-1 flex-row flex-wrap gap-x-1 overflow-hidden">
+        <Text
+          className="min-w-0 shrink font-semibold text-foreground text-sm"
+          onTextLayout={
+            model ? (event) => setIsNameWrapped(event.nativeEvent.lines.length > 1) : undefined
+          }
+        >
+          {presentation.name}
+          {model ? (
+            <>
+              {WORD_JOINER}
+              {/* An inline view rests on the baseline; per-platform offsets centre it on the
+                  glyphs. */}
+              <View className="translate-y-px pl-1.5 android:translate-y-[3px]">
+                <ModelAvatar model={model} size={16} />
+              </View>
+            </>
+          ) : null}
+        </Text>
+        {/* A wrapped name leaves no line to share, even where its first line has room. Text
+            measures no taller than its parent, so a hidden copy sizes the slot and the shown
+            copy floats free of it. */}
+        {model && !isNameWrapped ? (
+          <View className="h-0">
+            <Text className="text-sm opacity-0">{model.name}</Text>
+            <Text className="absolute top-0 left-0 text-foreground-tertiary text-sm">
+              {model.name}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  if (!model) return header;
+  return (
+    <BackgroundPressExclusion>
+      <InfoPopover
+        accessibilityLabel={t('chat.message.answeredBy', {
+          agent: presentation.name,
+          model: model.name,
+        })}
+        testID="assistant-message-model"
+        text={model.name}
+      >
+        {header}
+      </InfoPopover>
+    </BackgroundPressExclusion>
+  );
+}
+
+/**
+ * An answer with its header and actions. Several answers to one question are cards to swipe
+ * between, each opening in full over the screen; a source that cannot switch answers shows only
+ * the selected one.
+ */
+function AssistantChatMessage({
+  accessories,
+  attachments,
+  message,
+  presentation,
+  renderUsage,
+}: {
+  accessories: ReactNode;
+  attachments: ReactNode;
+  message: MessageListItem;
+  presentation: AssistantMessagePresentation;
+  renderUsage: ((message: MessageListItem) => ReactNode) | undefined;
+}) {
+  const { selectBranch } = useAssistantMessageActions();
+  const isGrouped = Boolean(message.branch && selectBranch);
+  const header = <AssistantMessageHeader message={message} presentation={presentation} />;
+  const extras = (
+    <>
+      {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
+      {accessories}
+      {message.status !== 'pending' ? (
+        <BackgroundPressExclusion>
+          <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+            <AssistantMessageToolbar message={message} />
+            <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
+          </ContextMenuExclusion>
+        </BackgroundPressExclusion>
+      ) : null}
+      <MessageTranslationContent message={message} />
+    </>
+  );
+
   return (
     <View className="w-full gap-2.5">
-      <View className="w-full flex-row items-center gap-2">
-        <AgentAvatar
-          accessibilityLabel={presentation.name}
-          avatar={presentation.avatar}
-          emoji={presentation.emoji}
-          name={presentation.name}
-          size={24}
-          uri={presentation.avatarUri}
-        />
-        <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
-          <Text className="shrink font-semibold text-foreground text-sm" numberOfLines={1}>
-            {presentation.name}
-          </Text>
-          {/* Several answers name their models in the tabs below instead. */}
-          {message.model && !message.branch ? (
-            <View className="min-w-0 shrink flex-row items-center gap-1">
-              <ModelAvatar model={message.model} size={16} />
-              <Text className="min-w-0 shrink text-foreground-tertiary text-sm" numberOfLines={1}>
-                {message.model.name}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-      {/* Above the answer so parallel answers can be compared while they still stream. */}
-      {message.branch ? <MessageAnswerTabs message={message} /> : null}
-      <AssistantMessage message={message}>
-        {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
-        {accessories}
-        {message.status !== 'pending' ? (
-          <BackgroundPressExclusion>
-            <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-              <AssistantMessageToolbar message={message} />
-              <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
-            </ContextMenuExclusion>
-          </BackgroundPressExclusion>
-        ) : null}
-        <MessageTranslationContent message={message} />
-      </AssistantMessage>
+      {header}
+      {isGrouped ? (
+        <>
+          <MessageAnswerCards message={message} />
+          <View className="w-full gap-2">{extras}</View>
+        </>
+      ) : (
+        <AssistantMessage message={message}>{extras}</AssistantMessage>
+      )}
     </View>
   );
 }
@@ -125,13 +210,13 @@ export const ChatMessage = memo(function ChatMessage({
         {accessories}
       </View>
     ) : (
-      renderChatAssistantMessage(
-        message,
-        assistantPresentation,
-        attachments,
-        accessories,
-        renderUsage,
-      )
+      <AssistantChatMessage
+        accessories={accessories}
+        attachments={attachments}
+        message={message}
+        presentation={assistantPresentation}
+        renderUsage={renderUsage}
+      />
     );
 
   return (

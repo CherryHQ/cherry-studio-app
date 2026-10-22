@@ -91,6 +91,7 @@ function fixture(
   });
   const notifications = new Set<(notification: DesktopNotification) => void>();
   const connection = {
+    agentMessageSummariesVersion: undefined as number | undefined,
     agentAttachmentSelections: false,
     agentUploadsVersion: 1,
     agentUploadChecksum: 'sha256',
@@ -248,6 +249,7 @@ it('observes through its lease, suppresses stale command targets, and never owns
 
 function backgroundFixture() {
   const turn = {
+    setInteraction: jest.fn(),
     updateContent: jest.fn(),
     update: jest.fn(),
     awaitApproval: jest.fn(),
@@ -759,7 +761,7 @@ it('keeps inline tool payloads out of frontend references and rejects another sc
 });
 
 it('materializes a question only from its bound input revision and preserves the response target', async () => {
-  const test = fixture();
+  const test = backgroundFixture();
   const input = {
     questions: [
       { question: '目录？', options: [{ label: 'src' }, { label: 'docs' }], multiSelect: true },
@@ -798,6 +800,14 @@ it('materializes a question only from its bound input revision and preserves the
   await settle();
   const question = snapshot!.interactions[0];
   expect(question.kind).toBe('question');
+  expect(test.turn.updateContent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      phase: 'awaiting-answer',
+      attentionId: 'question',
+      detail: 'chat.question.waiting',
+    }),
+  );
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
   await expect(
     test.source.readResource(question.input, new AbortController().signal),
   ).resolves.toEqual({
@@ -851,6 +861,139 @@ test('catalog preserves the desktop emoji without creating a session observation
   f.source.dispose();
   await f.source.drain();
 });
+
+it('negotiates history summaries from the current connection after each reconnect', async () => {
+  const test = fixture();
+  test.request.mockResolvedValue({ items: [], nextCursor: null });
+  const signal = new AbortController().signal;
+  for (const version of [undefined, 1, undefined]) {
+    test.setState({ status: 'suspended' });
+    test.connection.agentMessageSummariesVersion = version;
+    test.setState({ status: 'ready' });
+    await test.source.history('s', '1', undefined, signal);
+    const [method, params] = test.request.mock.calls.at(-1)!;
+    expect(method).toBe('agent.messages.list');
+    expect(params).toEqual({
+      sessionId: 's',
+      historyRevision: '1',
+      cursor: undefined,
+      ...(version === 1 ? { partsMode: 'paged' } : {}),
+    });
+  }
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('hydrates every page of a message summary and reuses its revision-bound parts', async () => {
+  const test = fixture();
+  test.connection.agentMessageSummariesVersion = 1;
+  const parts = Array.from({ length: 130 }, (_, index) => ({
+    partId: `p${index}`,
+    revision: '1',
+    kind: 'text',
+    state: 'completed',
+    content: { text: `Part ${index}` },
+  }));
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.get') return { session: test.projection.session };
+    if (method === 'agent.messages.list')
+      return {
+        items: [
+          {
+            messageId: 'm',
+            revision: '9',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+            usage: { totalTokens: 42 },
+          },
+        ],
+        nextCursor: 'older',
+      };
+    if (method === 'agent.parts.list') {
+      expect(params).toMatchObject({ sessionId: 's', messageId: 'm', messageRevision: '9' });
+      const offset = Number(params.cursor ?? 0);
+      return {
+        items: parts.slice(offset, offset + 50),
+        nextCursor: offset + 50 < parts.length ? String(offset + 50) : null,
+      };
+    }
+    throw new Error(method);
+  });
+  const signal = new AbortController().signal;
+  await test.source.readSession('s', signal);
+  const history = await test.source.history('s', '1', undefined, signal);
+  expect(history.next).toBe('older');
+  expect(history.items[0]).toMatchObject({ id: 'm', usage: { totalTokens: 42 } });
+  expect(history.items[0].parts).toEqual(
+    parts.map((part) => ({
+      id: part.partId,
+      kind: 'text',
+      text: part.content.text,
+      state: 'completed',
+      complete: true,
+    })),
+  );
+  expect(test.source.peekSession('s')?.history?.complete).toBe(true);
+  await test.source.history('s', '1', undefined, signal);
+  expect(test.request.mock.calls.filter(([method]) => method === 'agent.parts.list')).toHaveLength(
+    3,
+  );
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it.each(['revision', 'cursor'] as const)(
+  'does not cache incomplete summary parts after a %s failure',
+  async (failure) => {
+    const test = fixture();
+    test.connection.agentMessageSummariesVersion = 1;
+    test.request.mockImplementation(async (method, params) => {
+      if (method === 'agent.messages.list')
+        return {
+          items: [
+            {
+              messageId: 'm',
+              revision: '1',
+              role: 'assistant',
+              status: 'success',
+              partsMode: 'paged',
+            },
+          ],
+        };
+      if (method === 'agent.parts.list') {
+        if (params.cursor && failure === 'revision')
+          throw new RemoteFailureError({ reason: 'REVISION_EXPIRED', message: 'Changed' });
+        return {
+          items: [
+            {
+              partId: 'p',
+              revision: '1',
+              kind: 'text',
+              state: 'completed',
+              content: { text: 'Incomplete' },
+            },
+          ],
+          nextCursor: 'repeat',
+        };
+      }
+      throw new Error(method);
+    });
+    const signal = new AbortController().signal;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(test.source.history('s', '1', undefined, signal)).rejects.toMatchObject({
+        code: failure === 'revision' ? 'REVISION_EXPIRED' : 'PROTOCOL_ERROR',
+      });
+    }
+    expect(
+      test.request.mock.calls.filter(
+        ([method, params]) => method === 'agent.parts.list' && params.cursor === undefined,
+      ),
+    ).toHaveLength(2);
+    test.source.dispose();
+    await test.source.drain();
+  },
+);
 
 it('returns cached history across scope disposal, rebinds resources and revalidates metadata without rereading parts', async () => {
   const cache = new RemoteSessionReadCache();

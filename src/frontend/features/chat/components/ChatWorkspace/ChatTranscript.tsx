@@ -1,5 +1,5 @@
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { type ComponentProps } from 'react';
+import { type ComponentProps, useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,7 +21,13 @@ export function ChatTranscript({
   isLoadingMore,
   ...list
 }: ChatTranscriptProps) {
-  const headerHeight = useHeaderHeight();
+  const reportedHeaderHeight = useHeaderHeight();
+  // A header hidden under a full-screen layer reports no height; keeping the last one leaves the
+  // transcript where it was, so closing the layer lands back on the same content.
+  const [headerHeight, setHeaderHeight] = useState(reportedHeaderHeight);
+  if (reportedHeaderHeight > 0 && reportedHeaderHeight !== headerHeight) {
+    setHeaderHeight(reportedHeaderHeight);
+  }
   const { top } = useSafeAreaInsets();
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
     renderGateKey: list.dataKey,

@@ -83,6 +83,7 @@ export class DesktopSession {
   agentUploadsVersion?: number;
   agentUploadChecksum?: 'sha256';
   agentAttachmentSelections?: boolean;
+  agentMessageSummariesVersion?: number;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
@@ -107,6 +108,7 @@ export class DesktopSession {
       session.agentUploadsVersion = hello.agentUploadsVersion;
       session.agentUploadChecksum = hello.agentUploadChecksum;
       session.agentAttachmentSelections = hello.agentAttachmentSelections;
+      session.agentMessageSummariesVersion = hello.agentMessageSummariesVersion;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;

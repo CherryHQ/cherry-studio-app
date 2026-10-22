@@ -55,12 +55,12 @@ function imageReplacements<T extends z.ZodType>(anchor: T) {
       z.strictObject({
         anchor,
         file_entry_id: FileEntryIdSchema.describe(
-          'Replacement PNG/JPEG from the conversation or selected workspace. Keeps the existing image frame, crop and transforms; prepare a matching aspect ratio to avoid stretching.',
+          'Existing replacement image from the conversation, a generated image or the selected workspace. Keeps the existing image frame, crop and transforms; pick an image with a matching aspect ratio to avoid stretching.',
         ),
       }),
     )
     .min(1)
-    .max(8)
+    .max(50)
     .optional();
 }
 
@@ -95,13 +95,12 @@ const replacement = {
   expect_text: officeText(32_000).describe(
     'Exact complete paragraph text from read_office_content.',
   ),
-  find: officeText(16_000)
+  find: officeText(16_000, String.raw`\t\n\r`)
     .min(1)
-    .regex(/^[^\r\n\t]*$/)
     .describe(
       'Literal text occurring exactly once inside charRange, or in the complete paragraph when no range is supplied.',
     ),
-  replace: officeText(16_000).regex(/^[^\r\n\t]*$/),
+  replace: officeText(16_000, String.raw`\t\n\r`),
 };
 export const officeEditSchemas = {
   docx: z

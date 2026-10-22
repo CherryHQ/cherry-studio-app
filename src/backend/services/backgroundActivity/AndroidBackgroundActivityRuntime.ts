@@ -16,6 +16,7 @@ import type {
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
+import { parseBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import type { BackgroundExecutionStatus } from '@/shared/contracts/backgroundExecution';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -42,7 +43,7 @@ const holdBackgroundExecution = () => new Promise<void>(() => {});
 
 type ActivityProps = BackgroundReplyActivityProps | PaintingActivityProps;
 type ActivityRecord = {
-  attention?: 'terminal' | 'approval';
+  attention?: string;
   cancelled?: boolean;
   deepLinkUrl?: string;
   id: number;
@@ -60,6 +61,19 @@ type ServiceContent = {
   taskDesc: string;
   linkingURI?: string;
 };
+export type RemoteConnectionNotification = {
+  connectionId: string;
+  key: string;
+  title: string;
+  body: string;
+  url: string;
+  token: string;
+  disconnectLabel: string;
+};
+type ConnectionNotificationRecord = RemoteConnectionNotification & {
+  id: number;
+  delivered?: string;
+};
 
 /** Owns execution demand and conversation cards; background-actions owns the native service. */
 @Injectable('AndroidBackgroundActivityRuntime')
@@ -68,6 +82,7 @@ type ServiceContent = {
 @AppStatePolicy('background-presentation')
 export class AndroidBackgroundActivityRuntime extends BaseService implements KeepAliveSource {
   private readonly activities = new Set<ActivityRecord>();
+  private connections: ConnectionNotificationRecord[] = [];
   private readonly leases = new Set<LeaseRecord>();
   private background?: typeof BackgroundService;
   private notifications?: Notifications;
@@ -113,6 +128,32 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
 
   private publishStatus(): void {
     for (const listener of this.statusListeners) listener();
+  }
+
+  /** Connection demand is held through KeepAliveCoordinator; this owns presentation only. */
+  setRemoteConnections(notifications: readonly RemoteConnectionNotification[]): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.disposed) return;
+      const previous = this.connections;
+      this.connections = notifications.map((notification) => {
+        const existing = previous.find((record) => record.key === notification.key);
+        return {
+          ...notification,
+          id:
+            existing?.id ??
+            this.native?.getBackgroundTaskNotificationId?.(notification.key) ??
+            92902 + this.nextId++,
+          delivered: existing?.delivered,
+        };
+      });
+      const removed = previous.filter(
+        (record) => !this.connections.some((next) => next.id === record.id),
+      );
+      // Switch the service anchor before retiring its previous connection identity.
+      await this.reconcile();
+      for (const record of removed)
+        await this.native?.dismissBackgroundTaskNotification?.(record.id);
+    });
   }
 
   dismissCompletedTask = async (deepLinkUrl: string): Promise<void> => {
@@ -248,7 +289,10 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
               if (record.attention === 'terminal' && !isTerminal(nextProps.phase)) {
                 record.attention = undefined;
               }
-              if (previousPhase === 'awaiting-approval' && nextProps.phase !== previousPhase) {
+              if (
+                (previousPhase === 'awaiting-approval' || previousPhase === 'awaiting-answer') &&
+                nextProps.phase !== previousPhase
+              ) {
                 record.attention = undefined;
               }
               // Even superseded phases must reset the previous turn's notification state.
@@ -296,6 +340,9 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         [...this.activities].map(({ id }) => this.native?.dismissBackgroundTaskNotification?.(id)),
       );
       this.activities.clear();
+      for (const record of this.connections)
+        await this.native?.dismissBackgroundTaskNotification?.(record.id);
+      this.connections = [];
     });
   }
 
@@ -329,6 +376,8 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
             // Native execution stays foreground until the last task releases it.
             taskName: 'CherryBackgroundGeneration',
             taskIcon: { name: 'notification_icon', type: 'drawable' },
+            // Same notification brand red as the native notification bridge (DESIGN.md).
+            color: '#C74444',
             // The notification bridge names the same channel; task content never does.
             channelName: this.environment.translate('notifications.android.runningTitle'),
             foregroundServiceType: ['dataSync'],
@@ -381,6 +430,15 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   }
 
   private runningContent(): ServiceContent {
+    const connection = this.connections[0];
+    if (connection)
+      return {
+        notificationId: connection.id,
+        taskOngoing: true,
+        taskTitle: connection.title,
+        taskDesc: this.connectionBody(connection),
+        linkingURI: connection.url,
+      };
     const records = [...this.activities].filter((record) => !record.cancelled);
     const first = records.find(({ props }) => !isTerminal(props.phase)) ?? records[0];
     if (first) return this.serviceContent(first);
@@ -425,6 +483,35 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   }
 
   private async publishNotifications(): Promise<void> {
+    for (const connection of this.connections) {
+      const body = this.connectionBody(connection);
+      const content = JSON.stringify({ ...connection, body, delivered: undefined });
+      if (connection.delivered === content) continue;
+      try {
+        await this.native?.showBackgroundTaskNotification?.(
+          connection.id,
+          connection.title,
+          '',
+          connection.url,
+          true,
+          false,
+          this.environment.translate('notifications.android.runningTitle'),
+          {
+            subText: body,
+            connection: true,
+            actions: {
+              promoted: false,
+              token: connection.token,
+              prompt: '',
+              buttons: [{ id: 'disconnect', label: connection.disconnectLabel }],
+            },
+          },
+        );
+        connection.delivered = content;
+      } catch (error) {
+        logger.warn('Connection notification delivery failed', error as Error);
+      }
+    }
     for (const record of this.activities) {
       try {
         await this.publishNotification(record);
@@ -432,6 +519,18 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         logger.warn('Task notification delivery failed', error as Error);
       }
     }
+  }
+
+  private connectionBody(connection: ConnectionNotificationRecord): string {
+    const scheme = connection.url.split('://')[0] ?? '';
+    const hasRunningSession = [...this.activities].some((record) => {
+      if (record.cancelled || isTerminal(record.props.phase)) return false;
+      const task = parseBackgroundTaskUrl(record.deepLinkUrl, scheme);
+      return task?.kind === 'remote-chat' && task.connectionId === connection.connectionId;
+    });
+    return hasRunningSession
+      ? this.environment.translate('session.status.running')
+      : connection.body;
   }
 
   private async publishNotification(record: ActivityRecord): Promise<void> {
@@ -445,8 +544,13 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     const { props } = record;
     const phase = props.phase;
     const terminal = isTerminal(phase);
-    const kind = terminal ? 'terminal' : phase === 'awaiting-approval' ? 'approval' : undefined;
-    const requiresAttention = phase === 'awaiting-approval' || phase === 'failed';
+    const kind = terminal
+      ? 'terminal'
+      : phase === 'awaiting-approval' || phase === 'awaiting-answer'
+        ? JSON.stringify([phase, 'attentionId' in props ? props.attentionId : ''])
+        : undefined;
+    const requiresAttention =
+      phase === 'awaiting-approval' || phase === 'awaiting-answer' || phase === 'failed';
     const shouldAlert =
       kind !== undefined &&
       record.attention !== kind &&
@@ -481,6 +585,16 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
           ? 'notifications.android.attentionChannel'
           : 'notifications.android.runningTitle',
       ),
+      {
+        // The title names the task; the header marks whether it runs on the PC or this phone.
+        subText: this.environment.translate(
+          parseBackgroundTaskUrl(record.deepLinkUrl, record.deepLinkUrl?.split('://')[0] ?? '')
+            ?.kind === 'remote-chat'
+            ? 'notifications.source.desktop'
+            : 'notifications.source.phone',
+        ),
+        ...('actions' in props && props.actions ? { actions: props.actions } : {}),
+      },
     );
   }
 

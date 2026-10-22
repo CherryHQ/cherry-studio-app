@@ -507,8 +507,7 @@ contains these tools:
 | `health_list_workouts` | Newest-first workout overview with truncation information |
 | `health_list_data_types` | Search the public catalog and current iOS availability; no personal data |
 | `health_query_data` | Any supported type's original records, quantity statistics, characteristics, activity rings or medication list |
-| `health_get_record` | Record details, waveform/route/quantity points, clinical/CDA content and attachments |
-| `health_share_verifiable_records` | One-time selected SMART Health Cards / EU Digital COVID Certificates; requires Apple’s restricted entitlement |
+| `health_get_record` | Record details, waveform/route/quantity points and attachments |
 
 All personal-data tools require application approval even in automatic approval mode. Only public
 catalog discovery can run automatically. The approval sheet names the receiving model service and
@@ -518,8 +517,9 @@ Existing Agents retain their stored preference. Android has no Health Connect br
 
 The [native module](../../../modules/health-access/README.md) and shared catalog cover the current
 public HealthKit types in the iOS 27.1 SDK, including quantities, symptoms, reproductive health,
-nutrition, hearing, vision, ECG, clinical records and medications. Minimum iOS versions are checked
-per type. Neither a supported type nor a completed authorization request proves that read access
+nutrition, hearing, vision, ECG and medications. Clinical health records, CDA documents and
+verifiable health records are deliberately excluded, so the app requests no Health Records
+entitlement. Minimum iOS versions are checked per type. Neither a supported type nor a completed authorization request proves that read access
 was granted. Empty data cannot distinguish denied access from missing records and must not be
 reported as measured zero. No writing, background delivery or extended-history access is requested.
 
@@ -559,19 +559,9 @@ Activity rings cover complete local calendar days. Blood-pressure and food autho
 the contained quantities. Vision prescriptions and medications use per-object selection;
 medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
 selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
-selections, CDA content prompts and verifiable credential prompts share the application permission
-queue. Queued reads respect cancellation; an open selection retains the queue until native
-completion or timeout. Clinical reads require the extra Health Records entitlement and usage
-description.
+selections share the application permission queue.
 
-Verifiable credentials use a separate one-time selection query and explicit application approval,
-with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;
-continuations require selecting the same records. Original payload bytes are returned without
-verifying the signature or issuer. This API also requires a restricted entitlement approved by Apple,
-which this change does not obtain or enable; an ordinary clinical capability does not suffice.
-
-A new native binary is required, including a signing profile with the clinical capability. The
-initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
+A new native binary is required. The initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
 App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
 categories and selected AI service. See [Health Review](../../guides/health-review.md).
 
@@ -613,8 +603,9 @@ they do not calculate formulas themselves.
 `inspect_office_file` with `kind: "images"` returns paged picture anchors, names/alt text, optional
 frame dimensions and cell positions, and `replaceable`/`reason`. These anchors feed the edit tools'
 optional `images` array, not `read_office_content`. Each replacement contains `anchor` and a managed
-PNG/JPEG `file_entry_id`. Image-only and mixed edits are supported, with at most 8 replacements and
-2 MiB of replacement images. Every image is authorized before any file bytes are read. Replacement
+image `file_entry_id`. Image-only and mixed edits are supported, with at most 50 replacements;
+large or non-PNG/JPEG images are embedded as a compressed JPEG copy, never regenerated. Every image
+is authorized before any file bytes are read. Replacement
 keeps the selected occurrence's frame, crop, transforms and alt text; matching the new aspect ratio
 is the caller's responsibility. Shared original media stays unchanged for other occurrences.
 Unsupported linked/alternate/extended images fail explicitly. Image-only workbook edits do not
@@ -626,7 +617,8 @@ each result as `{ value, artifacts }`. Creation and editing return `value.status
 `source_sha256`. Inspection exposes `items` (paragraph `anchor`/`excerpt`, sheets, or slide shapes);
 exact reads expose `text` or cell `rows`. Excel `rows` is a two-dimensional array of cell objects;
 use `value.rows.flat().find(cell => cell.address === "B2")?.value` to read B2.
-A business error returns `{ status: "error", message }`.
+A business error returns `{ status: "error", message }` and marks the call failed, so the
+conversation shows it as failed; in Code Mode the nested call rejects with that message.
 `library_search_files` instead returns `{ files, nextCursor }`, without a status; each file includes
 `fileEntryId`. Code Mode commits `store()` changes only when a script succeeds. Finish a short
 creation script after storing file ids, then run dependent work in a separate script:
@@ -703,10 +695,17 @@ file however many edits it took, and across turns a file keeps its history as ve
   file instead. Without a workspace, edits to root files retain their lineage, and outside copies
   land at the root. A derived version becomes this turn's draft, so subsequent edits continue it.
 
-`edit_file` serializes calls naming the same source within a turn. The database transaction also
-compares the current entry id and content revision before committing; a competing Session cannot
-silently fork or overwrite a shared file. It rejects stale drafts and destinations moved outside
-the captured workspace. The Agent must re-read after a conflict.
+`edit_file` serializes calls naming the same source within a turn, in the order the model listed
+them. The source and its derived draft share one queue, entered before resolving paths or checking
+the base. Batched path edits all carry the base of the same read: a base that this tool's own earlier
+edit in the turn replaced continues from that edit's version and revision, so the batch applies
+instead of conflicting on its second call. A change from anywhere else still leaves the base stale.
+The database transaction also compares the current entry id and content revision before committing;
+a competing Session cannot silently fork or overwrite a shared file. It rejects stale drafts and
+destinations moved outside the captured workspace. The Agent must re-read after a conflict. Error
+results carry a fixed `code` (`old_string_not_found`, `old_string_ambiguous`, `stale_revision`,
+`file_too_large`, `not_text`, `file_unavailable`, `file_unreadable`, `file_not_in_scope`,
+`invalid_tool_input`) beside the model-facing message.
 
 `read_file` accepts the conversation ledger and the selected workspace. Outside-library reads
 require the separately approved library tool. It shares `readAttachmentContent` with attachment preparation and captures the
@@ -762,12 +761,14 @@ adapts its transport to the existing native QuickJS-NG engine; no WASM runtime i
 approval, provider selection and usage attribution.
 
 A script receives structured tool results and can combine calls, but every nested call passes the
-same capability checks and approval as a direct model call. Parent and child calls share the
-sixty-four-call turn budget, including invalid child arguments. Admission happens before child-task
-creation and deduplicates resumed calls by their stable IDs; only model rounds count toward twenty
-steps. A child call past the budget fails without creating a task; the script receives the error,
-keeps running and returns what it gathered, and the next model request is the tool-free final
-response. The Code Mode prompt section states this limit. The live parent shows
+same capability checks and approval as a direct model call. Neither model-issued nor nested calls
+have a fixed per-turn count limit. Pi owns nested-task creation, argument validation and recovery
+by stable call keys. Invalid child arguments return an error to the script without executing the
+application callback. The Code Mode prompt section describes temporary working data and managed
+output paths. It also tells the model to hand a file's content to another tool by reading it inside
+the script (`read_file` `offset`/`max_characters`, joined until `complete`) rather than retyping it
+into tool arguments; model output is the costly and lossy channel, while scripts pass strings at no
+model cost. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
@@ -831,11 +832,11 @@ credentials and private payloads from errors, and returns portable values. Cance
 through MCP, provider, device, and file operations where their APIs support it; non-abortable native
 work must discard late results after the turn is terminal.
 
-Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
-one final response with all tools disabled, using the current results and disclosing remaining gaps.
-This response remains subject to the context limit; the turn itself has no wall-clock deadline. The MCP
-adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
-limits are application constants rather than user settings in Version 1.
+Cherry adds no fixed tool-loop step or tool-call count limit. Pi owns continuation and automatic
+context compaction; the turn itself has no wall-clock deadline. Cancellation, failure-group policy,
+and per-operation limits remain active. The MCP adapter caps each remote call at 60 seconds of active
+execution and projects at most 256 KiB of JSON. These per-operation limits are application constants
+rather than user settings in Version 1.
 
 ## Desktop Relationship
 
@@ -930,17 +931,26 @@ disabled groups as the manual create form. A saved Agent without a model remains
 but cannot start chatting. The model derives instructions from the conversation and may use
 `ask_user_question` for material missing requirements.
 
+Every model-facing property has a concrete type, because OpenAI-compatible gateways that
+translate tools for Gemini reject a property whose type is hidden in a union. `model` is a
+registered `provider::model` string; omitting it preserves the model on update. These tools cannot
+clear a model; the user does that in the editor. Agent targets are strings validated locally as an
+exact Agent ID or `current`.
+
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
 and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
-bindings (`skillId` and `isEnabled`); both get and
+bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
 writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
-latest definition. `changes.skills` applies only the listed bindings: `isEnabled: true` binds and
-enables, `false` binds and disables, and `null` removes a binding. Unlisted bindings are preserved;
-this does not change the Skill library's global enablement. Definition edits and requested binding
+latest definition. `changes.skills` applies only the listed bindings: `state: enabled` binds and
+enables, `disabled` binds and disables, and `removed` removes a binding. Unlisted bindings are
+preserved; this does not change the Skill library's global enablement. Definition edits and requested binding
 changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
 apply to future turns only.
+
+A call saved before this contract, such as one still awaiting approval, fails validation without
+writing; the model reads the current definition and retries with the new form.
 
 Create/update publish committed Data API cache invalidations, including when a turn has no visible
 chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is

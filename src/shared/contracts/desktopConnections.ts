@@ -15,6 +15,8 @@ export type DesktopPairingProgress =
 
 /** Sync enabled PC provider configuration; add missing enabled models and preserve existing models. */
 export interface DesktopConnectionsModule {
+  /** Explicitly resumes a user-disconnected local transport, preserving pairing and PC execution. */
+  reconnect(id: string): void;
   getEndpoints(id: string, signal: AbortSignal): Promise<DirectEndpoint[]>;
   saveEndpoint(
     id: string,

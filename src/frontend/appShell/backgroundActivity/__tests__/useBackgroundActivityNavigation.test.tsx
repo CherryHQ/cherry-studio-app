@@ -121,3 +121,33 @@ test('opens ongoing work without clearing its execution notification', async () 
   expect(mockClear).toHaveBeenCalled();
   expect(mockDismiss).not.toHaveBeenCalled();
 });
+
+test('inline decisions stay with the runtime without opening or dismissing the chat', async () => {
+  mockResponse = { ...response('cherrystudio:///?sessionId=s'), actionIdentifier: 'approve' };
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
+  expect(mockClear).not.toHaveBeenCalled();
+  expect(mockDismiss).not.toHaveBeenCalled();
+});
+
+test('opens and dismisses a pending decision notice without treating it as a terminal execution', async () => {
+  mockResponse = response(
+    'cherrystudio://remote?connectionId=pc&sessionId=s',
+    BACKGROUND_NOTIFICATION_OWNER,
+    false,
+  );
+  mockResponse.notification.request.content.data = {
+    ...mockResponse.notification.request.content.data,
+    attention: true,
+  };
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  expect(mockRouter.navigate).toHaveBeenCalledWith({
+    pathname: '/remote',
+    params: { connectionId: 'pc', sessionId: 's' },
+  });
+  expect(mockDismiss).toHaveBeenCalledWith('notice');
+});

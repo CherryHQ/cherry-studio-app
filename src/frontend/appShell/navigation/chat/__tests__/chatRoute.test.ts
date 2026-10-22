@@ -1,4 +1,10 @@
-import { chatHref, chatReturnToHref, chatRouteParams, parseChatRoute } from '../chatRoute';
+import {
+  chatHref,
+  chatReturnToHref,
+  chatRouteParams,
+  parseChatPreviewSource,
+  parseChatRoute,
+} from '../chatRoute';
 
 describe('shared chat route contract', () => {
   test('uses the Session id as the complete existing-chat identity', () => {
@@ -77,4 +83,22 @@ describe('shared chat route contract', () => {
       undefined,
     );
   });
+
+  test.each([
+    { kind: 'session' as const, sessionId: 'session-1' },
+    { kind: 'draft' as const, agentId: 'agent-1', composerHandoff: 'seed-1' },
+  ])('round-trips a preview selection without replacing the $kind identity', (source) => {
+    const target = { ...source, selectionHandoff: 'selection-1' };
+    const params = chatRouteParams(target);
+    expect(parseChatRoute(params)).toEqual({ status: 'ready', target });
+    expect(parseChatPreviewSource(JSON.stringify(params))).toEqual(target);
+    expect(chatRouteParams(source).selectionHandoff).toBeUndefined();
+  });
+
+  test.each([undefined, '', '{', 'null', '[]', '{"sessionId": 123}', '{"draft": "private"}'])(
+    'rejects an invalid preview source: %s',
+    (source) => {
+      expect(parseChatPreviewSource(source)).toBeUndefined();
+    },
+  );
 });

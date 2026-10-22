@@ -1057,7 +1057,6 @@ export const HEALTH_TYPE_CATALOG = {
     minimumIOS: '8.0',
   },
   food: { identifier: 'HKCorrelationTypeIdentifierFood', kind: 'correlation', minimumIOS: '8.0' },
-  cdaDocument: { identifier: 'HKDocumentTypeIdentifierCDA', kind: 'document', minimumIOS: '10.0' },
   gad7: {
     identifier: 'HKScoredAssessmentTypeIdentifierGAD7',
     kind: 'assessment',
@@ -1067,51 +1066,6 @@ export const HEALTH_TYPE_CATALOG = {
     identifier: 'HKScoredAssessmentTypeIdentifierPHQ9',
     kind: 'assessment',
     minimumIOS: '18.0',
-  },
-  clinicalAllergyRecord: {
-    identifier: 'HKClinicalTypeIdentifierAllergyRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalClinicalNoteRecord: {
-    identifier: 'HKClinicalTypeIdentifierClinicalNoteRecord',
-    kind: 'clinical',
-    minimumIOS: '16.4',
-  },
-  clinicalConditionRecord: {
-    identifier: 'HKClinicalTypeIdentifierConditionRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalImmunizationRecord: {
-    identifier: 'HKClinicalTypeIdentifierImmunizationRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalLabResultRecord: {
-    identifier: 'HKClinicalTypeIdentifierLabResultRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalMedicationRecord: {
-    identifier: 'HKClinicalTypeIdentifierMedicationRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalProcedureRecord: {
-    identifier: 'HKClinicalTypeIdentifierProcedureRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalVitalSignRecord: {
-    identifier: 'HKClinicalTypeIdentifierVitalSignRecord',
-    kind: 'clinical',
-    minimumIOS: '12.0',
-  },
-  clinicalCoverageRecord: {
-    identifier: 'HKClinicalTypeIdentifierCoverageRecord',
-    kind: 'clinical',
-    minimumIOS: '14.0',
   },
   workouts: { identifier: 'HKWorkoutTypeIdentifier', kind: 'workout', minimumIOS: '8.0' },
   workoutRoute: { identifier: 'HKWorkoutRouteTypeIdentifier', kind: 'route', minimumIOS: '11.0' },
@@ -1172,6 +1126,9 @@ export function healthAuthorizationTypes(type: HealthDataType): HealthDataType[]
   if (type === 'audioExposureEvent') return ['environmentalAudioExposureEvent'];
   if (type === 'bloodPressure') return ['bloodPressureSystolic', 'bloodPressureDiastolic'];
   if (type === 'food') return HEALTH_DATA_TYPES.filter((name) => name.startsWith('dietary'));
+  // HealthKit raises an uncatchable exception when a series is checked without its parent type.
+  if (type === 'workoutRoute') return ['workouts', type];
+  if (type === 'heartbeatSeries') return ['hrv', type];
   return [type];
 }
 

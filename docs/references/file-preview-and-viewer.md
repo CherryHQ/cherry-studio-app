@@ -111,12 +111,18 @@ browser decoding limits still apply. The export page reuses this reader.
 
 ### Document
 
-Office previews up to 4 MiB also offer **Select content to reference** in the header menu.
+Office previews also offer **Select content to reference** in the header menu.
 Selection mode is explicit; browsing does not capture references. The package owns document taps,
 scrolling, zoom and cancelled gestures. The app holds the selected anchor/excerpt and supplies a
-footer action to open a new editable chat draft with the original attachment. The reference carries
-the managed file id, structural anchor and excerpt. The Agent reads the current referenced content
-and compares it with the excerpt before editing, following Desktop's workflow.
+footer action to reference the selection with the original attachment. A preview opened from a chat
+returns to that chat and appends the reference after the draft, preserving draft text,
+attachments, Agent and workspace; the workspace sheet the preview came from stays closed. A preview
+opened from the file library, or from a chat whose Agent is minimal, offers an `AgentMenu` of
+standard Agents and opens a new editable draft with the chosen one. Assistant deliverables whose
+files are unavailable are hidden from the message without leaving a gap.
+The reference carries the managed file id, structural anchor and excerpt. The Agent reads the
+current referenced content and compares it with the excerpt before editing, following Desktop's
+workflow.
 This is an Agent handoff, not an in-preview Office editor, and requires authorized rebuild/device
 acceptance before its source implementation is treated as verified.
 

@@ -41,6 +41,7 @@ import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
+import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
@@ -76,6 +77,13 @@ function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
   const workspaceName = workspace.workspace?.name;
   const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress | null>(null);
   const closeWorkspace = useCallback(() => setWorkspaceAddress(null), []);
+  // The sheet reopens on focus; a reference returning from its preview belongs to the composer.
+  const selectionHandoff = target?.selectionHandoff;
+  const [shownSelectionHandoff, setShownSelectionHandoff] = useState(selectionHandoff);
+  if (selectionHandoff !== shownSelectionHandoff) {
+    setShownSelectionHandoff(selectionHandoff);
+    if (selectionHandoff) setWorkspaceAddress(null);
+  }
   function openWorkspace() {
     if (!target) return;
     Keyboard.dismiss();
@@ -153,6 +161,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     title: session.data?.name,
     navigation: target.kind === 'session' ? target : undefined,
   });
+  // With several answers to the last question, the next message continues the one shown.
+  const continuesShownAnswer =
+    !messageWindow.hasNewerMessages &&
+    Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const shareMessage = useCallback(
     (messageId: string, translations?: ChatShareTranslations) => {
       if (sessionId)
@@ -212,45 +224,47 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           !messageWindow.error ? (
             <SessionReadReceipt sessionId={sessionId} />
           ) : null}
-          {/* Native background taps yield to scrolling and excluded message content. */}
-          <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
-            {sessionId && session.error ? (
-              <View className="flex-1 justify-center px-8 py-16">
-                <ContentState.Error
-                  primaryAction={{
-                    children: t('agent.actions.retry'),
-                    onPress: () => void session.refetch(),
-                  }}
-                  prominence="prominent"
-                  title={t('navigation.chatsLoadFailed')}
+          <FullScreenLayerHost>
+            {/* Native background taps yield to scrolling and excluded message content. */}
+            <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
+              {sessionId && session.error ? (
+                <View className="flex-1 justify-center px-8 py-16">
+                  <ContentState.Error
+                    primaryAction={{
+                      children: t('agent.actions.retry'),
+                      onPress: () => void session.refetch(),
+                    }}
+                    prominence="prominent"
+                    title={t('navigation.chatsLoadFailed')}
+                  />
+                </View>
+              ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+                <ChatWorkspace
+                  feedbackHintBottomOffset={composerHeight}
+                  isTranslationEnabled
+                  renderUsage={renderLocalUsage}
+                  snapshot={snapshot}
+                  messages={messages}
+                  onShare={sessionId ? shareMessage : undefined}
+                  pendingSend={controls.pendingSend}
+                  enteringUserMessageId={controls.enteringUserMessageId}
+                  onPendingSendDisplayed={controls.completePendingSend}
+                  assistantAvatar={agent.agent?.avatar}
+                  assistantAvatarUri={agent.agent?.avatarUri}
+                  assistantName={agent.agent?.name}
+                  isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+                  contentBottomInset={contentBottomInset}
+                  forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+                  forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+                  keyboardOffset={keyboardOffset}
+                  messageWindow={messageWindow}
+                  sessionId={sessionId}
                 />
-              </View>
-            ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
-              <ChatWorkspace
-                feedbackHintBottomOffset={composerHeight}
-                isTranslationEnabled
-                renderUsage={renderLocalUsage}
-                snapshot={snapshot}
-                messages={messages}
-                onShare={sessionId ? shareMessage : undefined}
-                pendingSend={controls.pendingSend}
-                enteringUserMessageId={controls.enteringUserMessageId}
-                onPendingSendDisplayed={controls.completePendingSend}
-                assistantAvatar={agent.agent?.avatar}
-                assistantAvatarUri={agent.agent?.avatarUri}
-                assistantName={agent.agent?.name}
-                isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
-                contentBottomInset={contentBottomInset}
-                forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-                forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-                keyboardOffset={keyboardOffset}
-                messageWindow={messageWindow}
-                sessionId={sessionId}
-              />
-            ) : (
-              <ChatEmptyState contentBottomInset={contentBottomInset} />
-            )}
-          </ComposerDismissArea>
+              ) : (
+                <ChatEmptyState contentBottomInset={contentBottomInset} />
+              )}
+            </ComposerDismissArea>
+          </FullScreenLayerHost>
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
@@ -267,7 +281,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                           messageWindow.messages.map((message) => message.imageResult),
                         )
                   }
+                  placeholder={
+                    continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
+                  }
                   sessionId={sessionId}
+                  selectionHandoff={target.selectionHandoff}
                 />
                 <ChatDockFooter>
                   <Text className="text-center text-xs text-muted-foreground">

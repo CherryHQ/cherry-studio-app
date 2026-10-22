@@ -3,6 +3,8 @@ import * as z from 'zod';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import {
   OfficeGenerationError,
+  OFFICE_MAX_FILE_BYTES,
+  OFFICE_MAX_IMAGES,
   OFFICE_MAX_INPUT_BYTES,
   OFFICE_MEDIA_TYPES,
   OFFICE_SCRIPT_MAX_INPUT_BYTES,
@@ -12,8 +14,14 @@ import {
 } from '@/backend/services/office';
 import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
-import type { RuntimeTool, RuntimeToolResult } from '../runtime';
-import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
+import type { RuntimeTool } from '../runtime';
+import {
+  mebibytes,
+  officeFailure as invalid,
+  prepareOfficeImages,
+  startOfficeOperation,
+  type OfficeFiles,
+} from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -30,10 +38,10 @@ const schema = z.strictObject({
     .describe('Body of an async JavaScript function that returns the finished file.'),
   inputs: z
     .array(FileEntryIdSchema)
-    .max(8)
+    .max(OFFICE_MAX_IMAGES)
     .optional()
     .describe(
-      'Managed file ids from conversation attachments or the selected workspace, exposed as inputs[id].',
+      'Managed file ids from conversation attachments, generated images or the selected workspace, exposed as inputs[id].',
     ),
 });
 
@@ -48,11 +56,12 @@ export function createOfficeScriptTool(
     ref: { source: 'builtin', capabilityId: RUN_OFFICE_SCRIPT_TOOL_NAME },
     providerName: RUN_OFFICE_SCRIPT_TOOL_NAME,
     displayName: 'Run Office script',
-    description: `Run JavaScript with pinned Office libraries to read, analyze or produce .docx, .xlsx and .pptx files: parse whole inputs in one run (XLSX.read(inputs[id].bytes, { type: 'array' }) for every sheet and row), then return nothing to get console.log output, or return a NEW file. Use it for large workbooks and for layouts and operations the create_* and edit_* tools cannot express; prefer those tools for small edits.
-Globals by output extension: docx = the docx 9.11 module (Document, Paragraph, TextRun, Table, ImageRun, Packer, patchDocument, ...); PptxGenJS = pptxgenjs 4.0 constructor; XLSX = SheetJS CE 0.20.3 mini (cell objects take f for formulas). Nothing calculates formulas, so also store each computed result: v beside f in SheetJS, or <v> after <f> in sheet XML; otherwise previews show blank cells. Always: zip = fflate 0.8 (unzipSync, zipSync, strFromU8, strToU8), xml = @xmldom/xmldom 0.9 (DOMParser, XMLSerializer), atob, btoa, and inputs[id] = { name, mediaType, base64, bytes } for each id listed in inputs. There is no DOM, Node API, network, timer, fetch or file path.
-Return the file as a base64 string, Uint8Array or ArrayBuffer, or return nothing to only inspect inputs (console.log output comes back as logs and no file is saved): return docx.Packer.toBase64String(doc); return pres.write({ outputType: 'base64' }); return XLSX.write(book, { bookType: 'xlsx', type: 'base64' }); return zip.zipSync(parts). Images: new docx.ImageRun({ type: 'png', data: inputs[id].bytes, transformation: { width, height } }); slide.addImage({ data: 'data:image/png;base64,' + inputs[id].base64, x, y, w, h }).
-To change an existing file without losing untouched parts, unzip inputs[id].bytes, edit its XML parts and zip it again, or use docx.patchDocument({ outputType: 'base64', data: inputs[id].bytes, patches }) for {{key}} placeholders. SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files.
-Inputs together must fit 6 MiB and the output 4 MiB; a run gets 30 seconds and 64 MiB. Saves in the selected workspace, or at the library root without a workspace, and never overwrites a source. Success is status "created" with fileEntryId and any console.log output (16 KiB) as logs, or status "read" with logs when nothing was returned; status "error" carries the script error to fix before retrying.`,
+    description: `Run JavaScript with pinned Office libraries to read, analyze or produce .docx, .xlsx and .pptx files: parse whole inputs in one run (XLSX.read(inputs[id].bytes, { type: 'array' }) for every sheet and row), then return nothing to get console.log output, or return a NEW file. Use it for large workbooks, for adding pictures to existing files, and for layouts and operations the create_* and edit_* tools cannot express; prefer those tools for small edits.
+Globals by output extension: docx = the docx 9.11 module (Document, Paragraph, TextRun, Table, ImageRun, Packer, patchDocument, ...); PptxGenJS = pptxgenjs 4.0 constructor; XLSX = SheetJS CE 0.20.3 mini (cell objects take f for formulas). Nothing calculates formulas, so also store each computed result: v beside f in SheetJS, or <v> after <f> in sheet XML; otherwise previews show blank cells. Always: zip = fflate 0.8 (unzipSync, zipSync, strFromU8, strToU8; zipSync stores already-compressed media), xml = @xmldom/xmldom 0.9 (DOMParser, XMLSerializer), atob, btoa, and inputs[id] = { name, mediaType, size, bytes, base64 } for each id listed in inputs; bytes and base64 are read on first use. There is no DOM, Node API, network, timer, fetch or file path.
+Return the file as a Uint8Array, ArrayBuffer or base64 string, or return nothing to only inspect inputs (console.log output comes back as logs and no file is saved): return docx.Packer.toArrayBuffer(doc); return pres.write({ outputType: 'uint8array' }); return XLSX.write(book, { bookType: 'xlsx', type: 'array' }); return zip.zipSync(parts). Images: new docx.ImageRun({ type: inputs[id].mediaType === 'image/png' ? 'png' : 'jpg', data: inputs[id].bytes, transformation: { width, height } }); slide.addImage({ data: 'data:' + inputs[id].mediaType + ';base64,' + inputs[id].base64, x, y, w, h }).
+Image inputs are existing files (attachments, generated images, workspace files): never regenerate an image to place it. Any image format is accepted; large or non-PNG/JPEG images arrive as a compressed JPEG copy, so read inputs[id].mediaType. To add a picture to an existing file, unzip it, add the media part, its relationship, a content type and the picture XML, then zip it again.
+To change an existing file without losing untouched parts, unzip inputs[id].bytes, edit its XML parts and zip it again, or use docx.patchDocument({ outputType: 'uint8array', data: inputs[id].bytes, patches }) for {{key}} placeholders. SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files.
+Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_BYTES)} after image compression; the output is limited to ${mebibytes(OFFICE_MAX_FILE_BYTES)}. Memory grows with the files a run reads: avoid extra copies of large inputs. Saves in the selected workspace, or at the library root without a workspace, and never overwrites a source. Success is status "created" with fileEntryId and any console.log output (16 KiB) as logs, or status "read" with logs when nothing was returned. A failed run returns the script error to fix before retrying; in Code Mode it throws. A size or memory failure is not fixed by rewriting the same work: split it across runs.`,
     inputSchema: toRuntimeInputSchema(schema),
     outputSchema: officeToolOutputSchemas[RUN_OFFICE_SCRIPT_TOOL_NAME],
     approval: 'auto',
@@ -72,47 +81,51 @@ Inputs together must fit 6 MiB and the output 4 MiB; a run gets 30 seconds and 6
         await access.resolveRead({ file_entry_id: id });
       }
 
-      const release = await officeOperationSlots.acquire(signal);
-      let nativeSettled = true;
-      let finished = false;
+      const operation = await startOfficeOperation(files, signal);
       try {
         const facts = await files.resolveAvailable(ids);
         signal.throwIfAborted();
+        const images = await prepareOfficeImages(
+          ids.filter((id) => facts.get(id)?.mediaType.startsWith('image/')),
+          files,
+          operation,
+          signal,
+        );
+        const inputs: Record<string, OfficeScriptInput> = {};
         let total = 0;
         for (const id of ids) {
-          const size = facts.get(id)?.size ?? 0;
-          if (!Number.isSafeInteger(size) || size <= 0)
-            return invalid(`Input ${id} is unavailable.`);
+          const fact = facts.get(id);
+          const image = images[id];
+          const uri = image?.uri ?? (fact && files.localUri(fact));
+          const size = image?.size ?? (uri ? files.size(uri) : undefined);
+          if (!fact || !uri || !size) return invalid(`Input ${id} is unavailable.`);
           total += size;
+          inputs[id] = {
+            name: fact.name,
+            mediaType: image?.mediaType ?? fact.mediaType,
+            uri,
+            size,
+          };
         }
         if (total > OFFICE_SCRIPT_MAX_INPUT_BYTES)
-          return invalid('Inputs exceed 6 MiB. Use fewer or smaller files.');
-        const inputs: Record<string, OfficeScriptInput> = {};
-        for (const id of ids) {
-          const fact = facts.get(id)!;
-          const data = await files.readAsBytes(fact, signal);
-          signal.throwIfAborted();
-          if (!data || data.length !== fact.size)
-            return invalid(`Input ${id} changed or is unavailable.`);
-          inputs[id] = { name: fact.name, mediaType: fact.mediaType, data };
-        }
-        nativeSettled = false;
-        const { data, logs } = await runOfficeScript({
+          return invalid(
+            `The inputs total ${mebibytes(total)}, over the ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_BYTES)} one run can read. Use fewer files per run.`,
+          );
+        const output = operation.output(format);
+        const { size, logs } = await runOfficeScript({
           format,
           script: parsed.data.code,
           inputs,
+          output,
           sandbox,
           signal,
-          onSettled: () => {
-            nativeSettled = true;
-            if (finished) release();
-          },
+          onSettled: operation.job(),
         });
         signal.throwIfAborted();
-        if (!data) return { value: { status: 'read', logs }, artifacts: [] };
-        const entry = await files.createBytesEntry(
+        if (size === null) return { value: { status: 'read', logs }, artifacts: [] };
+        const entry = await files.createFileEntry(
           {
-            data,
+            uri: output,
             name: parsed.data.filename,
             mediaType: OFFICE_MEDIA_TYPES[format],
             provenance: 'generated',
@@ -144,13 +157,8 @@ Inputs together must fit 6 MiB and the output 4 MiB; a run gets 30 seconds and 6
         if (error instanceof OfficeGenerationError) return invalid(error.message);
         throw error;
       } finally {
-        finished = true;
-        if (nativeSettled) release();
+        operation.finish();
       }
     },
   };
-}
-
-function invalid(message: string): RuntimeToolResult {
-  return { value: { status: 'error', message }, artifacts: [] };
 }

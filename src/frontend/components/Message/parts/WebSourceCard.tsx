@@ -84,7 +84,10 @@ export function WebSourceFavicon({ source }: { source: WebSource }) {
   return (
     <View
       accessibilityElementsHidden
-      className="relative size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border border-continuous bg-secondary"
+      // Favicons are site artwork drawn for light pages; a dark mark on the dark theme fill vanishes.
+      className={`relative size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border border-continuous ${
+        status === 'loaded' ? 'bg-constant-white' : 'bg-secondary'
+      }`}
       importantForAccessibility="no-hide-descendants"
     >
       {status !== 'loaded' ? (

@@ -10,10 +10,7 @@ import type { Painting } from '@/shared/data/types/painting';
 
 import { BackendProvider } from '../BackendProvider';
 import { DataApiProvider } from '../DataApiProvider';
-import {
-  resolvedPaintingFilesQueryOptions,
-  usePaintingGalleryItems,
-} from '../paintings/usePaintings';
+import { resolvedPaintingFilesQueryOptions, usePaintingOutputs } from '../paintings/usePaintings';
 
 jest.mock('expo-image', () => ({ Image: { loadAsync: jest.fn() } }));
 
@@ -162,10 +159,10 @@ it.each([false, true])(
         ...resolvedPaintingFilesQueryOptions(backend.paintings, painting),
         enabled: observeBoard,
       });
-      const gallery = usePaintingGalleryItems(paintings);
+      const gallery = usePaintingOutputs(paintings);
       useLayoutEffect(() => {
         boardFiles = board.data?.outputs.map(({ entry }) => entry.id);
-        galleryFiles = gallery.data.map((item) => item.fileEntryId);
+        galleryFiles = [...gallery.byPaintingId.values()].flat().map(({ entry }) => entry.id);
       });
       return null;
     }
