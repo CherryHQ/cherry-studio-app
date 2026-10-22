@@ -3,7 +3,8 @@ import type { PropsWithChildren } from 'react';
 export type ToastVariant = 'danger' | 'default' | 'success' | 'warning';
 
 export type ToastShowOptions = {
-  duration?: number;
+  /** Persistent notices are hidden by the workflow that owns them. */
+  duration?: number | 'persistent';
   placement?: 'top' | 'bottom';
   /** Extra space above a screen-owned dock. Bottom toasts also follow the keyboard. */
   bottomOffset?: number;

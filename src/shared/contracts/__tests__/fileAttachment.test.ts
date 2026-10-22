@@ -10,6 +10,19 @@ const filePart = {
 };
 
 describe('persisted attachment feedback', () => {
+  test('roundtrips OCR failure metadata without persisting page images or recognized text', () => {
+    const error = {
+      code: 'ATTACHMENT_INVALID',
+      message: 'PDF recognition failed',
+      retryable: false,
+      attachmentIssue: {
+        code: 'document-ocr-failed',
+        name: 'scan.pdf',
+        fileEntryId: filePart.fileEntryId,
+      },
+    };
+    expect(AgentErrorViewSchema.parse(JSON.parse(JSON.stringify(error)))).toEqual(error);
+  });
   test('retains reports after JSON roundtrip and leaves old messages without invented status', () => {
     const report = {
       mode: 'document-text',

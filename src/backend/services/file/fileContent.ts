@@ -21,7 +21,7 @@ import {
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
-import { readDocumentUriText } from './documentText';
+import { readDocumentUriText, subscribePdfOcr } from './documentText';
 import { editFileImage } from './editFileImage';
 import { FileHashError, hashLocalFile } from './fileHash';
 import {
@@ -75,6 +75,7 @@ const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true 
  * factory to inject.
  */
 export const fileContent = {
+  subscribePdfOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {

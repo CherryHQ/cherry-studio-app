@@ -7,13 +7,49 @@ private let extractionQueue = DispatchQueue(label: "expo.modules.PdfTextExtracto
 
 public class PdfTextExtractorModule: Module {
   private let defaultMaxPages = 100
+  private let requestsLock = NSLock()
+  private var requests: [String: PdfExtractionRequest] = [:]
 
   public func definition() -> ModuleDefinition {
     Name("PdfTextExtractor")
 
-    // 异步函数：提取 PDF 文本
-    AsyncFunction("extractText") { (filePath: String, options: ExtractOptions?) -> [String: Any] in
-      return try self.extractTextFromPDF(filePath: filePath, options: options)
+    Events("onProgress")
+
+    Function("createRequest") { () -> String in
+      let id = UUID().uuidString
+      self.requestsLock.lock()
+      self.requests[id] = PdfExtractionRequest()
+      self.requestsLock.unlock()
+      return id
+    }
+    Function("cancelRequest") { (id: String) in
+      self.requestsLock.lock()
+      let request = self.requests.removeValue(forKey: id)
+      self.requestsLock.unlock()
+      request?.cancel()
+    }
+    OnDestroy {
+      self.requestsLock.lock()
+      let active = Array(self.requests.values)
+      self.requests.removeAll()
+      self.requestsLock.unlock()
+      active.forEach { $0.cancel() }
+    }
+
+    AsyncFunction("extractText") {
+      (filePath: String, options: ExtractOptions?, requestId: String) -> [String: Any] in
+      self.requestsLock.lock()
+      let request = self.requests[requestId]
+      self.requestsLock.unlock()
+      guard let request else { throw PdfExtractionCancelledException() }
+      defer {
+        self.requestsLock.lock()
+        self.requests.removeValue(forKey: requestId)
+        self.requestsLock.unlock()
+      }
+      return try self.extractTextFromPDF(
+        filePath: filePath, options: options, requestId: requestId, request: request
+      )
     }.runOnQueue(extractionQueue)
 
     // 异步函数：获取 PDF 页数
@@ -24,53 +60,65 @@ public class PdfTextExtractorModule: Module {
 
   // MARK: - PDF 文本提取核心逻辑
 
-  private func extractTextFromPDF(filePath: String, options: ExtractOptions?) throws -> [String: Any] {
+  private func extractTextFromPDF(
+    filePath: String, options: ExtractOptions?, requestId: String, request: PdfExtractionRequest
+  ) throws -> [String: Any] {
+    try request.checkCancellation()
     let url = try parseFileURL(filePath)
     let didAccess = url.startAccessingSecurityScopedResource()
     defer {
-      if didAccess {
-        url.stopAccessingSecurityScopedResource()
-      }
+      if didAccess { url.stopAccessingSecurityScopedResource() }
     }
-
-    guard let document = PDFDocument(url: url) else {
+    guard let document = PDFDocument(url: url), !document.isEncrypted else {
       throw FailedToLoadDocumentException()
     }
-
-    if document.isEncrypted {
-      throw FailedToLoadDocumentException()
-    }
-
     let totalPages = document.pageCount
-
-    let maxPages = options?.maxPages ?? defaultMaxPages
-    let endPage = min(maxPages, totalPages)
-    let isTruncated = endPage < totalPages
-
-    var extractedText = ""
+    let endPage = min(max(0, min(options?.maxPages ?? defaultMaxPages, defaultMaxPages)), totalPages)
+    var pages: [String] = []
     var extractionError = false
+    var ocrError = false
+    var usedOcr = false
+    func progress(_ completed: Int, phase: String) throws {
+      try request.checkCancellation()
+      sendEvent("onProgress", [
+        "requestId": requestId,
+        "completedPages": completed,
+        "totalPages": endPage,
+        "phase": phase
+      ])
+    }
 
     for pageIndex in 0..<endPage {
-      autoreleasepool {
-        if let page = document.page(at: pageIndex) {
-          if let pageText = page.string {
-            if !extractedText.isEmpty {
-              extractedText += "\n"
-            }
-            extractedText += pageText
-          }
-        } else {
-          extractionError = true
+      try request.checkCancellation()
+      var recognizingPage = false
+      do {
+        let text: String = try autoreleasepool {
+          guard let page = document.page(at: pageIndex) else { throw FailedToLoadDocumentException() }
+          let nativeText = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+          try request.checkCancellation()
+          if hasUsablePdfText(nativeText) { return nativeText }
+          usedOcr = true
+          recognizingPage = true
+          try progress(pageIndex, phase: "ocr")
+          return try recognizePdfPage(page, request: request)
         }
+        pages.append(text)
+        try progress(pageIndex + 1, phase: usedOcr ? "ocr" : "text")
+      } catch {
+        try request.checkCancellation()
+        extractionError = true
+        ocrError = recognizingPage
+        break
       }
     }
-
+    try request.checkCancellation()
     return [
-      "text": extractedText,
+      "text": pages.joined(separator: "\n\n"),
       "totalPages": totalPages,
-      "extractedPages": endPage,
-      "isTruncated": isTruncated,
-      "extractionError": extractionError
+      "extractedPages": pages.count,
+      "isTruncated": endPage < totalPages,
+      "extractionError": extractionError,
+      "ocrError": ocrError
     ]
   }
 

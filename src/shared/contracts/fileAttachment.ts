@@ -16,6 +16,7 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'nul-byte',
     'document-empty',
     'document-invalid',
+    'document-ocr-failed',
     'parser-unavailable',
     'parser-unsupported',
   ]),
@@ -128,9 +129,11 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
     case 'invalid-utf8':
       return `${name} is not valid UTF-8 text.`;
     case 'document-empty':
-      return `${name} has no extractable text. Scanned documents require OCR.`;
+      return `${name} has no readable text after document extraction and any applicable PDF text recognition.`;
     case 'document-invalid':
       return `${name} could not be parsed. It may be damaged or password-protected.`;
+    case 'document-ocr-failed':
+      return `${name} contains a page that could not be recognized. Try a clearer scan or attach the relevant pages as images.`;
     case 'parser-unavailable':
       return 'The document parser is unavailable. Rebuild the development client or select the built-in parser.';
     case 'parser-unsupported':

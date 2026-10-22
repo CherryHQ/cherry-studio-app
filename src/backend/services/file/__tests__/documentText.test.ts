@@ -4,7 +4,7 @@ import {
 } from '@/shared/utils/fileAttachmentPolicy';
 
 import { extractPdfText } from '../../../../../modules/pdf-text-extractor';
-import { DocumentTextError, readDocumentUriText } from '../documentText';
+import { DocumentTextError, readDocumentUriText, subscribePdfOcr } from '../documentText';
 import { readFileUriBytes } from '../fileStorage';
 
 const mockFile = { size: 64 };
@@ -24,6 +24,7 @@ beforeEach(() => {
     extractedPages: 100,
     isTruncated: true,
     extractionError: false,
+    ocrError: false,
   });
 });
 
@@ -36,7 +37,11 @@ describe('managed document text', () => {
       text: 'PDF body',
       truncated: true,
     });
-    expect(extractPdfText).toHaveBeenCalledWith(URI, { maxPages: 100 });
+    expect(extractPdfText).toHaveBeenCalledWith(
+      URI,
+      { maxPages: 100 },
+      { signal: expect.any(AbortSignal), onProgress: expect.any(Function) },
+    );
     expect(readFileUriBytes).not.toHaveBeenCalled();
   });
 
@@ -61,13 +66,14 @@ describe('managed document text', () => {
     expect(extractPdfText).not.toHaveBeenCalled();
   });
 
-  test('rejects an image-only PDF instead of claiming its text was sent', async () => {
+  test('rejects an empty result after native extraction and OCR', async () => {
     jest.mocked(extractPdfText).mockResolvedValueOnce({
       text: '  ',
       totalPages: 1,
       extractedPages: 1,
       isTruncated: false,
       extractionError: false,
+      ocrError: false,
     });
     await expect(
       readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
@@ -81,10 +87,64 @@ describe('managed document text', () => {
       extractedPages: 2,
       isTruncated: false,
       extractionError: true,
+      ocrError: false,
     });
     await expect(
       readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
     ).rejects.toMatchObject({ failure: 'invalid' });
+  });
+
+  test('distinguishes unreadable scanned pages from a damaged PDF and rejects partial text', async () => {
+    jest.mocked(extractPdfText).mockResolvedValueOnce({
+      text: 'Native first page',
+      totalPages: 2,
+      extractedPages: 1,
+      isTruncated: false,
+      extractionError: true,
+      ocrError: true,
+    });
+    await expect(
+      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+    ).rejects.toMatchObject({ failure: 'ocr' });
+  });
+
+  test('preserves ordered native and recognized page text and clears OCR activity on failure', async () => {
+    const activity = jest.fn();
+    const unsubscribe = subscribePdfOcr(activity);
+    const controller = new AbortController();
+    try {
+      jest.mocked(extractPdfText).mockImplementationOnce(async (_uri, _options, control) => {
+        expect(control?.signal).toBe(controller.signal);
+        control?.onProgress?.({ requestId: 'one', completedPages: 1, totalPages: 2, phase: 'ocr' });
+        return {
+          text: 'Native page\n\n扫描文字',
+          totalPages: 2,
+          extractedPages: 2,
+          isTruncated: false,
+          extractionError: false,
+          ocrError: false,
+        };
+      });
+      await expect(readDocumentUriText(URI, 'application/pdf', controller.signal)).resolves.toEqual(
+        {
+          text: 'Native page\n\n扫描文字',
+          truncated: false,
+        },
+      );
+      expect(activity.mock.calls).toEqual([[false], [true], [false]]);
+
+      activity.mockClear();
+      jest.mocked(extractPdfText).mockImplementationOnce(async (_uri, _options, control) => {
+        control?.onProgress?.({ requestId: 'two', completedPages: 0, totalPages: 1, phase: 'ocr' });
+        throw new Error('Native OCR failure');
+      });
+      await expect(
+        readDocumentUriText(URI, 'application/pdf', controller.signal),
+      ).rejects.toMatchObject({ failure: 'invalid' });
+      expect(activity.mock.calls).toEqual([[true], [false]]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test('redacts native parser errors and propagates cancellation', async () => {
@@ -104,6 +164,7 @@ describe('managed document text', () => {
         extractedPages: 1,
         isTruncated: false,
         extractionError: false,
+        ocrError: false,
       };
     });
     await expect(readDocumentUriText(URI, 'application/pdf', controller.signal)).rejects.toThrow(

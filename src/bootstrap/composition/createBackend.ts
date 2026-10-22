@@ -351,6 +351,7 @@ export function createBackend(
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
       file: {
+        subscribePdfOcr: services.fileContent.subscribePdfOcr,
         createInternalEntry: services.fileContent.createInternalEntry,
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,
         editImage: services.fileContent.editImage,

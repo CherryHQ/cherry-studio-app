@@ -251,7 +251,7 @@ export function createReadFileTool(
           }
           return invalid(
             error.issue.code === 'document-empty'
-              ? 'The document has no extractable text. Scanned or image-only documents require OCR.'
+              ? 'The document has no readable text after extraction and any applicable PDF text recognition. Try a clearer scan or attach the relevant pages as images.'
               : error.message,
           );
         }

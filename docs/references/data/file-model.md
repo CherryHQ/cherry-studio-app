@@ -154,7 +154,7 @@ the imported entry. Painting still admits images only.
 
 `readAttachmentContent` is the common controlled reader for attachments and file tools. Its
 document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
-the native text extractor. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
+the native text extractor with on-device OCR for pages without usable text. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
 accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
 CSV stays on the text path. Format admission follows the published mobile entry point's
 [content detection](https://github.com/tulaafrica/anydoc/blob/rn-v0.4.1/src/formats/detect.rs),
@@ -195,7 +195,21 @@ PDFs have a 50 MiB source ceiling and other documents retain a 20 MiB ceiling. P
 Expo native extractor (at most 100 pages). Android serializes PDF extraction and page-count reads,
 with PDFBox stream buffers limited to 16 MiB in memory and 128 MiB across memory and temporary
 storage in the app cache. Closing the document releases its scratch file. These are stream-buffer
-limits, not a bound on all parsed objects or extracted text. In built-in mode,
+limits, not a bound on all parsed objects or extracted text.
+
+The [native PDF module](../../../modules/pdf-text-extractor/README.md) reads each page's text layer
+first, then renders textless pages for Apple Vision (iOS) or bundled ML Kit Chinese/Latin recognition
+(Android). OCR runs locally, sequentially, with at most a 2560-pixel edge and four million rendered
+pixels per page. Text and recognized pages are joined in order with blank-line separators. Blank
+pages are accepted; a nonblank page with no recognized text rejects the read as
+`document-ocr-failed`, rather than silently sending the other pages as complete. Corrupt native
+extraction still fails as `document-invalid`. The caller's abort signal reaches native cancellation;
+Android finishes its current ML Kit call before releasing the bitmap and stops before the next page.
+An App Shell notice observes aggregate OCR activity through `FileModule.subscribePdfOcr`; the
+originating send/tool operation owns cancellation. The original PDF is never modified and derived
+page images are not stored. A new native development client is required.
+
+In built-in mode,
 DOCX/PPTX/XLSX use bounded in-memory ZIP/XML parsing and SheetJS
 for workbook cells. Office ZIPs admit at most 2,048 entries, 32 MiB expanded data, and 4 MiB per XML
 part; workbook extraction caps each sheet at 10,000 rows, processes at most 100 sheets, and Office
@@ -209,7 +223,8 @@ PowerPoint follows slide relationships and includes speaker notes while excludin
 fields such as slide numbers, dates, headers, and footers. These fields do not make an otherwise
 textless document readable. Excel includes sheet names,
 cell addresses, formatted values, and stored formulas without evaluating them. Embedded images,
-charts as images, scanned-document OCR, and legacy DOC/PPT/XLS inputs are not supported by this path.
+charts as images, OCR inside Office documents, and legacy DOC/PPT/XLS inputs are not supported by
+the built-in Office path.
 DOCX/PPTX XML decoding remains UTF-8 only.
 Empty documents fail with `ATTACHMENT_NO_TEXT`; damaged, encrypted, or over-limit documents fail
 before reservation. Unreadable historical documents are omitted without failing a new turn.

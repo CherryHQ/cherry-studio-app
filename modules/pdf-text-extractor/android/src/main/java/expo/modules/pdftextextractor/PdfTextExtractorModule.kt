@@ -16,6 +16,9 @@ import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.io.File
 import java.io.IOException
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -61,6 +64,7 @@ class PdfTextExtractorModule : Module() {
     private val maxStreamMemoryBytes = 16 * 1024 * 1024L
     private val maxStreamStorageBytes = 128 * 1024 * 1024L
     private val documentMutex = Mutex()
+    private val requests = ConcurrentHashMap<String, AtomicBoolean>()
     @Volatile
     private var isInitialized = false
 
@@ -69,15 +73,36 @@ class PdfTextExtractorModule : Module() {
 
     override fun definition() = ModuleDefinition {
         Name("PdfTextExtractor")
+        Events("onProgress")
+
+        Function("createRequest") {
+            val id = UUID.randomUUID().toString()
+            requests[id] = AtomicBoolean(false)
+            id
+        }
+        Function("cancelRequest") { id: String ->
+            requests.remove(id)?.set(true)
+        }
+        OnDestroy {
+            requests.values.forEach { it.set(true) }
+            requests.clear()
+        }
 
         OnCreate {
             initializePdfBox()
         }
 
         // Plain AsyncFunctions share one serial thread with every Expo module.
-        AsyncFunction("extractText") Coroutine { filePath: String, options: ExtractOptions? ->
-            withContext(Dispatchers.IO) {
-                documentMutex.withLock { extractTextFromPDF(filePath, options) }
+        AsyncFunction("extractText") Coroutine { filePath: String, options: ExtractOptions?, requestId: String ->
+            val cancelled = requests[requestId] ?: throw PdfExtractionCancelledException()
+            try {
+                withContext(Dispatchers.IO) {
+                    documentMutex.withLock {
+                        extractTextFromPDF(filePath, options, requestId, cancelled)
+                    }
+                }
+            } finally {
+                requests.remove(requestId)
             }
         }
 
@@ -95,59 +120,87 @@ class PdfTextExtractorModule : Module() {
         }
     }
 
-    private fun extractTextFromPDF(filePath: String, options: ExtractOptions?): Map<String, Any> {
+    private fun extractTextFromPDF(
+        filePath: String,
+        options: ExtractOptions?,
+        requestId: String,
+        cancelled: AtomicBoolean
+    ): Map<String, Any> {
+        fun checkCancelled() {
+            if (cancelled.get()) throw PdfExtractionCancelledException()
+        }
+        checkCancelled()
         val file = parseFilePath(filePath)
         val isTempFile = filePath.startsWith("content://")
-
         try {
-            val document: PDDocument = try {
+            val document = try {
                 loadDocument(file)
             } catch (e: Exception) {
                 throw FailedToLoadDocumentException(e)
             }
-
             return document.use { doc ->
+                if (doc.isEncrypted) throw FailedToLoadDocumentException()
                 val totalPages = doc.numberOfPages
-
-                val maxPages = options?.maxPages ?: defaultMaxPages
-                val endPage = minOf(maxPages, totalPages)
-                val isTruncated = endPage < totalPages
-                if (totalPages == 0) {
-                    return mapOf(
-                        "text" to "",
-                        "totalPages" to 0,
-                        "extractedPages" to 0,
-                        "isTruncated" to false,
-                        "extractionError" to false
+                val endPage = minOf(
+                    (options?.maxPages ?: defaultMaxPages).coerceIn(0, defaultMaxPages), totalPages
+                )
+                val stripper = StrictPdfTextStripper()
+                val pages = mutableListOf<String>()
+                var extractionError = false
+                var ocrError = false
+                var ocr: PdfPageOcr? = null
+                fun progress(completed: Int, phase: String) {
+                    checkCancelled()
+                    sendEvent(
+                        "onProgress",
+                        mapOf(
+                            "requestId" to requestId,
+                            "completedPages" to completed,
+                            "totalPages" to endPage,
+                            "phase" to phase
+                        )
                     )
                 }
-
-                val stripper = StrictPdfTextStripper().apply {
-                    startPage = 1
-                    this.endPage = endPage
+                try {
+                    for (pageIndex in 0 until endPage) {
+                        checkCancelled()
+                        var recognizingPage = false
+                        try {
+                            stripper.startPage = pageIndex + 1
+                            stripper.endPage = pageIndex + 1
+                            val nativeText = stripper.getText(doc).trim()
+                            checkCancelled()
+                            val text = if (hasUsablePdfText(nativeText)) nativeText else {
+                                recognizingPage = true
+                                progress(pageIndex, "ocr")
+                                val reader = ocr ?: PdfPageOcr(file).also { ocr = it }
+                                reader.read(pageIndex, ::checkCancelled)
+                            }
+                            pages.add(text)
+                            progress(pageIndex + 1, if (ocr == null) "text" else "ocr")
+                        } catch (e: Exception) {
+                            checkCancelled()
+                            // Never substitute OCR for corrupt native content or send a partial result.
+                            extractionError = true
+                            ocrError = recognizingPage
+                            break
+                        }
+                    }
+                } finally {
+                    ocr?.close()
                 }
-
-                var extractionError = false
-                val extractedText = try {
-                    stripper.getText(doc)
-                } catch (e: Exception) {
-                    android.util.Log.w("PdfTextExtractor", "Failed to extract text from PDF", e)
-                    extractionError = true
-                    ""
-                }
-
+                checkCancelled()
                 mapOf(
-                    "text" to extractedText,
+                    "text" to pages.joinToString("\n\n"),
                     "totalPages" to totalPages,
-                    "extractedPages" to endPage,
-                    "isTruncated" to isTruncated,
-                    "extractionError" to extractionError
+                    "extractedPages" to pages.size,
+                    "isTruncated" to (endPage < totalPages),
+                    "extractionError" to extractionError,
+                    "ocrError" to ocrError
                 )
             }
         } finally {
-            if (isTempFile && file.exists()) {
-                file.delete()
-            }
+            if (isTempFile) file.delete()
         }
     }
 

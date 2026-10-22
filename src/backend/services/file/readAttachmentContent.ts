@@ -69,7 +69,9 @@ export async function readAttachmentContent(
           ? 'file-bytes'
           : error.failure === 'empty'
             ? 'document-empty'
-            : 'document-invalid',
+            : error.failure === 'ocr'
+              ? 'document-ocr-failed'
+              : 'document-invalid',
       );
     }
     return fail('unavailable');

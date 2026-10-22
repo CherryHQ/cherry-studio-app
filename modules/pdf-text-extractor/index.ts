@@ -4,10 +4,11 @@ import { Platform } from 'react-native';
 import type {
   ExtractOptions,
   ExtractResult,
+  ExtractionControl,
   PdfTextExtractorModule,
 } from './src/PdfTextExtractor.types';
 
-export type { ExtractOptions, ExtractResult };
+export type { ExtractOptions, ExtractResult, ExtractionControl };
 
 const NativeModule: PdfTextExtractorModule | null =
   Platform.OS === 'web' ? null : requireOptionalNativeModule('PdfTextExtractor');
@@ -30,8 +31,37 @@ const getNativeModule = (): PdfTextExtractorModule => {
 export async function extractPdfText(
   filePath: string,
   options?: ExtractOptions,
+  control: ExtractionControl = {},
 ): Promise<ExtractResult> {
-  return getNativeModule().extractText(filePath, options);
+  const { signal, onProgress } = control;
+  signal?.throwIfAborted();
+  const native = getNativeModule();
+  const requestId = native.createRequest();
+  const cancel = () => native.cancelRequest(requestId);
+  let subscription: { remove(): void } | undefined;
+  let isActive = true;
+  try {
+    subscription = onProgress
+      ? native.addListener('onProgress', (progress) => {
+          if (isActive && progress.requestId === requestId && !signal?.aborted)
+            onProgress(progress);
+        })
+      : undefined;
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+    // Always dispatch a reserved request, including a cancelled one, so native cleanup runs.
+    const result = await native.extractText(filePath, options ?? {}, requestId);
+    signal?.throwIfAborted();
+    return result;
+  } catch (error) {
+    signal?.throwIfAborted();
+    throw error;
+  } finally {
+    isActive = false;
+    signal?.removeEventListener('abort', cancel);
+    subscription?.remove();
+    cancel();
+  }
 }
 
 /**
