@@ -8,8 +8,5 @@ Feature screens report content readiness through the exported hook without ownin
 startup lifecycle. A screen that runs its own entrance reads `useStartupCoverVisible` and holds the
 entrance until the cover is gone; outside `StartupCoordinator` the hook reports no cover.
 
-`AppUpdateObserver` starts a nonblocking GitCode APK check after the bootstrap gate opens. It keeps
-the result in the shared frontend query cache and refreshes stale data when the app returns to the
-foreground. It never presents a dialog. Settings observes that result; opening settings does not
-start a request, and tapping the update row only refetches when no newer APK is already recorded.
-Store builds and iOS disable this query through the backend distribution gate.
+Application update discovery and reminders live in the sibling
+[appUpdate](../appUpdate/README.md) module. Startup only provides the cover-visibility signal.
