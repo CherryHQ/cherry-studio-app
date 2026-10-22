@@ -36,8 +36,10 @@ restored session still matches the profile. Only an explicit rejection (401/403,
 the account as needing sign-in. The profile stays readable and only enterprise requests fail.
 
 Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Non-production
-builds default to the cn-dev staging deployment. Production has no default. The native callback is
-`<scheme>://auth/callback` and must be registered with the Accounts Portal client.
+builds default to the cn-dev staging deployment. Production has no default. Every build uses the
+production callback `cherrystudio://auth/callback`, the only one registered with the Accounts
+Portal client. iOS auth sessions capture it in any build; on Android only the production app
+receives it, so development and preview builds may not return from the browser.
 
 ## Synchronization
 

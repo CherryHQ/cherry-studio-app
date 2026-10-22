@@ -10,7 +10,6 @@ import * as z from 'zod';
 
 import { createEnterpriseApi, EnterpriseAccount } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
-import { nativeCallbackUrl } from '@/backend/utils/oauth';
 import { EnterpriseError, normalizeEnterpriseAddress } from '@/shared/contracts/enterprise';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 
@@ -23,6 +22,9 @@ const ConfigSchema = z.object({
   scopes: z.array(z.string()).min(1),
   enterpriseAddress: z.string(),
 });
+// The only registered callback. iOS auth sessions capture it in any build; Android development
+// builds cannot receive it, which is accepted.
+const REDIRECT_URI = 'cherrystudio://auth/callback';
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
 let account: EnterpriseAccount | undefined;
@@ -35,8 +37,7 @@ export function enterpriseAccount(): EnterpriseAccount {
 
 function createEnterpriseAccount(): EnterpriseAccount {
   const parsed = ConfigSchema.safeParse(Constants.expoConfig?.extra?.accountsPortal);
-  const redirectUri = nativeCallbackUrl('auth/callback');
-  const config = parsed.success && redirectUri ? parsed.data : undefined;
+  const config = parsed.success ? parsed.data : undefined;
   const store = createMMKV({ id: 'cherry-installation-account' });
   const createFetch = (allowed: () => string[]) =>
     createFetchBridge({
@@ -59,7 +60,7 @@ function createEnterpriseAccount(): EnterpriseAccount {
         issuer: config.issuer,
         origin: config.origin,
         clientId: config.clientId,
-        redirectUri: redirectUri!,
+        redirectUri: REDIRECT_URI,
         scopes: config.scopes,
         storage: {
           get: (key) => SecureStore.getItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
