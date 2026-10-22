@@ -27,6 +27,14 @@ jest.mock('react-native', () => {
   });
 });
 
+// Finishes at once, so opening and closing complete within the test's act.
+const finishAtOnce = (to: unknown, _config: unknown, done?: (finished: boolean) => void) => {
+  done?.(true);
+  return to;
+};
+const mockWithTiming = jest.fn(finishAtOnce);
+const mockWithSpring = finishAtOnce;
+
 jest.mock('react-native-reanimated', () => {
   const { useRef } = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
@@ -47,11 +55,8 @@ jest.mock('react-native-reanimated', () => {
       });
       return ref.current;
     },
-    // Finishes at once, so opening and closing complete within the test's act.
-    withTiming: (to: unknown, _config: unknown, done?: (finished: boolean) => void) => {
-      done?.(true);
-      return to;
-    },
+    withSpring: (...args: Parameters<typeof finishAtOnce>) => mockWithSpring(...args),
+    withTiming: (...args: Parameters<typeof finishAtOnce>) => mockWithTiming(...args),
   };
 });
 
@@ -154,6 +159,14 @@ describe('ExpandedAnswerProvider', () => {
     expect(layer().props.style).toEqual({ height: 874, width: 402 });
   });
 
+  test('the layer grows once its answer has laid out, so mounting it does not skip the motion', async () => {
+    await open('a1', undefined, { layOut: false });
+    expect(mockWithTiming).not.toHaveBeenCalled();
+
+    act(() => content().props.onLayout());
+    expect(mockWithTiming).toHaveBeenCalledWith(1, expect.anything(), expect.any(Function));
+  });
+
   test('opening another answer shows it at once, and returns if it could not be shown', async () => {
     let settle: (applied: boolean) => void = () => {};
     await open('a2', new Promise<boolean>((resolve) => (settle = resolve)));
@@ -191,6 +204,8 @@ describe('ExpandedAnswerProvider', () => {
     await open('a1');
 
     await act(async () => close().props.onPress());
+    // The screen is released first; the layer goes a frame later.
+    await act(() => new Promise(requestAnimationFrame));
     expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 
@@ -201,7 +216,7 @@ describe('ExpandedAnswerProvider', () => {
     expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 
-  async function open(id: string, selection?: Promise<boolean>) {
+  async function open(id: string, selection?: Promise<boolean>, { layOut = true } = {}) {
     const createWithNodeMock = create as unknown as (
       element: ReactElement,
       options: { createNodeMock: () => unknown },
@@ -220,6 +235,7 @@ describe('ExpandedAnswerProvider', () => {
       (node) => node.props.pointerEvents === 'none' && typeof node.props.onLayout === 'function',
     );
     await act(async () => probe.props.onLayout());
+    if (layOut) act(() => content().props.onLayout());
   }
 
   function tree(messages: MessageListItem[]) {
@@ -238,6 +254,15 @@ describe('ExpandedAnswerProvider', () => {
   function layer() {
     return renderer!.root.find(
       (node) => typeof node.type === 'string' && node.props.testID === 'expanded-answer',
+    );
+  }
+
+  function content() {
+    return renderer!.root.find(
+      (node) =>
+        typeof node.type !== 'string' &&
+        typeof node.props.onLayout === 'function' &&
+        Array.isArray(node.props.style),
     );
   }
 

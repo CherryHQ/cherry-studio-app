@@ -258,7 +258,9 @@ export function ChatWorkspace({
   }
 
   return (
-    <View className="flex-1 bg-chat-background">
+    // No background of its own: the screen paints it, and a layer reaching over the composer leaves
+    // the composer visible beneath it.
+    <View className="flex-1">
       <MessageTranslationProvider
         isEnabled={isTranslationEnabled}
         sessionId={listKey ?? ''}
