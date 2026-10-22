@@ -102,21 +102,6 @@ extension HealthDataReader {
         row["leftEye"] = contacts.leftEye.map(serializeLens) as Any? ?? NSNull()
         row["rightEye"] = contacts.rightEye.map(serializeLens) as Any? ?? NSNull()
       }
-    } else if let value = sample as? HKClinicalRecord {
-      row["displayName"] = value.displayName
-      if let resource = value.fhirResource {
-        row["fhir"] = [
-          "identifier": resource.identifier, "resourceType": resource.resourceType.rawValue,
-          "sourceURL": resource.sourceURL?.absoluteString as Any? ?? NSNull(),
-          "byteCount": resource.data.count,
-        ]
-      }
-    } else if let value = sample as? HKCDADocumentSample, let document = value.document {
-      row["document"] = [
-        "title": document.title, "patientName": document.patientName,
-        "authorName": document.authorName, "custodianName": document.custodianName,
-        "byteCount": document.documentData?.count as Any? ?? NSNull(),
-      ]
     } else if let value = sample as? HKSeriesSample {
       row["count"] = value.count
     }

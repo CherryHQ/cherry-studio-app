@@ -675,8 +675,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             codemode: createCodemodeExtension({
               sandbox: this.codemodeSandbox,
               models: false,
-              // Keep a few useful signatures for scripts; discover the rest instead of duplicating all schemas.
-              inlineBudget: 600,
+              // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
+              inlineBudget: 0,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [

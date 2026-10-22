@@ -834,6 +834,28 @@ describe('Skill turn preparation', () => {
     expect(readInstructions).toHaveBeenCalledTimes(2);
   });
 
+  test.each([
+    [undefined, true],
+    ['create' as const, false],
+  ])(
+    'offers create_skill upfront only for the explicit workflow (%s)',
+    async (action, deferred) => {
+      const harness = createHarness();
+      harness.dependencies.skills = { resolve: async () => scope };
+      harness.dependencies.skillWorkflow = {
+        create: jest.fn(),
+      } as unknown as NonNullable<typeof harness.dependencies.skillWorkflow>;
+      const plan = await prepareTurn(
+        harness.dependencies,
+        { ...textInput(), ...(action ? { skillAction: action } : {}) },
+        new AbortController().signal,
+      );
+      expect(plan.tools.find((tool) => tool.providerName === 'create_skill')?.deferred).toBe(
+        deferred,
+      );
+    },
+  );
+
   test('persists explicit selection receipts and rejects out-of-scope selection', async () => {
     const harness = createHarness();
     harness.dependencies.skills = { resolve: async () => scope };

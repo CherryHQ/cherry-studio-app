@@ -51,13 +51,17 @@ on iOS, or Android back) returns to the transcript with that answer's card shown
 component inside the workspace's providers rather than a route, so menus, sheets and toasts portal
 above it as they do over the transcript.
 
-The layer grows from the card's frame and shrinks back onto the shown card. Its content lays out
-once at the final size and is clipped by the growing frame, which fades out near the card so the
-card's own text shows through. Past half of the motion the screen hides its header and the
-workspace region reaches over the composer (`FullScreenLayerHost`); shrinking below half returns
-both, so they appear within the motion. A new action takes over from the current progress. With
-reduced motion the layer fades in and out in place. The transcript keeps its size and header inset
-throughout, so nothing under the layer moves.
+The layer grows from the card's frame and shrinks back onto the shown card on the shared settle
+spring, which starts from rest and lands exactly without overshoot. Its content lays out once at the
+final size, before the motion starts, and is clipped by the growing frame; near the card the
+frame and its text fade together into the card's own text. On iOS, past half of the motion the screen
+hides its native header and the workspace region reaches over the composer
+(`FullScreenLayerHost`); shrinking below half returns both, so they appear within the motion.
+Android draws its header and composer in the app, so the region reaches over the composer from the
+start and the header fades with the motion's progress on the UI thread; nothing on screen re-lays
+out mid-motion, and the region is released before the closed layer is removed. A new action takes
+over from the current progress. With reduced motion the layer fades in and out in place. The
+transcript keeps its size and header inset throughout, so nothing under the layer moves.
 
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions

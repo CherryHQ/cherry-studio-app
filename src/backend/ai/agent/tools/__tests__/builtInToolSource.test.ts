@@ -50,7 +50,6 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -92,6 +91,30 @@ describe('createSystemCapabilitySource', () => {
     const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
     for (const name of names) expect(capabilityIds(disabled)).not.toContain(name);
     expect(capabilityIds(disabled)).toContain('read_file');
+  });
+
+  test('defers occasional health and Agent management tools while device schedules stay direct', async () => {
+    const tools = await resolve({
+      deviceAccess: {
+        'calendar.read': 'granted',
+        'calendar.write': 'granted',
+        'health.steps.read': 'granted',
+        'health.workouts.read': 'granted',
+      },
+    });
+    const deferred = (name: string) => tools.find((tool) => tool.providerName === name)?.deferred;
+    for (const name of [
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'health_get_summary',
+      'health_list_workouts',
+      'health_list_data_types',
+    ])
+      expect(deferred(name)).toBe(true);
+    expect(deferred('calendar_list_events')).toBeUndefined();
+    expect(deferred('ask_user_question')).toBeUndefined();
   });
 
   test('names the linked folder in the workspace tools only for a workspace conversation', async () => {
@@ -166,7 +189,6 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -219,7 +241,6 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -270,11 +291,7 @@ describe('createSystemCapabilitySource', () => {
 
   test('keeps extended personal health reads explicit while allowing public catalog lookup', async () => {
     const tools = await resolve({ deviceAccess: { 'health.electrocardiogram.read': 'requested' } });
-    for (const id of [
-      'health_query_data',
-      'health_get_record',
-      'health_share_verifiable_records',
-    ]) {
+    for (const id of ['health_query_data', 'health_get_record']) {
       expect(tools.find((tool) => tool.providerName === id)).toMatchObject({
         approval: 'ask',
         autoApprovalEligible: false,

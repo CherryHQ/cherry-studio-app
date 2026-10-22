@@ -179,10 +179,10 @@ out of the transcript, and an explicitly withdrawn input with no native input bo
 Cherry reservation removed without changing the runtime revision. Reconciliation repeats that
 cleanup if a process stopped after native withdrawal but before the Cherry write.
 
-The Pi 1.3.0 patch advances the next queued input after a terminal model failure. On open, it also
-places waiting inputs of an ownerless conversation whose previous run has already ended. This
-creates a pending run before scheduling is enabled; capability reconstruction still precedes any
-execution. Existing live runs and task-owned conversations retain their normal recovery paths.
+Pi 1.4.0 with `afterFailedRun: 'continue'` advances the next queued input after a terminal model
+failure. Waiting inputs of an ownerless conversation whose previous run already ended are not
+repaired on open; see [Scheduler And Recovery Semantics](#scheduler-and-recovery-semantics).
+Existing live runs and task-owned conversations retain their normal recovery paths.
 
 ## Rebuilding Model Context
 
@@ -346,7 +346,8 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 | `harness.js`: `openTasks` orphaned-inbox scan and ownership guards | No upstream replacement. The explicitly chosen clear/rebuild scope does not preserve old orphaned queues; the idle-inbox repair fixture is replaced by normal admitted-run recovery | Same runtime suite retains existing-run and task-owned conversation exclusions. This is a scope retirement, not a claim of backward-compatible orphan repair |
 
 The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.4.0.patch) contains
-Unicode search, the Code Mode `declarations` import and managed Code Mode output only. Upstream
+Unicode search, exact-name tool search, the Code Mode `declarations` import and managed Code Mode
+output only. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing
 ([#1219](https://github.com/CherryHQ/cherry-studio-app/issues/1219)) remains described in
@@ -356,7 +357,7 @@ storage-lifetime concern. Mobile's manual whole-file clearing
 
 | Package/hunk group | Classification and invariant | Existing regression source / retirement evidence |
 | --- | --- | --- |
-| Pi Durable Unicode search | Product behavior: Chinese names and adjacent Han pairs remain discoverable without exposing deferred tools prematurely | [piToolSearch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piToolSearch.test.ts); upstream tokenizer must satisfy Chinese and Latin cases |
+| Pi Durable Unicode search and exact names | Product behavior: Chinese names and adjacent Han pairs remain discoverable without exposing deferred tools prematurely; exact deferred names in a `tool_search` query load before ranked matches, so the prompt's `limit` equal to the number of names never loads a different tool | [piToolSearch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piToolSearch.test.ts); upstream must satisfy Chinese and Latin cases and select exact names regardless of BM25 rank |
 | Pi Durable `writeOutput` hook | Host boundary: Code Mode output becomes a managed artifact rather than an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts), [piCodemodeOutput.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeOutput.test.ts); require an upstream host-output API with cancellation/artifact ownership preserved |
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
 | Pi AI incremental JSON preview | Performance adaptation: avoid quadratic partial parsing while final tool arguments still require a complete valid object | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts); require final-argument parity plus measurement before removing the optimization |
@@ -372,8 +373,8 @@ Three platform hunks were retired after checking the pristine 1.4.0 packages:
 | Pi Durable tool-search `Type` import | The `pi-ai` entry adds only `auth/helpers.js`, `auth/types.js` and other import-free modules; its `auth/context.js` uses the native browser-map variant | Same guard's auth module list |
 
 For the remaining adaptation groups, the installed 1.4.0 patch is the recorded workaround; no
-independently confirmed replacement is recorded here. A future upgrade must attach exact upstream evidence per
-removed group instead of interpreting a clean patch rebase as a fix.
+independently confirmed replacement is recorded here. A future upgrade must attach exact upstream
+evidence per removed group instead of interpreting a clean patch rebase as a fix.
 
 ### Upgrade And Retirement Evidence
 

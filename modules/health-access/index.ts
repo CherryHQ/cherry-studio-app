@@ -31,14 +31,6 @@ export type HealthRecordOptions = {
   attachmentId: string;
 };
 export type HealthDataResult = Record<string, unknown>;
-export type HealthVerifiableRecordOptions = {
-  recordTypes: ('covid19' | 'immunization' | 'laboratory' | 'recovery')[];
-  sourceTypes: ('smartHealthCard' | 'euDigitalCOVIDCertificate')[];
-  offset: number;
-  limit: number;
-  dataOffset: number;
-  dataLimit: number;
-};
 export type HealthWorkout = {
   id: string;
   activityType: number;
@@ -59,7 +51,6 @@ type NativeHealthAccessModule = {
   query(type: TypeDescriptor, options: HealthQueryOptions): Promise<HealthDataResult>;
   getRecord(type: TypeDescriptor, options: HealthRecordOptions): Promise<HealthDataResult>;
   listWorkouts(startDate: string, endDate: string, limit: number): Promise<HealthWorkout[]>;
-  shareVerifiableRecords(options: HealthVerifiableRecordOptions): Promise<HealthDataResult>;
 };
 
 export type HealthAccessModule = {
@@ -104,7 +95,5 @@ export function getHealthDataReader() {
       native.getRecord(describeType(type), options),
     listWorkouts: (startDate: string, endDate: string, limit: number) =>
       native.listWorkouts(startDate, endDate, limit),
-    shareVerifiableRecords: (options: HealthVerifiableRecordOptions) =>
-      native.shareVerifiableRecords(options),
   };
 }

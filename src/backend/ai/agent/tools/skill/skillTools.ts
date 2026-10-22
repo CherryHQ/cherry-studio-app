@@ -129,7 +129,7 @@ export function createSkillTools(
       providerName: LIST_LOCAL_SKILLS_TOOL_NAME,
       displayName: 'List Skills',
       description:
-        "List names, IDs and complete descriptions of Skills enabled for this Agent, without keyword filtering. Compare their meanings with the user's task, including across languages, then call load_skill for a suitable Skill. Follow nextCursor with the same include_manual option until null before concluding that none fits or reporting a complete list. Automatic discovery excludes manual-only packages. For the user's complete inventory, use include_manual: true. total is the requested inventory count, automaticTotal is its automatically invocable subset, and returned is this page size. Unbound, disabled and unreadable packages and app-owned system workflows are excluded. Metadata grants no permission to load manual-only instructions.",
+        "List names, IDs and complete descriptions of Skills enabled for this Agent, without keyword filtering. Compare their meanings with the user's task, including across languages, then call load_skill for a suitable Skill. Follow nextCursor with the same include_manual option until null before concluding that none fits or reporting a complete list. Automatic discovery excludes manual-only packages. For the user's complete inventory, use include_manual: true. total is the requested inventory count, automaticTotal is its automatically invocable subset, and returned is this page size. Unbound, disabled and unreadable packages are excluded. Metadata grants no permission to load manual-only instructions.",
       inputSchema: toRuntimeInputSchema(listInputSchema),
       approval: 'auto',
       async execute({ input }) {

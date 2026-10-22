@@ -222,10 +222,12 @@ describe('DevicePermissions', () => {
     const finishSelection = createDeferred();
     const controller = new AbortController();
     jest.mocked(ImagePicker.getCameraPermissionsAsync).mockResolvedValue(unrequested as never);
-    const selection = service.runWithSystemPrompt(async () => {
+    health.request.mockImplementation(async (types) => {
       started.resolve();
       await finishSelection.promise;
-    }, controller.signal);
+      return nativeHealthStatuses(types, 'requested');
+    });
+    const selection = service.request(['health.steps.read'], controller.signal);
     const rejected = expect(selection).rejects.toThrow();
     await started.promise;
     controller.abort();
