@@ -304,7 +304,13 @@ describe('provider model add helpers', () => {
         outputModalities: [type === 'speech' ? MODALITY.AUDIO : MODALITY.TEXT],
       });
       expect(result.input).not.toHaveProperty('contextWindow');
-      const saved = { ...model('custom-voice'), ...result.input };
+      const saved: Model = {
+        ...model('custom-voice'),
+        capabilities: result.input?.capabilities ?? [],
+        endpointTypes: result.input?.endpointTypes,
+        inputModalities: result.input?.inputModalities,
+        outputModalities: result.input?.outputModalities,
+      };
       expect(type === 'speech' ? isTextToSpeechModel(saved) : isSpeechToTextModel(saved)).toBe(
         true,
       );
@@ -326,7 +332,13 @@ describe('provider model add helpers', () => {
     );
     const result = build({ ...form, modelId: baseline.modelId }, baseline);
     expect(result.errors).toEqual({});
-    const saved = { ...baseline, ...result.input };
+    const saved: Model = {
+      ...baseline,
+      capabilities: result.input?.capabilities ?? baseline.capabilities,
+      endpointTypes: result.input?.endpointTypes ?? baseline.endpointTypes,
+      inputModalities: result.input?.inputModalities ?? baseline.inputModalities,
+      outputModalities: result.input?.outputModalities ?? baseline.outputModalities,
+    };
     expect(isSpeechToTextModel(saved)).toBe(false);
     expect(isTextGenerationModel(saved)).toBe(true);
   });
