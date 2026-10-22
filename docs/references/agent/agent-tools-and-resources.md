@@ -716,8 +716,11 @@ For ordinary text, built-in Office text, and native PDF text, `read_file` takes 
 plus optional one-based `start_line` and `limit` (default 500
 lines, at most 2,000) and returns
 `{ status, fileEntryId, filename, size, startLine, lineCount, totalLines, truncated, text }`. The
-window is cut on a line boundary at 100,000 characters, so `startLine + lineCount` is always the
-next line to request. A single line larger than the whole budget is the one case that cannot be cut
+window is cut on a line boundary at 40 KiB of serialized text, so `startLine + lineCount` is
+always the next line to request. The size budget is
+measured as UTF-8 inside the JSON result, escapes included, and stays below the 50 KiB that Pi
+keeps of a model-facing tool result; a larger result would be cut after `nextOffset` was computed
+and silently skip text. A single line larger than the whole budget is the one case that cannot be cut
 on a boundary: the head is returned with `lineTruncated: true`, the read reports itself truncated,
 and `nextOffset` gives the code-point offset where the rest of the line starts, since asking for a
 later line cannot reach it. Text sources share attachment preparation's 5 MiB source ceiling and
@@ -729,8 +732,8 @@ independent of the pageable window's `truncated` flag. This lets a model continu
 attached document or revisit a file it wrote
 in an earlier turn, whose content is deliberately not replayed as an attachment.
 
-Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points) read the
-full text as a raw code-point window instead of lines, returning `text`, `offset`,
+Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points, also ended
+by the same 40 KiB size budget) read the full text as a raw code-point window instead of lines, returning `text`, `offset`,
 `characterCount`, `totalCharacters`, `nextOffset`, and `complete`. They are how a cut line
 continues, and the only paging AnyDoc output accepts: its result is explicitly
 `format: 'json-fragment'`. Concatenating
