@@ -15,6 +15,8 @@ import * as z from 'zod';
 import type { AgentAvatars } from '@/backend/services/agents/createAgentAvatars';
 import type { AvatarCharacters } from '@/backend/services/avatars/avatarCharacters';
 import type { AvatarResources } from '@/backend/services/avatars/avatarResources';
+import { validateAvatarExpression } from '@/backend/services/avatars/avatarStudioQuality';
+import { decodeRgba } from '@/backend/services/file/rgbaImageCodec';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type { ManagedFileResolver, TurnFileScope } from '../resources/managedFileResolver';
@@ -132,6 +134,22 @@ export function createAvatarCharacterTools(
       signal.throwIfAborted();
       const size = imageWidth(loaded.idle!.bytes);
       try {
+        const base = decodeRgba(loaded.idle!.bytes);
+        for (const expression of CHARACTER_EXPRESSIONS) {
+          if (expression === 'idle') continue;
+          const image = decodeRgba(loaded[expression]!.bytes);
+          if (image.width !== base.width || image.height !== base.height) {
+            return invalid('avatar_alignment', 'All expressions must match the base canvas.');
+          }
+          try {
+            validateAvatarExpression(base, image);
+          } catch {
+            return invalid(
+              'avatar_alignment',
+              `Expression ${expression} differs too much from the base, or has no visible change. Regenerate only this expression using the base as an edit reference. Do not save unrelated characters.`,
+            );
+          }
+        }
         const id = await dependencies.characters.saveCharacter({
           manifest: {
             version: 1,

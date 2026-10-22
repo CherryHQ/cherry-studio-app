@@ -848,7 +848,9 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
 
 function paintingModel(): ConfiguredPaintingModel {
   return {
-    support: { modes: { generate: { supports: {} } } } as ConfiguredPaintingModel['support'],
+    support: {
+      modes: { generate: { supports: {} }, edit: { supports: {} } },
+    } as ConfiguredPaintingModel['support'],
     uniqueModelId: createUniqueModelId('openai', 'gpt-image-1'),
   };
 }

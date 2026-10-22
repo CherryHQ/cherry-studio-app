@@ -5,6 +5,11 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { PiStreamFn } from './piModelTypes';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
+import {
+  addThinkingBindingHeader,
+  applyThinkingBinding,
+  supportsThinkingBinding,
+} from './piThinkingBinding';
 
 export type SupportedPiApi =
   | 'anthropic-messages'
@@ -175,6 +180,9 @@ export async function bindPiStream(
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
     const headers: ProviderHeaders = { ...options?.headers, ...binding.headers };
+    const thinkingBinding =
+      adapter.api === 'anthropic-messages' && supportsThinkingBinding(model.id);
+    if (thinkingBinding) addThinkingBindingHeader(headers);
     if (binding.apiKey === '') {
       // SDKs require a key even for unauthenticated gateways. Suppress only generated auth.
       for (const name of adapter.authHeaderNames) {
@@ -201,7 +209,7 @@ export async function bindPiStream(
       onPayload: async (payload, requestModel) => {
         const previous = await options?.onPayload?.(payload, requestModel);
         const resolvedPayload = previous === undefined ? payload : previous;
-        return binding.requestParameters
+        const prepared = binding.requestParameters
           ? applyPiRequestParameters(
               resolvedPayload,
               adapter.api,
@@ -210,6 +218,7 @@ export async function bindPiStream(
               temperature,
             )
           : resolvedPayload;
+        return thinkingBinding ? applyThinkingBinding(prepared) : prepared;
       },
       signal: options?.signal,
       temperature,

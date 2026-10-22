@@ -119,6 +119,8 @@ export type ConversationInteraction = {
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
+  /** Local built-in image operation; its managed references can be previewed before approval. */
+  imageGeneration?: boolean;
   input: ResourceRead;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };

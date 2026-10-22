@@ -32,6 +32,7 @@ import { type AvatarRecipe, isAvatarSource } from '@/shared/data/types/avatar';
 import { useAvatarCharacters } from '../hooks/useAvatarCharacters';
 import { useAvatarResource } from '../hooks/useAvatarResource';
 import { characterSprite } from '../utils/characterSprite';
+import { AvatarCreation } from './AvatarCreation';
 
 const PREVIEW_STATUSES: CharacterStatus[] = ['idle', 'running', 'waiting', 'completed', 'failed'];
 const COVER_SIZE = 512;
@@ -141,6 +142,7 @@ function AvatarStudio({
   );
   const [status, setStatus] = useState<CharacterStatus>('idle');
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
   const closed = useRef(false);
   useEffect(
     () => () => {
@@ -197,10 +199,28 @@ function AvatarStudio({
       toast.show({ label: t('agent.avatarStudio.loadFailed'), variant: 'danger' });
     }
   };
+  if (creating)
+    return (
+      <AvatarCreation
+        onBack={() => setCreating(false)}
+        onReady={(id) => {
+          void refreshLibrary().then(() => {
+            setPicked({
+              character: id,
+              background: recipe?.background ?? AVATAR_BACKGROUNDS[0].hex,
+            });
+            setCreating(false);
+          });
+        }}
+      />
+    );
   return (
     <View className="flex-1">
       <ScrollView contentContainerClassName="gap-6 px-4 pb-6">
         <View className="items-center gap-4 pt-2">
+          <Button onPress={() => setCreating(true)} variant="tonal">
+            {t('agent.avatarStudio.create.title')}
+          </Button>
           {sprite && recipe ? (
             <View accessible accessibilityLabel={t('agent.avatarStudio.preview')}>
               <CharacterPlayer

@@ -33,6 +33,36 @@ const EDIT_MODEL: ConfiguredPaintingModel = {
 const TURN_FILES: TurnFileScope = { fileEntryIds: new Set([ENTRY.id]) };
 
 describe('createGenerateImageTool', () => {
+  test('never silently turns an edit without a reference into paid generation', async () => {
+    const deps = createDependencies();
+    const tool = createGenerateImageTool(deps, EDIT_MODEL, TURN_FILES);
+    const result = await execute(tool, { mode: 'edit', prompt: 'Blink' });
+    expect(result.value).toMatchObject({
+      status: 'error',
+      message: expect.stringContaining('reference image'),
+    });
+    expect(deps.ai.generateImage).not.toHaveBeenCalled();
+  });
+
+  test('rejects reference editing on a generation-only model before a provider call', async () => {
+    const deps = createDependencies();
+    const result = await execute(createGenerateImageTool(deps, MODEL, TURN_FILES), {
+      mode: 'edit',
+      prompt: 'Blink',
+      image_ids: [ENTRY.id],
+    });
+    expect(result.value).toMatchObject({
+      status: 'error',
+      message: expect.stringContaining("can't edit"),
+    });
+    expect(deps.ai.generateImage).not.toHaveBeenCalled();
+  });
+
+  test('requires an explicit operation even for a prompt describing an edit', async () => {
+    const deps = createDependencies();
+    await execute(createGenerateImageTool(deps, MODEL, TURN_FILES), { prompt: 'Edit this image' });
+    expect(deps.ai.generateImage).not.toHaveBeenCalled();
+  });
   test('resolves editing support from the configured model, including copied provider metadata', async () => {
     const uniqueModelId = createUniqueModelId('copied-aihubmix', 'ernie-irag-edit');
     const getById = jest.fn(async () => ({ imageGeneration: EDIT_MODEL.support }) as Model | null);
@@ -55,7 +85,7 @@ describe('createGenerateImageTool', () => {
     const deps = createDependencies();
     const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
-    const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
+    const result = await execute(tool, { mode: 'generate', prompt: 'A cherry orchard at dawn' });
 
     expect(deps.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({ mode: 'generate', prompt: 'A cherry orchard at dawn' }),
@@ -87,7 +117,7 @@ describe('createGenerateImageTool', () => {
     expect(resolveUsageAttribution).not.toHaveBeenCalled();
 
     usageAttribution.messageRef = { kind: 'agent-session', id: 'message-1' };
-    await execute(tool, { prompt: 'A cherry' });
+    await execute(tool, { mode: 'generate', prompt: 'A cherry' });
     expect(deps.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({ usageAttribution }),
     );
@@ -97,7 +127,7 @@ describe('createGenerateImageTool', () => {
     const deps = createDependencies();
     const tool = createGenerateImageTool(deps, null, TURN_FILES);
 
-    const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
+    const result = await execute(tool, { mode: 'generate', prompt: 'A cherry orchard at dawn' });
 
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
     expect(String((result.value as { message: string }).message)).toContain('Settings > Model');
@@ -112,7 +142,7 @@ describe('createGenerateImageTool', () => {
     });
     const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
-    const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
+    const result = await execute(tool, { mode: 'generate', prompt: 'A cherry orchard at dawn' });
 
     expect(result.value).toMatchObject({ status: 'error' });
     expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
@@ -133,7 +163,7 @@ describe('createGenerateImageTool', () => {
       .mockRejectedValueOnce(new Error('disk full'));
     const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
-    const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
+    const result = await execute(tool, { mode: 'generate', prompt: 'A cherry orchard at dawn' });
 
     expect(result.value).toMatchObject({ status: 'error' });
     // A partial generation must not leave orphan rows in the file library.
@@ -144,7 +174,7 @@ describe('createGenerateImageTool', () => {
     const deps = createDependencies();
     const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
-    const result = await execute(tool, { prompt: '   ' });
+    const result = await execute(tool, { mode: 'generate', prompt: '   ' });
 
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
     expect(result.value).toMatchObject({ status: 'error', retryable: true });
@@ -155,6 +185,7 @@ describe('createGenerateImageTool', () => {
     const tool = createGenerateImageTool(deps, EDIT_MODEL, { fileEntryIds: new Set() });
 
     const result = await execute(tool, {
+      mode: 'edit',
       image_ids: [ENTRY.id],
       prompt: 'Turn this into a watercolor.',
     });

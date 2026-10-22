@@ -206,6 +206,7 @@ export function createSystemCapabilitySource(
               : [],
           ),
         ),
+        scope.paintingModel?.support,
       );
       return tools.map((tool) =>
         tool.ref.source === 'builtin' &&

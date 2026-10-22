@@ -2,6 +2,8 @@ import type { CharacterManifest } from '@cherrystudio/character-avatar/manifest'
 
 import type { AvatarRecipe, AvatarResource } from '@/shared/data/types/avatar';
 
+import type { AvatarStudioModule } from './avatarStudio';
+
 /** A library character with device-local URIs for each of its layers. */
 export type AvatarCharacter = {
   id: string;
@@ -15,6 +17,7 @@ export type AvatarCharacter = {
  * device-local cover resolution. The app ships no characters; users bring them.
  */
 export interface AvatarsModule {
+  readonly studio: AvatarStudioModule;
   /** Returns an opaque source reference. The editor's caller stores only this string. */
   createDraft(input: { recipe: AvatarRecipe; png: string }): Promise<string>;
   /**

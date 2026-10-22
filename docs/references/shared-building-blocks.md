@@ -29,6 +29,7 @@ it already exists.
 | Importing a file into managed storage, including one-time image normalization | `fileContent.createInternalEntry` in `src/backend/services/file/fileContent.ts` |
 | RGBA pixel operations (bounds, difference, transplant, flat-background removal) and their Skia codec | `src/backend/utils/rgbaImage.ts`, `src/backend/services/file/rgbaImageCodec.ts` |
 | Offline avatar drafts, recipes, managed covers and the character library | `createAvatarResources` and `createAvatarCharacters` in `src/backend/services/avatars`, exposed by the `avatars` workflow |
+| Resumable AI avatar creation, reference binding and expression quality gates | `createAvatarStudio` and `avatarStudioQuality` in `src/backend/services/avatars`, exposed by `avatars.studio` |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |

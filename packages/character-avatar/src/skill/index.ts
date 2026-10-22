@@ -21,12 +21,12 @@ waiting, done, error. Only the face may differ between them. Your job is to prod
 1. **Brief.** If the user has not described the character, ask once with \`ask_user_question\`:
    what it is (person, animal, creature), its vibe, and a main colour. A reference image the user
    attached is welcome as inspiration. Never copy existing characters, mascots or logos.
-2. **Base.** Call \`generate_image\` 2–3 times with the base prompt in \`references/prompts.md\`.
+2. **Base.** Prefer the avatar editor’s Create with AI flow: it checks model capabilities, saves progress and requires a sample approval before batching. If making the assets in this conversation, call \`generate_image\` with \`mode: "generate"\` 2–3 times with the base prompt in \`references/prompts.md\`.
    Look at each result with \`read_file\` and drop any that break the framing rules. Let the user
    pick with \`ask_user_question\` (describe each option in a few words).
 3. **Canvas.** \`image_process\` \`resize\` the chosen base to \`size: 768\`. This is the idle frame.
-4. **Expressions.** For each of blink, thinking, waiting, done, error:
-   - \`generate_image\` with \`image_ids: [chosen base]\` and that expression's edit prompt.
+4. **Expressions.** First generate and inspect ONLY blink. Ask the user to approve it before generating thinking, waiting, done and error. For each expression:
+   - \`generate_image\` with \`mode: "edit"\`, a distinct \`name\`, and \`image_ids: [chosen base]\` and that expression's edit prompt.
    - \`image_process\` \`resize\` the result to 768, then \`transplant\` it onto the idle frame
      (\`file_entry_id\`: idle, \`other_file_entry_id\`: resized edit) with \`region\` set to the face
      (estimate it from the idle frame, e.g. eyes to chin).
@@ -41,8 +41,8 @@ waiting, done, error. Only the face may differ between them. Your job is to prod
    and a soft \`background\` that contrasts with the character.
 8. **Report** in one or two sentences, including how many images you generated.
 
-If \`generate_image\` cannot take \`image_ids\`, the drawing model cannot edit images: tell the user
-to choose an image model that supports editing in Settings, and stop.
+Before any image call, check the current drawing model capabilities in the tool description. If reference editing is not supported: tell the user
+to choose an image model that supports editing in Settings, and stop. Never replace editing with generation. A missing reference or wrong character must stop the workflow before processing or saving.
 `;
 
 const PROMPTS = `Base prompt (fill in the brackets, keep every rule):

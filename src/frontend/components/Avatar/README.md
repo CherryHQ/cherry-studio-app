@@ -27,6 +27,10 @@ Cherry product data and presentation rules before composing that primitive.
   resource source through `onSave`; callers never carry a recipe or cover pair. Users pick a
   character from the on-device library and a circle colour, preview every execution state, import
   a character pack or delete a character. Saving draws the cover offscreen.
+- `AvatarCreation`, inside the editor, owns AI creation: compatible model selection, bounded
+  generation consent, candidate selection, approval of one blink sample, remaining expressions,
+  and a return to the existing animation preview before applying. Closing cancels the active
+  request; the backend keeps completed images in a local draft for resuming or explicit deletion.
 - `DynamicAvatar` is the public player. It resolves the resource internally, keeps the cover
   beneath, and animates the recipe while its character is in the library.
 - `ActiveAgentAvatar` is reserved for the focused conversation's header. It observes status without
@@ -41,6 +45,12 @@ stores the characters users bring; `utils/characterSprite.ts` adapts a library c
 engine. A character pack is a ZIP with `character.json` (`CharacterPackManifestSchema`) and one
 transparent square PNG or WebP per layer; frame and neck are derived when omitted. Agents can also
 design characters through the bundled `character-studio` Skill.
+
+The `avatars.studio` contract owns one draft per device under `avatar-studio`. Each successful image
+is checkpointed before the next request. Editing always uses the selected candidate bytes, and the
+remaining batch requires a saved sample approval. Framing, pixel difference and silhouette checks
+reject structural failures; they do not prove semantic identity, so sample and final visual review
+remain explicit user steps. The studio uses the existing image capability and needs no chat model.
 
 Callers outside this module import from `@/frontend/components/Avatar`. Uploaded provider avatars
 are read and written through `@/frontend/hooks/useProviderAvatar`, whose shared store keeps every

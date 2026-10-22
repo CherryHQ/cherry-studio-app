@@ -1,4 +1,5 @@
 import type { AiFailureInput } from '@/shared/contracts/aiFailure';
+import { isThinkingBindingFailure } from '@/shared/utils/aiFailure';
 
 const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
 const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
@@ -114,7 +115,9 @@ export function normalizeAiError(
       : typeof record?.retryable === 'boolean'
         ? record.retryable
         : undefined;
-  const retryable = explicitRetryable ?? isRetryableProviderFailure(code, message, statusCode);
+  const retryable = isThinkingBindingFailure(message)
+    ? false
+    : (explicitRetryable ?? isRetryableProviderFailure(code, message, statusCode));
 
   return {
     code,

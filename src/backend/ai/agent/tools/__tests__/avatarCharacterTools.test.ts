@@ -1,6 +1,15 @@
 import { CharacterPackError } from '@cherrystudio/character-avatar/layers';
 
+import { validateAvatarExpression } from '@/backend/services/avatars/avatarStudioQuality';
+
 import { createAvatarCharacterTools } from '../avatarCharacterTools';
+
+jest.mock('@/backend/services/file/rgbaImageCodec', () => ({
+  decodeRgba: () => ({ width: 768, height: 768, data: new Uint8Array() }),
+}));
+jest.mock('@/backend/services/avatars/avatarStudioQuality', () => ({
+  validateAvatarExpression: jest.fn(),
+}));
 
 jest.mock('@shopify/react-native-skia', () => ({
   Skia: {
@@ -89,6 +98,18 @@ test('saves conversation images as a character sized from the idle layer', async
       }),
     }),
   );
+});
+
+test('refuses an unrelated expression before saving any character', async () => {
+  jest.mocked(validateAvatarExpression).mockImplementationOnce(() => {
+    throw new Error('avatar_alignment');
+  });
+  const { dependencies, save } = setup();
+  expect((await save({ name: 'Mochi', layers })).value).toMatchObject({
+    status: 'error',
+    code: 'avatar_alignment',
+  });
+  expect(dependencies.characters.saveCharacter).not.toHaveBeenCalled();
 });
 
 test('reports layer problems to the model instead of failing the turn', async () => {

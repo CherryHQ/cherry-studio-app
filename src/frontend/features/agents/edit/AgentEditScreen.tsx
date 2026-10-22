@@ -9,6 +9,7 @@ import {
 } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { loggerService } from '@logger';
+import { randomUUID } from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -308,8 +309,13 @@ function AgentEditForm({
 
     try {
       savedAgentId = (await createAgent(dto.value)).id;
-    } catch {
-      toast.show({ label: t('agent.toast.saveFailed'), variant: 'danger' });
+    } catch (error) {
+      const diagnosticId = randomUUID();
+      logger.error('Failed to create agent', error as Error, { diagnosticId });
+      toast.show({
+        label: t('agent.toast.saveFailedDetail', { id: diagnosticId }),
+        variant: 'danger',
+      });
       return;
     }
 

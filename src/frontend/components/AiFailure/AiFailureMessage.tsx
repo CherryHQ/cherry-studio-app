@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
+import { isThinkingBindingFailure } from '@/shared/utils/aiFailure';
 
 import { readAiFailureDetail, type AiFailureData } from './aiFailureDetail';
 
@@ -60,15 +61,16 @@ export function AiFailureMessage({
 
   const titleKey = aiFailureReasonTitleKey(reasonCode);
   const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
-  const message =
-    fallbackMessage ??
-    t(
-      reasonCode === 'auth'
-        ? 'chat.errorPart.message.auth'
-        : retryable === true
-          ? 'chat.errorPart.retryable'
-          : 'chat.errorPart.message',
-    );
+  const message = isThinkingBindingFailure(data.message ?? '')
+    ? t('chat.errorPart.message.thinkingBinding')
+    : (fallbackMessage ??
+      t(
+        reasonCode === 'auth'
+          ? 'chat.errorPart.message.auth'
+          : retryable === true
+            ? 'chat.errorPart.retryable'
+            : 'chat.errorPart.message',
+      ));
 
   return (
     <>
