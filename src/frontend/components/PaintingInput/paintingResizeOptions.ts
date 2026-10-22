@@ -1,17 +1,18 @@
 import {
   getImageParamFields,
-  parseImageRatio,
   type ImageParamDraft,
   type ResolvedImageGenerationMode,
 } from '@/shared/utils/imageGenerationParams';
 
+import { optionRatioLabel, pixelSizeLabel } from './imageGenerationLabels';
+
 /**
  * Changing the ratio offers only declared dimensions and carries their exact
- * request value; pixel sizes also report their dimensions for display.
+ * request value; pixel sizes read as their nominal ratio and also report their dimensions.
  */
 export function paintingResizeOptions(mode: ResolvedImageGenerationMode | undefined) {
   const fields = getImageParamFields(mode);
-  for (const key of ['aspectRatio', 'size', 'imageResolution']) {
+  for (const key of ['aspectRatio', 'size', 'imageResolution'] as const) {
     const field = fields.find((item) => item.key === key && item.spec.type === 'enum');
     if (!field || field.spec.type !== 'enum') continue;
     const options = new Map<
@@ -19,20 +20,15 @@ export function paintingResizeOptions(mode: ResolvedImageGenerationMode | undefi
       { ratio: string; paramValues: ImageParamDraft; pixels?: string }
     >();
     for (const value of field.spec.options) {
-      const dimensions = parseImageRatio(value);
-      if (!dimensions) continue;
-      let ratio = `${dimensions.width}:${dimensions.height}`;
-      if (key !== 'aspectRatio') {
-        if (!Number.isInteger(dimensions.width) || !Number.isInteger(dimensions.height)) continue;
-        let { width, height } = dimensions;
-        while (height) [width, height] = [height, width % height];
-        ratio = `${dimensions.width / width}:${dimensions.height / width}`;
-      }
+      const ratio = optionRatioLabel(key, value);
+      if (!ratio) continue;
+      const pixels = pixelSizeLabel(key, value);
+      if (key !== 'aspectRatio' && !pixels) continue;
       if (!options.has(ratio) || value === field.spec.default) {
         options.set(ratio, {
           ratio,
           paramValues: { [field.key]: value },
-          ...(key === 'aspectRatio' ? {} : { pixels: `${dimensions.width}×${dimensions.height}` }),
+          ...(pixels && { pixels }),
         });
       }
     }
