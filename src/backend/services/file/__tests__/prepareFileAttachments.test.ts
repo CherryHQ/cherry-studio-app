@@ -35,6 +35,19 @@ function input(files: FileAttachmentFact[]) {
 }
 
 describe('prepareFileAttachments', () => {
+  test('keeps unrecognized PDF page facts in the report alongside the explicit model notice', async () => {
+    const document = { ...text, mediaType: 'application/pdf', name: 'scan.pdf' };
+    const body =
+      '[PDF extraction notice: pages 1, 3 have no recognized image text.]\n\nReadable body';
+    const prepared = await prepareFileAttachments({
+      ...input([document]),
+      readDocumentText: async () => ({ text: body, truncated: false, unrecognizedPages: [1, 3] }),
+    });
+    expect(prepared.get(FILE_ID)).toMatchObject({
+      content: { kind: 'text', text: body },
+      report: { sourceTruncated: false, unrecognizedPages: [1, 3] },
+    });
+  });
   test('preserves an actionable OCR failure instead of sending a partial document', async () => {
     const document = { ...text, mediaType: 'application/pdf', name: 'scan.pdf' };
     await expect(

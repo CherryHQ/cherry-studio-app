@@ -47,7 +47,7 @@ class FailedToLoadDocumentException(cause: Throwable? = null) : CodedException(
     cause
 )
 
-internal class StrictPdfTextStripper : PDFTextStripper() {
+internal open class StrictPdfTextStripper : PDFTextStripper() {
     override fun operatorException(
         operator: Operator,
         operands: MutableList<COSBase>,
@@ -144,8 +144,12 @@ class PdfTextExtractorModule : Module() {
                 val endPage = minOf(
                     (options?.maxPages ?: defaultMaxPages).coerceIn(0, defaultMaxPages), totalPages
                 )
-                val stripper = StrictPdfTextStripper()
+                // One PDFBox traversal, with page boundaries and image operators retained.
+                val nativePages = readPdfTextPages(doc, endPage, ::checkCancelled)
                 val pages = mutableListOf<String>()
+                val unrecognizedPages = mutableListOf<Int>()
+                var characterCount = 0
+                var isTruncated = endPage < totalPages || nativePages.truncated
                 var extractionError = false
                 var ocrError = false
                 var ocr: PdfPageOcr? = null
@@ -166,18 +170,28 @@ class PdfTextExtractorModule : Module() {
                         checkCancelled()
                         var recognizingPage = false
                         try {
-                            stripper.startPage = pageIndex + 1
-                            stripper.endPage = pageIndex + 1
-                            val nativeText = stripper.getText(doc).trim()
+                            val nativePage = nativePages.pages[pageIndex]
+                            val nativeText = nativePage.text
                             checkCancelled()
-                            val text = if (hasUsablePdfText(nativeText)) nativeText else {
+                            val text = if (hasUsablePdfText(nativeText) && !nativePage.hasImages) nativeText else {
                                 recognizingPage = true
                                 progress(pageIndex, "ocr")
                                 val reader = ocr ?: PdfPageOcr(file).also { ocr = it }
-                                reader.read(pageIndex, ::checkCancelled)
+                                val recognized = reader.read(pageIndex, ::checkCancelled)
+                                if (recognized.unrecognized) unrecognizedPages.add(pageIndex + 1)
+                                mergePdfPageText(nativeText, recognized.text)
                             }
-                            pages.add(text)
+                            val remaining = MAX_PDF_TEXT_CHARACTERS - characterCount - if (pages.isEmpty()) 0 else 2
+                            if (text.length > remaining) isTruncated = true
+                            var end = minOf(text.length, remaining.coerceAtLeast(0))
+                            if (end > 0 && text[end - 1].isHighSurrogate()) end--
+                            pages.add(text.substring(0, end))
+                            characterCount += end + if (pages.size == 1) 0 else 2
                             progress(pageIndex + 1, if (ocr == null) "text" else "ocr")
+                            if (characterCount >= MAX_PDF_TEXT_CHARACTERS - 2 || end < text.length) {
+                                isTruncated = isTruncated || pageIndex + 1 < endPage
+                                break
+                            }
                         } catch (e: Exception) {
                             checkCancelled()
                             // Never substitute OCR for corrupt native content or send a partial result.
@@ -194,9 +208,10 @@ class PdfTextExtractorModule : Module() {
                     "text" to pages.joinToString("\n\n"),
                     "totalPages" to totalPages,
                     "extractedPages" to pages.size,
-                    "isTruncated" to (endPage < totalPages),
+                    "isTruncated" to isTruncated,
                     "extractionError" to extractionError,
-                    "ocrError" to ocrError
+                    "ocrError" to ocrError,
+                    "unrecognizedPages" to unrecognizedPages
                 )
             }
         } finally {

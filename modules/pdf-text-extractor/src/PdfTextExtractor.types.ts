@@ -41,7 +41,7 @@ export interface ExtractResult {
   extractedPages: number;
 
   /**
-   * 是否因页数限制而截断
+   * 是否因页数或文字长度限制而截断
    */
   isTruncated: boolean;
 
@@ -50,8 +50,10 @@ export interface ExtractResult {
    * 当为 true 时，text 可能为空或不完整
    */
   extractionError: boolean;
-  /** A nonblank page could not be recognized; do not send the remaining pages as complete. */
+  /** Rendering or recognition failed; partial text must not be sent. */
   ocrError: boolean;
+  /** One-based nonblank pages where OCR produced no usable text. */
+  unrecognizedPages: number[];
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
 } from './src/PdfTextExtractor.types';
 
 export type { ExtractOptions, ExtractResult, ExtractionControl };
+export type { ExtractionProgress } from './src/PdfTextExtractor.types';
 
 const NativeModule: PdfTextExtractorModule | null =
   Platform.OS === 'web' ? null : requireOptionalNativeModule('PdfTextExtractor');

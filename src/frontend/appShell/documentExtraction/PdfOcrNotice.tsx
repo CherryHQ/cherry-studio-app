@@ -1,8 +1,27 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data/BackendProvider';
+import type { FileModule, PdfOcrProgress } from '@/shared/contracts/file';
+
+function PdfOcrProgressLabel({ subscribe }: { subscribe: FileModule['subscribePdfOcr'] }) {
+  const { t } = useTranslation();
+  const [progress, setProgress] = useState<PdfOcrProgress | null>(null);
+  useEffect(
+    () =>
+      subscribe((event) => {
+        if (event.type === 'progress') setProgress(event.progress);
+      }),
+    [subscribe],
+  );
+  return progress
+    ? t('attachments.recognizingPdfProgress', {
+        completed: progress.completedPages,
+        total: progress.totalPages,
+      })
+    : t('attachments.recognizingPdf');
+}
 
 /** Shared by attachment preparation and file tools. The original operation keeps its Stop action. */
 export function PdfOcrNotice() {
@@ -19,12 +38,23 @@ export function PdfOcrNotice() {
       if (toastId) toast.hide(toastId);
       toastId = undefined;
     };
-    const unsubscribe = file.subscribePdfOcr((active) => {
-      clear();
-      if (active) {
+    const unsubscribe = file.subscribePdfOcr((event) => {
+      if (event.type === 'unrecognized') {
+        toast.show({
+          label: t('attachments.pdfUnrecognizedPages', { pages: event.pages.join(', ') }),
+          variant: 'warning',
+          duration: 8000,
+        });
+      } else if (!event.progress) {
+        clear();
+      } else if (!timer && !toastId) {
         // Avoid flashing a notice for blank pages and very short documents.
         timer = setTimeout(() => {
-          toastId = toast.show({ label: t('attachments.recognizingPdf'), duration: 'persistent' });
+          timer = undefined;
+          toastId = toast.show({
+            label: <PdfOcrProgressLabel subscribe={file.subscribePdfOcr} />,
+            duration: 'persistent',
+          });
         }, 400);
       }
     });

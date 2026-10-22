@@ -24,6 +24,8 @@ internal fun hasUsablePdfText(text: String): Boolean =
     text.any { !it.isWhitespace() && !it.isISOControl() && it != '\uFFFD' } &&
         !text.contains('\uFFFD')
 
+internal data class PdfPageRecognition(val text: String, val unrecognized: Boolean = false)
+
 /** One document owns the renderer and recognizer; only one bounded bitmap is alive at a time. */
 internal class PdfPageOcr(file: File) : Closeable {
     private val renderer: PdfRenderer
@@ -40,7 +42,7 @@ internal class PdfPageOcr(file: File) : Closeable {
         }
     }
 
-    fun read(pageIndex: Int, checkCancelled: () -> Unit): String {
+    fun read(pageIndex: Int, checkCancelled: () -> Unit): PdfPageRecognition {
         checkCancelled()
         val bitmap = renderer.openPage(pageIndex).use { page ->
             val width = page.width.toDouble()
@@ -65,7 +67,7 @@ internal class PdfPageOcr(file: File) : Closeable {
         }
         try {
             checkCancelled()
-            if (!hasVisibleContent(bitmap)) return ""
+            if (!hasVisibleContent(bitmap)) return PdfPageRecognition("")
             val reader = recognizer ?: TextRecognition.getClient(
                 ChineseTextRecognizerOptions.Builder().build()
             ).also { recognizer = it }
@@ -73,8 +75,9 @@ internal class PdfPageOcr(file: File) : Closeable {
             // completion, then honor cancellation before processing another page.
             val text = Tasks.await(reader.process(InputImage.fromBitmap(bitmap, 0))).text.trim()
             checkCancelled()
-            if (!hasUsablePdfText(text)) throw IOException("No readable text on a nonblank PDF page")
-            return text
+            // A successful OCR call with no text may be a photograph, cover or scan noise.
+            return if (hasUsablePdfText(text)) PdfPageRecognition(text)
+                else PdfPageRecognition("", unrecognized = true)
         } finally {
             bitmap.recycle()
         }

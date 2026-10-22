@@ -3,172 +3,105 @@ import {
   MAX_PDF_ATTACHMENT_BYTES,
 } from '@/shared/utils/fileAttachmentPolicy';
 
-import { extractPdfText } from '../../../../../modules/pdf-text-extractor';
-import { DocumentTextError, readDocumentUriText, subscribePdfOcr } from '../documentText';
+import { DocumentTextError, readDocumentUriText } from '../documentText';
 import { readFileUriBytes } from '../fileStorage';
+import { readPdfText } from '../pdfText';
 
-const mockFile = { size: 64 };
-
+const mockFile = { size: 64, exists: true };
 jest.mock('expo-file-system', () => ({ File: jest.fn(() => mockFile) }));
-jest.mock('../../../../../modules/pdf-text-extractor', () => ({ extractPdfText: jest.fn() }));
+jest.mock('../pdfText', () => ({ readPdfText: jest.fn(), subscribePdfOcr: jest.fn() }));
 jest.mock('../fileStorage', () => ({ readFileUriBytes: jest.fn() }));
-
 const URI = 'file:///managed/document.pdf';
-
+const extracted = {
+  text: '  PDF body  ',
+  totalPages: 101,
+  extractedPages: 100,
+  isTruncated: true,
+  extractionError: false,
+  ocrError: false,
+  unrecognizedPages: [],
+};
 beforeEach(() => {
   jest.clearAllMocks();
   mockFile.size = 64;
-  jest.mocked(extractPdfText).mockResolvedValue({
-    text: '  PDF body  ',
-    totalPages: 101,
-    extractedPages: 100,
-    isTruncated: true,
-    extractionError: false,
-    ocrError: false,
-  });
+  mockFile.exists = true;
+  jest.mocked(readPdfText).mockResolvedValue(extracted);
 });
 
-describe('managed document text', () => {
-  test('uses the existing native PDF parser with a page ceiling and preserves incomplete extraction', async () => {
-    mockFile.size = MAX_PDF_ATTACHMENT_BYTES;
-    await expect(
-      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
-    ).resolves.toEqual({
-      text: 'PDF body',
-      truncated: true,
-    });
-    expect(extractPdfText).toHaveBeenCalledWith(
+test('retains the extraction ceiling separately from unreadable image pages', async () => {
+  mockFile.size = MAX_PDF_ATTACHMENT_BYTES;
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).resolves.toEqual({ text: 'PDF body', truncated: true });
+});
+
+test('rejects missing and oversized sources before consulting cached text', async () => {
+  mockFile.exists = false;
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).rejects.toMatchObject({ failure: 'invalid' });
+  mockFile.exists = true;
+  mockFile.size = MAX_PDF_ATTACHMENT_BYTES + 1;
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).rejects.toMatchObject({ failure: 'file-bytes' });
+  expect(readPdfText).not.toHaveBeenCalled();
+});
+
+test('keeps the smaller Office byte ceiling', async () => {
+  mockFile.size = MAX_DOCUMENT_ATTACHMENT_BYTES + 1;
+  await expect(
+    readDocumentUriText(
       URI,
-      { maxPages: 100 },
-      { signal: expect.any(AbortSignal), onProgress: expect.any(Function) },
-    );
-    expect(readFileUriBytes).not.toHaveBeenCalled();
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ failure: 'file-bytes' });
+  expect(readFileUriBytes).not.toHaveBeenCalled();
+});
+
+test('rejects a document with no readable text even if it has unrecognized image pages', async () => {
+  jest.mocked(readPdfText).mockResolvedValue({ ...extracted, text: ' ', unrecognizedPages: [1] });
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).rejects.toMatchObject({ failure: 'empty' });
+});
+
+test.each([
+  [{ extractionError: true, ocrError: false }, 'invalid'],
+  [{ extractionError: true, ocrError: true }, 'ocr'],
+])('rejects partial content on actual parser/engine errors: %s', async (flags, failure) => {
+  jest.mocked(readPdfText).mockResolvedValue({ ...extracted, ...flags });
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).rejects.toMatchObject({ failure });
+});
+
+test('retains the readable body and explicitly identifies pages with no recognized image text', async () => {
+  jest.mocked(readPdfText).mockResolvedValue({
+    ...extracted,
+    text: 'Native page\n\n扫描文字',
+    isTruncated: false,
+    unrecognizedPages: [1, 3],
   });
+  const result = await readDocumentUriText(URI, 'application/pdf', new AbortController().signal);
+  expect(result.unrecognizedPages).toEqual([1, 3]);
+  expect(result.truncated).toBe(false);
+  expect(result.text).toMatch(/^\[PDF extraction notice: pages 1, 3 /);
+  expect(result.text).toContain('Native page\n\n扫描文字');
+});
 
-  test('rejects an oversized managed blob before native extraction', async () => {
-    mockFile.size = MAX_PDF_ATTACHMENT_BYTES + 1;
-    await expect(
-      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
-    ).rejects.toMatchObject({ failure: 'file-bytes' });
-    expect(extractPdfText).not.toHaveBeenCalled();
+test('redacts parser errors and discards a result after caller cancellation', async () => {
+  jest.mocked(readPdfText).mockRejectedValueOnce(new Error(`Private path ${URI}`));
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).rejects.toEqual(new DocumentTextError('invalid'));
+  const controller = new AbortController();
+  jest.mocked(readPdfText).mockImplementationOnce(async () => {
+    controller.abort(new Error('cancelled'));
+    return extracted;
   });
-
-  test('keeps the Office ceiling smaller than the PDF ceiling before reading bytes', async () => {
-    mockFile.size = MAX_DOCUMENT_ATTACHMENT_BYTES + 1;
-    await expect(
-      readDocumentUriText(
-        'file:///managed/document.docx',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ failure: 'file-bytes' });
-    expect(readFileUriBytes).not.toHaveBeenCalled();
-    expect(extractPdfText).not.toHaveBeenCalled();
-  });
-
-  test('rejects an empty result after native extraction and OCR', async () => {
-    jest.mocked(extractPdfText).mockResolvedValueOnce({
-      text: '  ',
-      totalPages: 1,
-      extractedPages: 1,
-      isTruncated: false,
-      extractionError: false,
-      ocrError: false,
-    });
-    await expect(
-      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
-    ).rejects.toMatchObject({ failure: 'empty' });
-  });
-
-  test('does not send partial content when native extraction reports an error', async () => {
-    jest.mocked(extractPdfText).mockResolvedValueOnce({
-      text: 'partial',
-      totalPages: 2,
-      extractedPages: 2,
-      isTruncated: false,
-      extractionError: true,
-      ocrError: false,
-    });
-    await expect(
-      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
-    ).rejects.toMatchObject({ failure: 'invalid' });
-  });
-
-  test('distinguishes unreadable scanned pages from a damaged PDF and rejects partial text', async () => {
-    jest.mocked(extractPdfText).mockResolvedValueOnce({
-      text: 'Native first page',
-      totalPages: 2,
-      extractedPages: 1,
-      isTruncated: false,
-      extractionError: true,
-      ocrError: true,
-    });
-    await expect(
-      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
-    ).rejects.toMatchObject({ failure: 'ocr' });
-  });
-
-  test('preserves ordered native and recognized page text and clears OCR activity on failure', async () => {
-    const activity = jest.fn();
-    const unsubscribe = subscribePdfOcr(activity);
-    const controller = new AbortController();
-    try {
-      jest.mocked(extractPdfText).mockImplementationOnce(async (_uri, _options, control) => {
-        expect(control?.signal).toBe(controller.signal);
-        control?.onProgress?.({ requestId: 'one', completedPages: 1, totalPages: 2, phase: 'ocr' });
-        return {
-          text: 'Native page\n\n扫描文字',
-          totalPages: 2,
-          extractedPages: 2,
-          isTruncated: false,
-          extractionError: false,
-          ocrError: false,
-        };
-      });
-      await expect(readDocumentUriText(URI, 'application/pdf', controller.signal)).resolves.toEqual(
-        {
-          text: 'Native page\n\n扫描文字',
-          truncated: false,
-        },
-      );
-      expect(activity.mock.calls).toEqual([[false], [true], [false]]);
-
-      activity.mockClear();
-      jest.mocked(extractPdfText).mockImplementationOnce(async (_uri, _options, control) => {
-        control?.onProgress?.({ requestId: 'two', completedPages: 0, totalPages: 1, phase: 'ocr' });
-        throw new Error('Native OCR failure');
-      });
-      await expect(
-        readDocumentUriText(URI, 'application/pdf', controller.signal),
-      ).rejects.toMatchObject({ failure: 'invalid' });
-      expect(activity.mock.calls).toEqual([[true], [false]]);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  test('redacts native parser errors and propagates cancellation', async () => {
-    jest
-      .mocked(extractPdfText)
-      .mockRejectedValueOnce(new Error(`Could not open private path ${URI}`));
-    await expect(
-      readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
-    ).rejects.toEqual(new DocumentTextError('invalid'));
-
-    const controller = new AbortController();
-    jest.mocked(extractPdfText).mockImplementationOnce(async () => {
-      controller.abort(new Error('cancelled'));
-      return {
-        text: 'late result',
-        totalPages: 1,
-        extractedPages: 1,
-        isTruncated: false,
-        extractionError: false,
-        ocrError: false,
-      };
-    });
-    await expect(readDocumentUriText(URI, 'application/pdf', controller.signal)).rejects.toThrow(
-      'cancelled',
-    );
-  });
+  await expect(readDocumentUriText(URI, 'application/pdf', controller.signal)).rejects.toThrow(
+    'cancelled',
+  );
 });

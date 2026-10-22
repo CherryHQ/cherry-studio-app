@@ -202,6 +202,7 @@ export function createReadFileTool(
       }
       let text: string;
       let sourceTruncated: boolean;
+      let unrecognizedPages: number[] | undefined;
       let parser: 'builtin' | 'native-pdf' | undefined;
       try {
         const content = await read(source, signal);
@@ -232,7 +233,7 @@ export function createReadFileTool(
             artifacts: [],
           };
         }
-        ({ text, sourceTruncated, parser } = content);
+        ({ text, sourceTruncated, parser, unrecognizedPages } = content);
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof FileAttachmentError) {
@@ -266,6 +267,7 @@ export function createReadFileTool(
         filename: source.name,
         size: source.size,
         ...(parser ? { parser } : {}),
+        ...(unrecognizedPages ? { unrecognizedPages } : {}),
       };
       if (hasJsonParameters) {
         return {

@@ -41,9 +41,14 @@ export type PreparedFile = ResolvedFile & {
   content?: FileAttachmentContent;
 };
 
+export type PdfOcrProgress = { completedPages: number; totalPages: number };
+export type PdfOcrEvent =
+  | { type: 'progress'; progress: PdfOcrProgress | null }
+  | { type: 'unrecognized'; pages: number[] };
+
 export interface FileModule {
   /** Local scan recognition activity; the originating operation owns cancellation. */
-  subscribePdfOcr(listener: (active: boolean) => void): () => void;
+  subscribePdfOcr(listener: (event: PdfOcrEvent) => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
   /** Reuse a workspace file or copy an explicitly attached outside version into it. */

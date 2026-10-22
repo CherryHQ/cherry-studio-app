@@ -197,6 +197,7 @@ export async function prepareFileAttachments(
           mode: mode === 'document' ? 'document-text' : 'text',
           ...(content.parser ? { parser: content.parser } : {}),
           sourceTruncated: content.sourceTruncated,
+          ...(content.unrecognizedPages ? { unrecognizedPages: content.unrecognizedPages } : {}),
           requestTruncated: projected.didTruncate,
           includedCharacters: projected.characters,
         },

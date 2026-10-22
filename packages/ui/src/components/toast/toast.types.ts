@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 
 export type ToastVariant = 'danger' | 'default' | 'success' | 'warning';
 
@@ -10,7 +10,8 @@ export type ToastShowOptions = {
   bottomOffset?: number;
   actions?: readonly { label: string; onPress: () => void }[];
   dismissLabel?: string;
-  label: string;
+  /** A subscribing text component can update a persistent notice without remounting the toast. */
+  label: ReactNode;
   variant?: ToastVariant;
 };
 

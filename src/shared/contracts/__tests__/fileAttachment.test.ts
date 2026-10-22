@@ -27,6 +27,7 @@ describe('persisted attachment feedback', () => {
     const report = {
       mode: 'document-text',
       sourceTruncated: true,
+      unrecognizedPages: [1, 3],
       requestTruncated: false,
       includedCharacters: 12,
     };

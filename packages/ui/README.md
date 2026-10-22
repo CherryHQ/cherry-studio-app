@@ -1014,3 +1014,5 @@ hides that toast before invoking its callback; callers own persistence and outco
 `show` returns an ID for scoped `hide`, so a workflow can remove its own hint on route or lifecycle
 changes without clearing unrelated notices. Bottom placement follows the keyboard and accepts a
 screen-measured `bottomOffset` for dock clearance. Default text-only toasts retain top placement.
+`label` also accepts a subscribing text component for live progress without replacing the toast;
+pass any workflow subscription through props when its provider sits below the toast host.

@@ -40,6 +40,8 @@ export class FileAttachmentError extends Error {
 export const FileAttachmentReportSchema = z.strictObject({
   mode: z.enum(['image', 'text', 'document-text', 'document-ir']),
   sourceTruncated: z.boolean(),
+  /** One-based PDF pages whose visual content did not yield recognized text. */
+  unrecognizedPages: z.array(z.number().int().positive()).optional(),
   requestTruncated: z.boolean(),
   includedCharacters: z.number().int().nonnegative().optional(),
   parser: z.enum(['anydoc', 'builtin', 'native-pdf']).optional(),

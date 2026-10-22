@@ -59,7 +59,12 @@ internal func hasUsablePdfText(_ text: String) -> Bool {
   }
 }
 
-internal func recognizePdfPage(_ page: PDFPage, request: PdfExtractionRequest) throws -> String {
+internal struct PdfPageRecognition {
+  let text: String
+  var unrecognized = false
+}
+
+internal func recognizePdfPage(_ page: PDFPage, request: PdfExtractionRequest) throws -> PdfPageRecognition {
   try request.checkCancellation()
   guard let source = page.pageRef else { throw FailedToLoadDocumentException() }
   let bounds = source.getBoxRect(.cropBox)
@@ -98,9 +103,10 @@ internal func recognizePdfPage(_ page: PDFPage, request: PdfExtractionRequest) t
     }
   }
   // Blank pages are legitimate and must not make mixed documents fail.
-  if ink < 32 { return "" }
+  if ink < 32 { return PdfPageRecognition(text: "") }
   guard let image = context.makeImage() else { throw FailedToLoadDocumentException() }
   let text = try request.recognize(image)
-  guard hasUsablePdfText(text) else { throw FailedToLoadDocumentException() }
-  return text
+  // Successful recognition with no text may be a photograph, cover or scan noise.
+  return hasUsablePdfText(text) ? PdfPageRecognition(text: text)
+    : PdfPageRecognition(text: "", unrecognized: true)
 }

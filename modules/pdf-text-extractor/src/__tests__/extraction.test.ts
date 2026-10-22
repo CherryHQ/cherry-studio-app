@@ -27,6 +27,7 @@ const result: ExtractResult = {
   isTruncated: false,
   extractionError: false,
   ocrError: false,
+  unrecognizedPages: [],
 };
 
 beforeEach(() => {

@@ -75,6 +75,9 @@ public class PdfTextExtractorModule: Module {
     let totalPages = document.pageCount
     let endPage = min(max(0, min(options?.maxPages ?? defaultMaxPages, defaultMaxPages)), totalPages)
     var pages: [String] = []
+    var unrecognizedPages: [Int] = []
+    var characterCount = 0
+    var isTruncated = endPage < totalPages
     var extractionError = false
     var ocrError = false
     var usedOcr = false
@@ -96,14 +99,33 @@ public class PdfTextExtractorModule: Module {
           guard let page = document.page(at: pageIndex) else { throw FailedToLoadDocumentException() }
           let nativeText = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
           try request.checkCancellation()
-          if hasUsablePdfText(nativeText) { return nativeText }
+          // A page number or caption must not hide a scanned body on the same page.
+          if hasUsablePdfText(nativeText) {
+            let hasImages = try pdfPageHasImages(page)
+            if !hasImages { return nativeText }
+          }
           usedOcr = true
           recognizingPage = true
           try progress(pageIndex, phase: "ocr")
-          return try recognizePdfPage(page, request: request)
+          let recognized = try recognizePdfPage(page, request: request)
+          if recognized.unrecognized { unrecognizedPages.append(pageIndex + 1) }
+          return mergePdfPageText(nativeText, recognized.text)
         }
-        pages.append(text)
+        let separatorCount = pages.isEmpty ? 0 : 2
+        let remaining = max(0, maxPdfTextCharacters - characterCount - separatorCount)
+        let utf16 = text as NSString
+        var end = min(utf16.length, remaining)
+        if end > 0 && (0xD800...0xDBFF).contains(utf16.character(at: end - 1)) { end -= 1 }
+        let clipped = utf16.substring(to: end)
+        let wasClipped = end < utf16.length
+        if wasClipped { isTruncated = true }
+        pages.append(clipped)
+        characterCount += end + separatorCount
         try progress(pageIndex + 1, phase: usedOcr ? "ocr" : "text")
+        if characterCount >= maxPdfTextCharacters - 2 || wasClipped {
+          isTruncated = isTruncated || pageIndex + 1 < endPage
+          break
+        }
       } catch {
         try request.checkCancellation()
         extractionError = true
@@ -116,9 +138,10 @@ public class PdfTextExtractorModule: Module {
       "text": pages.joined(separator: "\n\n"),
       "totalPages": totalPages,
       "extractedPages": pages.count,
-      "isTruncated": endPage < totalPages,
+      "isTruncated": isTruncated,
       "extractionError": extractionError,
-      "ocrError": ocrError
+      "ocrError": ocrError,
+      "unrecognizedPages": unrecognizedPages
     ]
   }
 

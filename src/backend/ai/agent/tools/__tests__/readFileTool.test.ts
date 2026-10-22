@@ -23,6 +23,31 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
   parseAnydocDocument: jest.fn(),
 }));
 
+test('every PDF text window retains unrecognized page metadata, including windows past the notice', async () => {
+  const files = createFiles('pdf');
+  files.resolveAvailable.mockResolvedValue(
+    new Map([
+      [
+        FILE_ID,
+        {
+          fileEntryId: FILE_ID,
+          mediaType: 'application/pdf',
+          name: 'scan.pdf',
+          size: 3,
+        },
+      ],
+    ]),
+  );
+  files.readDocumentText.mockResolvedValue({
+    text: 'Extraction notice\nBody',
+    truncated: false,
+    unrecognizedPages: [1, 3],
+  });
+  const tool = createReadFileTool(files, IN_SCOPE);
+  const result = await execute(tool, { file_entry_id: FILE_ID, start_line: 2, limit: 1 });
+  expect(result.value).toMatchObject({ text: 'Body', unrecognizedPages: [1, 3] });
+});
+
 describe('AnyDoc raw JSON reads', () => {
   function documentFiles() {
     const files = createFiles('document');

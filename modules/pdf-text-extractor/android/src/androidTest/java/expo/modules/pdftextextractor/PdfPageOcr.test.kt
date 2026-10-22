@@ -53,8 +53,20 @@ class PdfPageOcrTest {
                 document.addPage(scannedPage)
                 PDPageContentStream(document, scannedPage).use { content ->
                     content.drawImage(LosslessFactory.createFromImage(document, scan), 0f, 0f, 600f, 300f)
+                    content.beginText()
+                    content.setFont(PDType1Font.HELVETICA, 10f)
+                    content.newLineAtOffset(280f, 10f)
+                    content.showText("2")
+                    content.endText()
                 }
                 document.addPage(PDPage(PDRectangle(600f, 300f)))
+                val illustration = PDPage(PDRectangle(600f, 300f))
+                document.addPage(illustration)
+                PDPageContentStream(document, illustration).use { content ->
+                    content.setNonStrokingColor(100, 150, 200)
+                    content.addRect(50f, 50f, 500f, 200f)
+                    content.fill()
+                }
                 document.save(pdf)
             }
         } finally {
@@ -68,15 +80,16 @@ class PdfPageOcrTest {
     }
 
     @Test
-    fun nativeTextSelectsOnlyTheTextPage() {
+    fun singlePassKeepsPageBoundariesAndDetectsAScanDespiteItsNativePageNumber() {
         PDDocument.load(pdf).use { document ->
-            val stripper = StrictPdfTextStripper()
-            stripper.startPage = 1
-            stripper.endPage = 1
-            assertTrue(hasUsablePdfText(stripper.getText(document)))
-            stripper.startPage = 2
-            stripper.endPage = 2
-            assertFalse(hasUsablePdfText(stripper.getText(document)))
+            val result = readPdfTextPages(document, 4) {}
+            assertEquals("Native page", result.pages[0].text)
+            assertFalse(result.pages[0].hasImages)
+            assertEquals("2", result.pages[1].text)
+            assertTrue(result.pages[1].hasImages)
+            assertEquals("", result.pages[2].text)
+            assertEquals("", result.pages[3].text)
+            assertFalse(result.truncated)
             assertFalse(hasUsablePdfText("\uFFFD\uFFFD"))
         }
     }
@@ -84,11 +97,19 @@ class PdfPageOcrTest {
     @Test
     fun bundledRecognizerReadsScansAndAllowsBlankPages() {
         PdfPageOcr(pdf).use { ocr ->
-            val text = ocr.read(1) {}
+            val text = (ocr.read(1) {}).text
             assertTrue(text, text.contains("CHERRY"))
             assertTrue(text, text.contains("123"))
             assertTrue(text, text.contains("中文"))
-            assertEquals("", ocr.read(2) {})
+            assertEquals(PdfPageRecognition(""), ocr.read(2) {})
+            assertEquals(PdfPageRecognition("", unrecognized = true), ocr.read(3) {})
         }
+    }
+
+    @Test
+    fun keepsNativeTextMissingFromOcrWithoutDuplicatingRecognizedLines() {
+        assertEquals("CHERRY OCR\n中文正文\nFooter", mergePdfPageText("CHERRY OCR\nFooter", "CHERRY OCR\n中文正文"))
+        assertEquals("Title", mergePdfPageText("Title", ""))
+        assertEquals("Recovered", mergePdfPageText("\uFFFD", "Recovered"))
     }
 }

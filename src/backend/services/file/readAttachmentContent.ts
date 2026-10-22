@@ -21,7 +21,13 @@ import { decodeManagedUtf8, ManagedTextError } from './utf8Text';
 export type AttachmentContentReader = DocumentContentReader;
 
 export type ReadAttachmentContent =
-  | { kind: 'text'; text: string; sourceTruncated: boolean; parser?: 'builtin' | 'native-pdf' }
+  | {
+      kind: 'text';
+      text: string;
+      sourceTruncated: boolean;
+      unrecognizedPages?: number[];
+      parser?: 'builtin' | 'native-pdf';
+    }
   | { kind: 'document'; parsed: ParsedAnydocDocument };
 
 /** Reads only resolved managed files. The caller must prove access before invoking this reader. */
@@ -52,6 +58,9 @@ export async function readAttachmentContent(
         kind: 'text',
         text: parsed.output.text,
         sourceTruncated: parsed.output.truncated,
+        ...(parsed.output.unrecognizedPages
+          ? { unrecognizedPages: parsed.output.unrecognizedPages }
+          : {}),
         parser: parsed.parser,
       };
     }
