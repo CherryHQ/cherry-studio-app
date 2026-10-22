@@ -5,8 +5,6 @@ import { cleanupStorageAfterBoot, databaseDirectory } from '../storagePaths';
 const mockDocumentUri = 'file:///data/user/0/app/files';
 const mockExisting = new Set<string>();
 
-jest.mock('expo-sqlite', () => ({ defaultDatabaseDirectory: '/data/user/0/app/files/SQLite' }));
-
 jest.mock('expo-file-system', () => {
   const join = (...parts: (string | { uri: string })[]) => {
     const uri = parts
