@@ -837,13 +837,53 @@ describe('DesktopConnectionManager ownership', () => {
     expect(channel.isOpen).toBe(false);
   });
 
+  it('tries each custom pairing endpoint with its own port and protocol', async () => {
+    const channel = session();
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('TLS endpoint unavailable'));
+    connect.mockResolvedValueOnce(channel as never);
+    const result = await manager.connectTemporary(
+      {
+        desktopIdentity: original.desktopIdentity,
+        endpoints: [
+          { host: 'desktop.example.com', port: 24443, security: 'wss' },
+          { host: 'fd7a::2', port: 24444, security: 'ws' },
+        ],
+      },
+      signal(),
+    );
+    expect(result).toBe(channel);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'wss://desktop.example.com:24443/v1/remote/connect',
+      'ws://[fd7a::2]:24444/v1/remote/connect',
+    ]);
+    expect(connect.mock.calls[0]?.[0].desktopIdentity).toBe(original.desktopIdentity);
+    channel.close();
+  });
+
+  it('does not retry a failed WSS pairing endpoint over plain WS', async () => {
+    jest.mocked(openWebSocketStream).mockRejectedValue(new Error('Certificate rejected'));
+    await expect(
+      manager.connectTemporary(
+        {
+          desktopIdentity: original.desktopIdentity,
+          endpoints: [{ host: 'desktop.example.com', port: 443, security: 'wss' }],
+        },
+        signal(),
+      ),
+    ).rejects.toMatchObject({ name: 'DesktopUnreachableError' });
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'wss://desktop.example.com:443/v1/remote/connect',
+    ]);
+    expect(row.grants).toEqual(grants);
+  });
+
   it('closes a temporary pairing channel returned after the caller aborted', async () => {
     const dial = deferred<DesktopSession>();
     const channel = session();
     connect.mockReturnValueOnce(dial.promise);
     const caller = new AbortController();
     const opening = manager.connectTemporary(
-      { ...original, addresses: ['192.168.1.2'], port: 23333 },
+      { desktopIdentity: original.desktopIdentity, endpoints: original.configuredEndpoints },
       caller.signal,
     );
     const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' });

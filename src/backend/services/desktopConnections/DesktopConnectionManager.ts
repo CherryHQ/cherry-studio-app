@@ -17,6 +17,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { DesktopConnectionRow } from '@/backend/data/db/schemas';
+import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
 import type {
   DesktopConnections,
@@ -33,7 +34,7 @@ import { DesktopDiscovery } from './DesktopDiscovery';
 import { DesktopEndpointResolver } from './DesktopEndpointResolver';
 import { DesktopSession } from './DesktopSession';
 import { loadDeviceIdentity } from './deviceIdentity';
-import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
+import { DesktopUnreachableError, RemoteFailureError, WebSocketOpeningError } from './remoteErrors';
 import { openWebSocketStream } from './remoteSocket';
 
 type LeaseEntry = {
@@ -379,11 +380,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   /** Pairing channels are also registered with app lifetime, including a dial still in flight. */
   connectTemporary(target: DesktopConnectionTarget, signal: AbortSignal): Promise<DesktopSession> {
-    return this.openTemporary(
-      target.addresses.map((host) => ({ host, port: target.port, security: 'ws' })),
-      target.desktopIdentity,
-      signal,
-    );
+    return this.openTemporary(target.endpoints, target.desktopIdentity, signal);
   }
 
   /** Checks only the requested route, without reusing or replacing a retained channel. */
@@ -853,6 +850,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     const deadline = setTimeout(() => round.abort(new Error('Connection round timed out')), 15_000);
     const attempted = new Set<string>();
     const failures: string[] = [];
+    const connectionFailures: DesktopConnectionFailure[] = [];
     let incompatible = false;
     try {
       for (;;) {
@@ -938,6 +936,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           }
           if (error instanceof RemoteFailureError && error.reason === 'UPGRADE_REQUIRED')
             incompatible = true;
+          if (error instanceof WebSocketOpeningError) connectionFailures.push(error.failure);
           failures.push(error instanceof Error ? error.name : 'Connection failed');
         } finally {
           clearTimeout(timer);
@@ -961,6 +960,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             : this.resolver.discoveryAvailable
               ? 'no-location'
               : 'discovery-unavailable',
+        connectionFailures,
       );
     } finally {
       clearTimeout(deadline);
