@@ -31,12 +31,9 @@ An Agent toggle makes a Skill available for the model to choose when relevant. A
 requests its use and supplies its full instructions for that turn; it is not a request to install
 the Skill or open a file viewer.
 
-Structured notes, research brief and daily agenda are app-owned system workflows. The Host includes
-their instructions and templates in internal system context, independently of installed packages or
-Agent bindings. They are short enough to stay resident, so a matching request never depends on the
-model loading them first. Calendar and research workflows are included only when all their required
-built-in tools are present in the current turn. They are not listed, recommended, installable or
-selectable in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
+The app ships no system workflows of its own. Former notes, research-brief and daily-agenda
+workflows only restated the web research rules or formats models already produce, while costing
+every request about 740 tokens. Earlier `builtin` installation records and package bytes remain available to
 backups, but are excluded from user reads, binding updates and installed runtime scope. Installing a
 user package with the same folder name replaces that hidden legacy record and its bindings; its old
 bytes follow ordinary storage reconciliation.
@@ -279,7 +276,7 @@ and claim success. Explicit upstream updates still replace current local content
 writes `source` as `marketplace` (CherryIN, GitHub and generated user-library packages); `builtin` remains readable for legacy
 installations and backups. It writes `source_url` as the URL updates re-resolve. Mobile has no
 global enablement control, so `is_enabled` and conversation bindings are written enabled. Desktop's `namespace` is absent
-because app-owned system workflows live in Host instructions rather than user installations.
+because Mobile has no app-owned Skill installations.
 Three mobile columns follow the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
 `profile` holds the tool names the package declares, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
@@ -348,8 +345,8 @@ ordinary loading receipt. Manual-only packages cannot be guessed into automatic 
 not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
-subset, even when either is zero, and distinguishes them from the app's installed library, explicit
-selections and app-owned system workflows. Current inventory questions use `list_local_skills`
+subset, even when either is zero, and distinguishes them from the app's installed library and explicit
+selections. Current inventory questions use `list_local_skills`
 with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its
 automatically invocable subset, and `returned` is one page. Complete lists follow `nextCursor` until
 null with the same options. This also refreshes inventory after a conversation installation without

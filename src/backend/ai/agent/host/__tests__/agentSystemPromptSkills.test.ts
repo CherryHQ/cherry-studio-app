@@ -38,7 +38,6 @@ describe('agent system prompt Skills section', () => {
     });
     expect(prompt).toContain('this Agent has no enabled, bound and readable Skill packages');
     expect(prompt).toContain('not the total installed in the app');
-    expect(prompt).toContain('app-owned System Skills');
     expect(prompt).toContain('`list_local_skills` with `include_manual: true`');
     expect(prompt).not.toContain('### Available Skills');
     expect(prompt).not.toContain('nextCursor');
