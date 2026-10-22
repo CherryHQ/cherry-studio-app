@@ -12,7 +12,7 @@ const endpointImageModel = model('gateway-image', {
 const embeddingModel = model('text-embedding-3', { capabilities: [MODEL_CAPABILITY.EMBEDDING] });
 
 describe('model type filter', () => {
-  test('keeps only the two model families shipped on mobile', () => {
+  test('keeps unsupported model families out of the conversation and image pickers', () => {
     expect(matchesModelTypeFilter(chatModel, 'text')).toBe(true);
     expect(matchesModelTypeFilter(imageModel, 'image')).toBe(true);
     expect(matchesModelTypeFilter(embeddingModel, 'text')).toBe(false);
@@ -42,6 +42,28 @@ describe('model type filter', () => {
 
     expect(filterModelsByType(models, 'all')).toEqual(models);
     expect(filterModelsByType(models, 'image')).toEqual([imageModel, endpointImageModel]);
+  });
+
+  test('separates synthesis and transcription from chat and multimodal audio models', () => {
+    const speech = model('tts', {
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+      inputModalities: [MODALITY.TEXT],
+      outputModalities: [MODALITY.AUDIO],
+    });
+    const transcription = model('transcribe', {
+      capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+      inputModalities: [MODALITY.AUDIO],
+      outputModalities: [MODALITY.TEXT],
+    });
+    const realtime = model('realtime', {
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION, MODEL_CAPABILITY.AUDIO_RECOGNITION],
+      inputModalities: [MODALITY.TEXT, MODALITY.AUDIO],
+      outputModalities: [MODALITY.TEXT, MODALITY.AUDIO],
+    });
+    const models = [chatModel, speech, transcription, realtime, embeddingModel];
+    expect(filterModelsByType(models, 'speech')).toEqual([speech]);
+    expect(filterModelsByType(models, 'transcription')).toEqual([transcription]);
+    expect(filterModelsByType(models, 'text')).toEqual([chatModel]);
   });
 });
 
