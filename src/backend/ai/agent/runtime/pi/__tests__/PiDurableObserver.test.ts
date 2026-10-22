@@ -227,7 +227,7 @@ function attach(
     observer,
     events,
     advance: (batch: readonly AgentEvent[]) => advance(batch),
-    advanceWork: (graph: TaskGraph) => advanceWork(graph, BACKGROUND_CONTEXT),
+    advanceWork: (graph: TaskGraph) => advanceWork(graph, [], BACKGROUND_CONTEXT),
   };
 }
 
