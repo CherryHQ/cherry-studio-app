@@ -186,7 +186,7 @@ describe('buildAgentSystemPrompt', () => {
       appLanguage: 'en-US',
       tools: [tool('create_document')],
     });
-    expect(prompt).toContain('discover `create_document` with `tool_search`');
+    expect(prompt).toContain('For Office work, use `create_document`');
     expect(prompt).not.toContain('`create_workbook`');
     expect(prompt).not.toContain('Editing requires');
     expect(prompt).not.toContain('run_office_script');

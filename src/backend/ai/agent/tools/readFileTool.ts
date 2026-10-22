@@ -347,9 +347,13 @@ function serializedBytes(character: string): number {
   return code < 0x10000 ? 3 : 4;
 }
 
-function textBytes(text: string): number {
+/** Serialized bytes of `text`, stopping once they exceed `limit`. */
+function textBytes(text: string, limit: number): number {
   let bytes = 0;
-  for (const character of text) bytes += serializedBytes(character);
+  for (const character of text) {
+    bytes += serializedBytes(character);
+    if (bytes > limit) break;
+  }
   return bytes;
 }
 
@@ -382,7 +386,8 @@ export function lineWindow(text: string, startLine: number, limit: number): Line
   let bytes = 0;
   for (const line of requested) {
     // An escaped newline separator is two bytes.
-    const size = textBytes(line) + (kept.length > 0 ? 2 : 0);
+    const separator = kept.length > 0 ? 2 : 0;
+    const size = textBytes(line, READ_FILE_MAX_TEXT_BYTES - bytes - separator) + separator;
     if (bytes + size > READ_FILE_MAX_TEXT_BYTES) {
       break;
     }

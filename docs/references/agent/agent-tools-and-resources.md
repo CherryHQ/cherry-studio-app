@@ -195,8 +195,10 @@ tools. The system prompt's Tools On Demand section names each deferred built-in 
 because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
-Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
-only a small Unicode tokenization patch so Chinese service and capability names can be searched.
+Loaded tools remain available in that Pi conversation, including after compaction, so the prompt
+asks for exact names with `limit` equal to their count. Cherry patches the search so Chinese service
+and capability names can be searched and exact deferred names load before ranked matches; plain
+BM25 otherwise ranks a shorter tool that mentions the name, such as `agent_get` for `agent_list`.
 
 Cherry no longer maintains empty-query browsing, coverage counters, distinct-term ranking tiers,
 `tool_describe`, a per-turn inspected-name ledger, or the `tool_call` dispatch/correction wrapper.
