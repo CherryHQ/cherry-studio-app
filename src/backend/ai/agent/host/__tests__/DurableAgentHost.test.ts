@@ -1004,7 +1004,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         status,
         error:
           status === 'failed'
-            ? { code: 'TIMEOUT', message: 'private provider response', retryable: true }
+            ? {
+                code: 'provider_error',
+                message: 'Maximum context length exceeded: private provider response',
+                retryable: true,
+                origin: 'provider',
+                context: { statusCode: 400 },
+              }
             : null,
       });
       await entered;
@@ -1058,7 +1064,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           attributes: expect.objectContaining({
             'agent.turn.status': status,
             ...(status === 'failed'
-              ? { 'error.code': 'EXECUTION_FAILED', 'error.retryable': true }
+              ? {
+                  'error.code': 'EXECUTION_FAILED',
+                  'error.source.code': 'provider_error',
+                  'error.product_reason': 'context_length',
+                  'error.retryable': true,
+                  'error.retry_scope': 'user',
+                  'http.status_code': 400,
+                }
               : {}),
           }),
         }),

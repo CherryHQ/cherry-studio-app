@@ -231,6 +231,60 @@ function attach(
   };
 }
 
+test('records compaction tasks separately from committed summaries and keeps private errors out of logs', async () => {
+  const { observer, advance } = attach({
+    entries: [],
+    tools: [],
+    nestedTools: [],
+    compactions: [],
+    inbox: [],
+  });
+  const taskId = 42 as TaskId<CompactionResult>;
+  const records: LogRecord[] = [];
+  const dispose = installLogWriter((record) => records.push(record));
+  try {
+    await observer.start();
+    await advance([{ type: 'compaction_start', taskId, reason: 'overflow', blocking: true }]);
+    await advance([
+      { type: 'compaction_end', taskId, reason: 'overflow', error: 'private provider response' },
+    ]);
+    await advance([{ type: 'compaction_start', taskId, reason: 'threshold', blocking: false }]);
+    await advance([{ type: 'compaction_end', taskId, reason: 'threshold' }]);
+    await advance([
+      {
+        type: 'entry_appended',
+        entry: {
+          id: 10,
+          kind: 'pi.compaction',
+          data: { reason: 'threshold' },
+        } as unknown as EntryRecord,
+      },
+    ]);
+    const compactions = records.filter(
+      (record) => record.message === 'Pi durable context compaction',
+    );
+    expect(compactions.map((record) => record.outcome)).toEqual([
+      'started',
+      'failed',
+      'started',
+      'ended',
+      'committed',
+    ]);
+    expect(compactions[1]).toMatchObject({ taskId: 42, reasonCode: 'overflow', blocking: true });
+    expect(compactions.at(-1)).toMatchObject({
+      entryId: 10,
+      reasonCode: 'threshold',
+      sessionId: 'session',
+      slot: 0,
+    });
+    expect(compactions.every((record) => record.turnId === undefined)).toBe(true);
+    expect(JSON.stringify(records)).not.toContain('private');
+  } finally {
+    dispose();
+    await observer.stop();
+  }
+});
+
 test('restores a parked turn and clears its pause when the task can run again', async () => {
   const tasks: TaskGraph = {
     tasks: {

@@ -1,3 +1,4 @@
+import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
 import { PluginError } from '@/shared/contracts/plugins';
 import { createLogRecord } from '@/shared/core/logger/LoggerService';
 import type { TraceSpanRecord } from '@/shared/data/types/trace';
@@ -188,6 +189,100 @@ test('uses terminal time for completed requests and start time for unfinished re
       range,
     ),
   ).toBeUndefined();
+});
+
+test('preserves request budgets and failure facts together through capture and archive projection', () => {
+  const attributes = sanitizeTraceAttributes({
+    'runtime.name': 'pi-durable',
+    'gen_ai.request.model': 'test-model',
+    'gen_ai.provider.id': 'test-provider',
+    'gen_ai.provider.api': 'openai-completions',
+    'gen_ai.model.context_window': 128_000,
+    'gen_ai.model.max_input_tokens': 120_000,
+    'gen_ai.model.max_output_tokens': 8192,
+    'gen_ai.request.output_budget_tokens': 4096,
+    'gen_ai.request.estimated_input_tokens': 100,
+    'gen_ai.request.estimate_source': 'pi_estimate',
+    'gen_ai.request.message_count': 2,
+    'gen_ai.request.tool_count': 5,
+    'gen_ai.request.max_tokens': 4096,
+    'gen_ai.request.max_tokens_field': 'max_tokens',
+    'gen_ai.response.finish_reason': 'error',
+    'error.type': 'ProviderError',
+    'error.code': 'runtime_error',
+    'error.origin': 'provider',
+    'error.retryable': false,
+    'error.retry_scope': 'automatic',
+    'error.stage': 'stream',
+    'error.category': 'unknown',
+    'http.status_code': 400,
+  });
+  const persisted = { ...trace, name: 'pi.generate_content', attributes };
+  const exported = projectDiagnosticTrace(JSON.parse(JSON.stringify(persisted)));
+  expect(exported?.attributes).toEqual(persisted.attributes);
+  expect(exported?.attributes).toMatchObject({
+    'gen_ai.request.estimated_input_tokens': 100,
+    'gen_ai.request.max_tokens': 4096,
+    'http.status_code': 400,
+    'error.retry_scope': 'automatic',
+  });
+  expect(exported?.attributes).not.toHaveProperty(['trace.attributes_truncated']);
+});
+
+test('exports only numeric budgets and closed product reasons and retry scopes', () => {
+  const record = {
+    ...trace,
+    name: 'ai.turn_state',
+    attributes: {
+      'error.product_reason': 'context_length',
+      'error.source.code': 'provider_error',
+      'error.retry_scope': 'user',
+      'gen_ai.request.estimated_input_tokens': 'private-value',
+      'gen_ai.request.max_tokens': -1,
+      'gen_ai.request.estimate_source': 'private-value',
+    },
+  };
+  expect(projectDiagnosticTrace(record)?.attributes).toEqual({
+    'error.product_reason': 'context_length',
+    'error.source.code': 'provider_error',
+    'error.retry_scope': 'user',
+  });
+  expect(
+    projectDiagnosticTrace({
+      ...record,
+      attributes: {
+        'error.product_reason': 'private-value',
+        'error.retry_scope': 'private-value',
+      },
+    })?.attributes,
+  ).toEqual({});
+});
+
+test('retains observed compaction lifecycle facts without its error or summary text', () => {
+  const raw = createLogRecord('info', 'Pi durable context compaction', 'PiDurableObserver', {}, [
+    {
+      operation: 'pi.compaction',
+      sessionId: 'session-1',
+      taskId: 42,
+      reasonCode: 'overflow',
+      blocking: true,
+      outcome: 'failed',
+      error: 'private upstream response',
+      summary: 'private conversation',
+    },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported?.facts).toEqual({
+    operation: 'pi.compaction',
+    sessionId: 'session-1',
+    taskId: 42,
+    reasonCode: 'overflow',
+    blocking: true,
+    outcome: 'failed',
+  });
+  expect(JSON.stringify(exported)).not.toContain('private');
+  expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
 });
 
 test.each(['running', 'ok', 'error', 'cancelled'] as const)(
