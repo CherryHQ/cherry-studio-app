@@ -20,28 +20,25 @@ function useEffectiveEngine(capability: VoiceCapability) {
   }).data;
 }
 
-/** Interim layout: engines per capability, then the AI models they and audio attachments use. */
+/** Keep each engine's controls together; transcription also serves audio attachments. */
 export default function VoiceSettingsScreen() {
   const { t } = useTranslation();
   const dictationEngine = useEffectiveEngine('dictation');
   const speechEngine = useEffectiveEngine('speech');
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.voice.title') }}>
-      <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null} />
-      {dictationEngine === 'system' ? (
-        <Section>
-          <DictationLanguageSetting />
-        </Section>
-      ) : null}
-      <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null} />
-      {speechEngine ? (
-        <Section>
-          <SpeechVoiceSetting engine={speechEngine} />
-        </Section>
-      ) : null}
-      <Section footer={t('settings.voice.model.footer')} title={t('settings.voice.model.title')}>
+      <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null}>
+        {dictationEngine === 'system' ? <DictationLanguageSetting /> : null}
+      </VoiceEngineSection>
+      <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
+        {speechEngine === 'ai' ? <VoiceModelSetting purpose="speech" /> : null}
+        {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}
+      </VoiceEngineSection>
+      <Section
+        footer={t('settings.voice.model.footer')}
+        title={t('settings.voice.model.transcription')}
+      >
         <VoiceModelSetting purpose="transcription" />
-        <VoiceModelSetting purpose="speech" />
       </Section>
     </SettingsScrollPage>
   );

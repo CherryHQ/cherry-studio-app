@@ -13,7 +13,11 @@ import {
   UniqueModelIdSchema,
 } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
+import {
+  isImageGenerationModel,
+  isSpeechToTextModel,
+  isTextToSpeechModel,
+} from '@/shared/utils/modelPurpose';
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
@@ -29,12 +33,20 @@ export const providerModelCapabilityValues = {
   reasoning: MODEL_CAPABILITY.REASONING,
   functionCall: MODEL_CAPABILITY.FUNCTION_CALL,
   drawing: MODEL_CAPABILITY.IMAGE_GENERATION,
+  speech: MODEL_CAPABILITY.AUDIO_GENERATION,
+  transcription: MODEL_CAPABILITY.AUDIO_TRANSCRIPT,
   embedding: MODEL_CAPABILITY.EMBEDDING,
   rerank: MODEL_CAPABILITY.RERANK,
 } as const;
 export type ProviderModelAddCapability = keyof typeof providerModelCapabilityValues;
 export type ProviderModelCapabilities = Record<ProviderModelAddCapability, boolean>;
-export type ProviderModelPrimaryType = 'text' | 'image' | 'embedding' | 'rerank';
+export type ProviderModelPrimaryType =
+  | 'text'
+  | 'image'
+  | 'speech'
+  | 'transcription'
+  | 'embedding'
+  | 'rerank';
 export type ProviderModelAddEndpoint = 'auto' | EndpointType;
 export type ProviderModelAddFormState = {
   capabilities: Partial<Record<ProviderModelAddCapability, boolean>>;
@@ -177,6 +189,9 @@ export function getProviderModelAddCapabilities(form: ProviderModelAddFormState,
   ) as ProviderModelCapabilities;
   return {
     ...capabilities,
+    speech: form.capabilities.speech ?? (baseline ? isTextToSpeechModel(baseline) : false),
+    transcription:
+      form.capabilities.transcription ?? (baseline ? isSpeechToTextModel(baseline) : false),
     drawing: Boolean(
       isProviderModelImageEndpoint(form.endpointType) ||
       (form.endpointType === 'auto' &&
@@ -193,6 +208,8 @@ export function getProviderModelPrimaryType(
   if (capabilities.rerank) return 'rerank';
   if (capabilities.embedding) return 'embedding';
   if (capabilities.drawing) return 'image';
+  if (capabilities.speech) return 'speech';
+  if (capabilities.transcription) return 'transcription';
   if (
     baseline?.capabilities.some(
       (capability) =>
@@ -225,6 +242,8 @@ export function changeProviderModelPrimaryType(
   const capabilities = { ...form.capabilities };
   for (const [key, selected] of [
     ['drawing', type === 'image'],
+    ['speech', type === 'speech'],
+    ['transcription', type === 'transcription'],
     ['embedding', type === 'embedding'],
     ['rerank', type === 'rerank'],
   ] as const) {
@@ -275,6 +294,10 @@ export function changeProviderModelEndpoint(
     else delete capabilities.embedding;
     if (inherited.rerank) capabilities.rerank = false;
     else delete capabilities.rerank;
+    if (inherited.speech) capabilities.speech = false;
+    else delete capabilities.speech;
+    if (inherited.transcription) capabilities.transcription = false;
+    else delete capabilities.transcription;
     primaryType = undefined;
   }
   return { ...form, capabilities, endpointType, primaryType };
@@ -321,7 +344,10 @@ export function buildProviderModelAddInput({
     input.name ??= modelId;
     input.group ??= getDefaultProviderModelGroupName(modelId, provider.id);
   }
-  if (!drawing) {
+  const primaryType =
+    formState.primaryType ??
+    getProviderModelPrimaryType(getProviderModelAddCapabilities(formState, baseline), baseline);
+  if (!drawing && primaryType !== 'speech' && primaryType !== 'transcription') {
     for (const field of ['contextWindow', 'maxInputTokens', 'maxOutputTokens'] as const) {
       const value = formState[field].trim();
       if (!value) continue;
@@ -333,12 +359,7 @@ export function buildProviderModelAddInput({
     const output =
       input.maxOutputTokens ?? baseline?.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
     const maxInput = input.maxInputTokens ?? baseline?.maxInputTokens;
-    if (
-      getProviderModelPrimaryType(
-        getProviderModelAddCapabilities(formState, baseline),
-        baseline,
-      ) === 'text'
-    ) {
+    if (primaryType === 'text') {
       if (output >= context)
         errors.maxOutputTokens = 'settings.provider.models.addOutputLimitError';
       if (maxInput !== undefined && maxInput > context)
@@ -405,6 +426,8 @@ export function buildProviderModelCapabilityFields(
     'video',
     'embedding',
     'rerank',
+    'speech',
+    'transcription',
   ] as const) {
     if (form.capabilities[key] === true) capabilities.add(providerModelCapabilityValues[key]);
     else if (form.capabilities[key] === false)
@@ -467,17 +490,22 @@ export function buildProviderModelCapabilityFields(
   }
   if (
     form.primaryType !== undefined &&
-    baseline?.capabilities.some(
-      (capability) =>
-        capability === MODEL_CAPABILITY.AUDIO_GENERATION ||
-        capability === MODEL_CAPABILITY.VIDEO_GENERATION ||
-        capability === MODEL_CAPABILITY.AUDIO_TRANSCRIPT,
-    )
+    baseline &&
+    (isSpeechToTextModel(baseline) ||
+      baseline.capabilities.includes(MODEL_CAPABILITY.AUDIO_GENERATION) ||
+      baseline.capabilities.includes(MODEL_CAPABILITY.VIDEO_GENERATION))
   ) {
     fields.inputModalities = [
       ...new Set([MODALITY.TEXT, ...(fields.inputModalities ?? inheritedInputModalities)]),
     ];
     fields.outputModalities = drawing ? [MODALITY.IMAGE] : [MODALITY.TEXT];
+  }
+  if (form.primaryType === 'speech') {
+    fields.inputModalities = [MODALITY.TEXT];
+    fields.outputModalities = [MODALITY.AUDIO];
+  } else if (form.primaryType === 'transcription') {
+    fields.inputModalities = [MODALITY.AUDIO];
+    fields.outputModalities = [MODALITY.TEXT];
   }
   return { fields, drawing, endpointError };
 }

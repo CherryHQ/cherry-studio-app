@@ -14,6 +14,7 @@ export const VOICE_ENGINE_PREFERENCE = {
 /** `unsupported` cannot run on this device; `needs-setup` lacks a configured model. */
 export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'unsupported';
 
+/** A saved catalog model; its API model ID and account are resolved at request time. */
 export type VoiceModelSelection = { providerId: string; modelId: string };
 export type VoiceProviderOption = { id: string; name: string };
 export type SpeechVoice = { id: string; name: string; language?: string };

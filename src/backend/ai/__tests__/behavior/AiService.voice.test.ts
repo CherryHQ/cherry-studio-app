@@ -1,4 +1,5 @@
 import type { SpeechModelV3CallOptions, TranscriptionModelV3CallOptions } from '@ai-sdk/provider';
+import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { MockSpeechModelV3, MockTranscriptionModelV3 } from 'ai/test';
 
 import { AiService } from '@/backend/ai/AiService';
@@ -21,12 +22,16 @@ const speechResult = {
 
 beforeEach(() => jest.clearAllMocks());
 
-test('resolves the selected account credential and an independent audio model, without chat lookup or fake usage', async () => {
-  const f = createContractFixture();
+test('uses the saved speech model API ID and selected account without inventing usage', async () => {
+  const f = createContractFixture({
+    modelId: 'saved-speech-model',
+    capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+    modelOverrides: { apiModelId: 'tts-1' },
+  });
   const generate = jest.fn(async (_options: SpeechModelV3CallOptions) => speechResult);
   mockResolve.mockReturnValue(new MockSpeechModelV3({ doGenerate: generate }));
   const result = await new AiService(f.services).generateSpeech(
-    { providerId: f.provider.id, modelId: 'tts-1', text: '你好', voice: 'alloy' },
+    { providerId: f.provider.id, modelId: f.model.modelId, text: '你好', voice: 'alloy' },
     new AbortController().signal,
   );
   expect(f.spies.resolveApiKey).toHaveBeenCalledWith(f.provider.id, undefined);
@@ -47,12 +52,15 @@ test('resolves the selected account credential and an independent audio model, w
     outputFormat: 'wav',
   });
   expect(result).toEqual({ audio: speechResult.audio, mediaType: 'audio/wav' });
-  expect(f.services.model.getById).not.toHaveBeenCalled();
   expect(f.spies.recordInvocation).not.toHaveBeenCalled();
 });
 
 test('transcribes original bytes with their stated container type, using the audio model and selected account', async () => {
-  const f = createContractFixture();
+  const f = createContractFixture({
+    modelId: 'whisper-1',
+    capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+    modelOverrides: { inputModalities: [MODALITY.AUDIO], outputModalities: [MODALITY.TEXT] },
+  });
   const generate = jest.fn(async (_options: TranscriptionModelV3CallOptions) => ({
     text: '你好',
     segments: [],
@@ -76,7 +84,10 @@ test('transcribes original bytes with their stated container type, using the aud
 test.each([401, 404, 503])(
   'normalizes HTTP %i failure once and redacts the serving credential',
   async (statusCode) => {
-    const f = createContractFixture();
+    const f = createContractFixture({
+      modelId: 'unknown-audio',
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+    });
     const generate = jest.fn(async () => {
       throw Object.assign(new Error('contract-key rejected'), {
         statusCode,
@@ -102,7 +113,10 @@ test.each([401, 404, 503])(
 );
 
 test('passes cancellation to the provider and keeps the abort reason', async () => {
-  const f = createContractFixture();
+  const f = createContractFixture({
+    modelId: 'tts-1',
+    capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+  });
   let started!: () => void;
   const ready = new Promise<void>((resolve) => {
     started = resolve;
@@ -149,3 +163,27 @@ test('rejects unsupported and disabled accounts before selecting a credential', 
     expect(f.spies.resolveApiKey).not.toHaveBeenCalled();
   }
 });
+
+test.each([
+  ['missing', { modelId: 'another-model' }],
+  ['disabled', { modelOverrides: { isEnabled: false } }],
+  ['hidden', { modelOverrides: { isHidden: true } }],
+  ['wrong purpose', { capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT] }],
+] satisfies [string, NonNullable<Parameters<typeof createContractFixture>[0]>][])(
+  'rejects a %s speech model before selecting a credential',
+  async (_name, options) => {
+    const f = createContractFixture({
+      modelId: 'tts-1',
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+      ...options,
+    });
+    await expect(
+      new AiService(f.services).generateSpeech(
+        { providerId: f.provider.id, modelId: 'tts-1', text: 'Hello', voice: 'alloy' },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'not-configured' });
+    expect(f.spies.resolveApiKey).not.toHaveBeenCalled();
+    expect(mockResolve).not.toHaveBeenCalled();
+  },
+);

@@ -1,87 +1,75 @@
-import {
-  Input,
-  OptionPickerBottomSheet,
-  Section,
-  TextField,
-  useToast,
-} from '@cherrystudio/ui/components';
-import { useQuery } from '@tanstack/react-query';
+import { Section, useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBackendModule, usePreference } from '@/frontend/data';
+import { ModelAvatar } from '@/frontend/components/Avatar';
+import {
+  ModelPickerDrawer,
+  type ModelPickerModelItem,
+  useModelPickerData,
+} from '@/frontend/components/ModelPicker';
+import { usePreference } from '@/frontend/data';
 
 const MODEL_PREFERENCE = {
   transcription: 'feature.voice.transcription_model',
   speech: 'feature.voice.speech_model',
 } as const;
-/** Prefilled when an account is first chosen; any model the gateway exposes can replace it. */
-const DEFAULT_MODEL_IDS = { transcription: 'gpt-4o-mini-transcribe', speech: 'gpt-4o-mini-tts' };
+const EMPTY_MODEL_KEYS = {
+  transcription: 'settings.voice.model.emptyTranscription',
+  speech: 'settings.voice.model.emptySpeech',
+} as const;
 
-/** An account plus a free-form model ID: audio models are not part of the chat model list. */
+/** Voice models use the same catalog and account configuration as other model settings. */
 export function VoiceModelSetting({ purpose }: { purpose: 'transcription' | 'speech' }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const voice = useBackendModule('voice');
   const [selection, setSelection] = usePreference(MODEL_PREFERENCE[purpose]);
-  const [modelId, setModelId] = useState(selection?.modelId ?? '');
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const providers = useQuery({
-    queryKey: ['voice', 'providers'],
-    queryFn: ({ signal }) => voice.listProviders({ signal }),
-  });
-  const provider = providers.data?.find((item) => item.id === selection?.providerId);
-
-  const save = (providerId: string | undefined, nextModelId: string) => {
-    const trimmed = nextModelId.trim();
-    void setSelection(providerId && trimmed ? { providerId, modelId: trimmed } : null).catch(() => {
-      toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
-    });
-  };
-  const chooseProvider = (providerId: string) => {
-    const nextModelId = modelId.trim() || DEFAULT_MODEL_IDS[purpose];
-    setModelId(nextModelId);
-    save(providerId, nextModelId);
+  const [isSaving, setIsSaving] = useState(false);
+  const { getModelItem, isLoading, modelItems } = useModelPickerData({ modelType: purpose });
+  const selectedModelId = selection ? `${selection.providerId}::${selection.modelId}` : null;
+  const selected = getModelItem(selectedModelId);
+  const select = (item: ModelPickerModelItem) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setIsPickerOpen(false);
+    void setSelection(
+      item.modelId === selectedModelId
+        ? null
+        : { providerId: item.provider.id, modelId: item.model.modelId },
+    )
+      .catch(() => {
+        toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
+      })
+      .finally(() => setIsSaving(false));
   };
 
   return (
     <>
       <Section.SelectItem
-        description={providers.data?.length === 0 ? t('settings.voice.noProviders') : undefined}
-        disabled={!providers.data?.length}
+        description={
+          !isLoading && modelItems.length === 0 ? t(EMPTY_MODEL_KEYS[purpose]) : undefined
+        }
+        disabled={isSaving}
         label={t(`settings.voice.model.${purpose}`)}
         onPress={() => setIsPickerOpen(true)}
-        testID={`settings-voice-${purpose}-provider`}
-        value={provider?.name ?? t('settings.voice.model.none')}
+        testID={`settings-voice-${purpose}-model`}
+        value={selected?.model.name ?? selection?.modelId ?? t('settings.voice.model.none')}
+        valueLeading={
+          selected ? <ModelAvatar model={selected.model} provider={selected.provider} /> : undefined
+        }
       />
-      {provider ? (
-        <Section.Item>
-          <TextField>
-            <TextField.Label>{t('settings.voice.model.id')}</TextField.Label>
-            <Input
-              accessibilityLabel={t('settings.voice.model.id')}
-              autoCapitalize="none"
-              autoCorrect={false}
-              maxLength={256}
-              onChangeText={setModelId}
-              onEndEditing={() => save(provider.id, modelId)}
-              placeholder={DEFAULT_MODEL_IDS[purpose]}
-              returnKeyType="done"
-              testID={`settings-voice-${purpose}-model`}
-              value={modelId}
-            />
-          </TextField>
-        </Section.Item>
+      {isPickerOpen ? (
+        <ModelPickerDrawer
+          emptyText={t(EMPTY_MODEL_KEYS[purpose])}
+          modelType={purpose}
+          onClose={() => setIsPickerOpen(false)}
+          onSelect={select}
+          open
+          selectedModelId={selectedModelId}
+          title={t(`settings.voice.model.${purpose}`)}
+        />
       ) : null}
-      <OptionPickerBottomSheet<string>
-        onClose={() => setIsPickerOpen(false)}
-        onValueChange={chooseProvider}
-        open={isPickerOpen}
-        options={(providers.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
-        selectedValue={selection?.providerId ?? ''}
-        size="compact"
-        title={t(`settings.voice.model.${purpose}`)}
-      />
     </>
   );
 }

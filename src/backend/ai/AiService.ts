@@ -39,6 +39,7 @@ import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { createUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
+import { isSpeechToTextModel, isTextToSpeechModel } from '@/shared/utils/modelPurpose';
 
 import { listModels as listProviderModels } from './generation/listModels';
 import { resolveAiSdkServing } from './generation/providerConfig';
@@ -324,7 +325,7 @@ export class AiService extends BaseService {
     input: VoiceModelSelection & { text: string; voice: string },
     signal: AbortSignal,
   ) {
-    return this.executeVoice(input, signal, (config) =>
+    return this.executeVoice(input, 'speech', signal, (config) =>
       aiCoreGenerateSpeech(
         resolveVoiceModel(config, 'speech'),
         input.text,
@@ -338,7 +339,7 @@ export class AiService extends BaseService {
     input: VoiceModelSelection & { audio: Uint8Array; mediaType: string },
     signal: AbortSignal,
   ) {
-    return this.executeVoice(input, signal, (config) => {
+    return this.executeVoice(input, 'transcription', signal, (config) => {
       const model = resolveVoiceModel(config, 'transcription');
       // ai-sdk sniffs the container from the bytes and reads MP4/M4A as WAV, naming the upload
       // `audio.wav`; the caller knows the real type.
@@ -358,6 +359,7 @@ export class AiService extends BaseService {
 
   private async executeVoice<TResult>(
     selection: VoiceModelSelection,
+    operation: 'speech' | 'transcription',
     signal: AbortSignal,
     invoke: (config: Parameters<typeof resolveVoiceModel>[0]) => Promise<TResult>,
   ): Promise<TResult> {
@@ -368,22 +370,21 @@ export class AiService extends BaseService {
     const endpointType = resolveVoiceEndpoint(provider);
     if (!provider.isEnabled || !endpointType)
       throw new VoiceError('not-configured', 'This provider cannot serve the audio protocol.');
-    // Voice IDs are separate from persisted chat/image models and never enter the general picker.
-    const model: Model = {
-      id: createUniqueModelId(provider.id, selection.modelId.trim()),
-      providerId: provider.id,
-      modelId: selection.modelId.trim(),
-      name: selection.modelId.trim(),
-      capabilities: [],
-      endpointTypes: [endpointType],
-      isDeprecated: false,
-      isEnabled: true,
-      isHidden: false,
-      supportsStreaming: false,
-    };
+    const model = await this.services.model.getById(
+      createUniqueModelId(provider.id, selection.modelId.trim()),
+    );
+    signal.throwIfAborted();
+    if (
+      !model ||
+      !model.isEnabled ||
+      model.isHidden ||
+      !(operation === 'speech' ? isTextToSpeechModel(model) : isSpeechToTextModel(model))
+    )
+      throw new VoiceError('not-configured', 'Select an available model for this voice operation.');
     const { sdkConfig } = await resolveAiSdkServing({
       provider,
-      model,
+      // The account's compatible base URL serves the audio routes, while the model owns its API ID.
+      model: { ...model, endpointTypes: [endpointType] },
       providerService: this.services.provider,
     });
     signal.throwIfAborted();

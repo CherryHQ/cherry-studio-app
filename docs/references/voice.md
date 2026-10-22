@@ -1,7 +1,7 @@
 # Voice Input And Speech
 
-> Status: engines, attachment transcription and settings are implemented; the settings controls
-> are interim and await their UI design. iOS/Android device acceptance is pending.
+> Status: system/cloud engines, attachment transcription and settings are implemented.
+> iOS/Android device acceptance of the current settings layout is pending.
 
 ## Capabilities
 
@@ -14,6 +14,13 @@
 System engines are free, need no setup and spend no tokens. AI engines are optional upgrades that
 the user configures once in **Settings → Voice**; voice actions never ask for a provider or model.
 Users can also dictate with their keyboard's own voice input, which needs no app support.
+
+Settings groups controls by capability. Each group opens its engine choices in a sheet, then shows
+only the selected engine's controls: recognition language for system dictation, and the model and
+voice for cloud speech. The transcription model has its own group because both cloud dictation and
+audio attachments use it. Both model rows reuse the shared model picker, filtered to speech
+synthesis (TTS) or transcription (STT). Selecting the current model again clears the selection.
+Add voice models in the existing provider model settings; account credentials are reused.
 
 The chat composer has one primary action slot, as mainstream chat apps do: voice input while the
 draft and attachments are empty, send once there is content, and stop while a reply streams.
@@ -103,11 +110,14 @@ transcribes.
 ## AI Models And Accounts
 
 `feature.voice.transcription_model` serves AI dictation and audio attachments;
-`feature.voice.speech_model` serves AI speech. Each is an account plus a free-form model ID,
-because audio models are not part of the chat model list. `AiService` resolves the account at
-request time and uses the OpenAI audio adapter with its URL, headers and credential
+`feature.voice.speech_model` serves AI speech. Each identifies a saved model by provider and model
+ID. `AiService` loads the current model, checks its availability and voice purpose, resolves its API
+model ID and account at request time, and uses the OpenAI audio adapter with the account URL,
+headers and credential
 (`resolveVoiceEndpoint`); only API-key accounts with an OpenAI or OpenAI-compatible endpoint
-qualify. Each action makes one attempt. Remote conversations also use the local voice settings.
+qualify. Realtime and multimodal audio chat models are not TTS choices. Previously entered model IDs
+must exist in the model catalog with the correct voice type. Each action makes one attempt. Remote
+conversations also use the local voice settings.
 
 The upstream audio APIs report no token counts or prices, so voice requests create no usage
 records; settings states that audio usage is not in the statistics.
