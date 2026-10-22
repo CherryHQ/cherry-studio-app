@@ -16,7 +16,7 @@ const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** Passive reminders never interrupt an active conversation or restart the application. */
 export function AppUpdateObserver() {
   const appUpdate = useBackendModule('appUpdate');
-  const { data } = useQuery(appUpdateQueryOptions(appUpdate));
+  const { data, isFetching } = useQuery(appUpdateQueryOptions(appUpdate));
   const transfer = useAppUpdateDownload(appUpdate);
   const actions = useAppUpdateActions();
   const { t } = useTranslation();
@@ -33,7 +33,13 @@ export function AppUpdateObserver() {
   }, []);
 
   useEffect(() => {
-    if (!active || coverVisible || data?.status !== 'available' || transfer.status !== 'idle')
+    if (
+      !active ||
+      coverVisible ||
+      isFetching ||
+      data?.status !== 'available' ||
+      transfer.status !== 'idle'
+    )
       return;
     const previous = cacheService.getPersist('app_update.last_reminder');
     const now = Date.now();
@@ -49,7 +55,7 @@ export function AppUpdateObserver() {
       duration: 10_000,
       actions: [{ label: t('appUpdate.view'), onPress: () => actions.showRelease(data) }],
     });
-  }, [active, coverVisible, data, transfer.status, actions, t, toast]);
+  }, [active, coverVisible, isFetching, data, transfer.status, actions, t, toast]);
 
   useEffect(() => {
     if (!active || coverVisible || lastTransfer.current === transfer) return;
@@ -69,9 +75,7 @@ export function AppUpdateObserver() {
         ),
         variant: 'danger',
         duration: 10_000,
-        actions: [
-          { label: t('common.retry'), onPress: () => actions.showRelease(transfer.release) },
-        ],
+        actions: [{ label: t('common.retry'), onPress: () => void actions.check() }],
       });
     } else if (transfer.status === 'downloading' && transfer.receivedBytes === 0) {
       toast.show({ label: t('appUpdate.downloadStarted') });

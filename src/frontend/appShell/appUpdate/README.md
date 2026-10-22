@@ -7,7 +7,9 @@ reusable entry currently rendered by About. Pages do not own channel decisions o
 The observer checks after bootstrap without blocking startup. Each cold launch checks again;
 returning to the foreground refreshes results older than six hours. Query keys include the channel.
 About reads the recorded result without starting a request and keeps `NEW` when a later refresh
-fails. Manual checks fetch fresh data when no newer release is recorded.
+fails. Manual checks fetch fresh data when no newer release is recorded or a download failed, so
+retrying uses the current release instead of pinning a replaced or withdrawn package. Concurrent
+manual checks share one decision and feedback, including across provider rerenders.
 
 After the startup cover is gone and the app is active, a newer release produces a ten-second toast
 with a View update action. Each release is reminded at most once per 24 hours using frontend persist

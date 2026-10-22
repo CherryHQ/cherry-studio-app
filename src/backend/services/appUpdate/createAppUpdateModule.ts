@@ -47,7 +47,10 @@ export function createAppUpdateModule(dependencies: {
         if (!getNativeAppUpdate()?.isApkInstallationEnabled()) {
           return { status: 'unavailable', reason: 'nativeUnavailable' };
         }
-        return checkGitcodeRelease(currentVersion, signal);
+        const result = await checkGitcodeRelease(currentVersion, signal);
+        signal?.throwIfAborted();
+        download.clearObsoleteFailure(result.status === 'available' ? result.id : null);
+        return result;
       }
       if (!Application.applicationId) return { status: 'unavailable', reason: 'unknownVersion' };
       if (channel === 'google-play') {

@@ -1,6 +1,6 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, type PropsWithChildren, use, useMemo } from 'react';
+import { createContext, type PropsWithChildren, use, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
@@ -29,6 +29,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   const { alert } = useAlert();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const pendingCheck = useRef<Promise<void> | null>(null);
 
   const actions = useMemo(() => {
     const install = async () => {
@@ -108,13 +109,10 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
         confirmInstall();
         return;
       }
-      if (transfer.status === 'failed') {
-        showRelease(transfer.release);
-        return;
-      }
       const options = appUpdateQueryOptions(appUpdate);
       const recorded = queryClient.getQueryData(options.queryKey);
-      if (recorded?.status === 'available') {
+      // A failed package may have been replaced or withdrawn since it was discovered.
+      if (transfer.status !== 'failed' && recorded?.status === 'available') {
         showRelease(recorded);
         return;
       }
@@ -130,7 +128,18 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       }
     };
 
-    return { check, showRelease, confirmInstall, cancelDownload: appUpdate.cancelDownload };
+    return {
+      check: () => {
+        // Share the complete action, including its feedback, across repeated taps and rerenders.
+        pendingCheck.current ??= check().finally(() => {
+          pendingCheck.current = null;
+        });
+        return pendingCheck.current;
+      },
+      showRelease,
+      confirmInstall,
+      cancelDownload: appUpdate.cancelDownload,
+    };
   }, [appUpdate, queryClient, alert, toast, t]);
 
   return <AppUpdateActionsContext value={actions}>{children}</AppUpdateActionsContext>;

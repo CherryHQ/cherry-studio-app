@@ -151,6 +151,11 @@ export function createApkDownload() {
       current?.controller.abort();
       await current?.promise;
     },
+    clearObsoleteFailure(releaseId: string | null) {
+      if (!stopped && state.status === 'failed' && state.release.id !== releaseId) {
+        publish({ status: 'idle' });
+      }
+    },
     invalidateReady() {
       if (state.status !== 'ready') return;
       reuseCached = false;

@@ -35,6 +35,7 @@ const mockDownload = {
   subscribeDownload: jest.fn(),
   dispose: jest.fn(async () => {}),
   invalidateReady: jest.fn(),
+  clearObsoleteFailure: jest.fn(),
 };
 jest.mock('../createApkDownload', () => ({ createApkDownload: () => mockDownload }));
 const mockCheckApk = jest.fn();
@@ -76,8 +77,28 @@ test('checks the installed version, forwards cancellation, and never downloads o
   const signal = new AbortController().signal;
   await expect(create().check(signal)).resolves.toEqual({ status: 'available', ...apk });
   expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', signal);
+  expect(mockDownload.clearObsoleteFailure).toHaveBeenCalledWith(apk.id);
   expect(mockDownload.download).not.toHaveBeenCalled();
   expect(Linking.openURL).not.toHaveBeenCalled();
+});
+
+test('only successful discovery can clear a withdrawn package failure', async () => {
+  const updates = create();
+  mockCheckApk.mockRejectedValueOnce(new Error('Offline'));
+  await expect(updates.check()).rejects.toThrow('Offline');
+  expect(mockDownload.clearObsoleteFailure).not.toHaveBeenCalled();
+
+  const controller = new AbortController();
+  mockCheckApk.mockImplementationOnce(async () => {
+    controller.abort();
+    return { status: 'available', ...apk };
+  });
+  await expect(updates.check(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(mockDownload.clearObsoleteFailure).not.toHaveBeenCalled();
+
+  mockCheckApk.mockResolvedValueOnce({ status: 'unavailable', reason: 'noRelease' });
+  await expect(updates.check()).resolves.toEqual({ status: 'unavailable', reason: 'noRelease' });
+  expect(mockDownload.clearObsoleteFailure).toHaveBeenCalledWith(null);
 });
 
 test('missing or malformed installed versions cannot produce an update decision', async () => {

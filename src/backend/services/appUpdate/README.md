@@ -60,6 +60,8 @@ claim that the app is current.
 transfer is active at a time; repeated requests share it. Leaving About only releases observation.
 Cancellation and bootstrap shutdown abort metadata/hash work, cancel the native transfer, wait for
 cleanup, and remove partial files before a new transfer is admitted.
+Successful release checks clear a failed transfer when its release was replaced or withdrawn,
+restoring normal reminders and update actions. Check failures preserve the existing transfer state.
 
 Metadata and checksum requests use the shared HTTP client. The APK body uses Expo FileSystem's
 native streaming downloader so large packages do not enter a JavaScript byte buffer; its progress

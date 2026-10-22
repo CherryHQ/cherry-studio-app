@@ -146,3 +146,54 @@ test('native package rejection forces a fresh download instead of reusing the re
   await updates.download(release);
   expect(FileSystem.createDownloadResumable).toHaveBeenCalledTimes(2);
 });
+
+test.each(['apk:2.1.0', null])(
+  'a replacement or withdrawn release (%s) clears the obsolete failure and notifies consumers',
+  async (latestReleaseId) => {
+    mockTask.downloadAsync.mockResolvedValueOnce({ status: 404 });
+    const updates = createApkDownload();
+    await updates.download(release);
+    expect(updates.getDownload().status).toBe('failed');
+    const changes = jest.fn();
+    const unsubscribe = updates.subscribeDownload(changes);
+
+    updates.clearObsoleteFailure(latestReleaseId);
+
+    expect(updates.getDownload()).toEqual({ status: 'idle' });
+    expect(changes).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  },
+);
+
+test('a check for the same release preserves its failure and package rejection', async () => {
+  const updates = createApkDownload();
+  await updates.download(release);
+  updates.invalidateReady();
+  const failed = updates.getDownload();
+
+  updates.clearObsoleteFailure(release.id);
+
+  expect(updates.getDownload()).toBe(failed);
+  jest.mocked(FileSystem.getInfoAsync).mockResolvedValue({
+    exists: true,
+    isDirectory: false,
+    uri: 'file:///cache/app-updates/update.apk',
+    size: 100,
+    modificationTime: 1,
+  });
+  await updates.download(release);
+  expect(FileSystem.createDownloadResumable).toHaveBeenCalledTimes(2);
+});
+
+test('a new release does not discard an active or ready package', async () => {
+  const updates = createApkDownload();
+  const pending = updates.download(release);
+  const downloading = updates.getDownload();
+  updates.clearObsoleteFailure('apk:2.1.0');
+  expect(updates.getDownload()).toBe(downloading);
+  await pending;
+  const ready = updates.getDownload();
+  expect(ready.status).toBe('ready');
+  updates.clearObsoleteFailure('apk:2.1.0');
+  expect(updates.getDownload()).toBe(ready);
+});
