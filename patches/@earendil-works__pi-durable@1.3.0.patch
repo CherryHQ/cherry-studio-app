@@ -10,6 +10,17 @@ diff --git a/dist/tool-search/tool-search.js b/dist/tool-search/tool-search.js
  import { defineExtension, defineTool } from "../harness/define.js";
  import { rankDocuments } from "../search.js";
  export const TOOL_SEARCH_TOOL_NAME = "tool_search";
+@@ -59,7 +59,9 @@
+                 throw new Error("limit must be a positive integer");
+             const candidates = (await api.agent(context)).deferred;
+             const documents = candidates.map((tool) => ({ name: tool.name, text: searchText(tool) }));
+-            const loaded = rankDocuments(query, documents, max);
++            // An exact deferred name in the query loads that tool before any ranked match.
++            const named = [...new Set(query.split(/[\s,]+/))].filter((term) => candidates.some((tool) => tool.name === term));
++            const loaded = [...named, ...rankDocuments(query, documents, max).filter((name) => !named.includes(name))].slice(0, Math.max(max, named.length));
+             const text = loaded.length === 0
+                 ? "No matching tools found."
+                 : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded
 diff --git a/dist/search.js b/dist/search.js
 --- a/dist/search.js
 +++ b/dist/search.js

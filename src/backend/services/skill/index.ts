@@ -6,4 +6,3 @@ export { createCherryinSkillSource } from './cherryinSkillSource';
 export { decodeUtf8, parseSkillEntry } from './skillPackage';
 export { createGithubSkillClients, createGithubSkillSource } from './skillSources';
 export { skillStorage, type SkillStorage } from './skillStorage';
-export { getSystemSkillInstructions } from './bundled';
