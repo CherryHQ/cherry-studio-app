@@ -167,6 +167,25 @@ describe('createGenerateImageTool', () => {
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
   });
 
+  test('publishes a parameter shared by generate and edit with a concrete type', () => {
+    const quality = { type: 'enum' as const, options: ['low', 'high'] };
+    const tool = createGenerateImageTool(
+      createDependencies(),
+      {
+        support: {
+          modes: { generate: { supports: { quality } }, edit: { supports: { quality } } },
+        },
+        uniqueModelId: MODEL.uniqueModelId,
+      },
+      TURN_FILES,
+    );
+
+    expect(tool.inputSchema).toMatchObject({
+      properties: { quality: { type: 'string', enum: ['low', 'high'] } },
+    });
+    expect(JSON.stringify(tool.inputSchema)).not.toContain('anyOf');
+  });
+
   test('carries the stable built-in ref and asks before spending provider quota', () => {
     const tool = createGenerateImageTool(createDependencies(), MODEL, TURN_FILES);
 

@@ -1,6 +1,6 @@
 # Agent Architecture
 
-> Status: the local experimental branch uses Pi Durable 1.2.0; authorized runtime and device
+> Status: the local experimental branch uses Pi Durable 1.3.0; authorized runtime and device
 > acceptance is pending. The separate PC Agent Controller version 2 keeps its existing behavior.
 
 This directory documents Cherry Mobile's conversation execution boundary. For mobile-originated
@@ -107,7 +107,8 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 
 - Mobile Skills support package installation, Agent bindings and progressive instruction loading;
   script execution and long-term activation-version retention remain out of scope.
-- Office generation, inspection, and patching tools are not implemented.
+- Office generation, structural reads, bounded patching and preview selections are implemented in
+  source through QuickJS and Pi Durable; validation remains pending. See [Office Tools Design](./office-tools-design.md).
 - Recovery and working-copy reclamation are implemented in source; tests, type checks, builds,
   provider/device lifecycle and backup acceptance for this ownership change remain unverified.
 - Provider coverage and model capability remain explicit; unsupported combinations fail before
@@ -122,6 +123,7 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 | [Agent Runtime](./agent-runtime.md) | Historical per-turn contract |
 | [Agent Persistence](./agent-persistence.md) | Authoritative Cherry transcript schema, settlement and deletion |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
+| [Office Tools Design](./office-tools-design.md) | Office generation, inspection/editing, preview selections and QuickJS/Pi Durable integration; acceptance pending |
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
 | [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization and bundled guides; future multi-account, HTTP reuse and Skill designs |
 | [Plugin Expansion Research](./plugin-expansion-research.md) | Official hosted-service availability, Feishu personal authorization, and CLI-to-JavaScript feasibility |

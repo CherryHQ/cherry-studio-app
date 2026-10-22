@@ -31,37 +31,59 @@ export type StoredRuntimeTurnContext = {
 };
 
 export type ReserveSubmissionResult = {
-  /** Fresh correlation id shared by the reserved user/assistant pair. */
+  /** Correlation id shared by the question and every answer reserved for it. */
   turnId: string;
   userMessage: AgentMessageView;
   assistantMessage: AgentMessageView;
+  /** Further multi-model answers, in the order they were requested. */
+  additionalAssistantMessages: AgentMessageView[];
 };
 
-export type ReserveSubmissionInput = {
-  sessionId: string;
-  userMessageId: string;
+export type ReservedAnswerInput = {
   assistantMessageId: string;
-  userParts: AgentMessagePart[];
   modelId: AgentInferenceSnapshotV1['model']['uniqueModelId'];
   inferenceSnapshot: AgentInferenceSnapshotV1;
 };
 
-export type ReserveInitialSubmissionInput = ReserveSubmissionInput & {
+export type ReserveSubmissionInput = ReservedAnswerInput & {
+  sessionId: string;
+  userMessageId: string;
+  userParts: AgentMessagePart[];
+  /**
+   * Message the question continues from: null starts the tree, and omitted
+   * continues the Session's selected leaf. The new answer becomes the selected leaf.
+   */
+  parentMessageId?: string | null;
+  /** Answers by further models, reserved in one multi-model sibling group. */
+  additionalReplies?: ReservedAnswerInput[];
+};
+
+/** A further answer to an existing question, reserved as its newest sibling. */
+export type ReserveAnswerInput = ReservedAnswerInput & {
+  sessionId: string;
+  userMessageId: string;
+};
+
+export type ReserveInitialSubmissionInput = Omit<ReserveSubmissionInput, 'parentMessageId'> & {
   agentId: string;
+  workspaceFolderId?: string;
 };
 
 export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
   session: AgentSessionView;
 };
 
-export type ReserveRetryInput = ReserveSubmissionInput & {
+export type ReserveRetryInput = Omit<
+  ReserveSubmissionInput,
+  'parentMessageId' | 'additionalReplies'
+> & {
   /** Recorded prefix the replacement execution keeps; empty restarts the answer. */
   assistantParts: AgentMessagePart[];
 };
 
 export type ForkSessionInput = {
   sessionId: string;
-  /** Inclusive fork point, identified by message rather than by turn. */
+  /** Inclusive fork point; the copy holds its ancestor chain only. */
   fromMessageId: string;
   /** Overrides the copied source name; the store never composes one itself. */
   name?: string;
@@ -125,8 +147,12 @@ export type FinalizeAssistantMessageInput = {
 };
 
 /**
- * Host-owned storage port for Agent Sessions and their linear transcripts
+ * Host-owned storage port for Agent Sessions and their message trees
  * (docs/references/agent/agent-persistence.md).
+ *
+ * History readers take an optional `through` message: the ancestor chain
+ * ending there is the history. Omitted, it is the Session's selected leaf;
+ * null is an empty history.
  *
  * The store persists messages only. The Turn is a Host projection: live turn
  * state (`running`/`awaiting-approval`/`cancelling`) and pending approvals are
@@ -157,23 +183,33 @@ export interface AgentSessionStore {
   ): Promise<ReserveInitialSubmissionResult>;
 
   /**
-   * Atomically reserves the user message and assistant placeholder under a
-   * fresh shared turnId before execution starts (protocol invariant 2).
+   * Atomically reserves the user message below its parent and one assistant
+   * placeholder per requested model under a fresh shared turnId before
+   * execution starts (protocol invariant 2), and selects the first answer.
    */
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
 
+  /** Atomically reserves a sibling answer to an existing question and selects it. */
+  reserveAnswer(input: ReserveAnswerInput): Promise<ReserveSubmissionResult>;
+
   /**
    * Atomically reserves a fresh execution of an existing user/assistant pair,
-   * keeping both message ids and their transcript position. Rejects unless the
-   * assistant row is the Session's last message, is settled, and is immediately
-   * preceded by the user row it shares a turn with: only the latest answer is
-   * replaceable (agent-protocol.md "Manual answer retry").
+   * keeping both message ids and their tree position. Rejects unless the
+   * assistant row is a settled leaf whose parent is the user row it shares a
+   * turn with (agent-protocol.md "Manual answer retry").
    */
   reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult>;
 
   /**
-   * Atomically creates a Session carrying the source's transcript up to and
-   * including the fork point (agent-protocol.md "Branching"). Unsettled rows
+   * Selects the branch containing `messageId`: unchanged when it is already on
+   * the selected branch, otherwise the newest leaf below it becomes the active
+   * node. Null when the Session or message no longer exists.
+   */
+  selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView | null>;
+
+  /**
+   * Atomically creates a Session carrying the ancestor chain of the fork point,
+   * the fork point included (agent-protocol.md "Branching"). Unsettled rows
    * are skipped, turn ids are reissued so the copy shares no correlation with
    * its source, the copied anchor is recorded as the Session boundary, and no
    * turn is started: the new Session is idle.
@@ -181,9 +217,11 @@ export interface AgentSessionStore {
   forkSession(input: ForkSessionInput): Promise<ForkSessionResult>;
 
   /**
-   * Atomically removes one turn's messages from a Session. The unit is the
-   * turn, not the message: a replayed transcript pairs every `tool-call` with
-   * its `tool-result`, and half a turn cannot be sent to a provider.
+   * Atomically removes one turn's messages from a Session: the question and all
+   * of its answers. The unit is the turn, not the message: a replayed
+   * transcript pairs every `tool-call` with its `tool-result`, and half a turn
+   * cannot be sent to a provider. Later questions below the removed answers move
+   * to the removed question's parent, as Desktop's non-cascading delete does.
    *
    * Any context checkpoint whose summary covers the removed turn is cleared in
    * the same transaction. The summary text is opaque to the store, so a
@@ -193,31 +231,54 @@ export interface AgentSessionStore {
    */
   deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
 
-  listMessages(sessionId: string): Promise<AgentMessageView[]>;
+  /**
+   * Remove an unexecuted reservation after the Runtime confirms withdrawal. Unlike deleting
+   * history, this cannot invalidate the current context or another input's execution.
+   */
+  discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
+
+  /** The ancestor chain ending at `through`, oldest first. */
+  listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]>;
+
+  getMessage(sessionId: string, messageId: string): Promise<AgentMessageView | null>;
+
+  /** The question and all its answers, including settled siblings of an active answer. */
+  listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]>;
+
+  /** Managed-file grants on the ancestor chain, without loading message bodies. */
+  listReferencedFileEntryIds(sessionId: string, through?: string | null): Promise<string[]>;
+
+  /** Whether any message continues from `messageId`. */
+  hasChildren(sessionId: string, messageId: string): Promise<boolean>;
 
   /**
-   * Loads the history tail a working-copy rebuild imports plus full-transcript
+   * Loads the history tail a working-copy rebuild imports plus history
    * authorization indexes without materializing every message in the Host.
    */
   loadRuntimeTurnContext(
     sessionId: string,
     afterTurnId: string | null,
+    through?: string | null,
   ): Promise<StoredRuntimeTurnContext>;
 
-  /** Skill load receipts and explicit selections across the complete transcript, oldest first. */
-  loadSkillActivations(sessionId: string): Promise<StoredSkillActivation[]>;
+  /** Skill load receipts and explicit selections across the history, oldest first. */
+  loadSkillActivations(
+    sessionId: string,
+    through?: string | null,
+  ): Promise<StoredSkillActivation[]>;
 
-  /** Workflow ids from successful load receipts across the complete transcript, oldest first. */
-  loadWorkflowLoads(sessionId: string): Promise<string[]>;
+  /** Workflow ids from successful load receipts across the history, oldest first. */
+  loadWorkflowLoads(sessionId: string, through?: string | null): Promise<string[]>;
 
   /**
-   * Returns the newest assistant row carrying an opaque checkpoint candidate.
-   * `excludeAssistantMessageId` skips one answer, so a retry does not resume
-   * from a summary of the very answer it is about to replace.
+   * Returns the newest assistant row of the history carrying an opaque
+   * checkpoint candidate. `excludeAssistantMessageId` skips one answer, so a
+   * retry does not resume from a summary of the very answer it is replacing.
    */
   getLatestContextCheckpoint(
     sessionId: string,
     excludeAssistantMessageId?: string,
+    through?: string | null,
   ): Promise<StoredRuntimeContextCheckpoint | null>;
   /** Save idle background compaction without replacing the already committed answer or timing. */
   saveContextCheckpoint(

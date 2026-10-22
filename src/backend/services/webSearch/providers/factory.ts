@@ -1,3 +1,5 @@
+import type { WebSearchTransport } from '@cherrystudio/web-search';
+
 import type {
   WebSearchProvider,
   WebSearchExecutionConfig,
@@ -5,8 +7,11 @@ import type {
 } from '@/shared/data/types/webSearch';
 
 import type { ApiKeyRotationState } from '../utils/provider';
+import { FetchProvider } from './api/FetchProvider';
+import { JinaProvider } from './api/JinaProvider';
 import type { BaseWebSearchProvider } from './base/BaseWebSearchProvider';
-import { WEB_SEARCH_PROVIDER_REGISTRY } from './registry';
+import { RemoteWebSearchProvider } from './base/RemoteWebSearchProvider';
+import { REMOTE_WEB_SEARCH_PROVIDERS } from './registry';
 
 export type WebSearchProviderDriver = BaseWebSearchProvider & {
   searchKeywords?: (
@@ -24,7 +29,14 @@ export type WebSearchProviderDriver = BaseWebSearchProvider & {
 export function createWebSearchProvider(
   provider: WebSearchProvider,
   apiKeyRotationState: ApiKeyRotationState,
+  transport?: WebSearchTransport,
 ): WebSearchProviderDriver {
-  const Provider = WEB_SEARCH_PROVIDER_REGISTRY[provider.id];
-  return new Provider(provider, apiKeyRotationState);
+  if (provider.id === 'fetch') return new FetchProvider(provider, apiKeyRotationState);
+  const Provider = provider.id === 'jina' ? JinaProvider : RemoteWebSearchProvider;
+  return new Provider(
+    provider,
+    apiKeyRotationState,
+    REMOTE_WEB_SEARCH_PROVIDERS[provider.id],
+    transport,
+  );
 }

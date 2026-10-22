@@ -336,6 +336,13 @@ describe('Agent tool and managed-file contracts', () => {
       status: 'pending',
     } as const;
     const snapshot = {
+      queuedInputs: [
+        {
+          turnId: 'queued-turn',
+          userMessage: { ...userMessage, id: 'queued-user', turnId: 'queued-turn' },
+          assistantMessageId: 'queued-answer',
+        },
+      ],
       activeTurn: {
         assistantMessageId: assistantMessage.id,
         endedAt: null,
@@ -365,9 +372,14 @@ describe('Agent tool and managed-file contracts', () => {
         updatedAt: '2026-08-31T00:00:00.000Z',
       },
       streamingMessage: assistantMessage,
+      additionalMessages: [
+        { ...assistantMessage, id: 'settled-sibling', status: 'success', siblingsGroupId: 1 },
+      ],
     } as const;
 
     expect(AgentSessionSnapshotSchema.parse(roundTrip(snapshot))).toEqual(snapshot);
+    const queueEvent = { type: 'queue.updated', inputs: snapshot.queuedInputs };
+    expect(AgentEventSchema.parse(roundTrip(queueEvent))).toEqual(queueEvent);
   });
 
   test('round-trips the versioned inference snapshot and preserves unsupported versions', () => {

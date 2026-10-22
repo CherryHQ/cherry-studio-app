@@ -26,13 +26,25 @@ Installs never write patched or built package output back into the shared pnpm s
 contaminate other checkouts. Each checkout applies patches and runs dependency build scripts on a
 clean install.
 
-- Run one `pnpm install` at a time per checkout. Git hooks and any pnpm command on stale
-  dependencies start an install; wait for it before starting another. Concurrent installs in the
-  same directory apply patches twice to the same files.
+- Run one `pnpm install` at a time per checkout. Git hooks can start an install; wait for it before
+  starting another. Concurrent installs in the same directory apply patches twice to the same files.
+- `verifyDepsBeforeRun: warn` keeps `pnpm run` and `pnpm exec` from starting implicit installs.
+  Install dependencies explicitly when they change. EAS already installs before fingerprinting;
+  an implicit install during prebuild can reapply native patches and change that fingerprint.
 - Do not run `pnpm rebuild`, and do not rebuild packages listed in `patchedDependencies`: pnpm
   12.2.1 reapplies patches to already patched files.
 - Repeated declarations in a patched file under `node_modules` mean a patch was applied twice.
   Delete that package's directory under `node_modules/.pnpm` and run `pnpm install --force`.
+
+### Pi Dependency Upgrades
+
+The pinned Pi family includes scheduler/recovery behavior patches as well as mobile compatibility
+adaptations. Before upgrading or retiring a hunk, use the
+[maintained patch inventory](../references/agent/pi-durable-migration.md#maintained-patch-contracts).
+Record the upstream replacement, compare persisted-input and recovery semantics, and retain
+behavioral regressions alongside patch/hash guards. A patch that applies cleanly is not proof of
+compatibility. Follow [Testing And CI](./testing-and-ci.md) and the active task's authorization for
+checks and device acceptance; do not clear runtime storage to make an upgrade pass.
 
 ## Run
 

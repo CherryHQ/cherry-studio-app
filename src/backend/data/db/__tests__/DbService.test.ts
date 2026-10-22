@@ -39,6 +39,26 @@ describe('DbService connection lifecycle', () => {
     );
   });
 
+  test('enables foreign keys even when the journal mode cannot change', async () => {
+    const execSync = jest.fn((sql: string) => {
+      if (sql.includes('journal_mode')) throw new Error('database is locked');
+    });
+    mockOpenDatabaseSync.mockReturnValue({ ...mockOpenDatabaseSync(), execSync });
+
+    await new DbService()._doInit();
+
+    expect(execSync).toHaveBeenCalledWith('PRAGMA foreign_keys = ON');
+  });
+
+  test('fails startup when foreign keys cannot be enabled', async () => {
+    const execSync = jest.fn((sql: string) => {
+      if (sql.includes('foreign_keys')) throw new Error('disk I/O error');
+    });
+    mockOpenDatabaseSync.mockReturnValue({ ...mockOpenDatabaseSync(), execSync });
+
+    await expect(new DbService()._doInit()).rejects.toThrow('disk I/O error');
+  });
+
   test('stops cleanly when SQLite refuses to close over unfinalized statements', async () => {
     mockCloseSync.mockImplementation(() => {
       throw new Error('unable to close due to unfinalized statements or unfinished backups');

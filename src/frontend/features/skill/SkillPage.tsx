@@ -1,6 +1,7 @@
+import { cn } from '@cherrystudio/ui/utils';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import type { ReactNode } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,10 +9,14 @@ import { RouteHeader, type RouteHeaderProps } from '@/frontend/appShell/header';
 
 export function SkillPage({
   children,
+  contentClassName,
+  footer,
   headerProps,
   testID,
 }: {
   children: ReactNode;
+  contentClassName?: string;
+  footer?: ReactNode;
   headerProps: RouteHeaderProps;
   testID?: string;
 }) {
@@ -28,8 +33,8 @@ export function SkillPage({
       >
         <ScrollView
           className="flex-1 bg-background"
-          contentContainerClassName="flex-grow gap-6 px-6 py-6"
-          contentContainerStyle={{ paddingBottom: bottom + 24 }}
+          contentContainerClassName={cn('flex-grow gap-6 px-6 py-6', contentClassName)}
+          contentContainerStyle={footer ? undefined : { paddingBottom: bottom + 24 }}
           contentInsetAdjustmentBehavior="never"
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
@@ -37,6 +42,14 @@ export function SkillPage({
         >
           {children}
         </ScrollView>
+        {footer ? (
+          <View
+            className="gap-3 border-t border-border-subtle bg-background px-6 pt-4"
+            style={{ paddingBottom: Math.max(bottom, 16) }}
+          >
+            {footer}
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </>
   );

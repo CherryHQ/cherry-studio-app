@@ -1,9 +1,8 @@
-import { ContentState, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
@@ -11,13 +10,10 @@ import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
-import {
-  type DesktopPairingQr,
-  DesktopPairingQrSchema,
-} from '@/shared/data/api/schemas/desktopConnections';
 
 import { useDesktopPairingInput } from './DesktopPairingProvider';
 import { pairingCancelDestination } from './pairingCancelDestination';
+import { usePairingInvitationInput } from './usePairingInvitationInput';
 import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
@@ -31,31 +27,12 @@ export function DeviceConnectionScannerScreen({
   const permissions = useBackendModule('permissions');
   const { camera, isPreparing, isActive, canSubmit, prepare } = useScannerPermissions();
   const insets = useSafeAreaInsets();
-  const [hasScanned, setHasScanned] = useState(false);
-  const [scanError, setScanError] = useState<string>();
-  const scanInFlight = useRef(false);
   const { setInput } = useDesktopPairingInput();
-  const isReady = isActive && !isPreparing;
-  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
-
-  const cancel = () => router.replace(pairingCancelDestination(setupIntent, connectionId));
-
-  const retryScan = () => {
-    scanInFlight.current = false;
-    setScanError(undefined);
-    setHasScanned(false);
-  };
-
-  const openSystemSettings = () => {
-    void permissions.openSystemSettings().catch(() => {
-      toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
-    });
-  };
-
-  const submit = useCallback(
-    (qr: DesktopPairingQr) => {
+  const { submitted, scanInvalid, scan, paste, retryScan } = usePairingInvitationInput({
+    canSubmit,
+    onInvitation: (invitation) => {
       setInput({
-        ...qr,
+        ...invitation,
         capabilities: ['configuration', 'agent'],
         ...(connectionId ? { connectionId } : {}),
       });
@@ -65,27 +42,22 @@ export function DeviceConnectionScannerScreen({
           : '/settings/device-connections/pair',
       );
     },
-    [connectionId, router, setInput, setupIntent],
-  );
+    onInvalidPaste: () =>
+      toast.show({
+        label: t('settings.deviceConnections.scan.invalidInvitation'),
+        variant: 'danger',
+      }),
+  });
+  const isReady = isActive && !isPreparing;
+  const showCamera = !isPreparing && !scanInvalid && camera?.state === 'granted';
 
-  const parseAndSubmit = useCallback(
-    (value: string) => {
-      if (!canSubmit() || scanInFlight.current) return;
-      // Native scan events can arrive before React commits loading state.
-      scanInFlight.current = true;
-      setHasScanned(true);
-      try {
-        const parsed = DesktopPairingQrSchema.safeParse(JSON.parse(value));
-        if (!parsed.success) {
-          throw new Error('invalid QR');
-        }
-        submit(parsed.data);
-      } catch {
-        setScanError(t('settings.deviceConnections.scan.invalidQr'));
-      }
-    },
-    [canSubmit, submit, t],
-  );
+  const cancel = () => router.replace(pairingCancelDestination(setupIntent, connectionId));
+
+  const openSystemSettings = () => {
+    void permissions.openSystemSettings().catch(() => {
+      toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
+    });
+  };
 
   return (
     <View className="flex-1 bg-grouped-background">
@@ -97,7 +69,10 @@ export function DeviceConnectionScannerScreen({
             : 'settings.deviceConnections.scan.title',
         )}
       />
-      <View className="flex-1 gap-5 px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
+      <ScrollView
+        contentContainerClassName="gap-5 px-4 pt-3"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
+      >
         <View
           className={
             showCamera
@@ -108,21 +83,21 @@ export function DeviceConnectionScannerScreen({
         >
           {isPreparing ? (
             <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
-          ) : scanError ? (
+          ) : scanInvalid ? (
             <ContentState.Error
               primaryAction={{ children: t('common.retry'), onPress: retryScan }}
-              title={scanError}
+              title={t('settings.deviceConnections.scan.invalidQr')}
             />
           ) : camera?.state === 'granted' ? (
             <>
               <CameraView
-                active={isReady && !hasScanned}
+                active={isReady && !submitted}
                 barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
                 onBarcodeScanned={
-                  !isReady || hasScanned
+                  !isReady || submitted
                     ? undefined
                     : ({ data }) => {
-                        parseAndSubmit(data);
+                        scan(data);
                       }
                 }
                 style={StyleSheet.absoluteFill}
@@ -163,7 +138,15 @@ export function DeviceConnectionScannerScreen({
               : 'settings.deviceConnections.scan.guidance',
           )}
         </Text>
-      </View>
+        <Button
+          disabled={!isReady || submitted}
+          onPress={() => void paste()}
+          testID="desktop-pairing-paste"
+          variant="secondary"
+        >
+          {t('settings.deviceConnections.scan.pasteInvitation')}
+        </Button>
+      </ScrollView>
     </View>
   );
 }

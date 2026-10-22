@@ -74,26 +74,53 @@ describe('PaintingService integration', () => {
     sqlite.close();
   });
 
-  it('pages newest receipts first and keeps output-less ones so the gallery can show them', async () => {
-    insertPainting(sqlite, 'painting-new', 'a0', 3, { input: [], output: ['new-output'] });
-    insertPainting(sqlite, 'painting-pending', 'a1', 2, { input: ['pending-input'], output: [] });
-    insertPainting(sqlite, 'painting-old', 'a2', 1, {
-      input: ['old-input'],
-      output: ['old-output'],
+  it('pages boards by their latest change, each with its count and newest receipts', async () => {
+    insertPainting(sqlite, 'busy-1', 'a0', 1, { input: [], output: ['busy-1-out'] }, 'board-busy');
+    insertPainting(sqlite, 'busy-2', 'a1', 2, { input: [], output: [] }, 'board-busy');
+    insertPainting(sqlite, 'busy-3', 'a2', 3, { input: [], output: ['busy-3-out'] }, 'board-busy');
+    insertPainting(sqlite, 'busy-4', 'a3', 4, { input: [], output: ['busy-4-out'] }, 'board-busy');
+    insertPainting(
+      sqlite,
+      'busy-5',
+      'a6',
+      7,
+      { input: [], output: ['busy-5-a', 'busy-5-b'] },
+      'board-busy',
+    );
+    insertPainting(sqlite, 'quiet-1', 'a4', 5, { input: [], output: ['quiet-out'] }, 'board-quiet');
+    insertPainting(sqlite, 'old-1', 'a5', 6, { input: [], output: [] }, 'board-old');
+    touchBoard(sqlite, 'board-busy', 30);
+    touchBoard(sqlite, 'board-quiet', 20);
+    touchBoard(sqlite, 'board-old', 10);
+
+    const firstPage = await service.listBoardsByCursor({ limit: 2 });
+    const secondPage = await service.listBoardsByCursor({
+      cursor: firstPage.nextCursor,
+      limit: 2,
     });
 
-    const firstPage = await service.listByCursor({ limit: 2 });
-    const secondPage = await service.listByCursor({ cursor: firstPage.nextCursor, limit: 2 });
-
-    expect(firstPage.items.map((painting) => painting.id)).toEqual([
-      'painting-new',
-      'painting-pending',
+    expect(firstPage.items.map((summary) => summary.board.id)).toEqual([
+      'board-busy',
+      'board-quiet',
     ]);
-    expect(firstPage.items[1].files).toEqual({ input: ['pending-input'], output: [] });
-    expect(firstPage.nextCursor).toBeDefined();
-    expect(secondPage.items.map((painting) => painting.id)).toEqual(['painting-old']);
-    expect(secondPage.items[0].files).toEqual({ input: ['old-input'], output: ['old-output'] });
+    expect(firstPage.items[0]).toMatchObject({ imageCount: 5, paintingCount: 5 });
+    expect(firstPage.items[0].recentPaintings.map(({ id }) => id)).toEqual([
+      'busy-5',
+      'busy-4',
+      'busy-3',
+      'busy-2',
+    ]);
+    expect(firstPage.items[0].recentPaintings[3].files).toEqual({ input: [], output: [] });
+    expect(firstPage.items[1]).toMatchObject({ imageCount: 1, paintingCount: 1 });
+    expect(secondPage.items[0]).toMatchObject({ imageCount: 0, paintingCount: 1 });
+    expect(secondPage.items.map((summary) => summary.board.id)).toEqual(['board-old']);
     expect(secondPage.nextCursor).toBeUndefined();
+  });
+
+  it('rejects a malformed board cursor', async () => {
+    await expect(service.listBoardsByCursor({ cursor: 'not-json' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
   });
 
   it('attaches generated outputs atomically without changing the original receipt', async () => {
@@ -190,6 +217,79 @@ describe('PaintingService integration', () => {
     });
   });
 
+  it('finds the painting that produced a file, and nothing for files it only used', async () => {
+    insertPainting(sqlite, 'painting-source', 'a0', 1, { input: [], output: ['source-output'] });
+    insertPainting(sqlite, 'painting-edit', 'a1', 2, {
+      input: ['source-output'],
+      output: ['edit-output-1', 'edit-output-2'],
+    });
+
+    await expect(service.findByOutputFile('edit-output-2')).resolves.toMatchObject({
+      id: 'painting-edit',
+    });
+    await expect(service.findByOutputFile('source-output')).resolves.toMatchObject({
+      id: 'painting-source',
+    });
+    await expect(service.findByOutputFile('imported-photo')).resolves.toBeNull();
+  });
+
+  it('lists only the paintings of one board, oldest first', async () => {
+    insertPainting(sqlite, 'painting-late', 'a0', 3, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-early', 'a1', 1, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-elsewhere', 'a2', 2);
+
+    await expect(
+      service.listByBoard('board-shared').then((paintings) => paintings.map(({ id }) => id)),
+    ).resolves.toEqual(['painting-early', 'painting-late']);
+  });
+
+  it('removes a board once its last painting is deleted, but keeps boards that still hold some', async () => {
+    insertPainting(sqlite, 'painting-a', 'a0', 1, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-b', 'a1', 2, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-alone', 'a2', 3, undefined, 'board-alone');
+
+    await service.deleteMany(['painting-a', 'painting-alone']);
+
+    expect(boardIds(sqlite)).toEqual(['board-shared']);
+    await service.deleteMany(['painting-b']);
+    expect(boardIds(sqlite)).toEqual([]);
+  });
+
+  it('deletes a board with all of its paintings while leaving their files in the library', async () => {
+    insertPainting(
+      sqlite,
+      'painting-a',
+      'a0',
+      1,
+      { input: [], output: ['a-output'] },
+      'board-gone',
+    );
+    insertPainting(sqlite, 'painting-b', 'a1', 2, undefined, 'board-gone');
+    insertPainting(sqlite, 'painting-kept', 'a2', 3, undefined, 'board-kept');
+    insertFile(sqlite, 'a-output', 1);
+
+    await service.deleteBoard('board-gone');
+
+    expect(sqlite.prepare('SELECT id FROM painting').all()).toEqual([{ id: 'painting-kept' }]);
+    expect(sqlite.prepare('SELECT id FROM file_entry').all()).toEqual([{ id: 'a-output' }]);
+    await expect(service.deleteBoard('board-gone')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('renames a board and remembers its focused painting, rejecting blank titles', async () => {
+    insertPainting(sqlite, 'painting-a', 'a0', 1, undefined, 'board-1');
+
+    await expect(
+      service.updateBoard('board-1', { focusPaintingId: 'painting-a', title: '  Sunset cat  ' }),
+    ).resolves.toMatchObject({ focusPaintingId: 'painting-a', id: 'board-1', title: 'Sunset cat' });
+    await expect(service.updateBoard('board-1', { title: '   ' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    await expect(service.getBoard('board-1')).resolves.toMatchObject({ title: 'Sunset cat' });
+    await expect(service.updateBoard('missing', { title: 'x' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
   it('deletes a painting without touching its files', async () => {
     insertPainting(sqlite, 'painting-delete', 'a0', 1, { input: [], output: ['delete-output'] });
     insertFile(sqlite, 'delete-output', 1);
@@ -242,18 +342,6 @@ describe('PaintingService integration', () => {
     await service.deleteMany([]);
 
     expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 1 });
-  });
-
-  it('lists every painting id in gallery order so select-all matches what is on screen', async () => {
-    insertPainting(sqlite, 'painting-first', 'a0', 3, { input: [], output: ['first-output'] });
-    insertPainting(sqlite, 'painting-pending', 'a1', 2, { input: ['pending-input'], output: [] });
-    insertPainting(sqlite, 'painting-last', 'a2', 1, { input: [], output: ['last-output'] });
-
-    await expect(service.listAllIds()).resolves.toEqual([
-      'painting-first',
-      'painting-pending',
-      'painting-last',
-    ]);
   });
 
   it('reuses an interrupted receipt: keeps its id, swaps inputs, moves it to the head', async () => {
@@ -315,14 +403,31 @@ function insertPainting(
   orderKey: string,
   timestamp: number,
   files: PaintingFiles = { input: [], output: [] },
+  boardId = `board-${id}`,
 ) {
   database
     .prepare(
-      `INSERT INTO painting
-       (id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
-       VALUES (?, 'provider', 'provider::model', 'prompt', ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO painting_board (id, title, created_at, updated_at)
+       VALUES (?, 'Board', ?, ?)`,
     )
-    .run(id, orderKey, timestamp, timestamp, JSON.stringify(files));
+    .run(boardId, timestamp, timestamp);
+  database
+    .prepare(
+      `INSERT INTO painting
+       (id, board_id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
+       VALUES (?, ?, 'provider', 'provider::model', 'prompt', ?, ?, ?, ?)`,
+    )
+    .run(id, boardId, orderKey, timestamp, timestamp, JSON.stringify(files));
+}
+
+function touchBoard(database: DatabaseSync, id: string, updatedAt: number) {
+  database.prepare('UPDATE painting_board SET updated_at = ? WHERE id = ?').run(updatedAt, id);
+}
+
+function boardIds(database: DatabaseSync) {
+  return (
+    database.prepare('SELECT id FROM painting_board ORDER BY id').all() as { id: string }[]
+  ).map((row) => row.id);
 }
 
 /**

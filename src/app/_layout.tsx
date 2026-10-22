@@ -1,4 +1,10 @@
-import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
+import {
+  Alert,
+  BottomSheetProvider,
+  OverlayNavigationProvider,
+  Portal,
+  Toast,
+} from '@cherrystudio/ui/components';
 
 import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
@@ -20,15 +26,13 @@ import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHan
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
+import { FeedbackCaptureProvider, FeedbackHintProvider } from '@/frontend/appShell/feedback';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import { McpInteractionDialog } from '@/frontend/appShell/mcp';
 import {
   getRootHeaderStyle,
-  getTransparentHeaderStyle,
   NavigationThemeProvider,
   paintingRouteId,
-  paintingViewerHeaderShown,
-  paintingViewerRouteId,
 } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
@@ -62,42 +66,48 @@ function RootLayout() {
       {/* iOS warmup focuses and removes a hidden input on the startup main thread. */}
       <KeyboardProvider preload={Platform.OS !== 'ios'}>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false }, toast: 'disabled' }}>
-          <Portal.AccessibilityBoundary>
-            <Toast.Provider>
-              <QueryProvider>
-                <AppBootstrapProvider>
-                  <BootstrapStartupCoordinator>
-                    <AppBootstrapGate>
-                      <StartupRouteReadyReporter>
-                        {/* Inside the reporter so a failed first render still lays out and ends startup. */}
-                        <AppErrorBoundary>
-                          <NavigationThemeProvider>
-                            <AppAlertProvider>
-                              <BottomSheetProvider>
-                                <RouteHeaderProvider rootAction="back">
-                                  <AppUpdateObserver />
-                                  <BackgroundActivityBridge />
-                                  <LanguagePreferenceObserver />
-                                  <SystemEntryBridge />
-                                  <ConversationProvider>
-                                    <RootStack />
-                                  </ConversationProvider>
-                                  <PrivacyConsentGate />
-                                  <RestoreOutcomeNotice />
-                                  <BackupDialog />
-                                  <McpInteractionDialog />
-                                </RouteHeaderProvider>
-                              </BottomSheetProvider>
-                            </AppAlertProvider>
-                          </NavigationThemeProvider>
-                        </AppErrorBoundary>
-                      </StartupRouteReadyReporter>
-                    </AppBootstrapGate>
-                  </BootstrapStartupCoordinator>
-                </AppBootstrapProvider>
-              </QueryProvider>
-            </Toast.Provider>
-          </Portal.AccessibilityBoundary>
+          <OverlayNavigationProvider>
+            <Portal.AccessibilityBoundary>
+              <Toast.Provider>
+                <QueryProvider>
+                  <AppBootstrapProvider>
+                    <BootstrapStartupCoordinator>
+                      <AppBootstrapGate>
+                        <StartupRouteReadyReporter>
+                          {/* Inside the reporter so a failed first render still lays out and ends startup. */}
+                          <AppErrorBoundary>
+                            <NavigationThemeProvider>
+                              <AppAlertProvider>
+                                <BottomSheetProvider>
+                                  <RouteHeaderProvider rootAction="back">
+                                    <AppUpdateObserver />
+                                    <BackgroundActivityBridge />
+                                    <LanguagePreferenceObserver />
+                                    <SystemEntryBridge />
+                                    <FeedbackCaptureProvider>
+                                      <FeedbackHintProvider>
+                                        <ConversationProvider>
+                                          <RootStack />
+                                        </ConversationProvider>
+                                      </FeedbackHintProvider>
+                                    </FeedbackCaptureProvider>
+                                    <PrivacyConsentGate />
+                                    <RestoreOutcomeNotice />
+                                    <BackupDialog />
+                                    <McpInteractionDialog />
+                                  </RouteHeaderProvider>
+                                </BottomSheetProvider>
+                              </AppAlertProvider>
+                            </NavigationThemeProvider>
+                          </AppErrorBoundary>
+                        </StartupRouteReadyReporter>
+                      </AppBootstrapGate>
+                    </BootstrapStartupCoordinator>
+                  </AppBootstrapProvider>
+                </QueryProvider>
+              </Toast.Provider>
+            </Portal.AccessibilityBoundary>
+          </OverlayNavigationProvider>
         </HeroUINativeProvider>
       </KeyboardProvider>
     </RootGestureView>
@@ -133,12 +143,7 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
 }
 
 function RootStack() {
-  const [backgroundColor, foregroundColor, constantBlack, constantWhite] = useThemeColor([
-    'background',
-    'foreground',
-    'constant-black',
-    'constant-white',
-  ]);
+  const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
 
   return (
     <Stack
@@ -153,6 +158,7 @@ function RootStack() {
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen name="library" options={{ headerShown: false }} />
+      <Stack.Screen name="trash" />
       <Stack.Screen name="agents" options={{ headerShown: false }} />
       <Stack.Screen name="plugins" options={{ headerShown: false }} />
       <Stack.Screen name="skills" options={{ headerShown: false }} />
@@ -188,37 +194,25 @@ function RootStack() {
           stack only needs to push the page without adding another header. */}
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen
-        // Task notifications reuse their task; each edit/resize starts a separate draft.
+        // Task notifications reuse their task; each new draft owns its own page.
         getId={({ params }) => paintingRouteId(params)}
         name="paintings/index"
         options={{
+          // Keep the full-bleed board's native canvas in sync with the app theme.
           contentStyle: { backgroundColor },
-          headerStyle: getTransparentHeaderStyle(),
-          headerTransparent: isLiquidGlassAvailable,
-        }}
-      />
-      <Stack.Screen
-        getId={({ params }) => paintingViewerRouteId(params)}
-        name="paintings/[paintingId]"
-        options={{
-          // The viewer runs the image full-bleed, so its chrome sits on the
-          // photo rather than on a themed surface: black behind, white on top,
-          // in both themes. `PaintingViewerChrome` paints the same pair.
-          contentStyle: { backgroundColor: constantBlack },
-          headerShown: paintingViewerHeaderShown,
-          headerStyle: { backgroundColor: constantBlack },
-          headerTintColor: constantWhite,
+          headerStyle: { backgroundColor: 'transparent' },
           headerTransparent: true,
           title: '',
         }}
       />
+      {/* Released task links and viewer routes redirect into the board. */}
+      <Stack.Screen
+        name="paintings/[paintingId]"
+        options={{ contentStyle: { backgroundColor }, headerShown: false }}
+      />
       <Stack.Screen
         name="paintings/[paintingId]/conversation"
-        options={{
-          contentStyle: { backgroundColor },
-          headerStyle: getTransparentHeaderStyle(),
-          headerTransparent: isLiquidGlassAvailable,
-        }}
+        options={{ contentStyle: { backgroundColor }, headerShown: false }}
       />
     </Stack>
   );

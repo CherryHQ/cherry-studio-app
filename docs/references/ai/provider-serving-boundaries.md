@@ -18,7 +18,7 @@ Provider + Model records
 ResolvedProviderConnection
         |
         +-- Language serving
-        |     +-- Pi binding (conversation, tool loop, and product chat checks)
+        |     +-- Pi binding (conversation, tool loop, product chat checks, translation, and naming)
         |     `-- AI SDK binding (generateText and SDK-only probes)
         |
         `-- Image serving
@@ -48,8 +48,7 @@ The persisted Provider and Model rows remain authoritative for:
 - model capability, modality, limits, and pricing facts.
 
 The Provider registry supplies catalog defaults and remains authoritative for request-only wire
-metadata that is deliberately not persisted, including reasoning dialects and service-tier delivery
-mappings. The Runtime rehydrates those facts at request time. Runtime code must not create a second
+metadata that is deliberately not persisted, including reasoning dialects. The Runtime rehydrates those facts at request time. Runtime code must not create a second
 Provider-id catalog to repeat them.
 
 ### `ResolvedProviderConnection`
@@ -59,7 +58,6 @@ derive in the same way:
 
 - effective endpoint type and raw base URL;
 - endpoint-scoped `adapterFamily`;
-- gateway provider-options key, when present;
 - normalized wire model id;
 - mobile application headers merged with Provider extra headers.
 
@@ -92,12 +90,16 @@ Both settings `models.checkHealth()` and onboarding `models.checkChat()` probe t
 conversation Runtime with no transcript or tools. Settings retains its selected API key, timeout,
 cancellation, and incremental results. A probe key is an ephemeral request override; credential
 selection still belongs to the binding, and neither traces nor persisted messages may contain it.
-`AiService.checkModel()` remains an internal AI SDK text-generation probe and does not establish
-chat readiness.
+
+Translation and automatic session naming use the bound `RuntimeTextGenerator` to share the selected
+model's OAuth and protocol adapters with chat. Each makes one provider invocation with its own
+instructions and source text, without creating a conversation or exposing tools. Normal terminal
+completion is required before saving a translation or summary title; cancellation, provider failures,
+and invocation usage remain part of the text-generation contract.
 
 Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. When a
 request fails before substantive content or a tool-call event is emitted, Pi tries every other
-enabled key at most once within the request's shared 120-second waiting budget, in cyclic order
+enabled key at most once within the request's shared 30-minute waiting budget, in cyclic order
 starting after the key that failed, and reports the last failure if none succeeds. Network failures,
 provider timeouts, streams that end without a terminal event, and every HTTP or provider error switch
 keys, including errors reported inside an HTTP 200 stream and failures to resolve a key's
@@ -116,8 +118,8 @@ This policy belongs to Pi; non-conversation AI SDK and image calls retain their 
 The idle timer wraps the complete key-failover sequence and is the only request bound; the
 provider SDK's own connection timeout is not configured. Credential switching, stream-start events,
 and empty text/thinking events do not reset it, so the budget is identical for single-key and
-multi-key providers: a request that keeps failing or produces no content ends after 120 seconds
-total, rather than waiting 120 seconds per key. Once content events reach the caller, each event
+multi-key providers: a request that keeps failing or produces no content ends after 30 minutes
+total, rather than waiting 30 minutes per key. Once content events reach the caller, each event
 resets the idle timer so ongoing generation can continue. Expiry ends the request and aborts the
 active transport without trying another key. Cancellation, source creation/iteration failures, and
 streams closed without a terminal event all settle the final result, including when source creation
@@ -162,11 +164,10 @@ Image generation keeps its existing independent pipeline:
 - the image executor owns generate/edit inputs, canonical parameter splitting, vendor options,
   submit/poll/cancel behavior, downloads, and managed artifacts.
 
-AI SDK text and image requests share only `resolveAiSdkServing`, which returns the connection,
-selected credentials, and wire model and carries no request parameters. `AiService.generateImage`
-builds image parameters from that result, and `AiImageRequest` accepts transport options only. Text
-options such as `systemMessageMode`, `store`, and reasoning or service-tier controls must not be
-merged into image requests.
+`AiService.generateImage` resolves the connection, selected credentials, and wire model through
+`resolveAiSdkServing`, then builds image parameters from that result. `AiImageRequest` accepts
+transport options only; language options such as `store` or reasoning controls must not be merged
+into image requests.
 
 An image-only transport must not be added to the language binding. A language-only transport must
 not acquire image parameter or artifact responsibilities.

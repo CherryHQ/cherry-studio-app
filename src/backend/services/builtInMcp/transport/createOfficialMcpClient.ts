@@ -1,12 +1,21 @@
-import { createMCPClient, type MCPClient, type MCPClientConfig } from '@ai-sdk/mcp';
+import {
+  Client,
+  type FetchLike,
+  ProtocolError,
+  type RequestOptions,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
+import Constants from 'expo-constants';
 import { fetch as expoFetch } from 'expo/fetch';
 
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginClient, PluginClientContext } from '../pluginDefinition';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
-type HttpTransportConfig = Extract<MCPClientConfig['transport'], { type: 'http' | 'sse' }>;
+// Local correlation only; removed before authorization or network transmission.
+const REQUEST_ID_HEADER = 'X-Cherry-Plugin-Request';
 
 type OfficialMcpConnection = {
   readonly url: string;
@@ -20,11 +29,26 @@ export async function createOfficialMcpClient(
   connection: OfficialMcpConnection,
 ): Promise<PluginClient> {
   const endpoint = new URL(connection.url);
-  const fetch: NonNullable<HttpTransportConfig['fetch']> = async (input, init) => {
+  let nextRequestId = 0;
+  const requests = new Map<string, { signal: AbortSignal; submitted: boolean }>();
+  const fetch: FetchLike = async (input, init) => {
     let isWrite = false;
     let submitted = false;
+    let signal = init?.signal ?? undefined;
     try {
-      const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+      const headers = new Headers(init?.headers);
+      const requestId = headers.get(REQUEST_ID_HEADER);
+      headers.delete(REQUEST_ID_HEADER);
+      const request = requestId === null ? undefined : requests.get(requestId);
+      // Cancellation can settle the SDK call before its asynchronous send reaches fetch.
+      if (requestId !== null && !request)
+        throw new PluginError('cancelled', 'The plugin request was cancelled.');
+      if (request) {
+        // Legacy MCP only sends a cancellation notification; also cancel this HTTP request.
+        // The request scope always aborts on completion, releasing these links and its stream.
+        signal = linkAbortSignals([request.signal, ...(signal ? [signal] : [])]).signal;
+      }
+      const url = new URL(input);
       if (url.href !== connection.url) {
         throw new PluginError('request', 'The plugin request target is not allowed.');
       }
@@ -38,22 +62,16 @@ export async function createOfficialMcpClient(
           isWrite = context.tools[name] === 'write';
         }
       }
-      init?.signal?.throwIfAborted();
-      const credential = await context
-        .getCredential(init?.signal ?? undefined)
-        .catch((error: unknown) => {
-          if (error instanceof PluginError) throw error;
-          throw new PluginError(
-            'authorization',
-            'The plugin authorization is no longer available.',
-          );
-        });
-      init?.signal?.throwIfAborted();
-      const headers = new Headers(init?.headers);
+      signal?.throwIfAborted();
+      const credential = await context.getCredential(signal).catch((error: unknown) => {
+        if (error instanceof PluginError) throw error;
+        throw new PluginError('authorization', 'The plugin authorization is no longer available.');
+      });
+      signal?.throwIfAborted();
       await context.authorization.apply(credential, {
         url,
         headers,
-        signal: init?.signal ?? undefined,
+        signal,
       });
       if (
         url.origin !== endpoint.origin ||
@@ -67,16 +85,17 @@ export async function createOfficialMcpClient(
       await context.assertAuthorized().catch(() => {
         throw new PluginError('authorization', 'The plugin authorization is no longer available.');
       });
-      init?.signal?.throwIfAborted();
+      signal?.throwIfAborted();
       submitted = true;
+      if (request) request.submitted = true;
       const response = await expoFetch(url.href, {
         ...init,
         headers,
         redirect: 'error',
-        signal: init?.signal ?? AbortSignal.timeout(CONNECTION_TIMEOUT_MS),
+        signal: signal ?? AbortSignal.timeout(CONNECTION_TIMEOUT_MS),
       });
       try {
-        await connection.inspectResponse?.(response, init?.signal ?? undefined);
+        await connection.inspectResponse?.(response, signal);
       } catch (error) {
         void response.body?.cancel().catch(() => undefined);
         throw error;
@@ -111,7 +130,7 @@ export async function createOfficialMcpClient(
       }
       return response;
     } catch (error) {
-      if (init?.signal?.aborted) {
+      if (signal?.aborted) {
         // Closing the client also aborts a submitted write, which the service may have committed.
         throw isWrite && submitted
           ? unknownWriteError(context.pluginId)
@@ -122,52 +141,107 @@ export async function createOfficialMcpClient(
       throw new PluginError('network', 'Could not reach the official MCP service.');
     }
   };
-  const client = await withRequestSignal(context.signal, (signal) =>
-    createMCPClient({
-      clientName: 'Cherry Studio',
-      initializationOptions: { signal },
+  const client = new Client({
+    name: 'Cherry Studio',
+    version: Constants.expoConfig?.version ?? 'unknown',
+  });
+  const transport = new StreamableHTTPClientTransport(endpoint, {
+    fetch,
+    requestInit: { redirect: 'error' },
+    // No authProvider: a 401 must not replay a possibly committed write.
+    reconnectionOptions: {
       maxRetries: 0,
-      // No authProvider: a 401 must not replay a possibly committed write.
-      transport: { type: 'http', url: connection.url, fetch, redirect: 'error' },
-    }),
-  );
-  // The pinned SDK implements callTool, but omits it from its public interface.
-  // Keep that dependency at the transport boundary instead of exposing the full SDK.
-  if (typeof (client as MCPClient & Partial<PluginClient>).callTool !== 'function') {
-    await client.close();
-    throw new PluginError('unavailable', 'The MCP client cannot invoke plugin tools.');
+      initialReconnectionDelay: 1000,
+      maxReconnectionDelay: 1000,
+      reconnectionDelayGrowFactor: 1,
+    },
+  });
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), CONNECTION_TIMEOUT_MS);
+  const connecting = linkAbortSignals([context.signal, deadline.signal]);
+  let onAbort!: () => void;
+  const interrupted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(connecting.signal.reason);
+    connecting.signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    connecting.signal.throwIfAborted();
+    // SDK connect options only bound initialize, not the following initialized notification.
+    await withPluginError(() =>
+      Promise.race([
+        client.connect(transport, { signal: connecting.signal, timeout: CONNECTION_TIMEOUT_MS }),
+        interrupted,
+      ]),
+    );
+    connecting.signal.throwIfAborted();
+  } catch (error) {
+    await client.close().catch(() => undefined);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    connecting.signal.removeEventListener('abort', onAbort);
+    connecting.dispose();
   }
-  const toolClient = client as MCPClient & PluginClient;
+  const serverInfo = client.getServerVersion();
+  if (!serverInfo) {
+    await client.close();
+    throw new PluginError('unavailable', 'The official MCP service did not return its identity.');
+  }
   return {
-    get serverInfo() {
-      return client.serverInfo;
-    },
-    listTools(input) {
-      return withRequestSignal(input?.options?.signal, (signal) =>
-        client.listTools({ ...input, options: { ...input?.options, signal } }),
-      );
-    },
-    callTool(input) {
-      return withRequestSignal(input.options?.abortSignal, (abortSignal) =>
-        toolClient.callTool({ ...input, options: { ...input.options, abortSignal } }),
-      );
-    },
+    serverInfo,
+    // One raw page per call: plugin discovery owns pagination and its cursor checks.
+    listTools: (input) =>
+      withRequest(input?.options?.signal, (options) =>
+        client.request({ method: 'tools/list', params: input?.params }, options),
+      ),
+    callTool: ({ name, args, options }) =>
+      withRequest(
+        options?.abortSignal,
+        (requestOptions) => client.callTool({ name, arguments: args }, requestOptions),
+        context.tools[name] === 'write',
+      ),
     close: () => client.close(),
   };
+
+  async function withRequest<TResult>(
+    caller: AbortSignal | undefined,
+    operation: (options: RequestOptions) => Promise<TResult>,
+    isWrite = false,
+  ): Promise<TResult> {
+    const controller = new AbortController();
+    const linked = linkAbortSignals([controller.signal, ...(caller ? [caller] : [])]);
+    const requestId = String(nextRequestId++);
+    const request = { signal: linked.signal, submitted: false };
+    requests.set(requestId, request);
+    try {
+      return await withPluginError(() =>
+        operation({ signal: request.signal, headers: { [REQUEST_ID_HEADER]: requestId } }),
+      );
+    } catch (error) {
+      if (error instanceof PluginError || ProtocolError.isInstance(error)) throw error;
+      if (isWrite && request.submitted) throw unknownWriteError(context.pluginId);
+      if (request.signal.aborted)
+        throw new PluginError('cancelled', 'The plugin request was cancelled.');
+      throw error;
+    } finally {
+      // Also stop a delayed send after the SDK times out or rejects its result.
+      controller.abort();
+      linked.dispose();
+      requests.delete(requestId);
+    }
+  }
 }
 
-/** The SDK's nested AbortSignal.any links need an abort even when a request succeeds. */
-async function withRequestSignal<TResult>(
-  caller: AbortSignal | undefined,
-  operation: (signal: AbortSignal) => Promise<TResult>,
-): Promise<TResult> {
-  const request = new AbortController();
-  const signal = caller ? AbortSignal.any([caller, request.signal]) : request.signal;
+/** The SDK wraps what the fetch boundary threw; plugin callers match on the original. */
+async function withPluginError<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
   try {
-    return await operation(signal);
-  } finally {
-    // The RPC has settled; release its links/response stream without closing the shared transport.
-    request.abort();
+    return await operation();
+  } catch (error) {
+    for (let current = error, depth = 0; current instanceof Error && depth < 4; depth += 1) {
+      if (current instanceof PluginError) throw current;
+      current = current.cause;
+    }
+    throw error;
   }
 }
 

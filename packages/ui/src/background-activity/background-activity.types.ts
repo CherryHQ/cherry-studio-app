@@ -9,6 +9,14 @@ export type BackgroundActivityIcon =
   | 'wrench'
   | 'x-circle';
 
+export type BackgroundActivityActions = {
+  token: string;
+  prompt: string;
+  /** At most one `primary` button carries the decision's emphasis; others stay neutral. */
+  buttons: { id: string; label: string; role?: 'primary' }[];
+  reply?: { label: string; placeholder: string; choices: string[] };
+};
+
 /**
  * Closed presentation model for a system background-activity surface.
  *
@@ -22,6 +30,7 @@ export type BackgroundActivityBasePresentation = {
 };
 
 export type BackgroundActivityPresentation = BackgroundActivityBasePresentation & {
+  actions?: BackgroundActivityActions;
   /** Optional short attribution shown opposite the title on roomy surfaces. */
   attribution?: string;
   compactIcon: BackgroundActivityIcon;
@@ -38,5 +47,6 @@ export type BackgroundActivityNativePresentation<
   Presentation extends BackgroundActivityBasePresentation = BackgroundActivityPresentation,
 > = Presentation & {
   colorScheme?: 'dark' | 'light';
-  logoUri?: string;
+  /** Downsampled app artwork; the surface chooses the variant for its own background. */
+  logoUris?: { dark: string; light: string };
 };

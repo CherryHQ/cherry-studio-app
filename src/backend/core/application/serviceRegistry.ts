@@ -17,6 +17,7 @@ import { BackupRuntime } from '@/backend/services/backup';
 import {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
+  RemoteConnectionNotificationRuntime,
 } from '@/backend/services/desktopConnections';
 import { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
@@ -27,6 +28,7 @@ import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoor
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -52,6 +54,7 @@ export const services = {
   CacheService,
   DbService,
   BackupRuntime,
+  TrashRuntime,
   DesktopConnectionManager,
   DesktopConnectionRuntime,
   ProviderAccountRuntime,
@@ -63,6 +66,7 @@ export const services = {
   AndroidBackgroundActivityRuntime,
   IosBackgroundExecutionSource,
   KeepAliveCoordinator,
+  RemoteConnectionNotificationRuntime,
   BackgroundActivityManager,
   BackgroundReplyRuntime,
   WebSearchService,

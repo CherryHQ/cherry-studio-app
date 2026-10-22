@@ -2,14 +2,15 @@ import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { Image, Text, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
+import pluginInlineIcons from '@/assets/plugins/inline-icons.json';
 import skillInlineIcon from '@/assets/skills/inline-icon.json';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import type { ResolvedCitationText } from '@/frontend/utils/messageCitations';
 import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
 import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
-import type { ResolvedCitationText } from './citations';
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';
 import { splitTextReferences } from './textReferences';
@@ -62,7 +63,9 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
         const icon =
           segment.reference.type === 'plugin'
             ? getPluginInlineIcon(segment.reference.pluginId, theme)
-            : { base64: skillInlineIcon['tool-case'], tint: true };
+            : segment.reference.type === 'selection'
+              ? { base64: pluginInlineIcons['file-text'], tint: true }
+              : { base64: skillInlineIcon['tool-case'], tint: true };
         return (
           <Text className="text-link" key={segment.reference.offset}>
             <Image

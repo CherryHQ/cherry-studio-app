@@ -1,8 +1,8 @@
 import { memo } from 'react';
 
+import type { ResolvedCitationText } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import type { ResolvedCitationText } from './citations';
 import { CodePart } from './CodePart';
 import { CompactionAnchorPart } from './CompactionAnchorPart';
 import { CompactPart } from './CompactPart';

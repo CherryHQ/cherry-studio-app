@@ -11,6 +11,7 @@ export type DesktopLeaseState = {
     | 'replaced'
     | 'removed'
     | 'stopped'
+    | 'disconnected'
     | 'no-location'
     | 'discovery-unavailable'
     | 'unreachable'
@@ -33,6 +34,17 @@ export type DesktopConnectionStore = Pick<
   DesktopConnectionService,
   'getRow' | 'updateStatus' | 'updateLearnedEndpoints'
 >;
+/** User disconnect survives process replacement, without changing pairing or grants. */
+export type DesktopConnectionIntentStore = {
+  isDisconnected(id: string): boolean;
+  setDisconnected(id: string, disconnected: boolean): void;
+};
+export type PersistentDesktopConnection = {
+  id: string;
+  name: string;
+  token: string;
+  status: 'connected' | 'connecting';
+};
 export type DesktopConnectionTarget = {
   desktopIdentity: string;
   addresses: string[];

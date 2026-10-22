@@ -17,7 +17,7 @@ export interface PromptVariableEnvironment {
   system?: string;
 }
 
-export const VOLATILE_PROMPT_VARIABLES = ['{{time}}', '{{datetime}}'] as const;
+const VOLATILE_PROMPT_VARIABLES = ['{{time}}', '{{datetime}}'] as const;
 
 const supportedVariables = [
   '{{username}}',

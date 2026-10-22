@@ -12,7 +12,7 @@ translations or the app's tool framework; the app owns those integrations.
 | `./skill` | `character-studio` Skill files for an Agent that designs characters | Anywhere |
 
 The app keeps generic pieces in `src` (`image_process`, pixel helpers) and the integration shells
-(library storage, avatar editor, Agent tools, bundled-Skill registration).
+(library storage, avatar editor, Agent tools, and on-demand design guidance).
 
 ## Engine input
 

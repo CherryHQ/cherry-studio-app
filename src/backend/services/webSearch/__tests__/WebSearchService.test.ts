@@ -1,38 +1,32 @@
+import { WebSearchTransportError } from '@cherrystudio/web-search';
+
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import { HttpError } from '@/backend/services/http';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import { PreferenceDefaults } from '@/shared/data/preference';
 
 import { downloadWebPage } from '../http/downloadWebPage';
-import { requestWebSearchJson, type WebSearchJsonRequester } from '../http/requestWebSearchJson';
+import { mobileWebSearchTransport } from '../transport';
 
-jest.mock('../http/requestWebSearchJson', () => ({
-  requestWebSearchJson: jest.fn(),
-}));
+jest.mock('../transport', () => ({ mobileWebSearchTransport: { request: jest.fn() } }));
 jest.mock('../http/downloadWebPage', () => ({ downloadWebPage: jest.fn() }));
+jest.mock('@/backend/services/device', () => ({ isDeviceRegionMainlandChina: () => false }));
 
-// Hosted Exa MCP is the only driver here that reaches the shared transport.
-const mockFetch = jest.fn();
-jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }));
+const request = jest.mocked(mobileWebSearchTransport.request);
 
-const requestWebSearchJsonMock =
-  requestWebSearchJson as jest.MockedFunction<WebSearchJsonRequester>;
+beforeEach(() => {
+  request.mockReset().mockRejectedValue(new WebSearchTransportError('network', 'offline'));
+  jest.mocked(downloadWebPage).mockReset();
+});
 
 describe('WebSearchService', () => {
-  beforeEach(() => {
-    requestWebSearchJsonMock.mockReset();
-    jest.mocked(downloadWebPage).mockReset();
-    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
-  });
-
   test.each([
     ['fetch', undefined, true],
     ['crawl4ai', undefined, false],
     ['crawl4ai', 'https://crawl.example.com', true],
     ['crawl4ai', 'ftp://crawl.example.com', false],
   ] as const)(
-    'checks page-reader readiness for %s with host %s',
+    'checks %s readiness without network requests',
     async (providerId, apiHost, ready) => {
       const service = new WebSearchService(
         createPreferenceService({
@@ -42,11 +36,9 @@ describe('WebSearchService', () => {
             : {},
         }),
       );
-
       await expect(service.isConfigured('fetchUrls')).resolves.toBe(ready);
-      expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
       expect(downloadWebPage).not.toHaveBeenCalled();
-      expect(mockFetch).not.toHaveBeenCalled();
     },
   );
 
@@ -57,144 +49,105 @@ describe('WebSearchService', () => {
         'chat.web_search.default_search_keywords_provider': 'jina',
       }),
     );
-
     await expect(service.isConfigured('searchKeywords')).resolves.toBe(false);
     await expect(service.isConfigured('fetchUrls')).resolves.toBe(true);
-    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 
-  test('reads through Jina with fresh-install defaults and no provider keys', async () => {
-    requestWebSearchJsonMock.mockResolvedValue({
-      data: { title: 'Example', content: 'Page body', url: 'https://example.com' },
-    });
-    const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
-
-    const response = await service.fetchUrls({ urls: ['https://example.com'] });
-
-    expect(response).toMatchObject({ providerId: 'jina', results: [{ content: 'Page body' }] });
-    expect(mockFetch).not.toHaveBeenCalled();
-    const headers = requestWebSearchJsonMock.mock.calls[0]?.[0]?.headers;
-    expect(headers).not.toHaveProperty('Authorization');
-  });
-
-  test('searches with fresh-install defaults without discarding hosted Highlights', async () => {
-    mockFetch.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: 'Title: Example\nURL: https://example.com\nHighlights: Search content',
-              },
-            ],
-          },
-        }),
-        { status: 200 },
-      ),
+  test('reads anonymously through the fresh-install provider', async () => {
+    request.mockResolvedValue(
+      jsonResponse({
+        data: { title: 'Example', content: 'Page body', url: 'https://example.com' },
+      }),
     );
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
+    await expect(service.fetchUrls({ urls: ['https://example.com'] })).resolves.toMatchObject({
+      providerId: 'jina',
+      results: [{ content: 'Page body' }],
+    });
+    expect(request.mock.calls[0][0].headers).not.toHaveProperty('Authorization');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 
+  test('uses hosted Exa MCP and retains Highlights with fresh-install defaults', async () => {
+    request.mockResolvedValue(
+      mcpResponse('Title: Example\nURL: https://example.com\nHighlights: Search content'),
+    );
+    const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
     await expect(service.searchKeywords({ keywords: ['example'] })).resolves.toMatchObject({
       providerId: 'exa-mcp',
       results: [{ content: 'Search content', url: 'https://example.com' }],
     });
+    expect(request.mock.calls[0][0].url).toBe('https://mcp.exa.ai/mcp');
   });
 
-  test('records a failed Jina read without retrying or calling Exa', async () => {
-    requestWebSearchJsonMock.mockRejectedValue(
-      new HttpError('Jina timed out', { kind: 'timeout' }),
-    );
+  test('records a timeout without retrying or switching providers', async () => {
+    request.mockRejectedValue(new WebSearchTransportError('timeout', 'Timed out'));
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
-
     await expect(service.fetchUrls({ urls: ['https://example.com'] })).resolves.toMatchObject({
       providerId: 'jina',
       results: [],
-      failures: [{ input: 'https://example.com', kind: 'timeout', message: 'Jina timed out' }],
+      failures: [{ input: 'https://example.com', kind: 'timeout', code: 'request_timeout' }],
     });
-    expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(1);
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
-  test('keeps partial results and failures from the selected provider without switching', async () => {
-    mockFetch
-      .mockResolvedValueOnce(exaPageResponse('https://example.com/a', 'First'))
-      .mockRejectedValueOnce(new Error('unavailable'));
-    requestWebSearchJsonMock.mockResolvedValue({
-      data: { title: 'Second', content: 'Second', url: 'https://example.com/b' },
-    });
+  test('keeps partial results and the selected provider when another page fails', async () => {
+    request
+      .mockResolvedValueOnce(mcpResponse('# Page\nURL: https://example.com/a\n\nFirst'))
+      .mockResolvedValueOnce(jsonResponse({ message: 'Unavailable' }, 503));
     const service = new WebSearchService(
       createPreferenceService({
         ...PreferenceDefaults,
         'chat.web_search.default_fetch_urls_provider': 'exa-mcp',
       }),
     );
-
     const response = await service.fetchUrls({
       urls: ['https://example.com/a', 'https://example.com/b'],
     });
-
-    expect(response.results.map((result) => result.content)).toEqual(['First']);
+    expect(response.results.map((item) => item.content)).toEqual(['First']);
     expect(response.providerId).toBe('exa-mcp');
     expect(response.failures).toEqual([
-      {
+      expect.objectContaining({
         input: 'https://example.com/b',
-        kind: 'network',
-        code: 'NETWORK_ERROR',
-        message: 'HTTP request could not reach the server.',
-      },
+        kind: 'http',
+        status: 503,
+      }),
     ]);
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+    expect(request.mock.calls.map(([call]) => call.url)).toEqual([
+      'https://mcp.exa.ai/mcp',
+      'https://mcp.exa.ai/mcp',
+    ]);
   });
 
-  test('retains every failed input and its status when no pages succeed', async () => {
-    requestWebSearchJsonMock.mockRejectedValue(
-      new HttpError('Jina unavailable', { kind: 'http', status: 503, code: 'UNAVAILABLE' }),
-    );
+  test('retains every failed input, upstream code and HTTP status when all reads fail', async () => {
+    request.mockResolvedValue(jsonResponse({ code: 'UNAVAILABLE', message: 'Unavailable' }, 503));
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
-
     const urls = ['https://example.com/a', 'https://example.com/b'];
     await expect(service.fetchUrls({ urls })).resolves.toMatchObject({
       providerId: 'jina',
       results: [],
-      failures: urls.map((input) => ({
-        input,
-        kind: 'http',
-        status: 503,
-        code: 'UNAVAILABLE',
-        message: 'Jina unavailable',
-      })),
+      failures: urls.map((input) => ({ input, kind: 'http', status: 503, code: 'UNAVAILABLE' })),
     });
-    expect(mockFetch).not.toHaveBeenCalled();
-    expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   test('propagates caller cancellation without returning a lookup failure', async () => {
     const controller = new AbortController();
-    requestWebSearchJsonMock.mockImplementation(async () => {
+    request.mockImplementation(async () => {
       controller.abort();
-      throw new Error('interrupted');
+      return jsonResponse({});
     });
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
-
     await expect(
       service.fetchUrls({ urls: ['https://example.com'] }, { signal: controller.signal }),
-    ).rejects.toBeDefined();
-    expect(mockFetch).not.toHaveBeenCalled();
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
-  test('checks provider with temporary selected api key', async () => {
-    requestWebSearchJsonMock.mockResolvedValue({
-      query: 'test query',
-      request_id: 'request-1',
-      response_time: 0.1,
-      results: [{ title: 'OK', content: 'content', url: 'https://example.com' }],
-    });
-
+  test('checks the selected provider using an unsaved key', async () => {
+    request.mockResolvedValue(tavilyResponse('test query', 'Content'));
     const service = new WebSearchService(createPreferenceService());
-
     await expect(
       service.checkProvider({
         providerId: 'tavily',
@@ -202,149 +155,118 @@ describe('WebSearchService', () => {
         override: { apiKeys: ['selected-key'] },
       }),
     ).resolves.toEqual({ valid: true });
-
-    expect(requestWebSearchJsonMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer selected-key' }),
-        method: 'POST',
-        providerId: 'tavily',
-        url: 'https://api.tavily.com/search',
-      }),
-    );
+    expect(request.mock.calls[0][0].headers.Authorization).toBe('Bearer selected-key');
   });
 
-  test('fails a check before any request when a required key is missing', async () => {
+  test('fails a check before requesting a service without its required key', async () => {
     const service = new WebSearchService(createPreferenceService());
-
     await expect(
       service.checkProvider({ providerId: 'parallel', capability: 'searchKeywords' }),
     ).resolves.toEqual({ valid: false, error: 'API key is required for provider parallel' });
-    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 
-  test('reports a self-hosted provider without an address as a configuration failure', async () => {
+  test('reports a missing self-hosted address as a configuration failure', async () => {
     const service = new WebSearchService(
-      createPreferenceService({ 'chat.web_search.default_fetch_urls_provider': 'crawl4ai' }),
+      createPreferenceService({
+        'chat.web_search.default_fetch_urls_provider': 'crawl4ai',
+      }),
     );
-
-    const response = await service.fetchUrls({ urls: ['https://example.com'] });
-
-    expect(response.results).toEqual([]);
-    expect(response.failures).toEqual([
-      expect.objectContaining({ kind: 'configuration', code: 'api_host_missing' }),
-    ]);
-    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+    await expect(service.fetchUrls({ urls: ['https://example.com'] })).resolves.toMatchObject({
+      results: [],
+      failures: [{ kind: 'configuration', code: 'api_host_missing' }],
+    });
+    expect(request).not.toHaveBeenCalled();
   });
 
-  test('returns the results it did get when one keyword request fails', async () => {
-    requestWebSearchJsonMock
-      .mockResolvedValueOnce({
-        query: 'first',
-        request_id: 'request-1',
-        response_time: 0.1,
-        results: [{ title: 'First', content: 'first content', url: 'https://example.com/a' }],
-      })
-      .mockRejectedValueOnce(new Error('nope'));
-
+  test('keeps successful keywords and reports failed inputs from the same provider', async () => {
+    request
+      .mockResolvedValueOnce(tavilyResponse('first', 'First content'))
+      .mockRejectedValueOnce(new WebSearchTransportError('network', 'offline'));
     const service = new WebSearchService(
       createPreferenceService({
         'chat.web_search.default_search_keywords_provider': 'tavily',
-        'chat.web_search.provider_overrides': {
-          tavily: {
-            apiKeys: ['key'],
-          },
-        },
+        'chat.web_search.provider_overrides': { tavily: { apiKeys: ['key'] } },
       }),
     );
-
     await expect(
       service.searchKeywords({ keywords: [' first ', 'second'] }),
     ).resolves.toMatchObject({
       query: 'first | second',
       providerId: 'tavily',
-      failures: [{ input: 'second', kind: 'unknown', message: 'nope' }],
-      results: [
-        {
-          title: 'First',
-          content: 'first content',
-          url: 'https://example.com/a',
-          sourceInput: 'first',
-        },
-      ],
+      failures: [{ input: 'second', kind: 'network' }],
+      results: [{ content: 'First content', sourceInput: 'first' }],
     });
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
-  test('caps provider page content before returning it even with stored compression disabled', async () => {
-    requestWebSearchJsonMock.mockResolvedValue({
-      data: {
-        title: 'Long article',
-        content: '文'.repeat(5_000),
-        url: 'https://example.com/article',
-      },
-    });
+  test('caps page content even when stored search compression is disabled', async () => {
+    request.mockResolvedValue(
+      jsonResponse({ data: { title: 'Long', content: '文'.repeat(5_000) } }),
+    );
     const service = new WebSearchService(
       createPreferenceService({
         'chat.web_search.default_fetch_urls_provider': 'jina',
         'chat.web_search.compression.method': 'none',
       }),
     );
-
     const response = await service.fetchUrls({ urls: ['https://example.com/article'] });
-
-    expect(response.results).toEqual([
-      {
-        title: 'Long article',
-        content: '文'.repeat(4_000),
-        url: 'https://example.com/article',
-        sourceInput: 'https://example.com/article',
-        truncated: true,
-      },
-    ]);
+    expect(response.results[0]).toMatchObject({
+      content: '文'.repeat(4_000),
+      truncated: true,
+      sourceInput: 'https://example.com/article',
+    });
   });
 
-  test('reads local text with the final source URL and original input', async () => {
-    const service = new WebSearchService(createPreferenceService());
+  test('keeps local extraction and final source URLs outside the shared remote client', async () => {
     jest.mocked(downloadWebPage).mockResolvedValue({
-      content: 'Local page content',
+      content: 'Local content',
       isHtml: false,
       url: 'https://example.com/article',
     });
+    const service = new WebSearchService(createPreferenceService());
     await expect(
       service.fetchUrls({ providerId: 'fetch', urls: ['https://example.com/start'] }),
     ).resolves.toMatchObject({
       providerId: 'fetch',
       results: [
         {
-          content: 'Local page content',
+          content: 'Local content',
           url: 'https://example.com/article',
           sourceInput: 'https://example.com/start',
         },
       ],
     });
+    expect(request).not.toHaveBeenCalled();
   });
 });
 
-function exaPageResponse(url: string, content: string): Response {
-  return new Response(
-    JSON.stringify({
-      result: { content: [{ type: 'text', text: `# Page\nURL: ${url}\n\n${content}` }] },
-    }),
-    { status: 200 },
-  );
+function jsonResponse(payload: unknown, status = 200) {
+  return { bodyText: JSON.stringify(payload), headers: {}, status };
+}
+
+function mcpResponse(text: string) {
+  return jsonResponse({ result: { content: [{ type: 'text', text }] } });
+}
+
+function tavilyResponse(query: string, content: string) {
+  return jsonResponse({
+    query,
+    request_id: 'request-1',
+    response_time: 0.1,
+    results: [{ title: 'Result', content, url: 'https://example.com' }],
+  });
 }
 
 function createPreferenceService(values: Partial<PreferenceSchema> = {}) {
-  // The two default-provider keys are deliberately absent: tests that exercise
-  // the unconfigured path rely on `get` resolving them to undefined.
-  const defaults: Partial<PreferenceSchema> = {
+  const preferences: Partial<PreferenceSchema> = {
     'chat.web_search.max_results': 5,
     'chat.web_search.compression.method': 'none',
     'chat.web_search.compression.cutoff_limit': 2000,
     'chat.web_search.provider_overrides': {},
+    ...values,
   };
-
   return {
-    get: <K extends PreferenceKeyType>(key: K) =>
-      (values[key] ?? defaults[key]) as PreferenceSchema[K],
-  } as PreferenceService;
+    get: jest.fn(async (key: PreferenceKeyType) => preferences[key]),
+  } as unknown as PreferenceService;
 }

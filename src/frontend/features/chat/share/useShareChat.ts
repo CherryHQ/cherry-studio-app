@@ -7,6 +7,7 @@ import { ConversationReadError } from '@/frontend/appShell/conversation';
 import { useDocumentExport } from '@/frontend/appShell/documentExport';
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { DocumentExportError } from '@/shared/contracts/documentExport';
+import { APP_LANGUAGES } from '@/shared/utils/languages';
 
 import type { ChatShareTarget } from './chatShareTarget';
 import { ChatExportError, prepareChatExport } from './prepareChatExport';
@@ -47,6 +48,7 @@ export function useShareChat(target: ChatShareTarget) {
           const options: ChatExportOptions = {
             title: data.title?.trim() || t('chat.share.documentTitle'),
             includeProcess: true,
+            translations: target.ref.source.kind === 'local' ? target.translations : undefined,
             labels: {
               user: t('chat.share.user'),
               assistant: data.assistantName || t('chat.share.assistant'),
@@ -55,6 +57,10 @@ export function useShareChat(target: ChatShareTarget) {
               reasoning: t('chat.reasoningStatus.thought'),
               file: t('chat.share.file'),
               status: t('chat.share.status'),
+              translation: (language) =>
+                t('chat.translation.result', {
+                  language: APP_LANGUAGES.find(({ value }) => value === language)?.label,
+                }),
               messageStatuses: {
                 pending: t('chat.share.unsettled'),
                 streaming: t('chat.share.unsettled'),

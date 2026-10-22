@@ -1,8 +1,9 @@
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
+import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentMessagePart } from '../../../host/runtimeProjection';
-import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
+import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -31,6 +32,32 @@ test('older configurations remain readable and current replaceable instructions 
     PiConfigurationSchema.parse(JSON.parse(JSON.stringify(current))).initialInstructions,
   ).toEqual(current.initialInstructions);
 });
+
+test.each(['standard', 'minimal'] as const)(
+  'migrates only the automatic date in released %s prompts and preserves user instructions',
+  (mode) => {
+    const date = '\n\n## Current Date\n\nThe current local date is `2026-12-31`.';
+    const language = '\n\n## Response Language\n';
+    const instructions = buildAgentSystemPrompt({
+      mode,
+      agentInstructions: `Keep this quoted example:${date}${language}Example language.`,
+      appLanguage: 'en-US',
+      tools: [],
+    });
+    const old = {
+      version: 1,
+      model: { providerId: 'p', modelId: 'm' },
+      instructions: instructions.replace(language, `${date}${language}`),
+      options: {},
+      tools: [],
+    };
+    const migrated = PiConfigurationSchema.parse(old);
+    expect(migrated).toMatchObject({ version: 2, instructions });
+    expect(PiConfigurationSchema.parse(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
+    expect(PiConfigurationSchema.parse({ ...old, version: 2 }).instructions).toBe(old.instructions);
+  },
+);
+
 const metadata = {
   kind: 'cherry.input',
   version: 1,
@@ -72,10 +99,17 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
   };
 }
 
+test('stored tool blueprints keep deferred discovery across restarts', () => {
+  expect(piToolBlueprint({ ...writeFile, deferred: true } as never)).toMatchObject({
+    deferred: true,
+  });
+  expect(piToolBlueprint(writeFile as never)).not.toHaveProperty('deferred');
+});
+
 describe('Pi turn projection', () => {
   test('preserves upstream loaded tool names for search presentation', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata,
       record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
       active: true,
@@ -134,7 +168,7 @@ describe('Pi turn projection', () => {
 
   function projectMessage(message: AssistantMessage, streaming: boolean) {
     return projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       record: placed,
       metadata,
       active: true,
@@ -228,7 +262,7 @@ describe('Pi turn projection', () => {
     ]);
   });
 
-  test('keeps the pending assistant when reasoning has not produced visible text yet', () => {
+  test('keeps a streaming reasoning indicator before the first summary text', () => {
     const message: AssistantMessage = {
       ...call('body', 2_000),
       content: [{ type: 'thinking', thinking: '' }],
@@ -236,7 +270,43 @@ describe('Pi turn projection', () => {
     const turn = projectMessage(message, true);
 
     expect(turn.hasAssistant).toBe(true);
-    expect(turn.parts).toEqual([]);
+    expect(turn.parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', state: 'streaming', text: '' }),
+    ]);
+  });
+
+  test('keeps an empty streaming reasoning phase after a completed tool result', () => {
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      record: placed,
+      metadata,
+      active: true,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'call',
+              toolName: 'write_file',
+              content: [{ type: 'text', text: 'Saved' }],
+              isError: false,
+              timestamp: 2_100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+      partial: { ...call('body', 2_200), content: [{ type: 'thinking', thinking: '' }] },
+    });
+
+    expect(turn.parts).toEqual([
+      expect.objectContaining({ type: 'tool', state: 'output-available' }),
+      expect.objectContaining({ type: 'reasoning', state: 'streaming', text: '' }),
+    ]);
   });
 
   test.each([true, false])(
@@ -256,7 +326,7 @@ describe('Pi turn projection', () => {
         ],
       };
       const turn = projectPiTurn({
-        sessionId: 'session',
+        lane: { sessionId: 'session', slot: 0 },
         record: placed,
         metadata,
         active: true,
@@ -301,7 +371,7 @@ describe('Pi turn projection', () => {
 
   test('recovered terminal inputs settle tool calls that have no result entry', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata,
       record: {
         id: 1,
@@ -343,7 +413,7 @@ describe('Pi turn projection', () => {
   test('a failed script keeps the JavaScript capability and reports the error its output ends with', () => {
     const scriptText = `Script failed\nOutput:\n${'line\n'.repeat(100)}Script error:\nSyntaxError: unexpected token`;
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata: {
         ...metadata,
         tools: [
@@ -426,7 +496,7 @@ describe('Pi turn projection', () => {
 
   test('live child status is progress, never a final tool output', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata: {
         ...metadata,
         tools: [
@@ -469,7 +539,7 @@ describe('Pi turn projection', () => {
       entry: 1,
     } as unknown as SubmissionRecord;
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       record,
       metadata,
       entries: [],
@@ -527,7 +597,12 @@ describe('Pi turn projection', () => {
         ],
       },
     ] as unknown as EntryRecord[];
-    const turn = projectPiTurn({ sessionId: 'session', record, metadata, entries });
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      record,
+      metadata,
+      entries,
+    });
     expect(turn.status).toBe('completed');
     expect(turn.parts[0]).toEqual(
       expect.objectContaining({

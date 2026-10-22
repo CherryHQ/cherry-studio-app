@@ -16,6 +16,7 @@ const FULL_TEXT_FILENAME = 'mcp-result.txt';
 export async function storeMcpResultFiles(
   result: unknown,
   signal: AbortSignal,
+  workspaceFolderId?: string | null,
 ): Promise<{
   value: unknown;
   artifacts: RuntimeArtifact[];
@@ -54,7 +55,13 @@ export async function storeMcpResultFiles(
         try {
           const entry = await createInternalEntry(
             fileEntryService,
-            { source: 'base64', data, mediaType, provenance: 'generated' },
+            {
+              source: 'base64',
+              data,
+              mediaType,
+              provenance: 'generated',
+              folderId: workspaceFolderId,
+            },
             signal,
           );
           entries.push(entry);
@@ -87,6 +94,7 @@ export async function storeMcpResultFiles(
             mediaType: 'text/plain',
             name: FULL_TEXT_FILENAME,
             provenance: 'generated',
+            folderId: workspaceFolderId,
           },
           signal,
         );

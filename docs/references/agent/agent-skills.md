@@ -31,12 +31,9 @@ An Agent toggle makes a Skill available for the model to choose when relevant. A
 requests its use and supplies its full instructions for that turn; it is not a request to install
 the Skill or open a file viewer.
 
-Structured notes, research brief and daily agenda are app-owned system workflows. The Host includes
-their instructions and templates in internal system context, independently of installed packages or
-Agent bindings. They are short enough to stay resident, so a matching request never depends on the
-model loading them first. Calendar and research workflows are included only when all their required
-built-in tools are present in the current turn. They are not listed, recommended, installable or
-selectable in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
+The app ships no system workflows of its own. Former notes, research-brief and daily-agenda
+workflows only restated the web research rules or formats models already produce, while costing
+every request about 740 tokens. Earlier `builtin` installation records and package bytes remain available to
 backups, but are excluded from user reads, binding updates and installed runtime scope. Installing a
 user package with the same folder name replaces that hidden legacy record and its bindings; its old
 bytes follow ordinary storage reconciliation.
@@ -214,8 +211,10 @@ the Skill targets Cherry Studio App in standard mode with a tool-capable model. 
 are also projected into the existing library record. There is no separate preview, save-option
 sheet, editor or trial flow. The ordinary Agent tool approval policy applies.
 
-The authoring prompt derives its built-in tool inventory from the executable turn snapshot and
-uses the offered descriptions and schemas for arguments and behavior. Code Mode uses its offered
+The authoring guidance is the `create_skill` description, so it enters context only with the tool.
+The tool is deferred and found through `tool_search`, except for the explicit `create` action,
+which offers it upfront. The model takes tool names from the offered and on-demand tools of the
+turn and uses their descriptions and schemas for arguments and behavior. Code Mode uses its offered
 model-facing name, not the internal `run_js` capability name. For MCP/plugin workflows the model
 uses existing discovery to inspect tool definitions and records required services in compatibility.
 It selects only tools needed by the workflow for `allowed-tools`, and writes concrete steps,
@@ -277,7 +276,7 @@ and claim success. Explicit upstream updates still replace current local content
 writes `source` as `marketplace` (CherryIN, GitHub and generated user-library packages); `builtin` remains readable for legacy
 installations and backups. It writes `source_url` as the URL updates re-resolve. Mobile has no
 global enablement control, so `is_enabled` and conversation bindings are written enabled. Desktop's `namespace` is absent
-because app-owned system workflows live in Host instructions rather than user installations.
+because Mobile has no app-owned Skill installations.
 Three mobile columns follow the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
 `profile` holds the tool names the package declares, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
@@ -326,8 +325,9 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
 These are application built-ins. Skill metadata, instruction and package file readers are directly
-exposed; discovery, installation and adaptation tools are deferred and found with
-`tool_search` by exact name. A search for a generic Skill tool does not describe installed package
+exposed; discovery, installation, adaptation and creation tools are deferred and found with
+`tool_search` by exact name. When the Agent has no Skill packages, the Skills section keeps only
+the inventory, discovery and in-turn installation rules. A search for a generic Skill tool does not describe installed package
 availability: use `list_local_skills` for that inventory. Pi Durable does not need a desktop
 filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
 sections while `load_skill` returns a receipt.
@@ -345,8 +345,8 @@ ordinary loading receipt. Manual-only packages cannot be guessed into automatic 
 not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
-subset, even when either is zero, and distinguishes them from the app's installed library, explicit
-selections and app-owned system workflows. Current inventory questions use `list_local_skills`
+subset, even when either is zero, and distinguishes them from the app's installed library and explicit
+selections. Current inventory questions use `list_local_skills`
 with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its
 automatically invocable subset, and `returned` is one page. Complete lists follow `nextCursor` until
 null with the same options. This also refreshes inventory after a conversation installation without

@@ -13,12 +13,6 @@ import { usePaintingAnnotationDraft } from '../usePaintingAnnotationDraft';
 
 let mockSend: () => Promise<void>;
 const mockGenerate = jest.fn<Promise<unknown>, [PaintingInputSubmission]>();
-const mockClose = jest.fn();
-const mockAnnotationsChange = jest.fn();
-const notes = [
-  { id: 1, x: 0.3, y: 0.4, text: 'Make the cup blue' },
-  { id: 2, x: 0.7, y: 0.5, text: 'Soften the shadow' },
-];
 const input: PaintingInputSubmission = {
   attachments: [],
   mode: 'edit',
@@ -59,13 +53,8 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 let editing: ReturnType<typeof usePaintingAnnotationDraft>;
 let composer: ReturnType<typeof useComposerState>;
 let actions: ReturnType<typeof useComposerActions>;
-function Probe() {
-  const current = usePaintingAnnotationDraft({
-    initialAnnotations: notes,
-    onAnnotationsChange: mockAnnotationsChange,
-    onClose: mockClose,
-    onGenerate: mockGenerate,
-  });
+function Probe({ imageKey }: { imageKey: string | null }) {
+  const current = usePaintingAnnotationDraft(imageKey);
   const state = useComposerState();
   const controls = useComposerActions();
   useLayoutEffect(() => {
@@ -77,7 +66,8 @@ function Probe() {
     <ComposerSurface
       onSend={async ({ text }) => {
         const prepared = current.preparePrompt(text);
-        await current.generate({ ...input, ...prepared });
+        await mockGenerate({ ...input, ...prepared });
+        if (imageKey) current.clearSubmitted(imageKey);
       }}
       onStop={() => undefined}
       streaming={false}
@@ -85,103 +75,105 @@ function Probe() {
   );
 }
 
-describe('painting annotation submission', () => {
+describe('painting annotation draft', () => {
   let renderer: ReactTestRenderer;
+  const render = (imageKey: string | null) =>
+    act(() => {
+      renderer.update(
+        <ComposerSessionProvider initialDraft="Keep the composition">
+          <Probe imageKey={imageKey} />
+        </ComposerSessionProvider>,
+      );
+    });
   beforeEach(() => {
     jest.clearAllMocks();
     act(() => {
       renderer = create(
         <ComposerSessionProvider initialDraft="Keep the composition">
-          <Probe />
+          <Probe imageKey="image-a" />
         </ComposerSessionProvider>,
       );
     });
-    act(() => editing.selectAnnotation(1));
   });
   afterEach(() => act(() => renderer.unmount()));
 
-  it('keeps the selected note through clearing and failed-send recovery', async () => {
+  it('routes typing to the selected note and back to the whole-image request', () => {
+    act(() => editing.addAnnotation(0.3, 0.4));
+    expect(editing.selectedId).toBe(1);
+    expect(composer.draft).toBe('');
+    act(() => actions.setDraft('Make the cup blue'));
+    act(() => editing.selectAnnotation(null));
+    expect(composer.draft).toBe('Keep the composition');
+    expect(editing.annotations).toEqual([{ id: 1, text: 'Make the cup blue', x: 0.3, y: 0.4 }]);
+    act(() => editing.selectAnnotation(1));
+    expect(composer.draft).toBe('Make the cup blue');
+  });
+
+  it('expands notes into positional model instructions while keeping the human brief', () => {
+    act(() => editing.addAnnotation(0.3, 0.4));
+    expect(editing.preparePrompt('Make the cup blue')).toEqual({
+      displayPrompt: 'Keep the composition\npainting.editor.annotationSummary',
+      prompt:
+        'Keep the composition\npainting.editor.annotationGuide\npainting.editor.annotationInstruction',
+    });
+  });
+
+  it('keeps unsent notes per image when the focus moves away and back', () => {
+    act(() => editing.addAnnotation(0.2, 0.2));
+    act(() => actions.setDraft('Add a hat'));
+    render('image-b');
+    expect(editing.selectedId).toBeNull();
+    expect(editing.annotations).toEqual([]);
+    expect(composer.draft).toBe('Keep the composition');
+    render('image-a');
+    expect(editing.annotations).toEqual([{ id: 1, text: 'Add a hat', x: 0.2, y: 0.2 }]);
+  });
+
+  it('removes a note and returns the field to the whole-image request when it was selected', () => {
+    act(() => editing.addAnnotation(0.2, 0.2));
+    act(() => editing.addAnnotation(0.8, 0.8));
+    act(() => editing.removeAnnotation(2));
+    expect(editing.annotations.map((note) => note.id)).toEqual([1]);
+    expect(editing.selectedId).toBeNull();
+    expect(composer.draft).toBe('Keep the composition');
+  });
+
+  it('locks notes while sending and restores the selected note after a rejected send', async () => {
+    act(() => editing.addAnnotation(0.3, 0.4));
+    act(() => actions.setDraft('Make the cup blue'));
     const pending = deferred<unknown>();
     mockGenerate.mockReturnValueOnce(pending.promise);
     let sending!: Promise<void>;
     act(() => {
       sending = mockSend();
     });
-    expect(composer.draft).toBe('');
     expect(editing.isSubmitting).toBe(true);
-
     act(() => {
-      editing.selectAnnotation(2);
       editing.selectAnnotation(null);
       editing.addAnnotation(0.5, 0.5);
-      editing.removeSelectedAnnotation();
-      editing.close();
+      editing.removeAnnotation(1);
     });
     expect(editing.selectedId).toBe(1);
-    expect(editing.annotations).toEqual(notes);
-    expect(mockClose).not.toHaveBeenCalled();
-    act(() => actions.setDraft('Keep the handle'));
+    expect(editing.annotations).toHaveLength(1);
 
     await act(async () => {
       pending.reject(new Error('request rejected'));
-      await sending;
+      await sending.catch(() => undefined);
     });
     expect(editing.isSubmitting).toBe(false);
+    expect(composer.draft).toBe('Make the cup blue');
     expect(editing.selectedId).toBe(1);
-    expect(composer.draft).toBe('Make the cup blue\nKeep the handle');
-
-    act(() => editing.selectAnnotation(2));
-    expect(editing.annotations).toEqual([
-      { ...notes[0], text: 'Make the cup blue\nKeep the handle' },
-      notes[1],
-    ]);
-    expect(composer.draft).toBe('Soften the shadow');
-    act(() => editing.close());
-    expect(composer.draft).toBe('Keep the composition');
-    expect(mockClose).toHaveBeenCalledTimes(1);
   });
 
-  it.each([false, true])(
-    'closes an accepted editor only without newer input (edited: %s)',
-    async (edited) => {
-      const pending = deferred<unknown>();
-      mockGenerate.mockReturnValueOnce(pending.promise);
-      let sending!: Promise<void>;
-      act(() => {
-        sending = mockSend();
-      });
-      if (edited) act(() => actions.setDraft('A newer instruction'));
-      await act(async () => {
-        pending.resolve({ paintingId: 'new-painting' });
-        await sending;
-      });
-      expect(editing.isSubmitting).toBe(false);
-      expect(editing.annotations).toEqual(notes);
-      expect(mockClose).toHaveBeenCalledTimes(edited ? 0 : 1);
-      expect(composer.draft).toBe(edited ? 'A newer instruction' : '');
-    },
-  );
-
-  it('does not close a replacement editor when an unmounted submission is accepted', async () => {
-    const pending = deferred<unknown>();
-    mockGenerate.mockReturnValueOnce(pending.promise);
-    let sending!: Promise<void>;
-    act(() => {
-      sending = mockSend();
-    });
-    act(() => {
-      renderer.update(
-        <ComposerSessionProvider>
-          <Probe key="replacement" />
-        </ComposerSessionProvider>,
-      );
-    });
+  it('consumes the image notes once the request is accepted', async () => {
+    act(() => editing.addAnnotation(0.3, 0.4));
+    act(() => actions.setDraft('Make the cup blue'));
+    mockGenerate.mockResolvedValueOnce({ paintingId: 'next' });
     await act(async () => {
-      pending.resolve({ paintingId: 'new-painting' });
-      await sending;
+      await mockSend();
     });
-    expect(mockClose).not.toHaveBeenCalled();
-    expect(editing.isSubmitting).toBe(false);
+    expect(editing.annotations).toEqual([]);
+    expect(editing.selectedId).toBeNull();
   });
 });
 

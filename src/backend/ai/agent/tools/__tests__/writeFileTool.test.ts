@@ -28,6 +28,7 @@ describe('writeFileTool', () => {
         status: 'created',
         fileEntryId: '00000000-0000-7000-8000-000000000001',
         filename: 'report.md',
+        revision: 1,
         size: 9,
       },
       artifacts: [
@@ -191,6 +192,8 @@ describe('writeFileTool', () => {
       properties: {
         content: expect.objectContaining({ type: 'string' }),
         filename: expect.objectContaining({ type: 'string' }),
+        base_file_entry_id: expect.objectContaining({ type: 'string' }),
+        base_revision: expect.objectContaining({ type: 'integer' }),
       },
       required: expect.arrayContaining(['content', 'filename']),
       additionalProperties: false,

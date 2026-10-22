@@ -1,13 +1,16 @@
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import FolderCheckIcon from '@cherrystudio/app-icons/icons/folder-check';
 import {
   composerContentGap,
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
+import { type ComponentProps, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { v7 as uuidv7 } from 'uuid';
 
 import { MainHeader } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
@@ -17,6 +20,7 @@ import {
   conversationShareHref,
   parseChatRoute,
   getChatComposerHandoff,
+  chatRouteParams,
 } from '@/frontend/appShell/navigation/chat';
 import {
   ComposerDismissArea,
@@ -27,13 +31,17 @@ import {
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
+import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
+import { createSelectionMention } from './components/ChatInput/utils/selectionMentions';
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
+import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
@@ -43,15 +51,77 @@ import {
   useAgentChatDraftHandoff,
   useLocalConversation,
 } from './runtime';
+import { createChatShareHandoff, type ChatShareTranslations } from './share/chatShareHandoff';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
 
 export function ChatScreen() {
   return (
-    <ChatScreenFrame header={MainHeader}>
+    <ChatScreenFrame header={LocalChatHeader}>
       <ChatRouteContent />
     </ChatScreenFrame>
+  );
+}
+
+function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
+  const { t } = useTranslation();
+  const params = useLocalSearchParams<ChatRouteParamsInput>();
+  const route = parseChatRoute(params);
+  const target = route.status === 'ready' ? route.target : undefined;
+  // Shares the content's queries, so the header reflects the binding without another fetch.
+  const workspace = useFileWorkspace({
+    sessionId: target?.kind === 'session' ? target.sessionId : undefined,
+    workspaceDraftId: target?.kind === 'draft' ? target.workspaceDraftId : undefined,
+  });
+  const workspaceName = workspace.workspace?.name;
+  const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress | null>(null);
+  const closeWorkspace = useCallback(() => setWorkspaceAddress(null), []);
+  // The sheet reopens on focus; a reference returning from its preview belongs to the composer.
+  const selectionHandoff = target?.selectionHandoff;
+  const [shownSelectionHandoff, setShownSelectionHandoff] = useState(selectionHandoff);
+  if (selectionHandoff !== shownSelectionHandoff) {
+    setShownSelectionHandoff(selectionHandoff);
+    if (selectionHandoff) setWorkspaceAddress(null);
+  }
+  function openWorkspace() {
+    if (!target) return;
+    Keyboard.dismiss();
+    if (target.kind === 'session') {
+      setWorkspaceAddress({ sessionId: target.sessionId });
+    } else {
+      const workspaceDraftId = target.workspaceDraftId ?? uuidv7();
+      if (!target.workspaceDraftId)
+        router.setParams(chatRouteParams({ ...target, workspaceDraftId }));
+      setWorkspaceAddress({ workspaceDraftId });
+    }
+  }
+  return (
+    <>
+      <MainHeader
+        {...props}
+        actions={
+          target
+            ? [
+                {
+                  key: 'file-workspace',
+                  type: 'icon',
+                  // The check marks a linked workspace, matching the selection in its sheet.
+                  icon: workspace.folderId ? FolderCheckIcon : FolderIcon,
+                  accessibilityLabel: workspaceName
+                    ? t('workspace.openCurrent', { name: workspaceName })
+                    : t('workspace.open'),
+                  testID: 'chat-file-workspace',
+                  onPress: () => openWorkspace(),
+                },
+              ]
+            : undefined
+        }
+      />
+      {workspaceAddress ? (
+        <FileWorkspaceSheet address={workspaceAddress} onClose={closeWorkspace} />
+      ) : null}
+    </>
   );
 }
 
@@ -71,6 +141,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const isPreview = useIsPreview();
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
+  const workspace = useFileWorkspace({
+    sessionId,
+    workspaceDraftId: target.kind === 'draft' ? target.workspaceDraftId : undefined,
+  });
   const draftHandoff = useAgentChatDraftHandoff(sessionId);
   const composerSession = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);
@@ -79,6 +153,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     agentId: resolvedAgentId,
     sessionId,
     composerKey: composerSession.key,
+    workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
   const agent = useAgentApiById(resolvedAgentId);
   const { snapshot, messages, messageWindow } = useLocalConversation({
@@ -86,10 +161,21 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     title: session.data?.name,
     navigation: target.kind === 'session' ? target : undefined,
   });
+  // With several answers to the last question, the next message continues the one shown.
+  const continuesShownAnswer =
+    !messageWindow.hasNewerMessages &&
+    Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const shareMessage = useCallback(
-    (messageId: string) => {
+    (messageId: string, translations?: ChatShareTranslations) => {
       if (sessionId)
-        router.push(conversationShareHref({ source: { kind: 'local' }, sessionId }, messageId));
+        router.push(
+          conversationShareHref(
+            { source: { kind: 'local' }, sessionId },
+            messageId,
+            undefined,
+            createChatShareHandoff(sessionId, translations),
+          ),
+        );
     },
     [sessionId],
   );
@@ -103,8 +189,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
   const initialDraft = composerHandoff?.skillAction
     ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
-    : composerHandoff?.draft;
+    : composerHandoff?.selection
+      ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
+      : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -114,6 +203,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
 
   return (
     <ComposerSessionProvider
+      workspaceSessionId={sessionId}
+      workspaceFolderId={!sessionId ? workspace.folderId : undefined}
       key={composerSession.key}
       initialAttachments={composerHandoff?.attachments}
       initialDraft={initialDraft}
@@ -133,47 +224,51 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           !messageWindow.error ? (
             <SessionReadReceipt sessionId={sessionId} />
           ) : null}
-          {/* Native background taps yield to scrolling and excluded message content. */}
-          <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
-            {sessionId && session.error ? (
-              <View className="flex-1 justify-center px-8 py-16">
-                <ContentState.Error
-                  primaryAction={{
-                    children: t('agent.actions.retry'),
-                    onPress: () => void session.refetch(),
-                  }}
-                  prominence="prominent"
-                  title={t('navigation.chatsLoadFailed')}
+          <FullScreenLayerHost>
+            {/* Native background taps yield to scrolling and excluded message content. */}
+            <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
+              {sessionId && session.error ? (
+                <View className="flex-1 justify-center px-8 py-16">
+                  <ContentState.Error
+                    primaryAction={{
+                      children: t('agent.actions.retry'),
+                      onPress: () => void session.refetch(),
+                    }}
+                    prominence="prominent"
+                    title={t('navigation.chatsLoadFailed')}
+                  />
+                </View>
+              ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+                <ChatWorkspace
+                  feedbackHintBottomOffset={composerHeight}
+                  isTranslationEnabled
+                  renderUsage={renderLocalUsage}
+                  snapshot={snapshot}
+                  messages={messages}
+                  onShare={sessionId ? shareMessage : undefined}
+                  pendingSend={controls.pendingSend}
+                  enteringUserMessageId={controls.enteringUserMessageId}
+                  onPendingSendDisplayed={controls.completePendingSend}
+                  assistantAvatar={agent.agent?.avatar}
+                  assistantAvatarUri={agent.agent?.avatarUri}
+                  assistantName={agent.agent?.name}
+                  isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+                  contentBottomInset={contentBottomInset}
+                  forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+                  forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+                  keyboardOffset={keyboardOffset}
+                  messageWindow={messageWindow}
+                  sessionId={sessionId}
                 />
-              </View>
-            ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
-              <ChatWorkspace
-                renderUsage={renderLocalUsage}
-                snapshot={snapshot}
-                messages={messages}
-                onShare={sessionId ? shareMessage : undefined}
-                pendingSend={controls.pendingSend}
-                enteringUserMessageId={controls.enteringUserMessageId}
-                onPendingSendDisplayed={controls.completePendingSend}
-                assistantAvatar={agent.agent?.avatar}
-                assistantAvatarUri={agent.agent?.avatarUri}
-                assistantName={agent.agent?.name}
-                isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
-                contentBottomInset={contentBottomInset}
-                forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-                forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-                keyboardOffset={keyboardOffset}
-                messageWindow={messageWindow}
-                sessionId={sessionId}
-              />
-            ) : (
-              <ChatEmptyState contentBottomInset={contentBottomInset} />
-            )}
-          </ComposerDismissArea>
+              ) : (
+                <ChatEmptyState contentBottomInset={contentBottomInset} />
+              )}
+            </ComposerDismissArea>
+          </FullScreenLayerHost>
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="expandable">
+            <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
               <View>
                 <ChatInput
                   agentId={resolvedAgentId}
@@ -186,7 +281,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                           messageWindow.messages.map((message) => message.imageResult),
                         )
                   }
+                  placeholder={
+                    continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
+                  }
                   sessionId={sessionId}
+                  selectionHandoff={target.selectionHandoff}
                 />
                 <ChatDockFooter>
                   <Text className="text-center text-xs text-muted-foreground">

@@ -1,12 +1,13 @@
 import type { ConversationMessage } from '@/frontend/appShell/conversation';
-import type { CacheService } from '@/frontend/data/CacheService';
 import {
   TranslationError,
   type TranslationErrorCode,
   type TranslationModule,
 } from '@/shared/contracts/translation';
-import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
+import type { ApiClient } from '@/shared/data/api/types';
+import type { AppLanguage } from '@/shared/utils/languages';
 
+import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import {
   messageTranslationSource,
   type MessageTranslationSource,
@@ -14,6 +15,7 @@ import {
 
 export type MessageTranslationState = Readonly<{
   content: string;
+  translations: Readonly<Partial<Record<AppLanguage, string>>>;
   language?: AppLanguage;
   visible: boolean;
   status: 'idle' | 'running' | 'success' | 'error' | 'cancelled';
@@ -21,12 +23,10 @@ export type MessageTranslationState = Readonly<{
 }>;
 export const EMPTY_TRANSLATION: MessageTranslationState = {
   content: '',
+  translations: {},
   visible: false,
   status: 'idle',
 };
-// Reading aids are recoverable; keep the most recently generated 100 results across all chats.
-const MAX_SAVED_TRANSLATIONS = 100;
-
 type ActiveTranslation = {
   source: MessageTranslationSource;
   controller: AbortController;
@@ -41,23 +41,40 @@ export class MessageTranslationStore {
 
   constructor(
     private readonly translation: TranslationModule,
-    private readonly cache: Pick<CacheService, 'getPersist' | 'setPersist'>,
-    private readonly scope: string,
+    private readonly dataApi: Pick<ApiClient, 'patch'>,
     private readonly sessionId: string,
   ) {}
 
-  private cacheKey(messageId: string, language: AppLanguage) {
-    return JSON.stringify([this.scope, this.sessionId, messageId, language]);
-  }
-
   get(source: MessageTranslationSource): MessageTranslationState {
     const current = this.states.get(source.messageId);
-    if (current?.contentHash === source.contentHash) return current.state;
-    this.states.set(source.messageId, {
-      contentHash: source.contentHash,
-      state: EMPTY_TRANSLATION,
-    });
-    return EMPTY_TRANSLATION;
+    let state = current?.contentHash === source.contentHash ? current.state : EMPTY_TRANSLATION;
+    const saved = source.translations;
+    if (saved?.sourceHash === source.contentHash) {
+      const languages = Object.keys(saved.results) as AppLanguage[];
+      if (languages.some((language) => saved.results[language] && !state.translations[language])) {
+        const translations = { ...state.translations };
+        let latest: { language: AppLanguage; content: string; createdAt: number } | undefined;
+        for (const language of languages) {
+          const result = saved.results[language];
+          if (!result) continue;
+          translations[language] ??= result.content;
+          if (!latest || result.createdAt >= latest.createdAt) latest = { language, ...result };
+        }
+        state =
+          state.status === 'idle' && latest
+            ? {
+                content: latest.content,
+                language: latest.language,
+                translations,
+                visible: false,
+                status: 'success',
+              }
+            : { ...state, translations };
+      }
+    }
+    if (current?.state !== state || current?.contentHash !== source.contentHash)
+      this.states.set(source.messageId, { contentHash: source.contentHash, state });
+    return state;
   }
 
   subscribe(messageId: string, listener: () => void) {
@@ -80,6 +97,19 @@ export class MessageTranslationStore {
     if (state.status !== 'idle') this.publish(source, { ...state, visible: !state.visible });
   }
 
+  getExpandedTranslations(): ChatShareTranslations {
+    const translations: Record<string, ChatShareTranslations[string]> = {};
+    for (const [messageId, { contentHash, state }] of this.states) {
+      if (state.visible && state.language && state.content.trim())
+        translations[messageId] = {
+          sourceHash: contentHash,
+          language: state.language,
+          content: state.content,
+        };
+    }
+    return translations;
+  }
+
   async start(source: MessageTranslationSource, language: AppLanguage) {
     const previous = this.active.get(source.messageId);
     if (previous?.source.contentHash === source.contentHash && previous.language === language) {
@@ -87,14 +117,16 @@ export class MessageTranslationStore {
       return;
     }
     if (previous) this.cancel(source.messageId);
-    const key = this.cacheKey(source.messageId, language);
-    const cached = this.cache.getPersist('chat.translations')[key];
-    if (
-      cached?.contentHash === source.contentHash &&
-      typeof cached.content === 'string' &&
-      cached.content.trim()
-    ) {
-      this.publish(source, { content: cached.content, language, visible: true, status: 'success' });
+    const state = this.get(source);
+    const cached = state.translations[language];
+    if (cached) {
+      this.publish(source, {
+        content: cached,
+        translations: state.translations,
+        language,
+        visible: true,
+        status: 'success',
+      });
       return;
     }
     const controller = new AbortController();
@@ -102,7 +134,13 @@ export class MessageTranslationStore {
     this.active.set(source.messageId, request);
     const isCurrent = () =>
       !controller.signal.aborted && this.active.get(source.messageId) === request;
-    this.publish(source, { content: '', language, visible: true, status: 'running' });
+    this.publish(source, {
+      content: '',
+      translations: state.translations,
+      language,
+      visible: true,
+      status: 'running',
+    });
     try {
       const content = await this.translation.translate(
         { text: source.text, language },
@@ -115,14 +153,20 @@ export class MessageTranslationStore {
         },
       );
       if (!isCurrent()) return;
-      const saved = { ...this.cache.getPersist('chat.translations') };
-      delete saved[key];
-      saved[key] = { contentHash: source.contentHash, content };
-      const keys = Object.keys(saved);
-      for (const oldKey of keys.slice(0, Math.max(0, keys.length - MAX_SAVED_TRANSLATIONS)))
-        delete saved[oldKey];
-      this.cache.setPersist('chat.translations', saved);
-      this.publish(source, { ...this.get(source), content, status: 'success' });
+      await this.dataApi.patch(
+        `/agent-sessions/${this.sessionId}/messages/${source.messageId}/translations`,
+        {
+          body: { sourceHash: source.contentHash, language, content },
+        },
+      );
+      if (!isCurrent()) return;
+      const current = this.get(source);
+      this.publish(source, {
+        ...current,
+        content,
+        translations: { ...current.translations, [language]: content },
+        status: 'success',
+      });
     } catch (error) {
       if (!isCurrent()) return;
       this.publish(source, {
@@ -147,7 +191,7 @@ export class MessageTranslationStore {
     for (const messageId of this.active.keys()) this.cancel(messageId);
   }
 
-  /** A removed, retried or changed answer must not accept a late translation. */
+  /** Cancel stale work; persisted results stay with the message until its text changes. */
   reconcile(messages: readonly ConversationMessage[]) {
     for (const [messageId, request] of this.active) {
       const message = messages.find((candidate) => candidate.key === messageId);
@@ -157,23 +201,9 @@ export class MessageTranslationStore {
           : undefined;
       if (source?.contentHash !== request.source.contentHash) this.cancel(messageId);
     }
-    // A retry can reuse the message ID. Invalidate saved text as soon as that answer
-    // starts changing, even if it eventually regenerates exactly the same words.
     for (const message of messages) {
       if (message.state === 'success' || !this.states.has(message.key)) continue;
       this.states.delete(message.key);
-      const saved = { ...this.cache.getPersist('chat.translations') };
-      let changed = false;
-      for (const { value } of APP_LANGUAGES) {
-        const key = this.cacheKey(message.key, value);
-        if (key in saved) {
-          delete saved[key];
-          changed = true;
-        }
-      }
-      if (changed) {
-        this.cache.setPersist('chat.translations', saved);
-      }
       for (const listener of this.listeners.get(message.key) ?? []) listener();
     }
   }

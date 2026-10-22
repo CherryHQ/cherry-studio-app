@@ -47,6 +47,7 @@ export type {
   RuntimeToolInputPreview,
   RuntimeToolRef,
   RuntimeToolResult,
+  RuntimeTextGenerator,
   RuntimeUsage,
   RuntimeUsageContext,
   RuntimeUsageReport,
@@ -59,6 +60,14 @@ export type {
   FakeRuntimeOptions,
   FakeRuntimeProgram,
 } from './FakeRuntime';
+export {
+  LANES_PER_SESSION,
+  laneKey,
+  parseLaneKey,
+  runtimeLane,
+  sameLane,
+  type RuntimeLane,
+} from './durableTypes';
 export { FakeRuntime } from './FakeRuntime';
 export { raceAbort } from './raceAbort';
 export { type MediaCapabilities, unsupportedMediaNote } from './unsupportedMedia';

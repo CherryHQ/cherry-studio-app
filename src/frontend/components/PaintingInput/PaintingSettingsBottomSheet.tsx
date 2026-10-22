@@ -6,11 +6,11 @@ import {
   Section,
   Slider,
   Switch,
-  TextAnimation,
+  Tabs,
   TextField,
 } from '@cherrystudio/ui/components';
 import type { TFunction } from 'i18next';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -22,7 +22,7 @@ import type {
 } from '@/shared/utils/imageGenerationParams';
 import { getImageParamFields } from '@/shared/utils/imageGenerationParams';
 
-import { imageParamLabel, imageParamOptionLabel } from './imageGenerationLabels';
+import { imageParamLabel, imageParamOptionLabel, simplifiedRatio } from './imageGenerationLabels';
 
 const FIELD_GAP = 8;
 // 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。
@@ -30,19 +30,55 @@ const RATIO_GRID_COLUMNS = 5;
 // 外壳（选中框）固定为正方形，边长 = 单元格宽；1:1 预览方形为其一半，
 // 其它比例按等面积缩放（观感大小一致），并收进外壳内边距。
 const RATIO_SHELL_INSET = 20;
+// Choices this short fit one segmented control; longer lists open their own page.
+const MAX_SEGMENTS = 4;
+
+type PaintingSettingsModelRow = {
+  icon?: ReactNode;
+  label: string;
+  onPress: () => void;
+  providerName?: string;
+};
 
 type PaintingSettingsBottomSheetProps = {
+  /** Shown first when the caller has no model control of its own. */
+  model?: PaintingSettingsModelRow;
   onDismiss: () => void;
   onValueChange: (key: string, value: unknown) => void;
-  resolvedMode: ResolvedImageGenerationMode;
+  resolvedMode: ResolvedImageGenerationMode | undefined;
   values: ImageParamDraft;
 };
+
+/** One fixed order everywhere: shape, count, quality, background, then the rest. */
+const FIELD_PRIORITY: readonly CanonicalParamKey[] = [
+  'aspectRatio',
+  'size',
+  'customSize',
+  'imageResolution',
+  'resolution',
+  'numImages',
+  'maxImages',
+  'quality',
+  'background',
+];
+
+function orderedFields(fields: readonly ImageParamField[]): ImageParamField[] {
+  const rank = (key: CanonicalParamKey) => {
+    const index = FIELD_PRIORITY.indexOf(key);
+    return index === -1 ? FIELD_PRIORITY.length : index;
+  };
+  return fields
+    .map((field, index) => ({ field, index }))
+    .sort((left, right) => rank(left.field.key) - rank(right.field.key) || left.index - right.index)
+    .map(({ field }) => field);
+}
 
 type EnumImageParamField = ImageParamField & {
   spec: Extract<ImageParamField['spec'], { type: 'enum' }>;
 };
 
 export function PaintingSettingsBottomSheet({
+  model,
   onDismiss,
   onValueChange,
   resolvedMode,
@@ -50,7 +86,7 @@ export function PaintingSettingsBottomSheet({
 }: PaintingSettingsBottomSheetProps) {
   const { t } = useTranslation();
   const [activeEnumKey, setActiveEnumKey] = useState<CanonicalParamKey | null>(null);
-  const fields = getImageParamFields(resolvedMode);
+  const fields = orderedFields(getImageParamFields(resolvedMode));
   const activeEnumField = fields.find(
     (field): field is EnumImageParamField =>
       field.key === activeEnumKey && field.spec.type === 'enum' && field.spec.render !== 'chips',
@@ -81,6 +117,7 @@ export function PaintingSettingsBottomSheet({
       ) : (
         <PaintingSettingsRootPage
           fields={fields}
+          model={model}
           onValueChange={onValueChange}
           onEnumPress={setActiveEnumKey}
           values={values}
@@ -92,11 +129,13 @@ export function PaintingSettingsBottomSheet({
 
 function PaintingSettingsRootPage({
   fields,
+  model,
   onEnumPress,
   onValueChange,
   values,
 }: {
   fields: readonly ImageParamField[];
+  model?: PaintingSettingsModelRow;
   onEnumPress: (key: CanonicalParamKey) => void;
   onValueChange: (key: string, value: unknown) => void;
   values: ImageParamDraft;
@@ -108,6 +147,7 @@ function PaintingSettingsRootPage({
       showsVerticalScrollIndicator={false}
       style={styles.page}
     >
+      {model ? <ModelRow model={model} /> : null}
       {fields.map((field) => (
         <PaintingSettingField
           field={field}
@@ -152,6 +192,20 @@ function PaintingSettingField({
         </View>
       );
     case 'enum': {
+      const options = enumOptions(field, fields);
+      if (field.spec.render !== 'chips' && options.length <= MAX_SEGMENTS) {
+        return (
+          <SegmentedField
+            label={label}
+            onChange={(option) => onValueChange(field.key, option)}
+            options={options.map((option) => ({
+              label: imageParamOptionLabel(t, field.key, option),
+              value: option,
+            }))}
+            value={String(value ?? field.spec.default ?? options[0])}
+          />
+        );
+      }
       if (field.spec.render !== 'chips') {
         return (
           <EnumSettingRow
@@ -161,7 +215,6 @@ function PaintingSettingField({
           />
         );
       }
-      const options = enumOptions(field, fields);
       // 比例/尺寸型字段（如 2:3、1024x1024）走截图式比例卡片；auto/custom
       // 等不可解析项在卡片里渲染成虚线占位，纯文字型字段回退普通 chips。
       return options.filter((option) => parseRatio(option)).length >= 2 ? (
@@ -183,14 +236,25 @@ function PaintingSettingField({
     case 'range': {
       const numericValue = typeof value === 'number' ? value : Number(value ?? field.spec.min);
       const isFixed = field.spec.max <= field.spec.min;
+      const step = field.spec.step ?? 1;
+      const stops = Math.floor((field.spec.max - field.spec.min) / step) + 1;
+      if (!isFixed && step >= 1 && stops <= MAX_SEGMENTS) {
+        const { min } = field.spec;
+        return (
+          <SegmentedField
+            label={label}
+            onChange={(option) => onValueChange(field.key, Number(option))}
+            options={Array.from({ length: stops }, (_, index) => {
+              const option = String(min + index * step);
+              return { label: option, value: option };
+            })}
+            value={String(numericValue)}
+          />
+        );
+      }
       return (
         <View className="gap-3">
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="font-medium text-foreground text-sm">{label}</Text>
-            <Text className="text-foreground text-sm" style={styles.tabularText}>
-              {numericValue}
-            </Text>
-          </View>
+          <FieldHeader label={label} value={String(numericValue)} />
           {isFixed ? null : (
             <Slider
               accessibilityLabel={label}
@@ -248,37 +312,31 @@ function AspectRatioField({
   const selectedValue = values[field.key];
   const selectedOption = typeof selectedValue === 'string' ? selectedValue : undefined;
   const { onLayout, width: gridWidth } = useLayoutWidth();
-  // 右侧始终原样显示选中比例（auto/custom 显示选项名）。
-  const headerText = selectedOption ? ratioOptionLabel(t, field.key, selectedOption) : '';
+  // Cells show the shape and ratio; the header adds what they cannot: the exact pixels.
+  const selectedRatio = selectedOption ? parseRatio(selectedOption) : undefined;
+  const selectedPixels =
+    selectedOption && selectedRatio && /^\s*\d+\s*[x×]\s*\d+\s*$/i.test(selectedOption)
+      ? `${selectedRatio.width}×${selectedRatio.height}`
+      : undefined;
   const cellWidth = Math.max(
     48,
     (gridWidth - FIELD_GAP * (RATIO_GRID_COLUMNS - 1)) / RATIO_GRID_COLUMNS,
   );
   return (
-    <View className="gap-2">
-      <View className="flex-row items-center justify-between gap-3">
-        <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
-        <TextAnimation.Rotating
-          text={headerText}
-          textClassName="font-medium text-foreground text-sm"
-        />
+    <View className="gap-3">
+      <FieldHeader label={imageParamLabel(t, field.key)} value={selectedPixels} />
+      <View className="flex-row flex-wrap" onLayout={onLayout} style={styles.chipGrid}>
+        {options.map((option) => (
+          <AspectRatioOption
+            cellWidth={cellWidth}
+            isSelected={selectedValue === option}
+            key={option}
+            label={ratioOptionLabel(t, field.key, option)}
+            onPress={() => onValueChange(field.key, option)}
+            value={option}
+          />
+        ))}
       </View>
-      <Section>
-        <Section.Item density="comfortable">
-          <View className="flex-row flex-wrap" onLayout={onLayout} style={styles.chipGrid}>
-            {options.map((option) => (
-              <AspectRatioOption
-                cellWidth={cellWidth}
-                isSelected={selectedValue === option}
-                key={option}
-                label={ratioOptionLabel(t, field.key, option)}
-                onPress={() => onValueChange(field.key, option)}
-                value={option}
-              />
-            ))}
-          </View>
-        </Section.Item>
-      </Section>
     </View>
   );
 }
@@ -407,6 +465,85 @@ function EnumChipsField({
   );
 }
 
+function ModelRow({ model }: { model: PaintingSettingsModelRow }) {
+  const { t } = useTranslation();
+  return (
+    <NavigationRow
+      label={t('painting.settings.model')}
+      leading={model.icon}
+      onPress={model.onPress}
+      testID="painting-setting-model"
+      value={model.label}
+    />
+  );
+}
+
+/** A choice that opens elsewhere: label on the left, current value and chevron on the right. */
+function NavigationRow({
+  label,
+  leading,
+  onPress,
+  testID,
+  value,
+}: {
+  label: string;
+  leading?: ReactNode;
+  onPress: () => void;
+  testID?: string;
+  value: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`${label}: ${value}`}
+      accessibilityRole="button"
+      className="min-h-11 flex-row items-center gap-3 active:opacity-70"
+      onPress={onPress}
+      testID={testID}
+    >
+      <Text className="font-medium text-foreground text-sm">{label}</Text>
+      <View className="min-w-0 flex-1 flex-row items-center justify-end gap-2">
+        {leading}
+        <Text className="min-w-0 shrink text-muted-foreground text-sm" numberOfLines={1}>
+          {value}
+        </Text>
+        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+      </View>
+    </Pressable>
+  );
+}
+
+function FieldHeader({ label, value }: { label: string; value?: string }) {
+  return (
+    <View className="flex-row items-center justify-between gap-3">
+      <Text className="font-medium text-foreground text-sm">{label}</Text>
+      {value ? (
+        <Text className="text-muted-foreground text-sm" style={styles.tabularText}>
+          {value}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function SegmentedField({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: readonly { label: string; value: string }[];
+  value: string;
+}) {
+  return (
+    <View className="gap-3">
+      <FieldHeader label={label} />
+      <Tabs accessibilityLabel={label} items={options} onValueChange={onChange} value={value} />
+    </View>
+  );
+}
+
 function EnumSettingRow({
   field,
   onPress,
@@ -417,29 +554,19 @@ function EnumSettingRow({
   values: ImageParamDraft;
 }) {
   const { t } = useTranslation();
-  const label = imageParamLabel(t, field.key);
-  const selectedValue = values[field.key];
-  const selectedLabel =
-    selectedValue === undefined
-      ? t('painting.settings.select')
-      : imageParamOptionLabel(t, field.key, String(selectedValue));
-
+  // An unset value means the model's own default applies; say which.
+  const selectedValue = values[field.key] ?? field.spec.default;
   return (
-    <Section>
-      <Section.Item
-        label={label}
-        onPress={onPress}
-        testID={`painting-setting-${field.key}`}
-        trailing={
-          <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
-            <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
-              {selectedLabel}
-            </Text>
-            <ChevronRightIcon className="size-5 shrink-0 text-foreground" />
-          </View>
-        }
-      />
-    </Section>
+    <NavigationRow
+      label={imageParamLabel(t, field.key)}
+      onPress={onPress}
+      testID={`painting-setting-${field.key}`}
+      value={
+        selectedValue === undefined
+          ? t('painting.settings.option.auto')
+          : imageParamOptionLabel(t, field.key, String(selectedValue))
+      }
+    />
   );
 }
 
@@ -571,20 +698,12 @@ function RatioPreview({ value }: { value: string }) {
   );
 }
 
-/** 1024x1024 这类尺寸值化简成 1:1 展示；化简不出简洁比例或非比例值时保留原标签。 */
+/** Pixel sizes read as their simplified ratio; anything else keeps its option label. */
 function ratioOptionLabel(t: TFunction, key: CanonicalParamKey, value: string): string {
   const ratio = parseRatio(value);
-  if (!ratio || !Number.isInteger(ratio.width) || !Number.isInteger(ratio.height)) {
-    return imageParamOptionLabel(t, key, value);
-  }
-  const divisor = greatestCommonDivisor(ratio.width, ratio.height);
-  const width = ratio.width / divisor;
-  const height = ratio.height / divisor;
-  return width <= 32 && height <= 32 ? `${width}:${height}` : imageParamOptionLabel(t, key, value);
-}
-
-function greatestCommonDivisor(a: number, b: number): number {
-  return b === 0 ? a : greatestCommonDivisor(b, a % b);
+  return (
+    (ratio && simplifiedRatio(ratio.width, ratio.height)) ?? imageParamOptionLabel(t, key, value)
+  );
 }
 
 /** 等面积缩放：给定基准面积，各比例观感大小一致，再收进外壳的最大边长内。 */

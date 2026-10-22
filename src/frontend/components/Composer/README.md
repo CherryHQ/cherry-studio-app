@@ -77,9 +77,14 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   as painting settings, use the same action. An alternative field passes its blur handle to
   `activateInput` on focus so background dismissal targets that field; the ordinary field resumes
   ownership on its next focus.
+- `ComposerEditor` and `ComposerEditorAccessories` connect CherryUI's shared compact-to-editing
+  layout and large-editor controls to the app field and translated labels. Callers compose the
+  toolbar and decide what activates editing: chat includes attachments, while painting keeps its
+  automatic reference compact until focus or draft text. The compact accessory is a preview only;
+  attachment preview and removal stay in `ComposerAttachmentStrip` above the active field.
 - `ComposerDock` — connects that input-context state to CherryUI's
-  `Composer.Dock`. Chat uses its `expandable` layout: a compact-height placeholder reserves
-  transcript space while the same dock overlays the conversation during manual expansion.
+  `Composer.Dock`. Chat and painting use its `expandable` layout: a compact-height placeholder
+  reserves content space while the same dock overlays the page during manual expansion.
   Other floating surfaces can use CherryUI's `useComposerDockLayout` inset primitive.
 - `ComposerDismissArea` — ends editing on a completed, unhandled background press. Scrolling and
   child controls cancel the press inside CherryUI's native `BackgroundPressArea`, including a touch
@@ -124,7 +129,7 @@ walk to verify it.
   deletes the library file; an in-flight import may finish after its tile is
   removed, but cannot restore that stale tile. Only explicit library deletion
   removes the file. Managed-file storage announces committed writes and the
-  app-wide `FileQueryBridge` refreshes shared file lists after unmount too.
+  app-wide `DataApiProvider` refreshes shared file lists after unmount too.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
@@ -137,7 +142,7 @@ walk to verify it.
 
 ## Behavior notes
 
-- Chat's screen-local `Composer.Expansion` owns manual large-editor presentation separately from
+- Each chat or painting screen's `Composer.Expansion` owns manual large-editor presentation separately from
   editing and draft state. Expand/collapse never moves the editor into a portal or requests native
   focus/blur. Sending and a newly mounted composer session collapse the large editor. Native
   keyboard hiding and input replacements retain its size choice; only field focus reconnects
@@ -165,6 +170,9 @@ walk to verify it.
   removal, and tools remain available. The send boundary rechecks readiness and
   exposes only managed `fileEntryId` attachments to callers. Import timing logs
   contain only kind, size, result, and duration.
+- Chat passes `workspaceSessionId`, or the selected `workspaceFolderId` before its first send.
+  New imports and newly selected library references use that destination. Switching workspaces
+  preserves already prepared attachment references and their files.
 - The i18n keys are still under `chat.*`. Two of them (`chat.media.camera`,
   `chat.media.photos`) are shared with the settings screens, so a `composer.*`
   namespace would fork strings rather than move them.

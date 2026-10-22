@@ -1,5 +1,6 @@
 import type { RuntimeTool } from '../../runtime';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
+import { EMPTY_TURN_SKILL_PLAN } from '../turnPreparation';
 
 function tool(capabilityId: string, providerName = capabilityId): RuntimeTool {
   return {
@@ -26,7 +27,6 @@ describe('buildAgentSystemPrompt', () => {
       mode: 'minimal',
       agentInstructions: 'Explain simply.',
       appLanguage: 'zh-CN',
-      currentDate: '2026-10-10',
       tools: [
         tool('web_search'),
         tool('read_file'),
@@ -46,7 +46,7 @@ describe('buildAgentSystemPrompt', () => {
       "model provider's native web search and page reading may be available",
     );
     expect(prompt).toContain('Application tools, Skills and plugins are unavailable');
-    expect(prompt).toContain('`2026-10-10`');
+    expect(prompt).not.toContain('The current local date');
     expect(prompt).toContain('`zh-CN`');
     expect(prompt).toContain('<agent_instructions>\nExplain simply.\n</agent_instructions>');
     for (const heading of [
@@ -58,54 +58,12 @@ describe('buildAgentSystemPrompt', () => {
       'Plugin Guides',
       'Tool Availability',
       'Answer Recovery',
-      'System Skills',
       'Skills',
     ]) {
       expect(prompt).not.toContain(`## ${heading}`);
     }
     expect(prompt).not.toContain('Plugin guide body.');
     expect(prompt).not.toContain('Discovery failed.');
-  });
-
-  test('provides system workflows without installation and only with their available built-in tools', () => {
-    const base = { agentInstructions: '', appLanguage: 'en-US' as const };
-    const textOnly = buildAgentSystemPrompt({ ...base, tools: [] });
-    expect(textOnly).toContain('### structured-notes');
-    expect(textOnly).toContain('## Action items');
-    expect(textOnly).not.toContain('### daily-agenda');
-    expect(textOnly).not.toContain('### research-brief');
-    expect(textOnly).not.toContain('### Available Skills');
-
-    const complete = buildAgentSystemPrompt({
-      ...base,
-      tools: [
-        tool('calendar_list_collections', 'mobile_calendar_collections'),
-        tool('calendar_list_events', 'mobile_calendar_events'),
-        tool('web_search', 'mobile_web_search'),
-        tool('web_fetch', 'mobile_web_fetch'),
-      ],
-    });
-    expect(complete).toContain('### daily-agenda');
-    expect(complete).toContain('`mobile_calendar_collections`');
-    expect(complete).toContain('`mobile_calendar_events`');
-    expect(complete).toContain('travel gaps under 15 minutes');
-    expect(complete).toContain('### research-brief');
-    expect(complete).toContain('`mobile_web_fetch`');
-    expect(complete).toContain('at most five bullets');
-    expect(complete).not.toContain('Read `references/');
-
-    const incomplete = buildAgentSystemPrompt({
-      ...base,
-      tools: [tool('calendar_list_events'), tool('web_search')],
-    });
-    expect(incomplete).not.toContain('### daily-agenda');
-    expect(incomplete).not.toContain('### research-brief');
-
-    const denied = buildAgentSystemPrompt({
-      ...base,
-      tools: [tool('web_search'), { ...tool('web_fetch'), approval: 'deny' }],
-    });
-    expect(denied).not.toContain('### research-brief');
   });
 
   test('explains discovery failures even when no MCP tool reached the turn catalog', () => {
@@ -124,7 +82,6 @@ describe('buildAgentSystemPrompt', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '   ',
       appLanguage: 'zh-CN',
-      currentDate: '2026-09-03',
       tools: [],
     });
 
@@ -133,8 +90,8 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('carry it through the necessary tool steps');
     expect(prompt).toContain('persistent memory, or background execution');
     expect(prompt).toContain('The current Cherry Studio App language is `zh-CN`.');
-    expect(prompt).toContain('The current local date is `2026-09-03`.');
-    expect(prompt).toContain('You must write every response in this language');
+    expect(prompt).not.toContain('The current local date');
+    expect(prompt).toContain('Use the app language only as a fallback');
     expect(prompt).not.toContain('## Agent Instructions');
     expect(prompt).not.toContain('## Web Citations');
     expect(prompt).not.toContain('## Web Research');
@@ -142,20 +99,36 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).not.toContain('## Plugin Guides');
   });
 
-  test('preserves user-configured Agent instructions behind the platform rules', () => {
-    const prompt = buildAgentSystemPrompt({
-      agentInstructions: 'Be a playful travel planner.\nAlways propose two options.',
-      appLanguage: 'en-US',
-      tools: [],
-    });
+  test.each(['standard', 'minimal'] as const)(
+    '%s mode respects response-language preferences without weakening platform rules',
+    (mode) => {
+      const prompt = buildAgentSystemPrompt({
+        mode,
+        agentInstructions: 'Be a playful travel planner.\nAlways respond in Persian.',
+        appLanguage: 'en-US',
+        tools: [],
+      });
 
-    expect(prompt).toContain(
-      '<agent_instructions>\nBe a playful travel planner.\nAlways propose two options.\n</agent_instructions>',
-    );
-    expect(prompt.indexOf('## Runtime Rules')).toBeLessThan(
-      prompt.indexOf('## Agent Instructions'),
-    );
-  });
+      expect(prompt).toContain(
+        '<agent_instructions>\nBe a playful travel planner.\nAlways respond in Persian.\n</agent_instructions>',
+      );
+      expect(prompt).toContain("1. Follow the user's explicit request for an output language.");
+      expect(prompt).toContain(
+        '2. Otherwise, follow any response-language preference in the Agent Instructions.',
+      );
+      expect(prompt).toContain("3. Otherwise, match the language of the user's own message");
+      expect(prompt).toContain('using conversation context when it is ambiguous');
+      expect(prompt).toContain('Use the app language only as a fallback');
+      expect(prompt).toContain(
+        "Replies are not limited to the app's supported interface languages",
+      );
+      expect(prompt).not.toContain('You must write every response in this language');
+      expect(prompt).not.toContain('This rule takes precedence over the Agent Instructions');
+      expect(prompt.indexOf('## Runtime Rules')).toBeLessThan(
+        prompt.indexOf('## Agent Instructions'),
+      );
+    },
+  );
 
   test('adds citation rules only for citable built-in web tools', () => {
     const withWeb = buildAgentSystemPrompt({
@@ -207,6 +180,32 @@ describe('buildAgentSystemPrompt', () => {
     expect(withoutFile).not.toContain('## Managed Files');
   });
 
+  test('describes only available Office tools and conditions editing guidance on the catalog', () => {
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('create_document')],
+    });
+    expect(prompt).toContain('For Office work, use `create_document`');
+    expect(prompt).not.toContain('`create_workbook`');
+    expect(prompt).not.toContain('Editing requires');
+    expect(prompt).not.toContain('run_office_script');
+    const scripted = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('create_workbook'), tool('run_office_script')],
+    });
+    expect(scripted).toContain('instead of reading cells in batches');
+    const editing = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('edit_document'), tool('inspect_office_file'), tool('read_office_content')],
+    });
+    expect(editing).toContain('source_sha256');
+    expect(editing).toContain('NEW copy');
+    expect(editing).toContain('compare it with the excerpt before editing');
+  });
+
   test('leaves MCP catalog guidance to the Runtime binding', () => {
     const withMcp = buildAgentSystemPrompt({
       agentInstructions: '',
@@ -245,32 +244,67 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('<agent_instructions>\nKeep the answer brief.\n</agent_instructions>');
   });
 
-  test('grounds Skill authoring in offered tools without exposing internal or denied names as callable tools', () => {
+  test('names deferred built-in tools for tool_search without denied or MCP names', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',
       appLanguage: 'en-US',
       tools: [
-        tool('create_skill'),
         tool('calendar_list_events'),
-        tool('run_js'),
-        { ...tool('calendar_delete_event'), approval: 'deny' },
+        { ...tool('health_query_data'), deferred: true },
+        { ...tool('agent_update'), deferred: true },
+        { ...tool('agent_create'), deferred: true, approval: 'deny' },
+        { ...mcpTool(), deferred: true },
       ],
     });
     expect(prompt).toContain(
-      'Cherry built-in tools offered in this turn: create_skill, calendar_list_events.',
+      'not offered upfront: `health_query_data`, `agent_update`. When a request needs some of them, call `tool_search` once with their exact names as the query and `limit` equal to the number of names',
     );
-    expect(prompt).toContain(
-      'run_js is an internal capability identifier, not a callable model tool',
-    );
-    expect(prompt).toContain('metadata.version as 1.0');
-    expect(prompt).not.toContain('calendar_delete_event');
+    expect(prompt).not.toContain('agent_create');
     expect(
       buildAgentSystemPrompt({
         agentInstructions: '',
         appLanguage: 'en-US',
         tools: [tool('calendar_list_events')],
       }),
-    ).not.toContain('## Create Skills');
+    ).not.toContain('## Tools On Demand');
+  });
+
+  test('states the create-skill workflow only when the user selected it', () => {
+    const tools = [tool('create_skill')];
+    const skills = { ...EMPTY_TURN_SKILL_PLAN, create: true };
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools, skills }),
+    ).toContain('The user selected the built-in create-skill workflow.');
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools }),
+    ).not.toContain('## Create Skill');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [{ ...tool('create_skill'), approval: 'deny' }],
+        skills,
+      }),
+    ).not.toContain('## Create Skill');
+  });
+
+  test('states the workspace contract only when the turn has a workspace', () => {
+    const linked = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('list_workspace'), tool('write_file')],
+    });
+    expect(linked).toContain('## Workspace');
+    expect(linked).toContain('`list_workspace` names it');
+    expect(linked).toContain('files you save or generate are stored there');
+    expect(linked).toContain('list or search it first');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [tool('write_file')],
+      }),
+    ).not.toContain('## Workspace');
   });
 
   test('asks for sandboxed computation only when run_js is in the turn', () => {

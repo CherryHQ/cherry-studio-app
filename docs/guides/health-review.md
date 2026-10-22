@@ -5,9 +5,20 @@ Guideline 2.5.1 because the binary included HealthKit while no primary health or
 was apparent. The record is in [App Store Connect](https://appstoreconnect.apple.com/apps/6809783714/distribution/reviewsubmissions/details/60bc61c3-a844-4654-a356-f3ee7bca99d7).
 The integration was removed for the initial release in [PR #1163](https://github.com/CherryHQ/cherry-studio-app/pull/1163).
 
+Apple then held version 0.4.0 (44) under Guideline 2.1 (Information Needed) with four questions
+about the Clinical Health Records API: how it is integrated and where and how often data is
+uploaded, which features use the data and how users enable or disable it, any other uses, and
+where the data is stored and who can access it. The record is in
+[App Store Connect](https://appstoreconnect.apple.com/apps/6809783714/distribution/reviewsubmissions/details/f3353daf-756b-4ed3-aee3-c4e0ccd5370b).
+Clinical records are available only through providers in a few regions, so they serve almost
+no Cherry Studio users while carrying the strictest review and privacy obligations. The app
+therefore reads no clinical records, CDA documents or verifiable health records and declares no
+Health Records entitlement or clinical usage description. The reply for the next build states
+that removal rather than answering the four questions.
+
 Health remains a system permission plus built-in Agent tools; the app adds no separate health
 page. The feature is Agent health and fitness analysis: read-only authorization, explicit consent
-for every health tool call, and health enabled for the Agent created during first-run onboarding.
+for every personal-health read, and health enabled for the Agent created during first-run onboarding.
 Approval is never promoted by automatic approval mode. The submission must make that feature
 apparent through store metadata, review notes and a recording rather than through extra UI. See
 Apple's [2.5.1, 5.1.2 and 5.1.3 requirements](https://developer.apple.com/app-store/review/guidelines/).
@@ -24,8 +35,11 @@ backup/export and OS backup behavior before distribution.
 
 ## Suggested App Review Notes
 
-Cherry Studio uses Apple Health for AI-assisted health and fitness analysis of activity, sleep,
-heart-rate and workout data. The default Agent created on first launch has Health enabled; for
+Cherry Studio uses Apple Health for AI-assisted health and fitness analysis of the categories
+selected by the user, including activity, sleep, body measurements, symptoms, reproductive health,
+hearing, vision and medications. The app does not use the Clinical Health Records API. Public type
+discovery reads no personal data; every personal-data read still requires sharing approval. The
+default Agent created on first launch has Health enabled; for
 other Agents, open Agents, edit the Agent and enable Health in its capabilities. Read access can
 be requested from Settings > System permissions > Health or on first use.
 

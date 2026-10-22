@@ -9,6 +9,16 @@ export function fitLiveActivityProps<Props extends object>(
   props: Props,
   deepLinkUrl?: string,
 ): Props {
+  // Only buttons render inside ActivityKit. Reply input belongs to the system
+  // notification, so its choice list must not consume ActivityKit's 4 KB budget.
+  const controls = (
+    props as { actions?: { token: string; prompt: string; buttons: unknown[]; reply?: unknown } }
+  ).actions;
+  if (controls?.reply)
+    props = {
+      ...props,
+      actions: { token: controls.token, prompt: controls.prompt, buttons: controls.buttons },
+    };
   const encoder = new TextEncoder();
   const byteLength = (value: object) =>
     encoder.encode(

@@ -1,5 +1,4 @@
 import {
-  type AiPlugin,
   generateImage as aiCoreGenerateImage,
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
@@ -13,7 +12,6 @@ import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { FinishReason, LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
@@ -35,9 +33,6 @@ import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
-import { AiSdkGenerator, buildAgentParams } from './generation';
-import { createAiUsagePlugin } from './generation/aiUsagePlugin';
-import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
 import { listModels as listProviderModels } from './generation/listModels';
 import { resolveAiSdkServing } from './generation/providerConfig';
 import { VertexAuthClient } from './generation/VertexAuthClient';
@@ -49,24 +44,6 @@ export type AiUsageAttribution = Pick<AiUsageCaptureContext, 'source' | 'message
 /** Read at call time by callers created before the attributed message exists. */
 export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
-/** Text generation request — pure transport data. */
-export interface AiGenerateRequest extends AiBaseRequest {
-  usageAttribution?: AiUsageAttribution;
-  system?: string;
-  prompt?: string;
-  messages?: ModelMessage[];
-  uniqueModelId: UniqueModelId;
-}
-
-// ── SDK extensions ─────────────────────────────────────────────────
-
-/** Text generation result; callers decide which finish reasons are usable. */
-export interface AiGenerateResult {
-  finishReason: FinishReason;
-  text: string;
-  usage?: LanguageModelUsage;
-}
-
 /** Image requests accept transport options only; text generation controls have no image meaning. */
 export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | 'requestOptions'> {
   usageAttribution?: AiUsageAttribution;
@@ -74,11 +51,6 @@ export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | '
   mode: ImageGenerationMode;
   paramValues: ParamValues;
   prompt: string;
-  uniqueModelId: UniqueModelId;
-}
-
-export interface AiCheckModelRequest extends AiBaseRequest {
-  timeout?: number;
   uniqueModelId: UniqueModelId;
 }
 
@@ -90,11 +62,13 @@ export interface AiImageResult {
   usage?: unknown;
 }
 
-export interface AiServiceDependencies extends BuildAgentParamsDependencies {
+export interface AiServiceDependencies {
   aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
   model: Pick<ModelService, 'getById'>;
-  provider: BuildAgentParamsDependencies['provider'] &
-    Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
+  provider: Pick<
+    ProviderService,
+    'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey' | 'resolveApiKey'
+  >;
   providerRegistry: Pick<
     ProviderRegistryService,
     'getImageGenerationSupport' | 'listProviderRegistryModels'
@@ -215,58 +189,6 @@ export class AiService extends BaseService {
     return this.vertexAuthClient;
   }
 
-  // ── Text generation (optional cumulative streaming updates) ──
-
-  async generateText(
-    request: AiGenerateRequest,
-    onText?: (text: string) => void,
-  ): Promise<AiGenerateResult> {
-    const signal = request.requestOptions?.signal;
-
-    const repairUsagePlugins: { current?: AiPlugin[] } = {};
-    const {
-      context,
-      credentialReceipt,
-      model,
-      options,
-      plugins,
-      provider,
-      repairToolCall,
-      sdkConfig,
-      tools,
-    } = await this.buildAgentParamsFor(request, () => repairUsagePlugins.current ?? []);
-    const usagePlugin = createAiUsagePlugin(
-      createCaptureContext({
-        provider,
-        model,
-        sdkModelId: sdkConfig.modelId,
-        credentialReceipt,
-        usageAttribution: request.usageAttribution,
-      }),
-      this.services.aiUsageRecord,
-    );
-    repairUsagePlugins.current = [usagePlugin];
-
-    const generator = new AiSdkGenerator({
-      providerId: sdkConfig.providerId,
-      providerSettings: sdkConfig.providerSettings,
-      modelId: sdkConfig.modelId,
-      plugins: [...plugins, usagePlugin],
-      context,
-      repairToolCall,
-      system: request.system,
-      tools,
-      options,
-    });
-
-    // prompt and messages are mutually exclusive in AI SDK; preserve that.
-    return generator.generate(
-      request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
-      signal,
-      onText,
-    );
-  }
-
   // ── Model listing ──
 
   async listModels(request: ListModelsRequest): Promise<Partial<Model>[]> {
@@ -336,14 +258,6 @@ export class AiService extends BaseService {
     const providerSettings = hasInputImages
       ? { ...sdkConfig.providerSettings, fetch: expoFetch }
       : sdkConfig.providerSettings;
-    const usageCaptureContext = createCaptureContext({
-      provider,
-      model,
-      sdkModelId: sdkConfig.modelId,
-      credentialReceipt,
-      usageAttribution: request.usageAttribution,
-    });
-
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
       sdkConfig.providerId,
       providerSettings as never,
@@ -362,7 +276,17 @@ export class AiService extends BaseService {
         ...(request.requestOptions?.headers && {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),
-        onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
+        onProviderCallStart: () =>
+          createProviderCallHandler(
+            createCaptureContext({
+              provider,
+              model,
+              sdkModelId: sdkConfig.modelId,
+              credentialReceipt,
+              usageAttribution: request.usageAttribution,
+            }),
+            this.services.aiUsageRecord,
+          ),
       },
     ).catch((error: unknown) => {
       if (signal?.aborted) throw error;
@@ -389,87 +313,9 @@ export class AiService extends BaseService {
     };
   }
 
-  // ── API validation ──
-
-  /** Probes AI SDK text generation only. Product chat checks use the bound AgentRuntime. */
-  async checkModel(request: AiCheckModelRequest): Promise<{ latency: number }> {
-    const start = performance.now();
-    const timeout = request.timeout ?? 15000;
-    const requestSignal = request.requestOptions?.signal;
-
-    // AbortController on timeout so the HTTP work cancels too (otherwise tokens keep burning).
-    const controller = new AbortController();
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    let abortListener: (() => void) | undefined;
-    let abortPromise: Promise<never> | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
-        controller.abort(new Error('Check model timeout'));
-        reject(new Error('Check model timeout'));
-      }, timeout);
-    });
-
-    try {
-      throwIfAiRequestAborted(requestSignal);
-      if (requestSignal) {
-        abortPromise = new Promise<never>((_, reject) => {
-          abortListener = () => {
-            const reason = getAiRequestAbortReason(requestSignal);
-            controller.abort(reason);
-            reject(reason);
-          };
-          requestSignal.addEventListener('abort', abortListener, { once: true });
-        });
-      }
-
-      const probeRequest = {
-        ...request,
-        requestOptions: { ...request.requestOptions, signal: controller.signal },
-      };
-      const probe = this.generateText({
-        ...probeRequest,
-        system: 'test',
-        prompt: 'hi',
-        reasoningEffort: 'none',
-      });
-      const probes: Promise<unknown>[] = [probe, timeoutPromise];
-      if (abortPromise) {
-        probes.push(abortPromise);
-      }
-
-      await Promise.race(probes);
-      return { latency: performance.now() - start };
-    } finally {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      if (abortListener) {
-        requestSignal?.removeEventListener('abort', abortListener);
-      }
-      if (requestSignal?.aborted) {
-        if (!controller.signal.aborted) {
-          controller.abort(requestSignal.reason);
-        }
-      }
-    }
-  }
-
   private async getProviderForListModels(request: ListModelsRequest): Promise<Provider> {
     if (!request.providerId) throw new Error('listModels requires providerId');
     return this.services.provider.getByProviderId(request.providerId);
-  }
-
-  private async buildAgentParamsFor(
-    request: AiBaseRequest,
-    getRepairUsagePlugins?: () => AiPlugin[],
-  ) {
-    const { provider, model } = await this.getProviderAndModel(request);
-    const built = await buildAgentParams({
-      request,
-      services: this.services,
-      provider,
-      model,
-      getRepairUsagePlugins,
-    });
-    return { ...built, provider, model };
   }
 
   private async getProviderAndModel(
@@ -497,16 +343,4 @@ function stripUndefinedHeaders(
   return Object.fromEntries(
     Object.entries(headers).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
-}
-
-function throwIfAiRequestAborted(signal: AbortSignal | undefined) {
-  if (!signal?.aborted) {
-    return;
-  }
-
-  throw getAiRequestAbortReason(signal);
-}
-
-function getAiRequestAbortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new Error('AI request aborted');
 }

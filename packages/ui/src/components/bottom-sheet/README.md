@@ -75,6 +75,8 @@ pass `closeAction={{ accessibilityLabel: 'Close' }}`. This places an X on the le
 title between equal action columns; `headerAction` stays on the right. The close button uses the
 same dismissal path as the downward gesture, scrim, Android back, and accessibility escape action.
 When showing a second level, `backAction` takes precedence over `closeAction`.
+For a title-only header, omit both actions and pass `titleAlign="center"`. Omitting `titleAlign`
+preserves the default: centered with `closeAction`, start-aligned otherwise.
 
 Set `avoidKeyboard` when the sheet holds a text field. The card then rises with the keyboard frame
 by frame and keeps its footer a small gap above it; once the card reaches the top inset, its body

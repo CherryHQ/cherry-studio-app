@@ -189,6 +189,7 @@ export class McpServerService {
     input: CreateMcpServerDto,
     oauth: NonNullable<RemoteMcpServer['oauth']>,
     previous?: McpServer,
+    signal?: AbortSignal,
   ): Promise<McpServer> {
     const parsed = CreateMcpServerSchema.parse(input);
     const reference = McpOAuthReferenceSchema.parse(oauth);
@@ -196,6 +197,7 @@ export class McpServerService {
     this.validateName(name);
     this.validateOAuthHeaders(parsed.headers);
     const [row] = await this.dbService.withWriteTx(async (tx) => {
+      signal?.throwIfAborted();
       if (previous) {
         const [current] = await tx
           .select()
@@ -213,6 +215,7 @@ export class McpServerService {
         }
       }
       await this.assertNameAvailable(tx, name, previous?.id);
+      signal?.throwIfAborted();
       const values = {
         name,
         endpointUrl: parsed.endpointUrl,
@@ -220,13 +223,15 @@ export class McpServerService {
         oauth: reference,
         isEnabled: true,
       };
-      return previous
+      const rows = await (previous
         ? tx
             .update(mcpServerTable)
             .set(values)
             .where(eq(mcpServerTable.id, previous.id))
             .returning()
-        : tx.insert(mcpServerTable).values(values).returning();
+        : tx.insert(mcpServerTable).values(values).returning());
+      signal?.throwIfAborted();
+      return rows;
     });
     return rowToMcpServer(row);
   }

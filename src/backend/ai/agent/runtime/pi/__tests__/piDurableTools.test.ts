@@ -2,6 +2,8 @@ import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { TSchema } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
+import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
+import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
 import {
   AssistantEntry,
   createRegistry,
@@ -26,7 +28,6 @@ import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
 import { projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { emptyAssistantMessage } from '../piStreamEvents';
-import { admitPiToolCall, PiToolBudget } from '../piToolBudget';
 import { ToolInstructions } from '../piToolInstructions';
 
 /** Preserve the same durable records across Harness instances, as a reopened SQL adapter does. */
@@ -173,6 +174,9 @@ describe('durable capability boundary', () => {
         capability({
           ref: { source: 'builtin', capabilityId: name },
           providerName: name,
+          ...(['find_skills', 'install_skill', 'adapt_skill'].includes(name)
+            ? { deferred: true }
+            : {}),
           execute,
         }),
       ),
@@ -225,32 +229,82 @@ describe('durable capability boundary', () => {
     }
   });
 
-  test('child calls consume the budget before task creation, and a refused call fails without ending the script', async () => {
-    let conversation!: Conversation;
-    const codes: (string | undefined)[] = [];
-    const execute = jest.fn(async () => ({ value: null, artifacts: [] }));
+  test('defers Office schemas while keeping the tools discoverable and callable', async () => {
+    const names = [
+      'create_document',
+      'create_workbook',
+      'create_presentation',
+      'inspect_office_file',
+      'read_office_content',
+      'edit_document',
+      'edit_workbook',
+      'edit_presentation',
+    ];
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve: async () => true,
+      tools: names.map((name) =>
+        capability({
+          ref: { source: 'builtin', capabilityId: name },
+          providerName: name,
+          deferred: true,
+        }),
+      ),
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      const agent = await conversation.agent(BACKGROUND_CONTEXT);
+      expect(agent.tools.map((tool) => tool.name)).toEqual(['tool_search']);
+      expect(agent.deferred.map((tool) => tool.name)).toEqual(names);
+      expect(agent.callable.map((tool) => tool.name)).toEqual(names);
+      await harness.waitForTask(
+        await toolTask(conversation, 'tool_search', { query: 'create_workbook', limit: 1 }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        content: [expect.objectContaining({ text: expect.stringContaining('create_workbook') })],
+      });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  test('nested calls pass the former call limit while invalid arguments still fail without ending the script', async () => {
+    const saved: string[] = [];
+    const execute: RuntimeTool['execute'] = async ({ input }) => {
+      const name = (input as { name: string }).name;
+      saved.push(name);
+      return { value: name, artifacts: [] };
+    };
     const extension = capabilityExtension({
       name: 'cherry',
       tools: [capability({ approval: 'auto', execute }), scriptCapability()],
       approve: async () => true,
-      admitCall: (call, _api, context) => admitPiToolCall(conversation, context, 1, call, ['call']),
       codemode: defineExtension({
         name: 'test-codemode',
         tools: [
           defineTool({
             name: 'codemode',
             parameters: { type: 'object' } as TSchema,
-            description: 'Call with invalid arguments.',
+            description: 'Save a batch of files.',
             replay: 'safe',
             async execute(_args, api, context) {
-              for (let index = 0; index < 70; index++) {
-                const result = await api.executeTool('create_file', {}, context, {
+              for (let index = 0; index < 257; index++) {
+                const name = `note-${index}.txt`;
+                const result = await api.executeTool('create_file', { name }, context, {
                   key: `c${index}`,
                 });
-                expect(result.isError).toBe(true);
-                codes.push(result.diagnostics[0]?.code);
+                expect(result.isError).toBe(false);
+                expect(result.structuredOutput).toMatchObject({ value: name });
               }
-              return { output: [{ type: 'text', text: 'Partial result.' }] };
+              const invalid = await api.executeTool('create_file', {}, context, { key: 'invalid' });
+              expect(invalid.isError).toBe(true);
+              expect(invalid.diagnostics[0]?.code).toBe('invalid_arguments');
+              return { output: [{ type: 'text', text: 'Saved 257 files.' }] };
             },
           }),
         ],
@@ -258,25 +312,68 @@ describe('durable capability boundary', () => {
     });
     const harness = await open(new MemoryStorage(), extension);
     try {
-      conversation = await harness.createConversation(
+      const conversation = await harness.createConversation(
         { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
         BACKGROUND_CONTEXT,
       );
       const id = await toolTask(conversation, 'codemode', {});
       await harness.waitForTask(id, BACKGROUND_CONTEXT);
       expect((await harness.getTask(id, BACKGROUND_CONTEXT))?.state.status).toBe('terminal');
-      // The parent call holds one of the 64 admissions; invalid arguments still spend the rest.
-      expect(codes.slice(0, 63)).toEqual(Array(63).fill('invalid_arguments'));
-      expect(codes.slice(63)).toEqual(Array(7).fill('tool_call_limit_exceeded'));
-      expect(execute).not.toHaveBeenCalled();
-      expect(
-        (await harness.snapshot(PiToolBudget, conversation.id, BACKGROUND_CONTEXT))?.nestedCalls,
-      ).toHaveLength(63);
+      expect(saved).toEqual(Array.from({ length: 257 }, (_, index) => `note-${index}.txt`));
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
         role: 'toolResult',
         isError: false,
-        details: { kind: 'cherry.tool-result', output: { modelValue: 'Partial result.' } },
+        details: { kind: 'cherry.tool-result', output: { modelValue: 'Saved 257 files.' } },
       });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  test('a failed nested call reports its reason to the script', async () => {
+    const message = 'The source file is 70.0 MiB, over the 64.0 MiB limit.';
+    const execute: RuntimeTool['execute'] = async () => ({
+      value: { status: 'error', message },
+      artifacts: [],
+      failure: {
+        scope: 'call',
+        error: { code: 'office_failed', message, retryable: false, origin: 'tool' },
+      },
+    });
+    let diagnostics: unknown;
+    const extension = capabilityExtension({
+      name: 'cherry',
+      tools: [capability({ approval: 'auto', execute }), scriptCapability()],
+      approve: async () => true,
+      codemode: defineExtension({
+        name: 'test-codemode',
+        tools: [
+          defineTool({
+            name: 'codemode',
+            parameters: { type: 'object' } as TSchema,
+            description: 'Save one file.',
+            replay: 'safe',
+            async execute(_args, api, context) {
+              const result = await api.executeTool('create_file', { name: 'a.txt' }, context, {
+                key: 'c1',
+              });
+              diagnostics = result.isError && result.diagnostics;
+              return { output: [{ type: 'text', text: 'done' }] };
+            },
+          }),
+        ],
+      }),
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation, 'codemode', {}), BACKGROUND_CONTEXT);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({ severity: 'error', code: 'office_failed', message }),
+      ]);
     } finally {
       await harness.close(BACKGROUND_CONTEXT);
     }
@@ -317,99 +414,110 @@ describe('durable capability boundary', () => {
     },
   );
 
-  test('completed child artifacts survive parent cancellation, task cleanup and reopening', async () => {
-    const artifact: RuntimeArtifact = {
-      ref: { kind: 'managed-file', fileEntryId: '00000000-0000-7000-8000-000000000001' },
-      name: 'note.txt',
-      mediaType: 'text/plain',
-      kind: 'created',
-    };
-    const created = jest.fn(async () => ({ value: 'saved', artifacts: [artifact] }));
-    let childFinished!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      childFinished = resolve;
-    });
-    const extension = capabilityExtension({
-      name: 'cherry',
-      tools: [capability({ approval: 'auto', execute: created }), scriptCapability()],
-      approve: async () => true,
-      codemode: defineExtension({
-        name: 'test-codemode',
-        tools: [
-          defineTool({
-            name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
-            description: 'Create a file then wait.',
-            replay: 'safe',
-            async execute(_args, api, context) {
-              await api.executeTool('create_file', { name: 'note.txt' }, context, { key: 'c1' });
-              childFinished();
-              return cancelled(context);
-            },
-          }),
-        ],
-      }),
-    });
-    const storage = new ReopenableMemoryStorage();
-    const harness = await open(storage, extension);
-    const conversation = await harness.createConversation(
-      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
-      BACKGROUND_CONTEXT,
-    );
-    const id = await toolTask(conversation, 'codemode', {});
-    try {
-      harness.resume();
-      await ready;
-      await harness.abortTask(id, BACKGROUND_CONTEXT);
-      await harness.waitForTask(id, BACKGROUND_CONTEXT);
-      expect(await harness.snapshot(PiCodemodeFiles, id, BACKGROUND_CONTEXT)).toBeUndefined();
-    } finally {
-      await harness.close(BACKGROUND_CONTEXT);
-    }
-    const reopened = await open(storage, extension);
-    try {
-      const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
-      const entries = (
-        await restored.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
-      ).items;
-      expect(entries.filter(PiCodemodeArtifactsEntry.is)).toHaveLength(1);
-      const turn = projectPiTurn({
-        sessionId: 'session',
-        entries,
-        record: {
-          id: 1,
-          type: 'input',
-          status: 'unanswered',
-          entry: 1,
-          reason: 'aborted',
-        } as unknown as SubmissionRecord,
-        metadata: {
-          kind: 'cherry.input',
-          version: 1,
-          requestId: 'request',
-          turnId: 'turn',
-          userMessageId: 'user',
-          assistantMessageId: 'assistant',
-          createdAt: 1,
-          metadata: {},
-          tools: [],
-        },
+  test.each(['create_file', 'create_document', 'edit_workbook'])(
+    'completed %s child artifacts survive parent cancellation, task cleanup and reopening',
+    async (name) => {
+      const artifact: RuntimeArtifact = {
+        ref: { kind: 'managed-file', fileEntryId: '00000000-0000-7000-8000-000000000001' },
+        name: 'note.txt',
+        mediaType: 'text/plain',
+        kind: name.startsWith('edit_') ? 'derived' : 'created',
+      };
+      const created = jest.fn(async () => ({ value: 'saved', artifacts: [artifact] }));
+      let childFinished!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        childFinished = resolve;
       });
-      expect(turn.parts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: 'tool',
-            state: 'interrupted',
-            output: expect.objectContaining({ artifacts: [] }),
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [
+          capability({
+            ref: { source: 'builtin', capabilityId: name },
+            providerName: name,
+            approval: 'auto',
+            execute: created,
           }),
-          expect.objectContaining({ type: 'file', ref: artifact.ref, name: artifact.name }),
-        ]),
+          scriptCapability(),
+        ],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              parameters: { type: 'object' } as TSchema,
+              description: 'Create a file then wait.',
+              replay: 'safe',
+              async execute(_args, api, context) {
+                await api.executeTool(name, { name: 'note.txt' }, context, { key: 'c1' });
+                childFinished();
+                return cancelled(context);
+              },
+            }),
+          ],
+        }),
+      });
+      const storage = new ReopenableMemoryStorage();
+      const harness = await open(storage, extension);
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
       );
-      expect(created).toHaveBeenCalledTimes(1);
-    } finally {
-      await reopened.close(BACKGROUND_CONTEXT);
-    }
-  });
+      const id = await toolTask(conversation, 'codemode', {});
+      try {
+        harness.resume();
+        await ready;
+        await harness.abortTask(id, BACKGROUND_CONTEXT);
+        await harness.waitForTask(id, BACKGROUND_CONTEXT);
+        expect(await harness.snapshot(PiCodemodeFiles, id, BACKGROUND_CONTEXT)).toBeUndefined();
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+      const reopened = await open(storage, extension);
+      try {
+        const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
+        const entries = (
+          await restored.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        expect(entries.filter(PiCodemodeArtifactsEntry.is)).toHaveLength(1);
+        const turn = projectPiTurn({
+          lane: { sessionId: 'session', slot: 0 },
+          entries,
+          record: {
+            id: 1,
+            type: 'input',
+            status: 'unanswered',
+            entry: 1,
+            reason: 'aborted',
+          } as unknown as SubmissionRecord,
+          metadata: {
+            kind: 'cherry.input',
+            version: 1,
+            requestId: 'request',
+            turnId: 'turn',
+            userMessageId: 'user',
+            assistantMessageId: 'assistant',
+            createdAt: 1,
+            metadata: {},
+            tools: [],
+          },
+        });
+        expect(turn.parts).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'tool',
+              state: 'interrupted',
+              output: expect.objectContaining({ artifacts: [] }),
+            }),
+            expect.objectContaining({ type: 'file', ref: artifact.ref, name: artifact.name }),
+          ]),
+        );
+        expect(created).toHaveBeenCalledTimes(1);
+      } finally {
+        await reopened.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
 
   test.each([
     ['completed', false, { status: 'ok' }],
@@ -563,6 +671,79 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test.each([
+    [{ status: 'created', fileEntryId: 'file' }, false],
+    [{ status: 'error', message: 'Invalid Office source' }, false],
+    [{ status: 'success', file_id: 'file' }, true],
+  ] as const)('validates declared built-in child output %j', async (value, isError) => {
+    const results: unknown[] = [];
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve: async () => true,
+      tools: [
+        scriptCapability(),
+        capability({
+          outputSchema: {
+            anyOf: [
+              {
+                type: 'object',
+                properties: { status: { const: 'created' }, fileEntryId: { type: 'string' } },
+                required: ['status', 'fileEntryId'],
+              },
+              {
+                type: 'object',
+                properties: { status: { const: 'error' }, message: { type: 'string' } },
+                required: ['status', 'message'],
+              },
+            ],
+          },
+          execute: async () => ({ value, artifacts: [] }),
+        }),
+      ],
+      codemode: defineExtension({
+        name: 'test-codemode',
+        tools: [
+          defineTool({
+            name: 'codemode',
+            parameters: { type: 'object' } as TSchema,
+            description: 'Exercise the declared child result.',
+            replay: 'safe',
+            async execute(_args, api, context) {
+              const result = await api.executeTool('create_file', { name: 'note.txt' }, context, {
+                key: 'c1',
+              });
+              results.push(result);
+              return { output: [{ type: 'text', text: 'Done' }] };
+            },
+          }),
+        ],
+      }),
+    });
+    const registered = extension.tools!.find((tool) => tool.name === 'create_file')!;
+    const declaration = renderToolSignature({
+      name: registered.name,
+      inputSchema: registered.parameters as CodemodeJsonSchema,
+      outputSchema: registered.structuredOutputSchema as CodemodeJsonSchema | undefined,
+    });
+    expect(declaration).toContain('fileEntryId: string');
+    expect(declaration).toContain('status: "created"');
+    expect(declaration).toContain('artifacts: Array<');
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation, 'codemode', {}), BACKGROUND_CONTEXT);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ isError });
+      if (!isError)
+        expect(results[0]).toMatchObject({ structuredOutput: { value, artifacts: [] } });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test.each(['completed', 'cancelled'])(
     'nested MCP app results survive a %s parent and reopening, outside the script/model channel',
     async (outcome) => {
@@ -604,6 +785,8 @@ describe('durable capability boundary', () => {
             providerName: 'mcp_widget',
             displayName: 'Widget',
             approval: 'auto',
+            // Raw MCP metadata cannot describe Cherry's bounded script-visible projection.
+            outputSchema: { type: 'object', required: ['counter'] },
             execute,
           }),
         ],
@@ -673,7 +856,7 @@ describe('durable capability boundary', () => {
         expect(content).not.toContain('UI_ONLY');
         expect(content).not.toContain('mcpApp');
         const turn = projectPiTurn({
-          sessionId: 'session',
+          lane: { sessionId: 'session', slot: 0 },
           entries: JSON.parse(JSON.stringify(entries)),
           record: {
             id: 1,

@@ -12,14 +12,17 @@ logging, and the single opening policy shared by the composer, messages, and fil
   callback, viewing a file never enables editing. The tile owns the navigation request lifetime.
 - `LoadedFileEntryPreview`: the same tile with caller-resolved entry, original URI, and preview URI.
 - `FileEntryAttachment`: an assistant deliverable. Images render directly at their aspect ratio,
-  with a height cap of 1.25 times the width; other kinds retain a full-width file row.
+  with a height cap of 1.25 times the width; other kinds retain a full-width file row. Unavailable
+  deliverables are hidden after resolution, including files moved to trash.
 - `FileEntryImage`: the same inline image for callers that already hold a resolved entry and URI.
 - `FileEntrySkeleton` and `FileEntryAttachmentSkeleton`: loading placeholders owned by the adapter.
 - `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
   `document`. JSON, XML, and YAML belong to `text`; PDF and unsupported types belong to `document`.
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
 - `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
-  `document` to the platform. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
+  `document` to the platform. Previews opened from a chat retain that chat's route identity so
+  Office selections return to its existing composer. `openFileEntryWithSystem` is the viewer's
+  explicit escape hatch.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
   the attachment image and painting outputs so neither renders a broken frame.
 

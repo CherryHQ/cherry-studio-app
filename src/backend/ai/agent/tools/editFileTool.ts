@@ -4,7 +4,7 @@
  * Where the result lands depends on who produced the source. A file this turn
  * created is the turn's draft and is rewritten in place, so a turn ends with
  * one artifact however many edits it took. Any other file is history: the edit
- * saves a new version (`report.html` → `report v2.html`) and the source is never
+ * saves a new version at the same logical path and the source is never
  * changed (docs/references/agent/agent-tools-and-resources.md).
  */
 
@@ -18,11 +18,13 @@ import {
   takeCodePoints,
 } from '@/backend/services/file/utf8Text';
 import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
-import { FileEntryIdSchema, nextVersionFilename } from '@/shared/data/types/file';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
 import type { ManagedFileFact, TurnResourceLedger } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
+import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 export const EDIT_FILE_TOOL_NAME = 'edit_file';
 export const EDIT_FILE_MAX_CONTENT_BYTES = 1_048_576;
@@ -36,7 +38,25 @@ export const editFileInputSchema = z.strictObject({
   file_entry_id: z
     .string()
     .refine((value) => FileEntryIdSchema.safeParse(value).success, 'Must be a managed file UUID.')
-    .describe('Managed file id from an attachment or an earlier file tool result.'),
+    .describe('Managed version id from an attachment or an earlier file tool result.')
+    .optional(),
+  path: z
+    .string()
+    .min(1)
+    .max(4096)
+    .optional()
+    .describe('Relative workspace path, instead of file_entry_id.'),
+  base_file_entry_id: z
+    .string()
+    .optional()
+    .describe(
+      'Required with path: the version id returned by the last read. A newer version causes a conflict.',
+    ),
+  base_revision: z
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Required with path: the revision returned by read_file.'),
   old_string: z.string().min(1).describe('Exact, case-sensitive text to replace.'),
   new_string: z.string().describe('Replacement text. Use an empty string to delete the match.'),
   replace_all: z
@@ -47,7 +67,7 @@ export const editFileInputSchema = z.strictObject({
 
 export type EditFileFiles = {
   createTextEntry(
-    input: {
+    input: FilePlacement & {
       data: string;
       mediaType: string;
       name: string;
@@ -65,42 +85,83 @@ export type EditFileFiles = {
 
 /**
  * The slice of the turn ledger this tool consults: which entries are its drafts,
- * and the names already in the Session so a new version does not reuse one.
+ * and which conversation files may be read.
  */
-export type TurnEditScope = Pick<TurnResourceLedger, 'availableFiles' | 'draftFileEntryIds'>;
+export type TurnEditScope = Pick<
+  TurnResourceLedger,
+  'availableFiles' | 'draftFileEntryIds' | 'fileEntryIds'
+>;
 
-export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): RuntimeTool {
-  /** One edit at a time per source (see `runExclusively`). */
-  const queues = new Map<string, Promise<unknown>>();
+type FileEditQueue = { tail: Promise<unknown>; draftId?: FileEntryId };
+
+export function createEditFileTool(
+  files: EditFileFiles,
+  scope: TurnEditScope,
+  access?: WorkspaceFileAccess,
+): RuntimeTool {
   /**
-   * The version this turn already derived from a source. A second edit of the
-   * same source continues that version instead of forking a same-named twin,
-   * which is the "one artifact per turn" rule applied to history as well as
-   * drafts.
+   * A source and the draft derived from it share one queue. Register calls before
+   * resolving their paths, so asynchronous lookups cannot reorder a batch.
    */
-  const versions = new Map<string, FileEntryId>();
+  const queues = new Map<string, FileEditQueue>();
+  /**
+   * The version and revision each of this tool's writes replaced, mapped to what it
+   * wrote. Edits batched in one message all carry the base of the same read; a base
+   * this turn's own queued edit replaced continues from that edit's result. Any
+   * other change keeps the base stale and conflicts.
+   */
+  const written = new Map<string, FileBase>();
+  const latestBase = (base: FileBase): FileBase => {
+    // Revisions only advance, so the chain ends.
+    let next = written.get(baseKey(base));
+    while (next) {
+      base = next;
+      next = written.get(baseKey(base));
+    }
+    return base;
+  };
+  const recordWrite = (source: ManagedFileFact, entry: FileEntry) => {
+    if (source.revision !== undefined)
+      written.set(baseKey({ fileEntryId: source.fileEntryId, revision: source.revision }), {
+        fileEntryId: entry.id,
+        revision: entry.updatedAt,
+      });
+  };
 
   const edit = async (
+    queue: FileEditQueue,
     requestedId: FileEntryId,
     old_string: string,
     new_string: string,
     replace_all: boolean,
     signal: AbortSignal,
+    expected?: FileBase,
   ): Promise<RuntimeToolResult> => {
     // A version this turn already derived is one of its drafts, whether or not
     // the catalog wrapper has granted it yet: parallel calls can reach here
     // before that grant lands.
-    const derived = versions.get(requestedId);
+    const derived = queue.draftId;
     const sourceFileEntryId = derived ?? requestedId;
     const rewritable = derived !== undefined || scope.draftFileEntryIds.has(sourceFileEntryId);
 
     signal.throwIfAborted();
     const source = (await files.resolveAvailable([sourceFileEntryId])).get(sourceFileEntryId);
     if (!source) {
-      return invalid('The managed source file is unavailable.');
+      return invalid('file_unavailable', 'The managed source file is unavailable.');
+    }
+    if (expected) {
+      const base = latestBase(expected);
+      if (base.fileEntryId !== sourceFileEntryId || base.revision !== source.revision)
+        return invalid(
+          'stale_revision',
+          'The draft changed after it was read. Read the file again.',
+        );
     }
     if (source.size > EDIT_FILE_MAX_CONTENT_BYTES) {
-      return invalid(`The source file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`);
+      return invalid(
+        'file_too_large',
+        `The source file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`,
+      );
     }
 
     let bytes: Uint8Array | undefined;
@@ -108,11 +169,11 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       bytes = await files.readAsBytes(source, signal);
     } catch {
       signal.throwIfAborted();
-      return invalid('The managed source file could not be read.');
+      return invalid('file_unreadable', 'The managed source file could not be read.');
     }
     signal.throwIfAborted();
     if (!bytes) {
-      return invalid('The managed source file is unavailable.');
+      return invalid('file_unavailable', 'The managed source file is unavailable.');
     }
 
     let decoded: ReturnType<typeof decodeManagedUtf8>;
@@ -120,17 +181,21 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       decoded = decodeManagedUtf8(bytes, EDIT_FILE_MAX_CONTENT_BYTES);
     } catch (error) {
       if (error instanceof ManagedTextError) {
-        return invalid(describeManagedTextFailure(error.failure, EDIT_FILE_MAX_CONTENT_BYTES));
+        return invalid(
+          error.failure === 'file-bytes' ? 'file_too_large' : 'not_text',
+          describeManagedTextFailure(error.failure, EDIT_FILE_MAX_CONTENT_BYTES),
+        );
       }
       throw error;
     }
 
     const replacements = countOccurrences(decoded.text, old_string);
     if (replacements === 0) {
-      return invalid('old_string was not found in the source file.');
+      return invalid('old_string_not_found', 'old_string was not found in the source file.');
     }
     if (!replace_all && replacements !== 1) {
       return invalid(
+        'old_string_ambiguous',
         'old_string appears multiple times. Include more surrounding text or set replace_all to true.',
       );
     }
@@ -143,7 +208,10 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       decoded.text.length + replacementCount * (new_string.length - old_string.length) >
       EDIT_FILE_MAX_CONTENT_BYTES
     ) {
-      return invalid(`The edited file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`);
+      return invalid(
+        'file_too_large',
+        `The edited file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`,
+      );
     }
 
     const editedText = replace_all
@@ -152,19 +220,26 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
     const data = decoded.hasBom ? `\ufeff${editedText}` : editedText;
     const size = new TextEncoder().encode(data).byteLength;
     if (size > EDIT_FILE_MAX_CONTENT_BYTES) {
-      return invalid(`The edited file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`);
+      return invalid(
+        'file_too_large',
+        `The edited file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`,
+      );
     }
 
     const snippet = changeSnippet(editedText, decoded.text.indexOf(old_string), new_string.length);
 
     signal.throwIfAborted();
     if (rewritable) {
-      const entry = await files.rewriteTextEntry({ data, id: sourceFileEntryId }, signal);
+      const entry = await (access
+        ? access.rewrite({ data, id: sourceFileEntryId, baseUpdatedAt: source.revision }, signal)
+        : files.rewriteTextEntry({ data, id: sourceFileEntryId }, signal));
+      recordWrite(source, entry);
       return {
         value: {
           status: 'edited',
           sourceFileEntryId,
           fileEntryId: entry.id,
+          revision: entry.updatedAt,
           filename: entry.filename,
           size: entry.size,
           replacements: replacementCount,
@@ -176,22 +251,33 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       };
     }
 
-    const entry = await files.createTextEntry(
-      {
-        data,
-        mediaType: source.mediaType,
-        name: nextVersionFilename(source.name, takenNames(scope)),
-        provenance: 'generated',
-      },
-      signal,
-    );
-    versions.set(requestedId, entry.id);
+    const entry = access
+      ? await access.createVersion(
+          sourceFileEntryId,
+          { data, mediaType: source.mediaType, name: source.name, baseUpdatedAt: source.revision },
+          signal,
+        )
+      : await files.createTextEntry(
+          {
+            data,
+            mediaType: source.mediaType,
+            name: source.name,
+            baseFileEntryId: sourceFileEntryId,
+            baseUpdatedAt: source.revision,
+            provenance: 'generated',
+          },
+          signal,
+        );
+    queue.draftId = entry.id;
+    queues.set(entry.id, queue);
+    recordWrite(source, entry);
 
     return {
       value: {
         status: 'edited',
         sourceFileEntryId,
         fileEntryId: entry.id,
+        revision: entry.updatedAt,
         filename: entry.filename,
         size: entry.size,
         replacements: replacementCount,
@@ -213,31 +299,71 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
     providerName: EDIT_FILE_TOOL_NAME,
     displayName: 'Edit file',
     description:
-      'Replace exact text in a Cherry-managed UTF-8 file. Use file_entry_id from an attachment or an earlier file tool result. A file created earlier in this same turn is updated in place and keeps its id; any other file is left unchanged and the edit is saved as a new version (`report.html` becomes `report v2.html`), which further edits in the same turn continue. Use replace_all only when every exact occurrence should change. The result includes a snippet of the edited region and the one-based line it starts at, usable as read_file start_line.',
+      'Replace exact text in a Cherry-managed UTF-8 file. Use file_entry_id from an attachment or an earlier file tool result. A file created earlier in this same turn is updated in place and keeps its id; any other file is preserved as an immutable historical version. Editing a workspace file advances its stable path; editing an approved outside source saves a new workspace copy. A path edit requires base_file_entry_id and base_revision from the last read. Several edits of one file may be sent together with the same base; they apply in order. A conflict requires re-reading. Use replace_all only when every exact occurrence should change. The result includes a snippet of the edited region and the one-based line it starts at, usable as read_file start_line.',
     inputSchema: toRuntimeInputSchema(editFileInputSchema),
     inputPreview: { textField: 'new_string' },
     approval: 'auto',
-    execute({ input, signal }) {
+    async execute({ input, signal }) {
       const parsed = editFileInputSchema.safeParse(input);
       if (!parsed.success) {
-        return Promise.resolve(invalid(`Invalid input: ${z.prettifyError(parsed.error)}`));
+        return Promise.resolve(
+          invalid('invalid_tool_input', `Invalid input: ${z.prettifyError(parsed.error)}`),
+        );
       }
-      const { file_entry_id, new_string, old_string, replace_all = false } = parsed.data;
-      const requestedId = FileEntryIdSchema.parse(file_entry_id);
+      const {
+        base_file_entry_id,
+        base_revision,
+        file_entry_id,
+        new_string,
+        old_string,
+        replace_all = false,
+      } = parsed.data;
+      if (!access && (!file_entry_id || parsed.data.path))
+        return invalid('invalid_tool_input', 'Provide a managed file_entry_id.');
       if (old_string === new_string) {
-        return Promise.resolve(invalid('old_string and new_string must be different.'));
+        return Promise.resolve(
+          invalid('invalid_tool_input', 'old_string and new_string must be different.'),
+        );
       }
       // read_file refuses NUL as binary; writing it would leave a file nothing can read back.
       if (new_string.includes('\0')) {
         return Promise.resolve(
-          invalid('new_string contains NUL characters. Remove them; a text file cannot hold NUL.'),
+          invalid(
+            'invalid_tool_input',
+            'new_string contains NUL characters. Remove them; a text file cannot hold NUL.',
+          ),
         );
       }
-      // Queue on the entry the edit will actually touch, so naming a source and
-      // the version already derived from it does not open two writers on one file.
-      return runExclusively(queues, versions.get(requestedId) ?? requestedId, () =>
-        edit(requestedId, old_string, new_string, replace_all, signal),
-      );
+      // Valid references carry an entry id, even in path mode. Missing ids fail
+      // reference validation inside the queue without touching a file.
+      const key = file_entry_id ?? base_file_entry_id ?? '';
+      const queue = queues.get(key) ?? { tail: Promise.resolve() };
+      queues.set(key, queue);
+      return runExclusively(queue, async () => {
+        signal.throwIfAborted();
+        const base =
+          base_file_entry_id !== undefined && base_revision !== undefined
+            ? latestBase({ fileEntryId: base_file_entry_id, revision: base_revision })
+            : undefined;
+        const requestedId = access
+          ? await access.resolveEdit(
+              base
+                ? {
+                    ...parsed.data,
+                    base_file_entry_id: base.fileEntryId,
+                    base_revision: base.revision,
+                  }
+                : parsed.data,
+            )
+          : FileEntryIdSchema.parse(file_entry_id);
+        if (!access && !scope.fileEntryIds.has(requestedId))
+          return invalid('file_not_in_scope', 'The file is not part of this conversation.');
+        const expected =
+          base_revision === undefined
+            ? undefined
+            : { fileEntryId: base_file_entry_id ?? requestedId, revision: base_revision };
+        return edit(queue, requestedId, old_string, new_string, replace_all, signal, expected);
+      });
     },
   };
 }
@@ -249,30 +375,14 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
  * in-place draft rewrite cannot. Queueing happens synchronously at call time,
  * so the edits also apply in the order the model listed them.
  */
-function runExclusively<T>(
-  queues: Map<string, Promise<unknown>>,
-  key: string,
-  work: () => Promise<T>,
-): Promise<T> {
-  const result = (queues.get(key) ?? Promise.resolve()).then(work);
+function runExclusively<T>(queue: FileEditQueue, work: () => Promise<T>): Promise<T> {
+  const result = queue.tail.then(work);
   // The queued tail never rejects: one failed edit must not fail the next.
-  queues.set(
-    key,
-    result.then(
-      () => undefined,
-      () => undefined,
-    ),
+  queue.tail = result.then(
+    () => undefined,
+    () => undefined,
   );
   return result;
-}
-
-/** Names already visible in this Session, which a new version must not reuse. */
-function takenNames(scope: TurnEditScope): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const file of scope.availableFiles.values()) {
-    names.add(file.name);
-  }
-  return names;
 }
 
 /**
@@ -351,6 +461,13 @@ function replaceSingle(content: string, search: string, replacement: string): st
   return content.slice(0, index) + replacement + content.slice(index + search.length);
 }
 
-function invalid(message: string): RuntimeToolResult {
-  return { value: { status: 'error', message }, artifacts: [] };
+type FileBase = { fileEntryId: string; revision: number };
+
+function baseKey({ fileEntryId, revision }: FileBase): string {
+  return `${fileEntryId}@${revision}`;
+}
+
+/** The code is the diagnostic cause; the message is what the model reads. */
+function invalid(code: string, message: string): RuntimeToolResult {
+  return { value: { status: 'error', code, message }, artifacts: [] };
 }

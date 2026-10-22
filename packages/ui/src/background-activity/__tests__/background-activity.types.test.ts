@@ -9,6 +9,7 @@ type ForbiddenVisualOverrides = Extract<
   | 'iconComponent'
   | 'layout'
   | 'logoUri'
+  | 'logoUris'
   | 'renderContent'
   | 'renderIcon'
   | 'spacing'

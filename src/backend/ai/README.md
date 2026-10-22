@@ -1,21 +1,25 @@
 # Mobile AI Adapters
 
 Two execution paths live here: the conversation turn, which runs on the Agent Runtime contract with
-Pi as its implementation, and non-conversation generation, which runs on the AI SDK behind
-`AiService`. Vendor adaptation for the second path lives in the private source package
+Pi as its implementation, and AI SDK generation behind `AiService`. Translation and session naming
+use the bound `RuntimeTextGenerator` to share chat's provider and OAuth support in one invocation without
+conversation storage or tools. Vendor adaptation for the AI SDK path lives in the private source package
 `@cherrystudio/ai-runtime`; this directory owns the mobile platform and application-service
 boundaries around it.
 
 ## Backend Ownership
 
-- `AiService.ts` owns non-conversation generation, model listing, SDK-only probes, and image generation.
-  Text generation can report cumulative streamed text without creating a conversation turn.
+- `AiService.ts` owns model listing, SDK-only text/protocol probes and image generation.
+  Its explicit-model text API remains an AI SDK boundary; translation, session naming and chat
+  connection checks use the bound Runtime text generator instead.
   Callers supply an explicit `uniqueModelId`; it does not resolve Agent state or stream chat turns.
 - `generation/` is the private implementation of `AiService`: AI SDK request assembly, provider
   configuration, model listing, Vertex authentication, execution, and mobile usage capture. Nothing
   outside `AiService.ts` imports it (ESLint-enforced). It owns no persisted turn state.
 - `agent/runtime/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the
-  Pi Runtime implementation (`docs/references/agent/agent-runtime.md`). This boundary must not
+  Pi Runtime implementation (`docs/references/agent/agent-runtime.md`). Its independent
+  `RuntimeTextGenerator` capability reuses provider resolution for text-only generation and keeps
+  terminal reasons, cancellation, and invocation usage without opening a conversation. This boundary must not
   import application protocol types, persistence, React, or Expo modules (ESLint-enforced). The one
   exception is `runtime/pi/piModelResolver.ts`, the single bridge that turns Provider and Model
   records into a Pi model; lint and the conformance harness draw that line at the same file.
@@ -25,6 +29,8 @@ boundaries around it.
   registration; the Host never constructs one.
   It also retains a small status snapshot for each Session that runs in the current generation,
   with status-only subscriptions for lists; transcript observation remains route-scoped.
+  Automatic summary naming uses the bound text generator with lifecycle cancellation and usage
+  capture; incomplete output leaves the temporary title intact.
 - `agent/modelCheck/` runs a bounded, cancellable chat connection probe through that same bound
   Runtime, without a persisted Session, history, or tools. Bootstrap injects it into the models
   workflow and records usage; only a closed failure category reaches the setup UI.
@@ -36,8 +42,10 @@ boundaries around it.
   declares the system model support factory whose language answer comes from the bound Runtime.
   Anything used by only one execution path belongs to that path — AI SDK provider configuration
   lives in `generation/`, and the Pi language compatibility decision lives in `agent/runtime/pi/`.
-- `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
-  discovery used by MCP settings.
+- `mcp/` owns the mobile Streamable HTTP transport and pooled connection/catalog lifecycle.
+  `McpAppAccess` owns App source/permission/consent policy and `McpAppRuntime` owns live views.
+  Agent and App calls share the invocation path and uncertain-outcome classification. See
+  [MCP Ownership](../../../docs/references/runtime-ownership.md#mcp-ownership).
 - `observability/` owns local diagnostic traces: explicit span handles, bounded metadata capture,
   retained JSONL files, and stable snapshots for future diagnostic packages. `TraceStorageService`
   is lifecycle-owned and flushes on backgrounding and stop; the public instrumentation surface is

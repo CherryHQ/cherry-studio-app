@@ -1,9 +1,9 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.1.0` and
-`@cherrystudio/ai-sdk-provider@0.1.7` in place of local source packages; Expo and device acceptance
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.2` and
+`@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.1.0` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.2.3` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -49,8 +49,9 @@ Native and ownership assessments.
 ### `@cherrystudio/ai-core`
 
 Mobile imports the published `ai-core` package through the private implementation behind
-`AiService`. Production consumers use provider construction, non-conversation text generation,
-model probes, and image generation. `packages/ai-runtime` owns Mobile's provider configuration
+`AiService`. Production consumers use provider construction, SDK-specific text/model probes,
+model discovery and image generation. Translation and session naming instead use the bound Pi
+`RuntimeTextGenerator`, as described in [Provider Integration](./provider-integration.md). `packages/ai-runtime` owns Mobile's provider configuration
 types that the published package does not expose.
 
 The published package also contains Desktop context and Agent helpers. They have no Mobile
@@ -66,14 +67,17 @@ dependency review before the pinned version changes.
 
 ### Dependency resolution
 
-The published `ai-core@2.1.0` and `ai-sdk-provider@0.1.7` require OpenAI SDK `3.0.109`; `ai-core`
+The published `ai-core@2.4.2` and `ai-sdk-provider@0.1.9` require OpenAI SDK `3.0.109`; `ai-core`
 also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
+Both Cherry packages now require Google SDK `3.0.132`. Mobile pins it with its required
+`@ai-sdk/provider@3.0.18` and `@ai-sdk/provider-utils@4.0.58`, retaining the Google model-path and
+image-routing patch.
 Expo-specific dependency choices and Pi patches remain Mobile-owned. A later Desktop version bump
 by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.1.0` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.2.3` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -100,8 +104,8 @@ check, platform exports, and device acceptance before the registry compatibility
 | Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older cached schemas remain readable offline; baseline `2.1.4` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
-| Reasoning wire dialects | Implemented for AI SDK and Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
-| Service tiers | Implemented for the AI SDK request path | Does not add service-tier delivery to Pi conversation requests |
+| Reasoning wire dialects | Implemented for Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
+| Service tiers | Materialized in Model data only | No request path sends a service tier |
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
 | Server tools and model eligibility | Implemented for the Pi conversation path from the bundled declarations; live-provider validation pending | Downloaded catalogs cannot grant a native tool; endpoints without an adapter keep the application Web Search |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |

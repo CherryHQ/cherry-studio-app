@@ -1,12 +1,15 @@
 # Cherry Agent Runtime
 
-> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.2.0.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.3.0.
 
 The experimental branch has replaced this per-turn production contract with upstream-owned durable
 history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active
 persistent contract, storage, tools, presentation, and backup. The baseline below explains the
 legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
 Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
+Translation and automatic naming use the separate `RuntimeTextGenerator` capability on the bound
+service: one text-only provider invocation sharing model resolution and OAuth, without the native
+loop or storage.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -81,8 +84,8 @@ incrementally update a Runtime checkpoint before the first provider turn.
 
 Pi system messages carry instructions and tool declaration changes. The adapter uses Pi's
 transcript helpers to resolve their current values, includes unmeasured changes in request budgets,
-and retains the effective system message when compacting a live loop. `finishTurn` decides whether
-to end before next-turn preparation; reaching the tool budget still allows one final answer.
+and retains the effective system message when compacting a live loop. Pi owns continuation and
+termination; Cherry adds no fixed tool-call count or tool-loop step limit.
 Compaction cancellation passes through Pi's execution Context.
 
 When following an upstream release, update both exact package pins, review the upstream changelogs
@@ -516,6 +519,7 @@ type RuntimeTool = {
   displayName: string
   description: string
   inputSchema: RuntimeJsonValue
+  outputSchema?: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
   failureGroup?: string
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>
@@ -528,6 +532,13 @@ may expose that alias as a direct model function or as the exact target name acc
 model-binding tool; that encoding never changes the tool's `ref`, approval, input, or persisted
 identity. `displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
 provider-native schema object.
+
+`outputSchema` optionally describes a built-in tool's `RuntimeToolResult.value`, including business
+error values. Pi wraps it with the managed artifact schema when declaring and validating Code Mode
+results. Tools without a definition retain an unknown value. MCP uses its bounded content projection
+instead; an upstream MCP output schema must not be applied to that different shape. Output definitions
+participate in the Host's configuration identity, preventing queued turns from changing an active
+tool contract.
 
 The Host supplies an immutable tool snapshot after applying the system catalog, the Agent's
 capability-group deny-list, current Agent MCP configuration, platform availability, system
@@ -574,19 +585,19 @@ The Host projects callback failures into the protocol's error result envelope, r
 callback's `value` in `value.details`. Runtime-only failure policy is not persisted. Partial web
 results therefore remain available in history and as citation sources alongside the error.
 
-Pi permits at most twenty tool-loop steps and sixty-four tool calls per turn. Calls beyond the limit
-do not execute their callback and receive a classified error result. After the current batch settles,
-reaching either limit disables tool selection and allows one final model response using the collected
-results, with instructions to disclose uncertainty and unfinished work. A successful final response
-completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
-request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
-`NONE`). Context exhaustion still stops before another provider request.
+Cherry imposes no fixed tool-call count or tool-loop step limit, including nested Code Mode calls.
+Pi owns continuation and context compaction. A successful tool result does not prove task progress:
+repeated successful calls can continue until the model finishes, execution fails, or the user stops it.
+
+The released `cherry.tool-budget` document keeps its `PiToolBudget` name, version 1, and storage
+semantics. Only `inputId` and `failedGroups` remain active; legacy call counters and final-response
+markers are ignored. Failure groups are isolated by input and survive recovery. Historical
+`tool_call_limit_exceeded` and `tool_step_limit_exceeded` errors remain readable in saved messages.
 
 A turn has no wall-clock deadline. Long generations, such as writing a large file through a tool, are
-legitimate progress, and the step and call budgets already bound runaway tool loops. A turn ends only
-by completing, failing, or being cancelled; cancellation aborts the model, approval waiters, and the
-callback signal before terminalizing live tool parts. Bounded waits belong to the operations that can
-stall: each model request shares a 120-second waiting budget across all API-key attempts. Switching
+legitimate progress. Cancellation aborts the model, approval waiters, and the callback signal before
+terminalizing live tool parts. Bounded waits belong to the operations that can
+stall: each model request shares a 30-minute waiting budget across all API-key attempts. Switching
 keys or receiving stream-start or empty text/thinking events does not reset it; content events
 reset the idle timer, so ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
 request settles on cancellation, source failure, or premature stream closure, even when the source
@@ -883,8 +894,8 @@ Every Runtime implementation passes the same suite:
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
-17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
-    context and callback limits retain classified failure outcomes.
+17. Tool execution can continue beyond former step and call limits; cancellation, context handling,
+    callback limits, and per-input failure-group recovery retain their classified outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded

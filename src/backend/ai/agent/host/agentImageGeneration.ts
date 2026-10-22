@@ -1,4 +1,5 @@
 import type { AiService, AiUsageAttribution } from '@/backend/ai/AiService';
+import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { CreateInternalEntryInput } from '@/backend/services/file/fileStorage';
 import {
@@ -28,6 +29,7 @@ export type AgentImageGenerationPlan = {
 
 export type AgentImageGenerationPort = {
   prepare(input: {
+    workspaceFolderId?: string | null;
     instructions: string;
     model: RuntimeModel;
     parts: readonly AgentInputPart[];
@@ -47,7 +49,7 @@ export function createAgentImageGeneration(dependencies: {
   };
 }): AgentImageGenerationPort {
   return {
-    async prepare({ instructions, model, parts, resources, settings, signal }) {
+    async prepare({ workspaceFolderId, instructions, model, parts, resources, settings, signal }) {
       const uniqueModelId = createUniqueModelId(model.providerId, model.modelId);
       const selectedModel = await raceAbort(dependencies.models.getById(uniqueModelId), signal);
       if (!selectedModel) reject('The selected model is unavailable.');
@@ -57,6 +59,7 @@ export function createAgentImageGeneration(dependencies: {
       }
 
       const files = [...resources.inputFiles.values()];
+      if (workspaceFolderId) await fileLibraryService.resolveDirectory(workspaceFolderId, '.');
       const prompt = parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
       const prepared = createPaintingGenerationStrategy(selectedModel).prepare({
         images: files,
@@ -109,6 +112,7 @@ export function createAgentImageGeneration(dependencies: {
             for (const [index, image] of result.images.entries()) {
               entries.push(
                 await dependencies.storage.createInternalEntry({
+                  folderId: workspaceFolderId ?? null,
                   data: image.base64,
                   mediaType: image.mediaType,
                   name: readableFilename(prompt, {

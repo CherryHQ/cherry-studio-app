@@ -13,7 +13,7 @@ import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
-import type { RuntimeDurableSubmission, RuntimeDurableTurn } from '../durableTypes';
+import type { RuntimeDurableSubmission, RuntimeDurableTurn, RuntimeLane } from '../durableTypes';
 import { RuntimeJsonValueSchema, RuntimeOptionsSchema } from '../runtimeSchemas';
 import {
   createDeniedToolResult,
@@ -51,35 +51,51 @@ export const PiToolBlueprintSchema = z.object({
   displayName: z.string(),
   description: z.string(),
   inputSchema: RuntimeJsonValueSchema,
+  outputSchema: RuntimeJsonValueSchema.optional(),
   inputPreview: z.object({ textField: z.string(), nameField: z.string().optional() }).optional(),
   approval: z.enum(['auto', 'ask', 'deny']),
   failureGroup: z.string().optional(),
   autoApprovalEligible: z.boolean().optional(),
+  deferred: z.boolean().optional(),
 });
 
 const WebToolRouteSchema = z.enum(['client', 'server', 'none']);
 
-export const PiConfigurationSchema = z.object({
-  version: z.literal(1),
-  kind: z.enum(['language', 'image']).default('language'),
-  model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
-  instructions: z.string(),
-  initialInstructions: z
-    .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
-    .max(64)
-    .default([]),
-  options: RuntimeOptionsSchema,
-  tools: z.array(PiToolBlueprintSchema),
-  webTools: z
-    .object({
-      modelToolsPreferred: z.boolean(),
-      clientSearchAvailable: z.boolean(),
-      clientFetchAvailable: z.boolean(),
-    })
-    .optional(),
-  /** Selected with the configuration, so queued, retried and recovered requests share one route. */
-  webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),
-});
+export const PiConfigurationSchema = z
+  .object({
+    version: z.union([z.literal(1), z.literal(2)]),
+    kind: z.enum(['language', 'image']).default('language'),
+    model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
+    instructions: z.string(),
+    initialInstructions: z
+      .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
+      .max(64)
+      .default([]),
+    options: RuntimeOptionsSchema,
+    tools: z.array(PiToolBlueprintSchema),
+    webTools: z
+      .object({
+        modelToolsPreferred: z.boolean(),
+        clientSearchAvailable: z.boolean(),
+        clientFetchAvailable: z.boolean(),
+      })
+      .optional(),
+    /** Selected with the configuration, so queued, retried and recovered requests share one route. */
+    webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),
+  })
+  .transform(({ version, ...configuration }) => ({
+    ...configuration,
+    version: 2 as const,
+    // Released v1 configurations included this Host-owned block before the language rules.
+    // Replace only its first occurrence; an Agent's own instructions may quote the same text.
+    instructions:
+      version === 1 && configuration.instructions.startsWith('# Cherry Studio Mobile Runtime\n\n')
+        ? configuration.instructions.replace(
+            /\n\n## Current Date\n\nThe current local date is `\d{4}-\d{2}-\d{2}`\.(?=\n\n## Response Language\n)/,
+            '',
+          )
+        : configuration.instructions,
+  }));
 
 const PiSubmissionSchema = z.object({
   kind: z.literal('cherry.input'),
@@ -255,7 +271,7 @@ function toolInputPreview(
 }
 
 export function projectPiTurn(options: {
-  sessionId: string;
+  lane: RuntimeLane;
   record: SubmissionRecord;
   metadata: JsonObject | undefined;
   entries: readonly EntryRecord[];
@@ -331,11 +347,11 @@ export function projectPiTurn(options: {
         const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
         const previous = parts.at(-1);
         // Adjacent summaries remain one phase, including across provider retries.
-        // Opaque items stay in model history and keep a growing phase active without an empty row.
+        // Keep a growing phase visible even before its first readable summary arrives.
         if (previous?.type === 'reasoning') {
           if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
           previous.state = state;
-        } else if (block.thinking.trim()) {
+        } else if (block.thinking.trim() || state === 'streaming') {
           parts.push({ id, type: 'reasoning', text: block.thinking, state });
         }
         return;
@@ -598,7 +614,7 @@ export function projectPiTurn(options: {
       }
     }
   return {
-    identity: { sessionId: options.sessionId, turnId: stored.turnId, requestId: stored.requestId },
+    identity: { ...options.lane, turnId: stored.turnId, requestId: stored.requestId },
     userMessageId: stored.userMessageId,
     assistantMessageId: stored.assistantMessageId,
     inputBoundary: record.entry !== undefined ? `pi:${record.entry}` : null,

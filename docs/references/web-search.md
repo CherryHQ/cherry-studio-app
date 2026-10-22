@@ -42,7 +42,7 @@ selected. Each request intersects the stored route with the credentials it actua
 
 Configuration readiness is local and makes no health-check request. Explicit denies and per-call
 approvals cannot be bypassed by a native tool. Requests without Host web policy, including probes,
-never gain native tools. Compaction and budget-exhausted final responses suppress them as well.
+never gain native tools. Compaction requests suppress them as well.
 
 Adapters, by the endpoint the model is actually requested on:
 
@@ -153,12 +153,25 @@ search on every message. See the official
 ## External Runtime
 
 ```text
-WebSearchService -> createWebSearchProvider() -> provider driver -> post-processing
+WebSearchService -> mobile provider adapter -> @cherrystudio/web-search -> mobile HTTP transport
+                 -> mobile post-processing with shared content slicing
 ```
 
 `WebSearchService` lives under `src/backend/services/webSearch` and reads preferences through
 `PreferenceService`. Bootstrap keeps it private. Frontend settings reach provider health checks
 through the narrow `webSearch` workflow module and reach configuration through `PreferenceClient`.
+
+The shared `@cherrystudio/web-search` package owns remote provider metadata, request formats,
+authentication formats, response validation, protocol errors, and result conversion. Mobile pins
+an exact package version and imports each provider through its public entry. It does not copy
+Desktop source or use Desktop source aliases. Protocol fixtures and protocol tests live upstream;
+Mobile tests cover its transport, configuration, credentials, capability selection, and policies.
+
+`mobileWebSearchTransport` uses the existing `createHttpClient` with text responses and all HTTP
+statuses returned to the package. Serialized bodies and URL paths/queries pass through unchanged;
+the package parses responses. Network errors, response-body deadlines, and cancellation stay with
+the mobile transport. The adapter preserves structured errors in the existing per-input failure
+envelope, including upstream codes and HTTP status.
 
 Runtime behavior:
 
@@ -174,27 +187,30 @@ Runtime behavior:
 
 ## Provider Registry
 
-The provider set is closed. Each id has a preset, one hand-written adapter in the registry, and
-settings derived from the preset; users choose among them and supply credentials. Provider ids,
-preset shape, and preference keys are vocabulary shared with Cherry Studio desktop.
+The provider set is closed. Remote presets derive from the shared catalog and an explicit Mobile
+capability allowlist; the registry selects their shared protocol modules. A single mobile adapter
+binds those protocols to the application, with Jina's region/retry policy kept separately. Local
+`fetch` remains mobile-owned. Users choose providers and supply credentials through settings
+derived from these presets. Provider ids, preset shape, and preference keys remain aligned with
+Cherry Studio desktop.
 
 | Provider | Search | Page reading | Credentials |
 | --- | --- | --- | --- |
 | `zhipu` | yes | | Zhipu model provider key |
 | `tavily`, `exa`, `bocha`, `parallel`, `serply` | yes | | API key required |
-| `querit` | yes | yes | API key required |
+| `querit`, `deepseek` | yes | yes | API key required |
 | `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
 | `jina` | yes | yes | API key required to search, optional to read pages |
 | `firecrawl` | yes | yes | API key optional |
 | `searxng` | yes | | self-hosted address; optional basic auth |
-| `crawl4ai` | | yes | self-hosted address; optional token |
+| `crawl4ai` | | yes | self-hosted address with optional token; Cloud requires a key |
 | `fetch` | | yes | none; see [Local Extraction](#local-extraction) |
 
 Each preset capability declares `requiresApiHost` and `requiresApiKey`. Configuration readiness
-and request execution use the same check, so a hostless local reader is available immediately
-and Jina requires a key only for keyword search. `WebSearchService` enforces the requirements
-before any request, so a missing key or address is the same configuration failure for every
-provider. SearXNG has no default address, unlike desktop, because a phone has no local instance
+and request execution share these checks, so a hostless local reader is available immediately
+and Jina requires a key only for keyword search. Host-specific protocol requirements, such as
+Crawl4AI Cloud's API key, are additionally checked by the shared protocol before sending its
+request. SearXNG has no default address, unlike desktop, because a phone has no local instance
 to reach.
 
 Fresh installations retain hosted Exa MCP for keyword search (`web_search_exa`) and Jina Reader
@@ -214,6 +230,14 @@ or an answer from the service is not retried, and an address the user entered is
 SearXNG returns the instance's result snippets and sends the configured engine list only when one
 is stored; it does not read each result page. Several API keys rotate per provider across lookups,
 over distinct keys.
+
+Querit accepts configured addresses with or without `/v1`. Crawl4AI uses `/scrape` for
+`crawl4ai.com` and its subdomains, and `/md` for self-hosted instances. These protocol choices are
+owned by the shared package.
+
+Mobile retains Exa MCP page reading, hostless local extraction, mandatory page-content budgets,
+and failure stopping. It does not adopt Desktop's automatic alternate-provider attempts or
+SearXNG engine discovery/page enrichment. Those would change request counts and failure behavior.
 
 ## Provider Settings
 

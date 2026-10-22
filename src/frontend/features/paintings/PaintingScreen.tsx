@@ -1,115 +1,107 @@
-import { ContentState } from '@cherrystudio/ui/components';
+/* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
+import { ContentState, Spinner } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
-import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { RouteHeader } from '@/frontend/appShell/header';
-import { ReadingContentFrame } from '@/frontend/appShell/layout';
-import { usePainting, useResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
-import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
+import { usePainting } from '@/frontend/data/paintings/usePaintings';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-import { PaintingComposer } from './components/PaintingComposer';
-import { paintingOpenState } from './utils/paintingOpenState';
+import { PaintingBoardWorkspace } from './components/PaintingBoardWorkspace';
 
+/**
+ * `/paintings` opens a painting board. A `boardId` (gallery card) opens the
+ * board where the user last left it; a `paintingId` (task notification, file
+ * library) opens its board focused on that painting, with `fileEntryId`
+ * choosing one of its images; neither starts a new board.
+ */
 export function PaintingScreen() {
   const { t } = useTranslation();
+  const { theme } = useUniwind();
   const router = useRouter();
-  // Screen-scoped rather than `router.setParams`: the receipt id can land after
+  // Screen-scoped rather than `router.setParams`: the receipt can land after
   // the user has already navigated away, and the router's version would write
-  // it into whatever route is focused by then.
-  // `RootParamList` is empty here (no generated route types), so the default
-  // `setParams` signature takes `undefined`; name the params this screen owns.
+  // into whatever route is focused by then.
   const navigation = useNavigation<{
-    setParams(params: { handoff: undefined; paintingId: string | undefined }): void;
+    setParams(params: {
+      boardId: undefined;
+      fileEntryId: undefined;
+      paintingId: string | undefined;
+    }): void;
   }>();
   const params = useLocalSearchParams<{
-    handoff?: string | string[];
+    boardId?: string | string[];
+    fileEntryId?: string | string[];
     paintingId?: string | string[];
   }>();
-  const handoffToken = getSingleRouteParam(params.handoff);
-  const paintingId = getSingleRouteParam(params.paintingId);
-  const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
-  // Opening a persisted painting gates the composer on its data. The gate closes
-  // for good once that data has seeded the composer: a generation later writes
-  // its receipt id into the route, and re-entering the gate would tear the
-  // composer down mid-generation.
-  const [isOpeningPainting, setIsOpeningPainting] = useState(paintingId !== undefined);
-  const paintingQuery = usePainting(paintingId);
-  const painting = paintingQuery.data;
-  // A handoff (edit / resize / album) already seeds the composer — the source
-  // image rides in as an input attachment — so the painting's own resolved files
-  // must not surface: the canvas stays blank for the fresh result instead of
-  // echoing the old output back at the user. Skip resolving them entirely then.
-  const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
-  const openState = isOpeningPainting
-    ? paintingOpenState({
-        files: filesQuery.data,
-        filesError: filesQuery.error,
-        hasHandoff: Boolean(handoff),
-        isFilesLoading: filesQuery.isLoading,
-        isPaintingLoading: paintingQuery.isLoading,
-        painting,
-        paintingError: paintingQuery.error,
-      })
-    : 'ready';
-  // Render-phase adjustment (not an effect): the guard makes the setState
-  // idempotent, so the extra render pass converges immediately.
-  if (isOpeningPainting && openState === 'ready') {
-    setIsOpeningPainting(false);
-  }
-  const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
-  useBackgroundTaskNotifications(
-    paintingId ? { kind: 'painting', paintingId } : undefined,
-    !handoffToken && Boolean(painting) && openState !== 'loading',
-  );
+  // Only the opening painting locates the board; later receipts rewrite the
+  // route for task identity without re-entering this gate.
+  const [opening] = useState(() => getSingleRouteParam(params.paintingId));
+  const [initialFileEntryId] = useState(() => getSingleRouteParam(params.fileEntryId));
+  const [openingBoardId, setOpeningBoardId] = useState(() => getSingleRouteParam(params.boardId));
+  const paintingQuery = usePainting(openingBoardId ? undefined : opening);
+  // Once located, the board outlives the opening painting, which may be deleted on this page.
+  if (!openingBoardId && paintingQuery.data) setOpeningBoardId(paintingQuery.data.boardId);
+  const foreground = useThemeColor('foreground');
   const handleReceipt = useCallback(
-    // Admission changes the draft's route identity to its own task. Keep its
-    // mounted composer state, but stop identifying it with the source painting.
-    (receiptId: string | undefined) =>
-      navigation.setParams({ handoff: undefined, paintingId: receiptId }),
+    (paintingId: string | undefined) =>
+      navigation.setParams({ boardId: undefined, fileEntryId: undefined, paintingId }),
     [navigation],
   );
-  const initialAttachments = handoff?.attachments ?? [];
-  const initialDraft = handoff?.draft ?? '';
+  const close = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/drawings');
+  }, [router]);
 
-  return (
-    <ReadingContentFrame>
-      {openState !== 'ready' ? <RouteHeader /> : null}
-      {openState === 'loading' ? (
-        <View className="flex-1 justify-center">
-          <ContentState.Loading />
-        </View>
-      ) : openState === 'ready' ? (
-        <PaintingComposer
-          initialAttachments={initialAttachments}
-          initialDraft={initialDraft}
-          initialFiles={paintingFiles}
-          initialParamValues={handoff?.paramValues}
-          isHandoff={Boolean(handoff)}
-          onReceipt={handleReceipt}
-          painting={painting}
+  let content;
+  if (opening && !openingBoardId) {
+    content = paintingQuery.isLoading ? (
+      <View className="flex-1 items-center justify-center">
+        <Spinner
+          accessibilityLabel={t('painting.board.loading')}
+          accessibilityRole="progressbar"
+          color={foreground}
         />
-      ) : (
+      </View>
+    ) : (
+      <>
+        <RouteHeader onBack={close} />
         <View className="flex-1 justify-center px-8 py-16">
           <ContentState.Error
-            title={t(openState === 'loadFailed' ? 'painting.loadFailed' : 'painting.unavailable')}
+            description={t('painting.board.unavailableDescription')}
             primaryAction={{
               children: t('common.retry'),
-              onPress: () => {
-                void paintingQuery.refetch();
-                void filesQuery.refetch();
-              },
+              onPress: () => void paintingQuery.refetch(),
             }}
-            secondaryAction={{
-              children: t('common.back'),
-              onPress: () => (router.canGoBack() ? router.back() : router.replace('/drawings')),
-            }}
+            prominence="prominent"
+            secondaryAction={{ children: t('common.back'), onPress: close }}
+            title={t('painting.board.unavailable')}
           />
         </View>
-      )}
-    </ReadingContentFrame>
+      </>
+    );
+  } else {
+    content = (
+      <PaintingBoardWorkspace
+        boardId={openingBoardId}
+        initialFocus={
+          opening ? { fileEntryId: initialFileEntryId, paintingId: opening } : undefined
+        }
+        onClose={close}
+        onReceipt={handleReceipt}
+      />
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-background">
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      {content}
+    </View>
   );
 }

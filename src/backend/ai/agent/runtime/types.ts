@@ -67,6 +67,23 @@ export interface AgentRuntimeSession {
   close(): Promise<void>;
 }
 
+/** One text-only provider invocation, without conversation storage, history, or tools. */
+export interface RuntimeTextGenerator {
+  generateText(
+    request: {
+      model: RuntimeModel;
+      instructions: string;
+      text: string;
+      options: RuntimeOptions;
+    },
+    options?: {
+      signal?: AbortSignal;
+      onText?: (text: string) => void;
+      onUsage?: (report: RuntimeUsageReport) => Promise<void>;
+    },
+  ): Promise<{ finishReason: string; text: string }>;
+}
+
 export type RuntimeModel = {
   providerId: string;
   modelId: string;
@@ -271,9 +288,16 @@ export type RuntimeTool = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
+  /** Built-in result.value JSON Schema, including business errors; MCP uses bounded content. */
+  outputSchema?: RuntimeJsonValue;
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
+  /**
+   * `read` only for application-owned tools known not to change anything outside
+   * the conversation. Absent means unknown and is treated as a write.
+   */
+  effect?: 'read' | 'write';
   /** Tools in the same group stop together after a tool-scoped failure. */
   failureGroup?: string;
   /**
@@ -283,6 +307,8 @@ export type RuntimeTool = {
   autoApprovalEligible?: boolean;
   /** Refuse before approval until a trusted instruction section with this key is in context. */
   requiredInstructions?: { key: string; refusal: string };
+  /** Low-frequency tools are found through tool_search instead of sent with every request. */
+  deferred?: boolean;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

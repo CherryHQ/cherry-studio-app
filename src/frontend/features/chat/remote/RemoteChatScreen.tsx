@@ -38,6 +38,7 @@ import {
 } from '@/frontend/components/Composer';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
+import { useBackendModule } from '@/frontend/data';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
@@ -140,9 +141,11 @@ function RemoteChatSession() {
   const source = useRemoteConversationSource();
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
+  const desktopConnections = useBackendModule('desktopConnections');
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
     useRemoteChatNavigation(target, source);
   const opened = useConversation(
@@ -208,7 +211,7 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
-                translationScope={JSON.stringify([target.connectionId, source.draftScope])}
+                feedbackHintBottomOffset={composerHeight}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
                 onShare={opened.session ? shareMessage : undefined}
@@ -224,11 +227,14 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="expandable">
+          <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
             <View>
               <ConversationStatus
                 availability={availability}
                 onRepair={() => router.push('/settings/device-connections')}
+                onReconnect={
+                  connectionId ? () => desktopConnections.reconnect(connectionId) : undefined
+                }
                 onOpenDeviceSettings={
                   connectionId
                     ? () =>

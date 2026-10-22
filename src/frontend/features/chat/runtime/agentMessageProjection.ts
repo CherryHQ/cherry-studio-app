@@ -170,6 +170,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'text':
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
+        part.selectionReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction
         ? withCherryMeta(
@@ -178,6 +179,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
               references: [
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
+                ...(part.selectionReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',
@@ -289,7 +291,7 @@ function toDisplayParts(
           text: sourcePart.text.trim() ? `${previous.text}\n\n${sourcePart.text}` : previous.text,
           state: sourcePart.state,
         };
-      } else if (sourcePart.text.trim()) {
+      } else if (sourcePart.text.trim() || sourcePart.state === 'streaming') {
         displayParts.push(projectAgentPart(sourcePart, cache).part);
         partKeys.push(sourcePart.id);
       }
@@ -353,22 +355,38 @@ export function toAgentMessageListItem(
   const model = resolveMessageModel(message);
   const item = {
     createdAt: message.createdAt,
-    data: toDisplayParts(
-      message.status === 'cancelled'
-        ? message.parts.filter(
-            (part) =>
-              part.type !== 'data-error' ||
-              (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
-          )
-        : message.parts,
-      cache,
-    ),
+    data: {
+      ...toDisplayParts(
+        message.status === 'cancelled'
+          ? message.parts.filter(
+              (part) =>
+                part.type !== 'data-error' ||
+                (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
+            )
+          : message.parts,
+        cache,
+      ),
+      ...(message.translations ? { translations: message.translations } : {}),
+    },
     id: message.id,
     ...(message.inferenceSnapshot?.status === 'supported' &&
     message.inferenceSnapshot.snapshot.imageGeneration
       ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
       : {}),
     ...(model ? { model } : {}),
+    // Only answers are switched in the transcript; a question has one answer path to follow.
+    ...(message.siblings && message.role === 'assistant'
+      ? {
+          branch: {
+            key: `answers:${message.parentId}`,
+            siblings: message.siblings.map((sibling) => ({
+              id: sibling.id,
+              status: toDisplayStatus(sibling.status),
+              modelId: sibling.modelId,
+            })),
+          },
+        }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
@@ -439,7 +457,15 @@ export function mergeAgentMessageViews(
     while (liveIndex < newLive.length && compareMessages(newLive[liveIndex], message) < 0) {
       merged.push(newLive[liveIndex++]);
     }
-    merged.push(liveById.get(message.id) ?? message);
+    const active = liveById.get(message.id);
+    merged.push(
+      active &&
+        message.translations &&
+        active.translations !== message.translations &&
+        (!active.translations || message.updatedAt >= active.updatedAt)
+        ? { ...active, translations: message.translations }
+        : (active ?? message),
+    );
   }
   merged.push(...newLive.slice(liveIndex));
   return merged;

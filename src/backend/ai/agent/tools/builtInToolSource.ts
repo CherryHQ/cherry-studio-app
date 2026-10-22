@@ -29,6 +29,7 @@ import { fileContent } from '@/backend/services/file/fileContent';
 import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
+import { getCharacterStudioInstructions } from '@/backend/services/skill';
 import {
   canRequestDevicePermission,
   canUseDevicePermission,
@@ -36,6 +37,7 @@ import {
 } from '@/shared/contracts';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { isDataApiError } from '@/shared/data/api/errors';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import {
   type BuiltInToolDescriptor,
@@ -62,7 +64,14 @@ import {
   type DeviceToolDependencies,
 } from './device';
 import { createEditFileTool } from './editFileTool';
+import {
+  createFileLibraryManagementTools,
+  type FileLibraryTrashAccess,
+} from './fileLibraryManagementTools';
+import { createFileLibraryTools } from './fileLibraryTools';
 import { createImageProcessTool } from './imageProcessTool';
+import { officeFiles } from './officeFiles';
+import { createOfficeTools } from './officeTools';
 import {
   type ConfiguredPaintingModel,
   createGenerateImageTool,
@@ -72,6 +81,7 @@ import {
 import { createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
+import { WorkspaceFileAccess } from './workspaceFileAccess';
 import { createWriteFileTool } from './writeFileTool';
 
 const logger = loggerService.withContext('BuiltInToolSource');
@@ -99,6 +109,7 @@ export type { TurnFileScope, TurnToolResources } from '../resources/managedFileR
 export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
+    workspaceFolderId?: string | null;
     agentId?: string;
     /** The Host's response channel for `ask_user_question`. */
     askUser: AskUserQuestion;
@@ -115,7 +126,8 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
     avatars: AvatarCharacterToolDependencies;
-    /** Null on clients built without the native sandbox, which omits `run_js`. */
+    trash: FileLibraryTrashAccess;
+    /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
     platform: string;
@@ -134,6 +146,7 @@ export type SystemCapabilityServices = {
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
+  trash: FileLibraryTrashAccess;
 };
 
 export function createSystemCapabilitySource(
@@ -142,6 +155,7 @@ export function createSystemCapabilitySource(
 ): SystemCapabilitySource {
   return {
     async getTools({
+      workspaceFolderId,
       agentId,
       askUser,
       disabledCapabilities,
@@ -157,6 +171,10 @@ export function createSystemCapabilitySource(
       }
 
       const scope = await resolveScope(deps, new Set(disabledCapabilities));
+      const fileAccess = new WorkspaceFileAccess(workspaceFolderId ?? null, resources);
+      const workspaceName = workspaceFolderId
+        ? (await fileAccess.library.folder(workspaceFolderId))?.name
+        : undefined;
       const catalog = createCatalog(
         deps,
         scope,
@@ -165,12 +183,37 @@ export function createSystemCapabilitySource(
         resolveUsageAttribution,
         agentId,
         askUser,
+        fileAccess,
+        workspaceName,
       );
-      return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
+      const tools = BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
-        return policy && tool ? [bindTurnResources({ ...tool, ...policy }, resources)] : [];
+        return policy && tool
+          ? [
+              bindTurnResources(
+                { ...tool, ...policy, effect: descriptor.effect ?? 'write' },
+                resources,
+              ),
+            ]
+          : [];
       });
+      const characterInstructions = getCharacterStudioInstructions(
+        new Map(
+          tools.flatMap((tool) =>
+            tool.ref.source === 'builtin'
+              ? [[tool.ref.capabilityId, tool.providerName] as const]
+              : [],
+          ),
+        ),
+      );
+      return tools.map((tool) =>
+        tool.ref.source === 'builtin' &&
+        tool.ref.capabilityId === 'avatar_character_save' &&
+        characterInstructions
+          ? { ...tool, description: `${tool.description}\n\n${characterInstructions}` }
+          : tool,
+      );
     },
   };
 }
@@ -247,6 +290,8 @@ function createCatalog(
   resolveUsageAttribution: AiUsageAttributionResolver | undefined,
   agentId: string | undefined,
   askUser: AskUserQuestion,
+  fileAccess: WorkspaceFileAccess,
+  workspaceName: string | undefined,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -260,9 +305,14 @@ function createCatalog(
         rewriteTextEntry: fileContent.rewriteTextEntry,
       },
       resources,
+      fileAccess,
     ),
-    createReadFileTool(managedFileResolver, resources, documentParserMode),
-    createWriteFileTool(fileContent),
+    createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
+    createWriteFileTool(fileContent, fileAccess),
+    ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
+    ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
+    // Office jobs read and write their files natively, which older clients cannot do.
+    ...(deps.jsSandbox?.files ? createOfficeTools(deps.jsSandbox, officeFiles, fileAccess) : []),
     createImageProcessTool(
       {
         createInternalEntry: paintingFileStorage.createInternalEntry,
@@ -280,7 +330,19 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
-    createGenerateImageTool(deps.painting, scope.paintingModel, resources, resolveUsageAttribution),
+    createGenerateImageTool(
+      {
+        ...deps.painting,
+        files: {
+          ...deps.painting.files,
+          createInternalEntry: (input) =>
+            deps.painting.files.createInternalEntry({ ...input, folderId: fileAccess.folderId }),
+        },
+      },
+      scope.paintingModel,
+      resources,
+      resolveUsageAttribution,
+    ),
   ];
   return new Map(
     tools.flatMap((tool) =>
@@ -294,7 +356,17 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
   return {
     ...tool,
     async execute(call) {
-      const output = await tool.execute(call);
+      let output;
+      try {
+        output = await tool.execute(call);
+      } catch (error) {
+        if (isDataApiError(error))
+          return {
+            value: { status: 'error', code: error.code, message: error.message },
+            artifacts: [],
+          };
+        throw error;
+      }
       for (const artifact of output.artifacts) {
         const fileEntryId = FileEntryIdSchema.safeParse(artifact.ref.fileEntryId);
         if (!fileEntryId.success) {
@@ -393,6 +465,7 @@ function resolveDependencies(
   return {
     agents: overrides.agents ?? agentService,
     avatars: overrides.avatars ?? productionAvatarDependencies(),
+    trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

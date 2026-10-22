@@ -13,7 +13,7 @@ export function useFileUri(entryId: FileEntryId, { enabled = true }: { enabled?:
 
   return useQuery({
     enabled,
-    queryFn: () => file.getUri(entryId),
+    queryFn: async () => (await file.getUri(entryId)) ?? null,
     queryKey: queryKeys.files.uri(entryId),
     retry: false,
   });
@@ -29,7 +29,9 @@ export function useResolvedFile(entryId: FileEntryId | undefined) {
     enabled: entryId !== undefined && Boolean(entryQuery.data),
   });
   const data =
-    entryQuery.data && uriQuery.data ? { entry: entryQuery.data, uri: uriQuery.data } : null;
+    !entryQuery.error && !uriQuery.error && entryQuery.data && uriQuery.data
+      ? { entry: entryQuery.data, uri: uriQuery.data }
+      : null;
 
   return {
     data,

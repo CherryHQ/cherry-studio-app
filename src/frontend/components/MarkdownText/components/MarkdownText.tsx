@@ -7,7 +7,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { FontSizeStep } from '@/shared/data/preference';
 
-import { resolveCitationLinkUrl } from '../citationLink';
+import { CITATION_LINK_PREFIX, resolveCitationLinkUrl } from '../citationLink';
 
 type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;
@@ -33,6 +33,7 @@ export function MarkdownText({
 
   return (
     <CherryMarkdownText
+      citationLinkPrefix={CITATION_LINK_PREFIX}
       fontSizeStep={normalizeFontSizeStep(fontSizeStep ?? storedFontSizeStep)}
       isStreaming={isStreaming}
       markdown={markdown}

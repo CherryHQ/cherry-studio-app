@@ -25,11 +25,18 @@ const mockChatState: AgentSessionChatState = {
   status: 'ready',
   sessionId: 'session-1',
   activeTurn: null,
+  queuedInputs: [],
   liveMessages: [],
   pendingApprovals: [],
   pendingQuestion: null,
 };
-const mockSubscribe = jest.fn(() => () => undefined);
+const mockChatListeners = new Set<() => void>();
+const mockSubscribe = jest.fn((_sessionId: string, listener: () => void) => {
+  mockChatListeners.add(listener);
+  return () => {
+    mockChatListeners.delete(listener);
+  };
+});
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
@@ -60,6 +67,9 @@ jest.mock('../AgentSessionChatClient', () => ({
   isAgentSessionBusy: jest.requireActual<typeof import('../AgentSessionChatClient')>(
     '../AgentSessionChatClient',
   ).isAgentSessionBusy,
+  isAgentSessionExecuting: jest.requireActual<typeof import('../AgentSessionChatClient')>(
+    '../AgentSessionChatClient',
+  ).isAgentSessionExecuting,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
     cancelTurn: mockCancelTurn,
     dispose: mockDispose,
@@ -118,11 +128,26 @@ describe('ChatProvider Draft handoff', () => {
     chatControls = undefined;
     draftHandoff = undefined;
     imageResult = undefined;
+    mockChatListeners.clear();
+    mockChatState.status = 'ready';
     mockChatState.liveMessages = [];
     mockChatState.activeTurn = null;
+    mockChatState.queuedInputs = [];
     mockChatState.isSubmitting = false;
+    mockChatState.snapshot = undefined;
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
+  });
+
+  it('keeps a queued-only composer sendable without showing an active-generation stop state', () => {
+    mockChatState.queuedInputs = [
+      { turnId: 'waiting', assistantMessageId: 'answer', userMessage: {} as AgentMessageView },
+    ];
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
   });
 
   afterEach(() => {
@@ -149,7 +174,130 @@ describe('ChatProvider Draft handoff', () => {
     act(() => {
       void currentControls().cancel();
     });
-    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1', 'active-answer');
+  });
+
+  it('follows the selected answer instead of another model still running in the background', async () => {
+    const selected: AgentMessageView = {
+      ...imageMessage('selected'),
+      parentId: 'question',
+      status: 'streaming',
+    };
+    const background: AgentMessageView = { ...selected, id: 'background', turnId: 'other-turn' };
+    mockChatState.liveMessages = [selected, background];
+    mockChatState.activeTurn = {
+      id: background.turnId!,
+      sessionId: 'session-1',
+      assistantMessageId: background.id,
+      status: 'running',
+      startedAt: selected.createdAt,
+      endedAt: null,
+      error: null,
+    };
+    mockChatState.snapshot = {
+      agent: { id: 'agent-1', name: 'Agent' },
+      capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
+      session: {
+        id: 'session-1',
+        agentId: 'agent-1',
+        name: '',
+        isNameManuallyEdited: false,
+        activeNodeId: selected.id,
+        forkBoundaryMessageId: null,
+        forkedFromSessionId: null,
+        createdAt: selected.createdAt,
+        updatedAt: selected.updatedAt,
+      },
+      activeTurn: mockChatState.activeTurn,
+      activeUserMessage: null,
+      streamingMessage: background,
+      queuedInputs: [],
+      pendingApprovals: [],
+      pendingQuestion: null,
+      hasHistoryBeforeActiveTurn: false,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    const cancel = currentControls().cancel;
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'selected');
+
+    mockChatState.liveMessages = [{ ...selected, status: 'success' }, background];
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBe(false);
+    // The most recent turn event may describe A completing while B still runs.
+    mockChatState.activeTurn = { ...mockChatState.activeTurn!, status: 'completed' };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().canSend).toBe(false);
+    mockCancelTurn.mockClear();
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).not.toHaveBeenCalled();
+
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: background.id },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    mockChatState.liveMessages = mockChatState.liveMessages.map((message) => ({
+      ...message,
+      status: 'success',
+    }));
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    mockChatState.liveMessages = [{ ...selected, status: 'success' }, background];
+
+    const queuedUser = {
+      ...selected,
+      id: 'queued-user',
+      role: 'user' as const,
+      parentId: background.id,
+    };
+    mockChatState.queuedInputs = [
+      { turnId: 'queued-turn', assistantMessageId: 'queued-answer', userMessage: queuedUser },
+    ];
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: 'queued-answer' },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: 'historical-answer' },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
   });
 
   it('publishes the admitted Draft to the destination Session for one render', async () => {
@@ -186,7 +334,7 @@ describe('ChatProvider Draft handoff', () => {
   });
 
   it.each([undefined, 'session-1'])(
-    'shows the same row IDs before %s sends complete and retains them until displayed',
+    'retains optimistic row IDs after %s admission until the transcript displays them',
     async (sessionId) => {
       const admission = deferred<void>();
       mockStartSession.mockImplementation(async (input) => {
@@ -213,7 +361,6 @@ describe('ChatProvider Draft handoff', () => {
       });
       const pending = currentControls().pendingSend!;
       const request = (sessionId ? mockSubmitMessage : mockStartSession).mock.calls[0][0];
-      expect(pending.isSubmitting).toBe(true);
       expect(currentControls().isBusy).toBe(true);
       expect(currentControls().canSend).toBe(false);
       expect(pending.sessionId).toBe(request.sessionId);
@@ -231,22 +378,210 @@ describe('ChatProvider Draft handoff', () => {
           }),
         ]),
       );
-      act(() => currentControls().completePendingSend(request.userMessageId));
-      expect(currentControls().pendingSend).toBe(pending);
       await act(async () => {
         admission.resolve();
         await sending;
       });
-      expect(currentControls().pendingSend).toMatchObject({
-        isSubmitting: false,
-        messages: pending.messages,
-      });
+      expect(currentControls().pendingSend).toBe(pending);
       expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();
       expect(currentControls().enteringUserMessageId).toBe(request.userMessageId);
     },
   );
+
+  it('leaves a follow-up behind a running answer to the queue instead of the transcript', async () => {
+    const admission = deferred<void>();
+    mockSubmitMessage.mockImplementation(() => admission.promise);
+    mockChatState.activeTurn = {
+      id: 'active-turn',
+      sessionId: 'session-1',
+      assistantMessageId: 'active-answer',
+      status: 'running',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
+    await act(async () => {
+      admission.resolve();
+      await sending;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+  });
+
+  it.each(['before', 'after'] as const)(
+    'retires a queued placeholder when the queue arrives %s admission, including after withdrawal',
+    async (arrival) => {
+      const admission = deferred<void>();
+      mockSubmitMessage.mockImplementation(() => admission.promise);
+      act(() => {
+        renderer = create(<Harness sessionId="session-1" />);
+      });
+      let sending!: Promise<void>;
+      act(() => {
+        sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+      });
+      const pending = currentControls().pendingSend!;
+      if (arrival === 'after') {
+        await act(async () => {
+          admission.resolve();
+          await sending;
+        });
+        expect(currentControls().pendingSend).toBe(pending);
+      }
+
+      act(() => {
+        mockChatState.queuedInputs = [
+          {
+            turnId: 'queued-turn',
+            assistantMessageId: pending.messages[1].id,
+            userMessage: { id: pending.messages[0].id } as AgentMessageView,
+          },
+        ];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      if (arrival === 'before') {
+        expect(currentControls().isBusy).toBe(true);
+        expect(currentControls().canSend).toBe(false);
+        await act(async () => {
+          admission.resolve();
+          await sending;
+        });
+      }
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().canSend).toBeUndefined();
+      expect(currentControls().isBusy).toBe(false);
+
+      // Withdrawal emits no transcript rows; removing the queue must not revive the placeholders.
+      act(() => {
+        mockChatState.queuedInputs = [];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+    },
+  );
+
+  it.each(['user', 'assistant'] as const)(
+    'retires the observed pair with %s arriving first before admission finishes',
+    async (firstRole) => {
+      const admission = deferred<void>();
+      mockSubmitMessage.mockImplementation(() => admission.promise);
+      act(() => {
+        renderer = create(<Harness sessionId="session-1" />);
+      });
+      let sending!: Promise<void>;
+      act(() => {
+        sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+      });
+      const pending = currentControls().pendingSend!;
+      const user = {
+        ...imageMessage(pending.messages[0].id),
+        role: 'user' as const,
+        parts: [],
+      };
+      const assistant = { ...imageMessage(pending.messages[1].id), parentId: user.id };
+      act(() => {
+        mockChatState.liveMessages = [firstRole === 'user' ? user : assistant];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBe(pending);
+      act(() => {
+        mockChatState.liveMessages = [user, assistant];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().isBusy).toBe(true);
+      expect(currentControls().canSend).toBe(false);
+
+      // The source can later discard these rows when history takes over or another branch is read.
+      act(() => {
+        mockChatState.liveMessages = [];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      await act(async () => {
+        admission.resolve();
+        await sending;
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().isBusy).toBe(false);
+      expect(currentControls().canSend).toBeUndefined();
+    },
+  );
+
+  it('withdraws placeholders on a branch switch before the source rows arrive', async () => {
+    const admission = deferred<void>();
+    mockSubmitMessage.mockImplementation(() => admission.promise);
+    mockChatState.snapshot = {
+      session: { activeNodeId: 'previous-answer' },
+    } as AgentSessionChatState['snapshot'];
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+    });
+    const pending = currentControls().pendingSend!;
+    const select = (activeNodeId: string) => {
+      mockChatState.snapshot = {
+        ...mockChatState.snapshot!,
+        session: { ...mockChatState.snapshot!.session, activeNodeId },
+      };
+      for (const listener of mockChatListeners) listener();
+    };
+    // Reservation selects our new answer before publishing either row.
+    act(() => select(pending.messages[1].id));
+    expect(currentControls().pendingSend).toBe(pending);
+    act(() => select('other-branch'));
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
+    await act(async () => {
+      admission.resolve();
+      await sending;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    act(() => select(pending.messages[1].id));
+    expect(currentControls().pendingSend).toBeUndefined();
+  });
+
+  it('keeps admission busy after the transcript has already displayed the pending pair', async () => {
+    const admission = deferred<void>();
+    mockSubmitMessage.mockImplementation(() => admission.promise);
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+    });
+    const userMessageId = currentControls().pendingSend!.messages[0].id;
+    act(() => currentControls().completePendingSend(userMessageId));
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
+    await act(async () => {
+      admission.resolve();
+      await sending;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+  });
 
   it('stops first-message preparation by the pending session ID and restores the draft without navigation', async () => {
     const admission = deferred<void>();
@@ -277,31 +612,36 @@ describe('ChatProvider Draft handoff', () => {
     expect(mockSetParams).not.toHaveBeenCalled();
   });
 
-  it('withdraws a rejected send, keeps its scroll intent stable, and allows the next send', async () => {
-    const admission = deferred<void>();
-    mockStartSession.mockImplementationOnce(() => admission.promise);
-    act(() => {
-      renderer = create(<Harness />);
-    });
-    let sending!: Promise<void>;
-    act(() => {
-      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Hello' }] });
-    });
-    const messageId = currentControls().pendingSend!.messages[0].id;
-    await act(async () => {
-      const failed = expect(sending).rejects.toThrow('rejected');
-      admission.reject(new Error('rejected'));
-      await failed;
-    });
-    expect(currentControls().pendingSend).toBeUndefined();
-    expect(currentControls().canSend).toBeUndefined();
-    expect(currentControls().enteringUserMessageId).toBe(messageId);
-    expect(mockSetParams).not.toHaveBeenCalled();
-    await act(async () => {
-      await currentControls().sendMessage({ parts: [{ type: 'text', text: 'Retry' }] });
-    });
-    expect(currentControls().pendingSend!.messages[0].id).not.toBe(messageId);
-  });
+  it.each([undefined, 'session-1'])(
+    'withdraws a rejected send in %s, keeps its scroll intent stable, and allows the next send',
+    async (sessionId) => {
+      const admission = deferred<void>();
+      (sessionId ? mockSubmitMessage : mockStartSession).mockImplementationOnce(
+        () => admission.promise,
+      );
+      act(() => {
+        renderer = create(<Harness sessionId={sessionId} />);
+      });
+      let sending!: Promise<void>;
+      act(() => {
+        sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Hello' }] });
+      });
+      const messageId = currentControls().pendingSend!.messages[0].id;
+      await act(async () => {
+        const failed = expect(sending).rejects.toThrow('rejected');
+        admission.reject(new Error('rejected'));
+        await failed;
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().canSend).toBeUndefined();
+      expect(currentControls().enteringUserMessageId).toBe(messageId);
+      expect(mockSetParams).not.toHaveBeenCalled();
+      await act(async () => {
+        await currentControls().sendMessage({ parts: [{ type: 'text', text: 'Retry' }] });
+      });
+      expect(currentControls().pendingSend!.messages[0].id).not.toBe(messageId);
+    },
+  );
 
   it('isolates a later composer from an earlier send even when both target the same Agent', async () => {
     const first = deferred<void>();

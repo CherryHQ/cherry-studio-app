@@ -103,8 +103,11 @@ compatibility adapter or generic frontend selector for persistence services.
 - `shared/data` owns frontend/backend data vocabulary; database rows remain under `backend/data`.
 - Agent chat uses one app-owned `MobileAgentHost`; the route provider observes Session state through
   `Backend.agent` and combines it with Data API transcript reads.
-- Pi is the only local Agent Runtime. `AiService` serves explicit-model, non-conversation
-  generation and provider utilities; no parallel Topic/Chat runtime remains.
+- Pi is the only local Agent Runtime. Conversation turns use the durable Host/Harness path.
+  Translation, session naming and chat model checks use its bound `RuntimeTextGenerator` for one
+  text-only invocation without conversation storage or tools. `AiService` owns AI SDK model
+  discovery/probes and image generation for painting/capability calls. See
+  [Provider Integration](./ai/provider-integration.md); no parallel Topic/Chat runtime remains.
 - The Agent Host resolves immutable per-turn `RuntimeTool` snapshots from persisted bindings and
   live application capability adapters. [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md)
   owns the current capability inventory and permission rules.

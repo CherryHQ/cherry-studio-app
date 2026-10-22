@@ -1,81 +1,93 @@
-# Paintings Pages
+# Paintings Page
 
-This page branch owns the `/paintings` composer and its nested viewer flow.
+This page owns `/paintings`: one immersive page for a whole painting board. The legacy
+`/paintings/[paintingId]` and `/paintings/[paintingId]/conversation` routes, which released builds
+linked from task notifications and the image viewer, redirect here with the same painting focused.
 
-- `PaintingScreen.tsx` owns the composer page.
-- `viewer/` owns `/paintings/[paintingId]`.
-- `viewer/conversation/` owns the legacy conversation child route and redirects into the unified
-  composer.
-- `components/`, `hooks/`, and `utils/` contain code private to this page branch.
+## Boards
 
-The independent `/drawings` history page lives in `src/frontend/features/drawings`. Painting queries
-and job observation shared by both pages live in `src/frontend/data/paintings`; draft handoff lives
-in `src/frontend/utils/paintingDraftHandoff.ts`; preview transitions shared by both pages live in
-`src/frontend/components/ArtifactPreview`.
+A board is the long-lived canvas that threads generations together. Each generation is a
+`painting` row belonging to one board; the board itself only stores its title and the node the user
+last focused. Edges are derived, never stored: within a board, a painting whose input file is
+another painting's output was made from it, and an input no painting on the board produced is an
+"imported" node. `utils/paintingBoardGraph.ts` builds that graph and its left-to-right layout.
 
-`PaintingComposer` uses `@/frontend/components/PaintingInput` for the image prompt, attachments,
-model picker, and parameter sheet. Agent chat shares those controls but submits through the Agent
-Host. Only this standalone painting workflow creates painting history entries and painting jobs.
+Every entry opens a board. A gallery card passes `boardId` and the board reopens on the node the
+user last focused; a generated image in the file library or a task notification passes `paintingId`
+(and `fileEntryId` for one of several images) and focuses that image. The gallery composer and a
+used template start their first generation themselves and then open the new board by its
+`paintingId`; `/paintings` without parameters is an empty board. The board is created by its first
+generation, titled from the request (a template's title for template generations), and renamable
+from the overview.
 
-The standalone workspace uses `PaintingWorkspaceInput`: prompt, attachment preview and send share
-one row on the existing composer surface. The menu prioritizes four common parameters and shows
-their current values. Common registry parameters open individually in the
-shared anchored popover; free text, custom dimensions and other parameters remain available in the
-existing sheet. Agent chat keeps the stacked `PaintingInput` presentation.
+## One Page, Two Layers
 
-Each successful turn is retained when a follow-up begins. Earlier outputs become thumbnails while
-the current result stays large, with Edit, Compare and Save actions. This timeline is screen-session
-state: reopening a record loads that generation, not an inferred chain of related records. Version
-numbers are local to this workspace; multiple images from one generation are candidates of the same
-version. Comparison uses the retained outputs and lets the user explicitly choose the editing source.
+A board opened from the gallery lands on the canvas; opening one image (file library, notification)
+lands on that image.
 
-`PaintingImageEditor` shares the mounted composer and painting-input session. Selecting an output
-for editing replaces the participating input images with that output, preserving the prompt draft.
-Only one native input is mounted at a time. Model selection and per-mode parameters survive the
-switch. A single-image edit/resize handoff opens this editor directly; multi-image handoffs retain
-the ordinary workspace so none of the participating images are hidden.
-Immersive editing and comparison unmount the route toolbar, whose iOS composition would otherwise
-force the native header over their own Back actions.
+- **Focus** fills the screen with the focused image. A plain tap leaves the page unchanged; tapping
+  a note selects it. Long press drops a positional note (or removes the one under the finger),
+  pinch and double tap zoom, and a horizontal swipe moves between the images of one generation.
+  The header carries back (to wherever
+  the board was opened from), the board pill (to the canvas), and one ungrouped menu with save,
+  share, generation info, and delete-this-version. Below the image, the lineage strip shows sources,
+  the current image, and what was made from it; tapping a cell walks the edge and holding one
+  previews it in place for comparison.
+- **Canvas** (the overview) draws every node and edge, generations reading left to right. Each
+  node is labelled with its generation number and model above the image, with a single-line prompt
+  preview below it. Tap either label or preview to read the complete prompt in an anchored
+  information popover. The selected image's size tag sits below the preview. Tapping a node selects
+  it — an outline, corner handles, and its pixel size — and the composer edits that image; tapping
+  the selected node opens it in focus;
+  tapping the empty canvas clears the selection, and the composer then starts a new root. It opens
+  scaled to fit (down to 60%) or around the selection; drag to pan, pinch to zoom, double tap to
+  return to the opening view. Notes belong to focus and are only sent from there.
 
-The editor displays the original reference inside the requested output frame. Its hit target fits
-the original image, so normalized annotation positions exclude letterboxing and remain stable when
-the keyboard or aspect ratio changes. The canvas reserves the measured dock height and follows the
-same keyboard displacement as the dock, keeping the entire reference above the input. Deferred
-annotation focus reads the committed input handle and is cancelled when the editor unmounts.
-Tap and native scrolling cancel normally; selecting an
-existing marker stops propagation instead of adding another. Native text selection in the timeline
-is excluded from background keyboard dismissal. Viewing/zooming remains owned by the existing image
-viewer; annotation mode uses taps rather than competing with its zoom gesture.
+The composer stays mounted across both layers so a draft survives moving around the board. The
+focused image is attached as the next generation's reference (`usePaintingFocusReference`); removing
+it means "generate something new" until the focus moves. Model and parameters live behind the
+composer's + menu, in one generation-settings sheet.
 
-Written location notes and the whole-image brief are frozen before capability validation and file
-preparation. The model receives localized original-image coordinates; the current timeline receives
-the human editing brief. These notes guide the image model through its existing reference-image
-contract: they are not masks or pixel-constrained edits. The persisted prompt retains the complete
-model instructions. Annotation drafts are retained per source within the mounted workspace, not
-stored in a new database schema. Completion does not close an editor containing newer input.
-While a send is being prepared or admitted, annotation selection, creation, deletion, and editor
-exit stay disabled until draft recovery finishes. Typing still belongs to the selected annotation,
-so a rejected send restores its text to the same target. This lock ends at admission, not when the
-background image generation completes.
+The resting composer keeps the reference as a thumbnail without a remove badge. Focusing it opens
+the shared full-width editor and moves references into chat's attachment area for preview and
+removal. The upper-right action enlarges the same field; the board header and canvas controls stay
+hidden and inaccessible through its close transition. Sending collapses the editor through the
+shared send boundary.
 
-The reference popover can reopen a single image for editing. Annotation drafts recognize both the
-album attachment identity and the managed file identity, so returning before import finishes does
-not lose notes. Sending that image from the ordinary workspace also includes its saved notes.
-Submitted reference thumbnails open the original file preview.
-Popover reference images resolve in the input's data scope; the UI portal receives presentational
-previews and navigation callbacks, without mounting file queries outside their providers.
+Image-editing ratios live in a single horizontally scrolling shortcut row above the composer, with
+shape previews and ratio-only labels. They follow the composer's selected model and parameter
+draft, hide when references are removed or the large editor is presented, and never send directly.
+Choosing one saves any selected note and prepares a whole-image request; user-authored text stays
+intact, while untouched shortcut text follows subsequent ratio choices.
 
-Viewers opened by a workspace carry its mounted session identity. Edit, Resize, and generation
-details return to that workspace, retaining its timeline and drafts. Only a live workspace receives
-these actions; a viewer opened independently keeps the existing draft-handoff flow. Resize applies
-the selected dimensions to the viewer's model while retaining its other parameter drafts. Registry
-ratios such as `ASPECT_16_9` display as `16:9` without changing the submitted registry value.
+Sending moves the focus to the new receipt (selected on the canvas, or full screen in focus), which shows the loader until its job finishes; the
+generation runs as a durable job, so the user can keep browsing the board. Generating and stopped
+receipts keep the requested image proportions. The shared loader is a text-free holo card with a
+light sweeping across it; it stops when the screen is inactive, the app is backgrounded, or Reduce
+Motion is enabled. A stopped generation shows an empty image frame, its saved brief, retry, and an explicit
+error-details action instead of a conversation error bubble. Diagnostic messages stay in the shared
+detail sheet. The receipt content scrolls above the composer when space or text size requires it.
+Stopping a running generation discards its receipt. If it
+was the board's last generation, the next send creates a fresh board on the same page. Removing a
+version refreshes the board and moves its focus and route to a surviving generation.
 
-`PaintingInputProvider` owns reference selection and parameter drafts. Its shared strategy only
-includes references accepted by the selected model; multiple outputs remain optional candidates.
-Successful outputs never replace input edited during generation. Each generation still creates
-its own painting record. A failed follow-up keeps the previous result visible, and cancellation
-restores its prompt, output dimensions, and route. The viewer's generation-details action opens
-the existing record; Edit and Resize hand off the selected image to the composer. Resize offers
-only the selected model's declared edit dimensions and carries the exact parameter key/value,
-including models declaring pixel sizes instead of aspect ratios.
+## Notes
+
+`usePaintingAnnotationDraft` keeps unsent notes per image. The composer has one field, so selecting a
+note swaps the field to that note's text and selecting "whole image" swaps it back. Sending freezes
+the notes into positional model instructions (`prompt`) and a human brief (`brief`); the board,
+generation info, and accessibility labels show the brief. Notes guide the model through its
+reference-image contract; they are not masks.
+
+## Organization
+
+- `PaintingScreen.tsx` resolves the route into a board and follows the app theme, including its
+  background, status bar, chrome, composer, and sheets. Image badges and annotation outlines retain
+  fixed contrast over uncontrolled image content.
+- `components/` holds the workspace, the focus canvas and chrome, the overview and its chrome, the
+  lineage strip, and the generation info sheet.
+- `hooks/` holds board data, generation control, the focus reference, and annotation drafts.
+- `utils/` holds the board graph, annotation prompts, and change-ratio options.
+
+The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries, the board
+list, starting generations, and job observation shared with it live in `src/frontend/data/paintings`.

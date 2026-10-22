@@ -17,7 +17,7 @@ Sessions own cancellation through `MobileAgentHost`; they are not resource-scope
 ## Model
 
 ```typescript
-export type ScopeKind = 'painting'
+export type ScopeKind = 'painting' | 'painting-board'
 
 export type ResourceScope = {
   readonly kind: ScopeKind
@@ -62,13 +62,24 @@ fence check.
 The painting generation handler declares its scope:
 
 ```typescript
-scopes: (input) => [{ id: input.paintingId, kind: 'painting' }]
+scopes: (input) => [
+  { id: input.paintingId, kind: 'painting' },
+  { id: input.boardId, kind: 'painting-board' },
+]
 ```
 
 `JobRuntime` registers the execution before its guarded `pending -> running` claim and uses the
 in-flight promise as `settled`. A painting deletion routes through `coordinator.delete()` before
-`PaintingService.deleteMany()`. This closes both the registration/claim race and late output-write
-race without adding a `paintingId -> jobId` database index.
+`PaintingService.deleteMany()`. Board deletion fences `painting-board` directly before any drain;
+it does not enumerate current children to approximate parent ownership.
+
+`PaintingsModule.startGeneration()` registers both identities after creating/resetting the receipt
+inside its admission transaction, before enqueue. A fence installed while SQL was awaiting causes
+registration to fail and the transaction to roll back. If deletion begins after registration,
+admission observes cancellation and keeps its settlement pending through commit/rollback. Delete
+then opens its own transaction. This avoids holding the delete transaction while work needs SQLite.
+Queued execution registers both scopes again before claim; a sealed parent cancels it before file
+or provider I/O. No `paintingId -> jobId` database index is needed.
 
 ## Process Death
 
@@ -79,7 +90,7 @@ The registry is process-local. Crash safety therefore uses complementary mechani
 | In-process scope registry | Active cancellation while the app runs |
 | Durable job ledger | Resume, retry, or abandon work after restart |
 | Cold-start sweep | Native Activity surfaces that outlived the process |
-| Write-path guards | Late output writes after their painting was deleted |
+| Read and write guards | Receipt/board existence before provider I/O, and late output writes after deletion |
 
 The write contract is: a write targeting a deleted painting fails or becomes a no-op; it never
 recreates the resource.

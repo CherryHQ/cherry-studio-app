@@ -903,6 +903,126 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
   });
 
+  test('waits for the sent message before leaving a historical reading position', async () => {
+    const messages = [createMessage('user-1', 'user')];
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} />);
+    });
+    await loadList();
+    act(() => mockLatestListProps?.onScrollBeginDrag?.());
+    mockListScrollToEnd.mockClear();
+
+    act(() => {
+      renderer?.update(<MessageList {...listProps(messages, { enteringMessageId: 'user-2' })} />);
+    });
+    await act(async () => flushAnimationFrames());
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+
+    act(() => {
+      renderer?.update(
+        <MessageList
+          {...listProps([...messages, createMessage('user-2', 'user')], {
+            enteringMessageId: 'user-2',
+          })}
+        />,
+      );
+    });
+    await act(async () => flushAnimationFrames());
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
+  });
+
+  test.each(['before', 'after'] as const)(
+    'waits for keyboard dismissal that starts %s scheduling a local send',
+    async (timing) => {
+      const messages = [createMessage('user-1', 'user')];
+      act(() => {
+        renderer = create(<MessageList {...listProps(messages)} />);
+      });
+      await loadList();
+      act(() => mockLatestListProps?.onScrollBeginDrag?.());
+      mockListScrollToEnd.mockClear();
+
+      act(() => {
+        if (timing === 'before') mockKeyboardHandlers.onStart?.({} as never);
+        renderer?.update(
+          <MessageList
+            {...listProps([...messages, createMessage('user-2', 'user')], {
+              enteringMessageId: 'user-2',
+            })}
+          />,
+        );
+      });
+      if (timing === 'after') act(() => mockKeyboardHandlers.onStart?.({} as never));
+      await act(async () => flushAnimationFrames());
+      expect(mockListScrollToEnd).not.toHaveBeenCalled();
+
+      act(() => mockKeyboardHandlers.onEnd?.({} as never));
+      await act(async () => flushAnimationFrames());
+      expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+      expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
+    },
+  );
+
+  test.each(['message', 'keyboard'] as const)(
+    'a new drag cancels a send waiting for its %s',
+    async (waitingFor) => {
+      const messages = [createMessage('user-1', 'user')];
+      const nextMessages = [...messages, createMessage('user-2', 'user')];
+      act(() => {
+        renderer = create(<MessageList {...listProps(messages)} />);
+      });
+      await loadList();
+      mockListScrollToEnd.mockClear();
+      act(() => {
+        mockLatestListProps?.onScrollBeginDrag?.();
+        if (waitingFor === 'keyboard') mockKeyboardHandlers.onStart?.({} as never);
+        renderer?.update(
+          <MessageList
+            {...listProps(waitingFor === 'message' ? messages : nextMessages, {
+              enteringMessageId: 'user-2',
+            })}
+          />,
+        );
+      });
+      await act(async () => flushAnimationFrames());
+      act(() => {
+        mockLatestListProps?.onScrollBeginDrag?.();
+        renderer?.update(
+          <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
+        );
+        mockKeyboardHandlers.onEnd?.({} as never);
+      });
+      await act(async () => flushAnimationFrames());
+      expect(mockListScrollToEnd).not.toHaveBeenCalled();
+      expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+    },
+  );
+
+  test('requests the latest window when a search result does not contain the sent message', async () => {
+    const messages = [createMessage('historical-user', 'user')];
+    const onReturnToLatest = jest.fn();
+    const overrides = {
+      hasNewerMessages: true,
+      initialScrollTarget: { messageId: 'historical-user' },
+      onReturnToLatest,
+    };
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages, overrides)} />);
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+    act(() => {
+      renderer?.update(
+        <MessageList {...listProps(messages, { ...overrides, enteringMessageId: 'new-user' })} />,
+      );
+    });
+    await act(async () => flushAnimationFrames());
+    expect(onReturnToLatest).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+  });
+
   test.each(['drag', 'dataset switch'] as const)(
     'cancels the scheduled send scroll when a %s takes precedence',
     async (interruption) => {

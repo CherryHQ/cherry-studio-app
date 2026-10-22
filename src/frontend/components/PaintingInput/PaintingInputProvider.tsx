@@ -19,11 +19,16 @@ const PaintingInputContext = createContext<PaintingInputContextValue | null>(nul
 
 /** Stays mounted across text/image controls, under the owning Composer session. */
 export function PaintingInputProvider({
+  adoptSubmittedReference,
   children,
   result,
-}: PropsWithChildren<{ result?: PaintingInputResult }>) {
+}: PropsWithChildren<{
+  /** See `usePaintingReference`; callers that own the reference attachment pass false. */
+  adoptSubmittedReference?: boolean;
+  result?: PaintingInputResult;
+}>) {
   const { attachments, draft } = useComposerState();
-  const reference = usePaintingReference(result, draft, attachments);
+  const reference = usePaintingReference(result, draft, attachments, adoptSubmittedReference);
   const [localModelId, selectLocalModel] = useState<UniqueModelId>();
   const [parameters, setParameters] = useState<{
     drafts: Record<string, ParameterDraft>;
@@ -54,12 +59,4 @@ export function usePaintingInputSession() {
   const context = use(PaintingInputContext);
   if (!context) throw new Error('PaintingInput requires PaintingInputProvider');
   return context;
-}
-
-export function usePaintingReferenceSelection() {
-  return usePaintingInputSession().reference;
-}
-
-export function usePaintingParameterDraft() {
-  return usePaintingInputSession().lastParameterDraft?.values;
 }

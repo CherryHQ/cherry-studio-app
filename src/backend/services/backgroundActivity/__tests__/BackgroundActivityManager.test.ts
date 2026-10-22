@@ -51,7 +51,10 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
   let presentationEnabledListener: (() => void) | undefined;
   let isPresentationEnabled: boolean;
   const mockLeases: { release: jest.Mock }[] = [];
-  const mockPrepareLogo = jest.fn(async () => 'file:///widgets/cherry-studio-logo.png');
+  const mockPrepareLogos = jest.fn(async () => ({
+    dark: 'file:///widgets/cherry-studio-logo-dark.png',
+    light: 'file:///widgets/cherry-studio-logo-light.png',
+  }));
   const mockAcquire = jest.fn((_tag: string) => {
     const lease = { release: jest.fn() };
     mockLeases.push(lease);
@@ -90,7 +93,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
 
     expect(first.presenter.clearOrphans).toHaveBeenCalledTimes(1);
     expect(second.presenter.clearOrphans).toHaveBeenCalledTimes(1);
-    expect(mockPrepareLogo).toHaveBeenCalledTimes(1);
+    expect(mockPrepareLogos).toHaveBeenCalledTimes(1);
     await manager._doStop();
   });
 
@@ -108,7 +111,10 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       expect.objectContaining({
         colorScheme: 'dark',
         detail: 'preparing',
-        logoUri: 'file:///widgets/cherry-studio-logo.png',
+        logoUris: {
+          dark: 'file:///widgets/cherry-studio-logo-dark.png',
+          light: 'file:///widgets/cherry-studio-logo-light.png',
+        },
       }),
       'cherrystudio:///?agentId=agent-1&sessionId=session-1',
     );
@@ -606,7 +612,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
         getColorScheme: () => 'dark',
         isPresentationEnabled: () => isPresentationEnabled,
         subscribePresentationEnabled,
-        prepareLogo: mockPrepareLogo,
+        prepareLogos: mockPrepareLogos,
         presenters: [presenter],
         subscribeVisibleTask,
       },
@@ -950,7 +956,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
         getColorScheme: () => 'dark',
         isPresentationEnabled: () => isPresentationEnabled,
         subscribePresentationEnabled,
-        prepareLogo: mockPrepareLogo,
+        prepareLogos: mockPrepareLogos,
         presenters,
         subscribeVisibleTask,
       },

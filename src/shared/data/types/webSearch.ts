@@ -1,3 +1,9 @@
+import type {
+  WebSearchCapability as SharedWebSearchCapability,
+  WebSearchErrorKind,
+  WebSearchResult as SharedWebSearchResult,
+} from '@cherrystudio/web-search';
+
 // ============================================================================
 // Provider Vocabulary
 // ============================================================================
@@ -14,6 +20,7 @@ export const WEB_SEARCH_PROVIDER_IDS = [
   'exa-mcp',
   'bocha',
   'querit',
+  'deepseek',
   'fetch',
   'jina',
   'firecrawl',
@@ -26,7 +33,7 @@ export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];
 
 export const WEB_SEARCH_CAPABILITIES = ['searchKeywords', 'fetchUrls'] as const;
 
-export type WebSearchCapability = (typeof WEB_SEARCH_CAPABILITIES)[number];
+export type WebSearchCapability = SharedWebSearchCapability;
 
 export type WebSearchProviderFeatureCapability = {
   feature: WebSearchCapability;
@@ -100,17 +107,12 @@ export function normalizeWebSearchCutoffLimit(value: unknown): number {
 }
 
 export type WebSearchResult = {
-  title: string;
-  content: string;
-  url: string;
-  sourceInput: string;
-  /** The returned content is only a prefix of the provider's result. */
-  truncated?: boolean;
+  -readonly [Key in keyof SharedWebSearchResult]: SharedWebSearchResult[Key];
 };
 
 export type WebSearchFailure = {
   input: string;
-  kind: 'configuration' | 'http' | 'invalid_response' | 'network' | 'timeout' | 'unknown';
+  kind: Exclude<WebSearchErrorKind, 'cancelled'>;
   message: string;
   code?: string;
   status?: number;

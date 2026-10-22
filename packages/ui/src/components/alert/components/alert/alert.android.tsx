@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Button } from '../../../button';
 import { Input } from '../../../input';
+import { useNavigationOverlay } from '../../../portal/overlay-navigation';
 import { TextField } from '../../../text-field';
 import type { AlertProps, DialogActionRole } from '../../alert.types';
 
@@ -21,6 +22,7 @@ export function Alert({
   testID,
   title,
 }: AlertProps) {
+  useNavigationOverlay(isOpen);
   return (
     <HeroDialog isOpen={isOpen} onOpenChange={onOpenChange} testID={testID}>
       <HeroDialog.Portal unstable_accessibilityContainerViewIsModal>

@@ -6,6 +6,7 @@ import type {
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
+  AgentQueuedInput,
   AgentRetryMessageInput,
   AgentSessionObservation,
   AgentSessionSnapshot,
@@ -25,6 +26,7 @@ export type AgentSessionChatState = {
   /** Answer awaiting its replacement turn; rendered as pending until it arrives. */
   retryingMessageId?: string;
   activeTurn: AgentTurnView | null;
+  queuedInputs: readonly AgentQueuedInput[];
   enteringUserMessageId?: string;
   error?: Error;
   hasHistoryBeforeActiveTurn?: boolean;
@@ -74,15 +76,25 @@ const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
  * treated as busy rather than silently unlocking the composer and retry action.
  */
 export function isAgentSessionBusy(state: AgentSessionChatState): boolean {
+  return Boolean(state.isSubmitting || state.queuedInputs.length || isAgentSessionExecuting(state));
+}
+
+export function isAgentSessionExecuting(state: AgentSessionChatState): boolean {
   return Boolean(
-    state.isSubmitting ||
-    (state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status)),
+    (state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status)) ||
+    // The latest turn event can be terminal while another model still answers.
+    state.liveMessages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message.status === 'pending' || message.status === 'streaming'),
+    ),
   );
 }
 
 function createSessionState(sessionId: string): AgentSessionChatState {
   return {
     activeTurn: null,
+    queuedInputs: [],
     liveMessages: [],
     pendingApprovals: [],
     pendingQuestion: null,
@@ -300,6 +312,14 @@ export class AgentSessionChatClient {
     return session;
   }
 
+  /** Shows the branch containing `messageId`; work on other branches keeps running. */
+  async selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView> {
+    const session = await this.protocol.selectMessage({ sessionId, messageId });
+    this.options.onSessionChanged?.(sessionId);
+    this.options.onTranscriptChanged?.(sessionId);
+    return session;
+  }
+
   /**
    * The removal reaches live state through the Session's own `turn.deleted`
    * event, so a caller that is already observing needs no separate reconcile.
@@ -396,11 +416,21 @@ export class AgentSessionChatClient {
     }
 
     const persistedById = new Map(persistedMessages.map((message) => [message.id, message]));
+    // Observation supplies a question while an answer to it runs: settled history omits it then,
+    // even when a page read just before a regeneration still holds it.
+    const answeredLive = new Set(
+      [...entry.liveMessages.values()].flatMap((message) =>
+        message.role === 'assistant' && message.parentId && !isTerminalMessage(message)
+          ? [message.parentId]
+          : [],
+      ),
+    );
     let changed = false;
     for (const [messageId, liveMessage] of entry.liveMessages) {
       const persistedMessage = persistedById.get(messageId);
       if (
         persistedMessage &&
+        !answeredLive.has(messageId) &&
         persistedMessage.role === liveMessage.role &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
@@ -422,19 +452,40 @@ export class AgentSessionChatClient {
     }
   }
 
-  async cancelTurn(sessionId: string): Promise<void> {
+  /** Stops the active turn, or the named live answer on its own turn. */
+  async cancelTurn(sessionId: string, messageId?: string): Promise<void> {
     const entry = this.getEntry(sessionId);
     const turn = entry.state.activeTurn;
+    if (messageId) {
+      const message = entry.liveMessages.get(messageId);
+      if (message) {
+        if (!message.turnId || isTerminalMessage(message)) return;
+        await this.protocol.cancelTurn({ sessionId, turnId: message.turnId, messageId });
+        return;
+      }
+      if (turn?.assistantMessageId !== messageId) return;
+    }
     if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
-      await this.protocol.cancelTurn({ sessionId, turnId: turn.id });
+      await this.protocol.cancelTurn({
+        sessionId,
+        turnId: turn.id,
+        ...(messageId ? { messageId } : {}),
+      });
       return;
     }
+    if (messageId) return;
     // Stop before the Host reserves the turn: the pending call rejects with
     // CANCELLED, whether it is still observing here or preparing in the Host.
     if (entry.submission && !entry.submission.isCancelled) {
       entry.submission.isCancelled = true;
       await this.protocol.cancelSubmission({ sessionId });
     }
+  }
+
+  async cancelQueuedInput(sessionId: string, turnId: string) {
+    const result = await this.protocol.cancelQueuedInput({ sessionId, turnId });
+    await this.refresh(sessionId);
+    return result;
   }
 
   async respondQuestion(
@@ -511,14 +562,21 @@ export class AgentSessionChatClient {
     if (snapshot.activeUserMessage) {
       entry.liveMessages.set(snapshot.activeUserMessage.id, snapshot.activeUserMessage);
     }
-    if (snapshot.streamingMessage) {
-      entry.liveMessages.set(snapshot.streamingMessage.id, snapshot.streamingMessage);
-      this.installToolInputPreviews(snapshot.streamingMessage);
+    for (const message of [
+      ...(snapshot.streamingMessage ? [snapshot.streamingMessage] : []),
+      ...(snapshot.additionalMessages ?? []),
+    ].sort(
+      (left, right) =>
+        Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
+    )) {
+      entry.liveMessages.set(message.id, message);
+      this.installToolInputPreviews(message);
     }
     this.updateState(entry, {
       isSubmitting: entry.state.isSubmitting,
       retryingMessageId: entry.state.retryingMessageId,
       activeTurn: snapshot.activeTurn,
+      queuedInputs: snapshot.queuedInputs,
       ...(snapshot.activeUserMessage
         ? { enteringUserMessageId: snapshot.activeUserMessage.id }
         : {}),
@@ -535,6 +593,9 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'queue.updated':
+        this.updateState(entry, { ...entry.state, queuedInputs: event.inputs });
+        return;
       case 'context.updated':
         this.updateState(entry, { ...entry.state, contextStatus: event.status });
         return;
@@ -646,11 +707,24 @@ export class AgentSessionChatClient {
         return;
       }
       case 'message.finalized':
-        entry.pendingTextDeltas.clear();
+        // Parallel answers keep streaming: drop only this message's unflushed text.
+        for (const [key, pending] of entry.pendingTextDeltas)
+          if (pending.messageId === event.message.id) entry.pendingTextDeltas.delete(key);
         entry.liveMessages.set(event.message.id, event.message);
         this.toolInputPreviews.clearMessage(event.message.id);
         this.commitLiveMessages(entry);
-        this.options.onTranscriptChanged?.(entry.state.sessionId);
+        // Settled history omits a turn while any of its answers runs; only the last answer to
+        // finish changes what it reads.
+        if (
+          !event.message.turnId ||
+          ![...entry.liveMessages.values()].some(
+            (message) =>
+              message.role === 'assistant' &&
+              message.turnId === event.message.turnId &&
+              !isTerminalMessage(message),
+          )
+        )
+          this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
       case 'turn.deleted': {
         for (const messageId of event.messageIds) {

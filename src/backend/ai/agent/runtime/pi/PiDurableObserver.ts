@@ -14,10 +14,16 @@ import type {
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../durableTypes';
+import {
+  laneKey,
+  type RuntimeConversationEvent,
+  type RuntimeConversationSnapshot,
+  type RuntimeLane,
+} from '../durableTypes';
 import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
+import { hasResponseContent } from './piStreamEvents';
 
 type InputView = { record: SubmissionRecord; metadata: JsonObject | undefined };
 const logger = loggerService.withContext('PiDurableObserver');
@@ -42,13 +48,13 @@ export class PiDurableObserver {
 
   constructor(
     private readonly runtime: PiDurableRuntime,
-    private readonly sessionId: string,
+    private readonly lane: RuntimeLane,
     private readonly listener: (event: RuntimeConversationEvent) => void,
   ) {}
 
   async start(): Promise<RuntimeConversationSnapshot> {
     if (this.stream) throw new Error('The Pi observer is already attached.');
-    const stream = await this.runtime.watch(this.sessionId);
+    const stream = await this.runtime.watch(laneKey(this.lane));
     this.stream = stream;
     try {
       await this.loadSnapshot(stream.snapshot);
@@ -115,7 +121,7 @@ export class PiDurableObserver {
       this.inputs.set(record.id, { ...input, record });
       if (!queued.has(record.id))
         for (const entry of await this.runtime.turnEntries(
-          this.sessionId,
+          laneKey(this.lane),
           record,
           BACKGROUND_CONTEXT,
           through,
@@ -186,16 +192,27 @@ export class PiDurableObserver {
           if (event.message.role === 'assistant') {
             this.partial = event.message;
             // The failed attempt's own message follows its retry event in the same batch.
-            if (event.message.stopReason !== 'error') this.retrying = false;
+            if (event.message.stopReason !== 'error' && hasResponseContent(event.message))
+              this.retrying = false;
           }
           break;
         case 'message_update':
-          if (this.partial) this.partial = updatedMessage(this.partial, event.changes, event.usage);
+          if (this.partial) {
+            this.partial = updatedMessage(this.partial, event.changes, event.usage);
+            if (this.partial.stopReason !== 'error' && hasResponseContent(this.partial))
+              this.retrying = false;
+          }
           break;
         case 'message_end':
           this.entries.set(event.entry.id, event.entry);
-          if (event.entry.model?.some((message) => message.role === 'assistant'))
-            this.partial = undefined;
+          for (const message of event.entry.model ?? []) {
+            if (message.role === 'assistant') {
+              this.partial = undefined;
+              // Throttled partials may leave the first response content in the final entry only.
+              if (message.stopReason !== 'error' && hasResponseContent(message))
+                this.retrying = false;
+            }
+          }
           break;
         case 'entry_appended':
           this.entries.set(event.entry.id, event.entry);
@@ -260,7 +277,7 @@ export class PiDurableObserver {
             // Compaction and extension tasks need not belong to the currently displayed run.
             ...(event.kind === 'pi.generation' || event.kind === 'pi.tool'
               ? this.diagnosticContext()
-              : { sessionId: this.sessionId }),
+              : { sessionId: this.lane.sessionId, slot: this.lane.slot }),
             operation: 'pi.task',
             taskId: Number(event.taskId),
             taskKind: event.kind,
@@ -310,7 +327,8 @@ export class PiDurableObserver {
   private diagnosticContext() {
     const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
     return {
-      sessionId: this.sessionId,
+      sessionId: this.lane.sessionId,
+      slot: this.lane.slot,
       requestId: active?.record.requestId,
       turnId: active?.metadata?.turnId,
       assistantMessageId: active?.metadata?.assistantMessageId,
@@ -331,7 +349,7 @@ export class PiDurableObserver {
       .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
       .sort((a, b) => a.id - b.id);
     const turn = projectPiTurn({
-      sessionId: this.sessionId,
+      lane: this.lane,
       ...input,
       entries,
       active,

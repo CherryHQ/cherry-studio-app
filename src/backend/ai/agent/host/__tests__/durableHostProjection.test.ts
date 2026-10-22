@@ -1,9 +1,9 @@
 import type { RuntimeDurableTurn } from '../../runtime';
-import { projectDurableHostTurn } from '../durableHostProjection';
+import { DurableTurnMetadataSchema, projectDurableHostTurn } from '../durableHostProjection';
 
 function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
   return {
-    identity: { sessionId: 'session', turnId: 'turn', requestId: 'turn' },
+    identity: { sessionId: 'session', slot: 0, turnId: 'turn', requestId: 'turn' },
     userMessageId: 'user',
     assistantMessageId: 'assistant',
     inputBoundary: 'pi:1',
@@ -36,6 +36,10 @@ function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
 }
 
 describe('durable message timing', () => {
+  test('pre-workspace metadata remains unbound instead of inheriting a later Session binding', () => {
+    expect(DurableTurnMetadataSchema.parse(turn({}).metadata).workspaceFolderId).toBeNull();
+  });
+
   test.each(['queued', 'running', 'completed'] as const)(
     'a %s answer does not display a provider attempt as a terminal failure',
     (status) => {

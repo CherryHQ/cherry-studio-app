@@ -1,4 +1,8 @@
-export { ModelPickerDrawer, type ModelPickerDrawerVariant } from './components/ModelPickerDrawer';
+export {
+  ModelPickerDrawer,
+  type ModelPickerDrawerVariant,
+  type ModelPickerMultiSelect,
+} from './components/ModelPickerDrawer';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerList } from './components/ModelPickerList';
 export { ModelSearchControls } from './components/ModelSearchControls/ModelSearchControls';

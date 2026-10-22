@@ -2,6 +2,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
   isAgentMutationToolPart,
+  isGeneratingImageToolPart,
   isProviderWebSearchToolPart,
   isToolMessagePart,
   isUserQuestionToolPart,
@@ -18,6 +19,13 @@ export type MessageProcessItem = {
 export type MessageProcessGroup<TItem extends MessageProcessItem> =
   | { kind: 'part'; item: TItem }
   | { kind: 'tools'; items: TItem[]; tools: ToolMessagePart[] };
+
+/** The newest text, reasoning, or tool part; only it can still be thinking or answering. */
+export function findLatestActivityPart(parts: readonly CherryMessagePart[]) {
+  return parts.findLast(
+    (part) => part.type === 'text' || part.type === 'reasoning' || isToolMessagePart(part),
+  );
+}
 
 /** Keep narration between tool calls inside the same disclosure. */
 export function groupMessageProcessItems<TItem extends MessageProcessItem>(
@@ -122,10 +130,12 @@ export function partitionMessageParts(
       return;
     }
 
-    // A question and a saved Agent are outcomes the reader acts on, not process.
+    // A question, a saved Agent, and an image being drawn are outcomes the
+    // reader acts on or waits for, not process.
     if (
       isToolMessagePart(part) &&
       (isUserQuestionToolPart(part) ||
+        isGeneratingImageToolPart(part) ||
         ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
           part.state === 'output-available'))
     ) {
@@ -171,9 +181,8 @@ function findResultTextIndex(parts: readonly CherryMessagePart[]): number | unde
 
 function isInvisiblePart(part: CherryMessagePart) {
   return (
-    ((part.type === 'reasoning' || part.type === 'text') &&
-      part.state !== 'streaming' &&
-      !part.text.trim()) ||
+    (part.type === 'text' && !part.text.trim()) ||
+    (part.type === 'reasoning' && part.state !== 'streaming' && !part.text.trim()) ||
     part.type === 'step-start' ||
     part.type === 'source-document' ||
     part.type === 'data-video' ||

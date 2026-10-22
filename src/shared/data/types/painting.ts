@@ -7,6 +7,9 @@ export const PaintingFilesSchema = z.strictObject({
 export type PaintingFiles = z.infer<typeof PaintingFilesSchema>;
 
 export const PaintingSchema = z.strictObject({
+  boardId: z.string(),
+  /** Human-written request when it differs from the model prompt; null otherwise. */
+  brief: z.string().nullable(),
   createdAt: z.iso.datetime(),
   files: PaintingFilesSchema,
   id: z.string(),
@@ -18,6 +21,36 @@ export const PaintingSchema = z.strictObject({
 });
 
 export type Painting = z.infer<typeof PaintingSchema>;
+
+export const PaintingBoardSchema = z.strictObject({
+  createdAt: z.iso.datetime(),
+  /** The node the user last focused; may name a painting deleted since. */
+  focusPaintingId: z.string().nullable(),
+  id: z.string(),
+  title: z.string(),
+  updatedAt: z.iso.datetime(),
+});
+
+export type PaintingBoard = z.infer<typeof PaintingBoardSchema>;
+
+/** One gallery entry: the board with what its cover needs, so the list stays one request. */
+export const PaintingBoardSummarySchema = z.strictObject({
+  board: PaintingBoardSchema,
+  /** Output images across every receipt on the board, so the cover can say how many it leaves out. */
+  imageCount: z.number().int().nonnegative(),
+  paintingCount: z.number().int().nonnegative(),
+  /** Newest first, at most {@link PAINTING_BOARD_RECENT_LIMIT}. */
+  recentPaintings: z.array(PaintingSchema),
+});
+
+export type PaintingBoardSummary = z.infer<typeof PaintingBoardSummarySchema>;
+
+export const PAINTING_BOARD_RECENT_LIMIT = 4;
+
+export type UpdatePaintingBoardDto = {
+  focusPaintingId?: string | null;
+  title?: string;
+};
 
 export const paintingFileRoles = ['input', 'output'] as const;
 export type PaintingFileRole = (typeof paintingFileRoles)[number];

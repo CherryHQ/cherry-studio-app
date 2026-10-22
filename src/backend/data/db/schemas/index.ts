@@ -8,9 +8,11 @@ import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
 import { desktopConnectionTable } from './desktopConnection';
 import { fileEntryTable } from './file';
+import { fileFolderTable, libraryFileTable } from './fileLibrary';
 import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
 import { paintingTable } from './painting';
+import { paintingBoardTable } from './paintingBoard';
 import { pluginAuthorizationTable } from './pluginAuthorization';
 import { preferenceTable } from './preference';
 import { userModelTable } from './userModel';
@@ -28,12 +30,14 @@ export { monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
 export * from './painting';
+export * from './paintingBoard';
 export * from './pluginAuthorization';
 export * from './userModel';
 export * from './userProvider';
 
 export { appStateTable } from './appState';
 export { fileEntryTable } from './file';
+export * from './fileLibrary';
 export { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from './preference';
 
 export type AppStateRow = typeof appStateTable.$inferSelect;
@@ -54,10 +58,13 @@ export const schema = {
   appStateTable,
   desktopConnectionTable,
   fileEntryTable,
+  fileFolderTable,
+  libraryFileTable,
   jobTable,
   mcpServerTable,
   pluginAuthorizationTable,
   paintingTable,
+  paintingBoardTable,
   preferenceTable,
   userModelTable,
   userProviderTable,

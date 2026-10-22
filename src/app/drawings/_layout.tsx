@@ -18,6 +18,11 @@ export default function DrawingsStackLayout() {
       }}
     >
       <Stack.Screen name="index" />
+      {/* The stage draws its own backdrop and grows out of the tapped card. */}
+      <Stack.Screen
+        name="templates"
+        options={{ animation: 'none', headerShown: false, presentation: 'transparentModal' }}
+      />
     </Stack>
   );
 }

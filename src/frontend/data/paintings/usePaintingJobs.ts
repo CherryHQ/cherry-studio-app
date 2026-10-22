@@ -83,7 +83,9 @@ export function usePaintingJobs(): PaintingJobs {
     if (!settled && !started) {
       return;
     }
-    void queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
+    void queryClient.invalidateQueries({
+      predicate: (query) => queryKeys.paintings.isBoardQuery(query.queryKey),
+    });
     if (settled) {
       // Only a terminal row explains an interruption, and the active poll never
       // carries one.

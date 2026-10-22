@@ -11,6 +11,7 @@ export type NativeSystemEntry = {
 type NativeSystemEvents = {
   onPending: () => void;
   onBackgroundExecutionExpired: (event: { id: string }) => void;
+  onBackgroundTaskActionPending: () => void;
 };
 
 /**
@@ -46,7 +47,22 @@ export interface SystemIntegrationNativeModule {
     ongoing: boolean,
     alert: boolean,
     channelName: string,
+    options: {
+      /** Header-line label: the notice's device, or a connection's state. */
+      subText?: string;
+      /** A standing PC connection notice; it shows no post time. */
+      connection?: boolean;
+      actions?: {
+        /** Connection notices remain ordinary ongoing notifications, separate from task Live Updates. */
+        promoted?: boolean;
+        token: string;
+        prompt: string;
+        buttons: { id: string; label: string }[];
+        reply?: { label: string; placeholder: string; choices: string[] };
+      };
+    },
   ): Promise<void>;
+  drainBackgroundTaskActions?(): Promise<{ token: string; actionId: string; text?: string }[]>;
   dismissBackgroundTaskNotification?(id: number): Promise<void>;
   dismissCompletedBackgroundTaskNotification?(key: string): Promise<void>;
   clearBackgroundTaskNotifications?(): Promise<void>;

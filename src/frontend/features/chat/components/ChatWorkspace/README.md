@@ -38,6 +38,31 @@ Fork provenance stays on the Session, not in persisted Messages. When the copied
 is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
 
+Several answers to one question are equal-height cards. Swiping settles on an answer and shows it,
+so the next message continues it; only the reader's own swipe chooses, never a scroll that ends
+after layout. A card previews the result text the full answer shows outside its process, with
+citations resolved as in the answer, and names its length when it folds. The shown answer uses the
+composer for its running state and stop action; other cards show their own running or failed state.
+
+Tapping any card opens that answer in full over the whole screen: the model and the answers' dots
+stay at the top, the answer's toolbar at the bottom, and there is no composer. Swiping across moves
+to another answer, which becomes the shown one; closing (the close button, pulling down past the top
+on iOS, or Android back) returns to the transcript with that answer's card shown. The layer is a
+component inside the workspace's providers rather than a route, so menus, sheets and toasts portal
+above it as they do over the transcript.
+
+The layer grows from the card's frame and shrinks back onto the shown card on the shared settle
+spring, which starts from rest and lands exactly without overshoot. Its content lays out once at the
+final size, before the motion starts, and is clipped by the growing frame; near the card the
+frame and its text fade together into the card's own text. On iOS, past half of the motion the screen
+hides its native header and the workspace region reaches over the composer
+(`FullScreenLayerHost`); shrinking below half returns both, so they appear within the motion.
+Android draws its header and composer in the app, so the region reaches over the composer from the
+start and the header fades with the motion's progress on the UI thread; nothing on screen re-lays
+out mid-motion, and the region is released before the closed layer is removed. A new action takes
+over from the current progress. With reduced motion the layer fades in and out in place. The
+transcript keeps its size and header inset throughout, so nothing under the layer moves.
+
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions
 CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe area.
@@ -73,26 +98,51 @@ newer setting-change event.
 
 The assistant toolbar offers translation for complete, successful text answers. It extracts only
 answer text and code parts; reasoning, tool output, errors, and existing translations are excluded.
-Pressing translate opens a button-anchored language menu; choosing a language starts translation
-through `Backend.translation` with the configured translation model (or the default model when unset).
+Before a translation exists, pressing translate opens a button-anchored language menu. Choosing a
+language starts translation through `Backend.translation` with the configured translation model
+(or the default model when unset).
 Dismissal makes no request. Each answer owns its chosen language, independently of the app language
-and other answers. Desktop messages use the phone's model configuration and are cached under the
-pairing scope; no desktop transcript is edited.
+and other answers. Only the local Agent screen enables message translation. Remote conversations
+provide no translation action or translation state provider.
 
 `translation/MessageTranslationStore` owns requests for the open Session, independently of virtualized
 row lifetimes. Button and result subscribe by message ID, so streamed translation does not rerender
-the transcript or original Markdown. The result appears below the original toolbar, with cancel,
-retry, copy, and hide actions. The block is excluded from the enclosing message menu and background
-press target, so holding its Markdown selects translated text; scrolling and control taps remain
+the transcript or original Markdown. The original toolbar's translation button is the only disclosure
+control: it keeps the same language icon and position, highlights while expanded, and toggles the
+result below it. Folding removes the complete result block. The block has a plain separator without
+a duplicate title or language heading. Its footer aligns icon-only copy, language selection, cancel,
+and retry actions with the original message toolbar. Choosing a language restores its cached result
+or starts translation when none is saved. Copy includes only the active translation text. Sharing
+uses the original message's share action and selection page. Opening sharing captures the current
+text and language of each expanded translation; folded translations are omitted even when cached.
+Image, HTML, and Markdown include the captured translation beneath its selected original message,
+independently of the thinking-content switch and with the existing watermark preference. Switching to a
+saved language makes no translation request. The block is excluded from the enclosing message menu
+and background press target, so
+holding its Markdown selects translated text; scrolling and control taps remain
 owned by the existing list and CherryUI controls. Leaving the screen cancels in-flight requests. A changed, retried,
 removed, or incomplete source cannot accept a late result.
 Choosing a different language cancels that answer's previous request and rejects its late chunks
 and result. Retry uses the chosen target. Changing the app language does not change translation
 targets or cancel requests; the transcript and reading position stay mounted.
 
-Successful results are reading aids in the existing persistent UI cache, keyed by source scope,
-Session, message and target language, and checked against the source content hash. The cache retains
-the latest 100 generated translations. Truncated, failed and cancelled translations are not saved.
+Successful results live in the owning `agent_session_message.data.translations`, beside `parts`:
+`{ sourceHash, results: { [language]: { content, createdAt } } }`. History and selected-message reads
+include these reading aids with the message; there is no translation table, per-row hydration query,
+or count-based eviction. The message-scoped Data API mutation merges a completed language inside a
+serialized write transaction, after verifying the Session, message role, terminal status and exact
+source hash. Other languages, parts, statistics and conversation activity are preserved.
+
+Truncated, failed and cancelled results are never saved. Retry admission retains saved translations;
+on successful settlement, the message store removes them only if the translated source text has
+changed. Different reasoning or part IDs do not invalidate identical source text. A changed, removed,
+retried or incomplete source still cancels in-flight work and rejects its late chunks and result.
+Forking copies translations with the message data; deletion, database backup and restore follow the
+message's existing lifecycle. Display readers isolate invalid translation metadata from the original
+message. Canonical source extraction is shared with the persistence writer, and Runtime history
+assembly reads only the original parts. Skill document translations keep their separate UI cache.
+
 Selecting a previously translated language restores a matching result without another request.
-Translation neither adds a turn nor changes message parts, model history, original-message copy or
-conversation export.
+Reopening the Session displays the most recently generated language in a folded state. The current
+language and disclosure state belong to the open screen. Translation never adds a turn or changes
+original-message copy, usage statistics or model history.

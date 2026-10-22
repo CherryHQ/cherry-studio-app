@@ -1,14 +1,10 @@
-import { ImageGenerationLoader, MessagePart } from '@cherrystudio/ui/components';
-import { memo, type ReactNode, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, View } from 'react-native';
+import { memo, type ReactNode } from 'react';
+import { View } from 'react-native';
 
-import {
-  imageParamsAspectRatio,
-  imageParamsResolutionLabel,
-} from '@/shared/utils/imageGenerationParams';
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
+import { PendingImagePart } from '../parts/PendingImagePart';
 import type { MessageListItem } from '../types';
 
 type AssistantMessageProps = {
@@ -27,22 +23,22 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
 }: {
   message: MessageListItem;
 }) {
-  const { t } = useTranslation();
+  const parts = message.data.parts ?? [];
+  const isPending = message.status === 'pending';
   const isPendingEmptyMessage =
-    message.status === 'pending' &&
-    !message.data.parts?.some(
-      (part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped',
-    );
+    isPending &&
+    !parts.some((part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped');
 
   if (isPendingEmptyMessage && message.imageGeneration) {
-    return <PendingImageMessage settings={message.imageGeneration} />;
+    return (
+      <PendingImagePart
+        aspectRatio={imageParamsAspectRatio(message.imageGeneration.paramValues)}
+        testID="chat-image-generation-loader"
+      />
+    );
   }
 
-  return isPendingEmptyMessage ? (
-    <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
-  ) : (
-    <MessageParts message={message} />
-  );
+  return <MessageParts message={message} />;
 });
 
 export const AssistantMessage = memo(function AssistantMessage({
@@ -56,32 +52,3 @@ export const AssistantMessage = memo(function AssistantMessage({
     </View>
   );
 });
-
-function PendingImageMessage({
-  settings,
-}: {
-  settings: NonNullable<MessageListItem['imageGeneration']>;
-}) {
-  const { t } = useTranslation();
-  const [width, setWidth] = useState(0);
-  const aspectRatio = imageParamsAspectRatio(settings.paramValues);
-  const handleLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
-  return (
-    <View className="w-full" onLayout={handleLayout}>
-      {width > 0 ? (
-        <ImageGenerationLoader
-          active
-          height={width / aspectRatio}
-          label={t('painting.status.generating')}
-          resolution={
-            imageParamsResolutionLabel(settings.paramValues) ?? t('painting.settings.option.auto')
-          }
-          testID="chat-image-generation-loader"
-          width={width}
-        />
-      ) : (
-        <View style={{ aspectRatio }} />
-      )}
-    </View>
-  );
-}

@@ -5,6 +5,10 @@ packages:
 # contaminate others. See docs/guides/development.md#dependencies.
 sideEffectsCacheReadonly: true
 
+# Implicit pre-run installs can reapply patches during EAS prebuild and change the native
+# fingerprint. See docs/guides/development.md#dependencies.
+verifyDepsBeforeRun: warn
+
 minimumReleaseAge: 1440
 trustPolicy: no-downgrade
 
@@ -25,11 +29,11 @@ overrides:
   '@ai-sdk/anthropic': 3.0.103
   '@ai-sdk/azure': 3.0.116
   '@ai-sdk/deepseek': 2.0.57
-  '@ai-sdk/google': 3.0.113
+  '@ai-sdk/google': 3.0.132
   '@ai-sdk/openai': 3.0.109
   '@ai-sdk/openai-compatible': 2.0.72
-  '@ai-sdk/provider': 3.0.15
-  '@ai-sdk/provider-utils': 4.0.49
+  '@ai-sdk/provider': 3.0.18
+  '@ai-sdk/provider-utils': 4.0.58
   '@ai-sdk/xai': 3.0.126
   ai: 6.0.185
   expo-app-metrics: 57.0.17
@@ -54,9 +58,9 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
-  '@earendil-works/pi-durable@1.2.0': patches/@earendil-works__pi-durable@1.2.0.patch
-  '@earendil-works/pi-codemode@1.2.0': patches/@earendil-works__pi-codemode@1.2.0.patch
-  '@earendil-works/pi-ai@1.2.0': patches/@earendil-works__pi-ai@1.2.0.patch
+  '@earendil-works/pi-durable@1.3.0': patches/@earendil-works__pi-durable@1.3.0.patch
+  '@earendil-works/pi-codemode@1.3.0': patches/@earendil-works__pi-codemode@1.3.0.patch
+  '@earendil-works/pi-ai@1.3.0': patches/@earendil-works__pi-ai@1.3.0.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.5: patches/metro@0.84.5.patch
@@ -64,7 +68,7 @@ patchedDependencies:
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
   react-native-reanimated@4.5.5: patches/react-native-reanimated@4.5.5.patch
   '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
-  '@ai-sdk/google@3.0.113': patches/@ai-sdk__google@3.0.113.patch
+  '@ai-sdk/google@3.0.132': patches/@ai-sdk__google@3.0.132.patch
   '@ai-sdk/openai@3.0.109': patches/@ai-sdk__openai@3.0.109.patch
   '@ai-sdk/openai-compatible@2.0.72': patches/@ai-sdk__openai-compatible@2.0.72.patch
   '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
@@ -88,22 +92,23 @@ patchedDependencies:
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
-  '@earendil-works/chord@1.2.0': patches/@earendil-works__chord@1.2.0.patch
+  '@earendil-works/chord@1.3.0': patches/@earendil-works__chord@1.3.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
 
 minimumReleaseAgeExclude:
-  # Pi 1.2.0 is upgraded as one release, including its internal dependencies.
-  - '@earendil-works/chord@1.2.0'
-  - '@earendil-works/pi-ai@1.2.0'
-  - '@earendil-works/pi-durable@1.2.0'
-  - '@earendil-works/pi-codemode@1.2.0'
-  - '@earendil-works/pi-telemetry@1.2.0'
-  - '@cherrystudio/provider-registry@0.1.0'
-  - '@cherrystudio/file-preview@0.1.0'
-  - '@cherrystudio/ai-core@2.1.0'
-  - '@cherrystudio/ai-sdk-provider@0.1.7'
-  - '@cherrystudio/remote-protocol@0.5.0'
-  - '@cherrystudio/remote-transport@0.2.1'
+  # Pi 1.3.0 is upgraded as one release, including its internal dependencies.
+  - '@earendil-works/chord@1.3.0'
+  - '@earendil-works/pi-ai@1.3.0'
+  - '@earendil-works/pi-durable@1.3.0'
+  - '@earendil-works/pi-codemode@1.3.0'
+  - '@earendil-works/pi-telemetry@1.3.0'
+  - '@cherrystudio/provider-registry@0.2.3'
+  - '@cherrystudio/web-search@0.2.0'
+  - '@cherrystudio/file-preview@0.1.3'
+  - '@cherrystudio/ai-core@2.4.2'
+  - '@cherrystudio/ai-sdk-provider@0.1.9'
+  - '@cherrystudio/remote-protocol@0.6.0'
+  - '@cherrystudio/remote-transport@0.2.4'
   - '@expo/cli@57.0.3'
   - '@expo/fingerprint@0.20.1'
   - '@expo/inline-modules@0.1.1'

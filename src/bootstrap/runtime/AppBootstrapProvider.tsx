@@ -8,11 +8,11 @@ import {
 import { recordSentryBreadcrumb } from '@/frontend/appShell/observability';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
 import { SkillQueryBridge } from '@/frontend/data/SkillQueryBridge';
 import i18n, { initI18n } from '@/frontend/i18n';
+import { startStartupStage } from '@/shared/core/logger/startupDiagnostics';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
   /** Test seam. Production owns one in-process backend runtime. */
@@ -77,7 +77,6 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
   return (
     <BackendProvider backend={runtime.backend}>
       <DataApiProvider dataApi={runtime.dataApi}>
-        <FileQueryBridge />
         <SkillQueryBridge />
         <ProviderRegistryQueryBridge />
         <PreferenceProvider preference={runtime.preference}>
@@ -100,9 +99,11 @@ async function initializeApp({
   runtime: AppBootstrapRuntime;
   setState: (state: AppBootstrapState) => void;
 }) {
+  const finish = startStartupStage('startup.bootstrap');
   try {
     recordSentryBreadcrumb('startup.bootstrap');
     await runtime.initialize();
+    finish(isDisposed() ? 'cancelled' : 'completed');
 
     if (!isDisposed()) {
       recordSentryBreadcrumb('startup.ready');
@@ -111,6 +112,7 @@ async function initializeApp({
       void runtime.runPostReadyTasks();
     }
   } catch (error) {
+    finish('failed');
     if (!isDisposed()) {
       recordSentryBreadcrumb('startup.failed');
       logger.error('Application initialization failed', toError(error), {

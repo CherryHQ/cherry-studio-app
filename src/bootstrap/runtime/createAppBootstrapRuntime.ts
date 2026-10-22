@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
-import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
@@ -22,6 +22,7 @@ import {
   getStorageBoot,
   rejectStorageCandidate,
 } from '@/backend/data/storage/storagePaths';
+import { subscribeBackgroundActivityActions } from '@/backend/services/backgroundActivity/actionTransport';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
@@ -40,6 +41,7 @@ import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliv
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -54,6 +56,7 @@ import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import { BackupError } from '@/shared/contracts/backup';
+import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
@@ -86,13 +89,17 @@ export function createAppBootstrapRuntime(
       : undefined;
   const isReplyCompletionNotificationEnabled = () =>
     preference.readCached('chat.completion_notifications.enabled');
-  // iOS delivers completion notices from the reply runtime's logical terminal
-  // events; Android raises them inside its own attention runtime.
+  // iOS delivers completion and decision notices from logical reply events;
+  // Android raises them inside its own attention runtime.
   const replyCompletionNotifications =
     Platform.OS === 'ios'
-      ? createReplyCompletionNotifier({ isReplyCompletionNotificationEnabled })
+      ? createReplyCompletionNotifier({
+          isReplyCompletionNotificationEnabled,
+          onForegroundAttention: publishForegroundActivityAttention,
+        })
       : undefined;
   backgroundActivityEnvironment.configure({
+    subscribeActions: subscribeBackgroundActivityActions,
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
@@ -137,12 +144,15 @@ export function createAppBootstrapRuntime(
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
-  const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
+  const languageServing = host.container.get<
+    LanguageServingSupport & AgentRuntime & RuntimeTextGenerator
+  >('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',
   );
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
+  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const services = createBackendServices({
     agent,
     ai,
@@ -156,9 +166,11 @@ export function createAppBootstrapRuntime(
     backend,
     dataApiDependencies,
     disposeSystemEntry,
+    disposeSkills,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
+    resourceScopes: host.container.get('ResourceScopeCoordinator'),
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
       replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
@@ -175,12 +187,15 @@ export function createAppBootstrapRuntime(
     diagnostics,
     languageServing,
     providerRegistryUpdater,
+    trash,
   });
   backup.configure(
     () =>
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
-      hasPendingSkillStorageWork(),
+      hasPendingSkillStorageWork() ||
+      mcpRuntime.hasPendingStorageWork() ||
+      trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });
     },
@@ -189,6 +204,8 @@ export function createAppBootstrapRuntime(
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
+      trash: trash.entries,
+      trashMutations: trash,
       agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
       agentGlobalSkills: services.agentGlobalSkill,
@@ -228,7 +245,7 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await disposeSystemEntry();
+        await Promise.all([disposeSystemEntry(), disposeSkills()]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -260,9 +277,9 @@ export function createAppBootstrapRuntime(
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }
-        await application.install(host);
+        await measureStartupStage('startup.host', () => application.install(host));
         await initializeAppRuntime(services);
-        await initializeSkills();
+        await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();
         try {
           cleanupStorageAfterBoot();

@@ -1,8 +1,9 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useLayoutEffect } from 'react';
 import { BackHandler, Keyboard, Modal, Platform, View } from 'react-native';
 import { KeyboardController, OverKeyboardView } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/overlay-navigation';
 import { focusMenuTarget } from '../menu-focus';
 import { useMenuInteraction } from '../menu-interaction';
 import { KeyboardMenuOverlay, MenuOverlay } from '../menu-overlay';
@@ -73,6 +74,35 @@ describe('menu overlay native boundary', () => {
     jest.clearAllMocks();
   });
 
+  it('keeps navigation pending until the native overlay actually dismisses', async () => {
+    let prepare!: ReturnType<typeof useOverlayNavigation>['prepareForNavigation'];
+    function Probe() {
+      const navigation = useOverlayNavigation();
+      useLayoutEffect(() => {
+        prepare = navigation.prepareForNavigation;
+      });
+      return null;
+    }
+    const tree = (open: boolean) => (
+      <OverlayNavigationProvider>
+        <Probe />
+        {render(open, open)}
+      </OverlayNavigationProvider>
+    );
+    act(() => renderer.update(tree(true)));
+    const navigate = jest.fn();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = prepare(new AbortController().signal).then(navigate);
+    });
+    expect(close).toHaveBeenCalledTimes(1);
+    await act(async () => renderer.update(tree(false)));
+    expect(navigate).not.toHaveBeenCalled();
+    await act(async () => renderer.root.findByType(Modal).props.onDismiss());
+    await pending;
+    expect(navigate).toHaveBeenCalledWith(true);
+  });
+
   it('routes native Back/Escape and outside presses through the same close without completing dismissal early', () => {
     const modal = renderer.root.findByType(Modal);
     expect(modal.props).toMatchObject({
@@ -86,14 +116,6 @@ describe('menu overlay native boundary', () => {
     act(() => renderer.update(render(false, false)));
     expect(closed).not.toHaveBeenCalled();
     act(() => renderer.root.findByType(Modal).props.onDismiss());
-    expect(closed).toHaveBeenCalledTimes(1);
-  });
-
-  it('waits for the Android invisible commit because that platform has no onDismiss event', () => {
-    jest.replaceProperty(Platform, 'OS', 'android');
-    act(() => renderer.update(render(false, false)));
-    expect(closed).not.toHaveBeenCalled();
-    act(() => [...frames.values()].forEach((callback) => callback(0)));
     expect(closed).toHaveBeenCalledTimes(1);
   });
 
@@ -113,7 +135,11 @@ describe('menu overlay native boundary', () => {
   });
 });
 
-describe.each(['ios', 'android'] as const)('keyboard-preserving menu overlay (%s)', (platform) => {
+describe.each([
+  { platform: 'ios', Overlay: KeyboardMenuOverlay, name: 'composer' },
+  { platform: 'android', Overlay: KeyboardMenuOverlay, name: 'composer' },
+  { platform: 'android', Overlay: MenuOverlay, name: 'action menu' },
+] as const)('keyboard-preserving $name overlay ($platform)', ({ platform, Overlay }) => {
   let renderer: ReactTestRenderer;
   let frames: Map<number, FrameRequestCallback>;
   let nextFrame: number;
@@ -122,15 +148,9 @@ describe.each(['ios', 'android'] as const)('keyboard-preserving menu overlay (%s
   const close = jest.fn();
   const closed = jest.fn();
   const render = (isOpen = true, isVisible = true) => (
-    <KeyboardMenuOverlay
-      isOpen={isOpen}
-      isVisible={isVisible}
-      onClose={close}
-      onClosed={closed}
-      testID="menu"
-    >
+    <Overlay isOpen={isOpen} isVisible={isVisible} onClose={close} onClosed={closed} testID="menu">
       <Item />
-    </KeyboardMenuOverlay>
+    </Overlay>
   );
 
   function flushFrame() {

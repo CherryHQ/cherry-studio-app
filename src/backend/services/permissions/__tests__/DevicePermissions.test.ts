@@ -201,6 +201,46 @@ describe('DevicePermissions', () => {
     expect(health.request).toHaveBeenCalledWith(['steps']);
   });
 
+  test.each(['visionPrescription', 'userAnnotatedMedication', 'medicationDoseEvent'] as const)(
+    'only reopens an already requested %s selection when explicitly requested',
+    async (type) => {
+      health.getStatuses.mockImplementation(async (types) =>
+        nativeHealthStatuses(types, 'requested'),
+      );
+      await service.request([`health.${type}.read`]);
+      expect(health.request).not.toHaveBeenCalled();
+      await service.request([`health.${type}.read`, 'health.steps.read'], undefined, {
+        reselectHealthRecords: true,
+      });
+      expect(health.request).toHaveBeenCalledTimes(1);
+      expect(health.request).toHaveBeenCalledWith([type]);
+    },
+  );
+
+  test('keeps a native selection ahead of ordinary permissions until it settles after cancellation', async () => {
+    const started = createDeferred();
+    const finishSelection = createDeferred();
+    const controller = new AbortController();
+    jest.mocked(ImagePicker.getCameraPermissionsAsync).mockResolvedValue(unrequested as never);
+    health.request.mockImplementation(async (types) => {
+      started.resolve();
+      await finishSelection.promise;
+      return nativeHealthStatuses(types, 'requested');
+    });
+    const selection = service.request(['health.steps.read'], controller.signal);
+    const rejected = expect(selection).rejects.toThrow();
+    await started.promise;
+    controller.abort();
+    const camera = service.request(['camera.read']);
+    await Promise.resolve();
+    expect(ImagePicker.getCameraPermissionsAsync).not.toHaveBeenCalled();
+
+    finishSelection.resolve();
+    await rejected;
+    await camera;
+    expect(ImagePicker.requestCameraPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
   test('reports health as unsupported on Android without a native bridge', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     service = new DevicePermissions(() => null);
@@ -256,6 +296,33 @@ describe('DevicePermissions', () => {
     await expect(service.getStatuses(['photos.read'])).resolves.toEqual({
       'photos.read': { state: 'limited', canAskAgain: false },
     });
+  });
+
+  test('does not query or request Android library access for system photo selection', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    Object.defineProperty(Platform, 'Version', { configurable: true, value: 34 });
+    const unsupported = { state: 'unavailable', canAskAgain: false, reason: 'unsupported' };
+    await expect(service.getStatuses(['photos.read'])).resolves.toEqual({
+      'photos.read': unsupported,
+    });
+    await expect(service.request(['photos.read'])).resolves.toEqual({ 'photos.read': unsupported });
+    expect(MediaLibrary.getPermissionsAsync).not.toHaveBeenCalled();
+    expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  test('requests only write access to save photos on Android 10 and earlier', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    Object.defineProperty(Platform, 'Version', { configurable: true, value: 29 });
+    jest.mocked(MediaLibrary.getPermissionsAsync).mockResolvedValue(unrequested as never);
+    jest.mocked(MediaLibrary.requestPermissionsAsync).mockImplementation(async () => {
+      jest.mocked(MediaLibrary.getPermissionsAsync).mockResolvedValue(allowed as never);
+      return allowed as never;
+    });
+    await expect(service.request(['photos.write'])).resolves.toEqual({
+      'photos.write': { state: 'granted', canAskAgain: false },
+    });
+    expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(true, ['photo']);
+    expect(MediaLibrary.getPermissionsAsync).not.toHaveBeenCalledWith(false, expect.anything());
   });
 
   test('does not request photo reading or storage permissions for the modern Android writer', async () => {

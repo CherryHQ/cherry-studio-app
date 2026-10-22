@@ -1,3 +1,5 @@
+import type { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
+import type { OperationHandle } from '@/backend/core/resources/types';
 import type { Database } from '@/backend/data/db/DbService';
 import type {
   PaintingGenerationInput,
@@ -19,6 +21,8 @@ import type {
 } from './tasks/paintingGenerateJobHandler';
 
 type PaintingReceiptInput = {
+  boardId?: string;
+  brief?: string;
   inputFileIds: readonly FileEntryId[];
   modelId: string;
   prompt: string;
@@ -57,6 +61,7 @@ export type PaintingsModuleDependencies = {
   getModel(id: UniqueModelId): Promise<Model | null>;
   jobs: PaintingJobsPort;
   paintings: PaintingGenerationPersistence;
+  scopes: Pick<ResourceScopeCoordinator, 'register'>;
 };
 
 export function createPaintingsModule(dependencies: PaintingsModuleDependencies): PaintingsModule {
@@ -103,44 +108,69 @@ async function startGeneration(
   });
   const images: PaintingGenerateJobImage[] = prepared.map((file) => ({
     fileEntryId: file.entry.id,
-    mediaType: file.entry.mediaType,
-    uri: file.uri,
   }));
   const { providerId } = parseUniqueModelId(input.modelId);
-  const result = await dependencies.db.withWriteTx(async (tx) => {
-    const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
-    if (existing) {
-      return {
-        jobId: existing.id,
-        paintingId: activeJobPaintingId(existing.input),
-      };
-    }
-    const receiptInput = {
-      inputFileIds: images.map((image) => image.fileEntryId),
-      modelId: input.modelId,
-      prompt,
-      providerId,
-    };
-    const receipt = input.paintingId
-      ? await dependencies.paintings.resetForRetryTx(tx, input.paintingId, receiptInput)
-      : await dependencies.paintings.createTx(tx, receiptInput);
-    const handle = await dependencies.jobs.enqueueGenerateTx(
-      tx,
-      {
-        images,
-        mode: request.mode,
-        modelId: input.modelId,
-        modelName: input.modelName,
-        paintingId: receipt.id,
-        paramValues: request.paramValues,
-        prompt,
-      },
-      { idempotencyKey: signature },
-    );
-    return { jobId: handle.id, paintingId: receipt.id };
+  const controller = new AbortController();
+  let settle!: () => void;
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve;
   });
-
-  return { jobId: result.jobId, paintingId: result.paintingId };
+  let admission: OperationHandle | undefined;
+  try {
+    const result = await dependencies.db.withWriteTx(async (tx) => {
+      const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
+      if (existing) {
+        return {
+          boardId: activeJobBoardId(existing.input),
+          jobId: existing.id,
+          paintingId: activeJobPaintingId(existing.input),
+        };
+      }
+      const receiptInput = {
+        ...(input.boardId ? { boardId: input.boardId } : {}),
+        ...(input.brief ? { brief: input.brief } : {}),
+        inputFileIds: images.map((image) => image.fileEntryId),
+        modelId: input.modelId,
+        prompt,
+        providerId,
+      };
+      const receipt = input.paintingId
+        ? await dependencies.paintings.resetForRetryTx(tx, input.paintingId, receiptInput)
+        : await dependencies.paintings.createTx(tx, receiptInput);
+      // Registration rejects a deletion that started while receipt creation was awaiting SQL.
+      // Keep it until commit/rollback; deletion must not queue its mutation ahead of admission.
+      admission = dependencies.scopes.register({
+        kind: 'painting.admit',
+        scopes: [
+          { id: receipt.id, kind: 'painting' },
+          { id: receipt.boardId, kind: 'painting-board' },
+        ],
+        cancel: (reason) => controller.abort(new Error(reason)),
+        settled,
+      });
+      const handle = await dependencies.jobs.enqueueGenerateTx(
+        tx,
+        {
+          boardId: receipt.boardId,
+          images,
+          mode: request.mode,
+          modelId: input.modelId,
+          modelName: input.modelName,
+          paintingId: receipt.id,
+          paramValues: request.paramValues,
+          prompt,
+        },
+        { idempotencyKey: signature },
+      );
+      controller.signal.throwIfAborted();
+      return { boardId: receipt.boardId, jobId: handle.id, paintingId: receipt.id };
+    });
+    controller.signal.throwIfAborted();
+    return result;
+  } finally {
+    admission?.release();
+    settle();
+  }
 }
 
 async function resolveFileEntries(files: PaintingFileRepository, ids: readonly FileEntryId[]) {
@@ -161,6 +191,13 @@ function activeJobPaintingId(jobInput: unknown): string {
   return paintingId;
 }
 
+function activeJobBoardId(jobInput: unknown): string {
+  const input = jobInput as Partial<PaintingGenerateJobInput> | null;
+  if (typeof input?.boardId !== 'string' || input.boardId.length === 0)
+    throw new Error('Active painting.generate job has no boardId in its input');
+  return input.boardId;
+}
+
 /**
  * `paintingId` participates so that retrying an interrupted receipt does not
  * collide with generating the very same prompt as a brand-new painting — same
@@ -169,6 +206,7 @@ function activeJobPaintingId(jobInput: unknown): string {
  */
 function generationSignature(input: PaintingGenerationInput): string {
   return JSON.stringify({
+    boardId: input.boardId ?? null,
     images: input.fileEntryIds,
     mode: input.mode,
     modelId: input.modelId,

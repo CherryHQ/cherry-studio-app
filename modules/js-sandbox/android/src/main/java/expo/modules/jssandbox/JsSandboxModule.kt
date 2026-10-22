@@ -1,5 +1,6 @@
 package expo.modules.jssandbox
 
+import android.net.Uri
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -21,6 +22,22 @@ class JsSandboxModule : Module() {
         val result = JsSandboxNative.run(
           runId.toByteArray(Charsets.UTF_8),
           code.toByteArray(Charsets.UTF_8),
+          limits.timeoutMs,
+          limits.memoryBytes,
+          limits.maxResultBytes,
+          limits.maxLogBytes,
+        )
+        String(result, Charsets.UTF_8)
+      }
+    }
+
+    AsyncFunction("runFiles") { runId: String, code: String, limits: JsSandboxLimits, files: JsSandboxFiles, promise: Promise ->
+      launch(runId, promise) {
+        val result = JsSandboxNative.runFiles(
+          runId.toByteArray(Charsets.UTF_8),
+          code.toByteArray(Charsets.UTF_8),
+          files.inputs.map { path(it).toByteArray(Charsets.UTF_8) }.toTypedArray(),
+          (if (files.output.isEmpty()) "" else path(files.output)).toByteArray(Charsets.UTF_8),
           limits.timeoutMs,
           limits.memoryBytes,
           limits.maxResultBytes,
@@ -70,6 +87,10 @@ class JsSandboxModule : Module() {
     }, "JsSandbox", STACK_SIZE_BYTES).start()
   }
 
+  /** Hosts pass `file://` URIs; the native core opens plain paths. */
+  private fun path(uri: String): String =
+    if (uri.startsWith("file:")) Uri.parse(uri).path ?: uri else uri
+
   private companion object {
     /** QuickJS stops recursion at 7 MiB of this stack (`kMaxStackBytes`), leaving room for the native code below its checks. */
     const val STACK_SIZE_BYTES = 8L shl 20
@@ -83,6 +104,11 @@ class JsSandboxClock : Record {
 
 internal fun interface JsSandboxMessageSink {
   fun post(message: ByteArray)
+}
+
+class JsSandboxFiles : Record {
+  @Field val inputs: List<String> = emptyList()
+  @Field val output: String = ""
 }
 
 class JsSandboxLimits : Record {
@@ -101,6 +127,18 @@ internal object JsSandboxNative {
   external fun run(
     runId: ByteArray,
     code: ByteArray,
+    timeoutMs: Int,
+    memoryBytes: Int,
+    maxResultBytes: Int,
+    maxLogBytes: Int,
+  ): ByteArray
+
+  @JvmStatic
+  external fun runFiles(
+    runId: ByteArray,
+    code: ByteArray,
+    inputPaths: Array<ByteArray>,
+    outputPath: ByteArray,
     timeoutMs: Int,
     memoryBytes: Int,
     maxResultBytes: Int,

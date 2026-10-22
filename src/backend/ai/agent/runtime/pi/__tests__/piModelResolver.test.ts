@@ -7,19 +7,23 @@ import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { GITHUB_COPILOT_MODELS } from '@earendil-works/pi-ai/providers/github-copilot.models';
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
+import { OPENAI_CODEX_MODELS } from '@earendil-works/pi-ai/providers/openai-codex.models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { buildRuntimeEndpointConfigs } from '@/backend/data/services/providerRegistryProjection';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { createTranslationModule } from '@/backend/services/translation';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
+import { generatePiText } from '../generatePiText';
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
 import type { PiRuntimeDependencies } from '../piModelTypes';
 import * as piOAuthModels from '../piOAuthModels';
+import { emptyAssistantMessage } from '../piStreamEvents';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
@@ -110,6 +114,84 @@ describe('Pi model resolver', () => {
     resolver = createPiModelResolver();
   });
 
+  test('translates with the OpenAI OAuth account and Codex transport when no API key exists', async () => {
+    const oauthModel = Object.values(OPENAI_CODEX_MODELS)[0];
+    jest.spyOn(piOAuthModels, 'resolveOAuthPiModel').mockResolvedValueOnce(oauthModel);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_RESPONSES,
+      'https://chatgpt.com/backend-api',
+      'openai-codex',
+    );
+    provider.presetProviderId = 'openai-codex';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, { apiModelId: oauthModel.id }),
+    );
+    mockResolveApiKey.mockRejectedValue(new Error('This provider has no manual API keys.'));
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'openai-codex',
+        auth: { apiKey: 'oauth-access' },
+        availableModelIds: [oauthModel.id],
+      }),
+    });
+    const message = {
+      ...emptyAssistantMessage(oauthModel),
+      content: [{ type: 'text' as const, text: '你好' }],
+    };
+    const source = new AssistantMessageEventStream();
+    source.push({ type: 'done', reason: 'stop', message });
+    mockBoundStreamFn.mockReturnValueOnce(source);
+    const translator = createTranslationModule({
+      ai: { generateText: (...args) => generatePiText(resolver, ...args) },
+      preference: { get: async () => 'test-provider::test-model' },
+      models: { getById: mockGetModelById },
+    });
+
+    await expect(translator.translate({ text: 'Hello', language: 'zh-CN' })).resolves.toBe('你好');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'openai-codex-responses' }),
+      expect.objectContaining({ apiKey: 'oauth-access', temperature: undefined }),
+    );
+    const [sentModel, context] = mockBoundStreamFn.mock.calls[0];
+    expect(sentModel.provider).toBe('openai-codex');
+    expect(context.messages).toEqual([
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('简体中文') }),
+      expect.objectContaining({ role: 'user', content: 'Hello' }),
+    ]);
+  });
+
+  test('keeps ordinary API-key translation on its configured protocol', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.openai.com/v1', 'openai'),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    mockBoundStreamFn.mockImplementationOnce((model) => {
+      const source = new AssistantMessageEventStream();
+      source.push({
+        type: 'done',
+        reason: 'stop',
+        message: {
+          ...emptyAssistantMessage(model),
+          content: [{ type: 'text', text: '你好' }],
+        },
+      });
+      return source;
+    });
+    const translator = createTranslationModule({
+      ai: { generateText: (...args) => generatePiText(resolver, ...args) },
+      preference: { get: async () => 'test-provider::test-model' },
+      models: { getById: mockGetModelById },
+    });
+    await expect(translator.translate({ text: 'Hello', language: 'zh-CN' })).resolves.toBe('你好');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'openai-responses' }),
+      expect.objectContaining({ apiKey: 'secret-key' }),
+    );
+  });
+
   test('retains canonical Copilot identity, model API, and credential-specific base URL', async () => {
     jest
       .spyOn(piOAuthModels, 'resolveOAuthPiModel')
@@ -149,47 +231,61 @@ describe('Pi model resolver', () => {
     expect(mockResolveApiKey).not.toHaveBeenCalled();
   });
 
-  test('preserves header-owned Kimi authentication and redacts the raw bearer token', async () => {
-    jest
-      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
-      .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
-    const provider = makeProvider(
-      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
-      'https://api.kimi.com/coding',
-      'anthropic',
-    );
-    provider.presetProviderId = 'kimi-coding';
-    provider.authMethods = ['oauth'];
-    mockGetProviderById.mockResolvedValue(provider);
-    mockGetModelById.mockResolvedValue(
-      makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { apiModelId: 'kimi-for-coding' }),
-    );
-    resolver = createPiModelResolver({
-      resolveAuth: async () => ({
-        id: 'kimi-coding',
-        auth: { headers: { Authorization: 'Bearer kimi-access' } },
-        availableModelIds: undefined,
-      }),
-    });
-    const resolution = await resolve(resolver);
-    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'kimi-coding' }),
-      'kimi-for-coding',
-    );
-    expect(mockBindPiStream).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        apiKey: undefined,
-        headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
-      }),
-    );
-    expect(resolution.model).toMatchObject({
-      provider: 'kimi-coding',
-      compat: { forceAdaptiveThinking: true },
-    });
-    expect(resolution.redactionValues).toContain('kimi-access');
-    expect(mockResolveApiKey).not.toHaveBeenCalled();
-  });
+  test.each([
+    {
+      endpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      baseUrl: 'https://api.kimi.com/coding',
+      family: 'anthropic',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      baseUrl: 'https://api.kimi.com/coding/v1',
+      family: 'openai-compatible',
+    },
+  ])(
+    'uses the official Kimi protocol and authentication for saved $endpoint settings',
+    async ({ endpoint, baseUrl, family }) => {
+      jest
+        .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+        .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
+      const provider = makeProvider(endpoint, baseUrl, family);
+      provider.presetProviderId = 'kimi-coding';
+      provider.authMethods = ['oauth'];
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { apiModelId: 'kimi-for-coding' }));
+      resolver = createPiModelResolver({
+        resolveAuth: async () => ({
+          id: 'kimi-coding',
+          auth: { headers: { Authorization: 'Bearer kimi-access' } },
+          availableModelIds: undefined,
+        }),
+      });
+      const resolution = await resolve(resolver);
+      expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'kimi-coding' }),
+        'kimi-for-coding',
+      );
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.objectContaining({ api: 'openai-completions' }),
+        expect.objectContaining({
+          apiKey: undefined,
+          headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
+        }),
+      );
+      expect(resolution.model).toMatchObject({
+        provider: 'kimi-coding',
+        api: 'openai-completions',
+        baseUrl: 'https://api.kimi.com/coding/v1',
+        compat: {
+          requiresReasoningContentOnAssistantMessages: true,
+          supportsMidConvoSystemMessages: true,
+          supportsMidConvoToolAdditions: true,
+        },
+      });
+      expect(resolution.redactionValues).toContain('kimi-access');
+      expect(mockResolveApiKey).not.toHaveBeenCalled();
+    },
+  );
 
   test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
     mockGetProviderById.mockResolvedValue(
@@ -407,7 +503,7 @@ describe('Pi model resolver', () => {
     expect(mockListApiKeys).toHaveBeenCalledWith(provider.id, { enabled: true });
   });
 
-  test('bounds all credential attempts to two minutes before output', async () => {
+  test('bounds all credential attempts to thirty minutes before output', async () => {
     jest.useFakeTimers();
     try {
       const testCase = CASES[0];
@@ -454,11 +550,11 @@ describe('Pi model resolver', () => {
         resolution.model,
         normalizeContext({ messages: [] }),
       );
-      await jest.advanceTimersByTimeAsync(120_000);
+      await jest.advanceTimersByTimeAsync(30 * 60_000);
 
       expect(await stream.result()).toMatchObject({
         stopReason: 'error',
-        errorMessage: 'The model response timed out after 120 seconds without data.',
+        errorMessage: 'The model response timed out after 1800 seconds without data.',
       });
       expect(usedKeys).toEqual([keys[0].key, keys[1].key]);
       expect(signal?.aborted).toBe(true);
@@ -723,6 +819,22 @@ describe('Pi model resolver', () => {
           headers: resolution.model.headers,
         }),
       );
+    },
+  );
+
+  test.each([ENDPOINT_TYPE.OPENAI_RESPONSES, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS])(
+    'keeps system updates inline only for official DeepSeek %s endpoints',
+    async (endpoint) => {
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { name: 'DeepSeek Flash' }));
+      for (const baseUrl of ['https://api.deepseek.com/v1', 'https://relay.example.test/v1']) {
+        mockGetProviderById.mockResolvedValue(makeProvider(endpoint, baseUrl, 'openai-compatible'));
+        const resolution = await resolve(resolver, {});
+        if (baseUrl === 'https://api.deepseek.com/v1') {
+          expect(resolution.model.compat).toMatchObject({ supportsMidConvoSystemMessages: true });
+        } else {
+          expect(resolution.model.compat).not.toHaveProperty('supportsMidConvoSystemMessages');
+        }
+      }
     },
   );
 
@@ -1123,6 +1235,27 @@ describe('Pi model resolver', () => {
       retryable: false,
     });
     expect(mockBindPiStream).not.toHaveBeenCalled();
+  });
+
+  test.each(CASES)('resolves a keyless gateway using $endpointType', async (testCase) => {
+    const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
+    provider.authOptional = true;
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+    mockResolveApiKey.mockResolvedValue({
+      apiKeySelection: { attribution: 'unknown' },
+      value: '',
+    });
+
+    const resolution = await resolve(resolver);
+
+    expect(resolution.model).toMatchObject({ api: testCase.api });
+    expect(resolution.usageContext.credentialReceipt).toEqual({ attribution: 'unknown' });
+    expect(resolution.redactionValues).not.toContain('unused');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ apiKey: '' }),
+    );
   });
 });
 

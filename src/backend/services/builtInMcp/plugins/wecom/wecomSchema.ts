@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import * as z from 'zod';
 
 import { PluginError } from '@/shared/contracts/plugins';

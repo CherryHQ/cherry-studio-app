@@ -1,13 +1,10 @@
 export {
   PaintingInput,
   PaintingWorkspaceInput,
-  PaintingImageInput,
   type PaintingInputSubmission,
+  type PaintingPromptPreparation,
 } from './PaintingInput';
-export {
-  PaintingInputProvider,
-  usePaintingReferenceSelection,
-  usePaintingParameterDraft,
-  usePaintingInputSession,
-} from './PaintingInputProvider';
+export { PaintingInputProvider, usePaintingInputSession } from './PaintingInputProvider';
+export { paintingInputIssueLabel } from './paintingInputFeedback';
+export { usePaintingInput } from './usePaintingInput';
 export { type PaintingInputResult } from './usePaintingReference';

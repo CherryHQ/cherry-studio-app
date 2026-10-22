@@ -1,5 +1,4 @@
 import {
-  type InfiniteData,
   queryOptions,
   useQueries,
   useQueryClient,
@@ -16,63 +15,13 @@ import {
   useMutation,
   useQuery,
 } from '@/frontend/data';
-import {
-  dataApiCollectionFilters,
-  removeItemsFromInfiniteData,
-  restoreQuerySnapshot,
-  updateQueriesOptimistically,
-} from '@/frontend/data/utils/optimisticQueryUpdate';
-import type { PaintingsModule } from '@/shared/contracts';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { FileEntryId } from '@/shared/data/types/file';
-import type { Painting } from '@/shared/data/types/painting';
-import {
-  imageParamsAspectRatio,
-  imageParamsResolutionLabel,
-} from '@/shared/utils/imageGenerationParams';
+import type { PaintingGenerationInput, PaintingsModule, ResolvedFile } from '@/shared/contracts';
+import type { Painting, PaintingBoard, PaintingBoardSummary } from '@/shared/data/types/painting';
 
-import {
-  type PaintingJobInterruptionReason,
-  paintingJobInterruptionReason,
-  paintingJobParamValues,
-  usePaintingJobs,
-} from './usePaintingJobs';
+import { type PaintingBoardCoverContent, paintingBoardCover } from './paintingBoardCover';
+import { usePaintingJobs } from './usePaintingJobs';
 
-const pageSize = 20;
-type PaintingListData = InfiniteData<CursorPaginationResponse<Painting>, string | undefined>;
-
-export type PaintingOutputGalleryItem = {
-  aspectRatio: number;
-  fileEntryId: FileEntryId;
-  key: string;
-  kind: 'output';
-  outputCount: number;
-  outputIndex: number;
-  painting: Painting;
-  uri: string;
-};
-
-/**
- * A receipt with no images yet: either `painting.generate` is still running or
- * it stopped without producing any. Both keep the painting's place in the
- * gallery — the tile is the only way back to a running generation and the only
- * handle on an abandoned one.
- */
-type PaintingPendingGalleryItemBase = {
-  aspectRatio: number;
-  key: string;
-  painting: Painting;
-  /** Requested size, when the params that asked for it name one. */
-  resolution?: string;
-};
-
-export type PaintingPendingGalleryItem = PaintingPendingGalleryItemBase &
-  (
-    | { kind: 'generating' }
-    | { interruptionReason: PaintingJobInterruptionReason; kind: 'interrupted' }
-  );
-
-export type PaintingGalleryItem = PaintingOutputGalleryItem | PaintingPendingGalleryItem;
+const boardPageSize = 20;
 
 export type ResolvedPaintingAttachment = ComposerAttachmentReady;
 
@@ -82,23 +31,67 @@ export type ResolvedPaintingFiles = {
   outputs: ResolvedPaintingAttachment[];
 };
 
-export function usePaintings() {
-  const query = useInfiniteQuery('/paintings', { limit: pageSize });
-  const paintings = useMemo(() => query.pages.flatMap((page) => page.items), [query.pages]);
+export function usePaintingBoards() {
+  const query = useInfiniteQuery('/painting-boards', { limit: boardPageSize });
+  const boards = useMemo(() => query.pages.flatMap((page) => page.items), [query.pages]);
 
   return {
+    boards,
+    error: query.error,
     isLoading: query.isLoading,
     isLoadingMore: query.isLoadingMore,
     loadMore: query.loadNext,
-    paintings,
-    query,
+    refresh: query.refresh,
   };
 }
 
-export function usePaintingIds({ enabled }: { enabled: boolean }) {
-  return useQuery('/paintings/ids', {
-    enabled,
-  });
+export type PaintingBoardCard = PaintingBoardCoverContent & {
+  board: PaintingBoard;
+  paintingCount: number;
+};
+
+/** Gallery cards: each board with the cover its newest receipts and running jobs make. */
+export function usePaintingBoardCards(summaries: readonly PaintingBoardSummary[]) {
+  const recentPaintings = useMemo(
+    () => summaries.flatMap((summary) => summary.recentPaintings),
+    [summaries],
+  );
+  const outputs = usePaintingOutputs(recentPaintings);
+  const { activeByPaintingId } = usePaintingJobs();
+  const cards = useMemo<PaintingBoardCard[]>(() => {
+    const activePaintingIds = new Set(activeByPaintingId.keys());
+    return summaries.map((summary) => ({
+      ...paintingBoardCover(
+        summary.recentPaintings,
+        outputs.byPaintingId,
+        activePaintingIds,
+        summary.imageCount,
+      ),
+      board: summary.board,
+      paintingCount: summary.paintingCount,
+    }));
+  }, [activeByPaintingId, outputs.byPaintingId, summaries]);
+
+  return { cards, isLoading: outputs.isLoading };
+}
+
+/** Starts a generation as a durable job and wakes the views that observe it. */
+export function useStartPaintingGeneration() {
+  const paintings = useBackendModule('paintings');
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    async (input: PaintingGenerationInput) => {
+      const started = await paintings.startGeneration(input);
+      // The active-job poll stops once nothing runs, so a fresh enqueue wakes it.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({
+        predicate: (query) => queryKeys.paintings.isBoardQuery(query.queryKey),
+      });
+      return started;
+    },
+    [paintings, queryClient],
+  );
 }
 
 export function useDeletePaintings() {
@@ -106,26 +99,7 @@ export function useDeletePaintings() {
   const paintingsBackend = useBackendModule('paintings');
   const { activeByPaintingId } = usePaintingJobs();
   const mutation = useMutation('DELETE', '/paintings', {
-    onMutate: async (variables) => {
-      const ids = new Set(variables?.query?.ids ?? []);
-      const paintings = await updateQueriesOptimistically<PaintingListData>(
-        queryClient,
-        dataApiCollectionFilters('/paintings'),
-        (current) => removeItemsFromInfiniteData(current, ids),
-      );
-      const paintingIds = await updateQueriesOptimistically<string[]>(
-        queryClient,
-        { exact: true, queryKey: ['/paintings/ids'] },
-        (current) => current?.filter((id) => !ids.has(id)),
-      );
-
-      return { paintingIds, paintings };
-    },
-    onError: (_error, _variables, context) => {
-      restoreQuerySnapshot(queryClient, context?.paintingIds);
-      restoreQuerySnapshot(queryClient, context?.paintings);
-    },
-    refresh: ['/paintings', '/paintings/ids'],
+    refresh: ['/painting-boards', '/painting-boards/*'],
   });
   const deletePaintings = mutation.trigger;
 
@@ -148,7 +122,6 @@ export function useDeletePaintings() {
       for (const id of uniqueIds) {
         // Drop rather than invalidate: refetching a deleted painting would throw.
         queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
-        queryClient.removeQueries({ queryKey: queryKeys.paintings.galleryFiles(id) });
         queryClient.removeQueries({ queryKey: queryKeys.paintings.imageAspectRatios(id) });
         queryClient.removeQueries({ queryKey: queryKeys.paintings.resolvedFiles(id) });
       }
@@ -210,52 +183,22 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
   };
 }
 
-export function usePaintingGalleryItems(paintings: readonly Painting[]) {
+/** The resolved output images of each painting, keyed by painting id. */
+export function usePaintingOutputs(paintings: readonly Painting[]) {
   const paintingsBackend = useBackendModule('paintings');
-  const queryClient = useQueryClient();
   const queries = useMemo(
     () =>
-      paintings.map((painting) =>
-        queryOptions({
-          queryKey: queryKeys.paintings.galleryFilesRevision(painting.id, painting.updatedAt),
-          queryFn: async (): Promise<PaintingOutputGalleryItem[]> => {
-            const resolved = await queryClient.ensureQueryData(
-              resolvedPaintingFilesQueryOptions(paintingsBackend, painting),
-            );
-            return await Promise.all(
-              resolved.outputs.map(async ({ entry, uri }, index) => ({
-                aspectRatio: await queryClient.ensureQueryData(
-                  imageAspectRatioQueryOptions(painting.id, entry.id, uri),
-                ),
-                fileEntryId: entry.id,
-                key: `${painting.id}:${entry.id}`,
-                kind: 'output' as const,
-                outputCount: resolved.outputs.length,
-                outputIndex: index + 1,
-                painting,
-                uri,
-              })),
-            );
-          },
-          staleTime: Infinity,
-        }),
-      ),
-    [paintings, paintingsBackend, queryClient],
+      paintings.map((painting) => resolvedPaintingFilesQueryOptions(paintingsBackend, painting)),
+    [paintings, paintingsBackend],
   );
   const combine = useCallback(
-    (results: readonly PaintingGalleryQueryResult[]) => {
-      const items = results.flatMap((result) => result.data ?? []);
-      const settledPaintingIds = new Set(
-        paintings.flatMap((painting, index) => (results[index]?.isPending ? [] : [painting.id])),
-      );
-      return {
-        data: items,
-        isLoading:
-          paintings.length > 0 &&
-          settledPaintingIds.size === 0 &&
-          results.some((result) => result.isLoading),
-        settledPaintingIds,
-      };
+    (results: readonly { data?: { outputs: ResolvedFile[] }; isLoading: boolean }[]) => {
+      const byPaintingId = new Map<string, readonly ResolvedFile[]>();
+      paintings.forEach((painting, index) => {
+        const outputs = results[index]?.data?.outputs;
+        if (outputs) byPaintingId.set(painting.id, outputs);
+      });
+      return { byPaintingId, isLoading: results.some((result) => result.isLoading) };
     },
     [paintings],
   );
@@ -263,17 +206,12 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
   return useQueries({ combine, queries });
 }
 
-type PaintingGalleryQueryResult = {
-  data: PaintingOutputGalleryItem[] | undefined;
-  isLoading: boolean;
-  isPending: boolean;
-};
-
-function resolvedPaintingFilesQueryOptions(
+export function resolvedPaintingFilesQueryOptions(
   paintings: PaintingsModule,
   painting: Painting | undefined,
 ) {
   return queryOptions({
+    meta: { fileEntryIds: [...(painting?.files.input ?? []), ...(painting?.files.output ?? [])] },
     queryFn: async () =>
       painting ? await paintings.resolveFiles(painting) : { inputs: [], outputs: [] },
     queryKey: queryKeys.paintings.resolvedFilesRevision(
@@ -303,81 +241,4 @@ async function loadImageAspectRatio(uri: string): Promise<number> {
   } catch {
     return 1;
   }
-}
-
-/**
- * The gallery in painting order, with an output-less receipt standing in for
- * its own tile. Placeholders are merged here rather than inside
- * {@link usePaintingGalleryItems} so that the once-per-second job poll never
- * re-runs the image measuring pass behind it.
- */
-export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
-  const outputs = usePaintingGalleryItems(paintings);
-  const jobs = usePaintingJobs();
-  const outputItems = outputs.data;
-
-  const items = useMemo(() => {
-    const byPaintingId = new Map<string, PaintingOutputGalleryItem[]>();
-    for (const item of outputItems ?? []) {
-      const existing = byPaintingId.get(item.painting.id);
-      if (existing) {
-        existing.push(item);
-      } else {
-        byPaintingId.set(item.painting.id, [item]);
-      }
-    }
-
-    return paintings.flatMap((painting): PaintingGalleryItem[] => {
-      const resolved = byPaintingId.get(painting.id);
-      if (resolved && resolved.length > 0) {
-        return resolved;
-      }
-      if (
-        !outputs.settledPaintingIds.has(painting.id) &&
-        !jobs.activeByPaintingId.has(painting.id)
-      ) {
-        return [];
-      }
-      const activeJob = jobs.activeByPaintingId.get(painting.id);
-      const interruptedJob = jobs.interruptedByPaintingId.get(painting.id);
-      const paramValues = paintingJobParamValues(activeJob ?? interruptedJob);
-      return [
-        {
-          aspectRatio: imageParamsAspectRatio(paramValues),
-          // No file entry to key on, and exactly one placeholder per painting:
-          // a multi-image request still shows a single tile until its outputs
-          // land and the real count is known.
-          key: `${painting.id}:pending`,
-          painting,
-          resolution: imageParamsResolutionLabel(paramValues),
-          ...(activeJob
-            ? { kind: 'generating' as const }
-            : {
-                interruptionReason: paintingJobInterruptionReason(interruptedJob),
-                kind: 'interrupted' as const,
-              }),
-        },
-      ];
-    });
-  }, [
-    jobs.activeByPaintingId,
-    jobs.interruptedByPaintingId,
-    outputItems,
-    outputs.settledPaintingIds,
-    paintings,
-  ]);
-
-  return { isLoading: outputs.isLoading || jobs.isLoading, items };
-}
-
-export function useSyncPaintingQueries() {
-  const queryClient = useQueryClient();
-
-  return useCallback(
-    async (painting: Painting) => {
-      queryClient.setQueryData(queryKeys.paintings.detail(painting.id), painting);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
-    },
-    [queryClient],
-  );
 }

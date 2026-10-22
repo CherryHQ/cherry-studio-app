@@ -62,6 +62,79 @@ test('retains useful error facts without free text, credentials, payloads or sta
   );
 });
 
+test('retains startup timings through file export while rejecting other info logs and private fields', () => {
+  const raw = createLogRecord('info', 'Startup stage', 'Startup', {}, [
+    {
+      operation: 'startup.service',
+      outcome: 'completed',
+      serviceName: 'DbService',
+      phase: 'gate',
+      startupStartedAt: 1000,
+      jsEntryStartMs: 200,
+      elapsedMs: 500,
+      durationMs: 125,
+      rnStartupStartMs: 0,
+      rnRuntimeStartMs: 10,
+      rnBundleEntryStartMs: 80,
+      path: '/private/database',
+      language: 'private-preference',
+      error: new Error('private failure'),
+    },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  const exported = projectDiagnosticLine(
+    { tooLarge: false, data: new TextEncoder().encode(JSON.stringify(persisted)) },
+    'logs',
+    { fromMs: 0, toMs: Date.now() + 1000 },
+  );
+  if (!exported || exported === 'malformed') throw new Error('Expected startup metadata');
+  const value = JSON.parse(new TextDecoder().decode(exported.data));
+  expect(value).toMatchObject({
+    level: 'info',
+    message: 'Startup stage',
+    facts: {
+      operation: 'startup.service',
+      outcome: 'completed',
+      serviceName: 'DbService',
+      phase: 'gate',
+      startupStartedAt: 1000,
+      jsEntryStartMs: 200,
+      elapsedMs: 500,
+      durationMs: 125,
+      rnStartupStartMs: 0,
+      rnRuntimeStartMs: 10,
+      rnBundleEntryStartMs: 80,
+    },
+  });
+  expect(JSON.stringify(value)).not.toMatch(/private|stack|path|language/);
+  expect(projectDiagnosticLog({ ...raw, message: 'arbitrary info' })).toBeUndefined();
+  expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
+});
+
+test('preserves the service and dependency responsible for a startup phase promotion', () => {
+  const persisted = projectDiagnosticLog(
+    createLogRecord('warn', 'Service promoted to startup gate', 'Lifecycle', {}, [
+      {
+        operation: 'service.phase.promote',
+        serviceName: 'BackgroundReplyRuntime',
+        requiredBy: 'RemoteAgentRuntime',
+        fromPhase: 'postReady',
+        toPhase: 'gate',
+      },
+    ]),
+  );
+  expect(projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)))).toMatchObject({
+    message: 'Service promoted to startup gate',
+    facts: {
+      operation: 'service.phase.promote',
+      serviceName: 'BackgroundReplyRuntime',
+      requiredBy: 'RemoteAgentRuntime',
+      fromPhase: 'postReady',
+      toPhase: 'gate',
+    },
+  });
+});
+
 test('exports only allowlisted trace fields even if stored metadata contains extra sensitive values', () => {
   const record = {
     ...trace,
@@ -211,6 +284,27 @@ test.each([
   });
   expect(JSON.stringify(exported)).not.toMatch(/private|arguments|stack/);
 });
+
+// OpenAI Responses ids join call and item ids; Code Mode appends its nested call number.
+test.each(['call_abc123|fc_def456', 'call_abc123|fc_def456/c3'])(
+  'keeps the %s tool call id',
+  (id) => {
+    const record = {
+      ...trace,
+      name: 'pi.execute_tool',
+      attributes: { 'tool.name': 'read_file', 'tool.call.id': id },
+    };
+    const projected = projectDiagnosticLine(
+      { tooLarge: false, data: new TextEncoder().encode(JSON.stringify(record)) },
+      'traces',
+      { fromMs: 0, toMs: 1000 },
+    );
+    if (!projected || projected === 'malformed') throw new Error('Expected an exported trace');
+    expect(JSON.parse(new TextDecoder().decode(projected.data)).attributes).toMatchObject({
+      'tool.call.id': id,
+    });
+  },
+);
 
 test('preserves durable failure correlation and retry facts through persistent log reprojection', () => {
   const first = projectDiagnosticLog(

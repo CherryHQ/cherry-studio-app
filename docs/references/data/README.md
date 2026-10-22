@@ -131,8 +131,8 @@ See [Storage Engine](./storage-engine.md) for the current engine constraints and
 ## Schema And Message Persistence
 
 The active schema includes app state/preferences, Agent and Agent Session data, provider/model,
-MCP, plugin authorization, desktop connection, file, painting, job, and AI usage tables. Agent Session
-messages are linear and use stable protocol message ids. The initial migration creates these 15
+MCP, plugin authorization, desktop connection, file, painting board, painting, job, and AI usage
+tables. Agent Session messages are linear and use stable protocol message ids. The initial migration creates these 15
 tables directly. See [Database Migrations](../../../migrations/README.md) for the unreleased
 baseline and development database reset requirement.
 

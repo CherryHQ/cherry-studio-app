@@ -10,7 +10,12 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import {
   FakeRuntime,
+  LANES_PER_SESSION,
+  laneKey,
+  parseLaneKey,
+  runtimeLane,
   type DurableAgentRuntime,
+  type RuntimeArtifact,
   type RuntimeConversationEvent,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
@@ -18,6 +23,7 @@ import {
   type RuntimeToolResult,
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
+import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
 import type { SkillTurnScope } from '../skillScope';
@@ -49,12 +55,12 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   const listeners = new Map<string, (event: RuntimeConversationEvent) => void>();
   let execution: RuntimeExecutionPorts | undefined;
   const emit = (turn: RuntimeDurableTurn) => {
-    const copy = copies.get(turn.identity.sessionId)!;
+    const copy = copies.get(laneKey(turn.identity))!;
     copy.turns = [
       ...copy.turns.filter((item) => item.identity.requestId !== turn.identity.requestId),
       turn,
     ];
-    listeners.get(turn.identity.sessionId)?.({ type: 'turn.updated', turn });
+    listeners.get(laneKey(turn.identity))?.({ type: 'turn.updated', turn });
   };
   const conversations: DurableAgentRuntime = {
     descriptor: new FakeRuntime().descriptor,
@@ -76,30 +82,40 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       steps.push('close');
     }),
     sessions: async () =>
-      [...copies].map(([sessionId, copy]) => ({ sessionId, revision: copy.revision })),
-    revision: async (id) => copies.get(id)?.revision,
-    hasConversation: async (id) => copies.has(id),
-    unfinishedSessions: async () =>
+      [...copies].map(([key, copy]) => ({ lane: parseLaneKey(key), revision: copy.revision })),
+    lanes: async (id) =>
+      Array.from({ length: LANES_PER_SESSION }, (_, slot) => runtimeLane(id, slot)).flatMap(
+        (lane) => {
+          const copy = copies.get(laneKey(lane));
+          return copy ? [{ lane, revision: copy.revision }] : [];
+        },
+      ),
+    revision: async (lane) => copies.get(laneKey(lane))?.revision,
+    hasConversation: async (lane) => copies.has(laneKey(lane)),
+    unfinishedLanes: async () =>
       [...copies]
         .filter(([, copy]) =>
           copy.turns.some((turn) => ['running', 'queued'].includes(turn.status)),
         )
-        .map(([id]) => id),
-    hasUnfinishedWork: async () => (await conversations.unfinishedSessions()).length > 0,
+        .map(([key]) => parseLaneKey(key)),
+    hasUnfinishedWork: async () => (await conversations.unfinishedLanes()).length > 0,
     watchWork: async () => ({ active: false, unsubscribe: async () => {} }),
     configuration: async () => configuration,
     configure: async () => {},
     resourceFileEntryIds: async () => [],
     ensureConversation: async (seed) => {
-      copies.set(seed.sessionId, { revision: seed.revision, turns: [] });
+      copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
+      return seed.history ? 'pi:imported' : undefined;
     },
-    submit: jest.fn(async (id, input) => {
-      expect(
-        (await store.listMessages(id)).find((message) => message.id === input.assistantMessageId)
-          ?.status,
-      ).toBe('pending');
+    forkConversation: async (seed) => {
+      copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
+    },
+    submit: jest.fn(async (lane, input) => {
+      expect((await store.getMessage(lane.sessionId, input.assistantMessageId))?.status).toBe(
+        'pending',
+      );
       const turn: RuntimeDurableTurn = {
-        identity: { sessionId: id, turnId: input.turnId, requestId: input.requestId },
+        identity: { ...lane, turnId: input.turnId, requestId: input.requestId },
         userMessageId: input.userMessageId,
         assistantMessageId: input.assistantMessageId,
         inputBoundary: 'pi:1',
@@ -116,28 +132,28 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       emit(turn);
       return turn;
     }),
-    observe: async (id, listener) => {
-      listeners.set(id, listener);
-      const turns = copies.get(id)?.turns ?? [];
+    observe: async (lane, listener) => {
+      listeners.set(laneKey(lane), listener);
+      const turns = copies.get(laneKey(lane))?.turns ?? [];
       return {
         snapshot: {
           activeTurn: turns.find((turn) => turn.status === 'running') ?? null,
           queue: turns.filter((turn) => turn.status === 'queued'),
         },
         unsubscribe: async () => {
-          listeners.delete(id);
+          listeners.delete(laneKey(lane));
         },
       };
     },
-    history: async (id, query) => ({
-      turns: (copies.get(id)?.turns ?? [])
+    history: async (lane, query) => ({
+      turns: (copies.get(laneKey(lane))?.turns ?? [])
         .toReversed()
         .filter((turn) => !query.requestIds || query.requestIds.includes(turn.identity.requestId))
         .slice(0, query.limit),
     }),
-    message: async (id, messageId) => {
+    message: async (lane, messageId) => {
       const turn = copies
-        .get(id)
+        .get(laneKey(lane))
         ?.turns.find(
           (turn) => turn.assistantMessageId === messageId || turn.userMessageId === messageId,
         );
@@ -149,12 +165,12 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     drainUsage: async () => {
       steps.push('usage');
     },
-    abort: jest.fn(async (id) => {
-      for (const turn of copies.get(id)?.turns ?? [])
+    abort: jest.fn(async (lane) => {
+      for (const turn of copies.get(laneKey(lane))?.turns ?? [])
         if (['queued', 'running'].includes(turn.status)) emit({ ...turn, status: 'cancelled' });
     }),
-    discardConversation: jest.fn(async (id) => {
-      copies.delete(id);
+    discardConversation: jest.fn(async (lane) => {
+      copies.delete(laneKey(lane));
       steps.push('discard');
     }),
     withdraw: async () => 'aborted',
@@ -199,6 +215,8 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     }),
     durableStorage: {
       open: async () => ({}) as never,
+      size: () => 0,
+      discard: () => {},
       notifyTranscript: () => {
         steps.push('persisted');
       },
@@ -206,17 +224,19 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     recordDurableUsage: async () => {},
     ...overrides,
   };
+  const reply = {
+    setInteraction: jest.fn(),
+    updateContent: jest.fn(),
+    awaitApproval: jest.fn(),
+    finish: jest.fn(),
+    retire: jest.fn(),
+    update: jest.fn(),
+  };
   const background = {
     acquirePreparation: () => ({ release() {} }),
     clearSession() {},
     updateSessionTitle() {},
-    startTurn: () => ({
-      updateContent() {},
-      awaitApproval() {},
-      finish() {},
-      retire() {},
-      update() {},
-    }),
+    startTurn: jest.fn(() => reply),
   };
   const host = new DurableAgentHost(store, ports, background, new FakeRuntime(), conversations);
   const reserve = async (
@@ -224,10 +244,12 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     userParts: AgentMessagePart[] = [
       { id: 'question', type: 'text', text: 'Question', state: 'done' },
     ],
+    workspaceFolderId?: string,
   ) => {
     const reserved = await store.reserveInitialSubmission({
       sessionId,
       agentId,
+      ...(workspaceFolderId ? { workspaceFolderId } : {}),
 
       userMessageId: uuid(),
       assistantMessageId: uuid(),
@@ -236,7 +258,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       inferenceSnapshot,
     });
     const turn: RuntimeDurableTurn = {
-      identity: { sessionId, turnId: reserved.turnId, requestId: reserved.turnId },
+      identity: { sessionId, slot: 0, turnId: reserved.turnId, requestId: reserved.turnId },
       userMessageId: reserved.userMessage.id,
       assistantMessageId: reserved.assistantMessage.id,
       inputBoundary: 'pi:1',
@@ -256,6 +278,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
         referencedFileEntryIds: [],
         hasHistoryBeforeActiveTurn: false,
         inferenceSnapshot,
+        workspaceFolderId: workspaceFolderId ?? null,
       },
     };
     copies.set(sessionId, { revision: 0, turns: [turn] });
@@ -271,11 +294,346 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     copies,
     emit,
     reserve,
+    background,
+    reply,
     execution: () => execution,
   };
 }
 
+/** Lets settlement and background presentation finish their store round trips. */
+async function settle() {
+  for (let round = 0; round < 20; round++) await new Promise((resolve) => setImmediate(resolve));
+}
+
 describe('durable tool diagnostics', () => {
+  test('refuses queueing with a changed tool return contract during an active turn', async () => {
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'create_document' },
+      providerName: 'create_document',
+      displayName: 'Create document',
+      description: '',
+      inputSchema: { type: 'object' },
+      outputSchema: { type: 'object', required: ['fileEntryId'] },
+      approval: 'auto',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const f = fixture({
+      runtimeTools: { resolve: async () => ({ tools: [tool], pluginGuides: [] }) },
+    });
+    await f.reserve('running');
+    jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [tool],
+      }),
+      tools: [{ ...tool, outputSchema: undefined }],
+    });
+    await f.host.initialize();
+    try {
+      await expect(
+        f.host.submitMessage({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Create another document.' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('publishes the recovered queue to observations installed before initialization', async () => {
+    const f = fixture();
+    const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };
+    f.copies.get(f.sessionId)!.turns = [queued];
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      expect(observation.snapshot.queuedInputs).toEqual([]);
+      await f.host.initialize();
+      expect(events).toContainEqual({
+        type: 'queue.updated',
+        inputs: [
+          expect.objectContaining({
+            turnId: queued.identity.turnId,
+            assistantMessageId: queued.assistantMessageId,
+          }),
+        ],
+      });
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('recovery finishes withdrawal when the process stopped before the reservation was removed', async () => {
+    const f = fixture();
+    const turn = {
+      ...(await f.reserve('cancelled')),
+      inputBoundary: null,
+      answerBoundary: null,
+      parts: [],
+    };
+    f.copies.get(f.sessionId)!.turns = [turn];
+    try {
+      await f.host.initialize();
+      expect(await f.store.listMessages(f.sessionId)).toEqual([]);
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(0);
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('restores a queued-only input with a withdrawal control and removes only its reservation', async () => {
+    const f = fixture();
+    const turn = {
+      ...(await f.reserve('queued')),
+      inputBoundary: null,
+      answerBoundary: null,
+      parts: [],
+    };
+    f.copies.get(f.sessionId)!.turns = [turn];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      expect(observation.snapshot.activeTurn).toBeNull();
+      expect(observation.snapshot.queuedInputs).toMatchObject([
+        {
+          turnId: turn.identity.turnId,
+          userMessage: { id: turn.userMessageId },
+          assistantMessageId: turn.assistantMessageId,
+        },
+      ]);
+      const revision = await f.store.getRuntimeRevision(f.sessionId);
+      jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+        f.emit({ ...turn, status: 'cancelled' });
+        return 'aborted';
+      });
+      await expect(
+        f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: turn.identity.turnId }),
+      ).resolves.toBe('withdrawn');
+      expect(await f.store.listMessages(f.sessionId)).toEqual([]);
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(revision);
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+      expect(events).toContainEqual({ type: 'queue.updated', inputs: [] });
+      expect(
+        events.some(
+          (event) => event.type === 'message.created' || event.type === 'message.finalized',
+        ),
+      ).toBe(false);
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('a queued removal that loses the placement race never aborts the active run', async () => {
+    const f = fixture();
+    const turn = {
+      ...(await f.reserve('queued')),
+      inputBoundary: null,
+      answerBoundary: null,
+      parts: [],
+    };
+    f.copies.get(f.sessionId)!.turns = [turn];
+    await f.host.initialize();
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      f.emit({ ...turn, status: 'running', inputBoundary: 'pi:1' });
+      return 'already-placed';
+    });
+    try {
+      await expect(
+        f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: turn.identity.turnId }),
+      ).resolves.toBe('already-started');
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+      expect(await f.store.listMessages(f.sessionId)).toHaveLength(2);
+      const observation = await f.host.observeSession(f.sessionId, () => {});
+      expect(observation.snapshot.queuedInputs).toEqual([]);
+      expect(observation.snapshot.activeTurn?.id).toBe(turn.identity.turnId);
+      observation.unsubscribe();
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('withdrawing an input leaves a concurrent reservation pending until native admission', async () => {
+    const f = fixture();
+    const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };
+    f.copies.get(f.sessionId)!.turns = [queued];
+    jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [],
+      }),
+    });
+    await f.host.initialize();
+    let reachedAdmission!: () => void;
+    const admissionStarted = new Promise<void>((resolve) => {
+      reachedAdmission = resolve;
+    });
+    let resumeAdmission!: () => void;
+    const admissionReleased = new Promise<void>((resolve) => {
+      resumeAdmission = resolve;
+    });
+    const submit = jest.mocked(f.conversations.submit).getMockImplementation()!;
+    jest.spyOn(f.conversations, 'submit').mockImplementation(async (sessionId, input) => {
+      reachedAdmission();
+      await admissionReleased;
+      return submit(sessionId, input);
+    });
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      f.emit({ ...queued, status: 'cancelled' });
+      return 'aborted';
+    });
+    const assistantMessageId = uuid();
+    const submitting = f.host.submitMessage({
+      sessionId: f.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId,
+      parts: [{ type: 'text', text: 'A concurrent follow-up' }],
+    });
+    try {
+      await admissionStarted;
+      await expect(
+        f.host.cancelQueuedInput({
+          sessionId: f.sessionId,
+          turnId: queued.identity.turnId,
+        }),
+      ).resolves.toBe('withdrawn');
+      const rows = await f.store.listMessages(f.sessionId);
+      expect(rows).toHaveLength(2);
+      expect(rows.find((row) => row.id === assistantMessageId)).toMatchObject({
+        status: 'pending',
+        parts: [],
+      });
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+    } finally {
+      resumeAdmission();
+      try {
+        await submitting;
+      } finally {
+        await f.host.close();
+      }
+    }
+  });
+
+  test('stores Code Mode outputs in the workspace the turn captured', async () => {
+    const workspaceFolderId = uuid();
+    const writeToolOutput = jest.fn(
+      async (): Promise<RuntimeArtifact> => ({
+        ref: { kind: 'managed-file', fileEntryId: uuid() },
+        name: 'result.csv',
+        mediaType: 'text/plain',
+        kind: 'created',
+      }),
+    );
+    const state = fixture({ writeToolOutput });
+    const turn = await state.reserve('running', undefined, workspaceFolderId);
+    await state.host.initialize();
+    try {
+      const signal = new AbortController().signal;
+      await state.execution()!.writeToolOutput!(
+        turn.identity,
+        { name: 'result.csv', data: 'a,b' },
+        signal,
+      );
+      expect(writeToolOutput).toHaveBeenCalledWith(
+        { name: 'result.csv', data: 'a,b', folderId: workspaceFolderId },
+        signal,
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(['bound', 'unbound'] as const)(
+    'preserves an admitted %s workspace through rebinding and host suspension',
+    async (binding) => {
+      const originalFolderId = binding === 'bound' ? uuid() : null;
+      const nextFolderId = uuid();
+      let interrupt!: (reason: Error) => void | Promise<void>;
+      const getTools = jest.fn(async () => []);
+      const resolveTools = jest.fn(async () => ({ tools: [], pluginGuides: [] }));
+      const writeToolOutput = jest.fn(
+        async (): Promise<RuntimeArtifact> => ({
+          ref: { kind: 'managed-file', fileEntryId: uuid() },
+          name: 'result.csv',
+          mediaType: 'text/plain',
+          kind: 'created',
+        }),
+      );
+      const state = fixture({
+        executionLease: (onInterrupt) => {
+          interrupt = onInterrupt;
+          return { release() {} };
+        },
+        tools: { getTools },
+        runtimeTools: { resolve: resolveTools },
+        writeToolOutput,
+      });
+      state.conversations.watchWork = async () => ({ active: true, unsubscribe: async () => {} });
+      await state.host.initialize();
+      try {
+        await state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Write a CSV' }],
+          ...(originalFolderId ? { workspaceFolderId: originalFolderId } : {}),
+        });
+        const turn = state.copies.get(state.sessionId)!.turns[0]!;
+        expect(turn.metadata.workspaceFolderId).toBe(originalFolderId);
+        const getSession = state.store.getSession.bind(state.store);
+        jest.spyOn(state.store, 'getSession').mockImplementation(async (id) => {
+          const session = await getSession(id);
+          return session ? { ...session, workspaceFolderId: nextFolderId } : null;
+        });
+        await interrupt(new Error('Background window expired'));
+        await state.host.resumeSuspended();
+        const signal = new AbortController().signal;
+        await state.execution()!.writeToolOutput!(
+          turn.identity,
+          { name: 'result.csv', data: 'a,b' },
+          signal,
+        );
+        expect(writeToolOutput).toHaveBeenLastCalledWith(
+          { name: 'result.csv', data: 'a,b', folderId: originalFolderId },
+          signal,
+        );
+        expect(getTools).toHaveBeenLastCalledWith(
+          expect.objectContaining({ workspaceFolderId: originalFolderId }),
+        );
+        expect(resolveTools).toHaveBeenLastCalledWith(
+          state.agentId,
+          expect.any(Function),
+          signal,
+          originalFolderId,
+        );
+        state.emit({ ...turn, status: 'completed' });
+        await state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Write in the new workspace' }],
+        });
+        expect(state.copies.get(state.sessionId)!.turns.at(-1)!.metadata.workspaceFolderId).toBe(
+          nextFolderId,
+        );
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
   test('records returned installation errors without changing execution failure policy', async () => {
     const { traces, records } = createTraceRecorder();
     const output: RuntimeToolResult = {
@@ -464,6 +822,8 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         open: async () => {
           throw Object.assign(new Error('private database path'), { code: 'SQLITE_CANTOPEN' });
         },
+        size: () => 0,
+        discard: () => {},
         notifyTranscript: () => {},
       },
     });
@@ -523,6 +883,59 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ).rejects.toThrow('watch failed');
       expect(state.conversations.submit).not.toHaveBeenCalled();
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('interrupted');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('clearing working storage deletes the closed file before reopening it', async () => {
+    const discard = jest.fn(() => {
+      state.steps.push('discard');
+    });
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => 0,
+        discard,
+        notifyTranscript: () => {},
+      },
+    });
+    await state.host.initialize();
+    try {
+      state.steps.length = 0;
+      await state.host.clearWorkingStorage();
+      const fileSteps = () => state.steps.filter((step) => step !== 'usage');
+      expect(fileSteps()).toEqual(['close', 'discard', 'open', 'resume']);
+      expect(state.host.isReady).toBe(true);
+
+      state.steps.length = 0;
+      discard.mockImplementationOnce(() => {
+        throw new Error('locked');
+      });
+      await expect(state.host.clearWorkingStorage()).rejects.toThrow('locked');
+      expect(fileSteps()).toEqual(['close', 'open', 'resume']);
+      expect(state.host.isReady).toBe(true);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('clearing working storage leaves the file open while native work runs', async () => {
+    const discard = jest.fn();
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => 0,
+        discard,
+        notifyTranscript: () => {},
+      },
+    });
+    jest.spyOn(state.conversations, 'hasUnfinishedWork').mockResolvedValue(true);
+    await state.host.initialize();
+    try {
+      await expect(state.host.clearWorkingStorage()).rejects.toMatchObject({ code: 'busy' });
+      expect(discard).not.toHaveBeenCalled();
+      expect(state.conversations.close).not.toHaveBeenCalled();
     } finally {
       await state.host.close();
     }
@@ -588,6 +1001,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         ...first,
         identity: {
           sessionId: state.sessionId,
+          slot: 0,
           turnId: reserved.turnId,
           requestId: reserved.turnId,
         },
@@ -616,7 +1030,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(terminal).toEqual([
         expect.objectContaining({
           status: outcome,
-          context: { ...first.identity, messageId: first.assistantMessageId },
+          context: {
+            sessionId: first.identity.sessionId,
+            turnId: first.identity.turnId,
+            requestId: first.identity.requestId,
+            messageId: first.assistantMessageId,
+          },
           attributes: expect.objectContaining({
             'agent.turn.status': status,
             ...(status === 'failed'
@@ -691,6 +1110,623 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('regenerating a completed answer adds a selected sibling in the same Session', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      expect(
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        }),
+      ).toBeUndefined();
+      const [question, answer] = await state.store.listMessages(state.sessionId);
+      expect(question?.id).toBe(original.userMessageId);
+      expect(answer).toMatchObject({ parentId: original.userMessageId, status: 'pending' });
+      expect(answer?.id).not.toBe(original.assistantMessageId);
+      expect(
+        await state.store.getMessage(state.sessionId, original.assistantMessageId),
+      ).toMatchObject({ status: 'success' });
+      // The sibling runs on its own working copy; the original copy keeps its history.
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      expect(lane).toEqual(runtimeLane(state.sessionId, 1));
+      expect(state.copies.get(state.sessionId)?.turns).toHaveLength(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('answering with another model adds a sibling even below a failed answer', async () => {
+    const state = fixture();
+    const original = await state.reserve('failed');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'error',
+        parts: [],
+        usage: null,
+        error: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      const second = createUniqueModelId('provider', 'second-model');
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+        modelId: second,
+      });
+
+      // The failed answer is kept rather than repaired in place.
+      expect(
+        await state.store.getMessage(state.sessionId, original.assistantMessageId),
+      ).toMatchObject({ status: 'error' });
+      const [answer] = await state.store.listUnsettledAssistantMessages();
+      expect(
+        await state.store.getMessage(state.sessionId, answer!.assistantMessageId),
+      ).toMatchObject({ modelId: second, parentId: original.userMessageId, siblingsGroupId: 0 });
+      expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(
+        answer!.assistantMessageId,
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('parallel answers share one question and each run on its own lane', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    try {
+      const second = createUniqueModelId('provider', 'second-model');
+      const result = await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        additionalReplies: [{ modelId: second, assistantMessageId: uuid() }],
+        parts: [{ type: 'text', text: 'Compare' }],
+      });
+      expect(result.activeNodeId).toBeTruthy();
+      const calls = (state.conversations.submit as jest.Mock).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(new Set(calls.map(([lane]) => lane)).size).toBe(2);
+      expect(calls.map(([, input]) => input.metadata.readOnlyTools)).toEqual([true, true]);
+      expect(new Set(calls.map(([, input]) => input.turnId)).size).toBe(1);
+      const unsettled = await state.store.listUnsettledAssistantMessages();
+      expect(unsettled).toHaveLength(2);
+      const answers = await Promise.all(
+        unsettled.map((row) => state.store.getMessage(state.sessionId, row.assistantMessageId)),
+      );
+      expect(answers.map((answer) => answer?.siblingsGroupId)).toEqual([1, 1]);
+      expect(answers.map((answer) => answer?.modelId)).toEqual([
+        inferenceSnapshot.model.uniqueModelId,
+        second,
+      ]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('branches reuse a bounded set of working copies, replacing the least recently used', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      for (let index = 0; index < LANES_PER_SESSION + 1; index++) {
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        });
+        const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+        const turn = state.copies.get(laneKey(lane))!.turns.at(-1)!;
+        state.emit({
+          ...turn,
+          status: 'completed',
+          answerBoundary: 'pi:2',
+          updatedAt: 100 + index,
+        });
+        await state.host.quiesce();
+      }
+      expect(state.copies.size).toBe(LANES_PER_SESSION);
+      // Every slot was taken, so the next copies replaced the oldest idle ones in order.
+      expect(
+        (state.conversations.discardConversation as jest.Mock).mock.calls.map(([lane]) => lane),
+      ).toEqual([runtimeLane(state.sessionId, 0), runtimeLane(state.sessionId, 1)]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('sending and stopping read only the Session own working copies', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const sessions = jest.spyOn(state.conversations, 'sessions');
+      const unfinished = jest.spyOn(state.conversations, 'unfinishedLanes');
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      const submitted = await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      await state.host.cancelTurn({ sessionId: state.sessionId, turnId: submitted.turnId });
+      observation.unsubscribe();
+      expect(sessions).not.toHaveBeenCalled();
+      expect(unfinished).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('rebuilds the selected branch from Cherry history once the engine copies are gone', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      const sibling = state.copies.get(laneKey(lane))!.turns.at(-1)!;
+      state.emit({
+        ...sibling,
+        status: 'completed',
+        answerBoundary: 'pi:2',
+        parts: [{ id: 'sibling', type: 'text', text: 'Sibling', state: 'done' }],
+      });
+      await state.host.quiesce();
+      // The engine database is disposable: Cherry history is the only source left.
+      state.copies.clear();
+      const ensure = jest.spyOn(state.conversations, 'ensureConversation');
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      const [seed] = ensure.mock.calls.at(-1)!;
+      expect(seed.lane).toEqual(runtimeLane(state.sessionId));
+      const history = JSON.stringify(seed.history?.history);
+      expect(history).toContain('Sibling');
+      expect(history).not.toContain('"Answer"');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('rejects parallel answers that repeat a model', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          additionalReplies: [
+            { modelId: inferenceSnapshot.model.uniqueModelId, assistantMessageId: uuid() },
+          ],
+          parts: [{ type: 'text', text: 'Compare' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  /** Two answers below the reserved question's answer, one continuing lane 0 and one forked. */
+  const askTwoModels = (
+    state: ReturnType<typeof fixture>,
+    parts = [{ type: 'text' as const, text: 'Compare' }],
+  ) =>
+    state.host.submitMessage({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      additionalReplies: [
+        { modelId: createUniqueModelId('provider', 'second-model'), assistantMessageId: uuid() },
+      ],
+      parts,
+    });
+  const runningTurns = (state: ReturnType<typeof fixture>) =>
+    [...state.copies.values()].flatMap((copy) =>
+      copy.turns.filter((turn) => turn.status === 'running'),
+    );
+
+  test.each([false, true])(
+    'observation restores settled siblings and keeps events during its read (settle during read: %s)',
+    async (settleDuringRead) => {
+      const state = fixture();
+      await state.reserve('completed');
+      await state.host.initialize();
+      try {
+        await askTwoModels(state);
+        const [first, second] = runningTurns(state);
+        state.emit({
+          ...first!,
+          status: 'completed',
+          parts: [{ id: 'answer', type: 'text', text: 'First answer', state: 'done' }],
+        });
+        await settle();
+        if (settleDuringRead) {
+          const read = state.store.listTurnMessages.bind(state.store);
+          jest.spyOn(state.store, 'listTurnMessages').mockImplementationOnce(async (...args) => {
+            state.emit({ ...second!, status: 'completed' });
+            await settle();
+            return read(...args);
+          });
+        }
+        const events: AgentEvent[] = [];
+        const observation = await state.host.observeSession(state.sessionId, (event) =>
+          events.push(event),
+        );
+        try {
+          expect(observation.snapshot.session.activeNodeId).toBe(first!.assistantMessageId);
+          expect(observation.snapshot.streamingMessage?.id).toBe(second!.assistantMessageId);
+          expect(observation.snapshot.additionalMessages).toEqual([
+            expect.objectContaining({
+              id: first!.assistantMessageId,
+              status: 'success',
+              parts: [expect.objectContaining({ text: 'First answer' })],
+            }),
+          ]);
+          if (settleDuringRead)
+            expect(events).toContainEqual(
+              expect.objectContaining({
+                type: 'message.finalized',
+                message: expect.objectContaining({
+                  id: second!.assistantMessageId,
+                  status: 'success',
+                }),
+              }),
+            );
+        } finally {
+          observation.unsubscribe();
+        }
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('rejects an implicit parallel image model before reserving messages or executing it', async () => {
+    const execute = jest.fn(async () => []);
+    const state = fixture({
+      imageGeneration: {
+        prepare: async ({ model }) =>
+          model.modelId === 'second-model'
+            ? { settings: { mode: 'generate', paramValues: {} }, execute }
+            : null,
+      },
+    });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const before = await state.store.listMessages(state.sessionId);
+      await expect(askTwoModels(state)).rejects.toMatchObject({
+        view: { code: 'CAPABILITY_UNSUPPORTED' },
+      });
+      expect(await state.store.listMessages(state.sessionId)).toEqual(before);
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('regenerating an earlier answer prepares and seeds only the fork prefix file grants', async () => {
+    const earlierFile = uuid();
+    const laterFile = uuid();
+    const scopes: string[][] = [];
+    const state = fixture({
+      tools: {
+        getTools: async ({ resources }) => {
+          scopes.push([...resources.fileEntryIds]);
+          return [];
+        },
+      },
+    });
+    await state.reserve('completed', [
+      {
+        id: 'file',
+        type: 'file',
+        fileEntryId: earlierFile,
+        mediaType: 'text/plain',
+        purpose: 'input-attachment',
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      const answers: RuntimeDurableTurn[] = [];
+      for (const text of ['Q2', 'Q3']) {
+        await state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text }],
+        });
+        const [turn] = runningTurns(state);
+        state.emit({ ...turn!, status: 'completed', answerBoundary: `pi:${answers.length + 3}` });
+        answers.push(turn!);
+        await state.host.quiesce();
+      }
+      // The source execution has since gained another file, beyond the requested prefix.
+      jest
+        .spyOn(state.conversations, 'resourceFileEntryIds')
+        .mockResolvedValue([earlierFile, laterFile]);
+      const fork = jest.spyOn(state.conversations, 'forkConversation');
+      scopes.length = 0;
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: answers[0]!.assistantMessageId,
+      });
+      expect(scopes).toEqual([[earlierFile]]);
+      expect(fork.mock.calls[0]?.[0].referencedFileEntryIds).toEqual([earlierFile]);
+      expect(fork.mock.calls[0]?.[0].from.boundary).toBe('pi:2');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('parallel answers publish an unchanged running turn and their shared question once', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      const submitted = await askTwoModels(state);
+      const running = runningTurns(state);
+      expect(running).toHaveLength(2);
+      // The answers stream in turns; their turn views do not change.
+      for (let index = 0; index < 3; index++)
+        for (const turn of running)
+          state.emit({
+            ...turn,
+            parts: [{ id: 'text', type: 'text', text: `Part ${index}`, state: 'streaming' }],
+          });
+      const turns = events.filter((event) => event.type === 'turn.updated');
+      expect(turns).toHaveLength(2);
+      expect(
+        events.filter(
+          (event) =>
+            event.type === 'message.created' && event.message.id === submitted.userMessageId,
+        ),
+      ).toHaveLength(1);
+      // A changed view is still published.
+      state.emit({ ...running[1]!, isRetrying: true });
+      expect(events.filter((event) => event.type === 'turn.updated')).toHaveLength(3);
+      expect(events.at(-1)).toMatchObject({
+        type: 'turn.updated',
+        turn: { assistantMessageId: running[1]!.assistantMessageId, isRetrying: true },
+      });
+      observation.unsubscribe();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('the background reply passes to a running answer and ends with the last one', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+      const running = runningTurns(state);
+      const holder = running.find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id === turn.assistantMessageId,
+      )!;
+      const other = running.find((turn) => turn !== holder)!;
+      state.emit({ ...holder, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      // Neither restarted nor finished while the other answer runs.
+      expect(state.reply.finish).not.toHaveBeenCalled();
+      expect(state.reply.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: other.assistantMessageId }),
+      );
+      state.emit({
+        ...other,
+        status: 'failed',
+        error: { code: 'TIMEOUT', message: 'Timeout', retryable: true },
+      });
+      await settle();
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+      expect(state.reply.finish).toHaveBeenCalledTimes(1);
+      expect(state.reply.finish).toHaveBeenCalledWith('completed');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('background handoff binds the remaining answer approval to its system card', async () => {
+    const state = fixture();
+    const controller = new AbortController();
+    let decision: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const holder = running.find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id === turn.assistantMessageId,
+      )!;
+      const other = running.find((turn) => turn !== holder)!;
+      const approvalId = uuid();
+      decision = state
+        .execution()!
+        .requestApproval(
+          other.identity,
+          {
+            id: approvalId,
+            turnId: other.identity.turnId,
+            toolCallId: 'pending-tool',
+            toolRef: { source: 'builtin', capabilityId: 'read_file' },
+            displayName: 'Read file',
+            input: {},
+            status: 'pending',
+          },
+          controller.signal,
+        )
+        .catch((error: unknown) => error);
+      await settle();
+      state.emit({ ...holder, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      const interaction = state.reply.setInteraction.mock.calls.at(-1)?.[0];
+      expect(interaction).toMatchObject({ kind: 'approval', id: approvalId });
+      await interaction.respond('deny');
+      await expect(decision).resolves.toBe('deny');
+      expect(state.reply.setInteraction).toHaveBeenLastCalledWith(undefined);
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+    } finally {
+      controller.abort();
+      await decision;
+      await state.host.close();
+    }
+  });
+
+  test('prepares parallel answers together and reads a shared image once', async () => {
+    const image = { fileEntryId: uuid(), mediaType: 'image/png', name: 'photo.png', size: 3 };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const resolveTools = jest.fn(async () => {
+      await gate;
+      return { tools: [], pluginGuides: [] };
+    });
+    const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
+    const state = fixture({
+      runtimeTools: { resolve: resolveTools },
+      files: {
+        resolveAvailable: async (ids) =>
+          new Map(ids.includes(image.fileEntryId) ? [[image.fileEntryId, image]] : []),
+        readAsBytes: async () => undefined,
+        readDocumentText: async () => undefined,
+        readAsDataUrl,
+      },
+    });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const submitted = askTwoModels(state, [
+        { type: 'text', text: 'Compare' },
+        {
+          type: 'file',
+          fileEntryId: image.fileEntryId,
+          mediaType: 'image/png',
+          filename: 'photo.png',
+        } as never,
+      ]);
+      await settle();
+      // The second answer did not wait for the first one's tool discovery.
+      expect(resolveTools).toHaveBeenCalledTimes(2);
+      release();
+      await submitted;
+      expect(readAsDataUrl).toHaveBeenCalledTimes(1);
+      expect(state.conversations.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('answers without a working copy rebuild the history once and fork the rest', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      // The runtime cache was cleared: Cherry history is the only source left.
+      state.copies.clear();
+      const ensure = jest.spyOn(state.conversations, 'ensureConversation');
+      const fork = jest.spyOn(state.conversations, 'forkConversation');
+      await askTwoModels(state);
+      expect(ensure).toHaveBeenCalledTimes(1);
+      const [rebuilt] = ensure.mock.calls[0]!;
+      expect(rebuilt.history?.history).not.toHaveLength(0);
+      expect(fork).toHaveBeenCalledTimes(1);
+      expect(fork.mock.calls[0]![0]).toMatchObject({
+        from: { lane: rebuilt.lane, boundary: 'pi:imported' },
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('a follow-up reads the tail of only the copy that ran the selected answer', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      expect(lane).toEqual(runtimeLane(state.sessionId, 1));
+      const sibling = state.copies.get(laneKey(lane))!.turns.at(-1)!;
+      state.emit({ ...sibling, status: 'completed', answerBoundary: 'pi:2' });
+      await state.host.quiesce();
+      const history = jest.spyOn(state.conversations, 'history');
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      expect((state.conversations.submit as jest.Mock).mock.calls.at(-1)![0]).toEqual(lane);
+      expect(history.mock.calls.map(([read]) => read)).toEqual([lane]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('selecting a message publishes the Session with its new selected leaf', async () => {
+    const state = fixture();
+    const first = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      const session = await state.host.selectMessage({
+        sessionId: state.sessionId,
+        messageId: first.userMessageId,
+      });
+      expect(session.activeNodeId).toBe(first.assistantMessageId);
+      expect(events).toContainEqual({ type: 'session.updated', session });
+      observation.unsubscribe();
+      await expect(
+        state.host.selectMessage({ sessionId: state.sessionId, messageId: uuid() }),
+      ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
     } finally {
       await state.host.close();
     }
@@ -816,7 +1852,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ).toEqual([
         expect.objectContaining({
           status: 'ok',
-          context: { ...turn.identity, messageId: turn.assistantMessageId },
+          context: {
+            sessionId: turn.identity.sessionId,
+            turnId: turn.identity.turnId,
+            requestId: turn.identity.requestId,
+            messageId: turn.assistantMessageId,
+          },
           attributes: { 'agent.turn.status': 'completed' },
         }),
       ]);
@@ -829,13 +1870,15 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const state = fixture();
     const running = await state.reserve('running');
     state.copies.set('deleted-owner', { revision: 0, turns: [] });
-    jest.spyOn(state.conversations, 'discardConversation').mockImplementation(async (id) => {
-      state.copies.delete(id);
+    jest.spyOn(state.conversations, 'discardConversation').mockImplementation(async (lane) => {
+      state.copies.delete(laneKey(lane));
       state.emit({ ...running, status: 'completed' });
     });
     await state.host.initialize();
     try {
-      expect(state.conversations.discardConversation).toHaveBeenCalledWith('deleted-owner');
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith(
+        runtimeLane('deleted-owner'),
+      );
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('success');
       const submitted = await state.host.submitMessage({
         sessionId: state.sessionId,
@@ -864,14 +1907,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
 
   test('an unadmitted reservation becomes interrupted and a missing Cherry owner never reappears', async () => {
     const state = fixture();
-    await state.reserve();
+    const { assistantMessageId } = await state.reserve();
+    const reservedAt = Date.parse(
+      (await state.store.getMessage(state.sessionId, assistantMessageId))!.createdAt,
+    );
+    const finalize = jest.spyOn(state.store, 'finalizeAssistantMessage');
     state.copies.clear();
     state.copies.set('deleted-owner', { revision: 0, turns: [] });
+    const now = jest.spyOn(Date, 'now').mockReturnValue(reservedAt + 60_000);
     await state.host.initialize();
+    now.mockRestore();
     try {
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('interrupted');
+      // Administrative recovery keeps the reservation's activity time.
+      expect(finalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeStats: {
+            runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
+          },
+        }),
+      );
       expect(await state.store.getSession('deleted-owner')).toBeNull();
-      expect(state.conversations.discardConversation).toHaveBeenCalledWith('deleted-owner');
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith(
+        runtimeLane('deleted-owner'),
+      );
     } finally {
       await state.host.close();
     }
@@ -931,7 +1990,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     );
     expect(writes.map((record) => record.status)).toEqual(['error', 'ok']);
     expect(writes[0]).toMatchObject({
-      context: { ...running.identity, messageId: running.assistantMessageId },
+      context: {
+        sessionId: running.identity.sessionId,
+        turnId: running.identity.turnId,
+        requestId: running.identity.requestId,
+        messageId: running.assistantMessageId,
+      },
       attributes: { 'error.code': 'SQLITE_FULL' },
     });
     expect(JSON.stringify(writes)).not.toContain('disk full');
@@ -979,7 +2043,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     await state.store.deleteTurn({ sessionId: state.sessionId, turnId: turn.identity.turnId });
     await state.host.initialize();
     try {
-      expect(state.conversations.discardConversation).toHaveBeenCalledWith(state.sessionId);
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith(
+        runtimeLane(state.sessionId),
+      );
       expect(await state.store.listMessages(state.sessionId)).toEqual([]);
     } finally {
       await state.host.close();

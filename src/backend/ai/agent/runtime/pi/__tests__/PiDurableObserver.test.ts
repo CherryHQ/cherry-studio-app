@@ -79,7 +79,7 @@ test.each([
     const dispose = installLogWriter((record) => {
       records.push(record);
     });
-    const observer = new PiDurableObserver(runtime, 'session', () => {});
+    const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, () => {});
     try {
       const observed = await observer.start();
       expect(observed.activeTurn?.identity.requestId).toBe('request-current');
@@ -140,7 +140,9 @@ test('restores compaction failure, shows progress, and clears failure only after
     submissions: async () => [],
   } as unknown as PiDurableRuntime;
   const events: RuntimeConversationEvent[] = [];
-  const observer = new PiDurableObserver(runtime, 'session', (event) => events.push(event));
+  const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, (event) =>
+    events.push(event),
+  );
   expect((await observer.start()).contextStatus).toBe('compaction-failed');
   await advance([{ type: 'compaction_start', taskId, reason: 'threshold', blocking: true }]);
   expect(events.at(-1)).toEqual({ type: 'context.updated', status: 'compacting' });
@@ -201,7 +203,9 @@ function attach(snapshot: Omit<SnapshotEvent, 'type' | 'agent' | 'usage'>, runni
     turnEntries: async () => [],
   } as unknown as PiDurableRuntime;
   const events: RuntimeConversationEvent[] = [];
-  const observer = new PiDurableObserver(runtime, 'session', (event) => events.push(event));
+  const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, (event) =>
+    events.push(event),
+  );
   return { observer, events, advance: (batch: readonly AgentEvent[]) => advance(batch) };
 }
 
@@ -231,40 +235,89 @@ test('reports blocking compaction only; background compaction never delays the r
   }
 });
 
-test('marks a running turn as retrying until the next provider attempt produces output', async () => {
-  const response = (stopReason: 'error' | 'stop', timestamp: number) =>
-    ({
-      role: 'assistant',
-      content: [],
-      api: 'openai-completions',
-      provider: 'provider',
-      model: 'model',
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
-      stopReason,
-      ...(stopReason === 'error' ? { errorMessage: 'Request timed out' } : {}),
-      timestamp,
-    }) as unknown as AssistantMessage;
-  const { observer, events, advance } = attach(
-    { entries: [], tools: [], nestedTools: [], compactions: [], inbox: [] },
-    true,
-  );
-  const latestTurn = () =>
-    events.findLast((event) => event.type === 'turn.updated')?.turn as RuntimeDurableTurn;
-  try {
-    expect((await observer.start()).activeTurn?.isRetrying).toBeUndefined();
-    // Pi reports the retry before the failed attempt's own message in the same batch.
-    const failed = response('error', 2);
-    await advance([
-      { type: 'auto_retry_start', attempt: 1, at: 3, errorMessage: 'Request timed out' },
-      { type: 'message_start', message: failed },
-      { type: 'message_end', entry: { id: 2, model: [failed] } as unknown as EntryRecord },
-    ]);
-    expect(latestTurn()).toMatchObject({ status: 'running', isRetrying: true });
-    await advance([{ type: 'auto_retry_end', attempt: 1 }]);
-    expect(latestTurn().isRetrying).toBe(true);
-    await advance([{ type: 'message_start', message: response('stop', 4) }]);
-    expect(latestTurn().isRetrying).toBeUndefined();
-  } finally {
-    await observer.stop();
-  }
-});
+test.each(['message_start', 'message_update', 'message_end'] as const)(
+  'keeps retry feedback until content arrives in %s',
+  async (contentEvent) => {
+    const response = (stopReason: 'error' | 'stop', timestamp: number) =>
+      ({
+        role: 'assistant',
+        content: [],
+        api: 'openai-completions',
+        provider: 'provider',
+        model: 'model',
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
+        stopReason,
+        ...(stopReason === 'error' ? { errorMessage: 'Request timed out' } : {}),
+        timestamp,
+      }) as unknown as AssistantMessage;
+    const { observer, events, advance } = attach(
+      { entries: [], tools: [], nestedTools: [], compactions: [], inbox: [] },
+      true,
+    );
+    const latestTurn = () =>
+      events.findLast((event) => event.type === 'turn.updated')?.turn as RuntimeDurableTurn;
+    try {
+      expect((await observer.start()).activeTurn?.isRetrying).toBeUndefined();
+      // Pi reports the retry before the failed attempt's own message in the same batch.
+      const failed: AssistantMessage = {
+        ...response('error', 2),
+        content: [{ type: 'text', text: 'Interrupted response' }],
+      };
+      await advance([
+        { type: 'auto_retry_start', attempt: 1, at: 3, errorMessage: 'Request timed out' },
+        { type: 'message_start', message: failed },
+        { type: 'message_end', entry: { id: 2, model: [failed] } as unknown as EntryRecord },
+      ]);
+      expect(latestTurn()).toMatchObject({ status: 'running', isRetrying: true });
+      await advance([{ type: 'auto_retry_end', attempt: 1 }]);
+      expect(latestTurn().isRetrying).toBe(true);
+      const next = {
+        ...response('stop', 4),
+        content: [
+          { type: 'text' as const, text: contentEvent === 'message_start' ? 'Resumed' : '' },
+        ],
+      };
+      await advance([{ type: 'message_start', message: next }]);
+      if (contentEvent !== 'message_start') {
+        expect(latestTurn().isRetrying).toBe(true);
+      }
+      if (contentEvent === 'message_update') {
+        await advance([
+          {
+            type: 'message_update',
+            usage: next.usage,
+            changes: [
+              {
+                type: 'message',
+                message: { ...next, content: [{ type: 'text', text: 'Resumed' }] },
+              },
+            ],
+          },
+        ]);
+      } else if (contentEvent === 'message_end') {
+        // The final partial was throttled away, but the committed response starts a tool round.
+        const completed: AssistantMessage = {
+          ...next,
+          stopReason: 'toolUse',
+          content: [{ type: 'toolCall', id: 'call', name: 'ask_user_question', arguments: {} }],
+        };
+        await advance([
+          {
+            type: 'message_end',
+            entry: { id: 3, model: [completed] } as unknown as EntryRecord,
+          },
+        ]);
+        expect(latestTurn()).toMatchObject({
+          status: 'running',
+          parts: [
+            { type: 'text', text: 'Interrupted response' },
+            { type: 'tool', toolCallId: 'call', state: 'input-available' },
+          ],
+        });
+      }
+      expect(latestTurn().isRetrying).toBeUndefined();
+    } finally {
+      await observer.stop();
+    }
+  },
+);

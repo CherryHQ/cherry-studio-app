@@ -121,6 +121,8 @@ export type TurnPreparationDependencies = {
 /** Everything the Host needs to reserve and execute a turn, frozen before the first write. */
 export type TurnPlan = {
   agent: AgentDefinition;
+  /** Captured before tools resolve; subsequent Session switches do not alter this turn. */
+  workspaceFolderId?: string;
   documentParserMode: DocumentParserMode;
   /** False only for a truly empty Session; drives first-message auto-naming. */
   hasMessages: boolean;
@@ -197,11 +199,19 @@ function createTurnUsageAttribution(
   };
 }
 
+/**
+ * Where a turn sits in the message tree and what it may do. `through` is the
+ * message the new question follows (null for a first question); omitted, the
+ * Session's selected leaf. A multi-model answer limits its tools to automatic reads.
+ */
+export type TurnScope = { through?: string | null; readOnlyTools?: boolean };
+
 export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput,
   signal: AbortSignal,
   excludeCheckpointMessageId?: string,
+  scope: TurnScope = {},
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
   const { sessionId } = parsed;
@@ -219,6 +229,7 @@ export async function prepareTurn(
     sessionId,
     signal,
     excludeCheckpointMessageId,
+    scope.through,
   );
 
   return prepareResolvedTurn(
@@ -230,6 +241,7 @@ export async function prepareTurn(
     runtimeContextCheckpoint,
     documentParserMode,
     signal,
+    scope,
   );
 }
 
@@ -245,12 +257,13 @@ export async function loadTurnContext(
   signal: AbortSignal,
   /** A retry skips the answer it replaces: that summary describes discarded content. */
   excludeCheckpointMessageId?: string,
+  through?: string | null,
 ): Promise<{
   storedTurnContext: StoredRuntimeTurnContext;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
 }> {
   const storedContextCandidate = await raceAbort(
-    dependencies.store.getLatestContextCheckpoint(sessionId, excludeCheckpointMessageId),
+    dependencies.store.getLatestContextCheckpoint(sessionId, excludeCheckpointMessageId, through),
     signal,
   );
   const checkpointValidation = storedContextCandidate
@@ -258,7 +271,11 @@ export async function loadTurnContext(
     : null;
   const requestedCheckpoint = checkpointValidation?.checkpoint ?? null;
   const storedTurnContext = await raceAbort(
-    dependencies.store.loadRuntimeTurnContext(sessionId, requestedCheckpoint?.anchorTurnId ?? null),
+    dependencies.store.loadRuntimeTurnContext(
+      sessionId,
+      requestedCheckpoint?.anchorTurnId ?? null,
+      through,
+    ),
     signal,
   );
   const runtimeContextIssue =
@@ -284,6 +301,7 @@ export async function prepareInitialTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentStartSessionInput,
   signal: AbortSignal,
+  scope: Pick<TurnScope, 'readOnlyTools'> = {},
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
   const configuredAgent = await raceAbort(dependencies.agents.getAgent(parsed.agentId), signal);
@@ -293,6 +311,7 @@ export async function prepareInitialTurn(
   const session = {
     agentId: parsed.agentId,
     name: '',
+    workspaceFolderId: parsed.workspaceFolderId ?? null,
   };
   const emptyContext: StoredRuntimeTurnContext = {
     anchorFound: true,
@@ -310,6 +329,7 @@ export async function prepareInitialTurn(
     null,
     documentParserMode,
     signal,
+    { ...scope, through: null },
   );
 }
 
@@ -319,6 +339,9 @@ export async function prepareDurableTurn(
   parsed: AgentSubmitMessageInput,
   referencedFileEntryIds: readonly string[],
   signal: AbortSignal,
+  scope: TurnScope = {},
+  /** Recovery supplies the admitted identity; null must not inherit the current binding. */
+  workspaceFolderId?: string | null,
 ): Promise<TurnPlan> {
   const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
   if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
@@ -327,7 +350,7 @@ export async function prepareDurableTurn(
   return prepareResolvedTurn(
     dependencies,
     parsed,
-    session,
+    workspaceFolderId === undefined ? session : { ...session, workspaceFolderId },
     agent,
     {
       anchorFound: true,
@@ -338,20 +361,30 @@ export async function prepareDurableTurn(
     null,
     dependencies.documentParserMode(),
     signal,
+    scope,
   );
 }
 
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'name'>,
+  session: Pick<AgentSessionView, 'agentId' | 'name' | 'workspaceFolderId'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
   documentParserMode: DocumentParserMode,
   signal: AbortSignal,
+  scope: TurnScope = {},
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
+  if (
+    scope.readOnlyTools &&
+    (parsed.imageGeneration || parsed.skillIds?.length || parsed.skillAction)
+  )
+    fail(
+      'CAPABILITY_UNSUPPORTED',
+      'Multi-model replies support chat models without Skills or image generation.',
+    );
   if (agent.mode === 'minimal' && (parsed.skillIds?.length || parsed.skillAction)) {
     fail('CAPABILITY_UNSUPPORTED', 'Minimal mode does not support Skills.');
   }
@@ -407,6 +440,7 @@ export async function prepareResolvedTurn(
     }
   };
   const imageGeneration = await dependencies.imageGeneration?.prepare({
+    workspaceFolderId: session.workspaceFolderId ?? null,
     instructions: agent.instructions,
     model: agent.model,
     parts,
@@ -415,6 +449,8 @@ export async function prepareResolvedTurn(
     signal,
   });
   if (imageGeneration) {
+    if (scope.readOnlyTools)
+      fail('CAPABILITY_UNSUPPORTED', 'Multi-model replies do not support image generation.');
     if (agent.mode === 'minimal') {
       fail('CAPABILITY_UNSUPPORTED', 'Minimal mode requires a chat model.');
     }
@@ -422,6 +458,7 @@ export async function prepareResolvedTurn(
       fail('CAPABILITY_UNSUPPORTED', 'Skills cannot be used with image generation.');
     return {
       agent,
+      ...(session.workspaceFolderId ? { workspaceFolderId: session.workspaceFolderId } : {}),
       documentParserMode,
       hasMessages: storedTurnContext.hasMessages,
       history: storedTurnContext.history,
@@ -496,16 +533,22 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
+  // A multi-model answer runs beside others, so it never loads Skills or plugin workflows.
+  const canUseSkills = canUseTools && !scope.readOnlyTools;
+  let receipts: ReturnType<typeof latestSkillActivations> = [];
   if (canUseTools) {
     // Read prior Skill receipts only when this turn can use tools and Skills.
-    const receipts = dependencies.skills
-      ? latestSkillActivations(
-          await raceAbort(dependencies.store.loadSkillActivations(parsed.sessionId), signal),
-        )
-      : [];
+    if (dependencies.skills && canUseSkills)
+      receipts = latestSkillActivations(
+        await raceAbort(
+          dependencies.store.loadSkillActivations(parsed.sessionId, scope.through),
+          signal,
+        ),
+      );
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          workspaceFolderId: session.workspaceFolderId ?? null,
           agentId: agent.id,
           askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
@@ -530,15 +573,18 @@ export async function prepareResolvedTurn(
             if (!signal.aborted) toolDiscoveryWarnings.push(warning);
           },
           signal,
+          session.workspaceFolderId ?? null,
         ),
         signal,
       );
       configuredTools = configured.tools;
-      pluginGuides = configured.pluginGuides;
+      if (canUseSkills) pluginGuides = configured.pluginGuides;
     } catch {
       signal.throwIfAborted();
       fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
     }
+  }
+  if (canUseSkills) {
     skills = await resolveTurnSkills(dependencies, agent, parsed.skillIds ?? [], receipts, signal);
     const expanding = createExpandingSkillScope(skills.scope);
     skills = {
@@ -585,7 +631,7 @@ export async function prepareResolvedTurn(
     if (dependencies.skillWorkflow && dependencies.skills) {
       skillTools = [
         ...skillTools,
-        createSkillCreationTool(dependencies.skillWorkflow),
+        createSkillCreationTool(dependencies.skillWorkflow, { deferred: !skills.create }),
         ...createSkillManagementTools({
           workflow: dependencies.skillWorkflow,
           source: dependencies.skills,
@@ -600,13 +646,20 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
+  // Parallel answers share one real world: only reads that need no approval
+  // (so no answer stops to ask the user) run beside each other.
+  if (scope.readOnlyTools)
+    tools = tools.filter((tool) => tool.effect === 'read' && tool.approval === 'auto');
   let workflowInstructions: TurnPlan['workflowInstructions'] = [];
   if (pluginGuides.length > 0) {
     const workflows = getPluginWorkflows(pluginGuides);
     tools = [...requireLoadedWorkflows(tools, workflows), createLoadWorkflowTool(workflows)];
     workflowInstructions = restoreLoadedWorkflows(
       workflows,
-      await raceAbort(dependencies.store.loadWorkflowLoads(parsed.sessionId), signal),
+      await raceAbort(
+        dependencies.store.loadWorkflowLoads(parsed.sessionId, scope.through),
+        signal,
+      ),
     );
   }
   const webTools =
@@ -681,6 +734,7 @@ export async function prepareResolvedTurn(
 
   return {
     agent,
+    ...(session.workspaceFolderId ? { workspaceFolderId: session.workspaceFolderId } : {}),
     documentParserMode,
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,

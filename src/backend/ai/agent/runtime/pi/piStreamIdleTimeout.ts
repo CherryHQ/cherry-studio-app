@@ -6,7 +6,7 @@ import { emptyAssistantMessage, isEmptyContentEvent, providerErrorEvent } from '
 import { isPiNativeWebActivity } from './piWebTools';
 
 /** Shared by all credential attempts within one model request. */
-export const PI_STREAM_IDLE_TIMEOUT_MS = 120_000;
+export const PI_STREAM_IDLE_TIMEOUT_MS = 30 * 60_000;
 
 /**
  * Wrap key failover so switching credentials cannot reset the idle budget. Measure from the

@@ -12,14 +12,18 @@ import { type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
+import type { ChatShareTranslations } from '../../share/chatShareHandoff';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatMessageRow } from './components/ChatMessageRow';
+import { ExpandedAnswerProvider } from './components/ExpandedAnswer';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
+import { ChatSessionProvider } from './context/ChatSessionContext';
+import { useConversationFeedbackHint } from './hooks/useConversationFeedbackHint';
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
@@ -40,14 +44,15 @@ type ChatWorkspaceProps = {
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
+  feedbackHintBottomOffset?: number;
   messageWindow: ConversationHistoryView;
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
-  onShare?: (messageId: string) => void;
+  onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   sessionId?: string;
-  /** Stable pairing scope for desktop conversations; local Sessions use the default. */
-  translationScope?: string;
+  /** Translation is available only for locally owned Agent messages. */
+  isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
@@ -66,10 +71,11 @@ export function ChatWorkspace({
   forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
+  feedbackHintBottomOffset = 0,
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
-  translationScope = 'local',
+  isTranslationEnabled = false,
   renderUsage,
 }: ChatWorkspaceProps) {
   const {
@@ -86,16 +92,14 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
+  useConversationFeedbackHint(
+    messageWindow.dataKey || sessionId || 'draft',
+    live,
+    feedbackHintBottomOffset,
+  );
   const listKey = sessionId ?? pendingSend?.sessionId;
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
-  // Only the Session's latest answer is replaceable, and an older window does
-  // not hold it (agent-protocol.md "Manual answer retry").
-  const retryableMessageId = useMemo(() => {
-    if (hasNewerMessages) return undefined;
-    const last = mergedMessages.at(-1);
-    return last?.display.role === 'assistant' ? last.key : undefined;
-  }, [hasNewerMessages, mergedMessages]);
   useEffect(() => {
     if (
       pendingSend &&
@@ -114,7 +118,8 @@ export function ChatWorkspace({
           ? { ...message.display, status: 'pending' as const, data: { parts: [] } }
           : message.display,
       );
-    if (!pendingSend) return projected;
+    // A page around an older message is not the transcript's end.
+    if (!pendingSend || hasNewerMessages) return projected;
     const [user, assistant] = pendingSend.messages;
     const userIndex = projected.findIndex((message) => message.id === user.id);
     const assistantIndex = projected.findIndex((message) => message.id === assistant.id);
@@ -124,7 +129,7 @@ export function ChatWorkspace({
     else if (assistantIndex >= 0) result.splice(assistantIndex, 0, user);
     else result.push(user, assistant);
     return result;
-  }, [mergedMessages, pendingSend, live.retryingMessageKey]);
+  }, [hasNewerMessages, mergedMessages, pendingSend, live.retryingMessageKey]);
   const timestampMessageIds = useMemo(
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],
@@ -253,16 +258,17 @@ export function ChatWorkspace({
   }
 
   return (
-    <View className="flex-1 bg-chat-background">
+    // No background of its own: the screen paints it, and a layer reaching over the composer leaves
+    // the composer visible beneath it.
+    <View className="flex-1">
       <MessageTranslationProvider
-        scope={translationScope}
+        isEnabled={isTranslationEnabled}
         sessionId={listKey ?? ''}
         messages={mergedMessages}
       >
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-          retryableMessageId={retryableMessageId}
           onShare={onShare}
           snapshot={live}
           messages={mergedMessages}
@@ -271,28 +277,32 @@ export function ChatWorkspace({
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
           >
-            <ChatTranscript
-              requiresInitialLayout={requiresInitialHistoryLayout}
-              isLoadingMore={isLoadingOlder || isLoadingNewer}
-              contentBottomInset={contentBottomInset}
-              // A draft window has no Session yet and reports an empty key. Keying the
-              // first send by its pending Session keeps the list on one dataset across
-              // the draft-to-Session handoff instead of starting as a keyless list.
-              dataKey={dataKey || listKey}
-              enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
-              extraData={messageListExtraData}
-              initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
-              initialScrollTarget={initialScrollTarget}
-              hasNewerMessages={hasNewerMessages}
-              keyboardOffset={keyboardOffset}
-              // ChatScreen owns background presses so blur also ends composer editing.
-              keyboardShouldPersistTaps="always"
-              messages={listMessages}
-              onLoadOlder={loadOlder}
-              onLoadNewer={loadNewer}
-              onReturnToLatest={returnToLatest}
-              renderMessage={renderChatMessage}
-            />
+            <ChatSessionProvider value={sessionId}>
+              <ExpandedAnswerProvider messages={listMessages} renderUsage={renderUsage}>
+                <ChatTranscript
+                  requiresInitialLayout={requiresInitialHistoryLayout}
+                  isLoadingMore={isLoadingOlder || isLoadingNewer}
+                  contentBottomInset={contentBottomInset}
+                  // A draft window has no Session yet and reports an empty key. Keying the
+                  // first send by its pending Session keeps the list on one dataset across
+                  // the draft-to-Session handoff instead of starting as a keyless list.
+                  dataKey={dataKey || listKey}
+                  enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
+                  extraData={messageListExtraData}
+                  initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+                  initialScrollTarget={initialScrollTarget}
+                  hasNewerMessages={hasNewerMessages}
+                  keyboardOffset={keyboardOffset}
+                  // ChatScreen owns background presses so blur also ends composer editing.
+                  keyboardShouldPersistTaps="always"
+                  messages={listMessages}
+                  onLoadOlder={loadOlder}
+                  onLoadNewer={loadNewer}
+                  onReturnToLatest={returnToLatest}
+                  renderMessage={renderChatMessage}
+                />
+              </ExpandedAnswerProvider>
+            </ChatSessionProvider>
           </ChatMessageRowProvider>
         </AssistantMessageActionsProvider>
       </MessageTranslationProvider>

@@ -84,6 +84,23 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
 };
 
 describe('DesktopSession', () => {
+  it('keeps message-summary negotiation local to each connection', async () => {
+    for (const version of [1, undefined]) {
+      const channel = fakeChannel({
+        'connection.hello': () => ({
+          ...hello['connection.hello'](),
+          ...(version === undefined ? {} : { agentMessageSummariesVersion: version }),
+        }),
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      try {
+        expect(session.agentMessageSummariesVersion).toBe(version);
+      } finally {
+        session.close();
+      }
+    }
+  });
+
   it('keeps binary acknowledgements separate from RPC and bounds unacknowledged data', async () => {
     const channel = fakeChannel({
       'connection.hello': () => ({

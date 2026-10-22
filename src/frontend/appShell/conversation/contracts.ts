@@ -7,6 +7,7 @@ import type {
 } from '@/shared/contracts/agent';
 import type { ExecutionFailure } from '@/shared/contracts/aiFailure';
 import type { InteractionResponse, InteractionQuestion } from '@/shared/contracts/interaction';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 /**
  * Shared consumption contract: what the chat workspace, sidebar and transcript export read from
@@ -52,6 +53,7 @@ export type Availability =
         | 'discovery-unavailable'
         | 'unreachable'
         | 'suspended'
+        | 'disconnected'
         | 'synchronizing'
         | 'busy'
         | 'not-authorized'
@@ -160,8 +162,12 @@ export type ConversationMessage = {
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
     retry?: ConversationAction<void, ConversationRef | void>;
+    /** Adds one more answer to this answer's question, from the chosen model. */
+    answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
+    /** Shows the branch containing another alternative at this message's branch point. */
+    select?: ConversationAction<{ messageId: string }, void>;
   };
 };
 export type ConversationSnapshot = {

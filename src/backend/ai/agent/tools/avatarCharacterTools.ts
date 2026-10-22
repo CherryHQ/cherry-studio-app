@@ -93,6 +93,7 @@ export function createAvatarCharacterTools(
     ref: { source: 'builtin', capabilityId: AVATAR_CHARACTER_SAVE_TOOL_NAME },
     providerName: AVATAR_CHARACTER_SAVE_TOOL_NAME,
     displayName: 'Save avatar character',
+    deferred: true,
     description:
       "Store a set of aligned expression images as an animated character in the user's avatar library. The app animates it; returns the character id.",
     inputSchema: toRuntimeInputSchema(saveInputSchema),
@@ -158,6 +159,7 @@ export function createAvatarCharacterTools(
     ref: { source: 'builtin', capabilityId: AGENT_SET_AVATAR_TOOL_NAME },
     providerName: AGENT_SET_AVATAR_TOOL_NAME,
     displayName: 'Set Agent avatar',
+    deferred: true,
     description:
       "Make a library character an Agent's animated avatar. It reacts to the Agent's activity in conversations.",
     inputSchema: toRuntimeInputSchema(setAvatarInputSchema),

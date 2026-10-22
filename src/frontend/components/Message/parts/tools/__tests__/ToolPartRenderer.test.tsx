@@ -29,6 +29,7 @@ jest.mock('../RunJsToolPart', () => ({
   isRunJsToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'run_js',
 }));
 jest.mock('../SkillToolPart', () => mockCreateToolPart('SkillToolPart'));
+jest.mock('../../PendingImagePart', () => mockCreateToolPart('PendingImagePart'));
 jest.mock('../UserQuestionPart', () => mockCreateToolPart('UserQuestionPart'));
 jest.mock('../WebSearchToolPart', () => mockCreateToolPart('WebSearchToolPart'));
 jest.mock('../WriteFileToolPart', () => ({
@@ -61,6 +62,26 @@ describe('ToolPartRenderer', () => {
     });
 
     expect(renderer?.root.findByType(expectedType).props.part).toBe(part);
+  });
+
+  it('holds a running image generation at the requested shape', () => {
+    const part = {
+      ...makeToolPart('generate_image'),
+      input: { aspectRatio: '16:9', prompt: 'A cherry orchard' },
+      state: 'input-available',
+    } as ToolMessagePart;
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(<ToolPartRenderer part={part} />);
+    });
+
+    expect(renderer?.root.findByType('PendingImagePart').props.aspectRatio).toBeCloseTo(16 / 9);
+    // Once it settles, the call is an ordinary tool row again.
+    act(() => {
+      renderer?.update(<ToolPartRenderer part={makeToolPart('generate_image')} />);
+    });
+    expect(renderer?.root.findAllByType('PendingImagePart')).toHaveLength(0);
+    expect(renderer?.root.findAllByType('GenericToolPart')).toHaveLength(1);
   });
 
   it('suppresses provider-owned web search parts before general web-search routing', () => {

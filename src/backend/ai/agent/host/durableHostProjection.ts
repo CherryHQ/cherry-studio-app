@@ -19,8 +19,14 @@ export const DurableTurnMetadataSchema = z.object({
   userParts: z.array(AgentMessagePartSchema),
   retainedParts: z.array(AgentMessagePartSchema).optional(),
   inferenceSnapshot: AgentInferenceSnapshotV1Schema,
+  // Released turns predating workspace support remain unbound on recovery.
+  workspaceFolderId: z.string().min(1).nullable().default(null),
   referencedFileEntryIds: z.array(z.string()),
   hasHistoryBeforeActiveTurn: z.boolean(),
+  /** One answer of a multi-model question: its tools are limited to automatic reads. */
+  readOnlyTools: z.boolean().optional(),
+  /** The question's parent in the message tree, so live rows can be placed on a branch. */
+  parentMessageId: z.string().nullable().optional(),
 });
 
 /** The desktop-aligned message timing: wall clock, tool execution, and approval waits. */
@@ -78,6 +84,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
   };
   const user = AgentMessageViewSchema.parse({
     ...common,
+    ...(metadata.parentMessageId !== undefined ? { parentId: metadata.parentMessageId } : {}),
     id: turn.userMessageId,
     role: 'user',
     status: 'success',
@@ -95,6 +102,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     ? AgentMessageViewSchema.parse({
         ...common,
         id: turn.assistantMessageId,
+        parentId: turn.userMessageId,
         stats: assistantStats(turn),
         role: 'assistant',
         status:

@@ -1,2 +1,6 @@
-export { AiFailureMessage } from './AiFailureMessage';
+export {
+  AiFailureDetailSheet,
+  AiFailureMessage,
+  aiFailureReasonTitleKey,
+} from './AiFailureMessage';
 export type { AiFailureData } from './aiFailureDetail';

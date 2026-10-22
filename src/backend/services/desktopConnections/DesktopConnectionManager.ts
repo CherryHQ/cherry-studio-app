@@ -5,6 +5,7 @@ import {
 } from '@cherrystudio/remote-protocol';
 import { loggerService } from '@logger';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { randomUUID } from 'expo-crypto';
 import { AppState } from 'react-native';
 
 import {
@@ -25,6 +26,8 @@ import type {
   DesktopDomain,
   DesktopDomainLease,
   DesktopLeaseState,
+  DesktopConnectionIntentStore,
+  PersistentDesktopConnection,
 } from './connectionPorts';
 import { DesktopDiscovery } from './DesktopDiscovery';
 import { DesktopEndpointResolver } from './DesktopEndpointResolver';
@@ -55,6 +58,8 @@ type ConnectionEntry = {
   retry: number;
   updates: Promise<void>;
   revoked: Set<string>;
+  connectionToken?: string;
+  disconnected?: boolean;
 };
 
 class DesktopAuthorizationError extends RemoteFailureError {}
@@ -92,9 +97,89 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private readonly temporaryDials = new Set<AbortController>();
   private stopped = false;
   private foreground = AppState.currentState === 'active';
+  private persistentConnectionsEnabled = false;
+  private intents?: DesktopConnectionIntentStore;
+  private readonly connectionListeners = new Set<() => void>();
 
-  configure(store: DesktopConnectionStore) {
+  configure(store: DesktopConnectionStore, intents?: DesktopConnectionIntentStore) {
     this.store = store;
+    this.intents = intents;
+  }
+
+  /** Android's connection notification owns this demand independently of page/task leases. */
+  enablePersistentConnections(): void {
+    this.persistentConnectionsEnabled = true;
+    for (const [id, entry] of this.entries) {
+      if (!entry.disconnected && [...entry.leases].some((lease) => lease.domain === 'agent')) {
+        entry.connectionToken ??= randomUUID();
+        this.reconcileVisibility(id, entry);
+      }
+    }
+    this.publishConnections();
+  }
+
+  getPersistentConnections = (): PersistentDesktopConnection[] =>
+    [...this.entries].flatMap(([id, entry]) =>
+      entry.connectionToken && !entry.disconnected && !entry.backgroundExpired
+        ? [
+            {
+              id,
+              name: entry.row.name,
+              token: entry.connectionToken,
+              status: entry.session?.isOpen ? ('connected' as const) : ('connecting' as const),
+            },
+          ]
+        : [],
+    );
+
+  subscribeConnections = (listener: () => void): (() => void) => {
+    this.connectionListeners.add(listener);
+    return () => {
+      this.connectionListeners.delete(listener);
+    };
+  };
+
+  /** Local transport only: never cancels execution or revokes desktop authorization. */
+  disconnect(id: string): void {
+    this.intents?.setDisconnected(id, true);
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    entry.disconnected = true;
+    entry.connectionToken = undefined;
+    this.close(entry);
+    for (const lease of entry.leases)
+      this.update(lease, { status: 'suspended', reason: 'disconnected' });
+    this.refreshDiscoveryActivity();
+    this.publishConnections();
+  }
+
+  reconnect(id: string): void {
+    this.assertAvailable();
+    this.intents?.setDisconnected(id, false);
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    entry.disconnected = false;
+    entry.backgroundExpired = false;
+    entry.retry = 0;
+    if (
+      this.persistentConnectionsEnabled &&
+      entry.row.grants.some((grant) => grant.domain === 'agent')
+    )
+      entry.connectionToken ??= randomUUID();
+    this.reconcileVisibility(id, entry);
+    this.refreshDiscoveryActivity();
+    this.publishConnections();
+  }
+
+  private publishConnections(): void {
+    for (const listener of this.connectionListeners) listener();
+  }
+
+  private hasDemand(entry: ConnectionEntry): boolean {
+    return (
+      Boolean(entry.connectionToken) ||
+      [...entry.leases].some((lease) => !lease.controller.signal.aborted)
+    );
   }
   protected onInit() {
     // iOS reports `inactive` for Control Center, system alerts and Face ID; only `background` hides the app.
@@ -149,7 +234,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       entry = undefined;
     }
     if (!entry) {
-      entry = { row, leases: new Set(), retry: 0, updates: Promise.resolve(), revoked: new Set() };
+      entry = {
+        row,
+        leases: new Set(),
+        retry: 0,
+        updates: Promise.resolve(),
+        revoked: new Set(),
+        disconnected: this.intents?.isDisconnected(id) ?? false,
+      };
       this.entries.set(id, entry);
     }
     // A newly granted domain must authenticate before it can use the existing channel.
@@ -168,6 +260,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       throw new RemoteFailureError({ reason: 'GRANT_REVOKED', message: 'Domain grant revoked' });
     const retained = entry;
     clearTimeout(entry.idleTimer);
+    if (domain === 'agent' && this.persistentConnectionsEnabled && !entry.disconnected)
+      entry.connectionToken ??= randomUUID();
     const lease: LeaseEntry = {
       backgroundRequired: false,
       domain,
@@ -175,7 +269,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       controller: new AbortController(),
       listeners: new Set(),
       state: {
-        status: this.foreground ? (entry.session?.isOpen ? 'ready' : 'connecting') : 'suspended',
+        status: entry.disconnected
+          ? 'suspended'
+          : this.foreground
+            ? entry.session?.isOpen
+              ? 'ready'
+              : 'connecting'
+            : 'suspended',
+        ...(entry.disconnected ? { reason: 'disconnected' as const } : {}),
       },
     };
     entry.leases.add(lease);
@@ -187,14 +288,15 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       retained.leases.delete(lease);
       this.reconcileVisibility(id, retained);
       this.retire(lease, 'stopped');
-      if (!retained.leases.size) {
+      if (!this.hasDemand(retained)) {
         if (!retained.session?.isOpen) retained.dial?.abort();
         this.refreshDiscoveryActivity();
         clearTimeout(retained.retryTimer);
         retained.idleTimer = setTimeout(() => {
-          if (!retained.leases.size && this.entries.get(id) === retained) {
+          if (!this.hasDemand(retained) && this.entries.get(id) === retained) {
             this.entries.delete(id);
             this.close(retained);
+            this.publishConnections();
           }
         }, IDLE_GRACE_MS);
       }
@@ -202,6 +304,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     signal.addEventListener('abort', release, { once: true });
     if (signal.aborted) release();
     this.ensureConnected(id, retained);
+    this.publishConnections();
     return {
       connectionId: id,
       grantId: grant.grantId,
@@ -411,6 +514,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     for (const lease of entry.leases) this.retire(lease, reason);
     this.close(entry);
     this.refreshDiscoveryActivity();
+    this.publishConnections();
   }
   async revoke(id: string, domain: DesktopDomain, grantId: string) {
     this.assertAvailable();
@@ -422,11 +526,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     )
       return;
     entry.revoked.add(`${domain}:${grantId}`);
+    if (domain === 'agent') entry.connectionToken = undefined;
     // Retire before awaiting storage: old event reducers can no longer commit.
     for (const lease of entry.leases)
       if (lease.domain === domain && lease.grantId === grantId)
         this.retire(lease, 'not-authorized');
-    if (![...entry.leases].some((lease) => !lease.controller.signal.aborted)) this.close(entry);
+    if (!this.hasDemand(entry)) this.close(entry);
+    this.publishConnections();
     await this.updateAuthorization(entry, async () => {
       if (this.entries.get(id) !== entry) return;
       const expected = entry.row;
@@ -469,11 +575,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   private canConnect(entry: ConnectionEntry): boolean {
     return (
-      this.foreground ||
-      (!entry.backgroundExpired &&
-        [...entry.leases].some(
-          (lease) => lease.backgroundRequired && !lease.controller.signal.aborted,
-        ))
+      !entry.disconnected &&
+      (this.foreground ||
+        (!entry.backgroundExpired &&
+          (Boolean(entry.connectionToken) ||
+            [...entry.leases].some(
+              (lease) => lease.backgroundRequired && !lease.controller.signal.aborted,
+            ))))
     );
   }
 
@@ -490,6 +598,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       entry.backgroundExpired = true;
       this.reconcileVisibility(id, entry);
       this.refreshDiscoveryActivity();
+      this.publishConnections();
     }, BACKGROUND_UNREACHABLE_MS);
   }
 
@@ -498,8 +607,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     if (this.canConnect(entry)) this.ensureConnected(id, entry);
     else {
       this.close(entry);
-      for (const lease of entry.leases) this.update(lease, { status: 'suspended' });
+      for (const lease of entry.leases)
+        this.update(lease, {
+          status: 'suspended',
+          ...(entry.disconnected ? { reason: 'disconnected' as const } : {}),
+        });
     }
+    this.publishConnections();
   }
 
   private ensureConnected(id: string, entry: ConnectionEntry) {
@@ -509,7 +623,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       entry.pending ||
       entry.session?.isOpen ||
       this.entries.get(id) !== entry ||
-      ![...entry.leases].some((lease) => !lease.controller.signal.aborted)
+      !this.hasDemand(entry)
     )
       return;
     clearTimeout(entry.retryTimer);
@@ -564,6 +678,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             ).catch(() => session?.close());
           });
           for (const lease of entry.leases) this.update(lease, { status: 'ready' });
+          this.publishConnections();
           this.watchBackgroundLoss(id, entry);
           const connected = session;
           void this.track(this.syncEndpoints(entry.row, connected, controller.signal));
@@ -576,12 +691,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
                 this.update(lease, { status: this.canConnect(entry) ? 'offline' : 'suspended' });
               this.watchBackgroundLoss(id, entry);
               this.scheduleReconnect(id, entry);
+              this.publishConnections();
             })
             .catch(() => undefined);
         } catch (error) {
           session?.close();
           if (!controller.signal.aborted && this.entries.get(id) === entry) {
             if (error instanceof DesktopAuthorizationError) {
+              entry.connectionToken = undefined;
               for (const listener of this.invalidations) listener({ connectionId: id });
               for (const lease of entry.leases) this.retire(lease, 'needs-repair');
               await this.store!.updateStatus(
@@ -605,6 +722,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
         } finally {
           if (entry.pending === promise) entry.pending = undefined;
           this.scheduleReconnect(id, entry);
+          this.publishConnections();
         }
       }),
     );
@@ -622,6 +740,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     const grants = authorization.grants.filter(
       (grant) => !entry.revoked.has(`${grant.domain}:${grant.grantId}`),
     );
+    if (!grants.some((grant) => grant.domain === 'agent')) entry.connectionToken = undefined;
     for (const previous of entry.row.grants)
       if (
         !grants.some(
@@ -637,7 +756,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     await this.store!.updateStatus(id, { grants, status: 'paired' }, signal, entry.row);
     signal.throwIfAborted();
     if (this.entries.get(id) === entry) entry.row = { ...entry.row, grants };
-    if (![...entry.leases].some((lease) => !lease.controller.signal.aborted)) this.close(entry);
+    if (!this.hasDemand(entry)) this.close(entry);
   }
   private scheduleReconnect(id: string, entry: ConnectionEntry) {
     if (
@@ -646,7 +765,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       entry.session?.isOpen ||
       entry.pending ||
       this.entries.get(id) !== entry ||
-      ![...entry.leases].some((lease) => !lease.controller.signal.aborted)
+      !this.hasDemand(entry)
     )
       return;
     clearTimeout(entry.retryTimer);

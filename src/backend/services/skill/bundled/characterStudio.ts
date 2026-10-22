@@ -1,9 +1,32 @@
 import { characterStudioSkill } from '@cherrystudio/character-avatar/skill';
 
-import type { BundledSkillDefinition } from './index';
+import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
 
-/** Ships with the character package; offered when drawing and Agent management are enabled. */
-export const characterStudioBundledSkill: BundledSkillDefinition = {
-  ...characterStudioSkill,
-  requiredTools: ['generate_image', 'image_process', 'avatar_character_save', 'agent_set_avatar'],
-};
+import { parseSkillEntry } from '../skillPackage';
+
+const REQUIRED_TOOLS: readonly BuiltInToolCapabilityId[] = [
+  'generate_image',
+  'image_process',
+  'avatar_character_save',
+  'agent_set_avatar',
+];
+
+/** Travels with the deferred avatar tool only when every design capability is available. */
+export function getCharacterStudioInstructions(
+  availableTools: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!REQUIRED_TOOLS.every((name) => availableTools.has(name))) return undefined;
+  const entry = parseSkillEntry(characterStudioSkill.files['SKILL.md']);
+  if (!entry || !('body' in entry)) return undefined;
+  const resources = Object.entries(characterStudioSkill.files)
+    .filter(([path]) => path !== 'SKILL.md')
+    .map(([path, content]) => `#### ${path}\n\n${content.trim()}`);
+  let instructions = [
+    `### ${characterStudioSkill.name}\n\n${entry.frontmatter.description}`,
+    entry.body.trim(),
+    ...resources,
+  ].join('\n\n');
+  for (const name of REQUIRED_TOOLS)
+    instructions = instructions.replaceAll(`\`${name}\``, `\`${availableTools.get(name)}\``);
+  return instructions;
+}

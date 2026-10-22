@@ -21,6 +21,9 @@ Pi is the only local Agent Runtime. It receives a normalized Agent transcript an
 selected Agent model through the Host-owned provider adapter. The current Pi binding supports
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
+Providers declaring optional API-key authentication can use these endpoints without a saved key.
+The Pi adapter supplies the SDK-only placeholder and suppresses generated credentials while
+preserving explicitly configured authentication headers.
 
 Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
 Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,
@@ -47,13 +50,35 @@ cancellation, output import, and cleanup. See
 
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
-- `generateText()` for short internal generations such as Session naming;
-- `listModels()` for provider discovery and `checkModel()` for internal AI SDK probes;
-- `generateImage()` for painting jobs.
+- `listModels()` for provider discovery;
+- `generateImage()` for painting jobs and the Agent image tool.
+
+It has no text-generation path; every language request goes through Pi.
 
 Settings and onboarding chat checks use the bound AgentRuntime through `Backend.models`.
+Translation and automatic session naming use its separate `RuntimeTextGenerator` capability,
+sharing chat's OAuth and protocol adapters without creating conversation history or tools.
 `AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
 `uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
+
+### Invocation Usage And Context Occupancy
+
+Image generation captures an immutable usage context through ai-core's `onProviderCallStart` for
+each provider invocation, including each batch and retry. Its completion handler keeps that
+context paired with the ai-core-generated invocation ID, image count, usage, timing, and completion
+time. The invocation ID is generated locally as `ai-core:image:<UUID>` and is distinct from any
+provider-issued request ID.
+The credential receipt describes the key actually selected for the operation; observing a new
+invocation does not rotate credentials. Failed attempts have no successful usage event and do not
+produce invented billing records. `AiUsageRecordService` deduplicates successful records by request
+ID and contains persistence failures; ai-core isolates synchronous observer failures from results.
+
+Pi conversation occupancy and billed usage are separate. `projectPiTurn` keeps the latest measured
+input-token count as `contextTokens`, while summing each response's billed usage. An Anthropic
+`pause_turn` continuation therefore retains one context occupancy and both invocation receipts.
+The runtime continuation regression covers this distinction. ai-core's `getContextTokens` is not
+applied to Pi totals: Pi owns their semantics, and the current image path has no conversation
+context-occupancy display requiring that helper.
 
 ## Provider And Model Records
 
@@ -62,8 +87,8 @@ auth config, endpoint configs, feature flags, settings, ordering, and enabled st
 
 `ModelService` reads and writes `user_model` rows. Model metadata is resolved when the model is added
 or reconciled, then stored locally for runtime use. Most fields are read from that projection.
-Request-only registry facts that intentionally are not persisted, such as reasoning wire dialects
-and service-tier delivery mappings, are rehydrated by `ProviderRegistryService` at request time.
+Request-only registry facts that intentionally are not persisted, such as reasoning wire dialects,
+are rehydrated by `ProviderRegistryService` at request time.
 
 `UniqueModelId` combines provider id and model id and is the runtime model identifier used by Agents,
 paintings, and settings. Provider and Model shapes follow Cherry Desktop unless mobile has a
@@ -73,9 +98,9 @@ documented runtime compatibility reason to diverge.
 
 `resolveProviderConnection()` is the shared, credential-selection-free connection resolver used by
 Pi and AI SDK request construction. It resolves the effective endpoint, endpoint-scoped adapter
-family, normalized wire model id, gateway provider-options key, and mobile/Provider request
-headers. It does not select API keys or IAM/OAuth credentials. Because configured extra headers may
-contain sensitive values, the result remains in memory and must not be persisted or logged.
+family, normalized wire model id, and mobile/Provider request headers. It does not select API keys
+or IAM/OAuth credentials. Because configured extra headers may contain sensitive values, the result
+remains in memory and must not be persisted or logged.
 
 A trailing `#` on a base URL disables automatic API-version insertion. Standard base-URL formatting
 removes that marker before Pi, AI SDK, and model-list requests use the address. Full request-path
@@ -101,11 +126,8 @@ The endpoint and adapter-family logic chooses variants such as OpenAI, OpenAI-co
 Azure Responses, Azure Anthropic, Gemini, CherryIN, NewAPI, AiHubMix, or Gateway. Provider settings
 builders are centralized in `src/backend/ai/provider/config.ts`.
 
-`src/backend/ai/generation/aiSdk/AiSdkGenerator.ts` is a generate-only wrapper around the AI SDK.
-Request assembly in `buildAgentParams.ts` supports explicit reasoning, sampling/provider overrides,
-headers, timeouts, retries, and caller-supplied tools. It owns no conversation persistence or
-stream lifecycle. AI SDK `ToolSet` is never the canonical Agent tool model: new Agent tool behavior
-resolves through the application-owned `RuntimeTool` contract and a Pi adapter.
+AI SDK `ToolSet` is never the canonical Agent tool model: Agent tool behavior resolves through the
+application-owned `RuntimeTool` contract and a Pi adapter.
 
 Endpoint declarations own wire-level behavior. `resolveEndpointDialect()` currently supplies the
 stream-usage behavior for the selected endpoint, while `ProviderRegistryService` consumes the
@@ -116,16 +138,11 @@ controls developer-role behavior. Provider-level actual-cost reporting is projec
 persisted `apiFeatures` shape only when the registry declares it, so absent catalog facts do not
 overwrite a newer persisted value with a generated default.
 
-Service tier is also catalog-driven. `ProviderRegistryService.resolveServiceTierControl()` combines
-the selected endpoint declaration with a model override, normalizes legacy persisted wire values to
-semantic selections, and narrows the available options. Request assembly then maps the semantic
-selection back to either an AI SDK provider-option namespace or a JSON request-body field. The
-body-field path composes a cached fetch wrapper instead of adding Provider-id conditionals.
+Service-tier controls are materialized on Model records from the catalog, but no request path sends
+them.
 
 Mobile sends application instructions with the `system` role on OpenAI Chat Completions and OpenAI
-Responses endpoints. The Pi bridge disables its URL/model-based developer-role inference, and the
-native OpenAI AI SDK bridge sets `providerOptions.openai.systemMessageMode` to `system` after request
-overrides are merged. Generic OpenAI-compatible adapters already preserve system messages. This is
+Responses endpoints. The Pi bridge disables its URL/model-based developer-role inference. This is
 a runtime-wide compatibility policy rather than a provider or model capability.
 
 ## Special Providers

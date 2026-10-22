@@ -242,6 +242,8 @@ describe('BackgroundReplyRuntime', () => {
       dismissDestination,
       notifyTurnFinished,
       requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
     });
     const turn = runtime.startTurn({
       agentId: 'agent-1',
@@ -279,6 +281,8 @@ describe('BackgroundReplyRuntime', () => {
       dismissDestination: jest.fn(),
       notifyTurnFinished,
       requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
     });
     const turn = runtime.startTurn({
       agentId: 'agent-1',
@@ -305,6 +309,8 @@ describe('BackgroundReplyRuntime', () => {
       dismissDestination: jest.fn(),
       notifyTurnFinished,
       requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
     });
     const turn = runtime.startTurn({
       agentId: 'agent-1',
@@ -332,6 +338,8 @@ describe('BackgroundReplyRuntime', () => {
       dismissDestination,
       notifyTurnFinished,
       requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
     });
     // The full notify-only lifecycle: preparation opens the logical turn, the
     // turn starts, and the preparation lease is released right after — the
@@ -380,6 +388,8 @@ describe('BackgroundReplyRuntime', () => {
     const runtime = await createRuntime(undefined, {
       dismissDestination: jest.fn(),
       requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
       notifyTurnFinished: jest.fn(async () => false),
     });
     acquire.mockImplementationOnce(() => ({ release }));
@@ -648,6 +658,8 @@ describe('BackgroundReplyRuntime', () => {
       dismissDestination: jest.fn(),
       notifyTurnFinished,
       requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
     });
     const input = {
       connectionId: 'pc',
@@ -779,6 +791,45 @@ describe('BackgroundReplyRuntime', () => {
     expect(() => turn.awaitApproval()).not.toThrow();
     expect(() => turn.finish('completed')).not.toThrow();
 
+    await runtime._doStop();
+  });
+
+  test('delivers each attention request once, retains execution, and invalidates retired requests', async () => {
+    const notifyAttention = jest.fn(async () => true);
+    const dismissAttention = jest.fn();
+    const runtime = await createRuntime(undefined, {
+      notifyAttention,
+      dismissAttention,
+      dismissDestination: jest.fn(),
+      requestPermissionOnce: jest.fn(),
+      notifyTurnFinished: jest.fn(async () => false),
+    });
+    const turn = runtime.startTurn({
+      agentId: 'a',
+      agentName: 'Agent',
+      sessionId: 's',
+      sessionTitle: 'Session',
+    });
+    turn.awaitApproval(undefined, undefined, 'a1');
+    await flushOperations();
+    turn.awaitApproval(undefined, undefined, 'a1');
+    await flushOperations();
+    expect(notifyAttention).toHaveBeenCalledTimes(1);
+    turn.awaitApproval(undefined, 'question', 'q1');
+    await flushOperations();
+    turn.awaitApproval(undefined, 'question', 'q2');
+    await flushOperations();
+    expect(notifyAttention).toHaveBeenCalledTimes(3);
+    expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        phase: 'awaiting-answer',
+        attentionId: 'q2',
+        icon: 'bubble-exclamation',
+      }),
+      { keepAlive: true, urgent: true },
+    );
+    turn.retire();
+    expect(dismissAttention).toHaveBeenCalled();
     await runtime._doStop();
   });
 

@@ -13,7 +13,7 @@ import {
 import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useBackendModule } from '@/frontend/data';
-import { cacheService } from '@/frontend/data/CacheService';
+import { useApiClient } from '@/frontend/data/DataApiProvider';
 
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
 import { messageTranslationSource } from './messageTranslationSource';
@@ -22,22 +22,21 @@ import { EMPTY_TRANSLATION, MessageTranslationStore } from './MessageTranslation
 const TranslationContext = createContext<MessageTranslationStore | null>(null);
 const unsubscribeNothing = () => {};
 type ProviderProps = PropsWithChildren<{
-  scope: string;
+  isEnabled: boolean;
   sessionId: string;
   messages: readonly ConversationMessage[];
 }>;
 
 export function MessageTranslationProvider(props: ProviderProps) {
-  return (
-    <SessionTranslationProvider key={JSON.stringify([props.scope, props.sessionId])} {...props} />
-  );
+  if (!props.isEnabled)
+    return <TranslationContext value={null}>{props.children}</TranslationContext>;
+  return <SessionTranslationProvider key={props.sessionId} {...props} />;
 }
 
-function SessionTranslationProvider({ children, scope, sessionId, messages }: ProviderProps) {
+function SessionTranslationProvider({ children, sessionId, messages }: ProviderProps) {
   const translator = useBackendModule('translation');
-  const [store] = useState(
-    () => new MessageTranslationStore(translator, cacheService, scope, sessionId),
-  );
+  const dataApi = useApiClient();
+  const [store] = useState(() => new MessageTranslationStore(translator, dataApi, sessionId));
   useFocusEffect(useCallback(() => () => store.cancelAll(), [store]));
   useLayoutEffect(() => {
     store.reconcile(messages);
@@ -47,7 +46,7 @@ function SessionTranslationProvider({ children, scope, sessionId, messages }: Pr
 
 /** Both the toolbar action and its content subscribe to this message alone. */
 export function useMessageTranslation(message: MessageListItem) {
-  const store = use(TranslationContext);
+  const store = useMessageTranslationStore();
   const row = useChatMessageRow(message.id);
   const source = useMemo(
     () =>
@@ -69,4 +68,9 @@ export function useMessageTranslation(message: MessageListItem) {
   );
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return store && source ? { state, source, store } : undefined;
+}
+
+/** Share actions read a snapshot on demand without subscribing to streamed text. */
+export function useMessageTranslationStore() {
+  return use(TranslationContext);
 }

@@ -38,6 +38,8 @@ const colorLiteralAllowlist: Record<string, string> = {
   'packages/ui/src/scripts/catalog-only-provider-icons.generated.ts':
     'artwork: generated provider icon SVGs',
   'packages/ui/src/scripts/generate-icons.ts': 'build script, outside the render tree',
+  'src/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime.ts':
+    'outside the render tree: Android notification badge colour, mirrors BackgroundExecution.kt',
   'src/frontend/components/Avatar/utils/brandAvatarStyles.ts':
     'upstream of the tokens: picks ink by luminance, its output is the colour decision',
   'src/frontend/appShell/startup/StartupCover.tsx':

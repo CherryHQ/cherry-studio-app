@@ -1,23 +1,23 @@
 import type { LucideIconProps } from '@cherrystudio/app-icons';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
 import CameraIcon from '@cherrystudio/app-icons/icons/camera';
-import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import type { ComponentType } from 'react';
 
 import type { PermissionKind } from '../../permissionConfig';
 
+// Android picks photos with the system picker and asks for legacy save access
+// only when saving, so there is no photo library permission to manage here.
 export const visiblePermissionKinds = [
   'location',
   'calendar',
   'camera',
-  'photos',
 ] as const satisfies readonly PermissionKind[];
 
 const permissionIcons: Record<PermissionKind, ComponentType<LucideIconProps> | undefined> = {
   calendar: CalendarIcon,
   camera: CameraIcon,
-  photos: ImageIcon,
+  photos: undefined,
   health: undefined,
   location: MapPinIcon,
   reminders: undefined,

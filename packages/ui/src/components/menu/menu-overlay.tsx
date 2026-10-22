@@ -1,4 +1,12 @@
-import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  type ComponentType,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import {
   GestureHandlerRootView,
@@ -6,6 +14,7 @@ import {
 } from 'react-native-gesture-handler';
 import { OverKeyboardView } from 'react-native-keyboard-controller';
 
+import { useNavigationOverlay } from '../portal/overlay-navigation';
 import { focusMenuTarget } from './menu-focus';
 import { MenuInteraction, type MenuInteractionValue } from './menu-interaction';
 
@@ -26,8 +35,9 @@ type MenuOverlayHostProps = {
   visible: boolean;
 };
 
-/** System-presented menus retain their native dismissal and Back/Escape boundary. */
+/** Android menus preserve focus so presentation cannot synthesize keyboard scrolling. */
 export function MenuOverlay(props: MenuOverlayProps) {
+  if (Platform.OS === 'android') return <KeyboardMenuOverlay {...props} />;
   return <MenuOverlayRoot {...props} host={NativeMenuOverlayHost} />;
 }
 
@@ -55,6 +65,8 @@ function MenuOverlayRoot({
   host: ComponentType<MenuOverlayHostProps>;
   shouldUseNativePresses?: boolean;
 }) {
+  const [isPresented, setIsPresented] = useState(isVisible);
+  if (isVisible && !isPresented) setIsPresented(true);
   const items = useRef(new Set<View>());
   const isActive = useRef(isOpen);
   const focusFrame = useRef<number | undefined>(undefined);
@@ -73,6 +85,11 @@ function MenuOverlayRoot({
   const requestClose = useCallback(() => {
     if (isActive.current) onClose();
   }, [onClose]);
+  useNavigationOverlay(isVisible || isPresented, requestClose);
+  const handleDismiss = useCallback(() => {
+    if (!isOpen) setIsPresented(false);
+    onClosed();
+  }, [isOpen, onClosed]);
   const handleShow = useCallback(() => {
     focusFrame.current = requestAnimationFrame(() => {
       if (isActive.current) focusMenuTarget(items.current.values().next().value ?? null);
@@ -97,7 +114,7 @@ function MenuOverlayRoot({
 
   return (
     <Host
-      onDismiss={onClosed}
+      onDismiss={handleDismiss}
       onRequestClose={requestClose}
       onShow={handleShow}
       visible={isVisible}
@@ -133,15 +150,6 @@ function MenuOverlayRoot({
 }
 
 function NativeMenuOverlayHost({ onDismiss, visible, ...props }: MenuOverlayHostProps) {
-  useEffect(() => {
-    // RN's Android Modal has no onDismiss event. Its dialog is removed when
-    // visible becomes false; wait for that commit before completing close.
-    if (!visible && Platform.OS === 'android') {
-      const frame = requestAnimationFrame(onDismiss);
-      return () => cancelAnimationFrame(frame);
-    }
-  }, [onDismiss, visible]);
-
   return (
     <Modal
       {...props}

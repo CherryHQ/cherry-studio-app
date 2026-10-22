@@ -23,6 +23,7 @@ import type {
   AgentInferenceSnapshotV1,
   AgentSessionView,
 } from '@/shared/contracts/agent';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { AgentSessionStore, FinalizeAssistantMessageInput } from '../AgentSessionStore';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
@@ -175,6 +176,52 @@ describe.each([
 
   afterEach(() => {
     harness.cleanup();
+  });
+
+  test('withdrawing a queued reservation preserves history, checkpoints and the current runtime revision', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'first', type: 'text', text: 'First', state: 'done' }],
+    });
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: first.turnId,
+      payload: { summary: 'Earlier context' },
+    };
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      turnId: first.turnId,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: checkpoint,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const history = await store.listMessages(session.id);
+    const revision = await store.getRuntimeRevision(session.id);
+    const queued = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'queued', type: 'text', text: 'Later', state: 'done' }],
+    });
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: queued.turnId })).toEqual(
+      [queued.userMessage.id, queued.assistantMessage.id],
+    );
+    expect(await store.listMessages(session.id)).toEqual(history);
+    expect(await store.getRuntimeRevision(session.id)).toBe(revision);
+    expect((await store.getLatestContextCheckpoint(session.id))?.checkpoint).toEqual(checkpoint);
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: queued.turnId })).toEqual(
+      [],
+    );
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: first.turnId })).toEqual(
+      [],
+    );
+    expect(await store.listMessages(session.id)).toEqual(history);
   });
 
   test('preserves multiple Desktop compaction anchors and their order through persisted reads', async () => {
@@ -427,26 +474,39 @@ describe.each([
     },
   );
 
-  test('reserveInitialSubmission atomically creates the Session and first message pair', async () => {
-    const ids = { sessionId: uuidv7(), ...messageIds() };
-    const reserved = await store.reserveInitialSubmission({
-      ...ids,
-      ...RESERVATION_FACTS,
-      agentId,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
-    });
+  test.each([false, true])(
+    'reserveInitialSubmission atomically creates the Session and first message pair (workspace: %s)',
+    async (withWorkspace) => {
+      const folderId = uuidv7();
+      if (withWorkspace) {
+        harness.raw
+          ?.prepare(
+            'INSERT INTO file_folder (id, name, name_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          )
+          .run(folderId, 'Workspace', 'workspace', 1, 1);
+      }
+      const ids = { sessionId: uuidv7(), ...messageIds() };
+      const reserved = await store.reserveInitialSubmission({
+        ...ids,
+        ...RESERVATION_FACTS,
+        agentId,
+        ...(withWorkspace ? { workspaceFolderId: folderId } : {}),
+        userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+      });
 
-    expect(reserved.session.id).toBe(ids.sessionId);
-    expect(reserved.userMessage.id).toBe(ids.userMessageId);
-    expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
-    expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
-    expect(await store.listMessages(reserved.session.id)).toEqual([
-      reserved.userMessage,
-      reserved.assistantMessage,
-    ]);
-    expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
-    expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
-  });
+      expect(reserved.session.id).toBe(ids.sessionId);
+      expect(reserved.session.workspaceFolderId ?? null).toBe(withWorkspace ? folderId : null);
+      expect(reserved.userMessage.id).toBe(ids.userMessageId);
+      expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
+      expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
+      expect(await store.listMessages(reserved.session.id)).toEqual([
+        reserved.userMessage,
+        reserved.assistantMessage,
+      ]);
+      expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
+      expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
+    },
+  );
 
   test('conversation activity advances the Session row timestamp', async () => {
     const reservationTime = 2_000_000_001_000;
@@ -1306,6 +1366,58 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     harness.cleanup();
   });
 
+  test('deletes a deep message chain and its search entries while preserving an independent fork', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const session = await harness.createEmptySession({ agentId: await harness.makeAgentId() });
+    const first = await settleTurn(store, session.id, 'Retained prefix');
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: first.assistantMessage.id,
+    });
+    if (fork.status !== 'forked') throw new Error('Expected a fork.');
+    const insert = raw.prepare(`INSERT INTO agent_session_message
+      (id, session_id, parent_id, turn_id, role, data, status, searchable_text, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'success', 'deepdelete', ?, ?)`);
+    let parentId = first.assistantMessage.id;
+    for (let index = 0; index < 1100; index++) {
+      const id = uuidv7();
+      insert.run(
+        id,
+        session.id,
+        parentId,
+        `deep-turn-${Math.floor(index / 2)}`,
+        index % 2 === 0 ? 'user' : 'assistant',
+        JSON.stringify({
+          parts: [{ id: 'text', type: 'text', text: 'deepdelete', state: 'done' }],
+        }),
+        index,
+        index,
+      );
+      parentId = id;
+    }
+    const matches = () =>
+      raw
+        .prepare(
+          "SELECT count(*) AS count FROM agent_session_message_fts WHERE agent_session_message_fts MATCH 'deepdelete'",
+        )
+        .get();
+    expect(matches()).toEqual({ count: 1100 });
+
+    expect(await store.deleteSession(session.id)).toBe(true);
+    expect(await store.getSession(session.id)).toBeNull();
+    expect(matches()).toEqual({ count: 0 });
+    expect(await store.getSession(fork.session.id)).toMatchObject({
+      forkedFromSessionId: null,
+      forkBoundaryMessageId: null,
+    });
+    expect(await store.listMessages(fork.session.id)).toHaveLength(2);
+    expect(raw.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+      count: 2,
+    });
+    expect(raw.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  });
+
   test('keeps Runtime replay strict when a stored part is unsupported', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -1622,6 +1734,58 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(readActivity()).toBe(keptActivity);
   });
 
+  test('publishes the complete fork after commit and skips rejected forks', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const source = await harness.createEmptySession({ agentId });
+    const anchor = await settleTurn(store, source.id, 'Fork this answer');
+    const notices: unknown[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => {
+      notices.push({
+        paths,
+        inTransaction: raw.isTransaction,
+        rows: raw
+          .prepare(
+            `SELECT s.id, s.active_node_id AS activeNodeId, COUNT(m.id) AS messageCount
+             FROM agent_session s JOIN agent_session_message m ON m.session_id = s.id
+             WHERE s.forked_from_session_id = ? GROUP BY s.id`,
+          )
+          .all(source.id),
+      });
+    });
+    try {
+      const result = await store.forkSession({
+        sessionId: source.id,
+        fromMessageId: anchor.assistantMessage.id,
+      });
+      expect(result.status).toBe('forked');
+      if (result.status !== 'forked') throw new Error('expected fork');
+      expect(notices).toEqual([
+        {
+          paths: ['/agent-sessions', `/agent-sessions/${result.session.id}`],
+          inTransaction: false,
+          rows: [
+            {
+              id: result.session.id,
+              activeNodeId: result.session.forkBoundaryMessageId,
+              messageCount: 2,
+            },
+          ],
+        },
+      ]);
+      await expect(
+        store.forkSession({ sessionId: source.id, fromMessageId: uuidv7() }),
+      ).resolves.toEqual({ status: 'message-not-found' });
+      await expect(
+        store.forkSession({ sessionId: uuidv7(), fromMessageId: anchor.assistantMessage.id }),
+      ).resolves.toEqual({ status: 'session-not-found' });
+      expect(notices).toHaveLength(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('a fork indexes its copied rows and outlives the source it cites', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -1913,3 +2077,315 @@ async function settleTurn(
   });
   return reserved;
 }
+
+describe('SQLite message-owned translations', () => {
+  let harness: StoreHarness;
+  beforeEach(() => {
+    harness = makeSqliteHarness();
+  });
+  afterEach(() => harness.cleanup());
+
+  async function translatedAnswer() {
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const input = {
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input', type: 'text' as const, text: 'Question', state: 'done' as const }],
+    };
+    await harness.store.reserveSubmission(input);
+    const finalization: FinalizeAssistantMessageInput = {
+      assistantMessageId: input.assistantMessageId,
+      status: 'success',
+      parts: [{ id: 'answer', type: 'text', text: 'Original', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    };
+    await harness.store.finalizeAssistantMessage(finalization);
+    const translations = {
+      sourceHash: sha256HexOfText('Original'),
+      results: {
+        'zh-CN': { content: '中文译文', createdAt: 1 },
+        'fr-FR': { content: 'Traduction', createdAt: 2 },
+      },
+    };
+    harness
+      .raw!.prepare(
+        "UPDATE agent_session_message SET data = json_set(data, '$.translations', json(?)) WHERE id = ?",
+      )
+      .run(JSON.stringify(translations), input.assistantMessageId);
+    return { input, finalization, translations };
+  }
+
+  test.each(['Original', 'Changed'])(
+    'reuses translations only when the retried source finishes as %s',
+    async (text) => {
+      const { input, finalization, translations } = await translatedAnswer();
+      const retry = await harness.store.reserveRetry({ ...input, assistantParts: [] });
+      expect(retry.assistantMessage.translations).toEqual(translations);
+      const final = await harness.store.finalizeAssistantMessage({
+        ...finalization,
+        turnId: retry.turnId,
+        parts: [
+          { id: 'new-reasoning', type: 'reasoning', text: 'Different reasoning', state: 'done' },
+          { id: 'new-answer', type: 'text', text, state: 'done' },
+        ],
+      });
+      expect(final.translations).toEqual(text === 'Original' ? translations : undefined);
+      const saved = (await harness.store.listMessages(input.sessionId)).at(-1);
+      expect(saved?.translations).toEqual(final.translations);
+      expect(saved?.parts).toEqual(final.parts);
+    },
+  );
+
+  test('copies translations with a fork and removes them with their owning message', async () => {
+    const { input, translations } = await translatedAnswer();
+    const result = await harness.store.forkSession({
+      sessionId: input.sessionId,
+      fromMessageId: input.assistantMessageId,
+    });
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') throw new Error('Expected a fork');
+    const copied = (await harness.store.listMessages(result.session.id)).at(-1);
+    expect(copied?.id).not.toBe(input.assistantMessageId);
+    expect(copied?.translations).toEqual(translations);
+    await harness.store.deleteSession(input.sessionId);
+    expect((await harness.store.listMessages(result.session.id)).at(-1)?.translations).toEqual(
+      translations,
+    );
+    await harness.store.deleteSession(result.session.id);
+    expect(
+      harness.raw!.prepare('SELECT count(*) AS count FROM agent_session_message').get(),
+    ).toEqual({ count: 0 });
+  });
+});
+
+describe.each([
+  ['InMemoryAgentSessionStore', makeInMemoryHarness],
+  ['SqliteAgentSessionStore', makeSqliteHarness],
+])('%s message tree', (_name, makeHarness) => {
+  let harness: StoreHarness;
+  let store: AgentSessionStore;
+  let sessionId: string;
+
+  beforeEach(async () => {
+    harness = makeHarness();
+    store = harness.store;
+    sessionId = (await harness.createEmptySession({ agentId: await harness.makeAgentId() })).id;
+  });
+
+  afterEach(() => {
+    harness.cleanup();
+  });
+
+  const ids = async (through?: string | null) =>
+    (await store.listMessages(sessionId, through)).map((message) => message.id);
+  const activeNode = async () => (await store.getSession(sessionId))?.activeNodeId;
+  async function settle(assistantMessageId: string) {
+    await store.finalizeAssistantMessage({
+      assistantMessageId,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+  }
+
+  test('reserves one question with every parallel answer in a group and selects the first', async () => {
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId,
+      userParts: [{ id: 'q', type: 'text', text: 'Compare', state: 'done' }],
+      additionalReplies: [{ assistantMessageId: uuidv7(), ...RESERVATION_FACTS }],
+    });
+    const [second] = reserved.additionalAssistantMessages;
+    expect(reserved.assistantMessage).toMatchObject({
+      parentId: reserved.userMessage.id,
+      siblingsGroupId: 1,
+      turnId: reserved.turnId,
+    });
+    expect(second).toMatchObject({
+      parentId: reserved.userMessage.id,
+      siblingsGroupId: 1,
+      turnId: reserved.turnId,
+    });
+    expect(await activeNode()).toBe(reserved.assistantMessage.id);
+    expect(await ids()).toEqual([reserved.userMessage.id, reserved.assistantMessage.id]);
+    expect(await ids(second!.id)).toEqual([reserved.userMessage.id, second!.id]);
+    await settle(reserved.assistantMessage.id);
+    expect(await store.listTurnMessages(sessionId, reserved.turnId)).toEqual([
+      expect.objectContaining({ id: reserved.userMessage.id, status: 'success' }),
+      expect.objectContaining({ id: reserved.assistantMessage.id, status: 'success' }),
+      expect.objectContaining({ id: second!.id, status: 'pending' }),
+    ]);
+    expect(await store.listTurnMessages(uuidv7(), reserved.turnId)).toEqual([]);
+  });
+
+  test('switching answers restores each answer’s own continuation', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    const followUp = await settleTurn(store, sessionId, 'Q2');
+    const sibling = await store.reserveAnswer({
+      sessionId,
+      userMessageId: first.userMessage.id,
+      assistantMessageId: uuidv7(),
+      ...RESERVATION_FACTS,
+    });
+    await settle(sibling.assistantMessage.id);
+    expect(sibling.assistantMessage).toMatchObject({
+      parentId: first.userMessage.id,
+      turnId: first.turnId,
+    });
+    expect(await ids()).toEqual([first.userMessage.id, sibling.assistantMessage.id]);
+
+    // B's own continuation, then back to A restores A's.
+    const continued = await settleTurn(store, sessionId, 'Q2 for B');
+    expect(continued.userMessage.parentId).toBe(sibling.assistantMessage.id);
+    await store.selectMessage(sessionId, first.assistantMessage.id);
+    expect(await activeNode()).toBe(followUp.assistantMessage.id);
+    await store.selectMessage(sessionId, sibling.assistantMessage.id);
+    expect(await activeNode()).toBe(continued.assistantMessage.id);
+    // A message already on the selected branch keeps the current leaf.
+    await store.selectMessage(sessionId, first.userMessage.id);
+    expect(await activeNode()).toBe(continued.assistantMessage.id);
+  });
+
+  test('continues from an earlier answer without dropping its existing continuation', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    const later = await settleTurn(store, sessionId, 'Q2');
+    const branch = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId,
+      parentMessageId: first.assistantMessage.id,
+      userParts: [{ id: 'q', type: 'text', text: 'Q2 again', state: 'done' }],
+    });
+    expect(await ids()).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+      branch.userMessage.id,
+      branch.assistantMessage.id,
+    ]);
+    expect(await ids(later.assistantMessage.id)).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+      later.userMessage.id,
+      later.assistantMessage.id,
+    ]);
+    expect(await store.hasChildren(sessionId, first.assistantMessage.id)).toBe(true);
+  });
+
+  test('deleting a question removes all of its answers and keeps later questions on its parent', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    const second = await settleTurn(store, sessionId, 'Q2');
+    const sibling = await store.reserveAnswer({
+      sessionId,
+      userMessageId: second.userMessage.id,
+      assistantMessageId: uuidv7(),
+      ...RESERVATION_FACTS,
+    });
+    await settle(sibling.assistantMessage.id);
+    await store.selectMessage(sessionId, second.assistantMessage.id);
+    const third = await settleTurn(store, sessionId, 'Q3');
+
+    const result = await store.deleteTurn({ sessionId, turnId: second.turnId });
+    expect(result).toEqual({
+      status: 'deleted',
+      deletedMessageIds: expect.arrayContaining([
+        second.userMessage.id,
+        second.assistantMessage.id,
+        sibling.assistantMessage.id,
+      ]),
+    });
+    expect(await ids()).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+      third.userMessage.id,
+      third.assistantMessage.id,
+    ]);
+  });
+
+  test('deleting the selected branch selects the newest surviving leaf', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    const second = await settleTurn(store, sessionId, 'Q2');
+    await store.deleteTurn({ sessionId, turnId: second.turnId });
+    expect(await activeNode()).toBe(first.assistantMessage.id);
+    await store.deleteTurn({ sessionId, turnId: first.turnId });
+    expect(await activeNode()).toBeNull();
+  });
+
+  test('forks only the selected branch as one straight line', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    await settleTurn(store, sessionId, 'Q2');
+    const sibling = await store.reserveAnswer({
+      sessionId,
+      userMessageId: first.userMessage.id,
+      assistantMessageId: uuidv7(),
+      ...RESERVATION_FACTS,
+    });
+    await settle(sibling.assistantMessage.id);
+    const fork = await store.forkSession({ sessionId, fromMessageId: sibling.assistantMessage.id });
+    if (fork.status !== 'forked') throw new Error('Expected a fork.');
+    const copied = await store.listMessages(fork.session.id);
+    expect(copied.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(copied[0]?.parentId).toBeNull();
+    expect(copied[1]?.parentId).toBe(copied[0]?.id);
+    expect(copied[1]?.siblingsGroupId).toBe(0);
+    expect(fork.session.activeNodeId).toBe(copied[1]?.id);
+  });
+
+  test('history readers follow the requested branch', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    const second = await settleTurn(store, sessionId, 'Q2');
+    const context = await store.loadRuntimeTurnContext(sessionId, null, first.assistantMessage.id);
+    expect(context.history.map((message) => message.id)).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+    ]);
+    const empty = await store.loadRuntimeTurnContext(sessionId, null, null);
+    expect(empty).toMatchObject({ history: [], hasMessages: false });
+    expect((await store.loadRuntimeTurnContext(sessionId, null)).history).toHaveLength(4);
+    expect(await store.getMessage(sessionId, second.userMessage.id)).toMatchObject({
+      parentId: first.assistantMessage.id,
+    });
+  });
+
+  test('file grants follow the requested prefix instead of later attachments', async () => {
+    const turns = [];
+    for (const fileEntryId of [INPUT_FILE_ID, ARTIFACT_FILE_ID]) {
+      const reserved = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId,
+        userParts: [
+          {
+            id: 'file',
+            type: 'file',
+            fileEntryId,
+            mediaType: 'text/plain',
+            purpose: 'input-attachment',
+          },
+        ],
+      });
+      await settle(reserved.assistantMessage.id);
+      turns.push(reserved);
+    }
+    expect(
+      await store.listReferencedFileEntryIds(sessionId, turns[0]!.assistantMessage.id),
+    ).toEqual([INPUT_FILE_ID]);
+    expect(await store.listReferencedFileEntryIds(sessionId)).toEqual([
+      INPUT_FILE_ID,
+      ARTIFACT_FILE_ID,
+    ]);
+    expect(await store.listReferencedFileEntryIds(sessionId, null)).toEqual([]);
+    expect(
+      (await store.loadRuntimeTurnContext(sessionId, null, turns[0]!.assistantMessage.id))
+        .referencedFileEntryIds,
+    ).toEqual([INPUT_FILE_ID]);
+  });
+});

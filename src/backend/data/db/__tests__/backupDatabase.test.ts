@@ -28,16 +28,62 @@ function database() {
       VALUES ('desktop', 'Desktop', 'phone', 'peer', '[]', 'paired', 1, 1);
     INSERT INTO preference (key, value, created_at, updated_at)
       VALUES ('ui.theme_mode', '"dark"', 1, 1), ('app.user.id', '"source-device"', 1, 1),
-             ('app.privacy.data_collection.enabled', 'true', 1, 1);
+             ('app.privacy.data_collection.enabled', 'true', 1, 1),
+             ('app.feedback.shake_enabled', 'true', 1, 1),
+             ('app.feedback.shake_hint_decision', '"accepted"', 1, 1);
   `);
   const adapter = {
     execAsync: async (sql: string) => raw.exec(sql),
     runAsync: async (sql: string, ...params: SQLInputValue[]) => raw.prepare(sql).run(...params),
+    getFirstAsync: async (sql: string, ...params: (SQLInputValue | SQLInputValue[])[]) =>
+      raw.prepare(sql).get(...params.flat()) ?? null,
     getAllAsync: async (sql: string, ...params: (SQLInputValue | SQLInputValue[])[]) =>
       raw.prepare(sql).all(...params.flat()),
   } as unknown as SQLiteDatabase;
   return { raw, adapter };
 }
+
+test('restore clears orphan workspace bindings while preserving existing trashed folders', async () => {
+  const { raw, adapter } = database();
+  try {
+    // A restored backup can carry a dangling binding; node:sqlite enforces keys by default.
+    raw.exec("PRAGMA foreign_keys = OFF; UPDATE agent_session SET workspace_folder_id = 'missing'");
+    await restoreDeviceState(adapter, []);
+    expect(raw.prepare('SELECT workspace_folder_id FROM agent_session').get()).toEqual({
+      workspace_folder_id: null,
+    });
+    raw.exec(
+      "INSERT INTO file_folder (id, name, name_key, created_at, updated_at, deleted_at) VALUES ('folder', 'Reports', 'reports', 1, 1, 2); UPDATE agent_session SET workspace_folder_id = 'folder'",
+    );
+    await restoreDeviceState(adapter, []);
+    expect(raw.prepare('SELECT workspace_folder_id FROM agent_session').get()).toEqual({
+      workspace_folder_id: 'folder',
+    });
+  } finally {
+    raw.close();
+  }
+});
+
+test('restore preserves message-owned translations together with the original parts', async () => {
+  const { raw, adapter } = database();
+  try {
+    const data = JSON.stringify({
+      parts: [],
+      translations: {
+        sourceHash: 'a'.repeat(64),
+        results: { 'zh-CN': { content: '保留译文', createdAt: 1 } },
+      },
+    });
+    raw.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?').run(data, 'complete');
+    await restoreDeviceState(adapter, []);
+    expect(
+      raw.prepare("SELECT data FROM agent_session_message WHERE id = 'complete'").get(),
+    ).toEqual({ data });
+    expect(raw.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  } finally {
+    raw.close();
+  }
+});
 
 test('schema comparison includes extra triggers whose names resemble SQLite internals or FTS shadow tables', async () => {
   const { raw, adapter } = database();
@@ -77,6 +123,8 @@ test('preserves content and portable settings, but never resumes work or imports
   try {
     await restoreDeviceState(adapter, [
       { key: 'app.user.id', value: '"target-device"' },
+      { key: 'app.feedback.shake_enabled', value: 'false' },
+      { key: 'app.feedback.shake_hint_decision', value: '"ignored"' },
       { key: 'app.privacy.data_collection.enabled', value: 'false' },
     ]);
     expect(raw.prepare('SELECT id, status FROM agent_session_message ORDER BY id').all()).toEqual([
@@ -97,6 +145,8 @@ test('preserves content and portable settings, but never resumes work or imports
     expect(JSON.parse(grant.credential)).toMatchObject({ storage: 'secure-store-v1' });
     expect(JSON.parse(grant.credential).id).not.toBe('10000000-0000-4000-8000-000000000001');
     expect(raw.prepare('SELECT key, value FROM preference ORDER BY key').all()).toEqual([
+      { key: 'app.feedback.shake_enabled', value: 'false' },
+      { key: 'app.feedback.shake_hint_decision', value: '"ignored"' },
       { key: 'app.privacy.data_collection.enabled', value: 'false' },
       { key: 'app.user.id', value: '"target-device"' },
       { key: 'ui.theme_mode', value: '"dark"' },

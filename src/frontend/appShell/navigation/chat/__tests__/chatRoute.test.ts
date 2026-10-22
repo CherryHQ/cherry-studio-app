@@ -1,4 +1,10 @@
-import { chatHref, chatReturnToHref, chatRouteParams, parseChatRoute } from '../chatRoute';
+import {
+  chatHref,
+  chatReturnToHref,
+  chatRouteParams,
+  parseChatPreviewSource,
+  parseChatRoute,
+} from '../chatRoute';
 
 describe('shared chat route contract', () => {
   test('uses the Session id as the complete existing-chat identity', () => {
@@ -46,6 +52,20 @@ describe('shared chat route contract', () => {
     expect(chatReturnToHref({ agentId: 'agent-1', kind: 'draft' })).toBe('/?agentId=agent-1');
   });
 
+  test('carries an unsent workspace selection only with its draft', () => {
+    const workspaceDraftId = '00000000-0000-7000-8000-000000000001';
+    const target = { kind: 'draft' as const, agentId: 'agent-1', workspaceDraftId };
+    expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
+    expect(chatRouteParams({ kind: 'draft', agentId: 'agent-1' }).workspaceDraftId).toBeUndefined();
+    expect(
+      chatRouteParams({ kind: 'session', sessionId: 'session-1' }).workspaceDraftId,
+    ).toBeUndefined();
+    expect(parseChatRoute({ sessionId: 'session-1', workspaceDraftId })).toEqual({
+      status: 'ready',
+      target: { kind: 'session', sessionId: 'session-1' },
+    });
+  });
+
   test('preserves a message destination and repeated-navigation identity', () => {
     const target = {
       kind: 'session' as const,
@@ -63,4 +83,22 @@ describe('shared chat route contract', () => {
       undefined,
     );
   });
+
+  test.each([
+    { kind: 'session' as const, sessionId: 'session-1' },
+    { kind: 'draft' as const, agentId: 'agent-1', composerHandoff: 'seed-1' },
+  ])('round-trips a preview selection without replacing the $kind identity', (source) => {
+    const target = { ...source, selectionHandoff: 'selection-1' };
+    const params = chatRouteParams(target);
+    expect(parseChatRoute(params)).toEqual({ status: 'ready', target });
+    expect(parseChatPreviewSource(JSON.stringify(params))).toEqual(target);
+    expect(chatRouteParams(source).selectionHandoff).toBeUndefined();
+  });
+
+  test.each([undefined, '', '{', 'null', '[]', '{"sessionId": 123}', '{"draft": "private"}'])(
+    'rejects an invalid preview source: %s',
+    (source) => {
+      expect(parseChatPreviewSource(source)).toBeUndefined();
+    },
+  );
 });

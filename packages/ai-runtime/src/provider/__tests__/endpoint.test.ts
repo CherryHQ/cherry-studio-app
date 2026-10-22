@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveAiSdkProviderId,
   resolveEffectiveEndpoint,
-  resolveProviderOptionsKey,
   resolveProviderVariant,
   resolveWireModelId,
 } from '../endpoint';
@@ -56,38 +55,6 @@ describe('resolveWireModelId', () => {
     expect(resolveWireModelId(model, ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT)).toBe(
       'gemini-flash-latest',
     );
-  });
-});
-
-describe('resolveProviderOptionsKey', () => {
-  it.each(['google-vertex', 'google-vertex-anthropic', 'google-vertex-maas'])(
-    'maps the %s runtime adapter to the Vertex provider-options namespace',
-    (providerId) => {
-      expect(resolveProviderOptionsKey(providerId)).toBe('vertex');
-    },
-  );
-
-  it('preserves provider ids whose runtime namespace matches their registration', () => {
-    expect(resolveProviderOptionsKey('openai')).toBe('openai');
-  });
-
-  it('uses the resolved gateway route instead of re-detecting the model in the encoder', () => {
-    expect(
-      resolveProviderOptionsKey('aihubmix', {
-        actualProviderId: 'aihubmix',
-        endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
-        gatewayProviderOptionsKey: 'google',
-      }),
-    ).toBe('google');
-  });
-
-  it('uses the concrete provider namespace for openai-compatible adapters', () => {
-    expect(
-      resolveProviderOptionsKey('openai-compatible', {
-        actualProviderId: 'custom-relay',
-        endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-      }),
-    ).toBe('custom-relay');
   });
 });
 

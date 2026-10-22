@@ -5,11 +5,14 @@ import { loggerService } from '@logger';
 import Constants from 'expo-constants';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
+import { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
 import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -38,6 +41,8 @@ const outputFileId = '00000000-0000-4000-8000-000000000002' as FileEntryId;
 
 function painting(id: string, outputs: FileEntryId[] = []): Painting {
   return {
+    boardId: 'board-1',
+    brief: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     files: { input: [inputFileId], output: outputs },
     id,
@@ -69,19 +74,22 @@ function createDependencies(): PaintingGenerateJobDependencies {
       })),
     },
     paintings: {
+      getById: jest.fn(async (id) => painting(id)),
       replaceOutputs: jest.fn(async () => painting('painting-1', [outputFileId])),
     },
     storage: {
       createInternalEntry: jest.fn(async () => fileEntry(outputFileId)),
       discard: jest.fn(async () => undefined),
       getUri: jest.fn(() => 'file:///output.png'),
+      resolve: jest.fn(async (id) => ({ entry: fileEntry(id), uri: 'file:///picked.png' })),
       readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),
     },
   };
 }
 
 const jobInput: PaintingGenerateJobInput = {
-  images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///picked.png' }],
+  boardId: 'board-1',
+  images: [{ fileEntryId: inputFileId }],
   mode: 'generate',
   modelId,
   modelName: 'GPT Image 2',
@@ -128,6 +136,7 @@ describe('createPaintingGenerateJobHandler', () => {
     expect(dependencies.storage.readDataUrl).toHaveBeenCalledWith(
       'file:///picked.png',
       'image/png',
+      expect.any(AbortSignal),
     );
     expect(dependencies.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -144,6 +153,26 @@ describe('createPaintingGenerateJobHandler', () => {
       [outputFileId],
       expect.any(AbortSignal),
     );
+  });
+
+  it('does not read or send an input that became unavailable before execution', async () => {
+    const dependencies = createDependencies();
+    jest.mocked(dependencies.storage.resolve).mockResolvedValue(null);
+    const handler = createPaintingGenerateJobHandler(dependencies);
+
+    await expect(handler.execute(createContext())).rejects.toBeInstanceOf(FileAttachmentError);
+    expect(dependencies.storage.readDataUrl).not.toHaveBeenCalled();
+    expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
+  });
+
+  it('does not execute after the owning receipt was deleted in a previous process', async () => {
+    const dependencies = createDependencies();
+    jest.mocked(dependencies.paintings.getById).mockRejectedValue(new Error('Painting not found'));
+    await expect(
+      createPaintingGenerateJobHandler(dependencies).execute(createContext()),
+    ).rejects.toThrow('Painting not found');
+    expect(dependencies.storage.readDataUrl).not.toHaveBeenCalled();
+    expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
   });
 
   it('preserves safe provider diagnostics in the job failure envelope', async () => {
@@ -393,6 +422,71 @@ describe('createPaintingGenerateJobHandler', () => {
       sqlite?.close();
       ctx = undefined;
       sqlite = undefined;
+    });
+
+    it('rejects a queued child of a sealed board before provider or file I/O', async () => {
+      const dependencies = createDependencies();
+      sqlite = new DatabaseSync(':memory:');
+      ctx = await createTestRuntime(sqlite, [
+        jobHandlerEntry('painting.generate', createPaintingGenerateJobHandler(dependencies)),
+      ]);
+      await ctx.scopes.delete([{ id: jobInput.boardId, kind: 'painting-board' }], async () => {});
+      const handle = await ctx.runtime.enqueue('painting.generate', jobInput);
+      expect((await handle.finished).status).toBe('cancelled');
+      expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
+      expect(dependencies.storage.readDataUrl).not.toHaveBeenCalled();
+      expect(dependencies.paintings.replaceOutputs).not.toHaveBeenCalled();
+    });
+
+    it('rejects an input trashed while its job waits for the painting queue', async () => {
+      const dependencies = createDependencies();
+      let started!: () => void;
+      const firstStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      let finish!: () => void;
+      const firstRunning = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      jest.mocked(dependencies.ai.generateImage).mockImplementationOnce(async () => {
+        started();
+        await firstRunning;
+        return { images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] };
+      });
+      sqlite = new DatabaseSync(':memory:');
+      ctx = await createTestRuntime(sqlite, [
+        jobHandlerEntry('painting.generate', createPaintingGenerateJobHandler(dependencies)),
+      ]);
+      const files = new FileEntryService(ctx.db.dbService);
+      const library = new FileLibraryService(ctx.db.dbService);
+      await files.create({
+        id: inputFileId,
+        filename: 'input.png',
+        mediaType: 'image/png',
+        provenance: 'imported',
+        size: 1,
+      });
+      jest.mocked(dependencies.storage.resolve).mockImplementation(async (id) => {
+        const entry = await files.findById(id);
+        return entry ? { entry, uri: 'file:///retained-input.png' } : null;
+      });
+      const first = await ctx.runtime.enqueue('painting.generate', {
+        ...jobInput,
+        images: [],
+        paintingId: 'painting-first',
+      });
+      try {
+        await firstStarted;
+        const queued = await ctx.runtime.enqueue('painting.generate', jobInput);
+        await library.trashFileEntry(inputFileId);
+        finish();
+        await first.finished;
+        expect((await queued.finished).status).toBe('failed');
+        expect(dependencies.storage.readDataUrl).not.toHaveBeenCalled();
+        expect(dependencies.ai.generateImage).toHaveBeenCalledTimes(1);
+      } finally {
+        finish();
+      }
     });
 
     it('completes an enqueued painting.generate job with the generation result', async () => {

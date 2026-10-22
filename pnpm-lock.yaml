@@ -114,11 +114,11 @@ overrides:
   '@ai-sdk/anthropic': 3.0.103
   '@ai-sdk/azure': 3.0.116
   '@ai-sdk/deepseek': 2.0.57
-  '@ai-sdk/google': 3.0.113
+  '@ai-sdk/google': 3.0.132
   '@ai-sdk/openai': 3.0.109
   '@ai-sdk/openai-compatible': 2.0.72
-  '@ai-sdk/provider': 3.0.15
-  '@ai-sdk/provider-utils': 4.0.49
+  '@ai-sdk/provider': 3.0.18
+  '@ai-sdk/provider-utils': 4.0.58
   '@ai-sdk/xai': 3.0.126
   ai: 6.0.185
   expo-app-metrics: 57.0.17
@@ -126,13 +126,13 @@ overrides:
 
 patchedDependencies:
   '@ai-sdk/anthropic@3.0.103': b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46
-  '@ai-sdk/google@3.0.113': 8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874
+  '@ai-sdk/google@3.0.132': e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e
   '@ai-sdk/openai-compatible@2.0.72': e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480
   '@ai-sdk/openai@3.0.109': 2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d
-  '@earendil-works/chord@1.2.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
-  '@earendil-works/pi-ai@1.2.0': 687c4101689b97366988f6440d2f0cbca17922c6554b6622b9da61a0652a8556
-  '@earendil-works/pi-codemode@1.2.0': 78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef
-  '@earendil-works/pi-durable@1.2.0': eaee40eb69f627352da7101d916465ebcae408b8cefcaf43fb0521329cb0144e
+  '@earendil-works/chord@1.3.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
+  '@earendil-works/pi-ai@1.3.0': e79674a647313e5d4fcaffdd07fadb2a8ba6995ec6d6c2c151117a713e770f58
+  '@earendil-works/pi-codemode@1.3.0': 78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef
+  '@earendil-works/pi-durable@1.3.0': 3b6084630c6a1f1277e63dcb3dd0a7b4183b9f07a4fd25ca34206429ff6e153f
   '@magrinj/expo-quick-look@0.3.1': 35520d77ed4612922b6a4ec70813738d976812225a1f806b1a40329e8adf6277
   '@openrouter/ai-sdk-provider@2.10.0': fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009
   '@opeoginni/github-copilot-openai-compatible@1.0.0': 4bea0e526136ed32d0be4849ec5cbb41bd5de7b7418dd6920598357438cfef25
@@ -151,9 +151,9 @@ patchedDependencies:
   metro@0.84.5: 83bf15885fcb6f6ab3feba2696c8dac0b5bbfd002a9bafacd0e8d727662931ce
   ollama-ai-provider-v2@3.3.1: 4cb5921e69158814eeeed8d71c80621bd261f33d769b6afabba0db40931155eb
   react-native-anydoc@0.4.1: 2cfc6ca60d6e0a51a169135e3ea1cd8d43ec9be6b773248ccc443ea9ee364b36
-  react-native-background-actions@4.1.0: 57e03a2a78f06d2935648b1a0d4d086c39e1f66d31ed3d23891db0a9e7245db1
+  react-native-background-actions@4.1.0: 6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970
   react-native-drawer-layout@4.2.4: 5d567d547b418913c11d2dfe413fc9c1caa72027b12a4a212d23447fc3efe934
-  react-native-enriched-markdown@1.0.1: 64c72480ed1a72c2b23111bf493a3ad7033655466278562bdcd1d4c7f15336ab
+  react-native-enriched-markdown@1.0.1: 5f0376b4df170a74ef4fbfc483c31a98aaa96dc83ef0446b3aa559aeb9444b5f
   react-native-keyboard-controller@1.21.13: 95056bc5f4a7328c9e05373d48344b1cff4db3be59a9ab864f19fbb065b5c583
   react-native-nitro-healthkit@1.0.0: a0c5aaa3edb770ba78119317bbf4aff94c9deacea711c6a020ab7d1a98460340
   react-native-reanimated@4.5.5: 33f006c0e10fff05d47d9879ade97c8c443eb6fd99f4379d5ffef53cc9af4fd8
@@ -179,8 +179,8 @@ importers:
         specifier: ^3.0.121
         version: 3.0.121(zod@4.4.3)
       '@ai-sdk/google':
-        specifier: 3.0.113
-        version: 3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3)
+        specifier: 3.0.132
+        version: 3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)
       '@ai-sdk/google-vertex':
         specifier: ^4.0.112
         version: 4.0.112(zod@4.4.3)
@@ -190,9 +190,6 @@ importers:
       '@ai-sdk/huggingface':
         specifier: ^1.0.50
         version: 1.0.50(zod@4.4.3)
-      '@ai-sdk/mcp':
-        specifier: 1.0.71
-        version: 1.0.71(zod@4.4.3)
       '@ai-sdk/mistral':
         specifier: ^3.0.37
         version: 3.0.37(zod@4.4.3)
@@ -206,11 +203,11 @@ importers:
         specifier: ^3.0.33
         version: 3.0.33(zod@4.4.3)
       '@ai-sdk/provider':
-        specifier: 3.0.15
-        version: 3.0.15
+        specifier: 3.0.18
+        version: 3.0.18
       '@ai-sdk/provider-utils':
-        specifier: 4.0.49
-        version: 4.0.49(zod@4.4.3)
+        specifier: 4.0.58
+        version: 4.0.58(zod@4.4.3)
       '@ai-sdk/togetherai':
         specifier: ^2.0.53
         version: 2.0.53(zod@4.4.3)
@@ -221,14 +218,14 @@ importers:
         specifier: ^7.29.2
         version: 7.29.7
       '@cherrystudio/ai-core':
-        specifier: 2.1.0
-        version: 2.1.0(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))
+        specifier: 2.4.2
+        version: 2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))
       '@cherrystudio/ai-runtime':
         specifier: workspace:*
         version: link:packages/ai-runtime
       '@cherrystudio/ai-sdk-provider':
-        specifier: 0.1.7
-        version: 0.1.7(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
+        specifier: 0.1.9
+        version: 0.1.9(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/analytics-client':
         specifier: ^1.4.0
         version: 1.4.0(typescript@6.0.3)
@@ -248,35 +245,38 @@ importers:
         specifier: workspace:*
         version: link:packages/mcp-app-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: 0.2.3
+        version: 0.2.3(zod@4.4.3)
       '@cherrystudio/remote-protocol':
-        specifier: 0.5.0
-        version: 0.5.0(zod@4.4.3)
+        specifier: 0.6.0
+        version: 0.6.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: 0.2.1
-        version: 0.2.1(zod@4.4.3)
+        specifier: 0.2.4
+        version: 0.2.4(zod@4.4.3)
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:packages/universal
+      '@cherrystudio/web-search':
+        specifier: 0.2.0
+        version: 0.2.0
       '@e965/xlsx':
         specifier: 0.20.3
         version: 0.20.3
       '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)
+        specifier: 1.3.0
+        version: 1.3.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)
       '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(patch_hash=687c4101689b97366988f6440d2f0cbca17922c6554b6622b9da61a0652a8556)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        specifier: 1.3.0
+        version: 1.3.0(patch_hash=e79674a647313e5d4fcaffdd07fadb2a8ba6995ec6d6c2c151117a713e770f58)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode':
-        specifier: 1.2.0
-        version: 1.2.0(patch_hash=78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef)
+        specifier: 1.3.0
+        version: 1.3.0(patch_hash=78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef)
       '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(patch_hash=eaee40eb69f627352da7101d916465ebcae408b8cefcaf43fb0521329cb0144e)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        specifier: 1.3.0
+        version: 1.3.0(patch_hash=3b6084630c6a1f1277e63dcb3dd0a7b4183b9f07a4fd25ca34206429ff6e153f)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@expo/dom-webview':
         specifier: ^57.0.1
         version: 57.0.1(expo@57.0.24)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -516,13 +516,13 @@ importers:
         version: 0.4.1(patch_hash=2cfc6ca60d6e0a51a169135e3ea1cd8d43ec9be6b773248ccc443ea9ee364b36)(react-native-nitro-modules@0.36.4(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))
       react-native-background-actions:
         specifier: 4.1.0
-        version: 4.1.0(patch_hash=57e03a2a78f06d2935648b1a0d4d086c39e1f66d31ed3d23891db0a9e7245db1)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))
+        version: 4.1.0(patch_hash=6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))
       react-native-chart-kit:
         specifier: 7.0.2
         version: 7.0.2(react-native-svg@15.15.4(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-enriched-markdown:
         specifier: 1.0.1
-        version: 1.0.1(patch_hash=64c72480ed1a72c2b23111bf493a3ad7033655466278562bdcd1d4c7f15336ab)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
+        version: 1.0.1(patch_hash=5f0376b4df170a74ef4fbfc483c31a98aaa96dc83ef0446b3aa559aeb9444b5f)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-gesture-handler:
         specifier: ~2.33.0
         version: 2.33.0(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -561,7 +561,7 @@ importers:
         version: 12.3.1
       react-native-streamdown:
         specifier: 0.2.0
-        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(1b0ee1bd509f93b4ecc06550b22f71f3)
+        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(8ba3c281ebda9d6d7a0d195cf3eab041)
       react-native-svg:
         specifier: 15.15.4
         version: 15.15.4(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -732,8 +732,8 @@ importers:
         specifier: ^3.0.121
         version: 3.0.121(zod@4.4.3)
       '@ai-sdk/google':
-        specifier: 3.0.113
-        version: 3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3)
+        specifier: 3.0.132
+        version: 3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)
       '@ai-sdk/google-vertex':
         specifier: ^4.0.112
         version: 4.0.112(zod@4.4.3)
@@ -756,23 +756,23 @@ importers:
         specifier: ^3.0.33
         version: 3.0.33(zod@4.4.3)
       '@ai-sdk/provider':
-        specifier: 3.0.15
-        version: 3.0.15
+        specifier: 3.0.18
+        version: 3.0.18
       '@ai-sdk/provider-utils':
-        specifier: 4.0.49
-        version: 4.0.49(zod@4.4.3)
+        specifier: 4.0.58
+        version: 4.0.58(zod@4.4.3)
       '@ai-sdk/togetherai':
         specifier: ^2.0.53
         version: 2.0.53(zod@4.4.3)
       '@cherrystudio/ai-core':
-        specifier: 2.1.0
-        version: 2.1.0(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))
+        specifier: 2.4.2
+        version: 2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))
       '@cherrystudio/ai-sdk-provider':
-        specifier: 0.1.7
-        version: 0.1.7(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
+        specifier: 0.1.9
+        version: 0.1.9(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: 0.2.3
+        version: 0.2.3(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -853,8 +853,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@cherrystudio/file-preview':
-        specifier: 0.1.0
-        version: 0.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: 0.1.3
+        version: 0.1.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@types/node':
         specifier: ^25.7.0
         version: 25.9.5
@@ -940,7 +940,7 @@ importers:
         version: 0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
       react-native-enriched-markdown:
         specifier: '*'
-        version: 1.0.1(patch_hash=64c72480ed1a72c2b23111bf493a3ad7033655466278562bdcd1d4c7f15336ab)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
+        version: 1.0.1(patch_hash=5f0376b4df170a74ef4fbfc483c31a98aaa96dc83ef0446b3aa559aeb9444b5f)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-gesture-handler:
         specifier: '*'
         version: 2.33.0(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -958,7 +958,7 @@ importers:
         version: 5.7.0(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-streamdown:
         specifier: '*'
-        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(1b0ee1bd509f93b4ecc06550b22f71f3)
+        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(8ba3c281ebda9d6d7a0d195cf3eab041)
       react-native-svg:
         specifier: 15.15.4
         version: 15.15.4(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -976,8 +976,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: 0.2.3
+        version: 0.2.3(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3)
@@ -1044,8 +1044,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/google@3.0.113':
-    resolution: {integrity: sha512-KGlPxV0B96fSXBheLBZZ2c9qJC2nQv1bEfJQ0hBYgze1cVbCxKYobXGcmWbIkVv6rsM7jmWUzWH8h95upsktqQ==}
+  '@ai-sdk/google@3.0.132':
+    resolution: {integrity: sha512-34xmZm/j+5TxUEpVas8A7u/rN6mJAsr1o0s3i/mV4BjdJwTX/Vi4lpzcw7LpScLBYf4A2RISf6yM8xmL/FBnqQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1061,12 +1061,6 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4
-
-  '@ai-sdk/mcp@1.0.71':
-    resolution: {integrity: sha512-woKUwm/yiqxEC+E863tqAjEpiyWCERmy//k9pdNYP8Ta6+PF6Ge2X6p99e72BdBovB+/McUWgbJ4+Fiht+41WQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/mistral@3.0.37':
     resolution: {integrity: sha512-KkdaMjs4C2y+vrZWJE990E3ZxBFiOTHQ94ZlquuIttpphcqJTMxNoIpnKT/4UzMVWXL0BUEE2vs+1UEVXkN8Kg==}
@@ -1092,14 +1086,14 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider-utils@4.0.49':
-    resolution: {integrity: sha512-8e7pd+82bobqrFOaD5dG/PiEuvLYr5olaE3I56ch0jipR0H7sGD6ohwTUynv6k8O8QidWiyIbEsZCtr/2dyXIA==}
+  '@ai-sdk/provider-utils@4.0.58':
+    resolution: {integrity: sha512-3YtZ9GmBNVLaiO6RSc/xrb5wY1RF0UYfCg6AQfdSaDWljX8EaSEC5s8PEch6mKXzOoM76v1yHK7CxYMJY2C1CA==}
     engines: {node: '>=18.17'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider@3.0.15':
-    resolution: {integrity: sha512-XeZW1CcDF2GMbH4wejW6xBRI2QCOgnkVYUnxoeDadB1mf85riL2bMUeDoh+6gJ/r4mjNfzUPW8OjLjvwTP0u1Q==}
+  '@ai-sdk/provider@3.0.18':
+    resolution: {integrity: sha512-IpefF5ssZVOZCD4Wu7zxt6PwZoGT2HLVjxpJ10Bjx6EAmRfLYJPjyrfxb0RYDlwvXnDb9nkQ7Do/oJVDuRFzew==}
     engines: {node: '>=18'}
 
   '@ai-sdk/togetherai@2.0.53':
@@ -1755,20 +1749,20 @@ packages:
   '@chainsafe/netmask@2.0.0':
     resolution: {integrity: sha512-I3Z+6SWUoaljh3TBzCnCxjlUyN8tA+NAk5L6m9IxvCf1BENQTePzPMis97CoN/iMW1St3WN+AWCCRp+TTBRiDg==}
 
-  '@cherrystudio/ai-core@2.1.0':
-    resolution: {integrity: sha512-HETWOXFJCeDKDDlWp7j1NHg6zvwP11XQALRkf33wVG2t2c735TIsBaZLMOItRiE9D9OJQjyM/lPSssPgSFtk0Q==}
+  '@cherrystudio/ai-core@2.4.2':
+    resolution: {integrity: sha512-6Hp9zOQGOos+RthLZmctPgHB9LtZ+YH3jTAyVgOHkIaN450MmIVTJJ+ImcbAKuCuzmOx7hqR2GW1z737bvJ0qw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@ai-sdk/google': 3.0.113
+      '@ai-sdk/google': 3.0.132
       '@ai-sdk/openai': 3.0.109
       ai: 6.0.185
 
-  '@cherrystudio/ai-sdk-provider@0.1.7':
-    resolution: {integrity: sha512-4wY7BRk0gxSH28vWd8U+2GYliYnBleYFWB08XCJ4x79eQSfFJo4bhdVH3z6PUxg8tO8gx+Nx8Jpmhe3G8yEy2A==}
+  '@cherrystudio/ai-sdk-provider@0.1.9':
+    resolution: {integrity: sha512-RwF+EXo41xeJRuEcLpqCk4zqJ5heEKWEbjQLZrg9Ge1+xlcHAgygDmBlKPCOFNeUfqzyKJP1lTOUNYDcPih/Fw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@ai-sdk/anthropic': 3.0.103
-      '@ai-sdk/google': 3.0.113
+      '@ai-sdk/google': 3.0.132
       '@ai-sdk/openai': 3.0.109
       '@ai-sdk/openai-compatible': 2.0.72
 
@@ -1781,24 +1775,27 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/file-preview@0.1.0':
-    resolution: {integrity: sha512-ZPcwN8KVlEzOwqSNWvGCWiQjoXdE7XSWF5Hfx9rUFnnZ6Zy0H3P52+UkoFVMPpYtMZ9Rij6jXgiR1PAy5kdLJQ==}
+  '@cherrystudio/file-preview@0.1.3':
+    resolution: {integrity: sha512-x4TZOWvsrpisZ2WLoQ6MOUZ8zM6At+ZcpfpFJrRGtf5dzvn6Mw4/fbDetRi1FSgTZbdLpZxhUGc0AfzmZs0MBA==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.1.0':
-    resolution: {integrity: sha512-f8UBBHp6x1a+kE7RnS/EMMxQ4tBONg1btk5iI94Cytl/RYCw+OfaK3q0hEEeVJrMwVALySkIWvwbRkKPz9ExYA==}
+  '@cherrystudio/provider-registry@0.2.3':
+    resolution: {integrity: sha512-2pfKUB+Vn9IzIPBFLHbvi8FqxU347ozRyuAfm5sEwDSLukgRMhTTxa+jkQLy86ezq58sUx5LZmf8QdooTXWxgg==}
     peerDependencies:
       zod: ^4.4.3
 
-  '@cherrystudio/remote-protocol@0.5.0':
-    resolution: {integrity: sha512-j54HUCS3tCFWSB1ZUvT0YGYQXBTNdB0zipvoP+V0fvkNB3sd4N7CytjKR5tFi1cv9/46N85gqsi5IEaftV7L1A==}
+  '@cherrystudio/remote-protocol@0.6.0':
+    resolution: {integrity: sha512-sKy0EpK9C4ILmyh1XQKtUJecrQRSvQQLn5H0MTJEIQru5GxTV/JVj7K5Z96nm5vZKuOEsWVQdOoN8BjckuV3rQ==}
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@0.2.1':
-    resolution: {integrity: sha512-cJ6NtAT8TZ5vpRa4TqbYQYTmJxEeR5H2tGwv8y7WBkGn/83QB6zuR47klpzPyRTkgOsIQIFxFXjfuA6DRaIAaw==}
+  '@cherrystudio/remote-transport@0.2.4':
+    resolution: {integrity: sha512-76eytxIsRAFHbvMnyBuRX4qu0XpDZ6AQdZcSi5VhwFxf57dAfNWlIDqbRxbw5VT6Ts8oJT2O+pa9jH3Vl6hlgg==}
+
+  '@cherrystudio/web-search@0.2.0':
+    resolution: {integrity: sha512-31bLFiAFsXgcEDiT8Du/GLR3cPBLFG7QtcZRj2WVPKFAL3moKYB55h8ciHMdMpowEBp81nQWyb1eKFerC8ycrQ==}
 
   '@craftzdog/react-native-buffer@6.1.2':
     resolution: {integrity: sha512-KV1HitN05FHLLDG7Zb/yftDsa+mKBYBzFMQ0PMldvUicq6vWOtAvz9mDavt7Fzozh+WNqORE+yFDkkdWysZ/SA==}
@@ -1815,25 +1812,25 @@ packages:
     engines: {node: '>=0.8'}
     hasBin: true
 
-  '@earendil-works/chord@1.2.0':
-    resolution: {integrity: sha512-Xh3M5B4D9YotOyBXyVbZ/5WfoUwP6Kt+TheCIDLxLCUx72UExuxZF//hNmIQGD13EkAHf2svKpXr/rCCT1gXTg==}
+  '@earendil-works/chord@1.3.0':
+    resolution: {integrity: sha512-qqYhjALZ193atpBzmmS+M5pHQoiI4Aynetc1jXpv+5O2crXH3Y8wbFEy33orU2nmFrlw1U36rsdgUjaW4b3m/w==}
     engines: {node: '>=22.19.0'}
 
-  '@earendil-works/pi-ai@1.2.0':
-    resolution: {integrity: sha512-U5/1zXqfV1on7/9sbez03tT4Ru49Lvfb4+zXSDK3DBKF5cRk6KxvAOTOY3HJ4jimlZth+rs7vbJqN6iBQAoNuQ==}
+  '@earendil-works/pi-ai@1.3.0':
+    resolution: {integrity: sha512-KaBI8x7q7sPoFUXICNGD9efHzDG+oRNwVvkA9jdIsSQWH1RjFssOlEGsbLtewUPPgCrvmz0l2KTgSLXTyj3acw==}
     engines: {node: '>=22.19.0'}
     hasBin: true
 
-  '@earendil-works/pi-codemode@1.2.0':
-    resolution: {integrity: sha512-UZF7IN0IIrf3bop2wTxrwoAakGctH6d3zdPwhPN+QHMECfoI5E6B6l6I17YGFZPj8cmGex6xX7mLCNJXRf7wsw==}
+  '@earendil-works/pi-codemode@1.3.0':
+    resolution: {integrity: sha512-2G9tmbsPhgzwfz7cmzJpbLSLqOx3eu22Gbzm+Wc3HqeZMjLQS4F3KfAabozVhv7uEjq3k2O1dZTHmhhWr2xbfQ==}
     engines: {node: '>=22.19.0'}
 
-  '@earendil-works/pi-durable@1.2.0':
-    resolution: {integrity: sha512-2kDyK7HVCTcxf3CTHkDR0rRGCUfIpoZr76fC6n/KZDu7hkDWR62anEujIkJ+8sKjtNpEM+zyKW3bi2NIEUyiCw==}
+  '@earendil-works/pi-durable@1.3.0':
+    resolution: {integrity: sha512-2aD0xead1LH0BBwUBxex28in/PpUJEwyaEiW/nLoTFUcZ/lDYEl6LHX6mGZKJG8tUHzERwJyysDgy0ruidt84w==}
     engines: {node: '>=22.19.0'}
 
-  '@earendil-works/pi-telemetry@1.2.0':
-    resolution: {integrity: sha512-NZ3aJE6dr7aTgzzXDe53OW7BsAsF8ZUKHPJTtnjaQcxtlagkUT0Ew8Qas0EvYQsZqR/KpF1lB+z209XBzIC7xg==}
+  '@earendil-works/pi-telemetry@1.3.0':
+    resolution: {integrity: sha512-ERGZr+aXjNJzoUbB7ZzHVH3g5otzMHjHLs2Fyizm12By5X+gBEhod9cJXFOk13S7M8a29Am+Mq21zm73mRJFLg==}
     engines: {node: '>=22.19.0'}
 
   '@egjs/hammerjs@2.0.17':
@@ -6205,8 +6202,8 @@ packages:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
 
-  eventsource-parser@3.0.8:
-    resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
+  eventsource-parser@3.1.1:
+    resolution: {integrity: sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ==}
     engines: {node: '>=18.0.0'}
 
   eventsource@3.0.7:
@@ -7478,6 +7475,9 @@ packages:
 
   jose@6.2.12:
     resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
+
+  js-base64@3.7.7:
+    resolution: {integrity: sha512-7rCnleh0z2CkXhH67J8K1Ytz0b2Y+yxTPL+/KOJoa20hfnVQ/3/T6W/KflYI4bRHRagNeXeU2bkNGI3v1oS/lw==}
 
   js-tokens@10.0.0:
     resolution: {integrity: sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q==}
@@ -10094,8 +10094,8 @@ snapshots:
   '@ai-sdk/amazon-bedrock@4.0.96(zod@4.4.3)':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       '@smithy/eventstream-codec': 4.4.16
       '@smithy/util-utf8': 4.4.16
       aws4fetch: 1.0.20
@@ -10103,137 +10103,130 @@ snapshots:
 
   '@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/azure@3.0.116(zod@4.4.3)':
     dependencies:
       '@ai-sdk/deepseek': 2.0.57(zod@4.4.3)
       '@ai-sdk/openai': 3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/bytedance@1.0.29(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/cerebras@2.0.54(zod@4.4.3)':
     dependencies:
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/deepseek@2.0.57(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/gateway@3.0.116(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
   '@ai-sdk/gateway@3.0.121(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
   '@ai-sdk/google-vertex@4.0.112(zod@4.4.3)':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3)
-      '@ai-sdk/google': 3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3)
+      '@ai-sdk/google': 3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       google-auth-library: 10.9.1(supports-color@8.1.1)
       zod: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
-  '@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3)':
+  '@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/groq@3.0.39(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/huggingface@1.0.50(zod@4.4.3)':
     dependencies:
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
-      zod: 4.4.3
-
-  '@ai-sdk/mcp@1.0.71(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
-      pkce-challenge: 5.0.1
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/mistral@3.0.37(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/perplexity@3.0.33(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/provider-utils@4.0.49(zod@4.4.3)':
+  '@ai-sdk/provider-utils@4.0.58(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.15
+      '@ai-sdk/provider': 3.0.18
       '@standard-schema/spec': 1.1.0
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.1
       undici: 6.28.0
       zod: 4.4.3
 
-  '@ai-sdk/provider@3.0.15':
+  '@ai-sdk/provider@3.0.18':
     dependencies:
       json-schema: 0.4.0
 
   '@ai-sdk/togetherai@2.0.53(zod@4.4.3)':
     dependencies:
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/xai@3.0.126(zod@4.4.3)':
     dependencies:
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       zod: 4.4.3
 
   '@anthropic-ai/sdk@0.129.0(zod@4.4.3)':
@@ -11083,31 +11076,31 @@ snapshots:
     dependencies:
       '@chainsafe/is-ip': 2.1.0
 
-  '@cherrystudio/ai-core@2.1.0(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))':
+  '@cherrystudio/ai-core@2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3)
       '@ai-sdk/azure': 3.0.116(zod@4.4.3)
       '@ai-sdk/deepseek': 2.0.57(zod@4.4.3)
-      '@ai-sdk/google': 3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3)
+      '@ai-sdk/google': 3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)
       '@ai-sdk/openai': 3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3)
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       '@ai-sdk/xai': 3.0.126(zod@4.4.3)
-      '@cherrystudio/ai-sdk-provider': 0.1.7(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
+      '@cherrystudio/ai-sdk-provider': 0.1.9(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
       '@openrouter/ai-sdk-provider': 2.10.0(patch_hash=fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009)(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))(zod@4.4.3)
       ai: 6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3)
       quick-lru: 5.1.1
       zod: 4.4.3
 
-  '@cherrystudio/ai-sdk-provider@0.1.7(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)':
+  '@cherrystudio/ai-sdk-provider@0.1.9(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3)
-      '@ai-sdk/google': 3.0.113(patch_hash=8cbaff63516ef35b2a638a683af4799855611da4a40b71ff896798ba90e30874)(zod@4.4.3)
+      '@ai-sdk/google': 3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)
       '@ai-sdk/openai': 3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3)
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
@@ -11115,25 +11108,25 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/file-preview@0.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@cherrystudio/file-preview@0.1.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.1.0(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.2.3(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
 
-  '@cherrystudio/remote-protocol@0.5.0(zod@4.4.3)':
+  '@cherrystudio/remote-protocol@0.6.0(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@0.2.1(zod@4.4.3)':
+  '@cherrystudio/remote-transport@0.2.4(zod@4.4.3)':
     dependencies:
-      '@cherrystudio/remote-protocol': 0.5.0(zod@4.4.3)
+      '@cherrystudio/remote-protocol': 0.6.0(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2
@@ -11142,6 +11135,13 @@ snapshots:
       json-rpc-2.0: 1.8.1
     transitivePeerDependencies:
       - zod
+
+  '@cherrystudio/web-search@0.2.0':
+    dependencies:
+      eventsource-parser: 3.1.1
+      js-base64: 3.7.7
+      tokenx: 1.3.0
+      zod: 4.4.3
 
   '@craftzdog/react-native-buffer@6.1.2(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)':
     dependencies:
@@ -11160,15 +11160,15 @@ snapshots:
 
   '@e965/xlsx@0.20.3': {}
 
-  '@earendil-works/chord@1.2.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)':
+  '@earendil-works/chord@1.3.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)':
     dependencies:
       typebox: 1.3.27
 
-  '@earendil-works/pi-ai@1.2.0(patch_hash=687c4101689b97366988f6440d2f0cbca17922c6554b6622b9da61a0652a8556)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@1.3.0(patch_hash=e79674a647313e5d4fcaffdd07fadb2a8ba6995ec6d6c2c151117a713e770f58)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.129.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
-      '@earendil-works/pi-telemetry': 1.2.0
+      '@earendil-works/pi-telemetry': 1.3.0
       '@google/genai': 2.21.0(supports-color@8.1.1)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@8.1.1)
@@ -11189,15 +11189,15 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-codemode@1.2.0(patch_hash=78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef)':
+  '@earendil-works/pi-codemode@1.3.0(patch_hash=78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef)':
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-durable@1.2.0(patch_hash=eaee40eb69f627352da7101d916465ebcae408b8cefcaf43fb0521329cb0144e)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-durable@1.3.0(patch_hash=3b6084630c6a1f1277e63dcb3dd0a7b4183b9f07a4fd25ca34206429ff6e153f)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
-      '@earendil-works/chord': 1.2.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)
-      '@earendil-works/pi-ai': 1.2.0(patch_hash=687c4101689b97366988f6440d2f0cbca17922c6554b6622b9da61a0652a8556)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
-      '@earendil-works/pi-codemode': 1.2.0(patch_hash=78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef)
+      '@earendil-works/chord': 1.3.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=e79674a647313e5d4fcaffdd07fadb2a8ba6995ec6d6c2c151117a713e770f58)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+      '@earendil-works/pi-codemode': 1.3.0(patch_hash=78e80eeffdcbe21824408fe8fe66f7c6a166d13a47be65d5c95da62f96d949ef)
       '@silvia-odwyer/photon': 0.3.3
       diff: 8.0.4
       typebox: 1.3.27
@@ -11214,7 +11214,7 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-telemetry@1.2.0': {}
+  '@earendil-works/pi-telemetry@1.3.0': {}
 
   '@egjs/hammerjs@2.0.17':
     dependencies:
@@ -12710,7 +12710,7 @@ snapshots:
       '@modelcontextprotocol/core': 2.3.1
       cross-spawn: 7.0.6
       eventsource: 3.0.7
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.1
       jose: 6.2.12
       pkce-challenge: 5.0.1
       zod: 4.4.3
@@ -12808,8 +12808,8 @@ snapshots:
   '@opeoginni/github-copilot-openai-compatible@1.0.0(patch_hash=4bea0e526136ed32d0be4849ec5cbb41bd5de7b7418dd6920598357438cfef25)(zod@4.4.3)':
     dependencies:
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
@@ -14383,8 +14383,8 @@ snapshots:
   ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3):
     dependencies:
       '@ai-sdk/gateway': 3.0.116(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       '@opentelemetry/api': 1.9.1
       zod: 4.4.3
 
@@ -15726,11 +15726,11 @@ snapshots:
 
   events@3.3.0: {}
 
-  eventsource-parser@3.0.8: {}
+  eventsource-parser@3.1.1: {}
 
   eventsource@3.0.7:
     dependencies:
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.1
 
   execa@5.1.1:
     dependencies:
@@ -17378,6 +17378,8 @@ snapshots:
 
   jose@6.2.12: {}
 
+  js-base64@3.7.7: {}
+
   js-tokens@10.0.0: {}
 
   js-tokens@4.0.0: {}
@@ -18159,8 +18161,8 @@ snapshots:
 
   ollama-ai-provider-v2@3.3.1(patch_hash=4cb5921e69158814eeeed8d71c80621bd261f33d769b6afabba0db40931155eb)(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))(zod@4.4.3):
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       ai: 6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3)
       zod: 4.4.3
 
@@ -18617,7 +18619,7 @@ snapshots:
       react-native: 0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
       react-native-nitro-modules: 0.36.4(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
 
-  react-native-background-actions@4.1.0(patch_hash=57e03a2a78f06d2935648b1a0d4d086c39e1f66d31ed3d23891db0a9e7245db1)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)):
+  react-native-background-actions@4.1.0(patch_hash=6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)):
     dependencies:
       eventemitter3: 4.0.7
       react-native: 0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
@@ -18638,7 +18640,7 @@ snapshots:
       react-native-reanimated: 4.5.5(patch_hash=33f006c0e10fff05d47d9879ade97c8c443eb6fd99f4379d5ffef53cc9af4fd8)(7d9e5fc70377e88866d5664e5950a8ac)
       use-latest-callback: 0.2.6(react@19.2.3)
 
-  react-native-enriched-markdown@1.0.1(patch_hash=64c72480ed1a72c2b23111bf493a3ad7033655466278562bdcd1d4c7f15336ab)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3):
+  react-native-enriched-markdown@1.0.1(patch_hash=5f0376b4df170a74ef4fbfc483c31a98aaa96dc83ef0446b3aa559aeb9444b5f)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3):
     dependencies:
       react: 19.2.3
       react-native: 0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
@@ -18746,11 +18748,11 @@ snapshots:
 
   react-native-skia-apple-tvos@147.1.0: {}
 
-  react-native-streamdown@0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(1b0ee1bd509f93b4ecc06550b22f71f3):
+  react-native-streamdown@0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(8ba3c281ebda9d6d7a0d195cf3eab041):
     dependencies:
       react: 19.2.3
       react-native: 0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
-      react-native-enriched-markdown: 1.0.1(patch_hash=64c72480ed1a72c2b23111bf493a3ad7033655466278562bdcd1d4c7f15336ab)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
+      react-native-enriched-markdown: 1.0.1(patch_hash=5f0376b4df170a74ef4fbfc483c31a98aaa96dc83ef0446b3aa559aeb9444b5f)(@expo/config-plugins@57.0.5(supports-color@8.1.1)(typescript@6.0.3))(katex@0.17.0)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-worklets: 0.10.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)
       remend: 1.3.0
 
@@ -19918,8 +19920,8 @@ snapshots:
 
   voyage-ai-provider@3.0.0(zod@4.4.3):
     dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.18
+      '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
     optionalDependencies:
       zod: 4.4.3
 
