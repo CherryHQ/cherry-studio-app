@@ -436,7 +436,7 @@ describe('PiDurableRuntime identity and handoff', () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
       const conversation = await runtime.ensureConversation(seed);
-      await runtime.reset(seed.sessionId, 'Start a fresh subject.');
+      await conversation.reset('Start a fresh subject.', BACKGROUND_CONTEXT);
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages).toEqual([
         expect.objectContaining({ content: 'Start a fresh subject.' }),
       ]);

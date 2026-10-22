@@ -280,7 +280,7 @@ describe('Pi durable execution integration', () => {
       expect(getCurrentSystemPrompt(requests[3]!.messages)).toContain(instructionBody);
 
       // Discarding all tool history must not discard this execution's committed instructions.
-      await runtime.reset('business-session');
+      await (await runtime.conversation('business-session'))!.reset(undefined, BACKGROUND_CONTEXT);
       const recoveredBody = await runtime.submit(
         'business-session',
         { type: 'input', requestId: 'after-reset', content: 'Continue' },
