@@ -48,10 +48,9 @@ the closed working file before the older runtime opens it. Recovery of legacy or
 (queued input with no live run) is outside this clearing/rebuild upgrade scope, so its startup
 repair patch is retired; it was not fixed upstream.
 
-Installation uses `pnpm install --ignore-scripts` to avoid an unauthorized build. Behavior tests,
-type checks, builds, and device acceptance have not been run for this upgrade. Regression sources
-cover failed-run queue progression, runnable-work protection, parked-state projection and small
-model compaction policies; authored tests are not a passing result.
+The full test suite, type checks, lint and iOS/Android `expo export:embed` bundles pass for this
+upgrade, including failed-run queue progression, runnable-work protection, parked-state projection,
+small-model compaction policies and the Metro graph guard. Device acceptance has not been run.
 
 ## Previous Pi 1.3.0 Upgrade
 
