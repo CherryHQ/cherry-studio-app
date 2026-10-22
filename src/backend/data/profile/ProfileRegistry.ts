@@ -17,7 +17,9 @@ const IdentitySchema = z.strictObject({
 });
 const RegistrySchema = z.strictObject({
   version: z.literal(1),
-  profiles: z.array(z.strictObject({ id: z.uuid(), identity: IdentitySchema })),
+  profiles: z.array(
+    z.strictObject({ id: z.uuid(), identity: IdentitySchema, address: z.string().min(1) }),
+  ),
   active: z.union([z.literal('local'), z.uuid()]),
 });
 type Registry = z.infer<typeof RegistrySchema>;
@@ -54,16 +56,25 @@ export class ProfileRegistry {
     const { active, profiles } = this.data;
     if (active === 'local') return LOCAL_PROFILE;
     const profile = profiles.find((candidate) => candidate.id === active);
-    return profile ? Object.freeze({ id: profile.id, identity: profile.identity }) : LOCAL_PROFILE;
+    return profile ? Object.freeze({ ...profile }) : LOCAL_PROFILE;
   }
 
-  /** Reuses the profile of a known identity; the local profile is never adopted by a login. */
-  resolve(identity: EnterpriseIdentity): ActiveProfile {
+  /**
+   * Reuses the profile of a known identity and records the address it was reached at, so a
+   * server that moves keeps its data. The local profile is never adopted by a login.
+   */
+  resolve(identity: EnterpriseIdentity, address: string): ActiveProfile {
     const parsed = IdentitySchema.parse(identity);
     const existing = this.data.profiles.find((profile) => sameIdentity(profile.identity, parsed));
-    if (existing) return Object.freeze({ id: existing.id, identity: existing.identity });
-    const profile = { id: z.uuid().parse(this.createId()), identity: parsed };
-    this.write({ ...this.data, profiles: [...this.data.profiles, profile] });
+    const profile = {
+      id: existing?.id ?? z.uuid().parse(this.createId()),
+      identity: parsed,
+      address,
+    };
+    this.write({
+      ...this.data,
+      profiles: [...this.data.profiles.filter((candidate) => candidate !== existing), profile],
+    });
     return Object.freeze(profile);
   }
 

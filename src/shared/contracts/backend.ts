@@ -1,3 +1,4 @@
+import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
@@ -5,7 +6,6 @@ import type { BackupModule } from './backup';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
-import type { EnterpriseModule } from './enterprise';
 import type { FileModule } from './file';
 import type { McpModule } from './mcp';
 import type { ModelsModule } from './models';
@@ -21,6 +21,7 @@ import type { TranslationModule } from './translation';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly account: AccountModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;
@@ -30,7 +31,6 @@ export interface Backend {
   readonly desktopConnections: DesktopConnectionsModule;
   readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;
-  readonly enterprise: EnterpriseModule;
   readonly file: FileModule;
   readonly mcp: McpModule;
   readonly models: ModelsModule;

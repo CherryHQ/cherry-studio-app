@@ -77,9 +77,9 @@ import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { AccountModule } from '@/shared/contracts/account';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
-import type { EnterpriseModule } from '@/shared/contracts/enterprise';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { profileScopedName } from '@/shared/data/activeProfile';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -118,7 +118,7 @@ export function createBackend(
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
     trash: Pick<TrashRuntime, 'trashFile'>;
-    enterprise: EnterpriseModule;
+    account: AccountModule;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -348,6 +348,7 @@ export function createBackend(
       }
     },
     backend: {
+      account: infrastructure.account,
       appUpdate: createAppUpdateModule(),
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,
@@ -357,7 +358,6 @@ export function createBackend(
       desktopConnections: infrastructure.desktopConnections,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
-      enterprise: infrastructure.enterprise,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,

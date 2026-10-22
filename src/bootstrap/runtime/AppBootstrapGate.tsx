@@ -6,7 +6,7 @@ import { useBackupState } from '@/frontend/hooks/useBackupState';
 import { BackupError } from '@/shared/contracts/backup';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
-import { enterpriseAccount } from '../profile/enterpriseAccount';
+import { installationAccount } from '../profile/installationAccount';
 import { useAppBootstrapState } from './AppBootstrapProvider';
 
 export function AppBootstrapGate({ children }: PropsWithChildren) {
@@ -31,7 +31,7 @@ export function AppBootstrapGate({ children }: PropsWithChildren) {
     return (
       <StartupFailureScreen
         onRetry={state.retry}
-        onUseLocal={isEnterpriseProfile() ? () => void enterpriseAccount().useLocal() : undefined}
+        onUseLocal={isEnterpriseProfile() ? () => void installationAccount().useLocal() : undefined}
       />
     );
   }

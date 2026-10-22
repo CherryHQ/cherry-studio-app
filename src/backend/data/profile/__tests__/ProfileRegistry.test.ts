@@ -32,12 +32,16 @@ describe('ProfileRegistry', () => {
 
   it('reuses one profile per identity and persists the next launch selection', () => {
     const { registry, stored } = createRegistry();
-    const profile = registry.resolve(identity);
-    expect(registry.resolve({ ...identity })).toEqual(profile);
-    expect(registry.resolve({ ...identity, productProfileId: 'org-2' }).id).not.toBe(profile.id);
+    const profile = registry.resolve(identity, 'https://a.example.com');
+    // A moved server keeps its data and records the new address.
+    const moved = registry.resolve({ ...identity }, 'https://b.example.com');
+    expect(moved).toEqual({ ...profile, address: 'https://b.example.com' });
+    expect(
+      registry.resolve({ ...identity, productProfileId: 'org-2' }, 'https://a.example.com').id,
+    ).not.toBe(profile.id);
 
-    registry.setActive(profile);
-    expect(createRegistry(stored()).registry.getActive()).toEqual(profile);
+    registry.setActive(moved);
+    expect(createRegistry(stored()).registry.getActive()).toEqual(moved);
   });
 
   it('falls back to local data when the directory is unreadable', () => {

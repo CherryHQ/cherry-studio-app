@@ -11,6 +11,7 @@ describe('profileScopedName', () => {
     setActiveProfile({
       id: '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
       identity: { deployment: 's', issuer: 'i', subject: 'u', productProfileId: 'o' },
+      address: 'https://e.example.com',
     });
     expect(profileScopedName('cherry-cache-persist')).toBe(
       'profile.8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60.cherry-cache-persist',

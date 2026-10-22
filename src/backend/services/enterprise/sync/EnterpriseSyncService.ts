@@ -29,7 +29,7 @@ import {
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import { isAuthenticationRejection } from '../account/EnterpriseAccount';
+import { isAuthenticationRejection } from '../account/AccountRuntime';
 import { createEnterpriseApi, type EnterpriseApi } from '../enterpriseApi';
 import {
   type AgentSetup,
@@ -55,7 +55,6 @@ const SETUP_CONCURRENCY = 4;
 
 /** The installation account, as the sync needs it. */
 export interface EnterpriseSession {
-  address(): string;
   getProductToken(): Promise<string>;
   /** The server refused the session; the user must sign in again. */
   reportRejected(): void;
@@ -132,12 +131,13 @@ export class EnterpriseSyncService extends BaseService {
   }
 
   private async run(): Promise<void> {
-    const identity = getActiveProfile().identity;
+    const profile = getActiveProfile();
+    const { identity } = profile;
     if (!identity || !this.session) return;
     this.lastAttempt = Date.now();
     const session = this.session;
     const api = createEnterpriseApi({
-      baseUrl: session.address(),
+      baseUrl: profile.address,
       getToken: session.getProductToken,
     });
     const skipped: SkipLog = [];

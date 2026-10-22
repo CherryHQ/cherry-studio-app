@@ -14,10 +14,19 @@ export type EnterpriseIdentity = Readonly<{
 }>;
 
 export type ActiveProfile =
-  | Readonly<{ id: 'local'; identity: null }>
-  | Readonly<{ id: string; identity: EnterpriseIdentity }>;
+  | Readonly<{ id: 'local'; identity: null; address: null }>
+  | Readonly<{
+      id: string;
+      identity: EnterpriseIdentity;
+      /** Enterprise service address, including a private deployment's API path. */
+      address: string;
+    }>;
 
-export const LOCAL_PROFILE: ActiveProfile = Object.freeze({ id: 'local', identity: null });
+export const LOCAL_PROFILE: ActiveProfile = Object.freeze({
+  id: 'local',
+  identity: null,
+  address: null,
+});
 
 let active: ActiveProfile = LOCAL_PROFILE;
 

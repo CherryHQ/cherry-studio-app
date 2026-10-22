@@ -46,7 +46,7 @@ import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
-import { enterpriseAccount } from '@/bootstrap/profile/enterpriseAccount';
+import { installationAccount } from '@/bootstrap/profile/installationAccount';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import {
   publishForegroundActivityAttention,
@@ -58,7 +58,6 @@ import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import { BackupError } from '@/shared/contracts/backup';
-import { normalizeEnterpriseAddress } from '@/shared/contracts/enterprise';
 import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { ApiClient } from '@/shared/data/api/types';
@@ -157,10 +156,9 @@ export function createAppBootstrapRuntime(
   );
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
-  const account = enterpriseAccount();
+  const account = installationAccount();
   const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
   enterpriseSync.configure({
-    address: () => normalizeEnterpriseAddress(account.getState().address),
     getProductToken: account.getProductToken,
     reportRejected: account.reportRejected,
   });
@@ -199,7 +197,7 @@ export function createAppBootstrapRuntime(
     languageServing,
     providerRegistryUpdater,
     trash,
-    enterprise: account,
+    account,
   });
   backup.configure(
     () =>

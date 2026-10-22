@@ -8,9 +8,9 @@ import * as WebBrowser from 'expo-web-browser';
 import { createMMKV } from 'react-native-mmkv';
 import * as z from 'zod';
 
-import { createEnterpriseApi, EnterpriseAccount } from '@/backend/services/enterprise';
+import { AccountRuntime, createEnterpriseApi } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
-import { EnterpriseError, normalizeEnterpriseAddress } from '@/shared/contracts/enterprise';
+import { AccountError } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 
 import { installationProfiles } from './installationProfiles';
@@ -27,34 +27,18 @@ const ConfigSchema = z.object({
 const REDIRECT_URI = 'cherrystudio://auth/callback';
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
-let account: EnterpriseAccount | undefined;
+let account: AccountRuntime | undefined;
 
 /** Installation-owned: one Accounts Portal session serves every profile of this install. */
-export function enterpriseAccount(): EnterpriseAccount {
-  account ??= createEnterpriseAccount();
+export function installationAccount(): AccountRuntime {
+  account ??= createAccount();
   return account;
 }
 
-function createEnterpriseAccount(): EnterpriseAccount {
+function createAccount(): AccountRuntime {
   const parsed = ConfigSchema.safeParse(Constants.expoConfig?.extra?.accountsPortal);
   const config = parsed.success ? parsed.data : undefined;
   const store = createMMKV({ id: 'cherry-installation-account' });
-  const createFetch = (allowed: () => string[]) =>
-    createFetchBridge({
-      maxResponseBytes: 1024 * 1024,
-      timeoutMs: 20_000,
-      unsupportedMethodError: () => new EnterpriseError('connection'),
-      assertUrl(value) {
-        const url = new URL(value);
-        if (!allowed().some((prefix) => url.toString() === prefix))
-          throw new EnterpriseError('address');
-        return url;
-      },
-    });
-  const address = {
-    read: () => store.getString('enterprise-address') ?? config?.enterpriseAddress ?? '',
-    write: (value: string) => store.set('enterprise-address', value),
-  };
   const portal = config
     ? createAccountsPortal({
         issuer: config.issuer,
@@ -78,35 +62,43 @@ function createEnterpriseAccount(): EnterpriseAccount {
               ),
             ),
         },
-        // Only the SDK's own endpoints, so a token can never be sent elsewhere.
-        fetch: createFetch(() => {
-          const permitted = [
-            `${config.issuer}/oauth/v2/token`,
-            `${config.issuer}/oauth/v2/revoke`,
-            `${config.origin}/api/v1/logout`,
-          ];
-          try {
-            permitted.push(
-              `${normalizeEnterpriseAddress(address.read())}/accounts-portal/v1/enter`,
-            );
-          } catch {
-            // No usable enterprise address yet.
-          }
-          return permitted;
+        // Only the SDK's own endpoints and an enterprise product entry, so tokens go nowhere else.
+        fetch: createFetchBridge({
+          maxResponseBytes: 1024 * 1024,
+          timeoutMs: 20_000,
+          unsupportedMethodError: () => new AccountError('connection'),
+          assertUrl(value) {
+            const url = new URL(value);
+            const fixed = [
+              `${config.issuer}/oauth/v2/token`,
+              `${config.issuer}/oauth/v2/revoke`,
+              `${config.origin}/api/v1/logout`,
+            ];
+            if (
+              !fixed.includes(url.toString()) &&
+              !(url.pathname.endsWith('/accounts-portal/v1/enter') && !url.search && !url.hash)
+            )
+              throw new AccountError('address');
+            return url;
+          },
         }),
       })
     : null;
   void portal?.ready.catch((error: unknown) => {
     loggerService
-      .withContext('EnterpriseAccount')
+      .withContext('AccountRuntime')
       .error('Could not restore the sign-in', error as Error);
   });
-  return new EnterpriseAccount({
+  return new AccountRuntime({
     portal,
     issuer: config?.issuer ?? '',
+    defaultAddress: config?.enterpriseAddress ?? '',
     active: getActiveProfile(),
     profiles: installationProfiles(),
-    address,
+    prompt: {
+      read: () => store.getBoolean('sign-in-prompted') ?? false,
+      write: () => store.set('sign-in-prompted', true),
+    },
     createApi: (baseUrl, getToken) => createEnterpriseApi({ baseUrl, getToken }),
     openBrowser: async (url, callbackUrl) => {
       const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl);

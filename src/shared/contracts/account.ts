@@ -1,43 +1,49 @@
-export type EnterpriseErrorCode =
+export type AccountErrorCode =
   /** The build carries no Accounts Portal configuration. */
   | 'unavailable'
   | 'address'
-  /** The chosen Accounts Portal profile is not an enterprise organization. */
-  | 'unsupported-profile'
   | 'connection'
   /** The enterprise server rejected the account or organization. */
   | 'rejected';
 
-export class EnterpriseError extends Error {
-  constructor(readonly code: EnterpriseErrorCode) {
-    super(`Enterprise ${code}`);
-    this.name = 'EnterpriseError';
+export class AccountError extends Error {
+  constructor(readonly code: AccountErrorCode) {
+    super(`Account ${code}`);
+    this.name = 'AccountError';
   }
 }
 
 /** Installation account state. Tokens and SDK objects never reach the UI. */
-export type EnterpriseAccountState = Readonly<{
+export type AccountState = Readonly<{
   isAvailable: boolean;
+  isSignedIn: boolean;
   /** Whether this runtime serves an enterprise profile rather than local data. */
   isEnterprise: boolean;
-  /** The server no longer accepts this enterprise session; data stays readable offline. */
+  /** The enterprise server no longer accepts this session; the user must sign in again. */
   needsSignIn: boolean;
+  /** A new installation has seen the sign-in page, whether it signed in or not. */
+  hasPrompted: boolean;
   isBusy: boolean;
   name?: string;
-  /** Enterprise service address used for sign-in and synchronization. */
-  address: string;
 }>;
 
-/** Sign-in, sign-out and local mode each select a profile and reload the app. */
-export interface EnterpriseModule {
-  getState(): EnterpriseAccountState;
+/**
+ * Accounts Portal sign-in. A community profile opens local data; an enterprise profile opens its
+ * own data. Switching between them reloads the app.
+ */
+export interface AccountModule {
+  getState(): AccountState;
   subscribe(listener: () => void): () => void;
-  /** Browser sign-in; the portal also lets the user pick another organization. */
-  signIn(): Promise<void>;
+  /**
+   * Browser sign-in. `address` selects a private enterprise deployment. Resolves true when a
+   * community account signed in; an enterprise account reloads the app instead.
+   */
+  signIn(options?: { address?: string }): Promise<boolean>;
   signOut(): Promise<void>;
   /** Opens local data and keeps the account signed in. */
   useLocal(): Promise<void>;
-  setAddress(address: string): void;
+  /** Continues a new installation without signing in. */
+  dismissPrompt(): void;
 }
 
 /** Accepts a hostname, port and optional API path; a bare hostname uses HTTPS. */
@@ -48,7 +54,7 @@ export function normalizeEnterpriseAddress(input: string): string {
     if (!value || value.startsWith('//') || /\s/.test(value)) throw new Error('empty');
     url = new URL(value.includes('://') ? value : `https://${value}`);
   } catch {
-    throw new EnterpriseError('address');
+    throw new AccountError('address');
   }
   if (
     !['https:', 'http:'].includes(url.protocol) ||
@@ -58,6 +64,6 @@ export function normalizeEnterpriseAddress(input: string): string {
     url.search ||
     url.hash
   )
-    throw new EnterpriseError('address');
+    throw new AccountError('address');
   return url.toString().replace(/\/$/, '');
 }

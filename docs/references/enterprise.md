@@ -1,19 +1,22 @@
 # Enterprise Edition
 
-Enterprise users sign in with Accounts Portal and receive model providers, models, default models,
-Agents, Skills and MCP servers from their organization's enterprise server. Community users and
-local data are unaffected.
+Users sign in with Accounts Portal. A community account keeps the installation's local data. An
+enterprise account, on the cloud service or a private deployment, opens its own data and receives
+model providers, models, default models, Agents, Skills and MCP servers from its organization's
+enterprise server.
 
 ## Data Profiles
 
-Each enterprise identity owns a separate data profile; local data is the `local` profile. An
-identity is the enterprise server id (`serverUniqueId`), the IdP issuer and subject, and the Accounts
-Portal organization profile id. Tokens, roles and display names are not part of it.
+Each enterprise identity owns a separate data profile; local data is the `local` profile, shared by
+community accounts and use without an account. An identity is the enterprise server id
+(`serverUniqueId`), the IdP issuer and subject, and the Accounts Portal organization profile id.
+Tokens, roles and display names are not part of it. The registry also records the address each
+enterprise profile was last reached at, so a moved server keeps its data.
 
 | Owner | Location |
 | --- | --- |
 | Installation directory of profiles (`ProfileRegistry`) | MMKV `cherry-installation-profiles` |
-| Accounts Portal session and enterprise address | SecureStore `accounts-portal.*`, MMKV `cherry-installation-account` |
+| Accounts Portal session and the sign-in prompt flag | SecureStore `accounts-portal.*`, MMKV `cherry-installation-account` |
 | Local profile | Original Documents, SQLite, MMKV and SecureStore names |
 | Enterprise profile | `Documents/profiles/<id>/`; MMKV stores and SecureStore keys prefixed `profile.<id>.` |
 
@@ -26,14 +29,24 @@ profile only, never by generation, so a restore keeps them.
 
 ## Account
 
-`EnterpriseAccount` (`src/backend/services/enterprise/account`) owns the installation's single
-Accounts Portal SDK instance, composed natively in `src/bootstrap/profile/enterpriseAccount.ts`. The
-SDK owns PKCE, token storage and refresh. Product requests use `getProductToken(address, profile)`.
-Sign-in reads `/configurations` once to learn the server id before the profile is chosen.
+`AccountRuntime` (`src/backend/services/enterprise/account`, exposed as `Backend.account`) owns the
+installation's single Accounts Portal SDK instance, composed natively in
+`src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage and refresh.
 
-A cold start opens the last profile without the network. After startup, `verify()` checks that the
-restored session still matches the profile. Only an explicit rejection (401/403, `signed_out`) marks
-the account as needing sign-in. The profile stays readable and only enterprise requests fail.
+- **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) opens the portal in the external
+  browser, where the user picks the community account or an organization. A private deployment
+  enters its server address on the same page; otherwise the build's enterprise address is used.
+- **New installation:** `FirstUseGate` shows `/login` before onboarding. Signing in to the community
+  account or choosing "Not now" continues to the existing provider setup; an enterprise account
+  reloads into its profile and skips onboarding. Installations with data never see the page; they
+  sign in from Settings → Account.
+- **Enterprise sign-in:** reads `/configurations` once with the product token to learn the server
+  id, resolves the profile and reloads into it.
+- **Cold start:** the last profile opens without the network. `verify()` then checks that the
+  restored session still matches it.
+- **Expiry:** an explicit rejection (401/403, `signed_out`, or a session that no longer matches)
+  replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the device;
+  the page offers sign-in again or local data.
 
 Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Non-production
 builds default to the cn-dev staging deployment. Production has no default. Every build uses the

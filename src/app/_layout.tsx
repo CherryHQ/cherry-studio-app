@@ -23,6 +23,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
+import { AccountSessionGate } from '@/frontend/appShell/account';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
@@ -86,9 +87,11 @@ function RootLayout() {
                                     <SystemEntryBridge />
                                     <FeedbackCaptureProvider>
                                       <FeedbackHintProvider>
-                                        <ConversationProvider>
-                                          <RootStack />
-                                        </ConversationProvider>
+                                        <AccountSessionGate>
+                                          <ConversationProvider>
+                                            <RootStack />
+                                          </ConversationProvider>
+                                        </AccountSessionGate>
                                       </FeedbackHintProvider>
                                     </FeedbackCaptureProvider>
                                     <PrivacyConsentGate />
@@ -156,6 +159,7 @@ function RootStack() {
     >
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen name="library" options={{ headerShown: false }} />
       <Stack.Screen name="trash" />

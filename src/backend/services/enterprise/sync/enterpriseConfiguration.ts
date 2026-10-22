@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { normalizeEnterpriseAddress } from '@/shared/contracts/enterprise';
+import { normalizeEnterpriseAddress } from '@/shared/contracts/account';
 import {
   createUniqueModelId,
   ENDPOINT_TYPE,

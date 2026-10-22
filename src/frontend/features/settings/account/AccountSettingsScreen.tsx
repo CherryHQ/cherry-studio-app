@@ -1,116 +1,54 @@
-import { Button, Input, Section, TextField, useToast } from '@cherrystudio/ui/components';
-import { useState, useSyncExternalStore } from 'react';
+import { Section, useToast } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 
-import { useBackendModule } from '@/frontend/data';
-import { EnterpriseError, type EnterpriseErrorCode } from '@/shared/contracts/enterprise';
+import { ACCOUNT_ERROR_KEYS, useAccount } from '@/frontend/appShell/account';
+import { AccountError } from '@/shared/contracts/account';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
-const ERROR_KEYS = {
-  unavailable: 'enterprise.account.error.unavailable',
-  address: 'enterprise.account.error.address',
-  'unsupported-profile': 'enterprise.account.error.unsupportedProfile',
-  connection: 'enterprise.account.error.connection',
-  rejected: 'enterprise.account.error.rejected',
-} as const satisfies Record<EnterpriseErrorCode, string>;
-
-export function useEnterpriseAccount() {
-  const enterprise = useBackendModule('enterprise');
-  const state = useSyncExternalStore(
-    enterprise.subscribe,
-    enterprise.getState,
-    enterprise.getState,
-  );
-  return { enterprise, state };
-}
-
-/** Sign-in, organization switching, local mode and the enterprise address. */
+/** Who is signed in, and the ways to switch accounts, return to local data or sign out. */
 export default function AccountSettingsScreen() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { enterprise, state } = useEnterpriseAccount();
-  const [address, setAddress] = useState(state.address);
-  const run = (action: () => Promise<void> | void) => {
-    void Promise.resolve()
-      .then(action)
-      .catch((error: unknown) => {
-        const code = error instanceof EnterpriseError ? error.code : 'connection';
-        toast.show({ label: t(ERROR_KEYS[code]), variant: 'danger' });
-      });
+  const router = useRouter();
+  const { account, state } = useAccount();
+  const run = (action: () => Promise<void>) => {
+    void action().catch((error: unknown) => {
+      const code = error instanceof AccountError ? error.code : 'connection';
+      toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
+    });
   };
+  const summary = state.isEnterprise
+    ? t('account.enterprise', { name: state.name ?? '' })
+    : state.isSignedIn
+      ? t('account.community', { name: state.name ?? '' })
+      : t('account.local');
 
   return (
-    <SettingsScrollPage
-      headerProps={{ title: t('enterprise.account.title') }}
-      contentClassName="gap-6"
-      keyboardShouldPersistTaps="handled"
-    >
-      <View className="gap-1">
-        <Text className="text-base text-foreground">
-          {state.isEnterprise
-            ? t('enterprise.account.enterprise', { name: state.name ?? '' })
-            : t('enterprise.account.local')}
-        </Text>
-        {state.needsSignIn ? (
-          <Text accessibilityLiveRegion="polite" className="text-sm text-danger">
-            {t('enterprise.account.needsSignIn')}
-          </Text>
+    <SettingsScrollPage headerProps={{ title: t('account.title') }}>
+      <Section footer={summary}>
+        <Section.Item
+          disabled={state.isBusy}
+          label={state.isSignedIn ? t('account.switch') : t('account.login.signIn')}
+          onPress={() => router.push('/login')}
+        />
+        {state.isEnterprise ? (
+          <Section.Item
+            disabled={state.isBusy}
+            label={t('account.useLocal')}
+            onPress={() => run(account.useLocal)}
+          />
         ) : null}
-        {!state.isAvailable ? (
-          <Text className="text-sm text-muted-foreground">{t(ERROR_KEYS.unavailable)}</Text>
+        {state.isSignedIn ? (
+          <Section.Item
+            destructive
+            disabled={state.isBusy}
+            label={t('account.signOut')}
+            onPress={() => run(account.signOut)}
+          />
         ) : null}
-      </View>
-      {state.isAvailable ? (
-        <>
-          {state.isEnterprise ? null : (
-            <TextField disabled={state.isBusy}>
-              <TextField.Label>{t('enterprise.account.address')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('enterprise.account.address')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                onChangeText={setAddress}
-                onEndEditing={() => {
-                  if (address.trim() !== state.address) run(() => enterprise.setAddress(address));
-                }}
-                value={address}
-              />
-              <TextField.Description>{t('enterprise.account.addressHint')}</TextField.Description>
-            </TextField>
-          )}
-          <View className="gap-3">
-            <Button
-              disabled={state.isBusy}
-              onPress={() =>
-                run(async () => {
-                  if (!state.isEnterprise && address.trim() !== state.address)
-                    enterprise.setAddress(address);
-                  await enterprise.signIn();
-                })
-              }
-            >
-              {state.isEnterprise && !state.needsSignIn
-                ? t('enterprise.account.switch')
-                : t('enterprise.account.signIn')}
-            </Button>
-            {state.isEnterprise ? (
-              <Section>
-                <Section.Item
-                  label={t('enterprise.account.useLocal')}
-                  onPress={() => run(enterprise.useLocal)}
-                />
-                <Section.Item
-                  label={t('enterprise.account.signOut')}
-                  onPress={() => run(enterprise.signOut)}
-                />
-              </Section>
-            ) : null}
-          </View>
-        </>
-      ) : null}
+      </Section>
     </SettingsScrollPage>
   );
 }

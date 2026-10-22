@@ -4,6 +4,7 @@ import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { useAccount } from '@/frontend/appShell/account';
 import { usePreference, useQuery } from '@/frontend/data';
 import { useLatestAgentSession } from '@/frontend/hooks/agent';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
@@ -12,6 +13,7 @@ import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 export function FirstUseGate({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const [status] = usePreference('app.onboarding.status');
+  const { state: account } = useAccount();
   // Onboarding sets up providers and default models, which the organization owns in enterprise.
   const isManaged = isEnterpriseProfile();
   const models = useQuery('/models', {
@@ -43,5 +45,6 @@ export function FirstUseGate({ children }: PropsWithChildren) {
     latestSession.session
   )
     return children;
-  return <Redirect href="/onboarding" />;
+  // A new installation signs in, or skips signing in, before choosing how to set up models.
+  return <Redirect href={account.isAvailable && !account.hasPrompted ? '/login' : '/onboarding'} />;
 }

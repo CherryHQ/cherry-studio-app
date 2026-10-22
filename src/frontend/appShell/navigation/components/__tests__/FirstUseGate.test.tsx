@@ -12,10 +12,14 @@ import type { ApiClient } from '@/shared/data/api/types';
 import { FirstUseGate } from '../FirstUseGate';
 
 let mockStatus: 'unseen' | 'skipped' | 'completed' = 'unseen';
+let mockAccount = { isAvailable: false, hasPrompted: false };
 
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data/hooks/useDataApi'),
   usePreference: () => [mockStatus],
+}));
+jest.mock('@/frontend/appShell/account', () => ({
+  useAccount: () => ({ state: mockAccount }),
 }));
 jest.mock('@/frontend/hooks/agent', () =>
   jest.requireActual('@/frontend/hooks/agent/useAgentSessions'),
@@ -78,6 +82,7 @@ describe('first-use admission and chat restoration', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockStatus = 'unseen';
+    mockAccount = { isAvailable: false, hasPrompted: false };
     latest = undefined;
     chatMountCount = 0;
     chatUnmountCount = 0;
@@ -141,6 +146,16 @@ describe('first-use admission and chat restoration', () => {
     },
   );
 
+  it('sends a new installation to sign-in until the prompt has been answered', async () => {
+    mockAccount = { isAvailable: true, hasPrompted: false };
+    await renderGate();
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/login');
+
+    mockAccount = { isAvailable: true, hasPrompted: true };
+    await renderGate();
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
+  });
+
   it('admits an enterprise profile without onboarding, whose setup the organization owns', async () => {
     setActiveProfile({
       id: 'enterprise-1',
@@ -150,6 +165,7 @@ describe('first-use admission and chat restoration', () => {
         productProfileId: 'profile-1',
         subject: 'user-1',
       },
+      address: 'https://enterprise.example',
     });
     try {
       await renderGate();

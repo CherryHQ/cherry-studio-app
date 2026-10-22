@@ -82,8 +82,8 @@ jest.mock('@/backend/services/file/filePreviewStorage', () => ({
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
 }));
-jest.mock('@/bootstrap/profile/enterpriseAccount', () => ({
-  enterpriseAccount: () => mockEnterpriseAccount,
+jest.mock('@/bootstrap/profile/installationAccount', () => ({
+  installationAccount: () => mockEnterpriseAccount,
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
@@ -301,7 +301,7 @@ describe('createAppBootstrapRuntime', () => {
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
-      enterprise: mockEnterpriseAccount,
+      account: mockEnterpriseAccount,
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,
