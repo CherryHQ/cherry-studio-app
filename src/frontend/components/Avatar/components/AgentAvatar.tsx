@@ -1,6 +1,9 @@
 import { Avatar } from '@cherrystudio/ui/components';
 
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
+import { isAvatarSource } from '@/shared/data/types/avatar';
+
+import { useAvatarResource } from '../hooks/useAvatarResource';
 
 const AGENT_AVATAR_SIZE = 40;
 const EMOJI_FONT_SCALE = 0.58;
@@ -24,7 +27,21 @@ type AgentAvatarProps = {
  * Round Agent avatar: resolved image, then a configured emoji, then the name's
  * initial on the neutral fallback fill. A blank name leaves the fill empty.
  */
-export function AgentAvatar({
+export function AgentAvatar(props: AgentAvatarProps) {
+  const source = props.uri ?? props.avatar;
+  return isAvatarSource(source) ? (
+    <ResourceCover {...props} source={source} />
+  ) : (
+    <AvatarImage {...props} />
+  );
+}
+
+function ResourceCover({ source, ...props }: AgentAvatarProps & { source: string }) {
+  const resource = useAvatarResource(source);
+  return <AvatarImage {...props} uri={resource.data?.coverUri} />;
+}
+
+function AvatarImage({
   accessibilityLabel,
   avatar,
   emoji,

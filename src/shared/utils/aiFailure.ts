@@ -48,6 +48,14 @@ function includesAny(text: string, values: readonly string[]): boolean {
   return values.some((value) => text.includes(value));
 }
 
+export function isThinkingBindingFailure(message: string): boolean {
+  return (
+    message.includes('thinking') &&
+    message.includes('signature') &&
+    message.includes('bound to a different conversation')
+  );
+}
+
 /**
  * Stable product classification derived from allowlisted failure facts.
  * Specific source codes win; a generic `forbidden` code still yields to more
@@ -72,6 +80,7 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     .filter((value): value is string => Boolean(value))
     .join('\n')
     .toLowerCase();
+  if (isThinkingBindingFailure(text)) return 'invalid_input';
   const embeddedStatus = text.match(
     /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/u,
   )?.[1];

@@ -44,7 +44,7 @@ Use this when:
 
 Notes:
 - Describe the desired image or edit vividly in the prompt.
-- Pass image_ids only when editing or using an existing image as a reference.
+- Always specify mode: generate for new artwork, edit for changes to an existing image. Edit requires image_ids; never replace an edit with a fresh generation.
 - Generated images are displayed automatically in the conversation. Returned ids and names are file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text.
 - Generation can take 10-60 seconds.
 - Requires a drawing model configured in Settings > Model. If none is set, tell the user instead of retrying.`;
@@ -118,7 +118,15 @@ export async function generateImageFromPrompt(
   }
 
   const { support, uniqueModelId } = resolvedModel;
-  const mode = resolveMode(input);
+  const mode = input.mode;
+  if (mode === 'edit' && input.image_ids?.length !== 1) {
+    return {
+      error: 'Editing requires exactly one reference image in image_ids. No image was generated.',
+    };
+  }
+  if (mode === 'generate' && input.image_ids?.length) {
+    return { error: 'Use mode edit when supplying a reference image. No image was generated.' };
+  }
   if (
     (mode === 'edit' && !support?.modes.edit) ||
     (mode === 'generate' && support && !support.modes.generate)
@@ -168,7 +176,7 @@ export async function generateImageFromPrompt(
           data: image.base64,
           mediaType: image.mediaType,
           // Named after the prompt so the library reads as what was drawn.
-          name: readableFilename(input.prompt, {
+          name: readableFilename(input.name ?? input.prompt, {
             extension: generatedImageExtension(image.mediaType),
             fallback: 'Image',
             ordinal: index + 1,
@@ -189,10 +197,6 @@ export async function generateImageFromPrompt(
     logger.error('generate_image failed', error as Error, { uniqueModelId });
     return { error: PAINTING_ERROR_NOTE };
   }
-}
-
-function resolveMode(input: GenerateImageToolInput): ImageGenerationMode {
-  return input.image_ids && input.image_ids.length > 0 ? 'edit' : 'generate';
 }
 
 function extractParamValues(

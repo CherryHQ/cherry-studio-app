@@ -1,3 +1,4 @@
+export { getCharacterStudioInstructions } from './bundled/characterStudio';
 export { createSkillsModule, type SkillsBackend } from './createSkillsModule';
 export { deriveSkillProfile, evaluateSkillLimitations } from './skillCompatibility';
 export { createSkillMarketplace } from './skillMarketplace';

@@ -2,6 +2,7 @@ import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
+import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -31,6 +32,9 @@ import {
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
+import { createAvatarCharacters } from '@/backend/services/avatars/avatarCharacters';
+import { createAvatarResources } from '@/backend/services/avatars/avatarResources';
+import { createAvatarStudio } from '@/backend/services/avatars/avatarStudio';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
 import type {
@@ -262,7 +266,19 @@ export function createBackend(
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
     },
   });
+  const characters = createAvatarCharacters();
+  const avatars = {
+    ...createAvatarResources(),
+    ...characters,
+    studio: createAvatarStudio({
+      ai: services.ai,
+      models: services.model,
+      characters,
+      normalizeError: normalizeAiError,
+    }),
+  };
   const agentAvatars = createAgentAvatars({
+    resources: avatars,
     agents: services.agentData,
     images: agentAvatarImages,
   });
@@ -341,6 +357,7 @@ export function createBackend(
       }
     },
     backend: {
+      avatars,
       appUpdate: createAppUpdateModule(),
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,

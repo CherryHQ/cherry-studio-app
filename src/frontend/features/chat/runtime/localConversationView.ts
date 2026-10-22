@@ -198,6 +198,10 @@ export function createLocalConversationProjector(input: {
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
+          ...(approval.toolRef.source === 'builtin' &&
+          approval.toolRef.capabilityId === 'generate_image'
+            ? { imageGeneration: true }
+            : {}),
           state: 'pending',
           ...(isHealth
             ? {

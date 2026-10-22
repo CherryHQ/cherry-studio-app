@@ -232,6 +232,9 @@ importers:
       '@cherrystudio/app-icons':
         specifier: workspace:*
         version: link:packages/app-icons
+      '@cherrystudio/character-avatar':
+        specifier: workspace:*
+        version: link:packages/character-avatar
       '@cherrystudio/design-tokens':
         specifier: workspace:*
         version: link:packages/design-tokens
@@ -822,6 +825,24 @@ importers:
       uniwind:
         specifier: '*'
         version: 1.6.5(patch_hash=791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(tailwindcss@4.3.0)
+
+  packages/character-avatar:
+    dependencies:
+      '@shopify/react-native-skia':
+        specifier: '*'
+        version: 2.6.2(react-native-reanimated@4.5.5(patch_hash=33f006c0e10fff05d47d9879ade97c8c443eb6fd99f4379d5ffef53cc9af4fd8)(7d9e5fc70377e88866d5664e5950a8ac))(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
+      react:
+        specifier: '*'
+        version: 19.2.3
+      react-native:
+        specifier: '*'
+        version: 0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
+      react-native-reanimated:
+        specifier: '*'
+        version: 4.5.5(patch_hash=33f006c0e10fff05d47d9879ade97c8c443eb6fd99f4379d5ffef53cc9af4fd8)(7d9e5fc70377e88866d5664e5950a8ac)
+      zod:
+        specifier: '*'
+        version: 4.4.3
 
   packages/design-tokens: {}
 

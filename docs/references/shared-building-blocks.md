@@ -27,6 +27,9 @@ it already exists.
 | Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `fileContent.createInternalEntry` in `src/backend/services/file/fileContent.ts` |
+| RGBA pixel operations (bounds, difference, transplant, flat-background removal) and their Skia codec | `src/backend/utils/rgbaImage.ts`, `src/backend/services/file/rgbaImageCodec.ts` |
+| Offline avatar drafts, recipes, managed covers and the character library | `createAvatarResources` and `createAvatarCharacters` in `src/backend/services/avatars`, exposed by the `avatars` workflow |
+| Resumable AI avatar creation, reference binding and expression quality gates | `createAvatarStudio` and `avatarStudioQuality` in `src/backend/services/avatars`, exposed by `avatars.studio` |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
@@ -46,6 +49,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 
 | Need | Owner |
 | --- | --- |
+| Avatar customization and playback | `AvatarEditor`, `DynamicAvatar` and `AgentAvatar` in `src/frontend/components/Avatar`; character animation, pack validation and covers in `@cherrystudio/character-avatar` |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
 | Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |

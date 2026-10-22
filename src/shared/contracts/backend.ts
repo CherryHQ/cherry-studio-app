@@ -1,5 +1,6 @@
 import type { AgentProtocol } from './agent';
 import type { AppUpdateModule } from './appUpdate';
+import type { AvatarsModule } from './avatars';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
 import type { DesktopConnectionsModule } from './desktopConnections';
@@ -20,6 +21,7 @@ import type { TranslationModule } from './translation';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly avatars: AvatarsModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;

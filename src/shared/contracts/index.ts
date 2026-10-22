@@ -1,3 +1,4 @@
+export * from './avatars';
 export * from './agent';
 export * from './backend';
 export * from './desktopConnections';

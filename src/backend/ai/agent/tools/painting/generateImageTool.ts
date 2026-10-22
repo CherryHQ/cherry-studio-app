@@ -35,7 +35,7 @@ export function createGenerateImageTool(
     ref: { source: 'builtin', capabilityId: GENERATE_IMAGE_TOOL_NAME },
     providerName: GENERATE_IMAGE_TOOL_NAME,
     displayName: 'Generate image',
-    description: GENERATE_IMAGE_DESCRIPTION,
+    description: `${GENERATE_IMAGE_DESCRIPTION}\nCurrent model: ${configuredModel?.uniqueModelId ?? 'not configured'}. Reference editing: ${configuredModel?.support?.modes.edit ? 'supported' : 'NOT supported. Stop and ask the user to select an edit-capable model for edits or animated avatars.'}`,
     inputSchema: toRuntimeInputSchema(inputSchema),
     // Generation spends the user's provider quota, so it asks unless an Agent
     // binding says otherwise (agent-tools-and-resources.md, Image Generation).

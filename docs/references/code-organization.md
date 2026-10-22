@@ -23,6 +23,7 @@ independent consumer creates a broader owner.
 | Desktop-mirrored portable AI contract or helper | `packages/universal` (dissolving; do not add new modules) |
 | Reusable platform-neutral product interaction component | `packages/ui` |
 | Web page bundled into the app and rendered in a WebView | `packages/<name>` with its own web toolchain |
+| Self-contained product capability with no app knowledge (engine, data format, Skill content) | `packages/<name>`, source-only; app integration stays in `src` |
 | Global or generated declaration | `src/types` |
 
 The repository and `src` top-level directory sets are closed by default. The current `src` roots are

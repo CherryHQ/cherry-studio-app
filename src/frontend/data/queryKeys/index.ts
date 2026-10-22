@@ -11,6 +11,11 @@ import { pluginConnectionQueryKeys } from './pluginConnections';
 import { providerQueryKeys } from './providers';
 
 export const queryKeys = {
+  avatars: {
+    studio: () => ['avatars', 'studio'] as const,
+    characters: () => ['avatars', 'characters'] as const,
+    resource: (source: string) => ['avatars', 'resource', source] as const,
+  },
   agentSessions: agentSessionQueryKeys,
   agents: agentQueryKeys,
   appUpdate: appUpdateQueryKeys,

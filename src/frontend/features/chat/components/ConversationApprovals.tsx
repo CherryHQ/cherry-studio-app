@@ -7,6 +7,7 @@ import { useQuery } from '@/frontend/data';
 
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
 import { ToolApprovalSheet, type ToolApprovalRespondInput } from './ToolApprovalSheet';
+import { ImageGenerationApproval } from './ToolApprovalSheet/ImageGenerationApproval';
 
 /**
  * The sheet consumes a bound decision and its input, never a connection or protocol method.
@@ -54,6 +55,9 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       canApprove={!healthDataSharing || Boolean(recipient.data)}
       onRespond={respond}
     >
+      {interaction?.imageGeneration && input.data?.kind === 'json' ? (
+        <ImageGenerationApproval input={input.data.value} />
+      ) : null}
       {healthDataSharing && recipient.data ? (
         <Text className="text-base text-foreground">
           {t('health.sharingConsent', { provider: recipient.data.name })}

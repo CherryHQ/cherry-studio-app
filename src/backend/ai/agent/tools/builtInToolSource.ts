@@ -21,10 +21,15 @@ import { Platform } from 'react-native';
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
+import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
+import { createAgentAvatars } from '@/backend/services/agents/createAgentAvatars';
+import { createAvatarCharacters } from '@/backend/services/avatars/avatarCharacters';
+import { createAvatarResources } from '@/backend/services/avatars/avatarResources';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
+import { getCharacterStudioInstructions } from '@/backend/services/skill';
 import {
   canRequestDevicePermission,
   canUseDevicePermission,
@@ -48,6 +53,10 @@ import type { RuntimeModel, RuntimeTool } from '../runtime';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
+  type AvatarCharacterToolDependencies,
+  createAvatarCharacterTools,
+} from './avatarCharacterTools';
+import {
   createCalendarTools,
   createHealthTools,
   createLocationTools,
@@ -60,6 +69,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createImageProcessTool } from './imageProcessTool';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -115,6 +125,7 @@ export type SystemCapabilitySource = {
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
+    avatars: AvatarCharacterToolDependencies;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
@@ -175,7 +186,7 @@ export function createSystemCapabilitySource(
         fileAccess,
         workspaceName,
       );
-      return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
+      const tools = BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
         return policy && tool
@@ -187,6 +198,23 @@ export function createSystemCapabilitySource(
             ]
           : [];
       });
+      const characterInstructions = getCharacterStudioInstructions(
+        new Map(
+          tools.flatMap((tool) =>
+            tool.ref.source === 'builtin'
+              ? [[tool.ref.capabilityId, tool.providerName] as const]
+              : [],
+          ),
+        ),
+        scope.paintingModel?.support,
+      );
+      return tools.map((tool) =>
+        tool.ref.source === 'builtin' &&
+        tool.ref.capabilityId === 'avatar_character_save' &&
+        characterInstructions
+          ? { ...tool, description: `${tool.description}\n\n${characterInstructions}` }
+          : tool,
+      );
     },
   };
 }
@@ -286,6 +314,16 @@ function createCatalog(
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     // Office jobs read and write their files natively, which older clients cannot do.
     ...(deps.jsSandbox?.files ? createOfficeTools(deps.jsSandbox, officeFiles, fileAccess) : []),
+    createImageProcessTool(
+      {
+        createInternalEntry: paintingFileStorage.createInternalEntry,
+        readAsBytes: managedFileResolver.readAsBytes,
+        readImage: managedFileResolver.readImage,
+        resolveAvailable: managedFileResolver.resolveAvailable,
+      },
+      resources,
+    ),
+    ...createAvatarCharacterTools(deps.avatars, managedFileResolver, resources, agentId),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.
     ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),
@@ -427,6 +465,7 @@ function resolveDependencies(
 ): SystemCapabilitySourceDependencies {
   return {
     agents: overrides.agents ?? agentService,
+    avatars: overrides.avatars ?? productionAvatarDependencies(),
     trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
@@ -436,6 +475,19 @@ function resolveDependencies(
     supportsToolCalling:
       overrides.supportsToolCalling ?? ((model) => supportsToolCalling(services.model, model)),
     webSearch: overrides.webSearch ?? services.webSearch,
+  };
+}
+
+function productionAvatarDependencies(): AvatarCharacterToolDependencies {
+  const resources = createAvatarResources();
+  return {
+    characters: createAvatarCharacters(),
+    resources,
+    agentAvatars: createAgentAvatars({
+      agents: agentService,
+      images: agentAvatarImages,
+      resources,
+    }),
   };
 }
 

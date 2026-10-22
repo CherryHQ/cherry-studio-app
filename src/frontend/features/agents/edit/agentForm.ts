@@ -10,12 +10,13 @@ import {
   type AgentCapability,
   DEFAULT_DISABLED_AGENT_CAPABILITIES,
 } from '@/shared/data/types/agentCapability';
+import { isAvatarSource } from '@/shared/data/types/avatar';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {
   /**
-   * Draft avatar image URI. Seeded from the record's resolved `avatarUri`, so a
-   * value that still equals the seed means "unchanged" and needs no file write.
+   * Opaque dynamic resource source or picked image URI. A
+   * value that still equals its saved seed needs no file write.
    * Never part of the DTO: the avatar has its own endpoint.
    */
   avatarUri: string | null;
@@ -35,7 +36,7 @@ type BuildAgentDtoOptions = {
 
 export function createAgentFormState(agent?: Agent): AgentFormState {
   return {
-    avatarUri: agent?.avatarUri ?? null,
+    avatarUri: isAvatarSource(agent?.avatar) ? agent.avatar : (agent?.avatarUri ?? null),
     // A new Agent starts with the sensitive device groups and Agent management
     // off; an existing record keeps exactly what was saved.
     disabledCapabilities: agent

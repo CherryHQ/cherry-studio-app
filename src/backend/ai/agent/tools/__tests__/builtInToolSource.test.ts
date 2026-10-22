@@ -47,10 +47,13 @@ describe('createSystemCapabilitySource', () => {
       'agent_create',
       'agent_get',
       'agent_list',
+      'agent_set_avatar',
       'agent_update',
       'ask_user_question',
+      'avatar_character_save',
       'health_list_data_types',
       'edit_file',
+      'image_process',
       'library_search_files',
       'library_read_file',
       'library_list_folders',
@@ -107,7 +110,9 @@ describe('createSystemCapabilitySource', () => {
       'agent_create',
       'agent_get',
       'agent_list',
+      'agent_set_avatar',
       'agent_update',
+      'avatar_character_save',
       'health_get_summary',
       'health_list_workouts',
       'health_list_data_types',
@@ -184,12 +189,15 @@ describe('createSystemCapabilitySource', () => {
       'agent_create',
       'agent_get',
       'agent_list',
+      'agent_set_avatar',
       'agent_update',
       'ask_user_question',
+      'avatar_character_save',
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
       'edit_file',
+      'image_process',
       'library_search_files',
       'library_read_file',
       'library_list_folders',
@@ -238,10 +246,13 @@ describe('createSystemCapabilitySource', () => {
       'agent_create',
       'agent_get',
       'agent_list',
+      'agent_set_avatar',
       'agent_update',
       'ask_user_question',
+      'avatar_character_save',
       'health_list_data_types',
       'edit_file',
+      'image_process',
       'library_search_files',
       'library_read_file',
       'library_list_folders',
@@ -416,17 +427,23 @@ describe('createSystemCapabilitySource', () => {
   });
 
   test('offers generate_image only with a drawing model and the group enabled', async () => {
+    const characterGuide = (tools: readonly RuntimeTool[]) =>
+      tools.find((tool) => tool.providerName === 'avatar_character_save')?.description;
     const withoutModel = await resolve({ paintingModel: null });
     expect(capabilityIds(withoutModel)).not.toContain('generate_image');
+    expect(characterGuide(withoutModel)).not.toContain('character-studio');
 
     const disabled = await resolve({
       disabledCapabilities: ['image'],
       paintingModel: paintingModel(),
     });
     expect(capabilityIds(disabled)).not.toContain('generate_image');
+    expect(characterGuide(disabled)).not.toContain('character-studio');
 
     const enabled = await resolve({ paintingModel: paintingModel() });
     expect(capabilityIds(enabled)).toContain('generate_image');
+    expect(characterGuide(enabled)).toContain('character-studio');
+    expect(characterGuide(enabled)).toContain('#### references/prompts.md');
     expect(approvalOf(enabled, 'generate_image')).toBe('ask');
     // Spending provider quota needs consent even under the global auto mode.
     const tool = enabled.find((candidate) => candidate.providerName === 'generate_image');
@@ -831,7 +848,9 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
 
 function paintingModel(): ConfiguredPaintingModel {
   return {
-    support: { modes: { generate: { supports: {} } } } as ConfiguredPaintingModel['support'],
+    support: {
+      modes: { generate: { supports: {} }, edit: { supports: {} } },
+    } as ConfiguredPaintingModel['support'],
     uniqueModelId: createUniqueModelId('openai', 'gpt-image-1'),
   };
 }

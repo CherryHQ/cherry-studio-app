@@ -28,6 +28,8 @@ const GENERATE_IMAGE_PROMPT_FIELD = z
 type ToolMode = Extract<ImageGenerationMode, 'generate' | 'edit'>;
 
 export type GenerateImageToolInput = {
+  mode: ToolMode;
+  name?: string;
   image_ids?: string[] | null;
   prompt: string;
 } & Partial<Record<CanonicalParamKey, unknown>>;
@@ -140,7 +142,21 @@ export function buildGenerateImageToolSchema(
     }
   }
 
-  const inputShape: Record<string, z.ZodType> = { prompt: GENERATE_IMAGE_PROMPT_FIELD };
+  const inputShape: Record<string, z.ZodType> = {
+    mode: z
+      .enum(['generate', 'edit'])
+      .describe(
+        'Required operation. Use edit for any modification or variation of an existing image. Editing requires image_ids and an edit-capable model; never substitute generate.',
+      ),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe('Short, distinct asset name, such as Orange cat - blink.'),
+    prompt: GENERATE_IMAGE_PROMPT_FIELD,
+  };
 
   for (const [key, entries] of params) {
     // Modes usually share a spec. Identical branches would still emit an anyOf without a
@@ -161,16 +177,12 @@ export function buildGenerateImageToolSchema(
     inputShape[key] = schema.optional();
   }
 
-  if (modes.includes('edit')) {
-    const imageIds = z
-      .array(z.string().trim().min(1))
-      .min(1)
-      .max(MAX_INPUT_IMAGES)
-      .describe(
-        'File entry id of an existing image to edit or use as a reference. Omit to generate a new image.',
-      );
-    inputShape.image_ids = modes.includes('generate') ? imageIds.optional() : imageIds;
-  }
+  const imageIds = z
+    .array(z.string().trim().min(1))
+    .min(1)
+    .max(MAX_INPUT_IMAGES)
+    .describe('Required for mode edit: the existing image file entry id. Omit for mode generate.');
+  inputShape.image_ids = imageIds.optional();
 
   return z.object(inputShape).strict();
 }
