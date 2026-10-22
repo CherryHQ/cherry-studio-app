@@ -1,4 +1,3 @@
-import { devicePermissions } from '@/backend/services/permissions';
 import {
   HEALTH_DATA_TYPES,
   HEALTH_TYPE_CATALOG,
@@ -7,11 +6,7 @@ import {
 } from '@/shared/contracts/health';
 import { HEALTH_ENUM_VALUES } from '@/shared/contracts/healthValues';
 
-import type {
-  HealthQueryOptions,
-  HealthRecordOptions,
-  HealthVerifiableRecordOptions,
-} from '../../../../modules/health-access';
+import type { HealthQueryOptions, HealthRecordOptions } from '../../../../modules/health-access';
 import { normalizeOptionalDateRange, withNativeToolTimeout } from './utils';
 
 type Reader = ReturnType<typeof import('../../../../modules/health-access').getHealthDataReader>;
@@ -56,13 +51,6 @@ export async function listHealthDataTypes(
     nextOffset: input.offset + page.length < types.length ? input.offset + page.length : null,
     note: 'Availability means the current iOS supports the type, not that records exist or read access was granted. Statistics are only for quantity types. No public HealthKit sleep-score type is exposed.',
     documentation: 'https://developer.apple.com/documentation/healthkit/data-types',
-    additionalReadTools: [
-      {
-        tool: 'health_share_verifiable_records',
-        description:
-          'SMART Health Cards and EU Digital COVID Certificates use one-time selection instead of ordinary type authorization. Requires a separate Apple-approved restricted entitlement.',
-      },
-    ],
   };
 }
 
@@ -89,9 +77,7 @@ export async function queryHealthData(
   if (input.workoutId && ['characteristic', 'activitySummary', 'medication'].includes(spec.kind))
     throw new Error('Workout filtering only applies to sample types.');
   if (input.reselectRecords && !healthRecordSelectionType(type))
-    throw new Error(
-      'reselectRecords applies only to vision prescriptions and medications. CDA documents request selection when their details are read.',
-    );
+    throw new Error('reselectRecords applies only to vision prescriptions and medications.');
   const range = normalizeOptionalDateRange(input.startDate, input.endDate);
   const reader = await load();
   const result = await withNativeToolTimeout(
@@ -127,21 +113,12 @@ export async function getHealthRecord(
   const type = resolveHealthDataType(input.type);
   const reader = await load();
   signal?.throwIfAborted();
-  // Document queries own their native timeout. A JS timeout must not release an open sheet.
-  const result =
-    type === 'cdaDocument' && !input.attachmentId
-      ? await devicePermissions.runWithSystemPrompt(() => reader.getRecord(type, input), signal)
-      : await withNativeToolTimeout(reader.getRecord(type, input), 'Health record query', 60_000);
+  const result = await withNativeToolTimeout(
+    reader.getRecord(type, input),
+    'Health record query',
+    60_000,
+  );
   return { ...result, type, valueDefinitions: valueDefinitions(type), accessNote: ACCESS_NOTE };
-}
-
-export async function shareVerifiableHealthRecords(
-  input: HealthVerifiableRecordOptions,
-  load: HealthDataReaderLoader = loadHealthDataReader,
-  signal?: AbortSignal,
-) {
-  const reader = await load();
-  return devicePermissions.runWithSystemPrompt(() => reader.shareVerifiableRecords(input), signal);
 }
 
 function valueDefinitions(type: HealthDataType) {

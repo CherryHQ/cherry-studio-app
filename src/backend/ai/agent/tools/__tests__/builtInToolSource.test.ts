@@ -50,7 +50,6 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -166,7 +165,6 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -219,7 +217,6 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
-      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -270,11 +267,7 @@ describe('createSystemCapabilitySource', () => {
 
   test('keeps extended personal health reads explicit while allowing public catalog lookup', async () => {
     const tools = await resolve({ deviceAccess: { 'health.electrocardiogram.read': 'requested' } });
-    for (const id of [
-      'health_query_data',
-      'health_get_record',
-      'health_share_verifiable_records',
-    ]) {
+    for (const id of ['health_query_data', 'health_get_record']) {
       expect(tools.find((tool) => tool.providerName === id)).toMatchObject({
         approval: 'ask',
         autoApprovalEligible: false,

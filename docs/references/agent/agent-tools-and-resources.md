@@ -507,8 +507,7 @@ contains these tools:
 | `health_list_workouts` | Newest-first workout overview with truncation information |
 | `health_list_data_types` | Search the public catalog and current iOS availability; no personal data |
 | `health_query_data` | Any supported type's original records, quantity statistics, characteristics, activity rings or medication list |
-| `health_get_record` | Record details, waveform/route/quantity points, clinical/CDA content and attachments |
-| `health_share_verifiable_records` | One-time selected SMART Health Cards / EU Digital COVID Certificates; requires Apple’s restricted entitlement |
+| `health_get_record` | Record details, waveform/route/quantity points and attachments |
 
 All personal-data tools require application approval even in automatic approval mode. Only public
 catalog discovery can run automatically. The approval sheet names the receiving model service and
@@ -518,8 +517,9 @@ Existing Agents retain their stored preference. Android has no Health Connect br
 
 The [native module](../../../modules/health-access/README.md) and shared catalog cover the current
 public HealthKit types in the iOS 27.1 SDK, including quantities, symptoms, reproductive health,
-nutrition, hearing, vision, ECG, clinical records and medications. Minimum iOS versions are checked
-per type. Neither a supported type nor a completed authorization request proves that read access
+nutrition, hearing, vision, ECG and medications. Clinical health records, CDA documents and
+verifiable health records are deliberately excluded, so the app requests no Health Records
+entitlement. Minimum iOS versions are checked per type. Neither a supported type nor a completed authorization request proves that read access
 was granted. Empty data cannot distinguish denied access from missing records and must not be
 reported as measured zero. No writing, background delivery or extended-history access is requested.
 
@@ -559,19 +559,9 @@ Activity rings cover complete local calendar days. Blood-pressure and food autho
 the contained quantities. Vision prescriptions and medications use per-object selection;
 medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
 selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
-selections, CDA content prompts and verifiable credential prompts share the application permission
-queue. Queued reads respect cancellation; an open selection retains the queue until native
-completion or timeout. Clinical reads require the extra Health Records entitlement and usage
-description.
+selections share the application permission queue.
 
-Verifiable credentials use a separate one-time selection query and explicit application approval,
-with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;
-continuations require selecting the same records. Original payload bytes are returned without
-verifying the signature or issuer. This API also requires a restricted entitlement approved by Apple,
-which this change does not obtain or enable; an ordinary clinical capability does not suffice.
-
-A new native binary is required, including a signing profile with the clinical capability. The
-initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
+A new native binary is required. The initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
 App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
 categories and selected AI service. See [Health Review](../../guides/health-review.md).
 
