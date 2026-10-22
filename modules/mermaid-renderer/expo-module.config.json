@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/MermaidRenderer.podspec",
+    "modules": ["MermaidRendererModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.mermaidrenderer.MermaidRendererModule"]
+  }
+}

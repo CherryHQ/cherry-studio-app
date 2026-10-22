@@ -44,6 +44,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+/modules/mermaid-renderer/shared/.gradle/
+/modules/mermaid-renderer/shared/.kotlin/
+/modules/mermaid-renderer/shared/build/
 
 .zed/*
 .idea/*

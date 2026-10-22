@@ -5,6 +5,12 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`MermaidDiagram` is a presentation-only component for common Mermaid diagrams on Android and iOS.
+Pass existing source; the component owns native layout, theme mapping, and SVG display. `MarkdownText`
+uses it for complete top-level Mermaid code blocks and preserves source fallback for incomplete or
+unsupported input. See [the component contract](./src/components/mermaid-diagram/README.md) and
+[native integration](../../modules/mermaid-renderer/README.md).
+
 `OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
 read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
 dismissible sheets and Cherry-rendered menus close

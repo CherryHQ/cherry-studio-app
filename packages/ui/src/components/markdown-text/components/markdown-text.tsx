@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import {
   EnrichedMarkdownText,
   type LinkPressEvent,
@@ -9,7 +9,9 @@ import { StreamdownText } from 'react-native-streamdown';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { normalizeLatexDelimiters } from '../../../markdown';
+import { splitMermaidBlocks } from '../../../markdown/split-mermaid-blocks';
 import { resolveTypographyScale, type TypographySizeStep } from '../../../utils/typography-scale';
+import { MermaidDiagram } from '../../mermaid-diagram';
 import { resolveSyntaxColors } from '../utils/syntax-colors';
 
 const markdownThemeVariables = [
@@ -280,21 +282,40 @@ export function MarkdownText({
     [isStreaming, markdown],
   );
 
+  const parts = splitMermaidBlocks(normalizedMarkdown, isStreaming);
+
   return (
-    <MarkdownRenderer
-      allowTrailingMargin={false}
-      flavor="github"
-      markdown={normalizedMarkdown}
-      markdownStyle={markdownStyle}
-      md4cFlags={{ latexMath: true, superscript: true, underline: false }}
-      onLinkPress={handleLinkPress}
-      selectable={selectable}
-      // iOS derives the translucent highlight and handles from one opaque tint.
-      selectionColor={Platform.OS === 'ios' ? mutedForeground : secondary}
-      selectionHandleColor={mutedForeground}
-      selectionMenuConfig={selectionMenuConfig}
-      streamingAnimation={isStreaming}
-    />
+    <View className="min-w-0 gap-3">
+      {parts.map((part, index) => {
+        const content = (
+          <MarkdownRenderer
+            key={part.key}
+            allowTrailingMargin={false}
+            flavor="github"
+            markdown={part.markdown}
+            markdownStyle={markdownStyle}
+            md4cFlags={{ latexMath: true, superscript: true, underline: false }}
+            onLinkPress={handleLinkPress}
+            selectable={selectable}
+            // iOS derives the translucent highlight and handles from one opaque tint.
+            selectionColor={Platform.OS === 'ios' ? mutedForeground : secondary}
+            selectionHandleColor={mutedForeground}
+            selectionMenuConfig={selectionMenuConfig}
+            streamingAnimation={isStreaming && index === parts.length - 1}
+          />
+        );
+        return part.kind === 'mermaid' ? (
+          <MermaidDiagram
+            key={part.key}
+            fallback={content}
+            fontSizeStep={fontSizeStep}
+            source={part.source}
+          />
+        ) : (
+          content
+        );
+      })}
+    </View>
   );
 }
 

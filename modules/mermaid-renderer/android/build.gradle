@@ -1,0 +1,29 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.mermaidrenderer'
+version = '1.0.0'
+
+def mermaidProperties = new Properties()
+file('../gradle.properties').withInputStream { mermaidProperties.load(it) }
+def mermaidVersion = mermaidProperties.getProperty('mermaidVersion')
+
+repositories {
+  maven {
+    url 'https://maven.artifacts.botiverse.dev'
+    content { includeGroup 'build.raft.mermaid' }
+  }
+}
+
+android {
+  namespace 'expo.modules.mermaidrenderer'
+  defaultConfig { versionCode 1; versionName '1.0.0' }
+  sourceSets.main.java.srcDir '../shared/src/commonMain/kotlin'
+}
+
+dependencies {
+  implementation "build.raft.mermaid:mermaid-layout-simple:${mermaidVersion}"
+  implementation "build.raft.mermaid:mermaid-render-svg:${mermaidVersion}"
+}
