@@ -87,6 +87,7 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  'app_update.last_reminder': { releaseId: string; remindedAt: number } | null;
   /** Skill document translations indexed by content hash and target language. */
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
@@ -99,6 +100,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'app_update.last_reminder': null,
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},

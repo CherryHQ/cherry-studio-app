@@ -3,6 +3,7 @@
 This directory owns frontend infrastructure that applies across the application rather than one
 page.
 
+- `appUpdate/` owns shared package-update reminders, decisions and entry points across channels.
 - `fileExport/` owns watermark preparation, system file sharing and photo saving.
 - `documentExport/` owns the source-neutral document export navigation handoff.
 - `header/` owns the app-wide main and route header adapters.

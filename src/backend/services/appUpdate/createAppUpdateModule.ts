@@ -1,97 +1,141 @@
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+import { getLocales } from 'expo-localization';
 import { Linking, Platform } from 'react-native';
-import { z } from 'zod';
 
-import { createHttpClient, HttpError } from '@/backend/services/http';
 import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
-import { compareReleaseVersions, parseReleaseVersion } from './releaseVersion';
+import { getNativeAppUpdate } from '../../../../modules/app-update';
+import { checkAppStoreRelease } from './appStoreRelease';
+import { resolveAppUpdateChannel } from './appUpdateChannel';
+import { createApkDownload } from './createApkDownload';
+import { assertApkRelease, checkGitcodeRelease } from './gitcodeRelease';
+import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
 
-const REPOSITORY = 'CherryHQ/cherry-studio-app';
-const ReleaseSchema = z.object({
-  tag_name: z.string().regex(/^v?\d+\.\d+\.\d+$/),
-  prerelease: z.boolean(),
-  release_status: z.string(),
-  assets: z.array(
-    z.object({ name: z.string(), type: z.string(), browser_download_url: z.string() }),
-  ),
-});
+export function createAppUpdateModule(dependencies: {
+  requestInstallPermission: () => Promise<boolean>;
+}): AppUpdateModule & { dispose(): Promise<void> } {
+  const channel = resolveAppUpdateChannel(
+    Platform.OS,
+    runningUpdate.channel,
+    __DEV__ && Constants.expoConfig?.extra?.isApkUpdatesEnabled === true,
+  );
+  const download = createApkDownload();
+  let stopped = false;
+  let installation: ReturnType<AppUpdateModule['install']> | undefined;
 
-export function createAppUpdateModule(): AppUpdateModule {
-  const isEnabled =
-    Platform.OS === 'android' &&
-    // The embedded channel cannot be changed by an OTA manifest. Unconfigured release builds fail closed.
-    (runningUpdate.channel === 'production-apk' ||
-      (__DEV__ &&
-        runningUpdate.channel === null &&
-        Constants.expoConfig?.extra?.isApkUpdatesEnabled === true));
-  const gitcode = createHttpClient({
-    baseUrl: 'https://api.gitcode.com/api/v5',
-    headers: { Accept: 'application/json' },
-    timeoutMs: 10_000,
-  });
+  function requireApk() {
+    if (stopped || channel !== 'apk')
+      throw new Error('APK updates are disabled for this distribution');
+    const native = getNativeAppUpdate();
+    if (!native?.isApkInstallationEnabled())
+      throw new Error('APK installation native module is unavailable');
+    return native;
+  }
 
   return {
-    isEnabled,
+    channel,
+    isEnabled: channel !== null,
     async check(signal): Promise<AppUpdateResult> {
-      if (!isEnabled) return { status: 'unavailable', reason: 'unsupported' };
+      signal?.throwIfAborted();
+      if (stopped || !channel) return { status: 'unavailable', reason: 'unsupported' };
       const currentVersion = Application.nativeApplicationVersion?.trim();
       if (!currentVersion) return { status: 'unavailable', reason: 'unknownVersion' };
-      // Reject an unparseable installed version before the request; never infer "up to date" from bad data.
       parseReleaseVersion(currentVersion);
-      let data: unknown;
-      try {
-        const response = await gitcode.request<unknown>({
-          method: 'GET',
-          path: `/repos/${REPOSITORY}/releases/latest`,
-          query: { type: 'latest' },
-          maxResponseBytes: 512_000,
-          signal,
-        });
-        data = response.data;
-      } catch (error) {
-        if (error instanceof HttpError && error.status === 404) {
-          return { status: 'unavailable', reason: 'noRelease' };
+      if (channel === 'apk') {
+        if (!getNativeAppUpdate()?.isApkInstallationEnabled()) {
+          return { status: 'unavailable', reason: 'nativeUnavailable' };
         }
-        throw error;
+        return checkGitcodeRelease(currentVersion, signal);
       }
-      const release = ReleaseSchema.parse(data);
-      const latestVersion = release.tag_name.replace(/^v/, '');
-      const apkName = `cherry-studio-${latestVersion}-android.apk`;
-      const downloadUrl = apkDownloadUrl(release.tag_name);
-      const hasApk = release.assets.some(
-        (asset) =>
-          asset.name === apkName &&
-          asset.type === 'attach' &&
-          asset.browser_download_url === downloadUrl,
-      );
-      if (release.prerelease || release.release_status !== 'latest' || !hasApk) {
-        return { status: 'unavailable', reason: 'noRelease' };
+      if (!Application.applicationId) return { status: 'unavailable', reason: 'unknownVersion' };
+      if (channel === 'google-play') {
+        const native = getNativeAppUpdate();
+        if (!native) return { status: 'unavailable', reason: 'nativeUnavailable' };
+        const update = await native.checkPlayUpdate();
+        signal?.throwIfAborted();
+        if (!update.available) return { status: 'upToDate', currentVersion };
+        const currentBuild = Number(Application.nativeBuildVersion);
+        if (!Number.isSafeInteger(currentBuild) || currentBuild <= 0) {
+          return { status: 'unavailable', reason: 'unknownVersion' };
+        }
+        if (!Number.isSafeInteger(update.versionCode) || update.versionCode <= currentBuild) {
+          throw new Error('Invalid Google Play update version');
+        }
+        return {
+          status: 'available',
+          channel,
+          id: `google-play:${update.versionCode}`,
+          currentVersion,
+          latestVersion: null,
+          storeUrl: `https://play.google.com/store/apps/details?id=${Application.applicationId}`,
+        };
       }
-      return compareReleaseVersions(latestVersion, currentVersion) > 0
-        ? {
-            status: 'available',
-            currentVersion,
-            latestVersion,
-            downloadUrl,
-          }
-        : { status: 'upToDate', currentVersion };
+      const region = getLocales()[0]?.regionCode;
+      const country = region && /^[A-Z]{2}$/.test(region) ? region : 'US';
+      return checkAppStoreRelease(Application.applicationId, currentVersion, country, signal);
     },
-    async openDownload(downloadUrl) {
-      if (!isEnabled) throw new Error('APK updates are disabled for this distribution');
-      const tag =
-        /^https:\/\/gitcode\.com\/CherryHQ\/cherry-studio-app\/releases\/download\/(v?\d+\.\d+\.\d+)\//.exec(
-          downloadUrl,
-        )?.[1];
-      if (!tag || downloadUrl !== apkDownloadUrl(tag)) throw new Error('Invalid APK download URL');
-      // The system browser owns the download; the app requests no package-install permission.
-      await Linking.openURL(downloadUrl);
+    async openStore(release) {
+      if (stopped || release.channel === 'apk' || release.channel !== channel) {
+        throw new Error('Invalid store update action');
+      }
+      if (channel === 'google-play') {
+        if (
+          !Application.applicationId ||
+          release.storeUrl !==
+            `https://play.google.com/store/apps/details?id=${Application.applicationId}`
+        ) {
+          throw new Error('Invalid Google Play URL');
+        }
+        try {
+          await Linking.openURL(`market://details?id=${Application.applicationId}`);
+          return;
+        } catch {
+          /* Fall back to the official web listing when no market handler is available. */
+        }
+      } else {
+        const match = /^app-store:(\d+):/.exec(release.id);
+        if (
+          !match ||
+          !/^https:\/\/apps\.apple\.com\/[a-z]{2}\/app\/id\d+$/.test(release.storeUrl) ||
+          !release.storeUrl.endsWith(`/id${match[1]}`)
+        )
+          throw new Error('Invalid App Store URL');
+      }
+      await Linking.openURL(release.storeUrl);
+    },
+    async download(release) {
+      requireApk();
+      assertApkRelease(release, Application.nativeApplicationVersion?.trim() ?? '');
+      await download.download(release);
+    },
+    cancelDownload: download.cancelDownload,
+    getDownload: download.getDownload,
+    subscribeDownload: download.subscribeDownload,
+    async install() {
+      const native = requireApk();
+      if (installation) return installation;
+      if (download.getDownload().status !== 'ready') throw new Error('No verified APK is ready');
+      installation = native
+        .installApk()
+        .then((result) => {
+          if (result === 'invalidPackage') download.invalidateReady();
+          return result;
+        })
+        .finally(() => {
+          installation = undefined;
+        });
+      return installation;
+    },
+    async requestInstallPermission() {
+      requireApk();
+      return dependencies.requestInstallPermission();
+    },
+    async dispose() {
+      stopped = true;
+      await download.dispose();
+      await installation?.catch(() => {});
     },
   };
-}
-
-function apkDownloadUrl(tag: string): string {
-  return `https://gitcode.com/${REPOSITORY}/releases/download/${tag}/cherry-studio-${tag.replace(/^v/, '')}-android.apk`;
 }

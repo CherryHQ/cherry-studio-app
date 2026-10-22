@@ -2,254 +2,211 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
-import { HttpError } from '@/backend/services/http';
+import type { ApkUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { createAppUpdateModule } from '../createAppUpdateModule';
 import { runningUpdate } from '../runningUpdate';
 
 jest.mock('expo-application', () => ({
-  __esModule: true,
   nativeApplicationVersion: '1.9.0',
+  nativeBuildVersion: '19',
+  applicationId: 'com.example.app',
 }));
-jest.mock('../runningUpdate', () => ({ runningUpdate: { channel: 'production-apk' } }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
-  default: { expoConfig: { version: '1.9.0', extra: { isApkUpdatesEnabled: true } } },
+  default: { expoConfig: { version: '9.0.0', extra: { isApkUpdatesEnabled: true } } },
 }));
-jest.mock('react-native', () => ({
-  Platform: { OS: 'android' },
-  Linking: { openURL: jest.fn() },
-}));
-const mockRequest = jest.fn();
-jest.mock('@/backend/services/http', () => ({
-  ...jest.requireActual('@/backend/services/http'),
-  createHttpClient: () => ({ request: mockRequest }),
-}));
-
-const downloadUrl =
-  'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v1.10.0/cherry-studio-1.10.0-android.apk';
-const apk = {
-  name: 'cherry-studio-1.10.0-android.apk',
-  type: 'attach',
-  browser_download_url: downloadUrl,
+jest.mock('expo-localization', () => ({ getLocales: () => [{ regionCode: 'CN' }] }));
+jest.mock('react-native', () => ({ Platform: { OS: 'android' }, Linking: { openURL: jest.fn() } }));
+jest.mock('../runningUpdate', () => ({ runningUpdate: { channel: 'production-apk' } }));
+const mockNative = {
+  isApkInstallationEnabled: jest.fn(() => true),
+  installApk: jest.fn(async () => 'opened'),
+  checkPlayUpdate: jest.fn(async () => ({ available: true, versionCode: 20 })),
 };
-const release = {
-  tag_name: 'v1.10.0',
-  prerelease: false,
-  release_status: 'latest',
-  assets: [
-    {
-      name: 'cherry-studio-app-v1.10.0.zip',
-      type: 'source',
-      browser_download_url: 'https://gitcode.com/CherryHQ/cherry-studio-app/-/archive/v1.10.0.zip',
-    },
-    apk,
-  ],
+const mockGetNative = jest.fn(() => mockNative as typeof mockNative | null);
+jest.mock('../../../../../modules/app-update', () => ({
+  getNativeAppUpdate: () => mockGetNative(),
+}));
+const mockDownload = {
+  download: jest.fn(async () => {}),
+  cancelDownload: jest.fn(async () => {}),
+  getDownload: jest.fn(() => ({ status: 'idle' })),
+  subscribeDownload: jest.fn(),
+  dispose: jest.fn(async () => {}),
+  invalidateReady: jest.fn(),
+};
+jest.mock('../createApkDownload', () => ({ createApkDownload: () => mockDownload }));
+const mockCheckApk = jest.fn();
+const mockAssertApk = jest.fn();
+const mockCheckAppStore = jest.fn();
+jest.mock('../gitcodeRelease', () => ({
+  checkGitcodeRelease: (...args: unknown[]) => mockCheckApk(...args),
+  assertApkRelease: (...args: unknown[]) => mockAssertApk(...args),
+}));
+jest.mock('../appStoreRelease', () => ({
+  checkAppStoreRelease: (...args: unknown[]) => mockCheckAppStore(...args),
+}));
+const mockPermission = jest.fn(async () => true);
+const create = () => createAppUpdateModule({ requestInstallPermission: mockPermission });
+const apk: ApkUpdateRelease = {
+  channel: 'apk',
+  id: 'apk:1.10.0',
+  currentVersion: '1.9.0',
+  latestVersion: '1.10.0',
+  downloadUrl:
+    'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v1.10.0/cherry-studio-1.10.0-android.apk',
+  checksumUrl:
+    'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v1.10.0/SHA256SUMS',
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockRequest.mockResolvedValue({ data: release });
+  mockGetNative.mockReturnValue(mockNative);
+  mockNative.isApkInstallationEnabled.mockReturnValue(true);
+  mockNative.checkPlayUpdate.mockResolvedValue({ available: true, versionCode: 20 });
+  mockCheckApk.mockResolvedValue({ status: 'available', ...apk });
+  mockDownload.getDownload.mockReturnValue({ status: 'idle' });
   jest.mocked(Linking.openURL).mockResolvedValue(undefined);
+  jest.replaceProperty(globalThis, '__DEV__', false);
 });
-
 afterEach(() => jest.restoreAllMocks());
 
-test('selects the latest GitCode APK attachment and forwards cancellation', async () => {
-  jest.replaceProperty(globalThis, '__DEV__', false);
+test('checks the installed version, forwards cancellation, and never downloads on discovery', async () => {
   const signal = new AbortController().signal;
-  const updates = createAppUpdateModule();
-  expect(updates.isEnabled).toBe(true);
-  await expect(updates.check(signal)).resolves.toEqual({
-    status: 'available',
-    currentVersion: '1.9.0',
-    latestVersion: '1.10.0',
-    downloadUrl,
-  });
-  expect(mockRequest).toHaveBeenCalledWith(
-    expect.objectContaining({
-      method: 'GET',
-      path: '/repos/CherryHQ/cherry-studio-app/releases/latest',
-      query: { type: 'latest' },
-      signal,
-    }),
-  );
+  await expect(create().check(signal)).resolves.toEqual({ status: 'available', ...apk });
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', signal);
+  expect(mockDownload.download).not.toHaveBeenCalled();
   expect(Linking.openURL).not.toHaveBeenCalled();
 });
 
-test.each(['1.10.0', '2.0.0'])(
-  'equal/newer installed versions never prompt a downgrade: %s',
-  async (version) => {
-    jest.replaceProperty(Application, 'nativeApplicationVersion', version);
-    await expect(createAppUpdateModule().check()).resolves.toEqual({
-      status: 'upToDate',
-      currentVersion: version,
-    });
-  },
-);
-
-test.each([
-  { assets: [] },
-  { assets: [{ ...apk, name: 'cherry-studio-1.10.0-android.aab' }] },
-  { assets: [{ ...apk, name: 'cherry-studio-1.9.0-android.apk' }] },
-  { assets: [{ ...apk, type: 'source' }] },
-  { assets: [{ ...apk, browser_download_url: 'https://unrelated.example/app.apk' }] },
-  { assets: [{ ...apk, browser_download_url: downloadUrl.replace('/v1.10.0/', '/v1.9.0/') }] },
-  { prerelease: true },
-  { release_status: 'pre' },
-  { release_status: 'draft' },
-])('does not advertise a release without a stable APK attachment: %j', async (overrides) => {
-  mockRequest.mockResolvedValue({ data: { ...release, ...overrides } });
-  await expect(createAppUpdateModule().check()).resolves.toEqual({
-    status: 'unavailable',
-    reason: 'noRelease',
-  });
-});
-
-test('a tag without v still matches the published APK and destination', async () => {
-  const url = downloadUrl.replace('/v1.10.0/', '/1.10.0/');
-  mockRequest.mockResolvedValue({
-    data: { ...release, tag_name: '1.10.0', assets: [{ ...apk, browser_download_url: url }] },
-  });
-  const updates = createAppUpdateModule();
-  await expect(updates.check()).resolves.toMatchObject({ status: 'available', downloadUrl: url });
-  await updates.openDownload(url);
-  expect(Linking.openURL).toHaveBeenCalledWith(url);
-});
-
-test('a missing latest release is distinct from up-to-date', async () => {
-  mockRequest.mockRejectedValue(new HttpError('Not found', { kind: 'http', status: 404 }));
-  await expect(createAppUpdateModule().check()).resolves.toEqual({
-    status: 'unavailable',
-    reason: 'noRelease',
-  });
-});
-
-test.each([
-  new HttpError('Rate limited', { kind: 'http', status: 403 }),
-  new HttpError('Offline', { kind: 'network' }),
-  new HttpError('Timed out', { kind: 'timeout' }),
-])('request failures are not converted into up-to-date: %s', async (error) => {
-  mockRequest.mockRejectedValue(error);
-  await expect(createAppUpdateModule().check()).rejects.toBe(error);
-});
-
-test.each(['invalid', 'v1.10.0/../../other', 'v1.10.0-beta.1'])(
-  'rejects malformed or nonnumeric release tags: %s',
-  async (tag) => {
-    mockRequest.mockResolvedValue({ data: { ...release, tag_name: tag } });
-    await expect(createAppUpdateModule().check()).rejects.toThrow();
-  },
-);
-
-test('missing app version does not produce an update decision', async () => {
+test('missing or malformed installed versions cannot produce an update decision', async () => {
   jest.replaceProperty(Application, 'nativeApplicationVersion', null);
-  await expect(createAppUpdateModule().check()).resolves.toEqual({
+  await expect(create().check()).resolves.toEqual({
     status: 'unavailable',
     reason: 'unknownVersion',
   });
-  expect(mockRequest).not.toHaveBeenCalled();
-});
-
-test('invalid app version fails before requesting release metadata', async () => {
   jest.replaceProperty(Application, 'nativeApplicationVersion', 'unknown');
-  await expect(createAppUpdateModule().check()).rejects.toThrow('Invalid release version');
-  expect(mockRequest).not.toHaveBeenCalled();
+  await expect(create().check()).rejects.toThrow('Invalid release version');
+  expect(mockCheckApk).not.toHaveBeenCalled();
 });
 
-test('compares the installed APK version even when an OTA manifest reports a newer version', async () => {
-  jest.replaceProperty(Constants.expoConfig!, 'version', '2.0.0');
-  await expect(createAppUpdateModule().check()).resolves.toEqual({
+test.each(['preview', null, 'production-ios'])(
+  'unconfigured Android channel %s stays disabled despite an OTA flag',
+  async (channel) => {
+    jest.replaceProperty(runningUpdate, 'channel', channel);
+    const updates = create();
+    expect(updates.isEnabled).toBe(false);
+    await expect(updates.check()).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'unsupported',
+    });
+    await expect(updates.download(apk)).rejects.toThrow('disabled');
+    await expect(updates.install()).rejects.toThrow('disabled');
+    await expect(updates.requestInstallPermission()).rejects.toThrow('disabled');
+    expect(mockCheckApk).not.toHaveBeenCalled();
+  },
+);
+
+test('the native Play channel ignores an enabled APK flag and cannot download or install APKs', async () => {
+  jest.replaceProperty(runningUpdate, 'channel', 'production-google-play');
+  const updates = create();
+  const result = await updates.check();
+  expect(result).toMatchObject({
     status: 'available',
-    currentVersion: '1.9.0',
-    latestVersion: '1.10.0',
-    downloadUrl,
+    channel: 'google-play',
+    id: 'google-play:20',
+    latestVersion: null,
+  });
+  expect(mockCheckApk).not.toHaveBeenCalled();
+  await expect(updates.download(apk)).rejects.toThrow('disabled');
+  await expect(updates.install()).rejects.toThrow('disabled');
+  await expect(updates.requestInstallPermission()).rejects.toThrow('disabled');
+  if (result.status !== 'available') throw new Error('Expected store release');
+  jest.mocked(Linking.openURL).mockRejectedValueOnce(new Error('No store handler'));
+  await updates.openStore(result);
+  expect(Linking.openURL).toHaveBeenNthCalledWith(1, 'market://details?id=com.example.app');
+  expect(Linking.openURL).toHaveBeenNthCalledWith(
+    2,
+    'https://play.google.com/store/apps/details?id=com.example.app',
+  );
+});
+
+test('Play check failure remains an error and a missing native module is not up-to-date', async () => {
+  jest.replaceProperty(runningUpdate, 'channel', 'production-google-play');
+  mockNative.checkPlayUpdate.mockRejectedValueOnce(new Error('Store unavailable'));
+  await expect(create().check()).rejects.toThrow('Store unavailable');
+  mockGetNative.mockReturnValue(null);
+  await expect(create().check()).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'nativeUnavailable',
   });
 });
 
-test.each(['production-google-play', 'production-ios', 'preview', null])(
-  'channel %s cannot enable APK downloads through an OTA flag',
-  async (channel) => {
-    jest.replaceProperty(globalThis, '__DEV__', false);
-    jest.replaceProperty(runningUpdate, 'channel', channel);
-    const updates = createAppUpdateModule();
-    expect(updates.isEnabled).toBe(false);
-    await expect(updates.check()).resolves.toEqual({
-      status: 'unavailable',
-      reason: 'unsupported',
-    });
-    await expect(updates.openDownload(downloadUrl)).rejects.toThrow('disabled');
-    expect(mockRequest).not.toHaveBeenCalled();
-    expect(Linking.openURL).not.toHaveBeenCalled();
-  },
-);
-
-test('the production-apk channel enables checks without the development flag', () => {
-  jest.replaceProperty(globalThis, '__DEV__', false);
-  jest.replaceProperty(Constants.expoConfig!, 'extra', {});
-  expect(createAppUpdateModule().isEnabled).toBe(true);
+test('Play uses build numbers and does not infer a version name', async () => {
+  jest.replaceProperty(runningUpdate, 'channel', 'production-google-play');
+  mockNative.checkPlayUpdate.mockResolvedValue({ available: false, versionCode: 0 });
+  await expect(create().check()).resolves.toEqual({ status: 'upToDate', currentVersion: '1.9.0' });
+  mockNative.checkPlayUpdate.mockResolvedValue({ available: true, versionCode: 19 });
+  await expect(create().check()).rejects.toThrow('Invalid Google Play update version');
 });
 
-test('an unconfigured development client can explicitly opt into APK checks', async () => {
+test('iOS reads published store metadata and cannot invoke APK operations', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
+  mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
+  const updates = create();
+  await updates.check();
+  expect(mockCheckAppStore).toHaveBeenCalledWith('com.example.app', '1.9.0', 'CN', undefined);
+  expect(mockCheckApk).not.toHaveBeenCalled();
+  await expect(updates.download(apk)).rejects.toThrow('disabled');
+});
+
+test('development requires an explicit flag and never overrides another native channel', () => {
   jest.replaceProperty(globalThis, '__DEV__', true);
   jest.replaceProperty(runningUpdate, 'channel', null);
-  expect(createAppUpdateModule().isEnabled).toBe(true);
+  expect(create().channel).toBe('apk');
   jest.replaceProperty(Constants.expoConfig!, 'extra', { isApkUpdatesEnabled: false });
-  expect(createAppUpdateModule().isEnabled).toBe(false);
+  expect(create().channel).toBeNull();
 });
 
-test.each([
-  ['android', false],
-  ['android', undefined],
-  ['android', 'true'],
-  ['android', 'false'],
-  ['android', 1],
-  ['ios', true],
-  ['web', true],
-] as const)(
-  '%s development client with flag %s cannot check or open an APK download',
-  async (platform, flag) => {
-    jest.replaceProperty(globalThis, '__DEV__', true);
-    jest.replaceProperty(runningUpdate, 'channel', null);
-    jest.replaceProperty(Platform, 'OS', platform);
-    jest.replaceProperty(Constants.expoConfig!, 'extra', { isApkUpdatesEnabled: flag });
-    const updates = createAppUpdateModule();
-    expect(updates.isEnabled).toBe(false);
-    await expect(updates.check()).resolves.toEqual({
-      status: 'unavailable',
-      reason: 'unsupported',
-    });
-    await expect(updates.openDownload(downloadUrl)).rejects.toThrow('disabled');
-    expect(mockRequest).not.toHaveBeenCalled();
-    expect(Linking.openURL).not.toHaveBeenCalled();
-  },
-);
-
-test('only an explicit download action opens the APK in the system browser', async () => {
-  const updates = createAppUpdateModule();
-  await updates.check();
-  expect(Linking.openURL).not.toHaveBeenCalled();
-  await updates.openDownload(downloadUrl);
-  expect(Linking.openURL).toHaveBeenCalledWith(downloadUrl);
+test('native installation capability and verified readiness are required independently', async () => {
+  const updates = create();
+  mockNative.isApkInstallationEnabled.mockReturnValue(false);
+  await expect(updates.download(apk)).rejects.toThrow('native module');
+  mockNative.isApkInstallationEnabled.mockReturnValue(true);
+  await expect(updates.install()).rejects.toThrow('No verified APK');
+  await updates.download(apk);
+  expect(mockAssertApk).toHaveBeenCalledWith(apk, '1.9.0');
+  expect(mockDownload.download).toHaveBeenCalledWith(apk);
+  expect(mockNative.installApk).not.toHaveBeenCalled();
+  mockDownload.getDownload.mockReturnValue({ status: 'ready' });
+  await expect(updates.install()).resolves.toBe('opened');
 });
 
-test.each([
-  'https://unrelated.example/app.apk',
-  downloadUrl.replace('https:', 'http:'),
-  downloadUrl.replace('gitcode.com', 'gitcode.com.unrelated.example'),
-  downloadUrl.replace('cherry-studio-app/', 'cherry-studio/'),
-  downloadUrl.replace('/v1.10.0/', '/v1.9.0/'),
-  downloadUrl.replace('.apk', '.aab'),
-  `${downloadUrl}?redirect=https://unrelated.example/`,
-])('rejects an unexpected APK destination: %s', async (url) => {
-  await expect(createAppUpdateModule().openDownload(url)).rejects.toThrow(
-    'Invalid APK download URL',
-  );
-  expect(Linking.openURL).not.toHaveBeenCalled();
+test('disposal joins the transfer and rejects further actions', async () => {
+  const updates = create();
+  await updates.dispose();
+  expect(mockDownload.dispose).toHaveBeenCalledTimes(1);
+  await expect(updates.download(apk)).rejects.toThrow('disabled');
+  await expect(updates.check()).resolves.toMatchObject({ status: 'unavailable' });
 });
 
-test('browser launch errors remain available to the UI for retry feedback', async () => {
-  const error = new Error('No browser available');
-  jest.mocked(Linking.openURL).mockRejectedValueOnce(error);
-  await expect(createAppUpdateModule().openDownload(downloadUrl)).rejects.toBe(error);
+test('an evicted or incompatible APK leaves readiness so the user can download again', async () => {
+  mockDownload.getDownload.mockReturnValue({ status: 'ready' });
+  mockNative.installApk.mockResolvedValueOnce('invalidPackage');
+  await expect(create().install()).resolves.toBe('invalidPackage');
+  expect(mockDownload.invalidateReady).toHaveBeenCalledTimes(1);
+});
+
+test('a cached store result can still open after backend recreation, but cannot redirect elsewhere', async () => {
+  jest.replaceProperty(runningUpdate, 'channel', 'production-google-play');
+  const result = await create().check();
+  if (result.status !== 'available' || result.channel === 'apk')
+    throw new Error('Expected store release');
+  const recreated = create();
+  await recreated.openStore(result);
+  await expect(
+    recreated.openStore({ ...result, storeUrl: 'https://example.com/app.apk' }),
+  ).rejects.toThrow('Invalid');
 });
