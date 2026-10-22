@@ -7,6 +7,8 @@ export interface ExtractOptions {
    * 超过此限制的页面将被截断
    */
   maxPages?: number;
+  /** Resolved app language. Selects recognition languages; unsupported scripts skip OCR. */
+  language?: string;
 }
 
 export type ExtractionProgress = {

@@ -81,6 +81,13 @@ public class PdfTextExtractorModule: Module {
     var extractionError = false
     var ocrError = false
     var usedOcr = false
+    var ocrLanguages: [String]??
+    func languages() throws -> [String]? {
+      if let resolved = ocrLanguages { return resolved }
+      let resolved = try pdfOcrLanguages(for: options?.language)
+      ocrLanguages = .some(resolved)
+      return resolved
+    }
     func progress(_ completed: Int, phase: String) throws {
       try request.checkCancellation()
       sendEvent("onProgress", [
@@ -100,14 +107,15 @@ public class PdfTextExtractorModule: Module {
           let nativeText = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
           try request.checkCancellation()
           // A page number or caption must not hide a scanned body on the same page.
-          if hasUsablePdfText(nativeText) {
-            let hasImages = try pdfPageHasImages(page)
-            if !hasImages { return nativeText }
+          if hasUsablePdfText(nativeText)
+            && (!isSparsePdfText(nativeText) || !pdfPageHasImages(page)) {
+            return nativeText
           }
-          usedOcr = true
           recognizingPage = true
+          guard let languages = try languages() else { return nativeText }
+          usedOcr = true
           try progress(pageIndex, phase: "ocr")
-          let recognized = try recognizePdfPage(page, request: request)
+          let recognized = try recognizePdfPage(page, request: request, languages: languages)
           if recognized.unrecognized { unrecognizedPages.append(pageIndex + 1) }
           return mergePdfPageText(nativeText, recognized.text)
         }
@@ -193,6 +201,9 @@ public class PdfTextExtractorModule: Module {
 struct ExtractOptions: Record {
   @Field
   var maxPages: Int?
+  /// Resolved app language; selects recognition languages or disables OCR for unsupported scripts.
+  @Field
+  var language: String?
 }
 
 // MARK: - 错误定义

@@ -3,6 +3,7 @@ package expo.modules.pdftextextractor
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.icu.util.ULocale
 import android.os.ParcelFileDescriptor
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -23,6 +24,14 @@ internal class PdfExtractionCancelledException : CodedException(
 internal fun hasUsablePdfText(text: String): Boolean =
     text.any { !it.isWhitespace() && !it.isISOControl() && it != '\uFFFD' } &&
         !text.contains('\uFFFD')
+
+/**
+ * The bundled recognizer reads Chinese and Latin only. Another script, such as Cyrillic, Greek or
+ * Japanese kana, yields plausible garbage rather than an error, so those languages skip OCR.
+ */
+internal fun isPdfOcrLanguageSupported(language: String?): Boolean =
+    language == null ||
+        ULocale.addLikelySubtags(ULocale.forLanguageTag(language)).script in setOf("Latn", "Hans", "Hant")
 
 internal data class PdfPageRecognition(val text: String, val unrecognized: Boolean = false)
 

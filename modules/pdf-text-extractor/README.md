@@ -1,9 +1,11 @@
 # PDF Text Extraction
 
 Local Expo module used by attachment preparation and Agent file reads. PDFKit (iOS) and PDFBox
-(Android) extract existing text first. Pages with image drawing operators (including nested forms)
-or without usable text are rendered for Apple Vision or the bundled ML Kit Chinese/Latin recognizer.
-A native page number or caption therefore cannot suppress recognition of the scanned body.
+(Android) extract existing text first. A page is rendered for Apple Vision or the bundled ML Kit
+Chinese/Latin recognizer only when it has no usable text, or when it draws an image (including in
+nested forms) and its text is sparse (fewer than 200 letters or digits). A native page number or
+caption therefore cannot suppress recognition of the scanned body, while a text page with a logo or
+figure, or a scan that already carries a text layer, keeps its native text without OCR.
 Recognition does not send page images to an OCR service.
 Normal conversation submission still sends the resulting text to the selected model.
 
@@ -15,14 +17,25 @@ Normal conversation submission still sends the resulting text to the selected mo
 - Native extraction and rendering run on a serial background queue / coroutine mutex. A readable
   text-only page never loads the OCR engine. Source PDF metadata rotation is honored when rendering.
 - Each rendered page is capped at a 2560-pixel edge, four million pixels, and 3x PDF point scale.
+  iOS maps the crop box and `/Rotate` itself, because `CGPDFPage.getDrawingTransform` never scales
+  up and would leave the page at 72 dpi in the corner of the bitmap.
   One bitmap is processed at a time and released before proceeding. These bounds do not bound all
   internal allocations made by PDFKit, PdfRenderer, PDFBox, Vision, or ML Kit.
 - A nearly white page (fewer than 32 rendered pixels with any RGB channel below 240) is treated as
   blank. Successful OCR with no usable text records the one-based page in `unrecognizedPages`,
   retaining any native text. Covers, illustrations and noisy blanks do not reject the other pages.
   The shared reader prefixes an explicit model-facing notice; attachment reports and tool windows
-  retain the page numbers, and the UI warns on reads, including cache hits. A completely textless document still
-  fails as empty. Rendering, parsing and recognition-engine errors still reject partial results.
+  retain the page numbers. The UI warns once, when the text is first extracted; cached history
+  re-reads on later turns do not warn again. A completely textless document still fails as empty.
+  Rendering, parsing and recognition-engine errors still reject partial results. The iOS image
+  scan only routes pages: if it cannot parse a page's operators, the page is treated as containing
+  images instead of rejecting text PDFKit can read.
+- Recognition follows the resolved app language passed as `language`. iOS selects the matching
+  Vision language first, then English and Chinese; Android's bundled model reads Chinese and Latin.
+  When the engine cannot read the app language's script (Greek on iOS; Cyrillic, Greek and Japanese
+  on Android), OCR is skipped and pages keep only their native text, because the engine would
+  return plausible garbage instead of failing. A document in another unsupported script attached
+  under a supported app language is not detected.
 - Results keep page order with blank-line separators, without writing a new PDF or adding library
   entries. OCR supplies visual reading order on mixed pages; native lines missing from that output
   are appended, with whitespace/punctuation-insensitive duplicate suppression. This is text
@@ -38,8 +51,8 @@ Normal conversation submission still sends the resulting text to the selected mo
 
 `src/backend/services/file/pdfText.ts` shares one extraction between concurrent consumers and
 reuses the same derived disk result for attachments, later turns and file tools. Cache keys include
-the managed filename (immutable entry ID), byte size, modification time, extraction-policy version
-and page ceiling. Availability/authorization and source byte limits are checked before cache access.
+the managed filename (immutable entry ID), byte size, modification time, extraction-policy version,
+page ceiling and app language. Availability/authorization and source byte limits are checked before cache access.
 No successful text results or page images accumulate in a process-wide memory cache.
 
 `pdfTextCache.ts` owns the disposable `Paths.cache/PdfText` directory: at most 64 MiB retained,
@@ -56,7 +69,10 @@ pages in a persistent notice without replacing the toast on every page.
 
 iOS links the system Vision framework. Android uses
 `com.google.mlkit:text-recognition-chinese:16.0.1`, which recognizes both Chinese and Latin and
-includes its model in the installation package. No first-use model download is needed.
+includes its model in the installation package. No first-use model download is needed, and devices
+without Google Play services work. For the arm64-v8a package this adds about 11 MB of native
+library (stored uncompressed), 2.4 MB of models and 1 MB of classes before R8, measured from the
+published AARs (`text-recognition-bundled-common` 17.0.0 and `text-recognition-chinese` 16.0.1).
 
 This changes the native bridge and requires a new development client. Installing JS dependencies
 or publishing an OTA update alone cannot enable OCR. See [Local EAS Builds](../../docs/guides/local-builds.md) and
@@ -73,7 +89,8 @@ the real bundled recognizer; their presence is not evidence that native acceptan
 Platform acceptance covers text-only, scanned, mixed, blank, rotated, encrypted,
 corrupt, and over-100-page PDFs. Include first-use offline recognition, cancellation during a page
 and while queued, repeated reads and concurrent consumers, memory on long documents, and the activity
-notice in both themes. Include images inside nested forms and inline images. Check Chinese and
+notice in both themes. Include a text PDF with a logo on every page (no OCR expected), a rotated
+scan on iOS, and Russian/Japanese app languages. Include images inside nested forms and inline images. Check Chinese and
 English recognition on representative physical devices. Complex tables/formulas, reconstruction
 of multi-column reading order and searchable-PDF export remain separate work.
 

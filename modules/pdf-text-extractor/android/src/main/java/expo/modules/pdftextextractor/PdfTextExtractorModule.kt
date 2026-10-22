@@ -27,6 +27,10 @@ import kotlinx.coroutines.withContext
 class ExtractOptions : Record {
     @Field
     val maxPages: Int? = null
+
+    /** Resolved app language; OCR is disabled for scripts the bundled recognizer cannot read. */
+    @Field
+    val language: String? = null
 }
 
 class InvalidFilePathException(cause: Throwable? = null) : CodedException(
@@ -153,6 +157,7 @@ class PdfTextExtractorModule : Module() {
                 var extractionError = false
                 var ocrError = false
                 var ocr: PdfPageOcr? = null
+                val ocrSupported = isPdfOcrLanguageSupported(options?.language)
                 fun progress(completed: Int, phase: String) {
                     checkCancelled()
                     sendEvent(
@@ -173,7 +178,9 @@ class PdfTextExtractorModule : Module() {
                             val nativePage = nativePages.pages[pageIndex]
                             val nativeText = nativePage.text
                             checkCancelled()
-                            val text = if (hasUsablePdfText(nativeText) && !nativePage.hasImages) nativeText else {
+                            val hasNativeBody = hasUsablePdfText(nativeText) &&
+                                (!nativePage.hasImages || !isSparsePdfText(nativeText))
+                            val text = if (hasNativeBody || !ocrSupported) nativeText else {
                                 recognizingPage = true
                                 progress(pageIndex, "ocr")
                                 val reader = ocr ?: PdfPageOcr(file).also { ocr = it }

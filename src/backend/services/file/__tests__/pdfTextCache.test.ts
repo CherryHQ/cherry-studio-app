@@ -89,28 +89,30 @@ beforeEach(() => {
 
 test('persists the complete extraction result across reader instances without device paths', async () => {
   source().write('pdf bytes');
-  const cache = pdfTextCacheFile(source());
+  const cache = pdfTextCacheFile(source(), 'zh-CN');
   writePdfTextCache(cache, result);
   await expect(readPdfTextCache(new File(cache.uri))).resolves.toEqual(result);
   expect(await cache.text()).not.toContain('file:///');
   const relocated = new File('file:///new-sandbox/00000000-0000-7000-8000-000000000001.pdf');
   mockFiles.set(relocated.uri, mockFiles.get(source().uri)!);
-  expect(pdfTextCacheFile(relocated).uri).toBe(cache.uri);
+  expect(pdfTextCacheFile(relocated, 'zh-CN').uri).toBe(cache.uri);
 });
 
 test('invalidates a replaced source and rejects truncated cache writes', async () => {
   source().write('pdf bytes');
-  const original = pdfTextCacheFile(source());
+  const original = pdfTextCacheFile(source(), 'zh-CN');
   writePdfTextCache(original, result);
   source().write('replacement');
-  expect(pdfTextCacheFile(source()).uri).not.toBe(original.uri);
-  await expect(readPdfTextCache(pdfTextCacheFile(source()))).resolves.toBeUndefined();
+  expect(pdfTextCacheFile(source(), 'zh-CN').uri).not.toBe(original.uri);
+  // Recognition languages follow the app language.
+  expect(pdfTextCacheFile(source(), 'ru-RU').uri).not.toBe(pdfTextCacheFile(source(), 'zh-CN').uri);
+  await expect(readPdfTextCache(pdfTextCacheFile(source(), 'zh-CN'))).resolves.toBeUndefined();
   original.write('{"text":');
   await expect(readPdfTextCache(original)).resolves.toBeUndefined();
 });
 
 test('never persists parser or recognition engine failures', () => {
-  const cache = pdfTextCacheFile(source());
+  const cache = pdfTextCacheFile(source(), 'zh-CN');
   writePdfTextCache(cache, { ...result, extractionError: true });
   expect(cache.exists).toBe(false);
   writePdfTextCache(cache, { ...result, ocrError: true });
@@ -125,14 +127,14 @@ test('evicts old disk entries when retained bytes exceed the cache ceiling', () 
   mockFiles.set(older.uri, { content: '{}', size: 40 * 1024 * 1024, time: 1 });
   mockFiles.set(newer.uri, { content: '{}', size: 40 * 1024 * 1024, time: 2 });
   mockTime = 3;
-  writePdfTextCache(pdfTextCacheFile(source()), result);
+  writePdfTextCache(pdfTextCacheFile(source(), 'zh-CN'), result);
   expect(older.exists).toBe(false);
   expect(newer.exists).toBe(true);
 });
 
 test('hard deletion removes only that entry; restore clears all derived PDF text', () => {
-  const cache = pdfTextCacheFile(source());
-  const other = pdfTextCacheFile(new File('file:///documents/other.pdf'));
+  const cache = pdfTextCacheFile(source(), 'zh-CN');
+  const other = pdfTextCacheFile(new File('file:///documents/other.pdf'), 'zh-CN');
   writePdfTextCache(cache, result);
   writePdfTextCache(other, result);
   deletePdfTextCache({ id: '00000000-0000-7000-8000-000000000001' as FileEntryId });

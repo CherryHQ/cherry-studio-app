@@ -7,7 +7,7 @@ import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 import type { ExtractResult } from '../../../../modules/pdf-text-extractor';
 
 // Increment when native extraction policy changes. Cached text is disposable, never canonical.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const MAX_CACHE_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_CACHE_ENTRIES = 256;
@@ -28,10 +28,10 @@ function directory(): Directory {
 }
 
 /** Managed filenames contain the immutable entry ID. Never persist a sandbox path. */
-export function pdfTextCacheFile(source: File): File {
+export function pdfTextCacheFile(source: File, language: string): File {
   return new File(
     directory(),
-    `${source.name}.v${CACHE_VERSION}.${source.size}.${source.modificationTime ?? 0}.${MAX_PDF_ATTACHMENT_PAGES}.json`,
+    `${source.name}.v${CACHE_VERSION}.${source.size}.${source.modificationTime ?? 0}.${MAX_PDF_ATTACHMENT_PAGES}.${language}.json`,
   );
 }
 

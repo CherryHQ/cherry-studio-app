@@ -1,13 +1,15 @@
 import { File } from 'expo-file-system';
 
 import { extractPdfText, type ExtractResult } from '../../../../../modules/pdf-text-extractor';
-import { readPdfText, subscribePdfOcr } from '../pdfText';
+import { configurePdfOcrLanguage, readPdfText, subscribePdfOcr } from '../pdfText';
 import { readPdfTextCache, writePdfTextCache } from '../pdfTextCache';
 
 jest.mock('expo-file-system', () => ({ File: jest.fn() }));
 jest.mock('../../../../../modules/pdf-text-extractor', () => ({ extractPdfText: jest.fn() }));
 jest.mock('../pdfTextCache', () => ({
-  pdfTextCacheFile: (source: File) => ({ uri: source.uri + '.cache' }),
+  pdfTextCacheFile: (source: File, language: string) => ({
+    uri: `${source.uri}.${language}.cache`,
+  }),
   readPdfTextCache: jest.fn(),
   writePdfTextCache: jest.fn(),
 }));
@@ -46,17 +48,29 @@ test('later turns and tool reads reuse persisted text without starting OCR', asy
   expect(extractPdfText).toHaveBeenCalledTimes(1);
 });
 
-test('cached partial results still disclose unrecognized pages without recognition activity', async () => {
+test('history re-reads of cached partial results neither warn again nor show activity', async () => {
   const events = jest.fn();
   const unsubscribe = subscribePdfOcr(events);
   jest.mocked(readPdfTextCache).mockResolvedValueOnce({ ...result, unrecognizedPages: [2] });
-  await readPdfText(source, signal());
+  await expect(readPdfText(source, signal())).resolves.toMatchObject({ unrecognizedPages: [2] });
   expect(extractPdfText).not.toHaveBeenCalled();
-  expect(events.mock.calls.map(([event]) => event)).toEqual([
-    { type: 'progress', progress: null },
-    { type: 'unrecognized', pages: [2] },
-  ]);
+  expect(events.mock.calls.map(([event]) => event)).toEqual([{ type: 'progress', progress: null }]);
   unsubscribe();
+});
+
+test('recognizes in the resolved app language and keys results by it', async () => {
+  configurePdfOcrLanguage(() => 'ru-RU');
+  try {
+    await readPdfText(source, signal());
+    expect(extractPdfText).toHaveBeenCalledWith(
+      source.uri,
+      expect.objectContaining({ language: 'ru-RU' }),
+      expect.anything(),
+    );
+    expect(writePdfTextCache).toHaveBeenCalledWith({ uri: `${source.uri}.ru-RU.cache` }, result);
+  } finally {
+    configurePdfOcrLanguage(() => 'en-US');
+  }
 });
 
 test('a shared extraction survives one caller cancelling and publishes progress once', async () => {

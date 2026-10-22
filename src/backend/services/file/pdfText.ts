@@ -3,6 +3,7 @@ import { File } from 'expo-file-system';
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import type { PdfOcrEvent } from '@/shared/contracts/file';
 import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
+import { DEFAULT_APP_LANGUAGE, type AppLanguage } from '@/shared/utils/languages';
 
 import { extractPdfText, type ExtractResult } from '../../../../modules/pdf-text-extractor';
 import { pdfTextCacheFile, readPdfTextCache, writePdfTextCache } from './pdfTextCache';
@@ -16,6 +17,12 @@ const pending = new Map<string, PendingExtraction>();
 const slots = createConcurrencySlots(1);
 const listeners = new Set<(event: PdfOcrEvent) => void>();
 let activity: Extract<PdfOcrEvent, { type: 'progress' }> = { type: 'progress', progress: null };
+let appLanguage = (): AppLanguage => DEFAULT_APP_LANGUAGE;
+
+/** Composition supplies the shared language resolver; recognition languages follow it. */
+export function configurePdfOcrLanguage(resolve: () => AppLanguage): void {
+  appLanguage = resolve;
+}
 
 export function subscribePdfOcr(listener: (event: PdfOcrEvent) => void): () => void {
   listeners.add(listener);
@@ -41,18 +48,21 @@ function reportUnrecognizedPages(result: ExtractResult) {
   }
 }
 
-async function extract(source: File, cache: File, signal: AbortSignal): Promise<ExtractResult> {
+async function extract(
+  source: File,
+  cache: File,
+  language: AppLanguage,
+  signal: AbortSignal,
+): Promise<ExtractResult> {
   const cached = await readPdfTextCache(cache);
   signal.throwIfAborted();
-  if (cached) {
-    reportUnrecognizedPages(cached);
-    return cached;
-  }
+  // Later turns re-read history; the user was already warned when the text was first extracted.
+  if (cached) return cached;
   const release = await slots.acquire(signal);
   try {
     const result = await extractPdfText(
       source.uri,
-      { maxPages: MAX_PDF_ATTACHMENT_PAGES },
+      { maxPages: MAX_PDF_ATTACHMENT_PAGES, language },
       {
         signal,
         onProgress: ({ phase, completedPages, totalPages }) => {
@@ -75,12 +85,17 @@ async function extract(source: File, cache: File, signal: AbortSignal): Promise<
 /** Shared across attachment preparation, follow-up turns and file tools. Each consumer owns its abort. */
 export function readPdfText(source: File, signal: AbortSignal): Promise<ExtractResult> {
   signal.throwIfAborted();
-  const cache = pdfTextCacheFile(source);
+  const language = appLanguage();
+  const cache = pdfTextCacheFile(source, language);
   const key = cache.uri;
   let operation = pending.get(key);
   if (!operation) {
     const controller = new AbortController();
-    operation = { controller, consumers: 0, result: extract(source, cache, controller.signal) };
+    operation = {
+      controller,
+      consumers: 0,
+      result: extract(source, cache, language, controller.signal),
+    };
     pending.set(key, operation);
     const owner = operation;
     const remove = () => {

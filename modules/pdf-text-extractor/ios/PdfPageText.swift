@@ -9,12 +9,24 @@ private final class PdfImageScan {
   init(depth: Int) { self.depth = depth }
 }
 
-/** Inspect drawing operators, including nested forms, without rendering ordinary text pages. */
-internal func pdfPageHasImages(_ page: PDFPage) throws -> Bool {
-  guard let source = page.pageRef else { throw FailedToLoadDocumentException() }
+/// A page whose native layer holds at most a page number, header or caption. Scanned bodies keep
+/// such text beside their image; a text page with a logo or figure has far more.
+internal func isSparsePdfText(_ text: String) -> Bool {
+  var count = 0
+  for scalar in text.unicodeScalars where CharacterSet.alphanumerics.contains(scalar) {
+    count += 1
+    if count >= 200 { return false }
+  }
+  return true
+}
+
+/// Inspect drawing operators, including nested forms, without rendering ordinary text pages.
+/// The scan only routes a page to OCR; content PDFKit can read must not be rejected by it.
+internal func pdfPageHasImages(_ page: PDFPage) -> Bool {
+  guard let source = page.pageRef else { return true }
   let stream = CGPDFContentStreamCreateWithPage(source)
   defer { CGPDFContentStreamRelease(stream) }
-  return try scanPdfImages(stream, depth: 0)
+  return (try? scanPdfImages(stream, depth: 0)) ?? true
 }
 
 private func scanPdfImages(_ stream: CGPDFContentStreamRef, depth: Int) throws -> Bool {

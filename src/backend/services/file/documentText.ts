@@ -45,7 +45,7 @@ export async function readDocumentUriText(
       if (result.text && extracted.unrecognizedPages.length > 0) {
         result.unrecognizedPages = extracted.unrecognizedPages;
         // Model-facing metadata precedes the body so attachment character budgets retain it.
-        result.text = `[PDF extraction notice: pages ${extracted.unrecognizedPages.join(', ')} contain visual content with no recognized text. The text below does not represent those images; request page images when needed.]\n\n${result.text}`;
+        result.text = `[PDF extraction notice: pages ${extracted.unrecognizedPages.join(', ')} contain visual content with no recognized text. The text below does not represent those pages; if their content matters, ask the user to attach them as images.]\n\n${result.text}`;
       }
     } else {
       const bytes = await readFileUriBytes(uri, signal);

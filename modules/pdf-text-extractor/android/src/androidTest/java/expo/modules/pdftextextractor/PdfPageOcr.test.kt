@@ -107,6 +107,16 @@ class PdfPageOcrTest {
     }
 
     @Test
+    fun routesOnlySparseImagePagesAndSupportedScriptsToOcr() {
+        assertTrue(isSparsePdfText("2"))
+        assertFalse(isSparsePdfText("word ".repeat(60)))
+        assertTrue(isPdfOcrLanguageSupported("zh-TW"))
+        assertTrue(isPdfOcrLanguageSupported("vi-VN"))
+        assertFalse(isPdfOcrLanguageSupported("ru-RU"))
+        assertFalse(isPdfOcrLanguageSupported("ja-JP"))
+    }
+
+    @Test
     fun keepsNativeTextMissingFromOcrWithoutDuplicatingRecognizedLines() {
         assertEquals("CHERRY OCR\n中文正文\nFooter", mergePdfPageText("CHERRY OCR\nFooter", "CHERRY OCR\n中文正文"))
         assertEquals("Title", mergePdfPageText("Title", ""))

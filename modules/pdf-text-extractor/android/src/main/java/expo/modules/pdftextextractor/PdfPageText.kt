@@ -64,6 +64,18 @@ internal fun readPdfTextPages(
     return PdfNativeTextPages(pages, writer.truncated)
 }
 
+/**
+ * A page whose native layer holds at most a page number, header or caption. Scanned bodies keep
+ * such text beside their image; a text page with a logo or figure has far more.
+ */
+internal fun isSparsePdfText(text: String): Boolean {
+    var count = 0
+    for (char in text) {
+        if (char.isLetterOrDigit() && ++count >= 200) return false
+    }
+    return true
+}
+
 /** OCR owns visual reading order; keep native lines it missed without repeating matching text. */
 internal fun mergePdfPageText(nativeText: String, recognized: String): String {
     if (!hasUsablePdfText(nativeText)) return recognized

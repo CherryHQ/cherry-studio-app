@@ -154,7 +154,7 @@ the imported entry. Painting still admits images only.
 
 `readAttachmentContent` is the common controlled reader for attachments and file tools. Its
 document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
-the native text extractor with on-device OCR for image-bearing pages and pages without usable text. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
+the native text extractor with on-device OCR for pages without usable text and image pages whose text is sparse. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
 accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
 CSV stays on the text path. Format admission follows the published mobile entry point's
 [content detection](https://github.com/tulaafrica/anydoc/blob/rn-v0.4.1/src/formats/detect.rs),
@@ -198,18 +198,21 @@ storage in the app cache. Closing the document releases its scratch file. These 
 limits, not a bound on all native allocations.
 
 The [native PDF module](../../../modules/pdf-text-extractor/README.md) reads each page's text layer
-first, then renders pages containing image drawing operators or lacking usable text for Apple Vision (iOS) or bundled ML Kit Chinese/Latin recognition
-(Android). OCR runs locally, sequentially, with at most a 2560-pixel edge and four million rendered
+first. Pages lacking usable text, or drawing images with fewer than 200 letters or digits of native
+text, are rendered for Apple Vision (iOS) or bundled ML Kit Chinese/Latin recognition (Android).
+Recognition follows the resolved app language and is skipped when the engine cannot read its
+script. OCR runs locally, sequentially, with at most a 2560-pixel edge and four million rendered
 pixels per page. Text and recognized pages are joined in order with blank-line separators. Blank
 pages are accepted. Successful OCR with no usable text retains the other text and records one-based
 `unrecognizedPages`, included in the attachment report, tool metadata and a leading model-facing
-text notice. The App Shell also warns about these pages. Rendering/recognition-engine failures
+text notice. The App Shell warns about these pages once, on first extraction. Rendering/recognition-engine failures
 still reject partial text as `document-ocr-failed`; corrupt native extraction fails as
 `document-invalid`. Android collects native page text and image facts in one PDFBox traversal.
 
 The PDF reader coalesces concurrent reads and persists successful results in the disposable
 `Paths.cache/PdfText` directory (64 MiB total, 8 MiB per entry). Keys contain the managed filename,
-size, modification time, extraction-policy version and page ceiling, never absolute sandbox paths.
+size, modification time, extraction-policy version, page ceiling and app language, never absolute
+sandbox paths.
 Later turns and tools reuse these results after normal file authorization/availability checks.
 Hard deletion removes the entry's derived text; restore clears the cache. Eviction, cache purging
 and policy changes may require extraction again. No derived text enters the library or database.

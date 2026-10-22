@@ -27,13 +27,11 @@ internal final class PdfExtractionRequest {
     if cancelled { throw PdfExtractionCancelledException() }
   }
 
-  func recognize(_ image: CGImage) throws -> String {
+  func recognize(_ image: CGImage, languages: [String]) throws -> String {
     let recognition = VNRecognizeTextRequest()
     recognition.recognitionLevel = .accurate
     recognition.usesLanguageCorrection = true
-    recognition.automaticallyDetectsLanguage = true
-    let supported = try recognition.supportedRecognitionLanguages()
-    recognition.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"].filter { supported.contains($0) }
+    recognition.recognitionLanguages = languages
     lock.lock()
     if cancelled {
       lock.unlock()
@@ -53,6 +51,27 @@ internal final class PdfExtractionRequest {
   }
 }
 
+/// Vision languages for the resolved app language, plus the Chinese/Latin coverage shared with
+/// Android. Nil disables OCR: an unsupported script yields plausible garbage, not an error.
+internal func pdfOcrLanguages(for appLanguage: String?) throws -> [String]? {
+  let probe = VNRecognizeTextRequest()
+  probe.recognitionLevel = .accurate
+  let supported = try probe.supportedRecognitionLanguages()
+  let app = Locale.Language(identifier: appLanguage ?? "zh-Hans")
+  let primary = supported.first {
+    let candidate = Locale.Language(identifier: $0)
+    return candidate.languageCode == app.languageCode && candidate.script == app.script
+  }
+  let script = app.script?.identifier
+  guard primary != nil || script == "Latn" else { return nil }
+  let shared = script == "Hant" ? ["en-US", "zh-Hant", "zh-Hans"] : ["en-US", "zh-Hans", "zh-Hant"]
+  var languages: [String] = []
+  for id in [primary].compactMap({ $0 }) + shared where supported.contains(id) && !languages.contains(id) {
+    languages.append(id)
+  }
+  return languages
+}
+
 internal func hasUsablePdfText(_ text: String) -> Bool {
   !text.contains("\u{FFFD}") && text.unicodeScalars.contains {
     !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0)
@@ -64,11 +83,14 @@ internal struct PdfPageRecognition {
   var unrecognized = false
 }
 
-internal func recognizePdfPage(_ page: PDFPage, request: PdfExtractionRequest) throws -> PdfPageRecognition {
+internal func recognizePdfPage(
+  _ page: PDFPage, request: PdfExtractionRequest, languages: [String]
+) throws -> PdfPageRecognition {
   try request.checkCancellation()
   guard let source = page.pageRef else { throw FailedToLoadDocumentException() }
   let bounds = source.getBoxRect(.cropBox)
-  let rotated = abs(source.rotationAngle) % 180 == 90
+  let rotation = ((Int(source.rotationAngle) % 360) + 360) % 360
+  let rotated = rotation % 180 == 90
   let width = rotated ? bounds.height : bounds.width
   let height = rotated ? bounds.width : bounds.height
   guard width.isFinite, height.isFinite, width > 0, height > 0 else {
@@ -83,13 +105,25 @@ internal func recognizePdfPage(_ page: PDFPage, request: PdfExtractionRequest) t
     bytesPerRow: pixelWidth * 4, space: CGColorSpaceCreateDeviceRGB(),
     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
   ) else { throw FailedToLoadDocumentException() }
-  let target = CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight)
   // White is the document paper, not application chrome.
   context.setFillColor(gray: 1, alpha: 1)
-  context.fill(target)
+  context.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+  // CGPDFPage.getDrawingTransform never scales up, so map the crop box and clockwise /Rotate here.
+  let quarterTurn: CGAffineTransform
+  switch rotation {
+  case 90: quarterTurn = CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: bounds.width)
+  case 180: quarterTurn = CGAffineTransform(a: -1, b: 0, c: 0, d: -1, tx: bounds.width, ty: bounds.height)
+  case 270: quarterTurn = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: bounds.height, ty: 0)
+  default: quarterTurn = .identity
+  }
   context.concatenate(
-    source.getDrawingTransform(.cropBox, rect: target, rotate: 0, preserveAspectRatio: true)
+    CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)
+      .concatenating(quarterTurn)
+      .concatenating(CGAffineTransform(
+        scaleX: CGFloat(pixelWidth) / width, y: CGFloat(pixelHeight) / height
+      ))
   )
+  context.clip(to: bounds)
   context.drawPDFPage(source)
   try request.checkCancellation()
 
@@ -105,7 +139,7 @@ internal func recognizePdfPage(_ page: PDFPage, request: PdfExtractionRequest) t
   // Blank pages are legitimate and must not make mixed documents fail.
   if ink < 32 { return PdfPageRecognition(text: "") }
   guard let image = context.makeImage() else { throw FailedToLoadDocumentException() }
-  let text = try request.recognize(image)
+  let text = try request.recognize(image, languages: languages)
   // Successful recognition with no text may be a photograph, cover or scan noise.
   return hasUsablePdfText(text) ? PdfPageRecognition(text: text)
     : PdfPageRecognition(text: "", unrecognized: true)
