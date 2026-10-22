@@ -212,8 +212,8 @@ export class DurableAgentHost implements AgentProtocol {
     await this.captureCheckpoints();
     await this.naming.drain();
   }
-  getWorkingStorageSize() {
-    return Promise.resolve(this.ports.durableStorage?.size() ?? 0);
+  async getWorkingStorageSize(): Promise<number> {
+    return this.ports.durableStorage?.size() ?? 0;
   }
   /**
    * Pi keeps retired and superseded copies until its file is removed. Cherry transcripts and
