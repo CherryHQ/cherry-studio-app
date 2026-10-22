@@ -245,8 +245,8 @@ importers:
         specifier: 0.2.3
         version: 0.2.3(zod@4.4.3)
       '@cherrystudio/remote-protocol':
-        specifier: 0.6.0
-        version: 0.6.0(zod@4.4.3)
+        specifier: 0.7.0
+        version: 0.7.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
         specifier: 0.2.4
         version: 0.2.4(zod@4.4.3)
@@ -1767,6 +1767,11 @@ packages:
 
   '@cherrystudio/remote-protocol@0.6.0':
     resolution: {integrity: sha512-sKy0EpK9C4ILmyh1XQKtUJecrQRSvQQLn5H0MTJEIQru5GxTV/JVj7K5Z96nm5vZKuOEsWVQdOoN8BjckuV3rQ==}
+    peerDependencies:
+      zod: ^4.3.4
+
+  '@cherrystudio/remote-protocol@0.7.0':
+    resolution: {integrity: sha512-N/ELVCuwLaSAt+FOfrnkDbRoRdzcQtCfk9x//BlnmbWG7O7FeoQfTY4rHIOcOZzA4FL8qq2JzwKyu5+xrVnC4Q==}
     peerDependencies:
       zod: ^4.3.4
 
@@ -11099,6 +11104,11 @@ snapshots:
       zod: 4.4.3
 
   '@cherrystudio/remote-protocol@0.6.0(zod@4.4.3)':
+    dependencies:
+      json-canonicalize: 3.0.1
+      zod: 4.4.3
+
+  '@cherrystudio/remote-protocol@0.7.0(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3

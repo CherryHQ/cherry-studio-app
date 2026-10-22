@@ -91,3 +91,20 @@ test('clipboard content that is not an invitation reports instead of submitting'
   expect(onInvalidPaste).toHaveBeenCalledTimes(1);
   expect(onInvitation).not.toHaveBeenCalled();
 });
+
+test.each(['scan', 'paste'] as const)('accepts a v3 custom endpoint through %s', async (source) => {
+  const { ips: _ips, port: _port, ...proof } = invitation;
+  const custom = {
+    ...proof,
+    v: 3,
+    endpoints: [{ host: 'desktop.example.com', port: 24443, security: 'wss' }],
+  };
+  if (source === 'scan') await act(async () => latest.scan(JSON.stringify(custom)));
+  else {
+    mockGetStringAsync.mockResolvedValue(JSON.stringify(custom));
+    await act(async () => latest.paste());
+  }
+  expect(latest.submitted).toBe(true);
+  expect(latest.scanInvalid).toBe(false);
+  expect(onInvitation).toHaveBeenCalledWith(custom);
+});
