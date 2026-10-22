@@ -1,3 +1,4 @@
+import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import { Composer, useComposerExpansion } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -8,6 +9,7 @@ import {
   type ResolvedImageGenerationMode,
 } from '@/shared/utils/imageGenerationParams';
 
+import { optionRatioLabel } from './imageGenerationLabels';
 import { paintingResizeOptions } from './paintingResizeOptions';
 
 /** One quiet row of model-supported shapes, attached to the next editing request. */
@@ -41,13 +43,9 @@ export function PaintingRatioShortcuts({
             {choices.map((choice) => {
               const ratio = parseImageRatio(choice.ratio)!;
               const scale = 18 / Math.max(ratio.width, ratio.height);
-              const isSelected = Object.keys(choice.paramValues).some((key) => {
-                const current = parseImageRatio(values[key]);
-                return (
-                  current !== undefined &&
-                  current.width * ratio.height === current.height * ratio.width
-                );
-              });
+              const isSelected = Object.keys(choice.paramValues).some(
+                (key) => optionRatioLabel(key as CanonicalParamKey, values[key]) === choice.ratio,
+              );
               return (
                 <Pressable
                   accessibilityLabel={

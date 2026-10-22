@@ -132,26 +132,66 @@ export function imageParamLabel(t: TFunction, key: CanonicalParamKey): string {
 
 /** Pixel sizes such as `1536x1024` read as `3:2 · 1536×1024`; ratios read as `3:2`. */
 export function imageParamOptionLabel(t: TFunction, key: CanonicalParamKey, value: string): string {
-  const ratio = parseImageRatio(value);
-  if (ratio && key === 'aspectRatio') return `${ratio.width}:${ratio.height}`;
-  if (ratio && PIXEL_SIZE_KEYS.has(key) && /^\s*\d+\s*[x×]\s*\d+\s*$/i.test(value)) {
-    const pixels = `${ratio.width}×${ratio.height}`;
-    const simplified = simplifiedRatio(ratio.width, ratio.height);
-    return simplified ? `${simplified} · ${pixels}` : pixels;
-  }
+  const pixels = pixelSizeLabel(key, value);
+  const ratio = optionRatioLabel(key, value);
+  if (pixels) return `${ratio} · ${pixels}`;
+  if (ratio && key === 'aspectRatio') return ratio;
   const translationKey = OPTION_LABEL_KEYS[key]?.[value];
   return translationKey ? t(translationKey) : value;
 }
 
 const PIXEL_SIZE_KEYS = new Set<CanonicalParamKey>(['size', 'imageResolution']);
 
-/** `1536x1024` → `3:2`; undefined when the sides do not reduce to a short ratio. */
-export function simplifiedRatio(width: number, height: number): string | undefined {
-  if (!Number.isInteger(width) || !Number.isInteger(height)) return undefined;
+/** `1536x1024` → `1536×1024`; undefined for anything that is not an exact pixel size. */
+export function pixelSizeLabel(key: CanonicalParamKey, value: string): string | undefined {
+  const match = PIXEL_SIZE_KEYS.has(key) && /^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i.exec(value);
+  return match ? `${match[1]}×${match[2]}` : undefined;
+}
+
+/** The ratio an option reads as: declared ratios verbatim, pixel sizes by their nominal ratio. */
+export function optionRatioLabel(key: CanonicalParamKey, value: unknown): string | undefined {
+  const ratio = parseImageRatio(value);
+  if (!ratio) return undefined;
+  return key === 'aspectRatio'
+    ? `${ratio.width}:${ratio.height}`
+    : nominalRatio(ratio.width, ratio.height);
+}
+
+const COMMON_RATIOS = [
+  [1, 1],
+  [5, 4],
+  [4, 3],
+  [3, 2],
+  [16, 9],
+  [2, 1],
+  [21, 9],
+  [3, 1],
+].flatMap(([w, h]) =>
+  w === h
+    ? [[w, h]]
+    : [
+        [w, h],
+        [h, w],
+      ],
+);
+
+/**
+ * Vendors round pixel sizes to model-friendly multiples (`1664x928` is their 16:9), so exact
+ * reduction yields `52:29` or nothing. A common ratio within 2% wins; then a short exact ratio;
+ * then the nearest common ratio.
+ */
+function nominalRatio(width: number, height: number): string {
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return `${width}:${height}`;
+  const distance = ([w, h]: number[]) => Math.abs(Math.log((width * h) / (height * w)));
+  const nearest = COMMON_RATIOS.reduce((best, ratio) =>
+    distance(ratio) < distance(best) ? ratio : best,
+  );
   const divisor = greatestCommonDivisor(width, height);
   const w = width / divisor;
   const h = height / divisor;
-  return w <= 32 && h <= 32 ? `${w}:${h}` : undefined;
+  return distance(nearest) > 0.02 && w <= 32 && h <= 32
+    ? `${w}:${h}`
+    : `${nearest[0]}:${nearest[1]}`;
 }
 
 function greatestCommonDivisor(a: number, b: number): number {
