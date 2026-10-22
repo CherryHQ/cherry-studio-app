@@ -80,6 +80,7 @@ public class PdfTextExtractorModule: Module {
     var isTruncated = endPage < totalPages
     var extractionError = false
     var ocrError = false
+    var ocrUnavailable = false
     var usedOcr = false
     var ocrLanguages: [String]??
     func languages() throws -> [String]? {
@@ -112,7 +113,14 @@ public class PdfTextExtractorModule: Module {
             return nativeText
           }
           recognizingPage = true
-          guard let languages = try languages() else { return nativeText }
+          guard let languages = try languages() else {
+            // The engine cannot read this script; report image pages rather than send garbage.
+            if pdfPageHasImages(page) {
+              ocrUnavailable = true
+              unrecognizedPages.append(pageIndex + 1)
+            }
+            return nativeText
+          }
           usedOcr = true
           try progress(pageIndex, phase: "ocr")
           let recognized = try recognizePdfPage(page, request: request, languages: languages)
@@ -149,6 +157,7 @@ public class PdfTextExtractorModule: Module {
       "isTruncated": isTruncated,
       "extractionError": extractionError,
       "ocrError": ocrError,
+      "ocrUnavailable": ocrUnavailable,
       "unrecognizedPages": unrecognizedPages
     ]
   }

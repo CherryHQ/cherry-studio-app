@@ -205,9 +205,10 @@ script. OCR runs locally, sequentially, with at most a 2560-pixel edge and four 
 pixels per page. Text and recognized pages are joined in order with blank-line separators. Blank
 pages are accepted. Successful OCR with no usable text retains the other text and records one-based
 `unrecognizedPages`, included in the attachment report, tool metadata and a leading model-facing
-text notice. The App Shell warns about these pages once, on first extraction. Rendering/recognition-engine failures
-still reject partial text as `document-ocr-failed`; corrupt native extraction fails as
-`document-invalid`. Android collects native page text and image facts in one PDFBox traversal.
+text notice. When the engine cannot read the app language's script, image pages are reported the
+same way without recognition, and a document left with no text fails as `document-ocr-unsupported`.
+Rendering/recognition-engine failures still reject partial text as `document-ocr-failed`; corrupt
+native extraction fails as `document-invalid`. Android collects native page text and image facts in one PDFBox traversal.
 
 The PDF reader coalesces concurrent reads and persists successful results in the disposable
 `Paths.cache/PdfText` directory (64 MiB total, 8 MiB per entry). Keys contain the managed filename,
@@ -218,8 +219,10 @@ Hard deletion removes the entry's derived text; restore clears the cache. Evicti
 and policy changes may require extraction again. No derived text enters the library or database.
 Each consumer's cancellation is independent; the last consumer cancels native work. Android
 finishes the current ML Kit call before releasing its bitmap and the extraction slot.
-An App Shell notice displays page progress through `FileModule.subscribePdfOcr`; the originating
-send/tool operation owns cancellation. The original PDF is never modified and derived page images
+`FileModule.observePdfOcr` reports one file's queued or page-progress state while it is recognized,
+keyed by file entry. The transcript tile of that file draws the progress stroke and page count, a
+pending reply names the wait, and a running `read_file` row shows the page count. Cache hits report
+nothing. The originating send/tool operation owns cancellation. The original PDF is never modified and derived page images
 are not stored. A new native development client is required.
 
 In built-in mode,
@@ -256,8 +259,9 @@ existing messages, attachment reports, and tool results are not rewritten.
 
 Settings exposes **Document parser** as a local preference with AnyDoc selected by default and
 Built-in available for comparison. Its picker describes both formats and the next-turn/PDF rules;
-a failed preference save reports through the existing toast gateway. The transcript displays file
-attachments without processing notices. Reports still persist the actual parser, complete versus
+a failed preference save reports through the existing toast gateway. Under a sent message's attachments,
+the transcript lists what the model did not receive from the reports: unrecognized PDF pages and
+source or request truncation, naming the file when there are several. Reports still persist the actual parser, complete versus
 deferred IR delivery, and image omission reasons; older messages without those facts remain
 unspecified rather than inferred from today's preference.
 

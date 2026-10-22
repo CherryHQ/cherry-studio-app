@@ -21,7 +21,7 @@ import {
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
-import { readDocumentUriText, subscribePdfOcr } from './documentText';
+import { readDocumentUriText } from './documentText';
 import { editFileImage } from './editFileImage';
 import { FileHashError, hashLocalFile } from './fileHash';
 import {
@@ -40,6 +40,7 @@ import {
   rewriteInternalTextEntry,
 } from './fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
+import { observePdfOcr } from './pdfText';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -75,7 +76,7 @@ const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true 
  * factory to inject.
  */
 export const fileContent = {
-  subscribePdfOcr,
+  observePdfOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {

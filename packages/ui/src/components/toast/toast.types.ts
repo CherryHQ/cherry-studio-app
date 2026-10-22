@@ -1,17 +1,15 @@
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren } from 'react';
 
 export type ToastVariant = 'danger' | 'default' | 'success' | 'warning';
 
 export type ToastShowOptions = {
-  /** Persistent notices are hidden by the workflow that owns them. */
-  duration?: number | 'persistent';
+  duration?: number;
   placement?: 'top' | 'bottom';
   /** Extra space above a screen-owned dock. Bottom toasts also follow the keyboard. */
   bottomOffset?: number;
   actions?: readonly { label: string; onPress: () => void }[];
   dismissLabel?: string;
-  /** A subscribing text component can update a persistent notice without remounting the toast. */
-  label: ReactNode;
+  label: string;
   variant?: ToastVariant;
 };
 

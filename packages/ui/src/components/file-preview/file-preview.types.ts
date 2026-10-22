@@ -54,7 +54,8 @@ export type FilePreviewPlugin = {
 
 export type FilePreviewTransfer = {
   progress?: number;
-  state: 'uploading' | 'failed';
+  /** `processing` is local work on the file, such as text recognition. */
+  state: 'uploading' | 'processing' | 'failed';
   label: string;
 };
 

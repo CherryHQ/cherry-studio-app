@@ -26,7 +26,6 @@ import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHan
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
-import { PdfOcrNotice } from '@/frontend/appShell/documentExtraction';
 import { FeedbackCaptureProvider, FeedbackHintProvider } from '@/frontend/appShell/feedback';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import { McpInteractionDialog } from '@/frontend/appShell/mcp';
@@ -84,7 +83,6 @@ function RootLayout() {
                                     <AppUpdateObserver />
                                     <BackgroundActivityBridge />
                                     <LanguagePreferenceObserver />
-                                    <PdfOcrNotice />
                                     <SystemEntryBridge />
                                     <FeedbackCaptureProvider>
                                       <FeedbackHintProvider>

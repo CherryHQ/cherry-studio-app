@@ -54,7 +54,9 @@ export interface ExtractResult {
   extractionError: boolean;
   /** Rendering or recognition failed; partial text must not be sent. */
   ocrError: boolean;
-  /** One-based nonblank pages where OCR produced no usable text. */
+  /** Image pages were skipped because the engine cannot read the app language's script. */
+  ocrUnavailable: boolean;
+  /** One-based nonblank pages whose visual content yielded no usable text. */
   unrecognizedPages: number[];
 }
 

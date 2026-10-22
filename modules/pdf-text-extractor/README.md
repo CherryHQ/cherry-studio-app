@@ -25,16 +25,17 @@ Normal conversation submission still sends the resulting text to the selected mo
   blank. Successful OCR with no usable text records the one-based page in `unrecognizedPages`,
   retaining any native text. Covers, illustrations and noisy blanks do not reject the other pages.
   The shared reader prefixes an explicit model-facing notice; attachment reports and tool windows
-  retain the page numbers. The UI warns once, when the text is first extracted; cached history
-  re-reads on later turns do not warn again. A completely textless document still fails as empty.
+  retain the page numbers, and the transcript lists them under the sent message's attachments. A
+  completely textless document still fails as empty.
   Rendering, parsing and recognition-engine errors still reject partial results. The iOS image
   scan only routes pages: if it cannot parse a page's operators, the page is treated as containing
   images instead of rejecting text PDFKit can read.
 - Recognition follows the resolved app language passed as `language`. iOS selects the matching
   Vision language first, then English and Chinese; Android's bundled model reads Chinese and Latin.
   When the engine cannot read the app language's script (Greek on iOS; Cyrillic, Greek and Japanese
-  on Android), OCR is skipped and pages keep only their native text, because the engine would
-  return plausible garbage instead of failing. A document in another unsupported script attached
+  on Android), OCR is skipped because the engine would return plausible garbage instead of failing.
+  Pages with images are listed in `unrecognizedPages` and `ocrUnavailable` is set; a document left
+  without text fails as `document-ocr-unsupported`. A document in another unsupported script attached
   under a supported app language is not detected.
 - Results keep page order with blank-line separators, without writing a new PDF or adding library
   entries. OCR supplies visual reading order on mixed pages; native lines missing from that output
@@ -62,8 +63,9 @@ purging or corrupt cache files require extraction again; ordinary follow-up read
 
 Each consumer can stop immediately. Only the last consumer cancels the shared native request;
 the extraction slot remains occupied until native cleanup finishes. Aborted or failed extraction
-is never cached. A cache hit does not show recognition activity. The UI displays completed/total
-pages in a persistent notice without replacing the toast on every page.
+is never cached. `observePdfOcr` reports one file entry's queued or page-progress state (keyed by
+the managed filename's entry ID) to its transcript tile, the pending reply and a running `read_file`
+row. A cache hit reports nothing.
 
 ## Integration
 
@@ -88,8 +90,8 @@ the real bundled recognizer; their presence is not evidence that native acceptan
 
 Platform acceptance covers text-only, scanned, mixed, blank, rotated, encrypted,
 corrupt, and over-100-page PDFs. Include first-use offline recognition, cancellation during a page
-and while queued, repeated reads and concurrent consumers, memory on long documents, and the activity
-notice in both themes. Include a text PDF with a logo on every page (no OCR expected), a rotated
+and while queued, repeated reads and concurrent consumers, memory on long documents, and the tile,
+pending-reply and tool-row progress in both themes. Include a text PDF with a logo on every page (no OCR expected), a rotated
 scan on iOS, and Russian/Japanese app languages. Include images inside nested forms and inline images. Check Chinese and
 English recognition on representative physical devices. Complex tables/formulas, reconstruction
 of multi-column reading order and searchable-PDF export remain separate work.

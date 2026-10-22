@@ -11,10 +11,9 @@ import type { ExtractedDocumentText } from './officeText';
 import { readPdfText } from './pdfText';
 
 export type { ExtractedDocumentText } from './officeText';
-export { subscribePdfOcr } from './pdfText';
 
 export class DocumentTextError extends Error {
-  constructor(readonly failure: 'empty' | 'invalid' | 'file-bytes' | 'ocr') {
+  constructor(readonly failure: 'empty' | 'invalid' | 'file-bytes' | 'ocr' | 'ocr-unsupported') {
     super(failure);
     this.name = 'DocumentTextError';
   }
@@ -41,6 +40,8 @@ export async function readDocumentUriText(
       const extracted = await readPdfText(source, signal);
       if (extracted.ocrError) throw new DocumentTextError('ocr');
       if (extracted.extractionError) throw new DocumentTextError('invalid');
+      if (extracted.ocrUnavailable && !extracted.text.trim())
+        throw new DocumentTextError('ocr-unsupported');
       result = { text: extracted.text.trim(), truncated: extracted.isTruncated };
       if (result.text && extracted.unrecognizedPages.length > 0) {
         result.unrecognizedPages = extracted.unrecognizedPages;

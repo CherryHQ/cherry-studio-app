@@ -156,6 +156,7 @@ class PdfTextExtractorModule : Module() {
                 var isTruncated = endPage < totalPages || nativePages.truncated
                 var extractionError = false
                 var ocrError = false
+                var ocrUnavailable = false
                 var ocr: PdfPageOcr? = null
                 val ocrSupported = isPdfOcrLanguageSupported(options?.language)
                 fun progress(completed: Int, phase: String) {
@@ -180,7 +181,14 @@ class PdfTextExtractorModule : Module() {
                             checkCancelled()
                             val hasNativeBody = hasUsablePdfText(nativeText) &&
                                 (!nativePage.hasImages || !isSparsePdfText(nativeText))
-                            val text = if (hasNativeBody || !ocrSupported) nativeText else {
+                            val text = if (hasNativeBody) nativeText else if (!ocrSupported) {
+                                // The recognizer cannot read this script; report image pages instead.
+                                if (nativePage.hasImages) {
+                                    ocrUnavailable = true
+                                    unrecognizedPages.add(pageIndex + 1)
+                                }
+                                nativeText
+                            } else {
                                 recognizingPage = true
                                 progress(pageIndex, "ocr")
                                 val reader = ocr ?: PdfPageOcr(file).also { ocr = it }
@@ -218,6 +226,7 @@ class PdfTextExtractorModule : Module() {
                     "isTruncated" to isTruncated,
                     "extractionError" to extractionError,
                     "ocrError" to ocrError,
+                    "ocrUnavailable" to ocrUnavailable,
                     "unrecognizedPages" to unrecognizedPages
                 )
             }

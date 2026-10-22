@@ -41,14 +41,17 @@ export type PreparedFile = ResolvedFile & {
   content?: FileAttachmentContent;
 };
 
-export type PdfOcrProgress = { completedPages: number; totalPages: number };
-export type PdfOcrEvent =
-  | { type: 'progress'; progress: PdfOcrProgress | null }
-  | { type: 'unrecognized'; pages: number[] };
+/** On-device recognition of a scanned PDF that a send or file tool is reading. */
+export type PdfOcrState =
+  | { status: 'queued' }
+  | { status: 'recognizing'; completedPages: number; totalPages: number };
 
 export interface FileModule {
-  /** Local scan recognition activity; the originating operation owns cancellation. */
-  subscribePdfOcr(listener: (event: PdfOcrEvent) => void): () => void;
+  /** Recognition of one file; calls back immediately, then on change. Undefined when idle. */
+  observePdfOcr(
+    fileEntryId: string,
+    observer: (state: PdfOcrState | undefined) => void,
+  ): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
   /** Reuse a workspace file or copy an explicitly attached outside version into it. */

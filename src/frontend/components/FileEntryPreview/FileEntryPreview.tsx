@@ -23,12 +23,14 @@ const logger = loggerService.withContext('FileEntryPreview');
 
 /** Reads the entry by id, then its URI. */
 export function FileEntryPreview({
+  badge,
   entryId,
   size,
   variant,
   transfer,
   onImageReplace,
 }: {
+  badge?: ReactNode;
   entryId: FileEntryId;
   size?: number;
   variant?: FilePreviewVariant;
@@ -45,6 +47,7 @@ export function FileEntryPreview({
 
   return (
     <EntryPreview
+      badge={badge}
       entry={data?.entry}
       entryId={entryId}
       size={size}

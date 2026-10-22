@@ -80,7 +80,9 @@ export async function readAttachmentContent(
             ? 'document-empty'
             : error.failure === 'ocr'
               ? 'document-ocr-failed'
-              : 'document-invalid',
+              : error.failure === 'ocr-unsupported'
+                ? 'document-ocr-unsupported'
+                : 'document-invalid',
       );
     }
     return fail('unavailable');

@@ -38,7 +38,7 @@ export function FilePreviewFrame({
         transfer ? `${accessibilityLabel}, ${transfer.label}` : accessibilityLabel
       }
       accessibilityRole="button"
-      accessibilityState={{ disabled, busy: transfer?.state === 'uploading' }}
+      accessibilityState={{ disabled, busy: !!transfer && transfer.state !== 'failed' }}
       className="active:opacity-70"
       disabled={disabled}
       onPress={onPress}

@@ -1,7 +1,7 @@
 import { File } from 'expo-file-system';
 
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
-import type { PdfOcrEvent } from '@/shared/contracts/file';
+import type { PdfOcrState } from '@/shared/contracts/file';
 import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 import { DEFAULT_APP_LANGUAGE, type AppLanguage } from '@/shared/utils/languages';
 
@@ -13,10 +13,13 @@ type PendingExtraction = {
   consumers: number;
   result: Promise<ExtractResult>;
 };
+type OcrObserver = (state: PdfOcrState | undefined) => void;
 const pending = new Map<string, PendingExtraction>();
 const slots = createConcurrencySlots(1);
-const listeners = new Set<(event: PdfOcrEvent) => void>();
-let activity: Extract<PdfOcrEvent, { type: 'progress' }> = { type: 'progress', progress: null };
+let extracting = 0;
+// Keyed by file entry: the transcript tile and tool row of that file show its own work.
+const states = new Map<string, PdfOcrState>();
+const observers = new Map<string, Set<OcrObserver>>();
 let appLanguage = (): AppLanguage => DEFAULT_APP_LANGUAGE;
 
 /** Composition supplies the shared language resolver; recognition languages follow it. */
@@ -24,28 +27,21 @@ export function configurePdfOcrLanguage(resolve: () => AppLanguage): void {
   appLanguage = resolve;
 }
 
-export function subscribePdfOcr(listener: (event: PdfOcrEvent) => void): () => void {
-  listeners.add(listener);
-  listener(activity);
+export function observePdfOcr(fileEntryId: string, observer: OcrObserver): () => void {
+  let set = observers.get(fileEntryId);
+  if (!set) observers.set(fileEntryId, (set = new Set()));
+  set.add(observer);
+  observer(states.get(fileEntryId));
   return () => {
-    listeners.delete(listener);
+    set.delete(observer);
+    if (set.size === 0 && observers.get(fileEntryId) === set) observers.delete(fileEntryId);
   };
 }
 
-function publish(event: PdfOcrEvent) {
-  if (event.type === 'progress') activity = event;
-  for (const listener of listeners) listener(event);
-}
-
-function reportUnrecognizedPages(result: ExtractResult) {
-  if (
-    !result.extractionError &&
-    !result.ocrError &&
-    result.text.trim() &&
-    result.unrecognizedPages.length > 0
-  ) {
-    publish({ type: 'unrecognized', pages: result.unrecognizedPages });
-  }
+function setState(fileEntryId: string, state: PdfOcrState | undefined) {
+  if (state) states.set(fileEntryId, state);
+  else states.delete(fileEntryId);
+  for (const observer of observers.get(fileEntryId) ?? []) observer(state);
 }
 
 async function extract(
@@ -56,29 +52,35 @@ async function extract(
 ): Promise<ExtractResult> {
   const cached = await readPdfTextCache(cache);
   signal.throwIfAborted();
-  // Later turns re-read history; the user was already warned when the text was first extracted.
   if (cached) return cached;
-  const release = await slots.acquire(signal);
+  // Managed filenames are the immutable entry ID plus an extension.
+  const fileEntryId = source.name.split('.')[0]!;
+  if (extracting > 0) setState(fileEntryId, { status: 'queued' });
+  extracting += 1;
   try {
-    const result = await extractPdfText(
-      source.uri,
-      { maxPages: MAX_PDF_ATTACHMENT_PAGES, language },
-      {
-        signal,
-        onProgress: ({ phase, completedPages, totalPages }) => {
-          if (phase === 'ocr')
-            publish({ type: 'progress', progress: { completedPages, totalPages } });
+    const release = await slots.acquire(signal);
+    try {
+      const result = await extractPdfText(
+        source.uri,
+        { maxPages: MAX_PDF_ATTACHMENT_PAGES, language },
+        {
+          signal,
+          onProgress: ({ phase, completedPages, totalPages }) => {
+            if (phase === 'ocr')
+              setState(fileEntryId, { status: 'recognizing', completedPages, totalPages });
+          },
         },
-      },
-    );
-    signal.throwIfAborted();
-    // Do not recreate a deleted file's derived content after an in-flight read.
-    if (source.exists) writePdfTextCache(cache, result);
-    reportUnrecognizedPages(result);
-    return result;
+      );
+      signal.throwIfAborted();
+      // Do not recreate a deleted file's derived content after an in-flight read.
+      if (source.exists) writePdfTextCache(cache, result);
+      return result;
+    } finally {
+      release();
+    }
   } finally {
-    publish({ type: 'progress', progress: null });
-    release();
+    extracting -= 1;
+    setState(fileEntryId, undefined);
   }
 }
 

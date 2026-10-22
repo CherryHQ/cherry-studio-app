@@ -7,7 +7,7 @@ import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 import type { ExtractResult } from '../../../../modules/pdf-text-extractor';
 
 // Increment when native extraction policy changes. Cached text is disposable, never canonical.
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const MAX_CACHE_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_CACHE_ENTRIES = 256;
@@ -18,6 +18,7 @@ const resultSchema = z.object({
   isTruncated: z.boolean(),
   extractionError: z.literal(false),
   ocrError: z.literal(false),
+  ocrUnavailable: z.boolean(),
   unrecognizedPages: z
     .array(z.number().int().min(1).max(MAX_PDF_ATTACHMENT_PAGES))
     .max(MAX_PDF_ATTACHMENT_PAGES),

@@ -9,7 +9,7 @@ import { readPdfText } from '../pdfText';
 
 const mockFile = { size: 64, exists: true };
 jest.mock('expo-file-system', () => ({ File: jest.fn(() => mockFile) }));
-jest.mock('../pdfText', () => ({ readPdfText: jest.fn(), subscribePdfOcr: jest.fn() }));
+jest.mock('../pdfText', () => ({ readPdfText: jest.fn() }));
 jest.mock('../fileStorage', () => ({ readFileUriBytes: jest.fn() }));
 const URI = 'file:///managed/document.pdf';
 const extracted = {
@@ -19,6 +19,7 @@ const extracted = {
   isTruncated: true,
   extractionError: false,
   ocrError: false,
+  ocrUnavailable: false,
   unrecognizedPages: [],
 };
 beforeEach(() => {
@@ -65,6 +66,25 @@ test('rejects a document with no readable text even if it has unrecognized image
   await expect(
     readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
   ).rejects.toMatchObject({ failure: 'empty' });
+});
+
+test('names an unsupported recognition language instead of an unreadable scan', async () => {
+  jest
+    .mocked(readPdfText)
+    .mockResolvedValue({ ...extracted, text: '', ocrUnavailable: true, unrecognizedPages: [1] });
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).rejects.toMatchObject({ failure: 'ocr-unsupported' });
+  // Readable pages still send; skipped image pages surface as unrecognized.
+  jest.mocked(readPdfText).mockResolvedValue({
+    ...extracted,
+    text: 'Native page',
+    ocrUnavailable: true,
+    unrecognizedPages: [2],
+  });
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).resolves.toMatchObject({ unrecognizedPages: [2] });
 });
 
 test.each([

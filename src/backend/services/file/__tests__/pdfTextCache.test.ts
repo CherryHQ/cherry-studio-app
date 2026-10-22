@@ -78,6 +78,7 @@ const result: ExtractResult = {
   isTruncated: false,
   extractionError: false,
   ocrError: false,
+  ocrUnavailable: false,
   unrecognizedPages: [1],
 };
 const source = () => new File('file:///documents/00000000-0000-7000-8000-000000000001.pdf');

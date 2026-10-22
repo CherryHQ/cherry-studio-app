@@ -1,9 +1,12 @@
+import TriangleAlertIcon from '@cherrystudio/app-icons/icons/triangle-alert';
 import { memo, type ReactNode, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { FilePart } from '../parts/FilePart';
 import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';
+import { attachmentNotices } from './attachmentNotices';
 import { partitionUserMessageParts } from './partitionUserMessageParts';
 import { UserMessageAttachments } from './UserMessageAttachments';
 import {
@@ -17,10 +20,13 @@ type UserMessageProps = {
 };
 
 export const UserMessage = memo(function UserMessage({ attachments, message }: UserMessageProps) {
+  const { t } = useTranslation();
   const { attachments: fileParts, bodyMessage } = useMemo(
     () => partitionUserMessageParts(message),
     [message],
   );
+  // Source-owned attachment cards report their own delivery.
+  const notices = attachments ? [] : attachmentNotices(fileParts, t);
 
   return (
     <View className="w-full items-end">
@@ -29,6 +35,16 @@ export const UserMessage = memo(function UserMessage({ attachments, message }: U
           <UserMessageAttachments>
             {attachments ?? fileParts.map(({ part }) => <FilePart key={part.url} part={part} />)}
           </UserMessageAttachments>
+        ) : null}
+        {notices.length > 0 ? (
+          <View className="items-end gap-1">
+            {notices.map((notice) => (
+              <View className="flex-row items-start gap-1.5" key={notice}>
+                <TriangleAlertIcon className="mt-0.5 size-3.5 text-warning" />
+                <Text className="shrink text-muted-foreground text-xs">{notice}</Text>
+              </View>
+            ))}
+          </View>
         ) : null}
         {bodyMessage ? (
           <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
