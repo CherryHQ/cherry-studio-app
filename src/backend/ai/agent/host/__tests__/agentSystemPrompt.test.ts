@@ -299,7 +299,7 @@ describe('buildAgentSystemPrompt', () => {
       ],
     });
     expect(prompt).toContain(
-      'load it with `tool_search` using its exact name, then call it: `health_query_data`, `agent_update`.',
+      'not offered upfront: `health_query_data`, `agent_update`. When a request needs some of them, call `tool_search` once with their exact names as the query and `limit` equal to the number of names',
     );
     expect(prompt).not.toContain('agent_create');
     expect(

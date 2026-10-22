@@ -187,7 +187,7 @@ Use the offered JavaScript execution tool when an answer depends on exact comput
   if (onDemand.length > 0) {
     sections.push(`## Tools On Demand
 
-These built-in tools are available but not offered upfront. When a request needs one, load it with \`tool_search\` using its exact name, then call it: ${onDemand.join(', ')}.`);
+These built-in tools are available but not offered upfront: ${onDemand.join(', ')}. When a request needs some of them, call \`tool_search\` once with their exact names as the query and \`limit\` equal to the number of names, then call them. Every loaded tool stays in context for the rest of the conversation, so never load extra matches, and never search for a tool you are already offered.`);
   }
 
   if (pluginGuides.length > 0) {
