@@ -4,6 +4,8 @@ export type AppUpdateRelease = {
   /** Channel-qualified release identity; also used to throttle reminders. */
   id: string;
   currentVersion: string;
+  /** What the distribution source published with this version, when it publishes anything. */
+  notes: string | null;
 } & (
   | { channel: 'apk'; latestVersion: string; downloadUrl: string; checksumUrl: string }
   /** Google Play exposes a build number, not a public version name. */
@@ -40,6 +42,8 @@ export interface AppUpdateModule {
   /** One app-owned transfer, shared by every screen. Completion never installs automatically. */
   download(release: ApkUpdateRelease): Promise<void>;
   cancelDownload(): Promise<void>;
+  /** Release notes for the UI language; a failed lookup degrades to no notes. */
+  releaseNotes(release: AppUpdateRelease, language: string): Promise<string | null>;
   getDownload(): AppUpdateDownload;
   subscribeDownload(listener: () => void): () => void;
   install(): Promise<'opened' | 'permissionRequired' | 'invalidPackage'>;

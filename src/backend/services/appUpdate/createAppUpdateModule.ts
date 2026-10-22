@@ -10,6 +10,7 @@ import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
 import { assertApkRelease, checkGitcodeRelease } from './gitcodeRelease';
+import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
 
@@ -72,6 +73,7 @@ export function createAppUpdateModule(dependencies: {
           id: `google-play:${update.versionCode}`,
           currentVersion,
           latestVersion: null,
+          notes: null,
           storeUrl: `https://play.google.com/store/apps/details?id=${Application.applicationId}`,
         };
       }
@@ -113,6 +115,7 @@ export function createAppUpdateModule(dependencies: {
       assertApkRelease(release, Application.nativeApplicationVersion?.trim() ?? '');
       await download.download(release);
     },
+    releaseNotes: readReleaseNotes,
     cancelDownload: download.cancelDownload,
     getDownload: download.getDownload,
     subscribeDownload: download.subscribeDownload,

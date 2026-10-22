@@ -6,7 +6,7 @@ import { assertApkRelease, checkGitcodeRelease, readApkChecksum } from '../gitco
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
   ...jest.requireActual('@/backend/services/http'),
-  createHttpClient: () => ({ request: mockRequest }),
+  createHttpClient: () => ({ request: (request: unknown) => mockRequest(request) }),
 }));
 const downloadUrl =
   'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v1.10.0/cherry-studio-1.10.0-android.apk';
@@ -28,6 +28,7 @@ const available: ApkUpdateRelease = {
   channel: 'apk',
   id: 'apk:1.10.0',
   currentVersion: '1.9.0',
+  notes: null,
   latestVersion: '1.10.0',
   downloadUrl,
   checksumUrl,
@@ -47,6 +48,16 @@ test('selects the signed-package release attachments and forwards cancellation',
   expect(mockRequest).toHaveBeenCalledWith(
     expect.objectContaining({ signal, maxResponseBytes: 512_000 }),
   );
+});
+
+test('carries the published notes without the title or download section', async () => {
+  mockRequest.mockResolvedValue({
+    data: {
+      ...release,
+      body: '# Cherry Studio 1.10.0 更新日志\n\n- 新功能\n\n## 下载安装\n\n- APK',
+    },
+  });
+  await expect(checkGitcodeRelease('1.9.0')).resolves.toMatchObject({ notes: '- 新功能' });
 });
 
 test.each(['1.10.0', '2.0.0'])('never offers a downgrade from %s', async (version) => {

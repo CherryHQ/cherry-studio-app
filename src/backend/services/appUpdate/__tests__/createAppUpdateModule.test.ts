@@ -54,6 +54,7 @@ const apk: ApkUpdateRelease = {
   channel: 'apk',
   id: 'apk:1.10.0',
   currentVersion: '1.9.0',
+  notes: null,
   latestVersion: '1.10.0',
   downloadUrl:
     'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v1.10.0/cherry-studio-1.10.0-android.apk',

@@ -2,7 +2,7 @@ import { checkAppStoreRelease } from '../appStoreRelease';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
-  createHttpClient: () => ({ request: mockRequest }),
+  createHttpClient: () => ({ request: (request: unknown) => mockRequest(request) }),
 }));
 
 beforeEach(() => jest.clearAllMocks());
@@ -18,6 +18,7 @@ test('looks up the installed bundle in the selected region and constructs an off
     id: 'app-store:1234:1.10.0',
     currentVersion: '1.9.0',
     latestVersion: '1.10.0',
+    notes: null,
     storeUrl: 'https://apps.apple.com/cn/app/id1234',
   });
   expect(mockRequest).toHaveBeenCalledWith(
@@ -49,4 +50,22 @@ test('a store release older than the installed beta does not prompt a downgrade'
 test('lookup failures never imply up-to-date', async () => {
   mockRequest.mockRejectedValue(new Error('Offline'));
   await expect(checkAppStoreRelease('com.example.app', '1.9.0', 'US')).rejects.toThrow('Offline');
+});
+
+test('carries the storefront release notes', async () => {
+  mockRequest.mockResolvedValue({
+    data: {
+      results: [
+        {
+          bundleId: 'com.example.app',
+          trackId: 1234,
+          version: '1.10.0',
+          releaseNotes: '  New in 1.10.0\n• Faster  ',
+        },
+      ],
+    },
+  });
+  await expect(checkAppStoreRelease('com.example.app', '1.9.0', 'US')).resolves.toMatchObject({
+    notes: 'New in 1.10.0\n• Faster',
+  });
 });

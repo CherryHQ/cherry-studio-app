@@ -79,6 +79,10 @@ artifact filenames, checksums, and technical identifiers unchanged.
 GitHub's generated notes reuse pull request titles without translating them. Review their language
 and keep any manually curated replacement in English. Published GitHub release notes can be updated
 with `gh release edit <tag> --notes-file <english-notes.md>` without rebuilding or uploading the APK.
+The app shows these notes in its update dialog. Start both bodies with the `#` title and end them
+with the download section headed exactly `## 下载安装` (GitCode) or `## Download and Installation`
+(GitHub); the app removes the title and that final section, so put everything users should read in
+the app before it.
 When using `scripts/publishGitcodeRelease.ts`, supply the Chinese version as `release-notes.md` in
 its `RELEASE_DIRECTORY`; the script reads that file as-is and does not translate it.
 

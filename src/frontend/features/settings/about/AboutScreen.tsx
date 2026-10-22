@@ -3,7 +3,8 @@ import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import HistoryIcon from '@cherrystudio/app-icons/icons/history';
 import MailIcon from '@cherrystudio/app-icons/icons/mail';
 import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-text';
-import { Image, Section, useToast } from '@cherrystudio/ui/components';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
+import { Chip, Image, Section, useToast } from '@cherrystudio/ui/components';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
@@ -12,7 +13,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
 
-import { AppUpdateSection } from '@/frontend/appShell/appUpdate';
+import { useAppUpdateEntry } from '@/frontend/appShell/appUpdate';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
@@ -33,6 +34,7 @@ export default function AboutSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
+  const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateEntry();
   const versionLabel = APP_VERSION ? `v${APP_VERSION}` : t('settings.about.version.unknown');
   const buildLabel = APP_BUILD ? t('settings.about.version.build', { build: APP_BUILD }) : null;
   const environmentLabel =
@@ -92,8 +94,25 @@ export default function AboutSettingsScreen() {
           </View>
         </View>
 
-        <AppUpdateSection />
         <Section>
+          {isEnabled ? (
+            <Section.Item
+              accessibilityHint={hasAvailableUpdate ? t('appUpdate.confirmTitle') : undefined}
+              accessibilityState={{ busy: isFetching }}
+              label={t('appUpdate.check')}
+              leading={<RefreshCwIcon className="size-4 text-foreground" />}
+              onPress={() => void checkForUpdates()}
+              showChevron={false}
+              testID="settings-check-update"
+              trailing={
+                hasAvailableUpdate ? (
+                  <Chip.Tag className="px-2 py-0.5" testID="settings-update-new">
+                    <Chip.Label className="text-xs">{t('appUpdate.newBadge')}</Chip.Label>
+                  </Chip.Tag>
+                ) : undefined
+              }
+            />
+          ) : null}
           <Section.Item
             accessibilityHint={t('settings.about.feedback.description')}
             label={t('settings.about.feedback.title')}

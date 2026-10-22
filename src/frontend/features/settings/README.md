@@ -16,8 +16,9 @@ This page tree owns the settings home and every page reached beneath `/settings`
 ## Organization
 
 - `components/` contains UI private to the settings home.
-- About embeds the shared [app-update section](../../appShell/appUpdate/README.md). Update discovery,
-  reminders, download state and channel actions belong to app-shell/backend infrastructure.
+- About renders its ordinary "check for updates" row from the shared
+  [app-update entry](../../appShell/appUpdate/README.md); the update dialog, discovery, reminders,
+  download state and channel actions belong to app-shell/backend infrastructure.
 - `hooks/` and `utils/` contain behavior shared by settings child pages.
 - `about/`, `appearance/`, `fontSize/`, `notifications/`, `permissions/`, and `profile/` each own one
   direct child page.

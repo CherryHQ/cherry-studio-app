@@ -7,7 +7,12 @@ import { compareReleaseVersions } from './releaseVersion';
 
 const LookupSchema = z.object({
   results: z.array(
-    z.object({ bundleId: z.string(), trackId: z.number().int().positive(), version: z.string() }),
+    z.object({
+      bundleId: z.string(),
+      trackId: z.number().int().positive(),
+      version: z.string(),
+      releaseNotes: z.string().optional(),
+    }),
   ),
 });
 const apple = createHttpClient({ baseUrl: 'https://itunes.apple.com', timeoutMs: 10_000 });
@@ -35,6 +40,7 @@ export async function checkAppStoreRelease(
         id: `app-store:${release.trackId}:${release.version}`,
         currentVersion,
         latestVersion: release.version,
+        notes: release.releaseNotes?.trim() || null,
         storeUrl: `https://apps.apple.com/${country.toLowerCase()}/app/id${release.trackId}`,
       }
     : { status: 'upToDate', currentVersion };

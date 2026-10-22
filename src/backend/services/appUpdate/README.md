@@ -54,6 +54,19 @@ claim that the app is current.
   missing regional listing is `noRelease`. This checks App Store publications, not new TestFlight
   builds. Store submission or TestFlight upload alone is never an availability signal.
 
+## Release Notes
+
+Each available release carries `notes` from its own source, and `releaseNotes(release, language)`
+selects the version for the UI language. A failed lookup returns what the release already carries.
+
+- **APK:** the GitCode release body is Simplified Chinese Markdown. Chinese UI languages use it as
+  is. Other languages read the English body of the same tag from the public GitHub releases API
+  (`api.github.com`, ten-second timeout), falling back to the Chinese notes. Both bodies drop their
+  `#` title and everything from the download heading (`## 下载安装` / `## Download and Installation`)
+  onward, which describes attachments and checksums the app handles itself.
+- **App Store:** Apple's lookup `releaseNotes` for the queried region, as plain text.
+- **Google Play:** none; the in-app update API exposes only a version code.
+
 ## APK Transfer And Installation
 
 `createApkDownload` exposes a stable snapshot/subscription pair through the shared module. Only one

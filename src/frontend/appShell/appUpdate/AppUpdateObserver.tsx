@@ -1,11 +1,12 @@
-import { useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
+import { useGlobalSearchParams, usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
+import { type ChatRouteParamsInput, parseChatRoute } from '@/frontend/appShell/navigation/chat';
+import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
 import { useStartupCoverVisible } from '@/frontend/appShell/startup';
-import { appUpdateQueryOptions, useAppUpdateDownload } from '@/frontend/data/appUpdate';
+import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { cacheService } from '@/frontend/data/CacheService';
 
@@ -13,17 +14,30 @@ import { useAppUpdateActions } from './AppUpdateProvider';
 
 const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-/** Passive reminders never interrupt an active conversation or restart the application. */
+/**
+ * Checks after bootstrap and offers a newer release once per cold start, only on the plain landing
+ * chat: a launch from a share, notification or link keeps its destination uninterrupted, and a
+ * foreground refresh never interrupts a session already in use.
+ */
 export function AppUpdateObserver() {
   const appUpdate = useBackendModule('appUpdate');
-  const { data, isFetching } = useQuery(appUpdateQueryOptions(appUpdate));
-  const transfer = useAppUpdateDownload(appUpdate);
+  const { data, status } = useQuery(appUpdateQueryOptions(appUpdate));
   const actions = useAppUpdateActions();
-  const { t } = useTranslation();
-  const { toast } = useToast();
   const coverVisible = useStartupCoverVisible();
+  const privacyPending = usePrivacyConsentPending();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<ChatRouteParamsInput>();
   const [active, setActive] = useState(AppState.currentState === 'active');
-  const lastTransfer = useRef(transfer);
+  const settled = useRef(false);
+  const route = parseChatRoute(params);
+  // A new chat with nothing handed to it; a share or a notification arrives with a target.
+  const landing =
+    pathname === '/' &&
+    (route.status === 'empty' ||
+      (route.status === 'ready' &&
+        route.target.kind === 'draft' &&
+        !route.target.composerHandoff &&
+        !route.target.selectionHandoff));
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) =>
@@ -33,14 +47,16 @@ export function AppUpdateObserver() {
   }, []);
 
   useEffect(() => {
-    if (
-      !active ||
-      coverVisible ||
-      isFetching ||
-      data?.status !== 'available' ||
-      transfer.status !== 'idle'
-    )
+    if (settled.current || !active || coverVisible) return;
+    // Leaving the landing chat, a pending privacy decision, or a failed first check ends this
+    // launch's chance to prompt; the next cold start tries again.
+    if (!landing || privacyPending || status === 'error') {
+      settled.current = true;
       return;
+    }
+    if (status !== 'success') return;
+    settled.current = true;
+    if (data.status !== 'available' || appUpdate.getDownload().status !== 'idle') return;
     const previous = cacheService.getPersist('app_update.last_reminder');
     const now = Date.now();
     if (
@@ -49,38 +65,8 @@ export function AppUpdateObserver() {
       now - previous.remindedAt < REMINDER_INTERVAL_MS
     )
       return;
-    cacheService.setPersist('app_update.last_reminder', { releaseId: data.id, remindedAt: now });
-    toast.show({
-      label: t('appUpdate.confirmTitle'),
-      duration: 10_000,
-      actions: [{ label: t('appUpdate.view'), onPress: () => actions.showRelease(data) }],
-    });
-  }, [active, coverVisible, isFetching, data, transfer.status, actions, t, toast]);
-
-  useEffect(() => {
-    if (!active || coverVisible || lastTransfer.current === transfer) return;
-    lastTransfer.current = transfer;
-    if (transfer.status === 'ready') {
-      toast.show({
-        label: t('appUpdate.ready'),
-        duration: 10_000,
-        actions: [{ label: t('appUpdate.install'), onPress: actions.confirmInstall }],
-      });
-    } else if (transfer.status === 'failed') {
-      toast.show({
-        label: t(
-          transfer.reason === 'verification'
-            ? 'appUpdate.verificationFailed'
-            : 'appUpdate.downloadFailed',
-        ),
-        variant: 'danger',
-        duration: 10_000,
-        actions: [{ label: t('common.retry'), onPress: () => void actions.check() }],
-      });
-    } else if (transfer.status === 'downloading' && transfer.receivedBytes === 0) {
-      toast.show({ label: t('appUpdate.downloadStarted') });
-    }
-  }, [active, coverVisible, transfer, actions, t, toast]);
+    actions.open(data);
+  }, [active, coverVisible, privacyPending, landing, status, data, appUpdate, actions]);
 
   return null;
 }

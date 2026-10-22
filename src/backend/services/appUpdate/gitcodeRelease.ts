@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createHttpClient, HttpError } from '@/backend/services/http';
 import type { ApkUpdateRelease, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
+import { normalizeReleaseNotes } from './releaseNotes';
 import { compareReleaseVersions } from './releaseVersion';
 
 const REPOSITORY = 'CherryHQ/cherry-studio-app';
@@ -10,6 +11,7 @@ const ReleaseSchema = z.object({
   tag_name: z.string().regex(/^v?\d+\.\d+\.\d+$/),
   prerelease: z.boolean(),
   release_status: z.string(),
+  body: z.string().nullish(),
   assets: z.array(
     z.object({ name: z.string(), type: z.string(), browser_download_url: z.string() }),
   ),
@@ -63,6 +65,7 @@ export async function checkGitcodeRelease(
         id: `apk:${latestVersion}`,
         currentVersion,
         latestVersion,
+        notes: normalizeReleaseNotes(release.body),
         ...urls,
       }
     : { status: 'upToDate', currentVersion };

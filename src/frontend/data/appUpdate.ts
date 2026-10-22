@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 
-import type { AppUpdateModule } from '@/shared/contracts/appUpdate';
+import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { appUpdateQueryKeys } from './queryKeys/appUpdate';
 
@@ -16,6 +16,20 @@ export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
     staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
     retry: 1,
+  });
+}
+
+/** A published version's notes never change, so one lookup per release and language suffices. */
+export function appUpdateReleaseNotesQueryOptions(
+  appUpdate: AppUpdateModule,
+  release: AppUpdateRelease,
+  language: string,
+) {
+  return queryOptions({
+    queryKey: appUpdateQueryKeys.notes(release.id, language),
+    queryFn: () => appUpdate.releaseNotes(release, language),
+    staleTime: Infinity,
+    gcTime: 6 * 60 * 60 * 1000,
   });
 }
 
