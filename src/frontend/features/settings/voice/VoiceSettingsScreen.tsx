@@ -6,6 +6,7 @@ import { useBackendModule, usePreference } from '@/frontend/data';
 import { VOICE_ENGINE_PREFERENCE, type VoiceCapability } from '@/shared/contracts/voice';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { DictationLanguageSetting } from './components/DictationLanguageSetting';
 import { SpeechVoiceSetting } from './components/SpeechVoiceSetting';
 import { VoiceEngineSection } from './components/VoiceEngineSection';
 import { VoiceModelSetting } from './components/VoiceModelSetting';
@@ -27,6 +28,11 @@ export default function VoiceSettingsScreen() {
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.voice.title') }}>
       <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null} />
+      {dictationEngine === 'system' ? (
+        <Section>
+          <DictationLanguageSetting />
+        </Section>
+      ) : null}
       <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null} />
       {speechEngine ? (
         <Section>

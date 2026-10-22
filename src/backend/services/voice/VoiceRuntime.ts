@@ -21,7 +21,9 @@ export type VoiceRuntimeDependencies = {
     get(key: (typeof VOICE_ENGINE_PREFERENCE)[VoiceCapability]): Promise<VoiceEngineId | null>;
   };
   listProviders(signal: AbortSignal): Promise<VoiceProviderOption[]>;
+  /** Reading aloud and its voices follow the app language. */
   language(): AppLanguage;
+  dictationLanguage(): AppLanguage;
   /** Subscribes to the app entering the background. */
   onBackground(listener: () => void): () => void;
 };
@@ -39,6 +41,7 @@ export function createVoiceRuntime({
   preference,
   listProviders,
   language,
+  dictationLanguage,
   onBackground,
 }: VoiceRuntimeDependencies): { module: VoiceModule; dispose(): Promise<void> } {
   const lifetime = new AbortController();
@@ -150,7 +153,7 @@ export function createVoiceRuntime({
         const engine = await track(resolve<DictationEngine>('dictation', activity.signal));
         const session = await track(
           engine.start({
-            language: language(),
+            language: dictationLanguage(),
             signal: activity.signal,
             onText: (text) => options?.onText?.(text),
             onLevel: (level) => options?.onLevel?.(level),

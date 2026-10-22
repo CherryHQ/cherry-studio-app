@@ -71,6 +71,8 @@ export interface PreferenceSchema {
   'feature.voice.ai_voice': string;
   /** Null uses the first engine this device supports. */
   'feature.voice.dictation_engine': VoiceEngineId | null;
+  /** Null follows the app language. Only the system engine uses it; AI models detect it. */
+  'feature.voice.dictation_language': LanguageVarious | null;
   /** Null uses the first engine this device supports. */
   'feature.voice.speech_engine': VoiceEngineId | null;
   'feature.voice.speech_model': VoiceModelSelection | null;
@@ -124,6 +126,7 @@ export const PreferenceDefaults = {
   'feature.translate.model_id': null,
   'feature.voice.ai_voice': 'alloy',
   'feature.voice.dictation_engine': null,
+  'feature.voice.dictation_language': null,
   'feature.voice.speech_engine': null,
   'feature.voice.speech_model': null,
   'feature.voice.system_voice': '',

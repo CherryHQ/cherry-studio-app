@@ -36,12 +36,14 @@ export function createVoice({
   providers,
   permissions,
   language,
+  dictationLanguage,
 }: {
   ai: AiTranscriptionDependencies['ai'] & AiSpeechDependencies['ai'];
   preference: VoicePreferences;
   providers: Pick<ProviderService, 'list'>;
   permissions: SystemPromptQueue;
   language(): AppLanguage;
+  dictationLanguage(): AppLanguage;
 }) {
   const platform = Platform.OS === 'ios' ? 'ios' : 'android';
   const scratch = createVoiceScratch();
@@ -68,6 +70,7 @@ export function createVoice({
         .map(({ id, name }) => ({ id, name }));
     },
     language,
+    dictationLanguage,
     onBackground(listener) {
       const subscription = AppState.addEventListener('change', (state) => {
         if (state === 'background') listener();

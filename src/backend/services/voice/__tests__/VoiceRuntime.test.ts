@@ -66,6 +66,7 @@ function setup({
     },
     listProviders: async () => [],
     language: () => 'zh-CN',
+    dictationLanguage: () => 'en-US',
     onBackground: (listener) => {
       background = listener;
       return () => {
@@ -110,6 +111,26 @@ describe('engine choice', () => {
     });
     await expect(module.speak('hello')).rejects.toMatchObject({ code: 'unsupported' });
     expect(ai.engine.speak).not.toHaveBeenCalled();
+  });
+
+  test('dictation uses its own language while reading follows the app', async () => {
+    const dictation = dictationEngine();
+    const speech = speechEngine();
+    const { module } = setup({
+      dictation: { system: dictation.engine },
+      speech: { system: speech.engine },
+    });
+    await module.startDictation();
+    expect(dictation.engine.start).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'en-US' }),
+    );
+    dictation.result.resolve('done');
+    await flush();
+    void module.speak('hello');
+    await flush();
+    expect(speech.engine.speak).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'zh-CN' }),
+    );
   });
 });
 

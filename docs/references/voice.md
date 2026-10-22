@@ -70,8 +70,9 @@ that cannot play fails the reading. A pause or stop the reading did not request,
 interruption, also fails it in both speech engines, instead of waiting for playback to resume. The
 voice list is OpenAI's; a compatible gateway rejects the voices it lacks.
 
-Dictation and system speech use the resolved app language. AI transcription detects the language
-itself.
+System speech uses the resolved app language. System dictation uses
+`feature.voice.dictation_language`, which follows the app language when null; settings show it only
+while the system engine dictates. AI transcription detects the language itself.
 
 ## Audio Attachments
 

@@ -327,15 +327,21 @@ export function createBackend(
   });
 
   services.agent.configureSkills(skills);
+  const appLanguage = (preference: string | null) =>
+    resolveAppLanguage(
+      preference,
+      getLocales().map((locale) => locale.languageTag),
+    );
   const voice = createVoice({
     ai: services.ai,
     preference: services.preference,
     providers: services.provider,
     permissions: services.devicePermissions,
-    language: () =>
-      resolveAppLanguage(
-        services.preference.readCached('app.language'),
-        getLocales().map((locale) => locale.languageTag),
+    language: () => appLanguage(services.preference.readCached('app.language')),
+    dictationLanguage: () =>
+      appLanguage(
+        services.preference.readCached('feature.voice.dictation_language') ??
+          services.preference.readCached('app.language'),
       ),
   });
 
