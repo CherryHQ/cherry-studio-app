@@ -51,15 +51,3 @@ diff --git a/dist/search.js b/dist/search.js
          .filter((term) => term.length > 0 && !STOP_WORDS.has(term))
          .map(stem);
  }
-diff --git a/dist/tool-search/tool-search.js b/dist/tool-search/tool-search.js
---- a/dist/tool-search/tool-search.js
-+++ b/dist/tool-search/tool-search.js
-@@ -3,7 +3,7 @@
-  * and the matches are loaded with `control.addTools`, so the next request offers them. Loading writes the
-  * conversation's `modelTools` (its `add`), so loaded tools stay offered on that branch, also after a compaction.
-  */
--import { Type } from "@earendil-works/pi-ai";
-+import { Type } from "typebox";
- import { defineExtension, defineTool } from "../harness/define.js";
- import { rankDocuments } from "../search.js";
- export const TOOL_SEARCH_TOOL_NAME = "tool_search";

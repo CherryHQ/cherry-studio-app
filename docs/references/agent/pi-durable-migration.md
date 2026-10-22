@@ -342,7 +342,7 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 | `harness.js`: `openTasks` orphaned-inbox scan and ownership guards | No upstream replacement. The explicitly chosen clear/rebuild scope does not preserve old orphaned queues; the idle-inbox repair fixture is replaced by normal admitted-run recovery | Same runtime suite retains existing-run and task-owned conversation exclusions. This is a scope retirement, not a claim of backward-compatible orphan repair |
 
 The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.4.0.patch) contains
-Unicode search, import isolation and managed Code Mode output only. Upstream
+Unicode search, the Code Mode `declarations` import and managed Code Mode output only. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing
 ([#1219](https://github.com/CherryHQ/cherry-studio-app/issues/1219)) remains described in
@@ -356,11 +356,19 @@ storage-lifetime concern. Mobile's manual whole-file clearing
 | Pi Durable `writeOutput` hook | Host boundary: Code Mode output becomes a managed artifact rather than an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts), [piCodemodeOutput.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeOutput.test.ts); require an upstream host-output API with cancellation/artifact ownership preserved |
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
 | Pi AI incremental JSON preview | Performance adaptation: avoid quadratic partial parsing while final tool arguments still require a complete valid object | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts); require final-argument parity plus measurement before removing the optimization |
-| Pi AI native OAuth, model-runtime imports; Pi Durable TypeBox/declarations imports; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
+| Pi AI native OAuth; Pi Durable declarations import; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
 | Chord numeric array keys | Hermes compatibility: JSON changes to array indexes are interpreted consistently | [piChordPatch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piChordPatch.test.ts); require the behavior on Hermes, not only Node |
 
-For these adaptation groups, the installed 1.4.0 patch is the recorded workaround; no independently
-confirmed replacement is recorded here. A future upgrade must attach exact upstream evidence per
+Three platform hunks were retired after checking the pristine 1.4.0 packages:
+
+| Retired hunk | Upstream 1.4.0 evidence | Retained guard |
+| --- | --- | --- |
+| Pi AI `utils/model-runtime.js` and adapter imports | `models.js` is now the registry, not the catalog; its auth imports are the same native-safe modules, and Mobile already imports `pi-ai/models` directly. The removed copy matched upstream `calculateCost`/`clampThinkingLevel` | Runtime graph guard in [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) |
+| Pi AI `provider-env.js` Bun fallback removal | The `require("node:fs")` is inside `try`; Expo's `allowOptionalDependencies` makes Metro skip it, and it runs only under Bun | The graph guard allows only that try-wrapped require; any other Node import still fails |
+| Pi Durable tool-search `Type` import | The `pi-ai` entry adds only `auth/helpers.js`, `auth/types.js` and other import-free modules; its `auth/context.js` uses the native browser-map variant | Same guard's auth module list |
+
+For the remaining adaptation groups, the installed 1.4.0 patch is the recorded workaround; no
+independently confirmed replacement is recorded here. A future upgrade must attach exact upstream evidence per
 removed group instead of interpreting a clean patch rebase as a fix.
 
 ### Upgrade And Retirement Evidence

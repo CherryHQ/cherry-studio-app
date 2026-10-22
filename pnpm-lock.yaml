@@ -130,9 +130,9 @@ patchedDependencies:
   '@ai-sdk/openai-compatible@2.0.72': e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480
   '@ai-sdk/openai@3.0.109': 2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d
   '@earendil-works/chord@1.4.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
-  '@earendil-works/pi-ai@1.4.0': ab9914e9775c5febbae93a86c47bcdcc82d3ac00b03f5f8dc797d95c51eacc82
+  '@earendil-works/pi-ai@1.4.0': a6d72646808447e3b6cc1720ed06fee52de2f5f2f90d57b52571e0c56d9dd912
   '@earendil-works/pi-codemode@1.4.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
-  '@earendil-works/pi-durable@1.4.0': 02bbc28ebf99f0e5e08548ff7ba14e12e95c88a34a04ab3f89355de35c02c2d6
+  '@earendil-works/pi-durable@1.4.0': 03fe9113567879be90f01e43741449de447276137a97980646dc5034456342a1
   '@magrinj/expo-quick-look@0.3.1': 35520d77ed4612922b6a4ec70813738d976812225a1f806b1a40329e8adf6277
   '@openrouter/ai-sdk-provider@2.10.0': fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009
   '@opeoginni/github-copilot-openai-compatible@1.0.0': 4bea0e526136ed32d0be4849ec5cbb41bd5de7b7418dd6920598357438cfef25
@@ -267,13 +267,13 @@ importers:
         version: 1.4.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)
       '@earendil-works/pi-ai':
         specifier: 1.4.0
-        version: 1.4.0(patch_hash=ab9914e9775c5febbae93a86c47bcdcc82d3ac00b03f5f8dc797d95c51eacc82)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        version: 1.4.0(patch_hash=a6d72646808447e3b6cc1720ed06fee52de2f5f2f90d57b52571e0c56d9dd912)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode':
         specifier: 1.4.0
         version: 1.4.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
       '@earendil-works/pi-durable':
         specifier: 1.4.0
-        version: 1.4.0(patch_hash=02bbc28ebf99f0e5e08548ff7ba14e12e95c88a34a04ab3f89355de35c02c2d6)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        version: 1.4.0(patch_hash=03fe9113567879be90f01e43741449de447276137a97980646dc5034456342a1)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@expo/dom-webview':
         specifier: ^57.0.1
         version: 57.0.1(expo@57.0.24)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -11144,7 +11144,7 @@ snapshots:
       '@earendil-works/pi-telemetry': 1.4.0
       typebox: 1.3.27
 
-  '@earendil-works/pi-ai@1.4.0(patch_hash=ab9914e9775c5febbae93a86c47bcdcc82d3ac00b03f5f8dc797d95c51eacc82)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@1.4.0(patch_hash=a6d72646808447e3b6cc1720ed06fee52de2f5f2f90d57b52571e0c56d9dd912)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.129.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
@@ -11173,10 +11173,10 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-durable@1.4.0(patch_hash=02bbc28ebf99f0e5e08548ff7ba14e12e95c88a34a04ab3f89355de35c02c2d6)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-durable@1.4.0(patch_hash=03fe9113567879be90f01e43741449de447276137a97980646dc5034456342a1)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@earendil-works/chord': 1.4.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)
-      '@earendil-works/pi-ai': 1.4.0(patch_hash=ab9914e9775c5febbae93a86c47bcdcc82d3ac00b03f5f8dc797d95c51eacc82)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+      '@earendil-works/pi-ai': 1.4.0(patch_hash=a6d72646808447e3b6cc1720ed06fee52de2f5f2f90d57b52571e0c56d9dd912)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode': 1.4.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
       '@earendil-works/pi-telemetry': 1.4.0
       '@silvia-odwyer/photon': 0.3.3
