@@ -3,12 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type PropsWithChildren, use, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { cacheService } from '@/frontend/data/CacheService';
 import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { AppUpdateDialog } from './AppUpdateDialog';
+import { appUpdateQueryOptions } from './appUpdateQueries';
 
 const UNAVAILABLE_KEYS = {
   unsupported: 'appUpdate.unsupported',

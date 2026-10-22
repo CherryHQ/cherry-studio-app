@@ -26,6 +26,7 @@ let mockPathname = '/';
 let mockParams: Record<string, string> = {};
 let mockCoverVisible = false;
 let mockPrivacyPending = false;
+let mockReceivingShare = false;
 let mockReminder: { releaseId: string; remindedAt: number } | undefined;
 
 jest.mock('expo-router', () => ({
@@ -37,6 +38,9 @@ jest.mock('@/frontend/appShell/privacy', () => ({
 }));
 jest.mock('@/frontend/appShell/startup', () => ({
   useStartupCoverVisible: () => mockCoverVisible,
+}));
+jest.mock('@/frontend/appShell/systemEntry', () => ({
+  useSystemEntryReceiving: () => mockReceivingShare,
 }));
 jest.mock('@/frontend/data/BackendProvider', () => ({ useBackendModule: () => mockUpdate }));
 jest.mock('@/frontend/data/CacheService', () => ({
@@ -72,6 +76,7 @@ beforeEach(() => {
   mockParams = {};
   mockCoverVisible = false;
   mockPrivacyPending = false;
+  mockReceivingShare = false;
   mockReminder = undefined;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
@@ -103,6 +108,7 @@ test('waits for the startup cover before offering the release', async () => {
 test.each([
   ['another route', () => (mockPathname = '/settings/about')],
   ['a shared draft', () => (mockParams = { agentId: 'a', composerHandoff: 'h' })],
+  ['a share still importing', () => (mockReceivingShare = true)],
   ['a notification session', () => (mockParams = { sessionId: 's' })],
   ['a pending privacy decision', () => (mockPrivacyPending = true)],
 ])('a launch into %s is not interrupted, even after returning to chat', async (_, arrange) => {
@@ -111,6 +117,7 @@ test.each([
   mockPathname = '/';
   mockParams = {};
   mockPrivacyPending = false;
+  mockReceivingShare = false;
   await rerender();
 
   expect(mockOpen).not.toHaveBeenCalled();

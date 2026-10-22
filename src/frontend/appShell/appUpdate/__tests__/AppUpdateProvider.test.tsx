@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
 import type {
   ApkUpdateRelease,
   AppUpdateDownload,
@@ -13,6 +12,7 @@ import type {
 
 import type { AppUpdateDialog } from '../AppUpdateDialog';
 import { AppUpdateProvider, useAppUpdateActions } from '../AppUpdateProvider';
+import { appUpdateQueryOptions } from '../appUpdateQueries';
 
 type AppUpdateDialogProps = Parameters<typeof AppUpdateDialog>[0];
 

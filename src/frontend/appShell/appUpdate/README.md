@@ -14,7 +14,9 @@ returning to the foreground refreshes results older than six hours. Query keys i
 Only the first check result of a launch may open the dialog, and only when the user is on the plain
 landing chat: after the startup cover hides, while the app is active and no privacy decision is
 pending. A launch that opens a shared draft, a notification's session, another route, or a pending
-privacy disclosure keeps its destination; that launch does not offer the release later. Foreground
+privacy disclosure keeps its destination; that launch does not offer the release later. An Android
+share opens the plain landing chat and reaches its draft only after its attachments import, so a
+share still importing counts as a shared draft. Foreground
 refreshes never open the dialog. A release is offered at most once per 24 hours through frontend
 persist cache, and any presentation of the dialog, including a manual check, counts as the offer.
 There are no passive update toasts.

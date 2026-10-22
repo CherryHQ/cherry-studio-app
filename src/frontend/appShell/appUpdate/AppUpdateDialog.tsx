@@ -5,11 +5,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { appUpdateReleaseNotesQueryOptions, useAppUpdateDownload } from '@/frontend/data/appUpdate';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { usePreference } from '@/frontend/data/hooks';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { AppUpdateDownload, AppUpdateRelease } from '@/shared/contracts/appUpdate';
+
+import { appUpdateReleaseNotesQueryOptions, useAppUpdateDownload } from './appUpdateQueries';
 
 export type AppUpdateDialogActions = {
   cancel(): Promise<void>;

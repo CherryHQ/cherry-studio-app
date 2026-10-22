@@ -52,6 +52,29 @@ test('a claimed share arrives as library files and leaves no native staging behi
   await runtime.dispose();
 });
 
+test('a share reports receiving only while its attachments import', async () => {
+  const { runtime, importFiles } = setup();
+  const observed: boolean[] = [];
+  runtime.module.subscribeReceiving(() => observed.push(runtime.module.isReceiving()));
+  let finish!: () => void;
+  importFiles.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve([file]);
+      }),
+  );
+
+  const claim = runtime.module.claimNext();
+  await Promise.resolve();
+  expect(runtime.module.isReceiving()).toBe(true);
+  finish();
+  await claim;
+
+  expect(runtime.module.isReceiving()).toBe(false);
+  expect(observed).toEqual([true, false]);
+  await runtime.dispose();
+});
+
 test('an import failure leaves the share staged for a later claim', async () => {
   const { runtime, native, importFiles } = setup();
   importFiles.mockRejectedValueOnce(new Error('disk full'));

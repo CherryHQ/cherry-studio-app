@@ -1,16 +1,15 @@
 import { queryOptions } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 
+import { queryKeys } from '@/frontend/data';
 import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUpdate';
-
-import { appUpdateQueryKeys } from './queryKeys/appUpdate';
 
 /**
  * The app-shell observer owns automatic checks; other surfaces observe or explicitly refetch.
  */
 export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
   return queryOptions({
-    queryKey: appUpdateQueryKeys.latest(appUpdate.channel),
+    queryKey: queryKeys.appUpdate.latest(appUpdate.channel),
     queryFn: ({ signal }) => appUpdate.check(signal),
     enabled: appUpdate.isEnabled,
     staleTime: 6 * 60 * 60 * 1000,
@@ -26,7 +25,7 @@ export function appUpdateReleaseNotesQueryOptions(
   language: string,
 ) {
   return queryOptions({
-    queryKey: appUpdateQueryKeys.notes(release.id, language),
+    queryKey: queryKeys.appUpdate.notes(release.id, language),
     queryFn: () => appUpdate.releaseNotes(release, language),
     staleTime: Infinity,
     gcTime: 6 * 60 * 60 * 1000,

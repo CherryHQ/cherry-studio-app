@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 
 import { useAppUpdateActions } from './AppUpdateProvider';
+import { appUpdateQueryOptions } from './appUpdateQueries';
 
 /** State for a page's ordinary "check for updates" row; the update dialog owns everything else. */
 export function useAppUpdateEntry() {

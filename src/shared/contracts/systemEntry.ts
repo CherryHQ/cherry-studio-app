@@ -17,6 +17,9 @@ export type SystemAction = {
 
 export interface SystemEntryModule {
   subscribePending(listener: () => void): () => void;
+  /** True while a claimed share imports its attachments, before it reaches the composer. */
+  isReceiving(): boolean;
+  subscribeReceiving(listener: () => void): () => void;
   /**
    * Claims one staged share. Attachments are imported into the library and the native staging
    * copy is released before it resolves, so the caller owns nothing that needs releasing.
