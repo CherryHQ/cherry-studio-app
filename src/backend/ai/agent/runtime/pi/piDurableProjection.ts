@@ -30,6 +30,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
+import { PI_IMAGE_TOOL_NAME } from './piDurableImageModel';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -309,11 +310,19 @@ export function projectPiTurn(options: {
       for (const key of Object.keys(billed) as (keyof RuntimeUsage)[])
         usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
-    if (message.stopReason === 'error')
-      error = {
+    if (message.stopReason === 'error') {
+      const imageTool =
+        message.api === 'cherry-image'
+          ? parts.findLast(
+              (part) => part.type === 'tool' && part.providerName === PI_IMAGE_TOOL_NAME,
+            )
+          : undefined;
+      // The image scheduling message carries no new provider response. Its tool receipt owns
+      // the failure shown by the Host, including explicit-user-retry eligibility.
+      error = (imageTool?.type === 'tool' ? imageTool.error : undefined) ?? {
         code: 'provider_error',
         message: message.errorMessage ?? 'The provider request failed.',
-        retryable: true,
+        retryable: message.api !== 'cherry-image',
         origin: 'provider',
         context: {
           providerId: message.provider,
@@ -321,6 +330,7 @@ export function projectPiTurn(options: {
           finishReason: message.stopReason,
         },
       };
+    }
     const web = readPiWebResult(message);
     // Anthropic splits one answer at every citation; the fragments are a single paragraph flow.
     let answer: Extract<RuntimeOutputPart, { text: string }> | undefined;
