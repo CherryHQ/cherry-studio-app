@@ -14,7 +14,7 @@ describe('voice account endpoint', () => {
       },
     });
     expect(resolveVoiceEndpoint(provider)).toBe(endpoint);
-    expect(resolveVoiceEndpoint({ ...provider, authType: 'oauth' })).toBeUndefined();
+    expect(resolveVoiceEndpoint({ ...provider, authType: 'iam-gcp' })).toBeUndefined();
     expect(resolveVoiceEndpoint({ ...provider, endpointConfigs: {} })).toBeUndefined();
     expect(
       resolveVoiceEndpoint({
