@@ -4,6 +4,8 @@ import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
+import SquareIcon from '@cherrystudio/app-icons/icons/square';
+import Volume2Icon from '@cherrystudio/app-icons/icons/volume-2';
 import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,15 +96,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           },
         ]
       : []),
-    ...(speechText
-      ? [
-          {
-            id: 'read-aloud',
-            label: t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start'),
-            onPress: speech.toggle,
-          },
-        ]
-      : []),
     {
       id: 'share',
       label: t('chat.messageActions.share'),
@@ -136,6 +129,22 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
           size="xs"
           testID="assistant-message-copy"
+          variant="ghost"
+        />
+      ) : null}
+      {speechText ? (
+        <Button
+          accessibilityLabel={t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start')}
+          icon={
+            speech.isSpeaking ? (
+              <SquareIcon className="text-foreground" size={15} />
+            ) : (
+              <Volume2Icon className="text-muted-foreground" size={15} />
+            )
+          }
+          onPress={speech.toggle}
+          size="xs"
+          testID="assistant-message-read-aloud"
           variant="ghost"
         />
       ) : null}

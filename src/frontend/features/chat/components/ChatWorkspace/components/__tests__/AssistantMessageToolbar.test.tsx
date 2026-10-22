@@ -236,13 +236,15 @@ describe('AssistantMessageToolbar', () => {
     expect(mockShare).toHaveBeenCalledWith('assistant-1', undefined);
   });
 
-  test('reads the answer text aloud from the more menu', () => {
+  test('reads the answer text aloud from the toolbar', () => {
     renderToolbar(createMessage('success', 'Answer'));
 
     expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer');
-    expect(menuItem('read-aloud')?.label).toBe('voice.speech.start');
-    act(() => menuItem('read-aloud')?.onPress());
+    const button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
+    expect(button?.props.accessibilityLabel).toBe('voice.speech.start');
+    act(() => button?.props.onPress());
     expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
+    expect(menuItem('read-aloud')).toBeUndefined();
   });
 
   test('adds an answer from the model chosen with @', async () => {

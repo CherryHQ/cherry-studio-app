@@ -1,8 +1,7 @@
 # Voice Input And Speech
 
-> Status: engines, attachment transcription and settings are implemented; the message read-aloud
-> and settings controls are interim and await their UI design. iOS/Android device acceptance is
-> pending.
+> Status: engines, attachment transcription and settings are implemented; the settings controls
+> are interim and await their UI design. iOS/Android device acceptance is pending.
 
 ## Capabilities
 
@@ -19,7 +18,8 @@ Users can also dictate with their keyboard's own voice input, which needs no app
 The chat composer has one primary action slot, as mainstream chat apps do: voice input while the
 draft and attachments are empty, send once there is content, and stop while a reply streams.
 Dictation keeps the slot until it ends even as its text fills the draft. Adding to a typed draft by
-voice goes through the keyboard's own voice input.
+voice goes through the keyboard's own voice input. Reading aloud sits beside copy on a settled
+assistant reply's toolbar and turns into stop while that reply is read.
 
 ## Module Boundaries
 
