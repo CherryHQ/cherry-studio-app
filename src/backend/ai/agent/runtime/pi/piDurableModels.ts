@@ -22,6 +22,7 @@ import { piDurableUsage, withPiContinuationUsage } from './piDurableProjection';
 import { piDurableSetupError, protectPiDurableStream } from './piDurableStream';
 import {
   piModelErrorAttributes,
+  piModelRequestAttributes,
   piModelTerminalErrorAttributes,
   type PiModelFailureStage,
 } from './piModelDiagnostics';
@@ -172,8 +173,15 @@ export function createPiDurableModels(
               : undefined;
           const createStream = async (continuedContent?: JsonObject[]) => {
             const requestStartedAt = Date.now();
+            const maxTokens = Math.min(
+              resolved.model.maxTokens,
+              options?.maxTokens ?? resolved.model.maxTokens,
+              selected.maxOutputTokens ?? resolved.model.maxTokens,
+            );
+            trace?.setAttributes(piModelRequestAttributes(resolved, context, maxTokens));
             const stream = await resolved.streamFn(resolved.model, context, {
               ...options,
+              trace,
               onPayload: async (payload: unknown, wire: Model<Api>) => {
                 // A credential retry sends the request again; its metadata starts over.
                 if (!continuedContent) web?.reset();
@@ -201,11 +209,7 @@ export function createPiDurableModels(
                 : {}),
               reasoning: thinking === 'off' ? undefined : thinking,
               temperature: selected.temperature ?? options?.temperature,
-              maxTokens: Math.min(
-                resolved.model.maxTokens,
-                options?.maxTokens ?? resolved.model.maxTokens,
-                selected.maxOutputTokens ?? resolved.model.maxTokens,
-              ),
+              maxTokens,
             });
             return measuredStream(
               protectPiDurableStream(stream, resolved.model, secrets, options?.signal),

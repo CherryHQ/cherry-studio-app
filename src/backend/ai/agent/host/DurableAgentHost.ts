@@ -2146,6 +2146,7 @@ export class DurableAgentHost implements AgentProtocol {
     const span = this.ports.traces?.startTrace('ai.turn_state', context, {
       'agent.turn.status': status,
       ...traceErrorAttributes(error),
+      ...(error ? { 'error.retry_scope': 'user' } : {}),
     });
     span?.end(
       status === 'failed'

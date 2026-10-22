@@ -235,12 +235,40 @@ export class PiDurableObserver {
           break;
         case 'entry_appended':
           this.entries.set(event.entry.id, event.entry);
-          if (CompactionEntry.is(event.entry)) this.compactionFailed = false;
+          if (CompactionEntry.is(event.entry)) {
+            this.compactionFailed = false;
+            logger.info('Pi durable context compaction', {
+              sessionId: this.lane.sessionId,
+              slot: this.lane.slot,
+              operation: 'pi.compaction',
+              entryId: Number(event.entry.id),
+              reasonCode: event.entry.data?.reason,
+              outcome: 'committed',
+            });
+          }
           break;
         case 'compaction_start':
           this.compactions.set(event.taskId, event.blocking);
+          logger.info('Pi durable context compaction', {
+            sessionId: this.lane.sessionId,
+            slot: this.lane.slot,
+            operation: 'pi.compaction',
+            taskId: Number(event.taskId),
+            reasonCode: event.reason,
+            blocking: event.blocking,
+            outcome: 'started',
+          });
           break;
         case 'compaction_end':
+          logger.info('Pi durable context compaction', {
+            sessionId: this.lane.sessionId,
+            slot: this.lane.slot,
+            operation: 'pi.compaction',
+            taskId: Number(event.taskId),
+            reasonCode: event.reason,
+            blocking: this.compactions.get(event.taskId),
+            outcome: event.error === undefined ? 'ended' : 'failed',
+          });
           this.compactions.delete(event.taskId);
           if (event.error !== undefined) this.compactionFailed = true;
           break;

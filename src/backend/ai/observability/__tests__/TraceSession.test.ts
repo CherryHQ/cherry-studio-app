@@ -1,5 +1,6 @@
-import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
+import { sanitizeTraceAttributes, traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { TraceSpanRecordSchema, type TraceSpanRecord } from '@/shared/data/types/trace';
+import { createAiFailure } from '@/shared/utils/createAiFailure';
 
 import { TraceSession } from '../TraceSession';
 
@@ -102,5 +103,64 @@ describe('TraceSession', () => {
     root.end('ok');
     expect(records).toHaveLength(512);
     expect(records.at(-1)?.attributes['trace.dropped_spans']).toBe(45);
+  });
+
+  it('keeps the product reason and provider facts behind a protocol failure without its text', () => {
+    const { root, records } = capture();
+    root.end(
+      'error',
+      traceErrorAttributes({
+        code: 'EXECUTION_FAILED',
+        ...createAiFailure({
+          code: 'runtime_error',
+          message: 'Maximum context length exceeded: private response',
+          retryable: true,
+          origin: 'provider',
+          name: 'ProviderError',
+          context: { statusCode: 400, responseBody: 'private body' },
+        }),
+      }),
+    );
+    expect(records.at(-1)?.attributes).toEqual({
+      'error.type': 'ProviderError',
+      'error.code': 'EXECUTION_FAILED',
+      'error.source.code': 'runtime_error',
+      'error.product_reason': 'context_length',
+      'error.origin': 'provider',
+      'error.retryable': true,
+      'http.status_code': 400,
+    });
+    expect(JSON.stringify(records)).not.toMatch(/private|Maximum|body|message/);
+  });
+
+  it('counts only retained attributes toward the limit and makes truncation visible', () => {
+    const omitted = Object.fromEntries(
+      Array.from({ length: 24 }, (_, index) => [`prompt${index}`, 'private']),
+    );
+    expect(sanitizeTraceAttributes({ ...omitted, 'http.status_code': 400 })).toEqual({
+      'http.status_code': 400,
+    });
+    const attributes = Object.fromEntries(
+      Array.from({ length: 25 }, (_, index) => [`fact${index}`, index]),
+    );
+    const safe = sanitizeTraceAttributes(attributes);
+    expect(safe).toHaveProperty('fact23', 23);
+    expect(safe).not.toHaveProperty('fact24');
+    expect(safe['trace.attributes_truncated']).toBe(true);
+    expect(sanitizeTraceAttributes(safe)).toEqual(safe);
+  });
+
+  it('keeps terminal facts when request facts already fill the attribute limit', () => {
+    const { root, records } = capture();
+    root.setAttributes(
+      Object.fromEntries(Array.from({ length: 30 }, (_, index) => [`fact${index}`, index])),
+    );
+    root.end('error', { 'error.category': 'network', 'error.retry_scope': 'automatic' });
+    const attributes = records.at(-1)?.attributes;
+    expect(attributes).toMatchObject({
+      'error.category': 'network',
+      'error.retry_scope': 'automatic',
+      'trace.attributes_truncated': true,
+    });
   });
 });

@@ -9,6 +9,7 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { Model } from '@/shared/data/types/model';
 
+import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
 import {
   bindPiStream,
   resolvePiApiAdapter,
@@ -274,6 +275,8 @@ describe('Pi API adapters', () => {
   });
 
   test('composes existing payload hooks and recomputes thinking budgets for each request cap', async () => {
+    const { traces, records } = createTraceRecorder();
+    const trace = traces.startTrace('pi.generate_content');
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
     jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAnthropicStreamSimple);
     const streamFn = await bindPiStream(adapter, {
@@ -292,6 +295,7 @@ describe('Pi API adapters', () => {
     });
     const piModel = { api: 'anthropic-messages' } as PiModel<SupportedPiApi>;
     await streamFn(piModel, context, {
+      trace,
       maxTokens: 2048,
       onPayload: async () => ({
         model: 'rewritten-model',
@@ -306,5 +310,70 @@ describe('Pi API adapters', () => {
       tool_choice: { type: 'none' },
       thinking: { type: 'enabled', budget_tokens: 2047 },
     });
+    expect(options).not.toHaveProperty('trace');
+    trace?.end('ok');
+    expect(records.at(-1)?.attributes).toEqual({
+      'gen_ai.request.max_tokens': 2048,
+      'gen_ai.request.max_tokens_field': 'max_tokens',
+    });
   });
+
+  test.each([
+    {
+      endpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      payload: { max_tokens: 1024 },
+      field: 'max_tokens',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      payload: { max_completion_tokens: 1024 },
+      field: 'max_completion_tokens',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      payload: { max_output_tokens: 1024 },
+      field: 'max_output_tokens',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      payload: { config: { maxOutputTokens: 1024 } },
+      field: 'config.maxOutputTokens',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      family: 'openai-codex',
+      payload: {},
+      field: 'omitted',
+    },
+  ])(
+    'records the final $field output cap without retaining the payload',
+    async ({ endpoint, family, payload, field }) => {
+      const { traces, records } = createTraceRecorder();
+      const trace = traces.startTrace('pi.generate_content');
+      const adapter = resolvePiApiAdapter(endpoint, family);
+      const streamSimple = jest.fn((..._args: Parameters<PiStreamFn>) => mockStreamResult);
+      jest
+        .spyOn(adapter, 'loadStreamSimple')
+        .mockResolvedValue(streamSimple as unknown as PiStreamFn);
+      const streamFn = await bindPiStream(adapter, {
+        apiKey: 'private-key',
+        fetch: mockFetch,
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 2048,
+      });
+      const model = { api: adapter.api } as PiModel<SupportedPiApi>;
+      await streamFn(model, context, { trace });
+      const options = streamSimple.mock.calls[0]![2] as Parameters<PiStreamFn>[2];
+      const body = { ...payload, input: 'private user content' };
+      expect(await options?.onPayload?.(body, model)).toBe(body);
+      expect(options).not.toHaveProperty('trace');
+      trace?.end('ok');
+      expect(records.at(-1)?.attributes).toEqual({
+        'gen_ai.request.max_tokens_field': field,
+        ...(field === 'omitted' ? {} : { 'gen_ai.request.max_tokens': 1024 }),
+      });
+      expect(JSON.stringify(records)).not.toContain('private');
+    },
+  );
 });

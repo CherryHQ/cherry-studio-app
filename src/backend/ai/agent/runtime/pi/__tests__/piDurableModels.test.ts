@@ -44,6 +44,7 @@ function setup(
       model: wire,
       streamFn,
       defaultThinkingLevel: 'off',
+      maxInputTokens: modelPreflight.maxInputTokens,
       redactionValues: [],
       supportsTools: true,
       usageContext: {
@@ -252,6 +253,7 @@ describe('Pi durable request diagnostics', () => {
         'error.category': failure.category,
         'error.code': failure.code,
         'error.retryable': failure.retryable,
+        'error.retry_scope': 'automatic',
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');
@@ -354,10 +356,49 @@ describe('Pi durable request diagnostics', () => {
         'gen_ai.provider.id': wire.provider,
         'gen_ai.provider.api': wire.api,
         'gen_ai.response.finish_reason': 'stop',
+        'gen_ai.model.context_window': preflight.contextWindow,
+        'gen_ai.model.max_input_tokens': preflight.maxInputTokens,
+        'gen_ai.model.max_output_tokens': preflight.maxOutputTokens,
+        'gen_ai.request.output_budget_tokens': 512,
+        'gen_ai.request.estimated_input_tokens': 4,
+        'gen_ai.request.estimate_source': 'pi_estimate',
+        'gen_ai.request.message_count': 1,
+        'gen_ai.request.tool_count': 0,
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');
     expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
+  });
+
+  test('labels a usage-based input estimate and records the smaller request output budget', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    await bridge.registerModel(reference);
+    const previous: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      timestamp: 2,
+      stopReason: 'stop',
+      usage: { ...emptyAssistantMessage(wire).usage, input: 100, output: 20, totalTokens: 120 },
+      content: [{ type: 'text', text: 'private response' }],
+    };
+    await bridge.models.completeSimple(
+      bridge.getModel(reference)!,
+      {
+        messages: [
+          { role: 'user', content: 'private question', timestamp: 1 },
+          previous,
+          { role: 'user', content: '1234567', timestamp: 3 },
+        ],
+      },
+      { maxTokens: 128 },
+    );
+    expect(records.at(-1)?.attributes).toMatchObject({
+      'gen_ai.request.output_budget_tokens': 128,
+      'gen_ai.request.estimated_input_tokens': 122,
+      'gen_ai.request.estimate_source': 'pi_usage_and_estimate',
+      'gen_ai.request.message_count': 3,
+    });
+    expect(JSON.stringify(records)).not.toMatch(/private|1234567/);
   });
 
   test('retains provider status and code without copying response diagnostics', async () => {

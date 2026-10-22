@@ -1,5 +1,6 @@
 import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
+import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { TraceSpanRecordSchema } from '@/shared/data/types/trace';
 
 const LOG_MESSAGES = new Set([
@@ -28,6 +29,7 @@ const LOG_MESSAGES = new Set([
   'Pi durable task blocked',
   'Pi durable generation retry scheduled',
   'Pi durable tool execution interrupted',
+  'Pi durable context compaction',
 ]);
 const LOG_STRING_FIELDS = new Set([
   'code',
@@ -60,6 +62,8 @@ const LOG_NUMBER_FIELDS = new Set([
   'writeFailures',
   'droppedRecords',
   'taskId',
+  'entryId',
+  'slot',
   'retryAttempt',
   'startupStartedAt',
   'jsEntryStartMs',
@@ -68,11 +72,25 @@ const LOG_NUMBER_FIELDS = new Set([
   'rnRuntimeStartMs',
   'rnBundleEntryStartMs',
 ]);
+const TRACE_NUMBER_FIELDS = new Set([
+  'gen_ai.model.context_window',
+  'gen_ai.model.max_input_tokens',
+  'gen_ai.model.max_output_tokens',
+  'gen_ai.request.output_budget_tokens',
+  'gen_ai.request.estimated_input_tokens',
+  'gen_ai.request.message_count',
+  'gen_ai.request.tool_count',
+  'gen_ai.request.max_tokens',
+]);
 const TRACE_FIELDS = new Set([
+  ...TRACE_NUMBER_FIELDS,
   'error.type',
   'error.code',
+  'error.source.code',
+  'error.product_reason',
   'error.origin',
   'error.retryable',
+  'error.retry_scope',
   'error.category',
   'error.stage',
   'http.status_code',
@@ -83,6 +101,8 @@ const TRACE_FIELDS = new Set([
   'plugin.stage',
   'plugin.state',
   'gen_ai.request.model',
+  'gen_ai.request.estimate_source',
+  'gen_ai.request.max_tokens_field',
   'gen_ai.provider.id',
   'gen_ai.provider.api',
   'gen_ai.response.finish_reason',
@@ -102,7 +122,28 @@ const TRACE_FIELDS = new Set([
   'agent.recovery.unfinished_count',
 ]);
 
-function metadataValue(value: unknown): string | number | boolean | undefined {
+function metadataValue(key: string, value: unknown): string | number | boolean | undefined {
+  if (TRACE_NUMBER_FIELDS.has(key))
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  if (key === 'error.product_reason') {
+    const reason = AiFailureReasonSchema.safeParse(value);
+    return reason.success ? reason.data : undefined;
+  }
+  if (key === 'error.retry_scope')
+    return value === 'automatic' || value === 'user' ? value : undefined;
+  if (key === 'gen_ai.request.estimate_source')
+    return value === 'pi_estimate' || value === 'pi_usage_and_estimate' ? value : undefined;
+  if (key === 'gen_ai.request.max_tokens_field')
+    return typeof value === 'string' &&
+      [
+        'max_tokens',
+        'max_completion_tokens',
+        'max_output_tokens',
+        'config.maxOutputTokens',
+        'omitted',
+      ].includes(value)
+      ? value
+      : undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
   return diagnosticIdentifier(value);
@@ -137,11 +178,13 @@ function projectRepetition(value: unknown, timestamp: string) {
 
 /** Drop arbitrary log messages and nested payloads before any persistent write. */
 export function projectDiagnosticLog(record: Record<string, unknown>) {
-  const isStartup = record.module === 'Startup' && record.message === 'Startup stage';
+  const isLifecycle =
+    (record.module === 'Startup' && record.message === 'Startup stage') ||
+    (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction');
   if (
     record.level !== 'warn' &&
     record.level !== 'error' &&
-    !(record.level === 'info' && isStartup)
+    !(record.level === 'info' && isLifecycle)
   )
     return undefined;
   if (typeof record.timestamp !== 'string' || !Number.isFinite(Date.parse(record.timestamp)))
@@ -163,7 +206,10 @@ export function projectDiagnosticLog(record: Record<string, unknown>) {
       if (identifier) facts[key] = identifier;
     } else if (LOG_NUMBER_FIELDS.has(key) && typeof value === 'number' && Number.isFinite(value)) {
       facts[key] = value;
-    } else if ((key === 'retryable' || key === 'isFatal') && typeof value === 'boolean') {
+    } else if (
+      (key === 'retryable' || key === 'isFatal' || key === 'blocking') &&
+      typeof value === 'boolean'
+    ) {
       facts[key] = value;
     }
   }
@@ -177,10 +223,11 @@ export function projectDiagnosticLog(record: Record<string, unknown>) {
         !LOG_STRING_FIELDS.has(key) &&
         !LOG_NUMBER_FIELDS.has(key) &&
         key !== 'retryable' &&
-        key !== 'isFatal'
+        key !== 'isFatal' &&
+        key !== 'blocking'
       )
         continue;
-      const safe = metadataValue(value);
+      const safe = metadataValue(key, value);
       if (safe !== undefined) facts[key] = safe;
     }
   }
@@ -218,7 +265,7 @@ export function projectDiagnosticTrace(value: unknown) {
   const attributes: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(record.attributes)) {
     if (!TRACE_FIELDS.has(key)) continue;
-    const safe = metadataValue(value);
+    const safe = metadataValue(key, value);
     if (safe !== undefined) attributes[key] = safe;
   }
   return {
