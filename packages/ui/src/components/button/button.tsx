@@ -35,8 +35,10 @@ export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style
 
 export type ButtonLabelProps = Omit<TextProps, 'className' | 'style'>;
 
+// Clearing borderWidth passes NaN into Android's rounded overflow clipping and hides children.
+// Keep an explicit zero when switching away from a bordered variant (react-native#54217).
 const rootBaseStyles =
-  'flex-row items-center justify-center overflow-hidden active:opacity-80 disabled:opacity-40';
+  'flex-row items-center justify-center overflow-hidden border-0 active:opacity-80 disabled:opacity-40';
 
 const shapeStyles: Record<ButtonShape, string> = {
   pill: 'rounded-full',
