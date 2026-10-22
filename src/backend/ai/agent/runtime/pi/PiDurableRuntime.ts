@@ -21,6 +21,7 @@ import {
   type SubmissionId,
   ProviderDoc,
   type Storage,
+  type TaskGraph,
   watchEvents,
 } from '@earendil-works/pi-durable';
 
@@ -38,6 +39,7 @@ const SessionBinding = defineDocFamily<PiSessionBinding, number>({
   kind: 'cherry.session',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: (revision) => ({ conversationId: null, revision }),
 });
@@ -47,6 +49,7 @@ const SubmissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
   kind: 'cherry.submission',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: (value) => ({ value }),
 });
@@ -59,6 +62,7 @@ const MessageBinding = defineDocFamily<
   kind: 'cherry.message-binding',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: (identity) => identity,
 });
@@ -68,6 +72,7 @@ const RequestOptions = defineDocFamily<{ value: JsonObject }, JsonObject>({
   kind: 'cherry.request-options',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: (value) => ({ value }),
 });
@@ -77,6 +82,7 @@ const Configuration = defineDocFamily<{ value: JsonObject }, JsonObject>({
   kind: 'cherry.configuration',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: (value) => ({ value }),
 });
@@ -85,6 +91,7 @@ const UsageDelivery = defineDocFamily<{ value: JsonObject; delivered: boolean },
   kind: 'cherry.usage-delivery',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: (value) => ({ value, delivered: false }),
 });
@@ -94,6 +101,7 @@ const UsagePending = defineDocFamily<{ ids: string[] }, null>({
   kind: 'cherry.usage-pending',
   version: 1,
   scope: 'session',
+  checkpointWhen: () => false,
   family: true,
   initial: () => ({ ids: [] }),
 });
@@ -103,6 +111,7 @@ const ResourceScope = defineDoc<{ fileEntryIds: string[] }>({
   kind: 'cherry.resources',
   version: 1,
   scope: 'conversation',
+  checkpointWhen: () => false,
   history: 'latest',
   fork: 'current',
   initial: () => ({ fileEntryIds: [] }),
@@ -743,4 +752,22 @@ function indexSubmission(index: SubmissionIndex, record: SubmissionRecord): void
   if (record.entry !== undefined) index.entries.set(record.entry, record);
   if (record.status === 'queued') index.queued.set(record.id, record);
   else index.queued.delete(record.id);
+}
+
+/** Sleeping and blocked tasks remain unfinished without holding native execution protection. */
+export function hasRunnablePiTasks(graph: TaskGraph, now = Date.now()): boolean {
+  return Object.values(graph.tasks).some((task) => {
+    if (task.state.status === 'completing') return false;
+    if (task.abortRequested) return true;
+    if (task.blocked) return false;
+    switch (task.state.status) {
+      case 'pending':
+      case 'running':
+        return true;
+      case 'sleeping':
+        return task.state.until <= now;
+      case 'waiting':
+        return task.state.on.every((id) => graph.tasks[String(id)] === undefined);
+    }
+  });
 }

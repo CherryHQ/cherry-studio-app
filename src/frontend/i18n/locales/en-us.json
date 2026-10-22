@@ -503,6 +503,7 @@
   "chat.reasoningStatus.thinking": "Thinking",
   "chat.reasoningStatus.thought": "Thought it through",
   "chat.runtime.failed": "Agent is unavailable. Retry to resume.",
+  "chat.runtime.paused": "Execution paused after repeated interruptions. Stop this reply, then retry.",
   "chat.runtime.retrying": "Request failed. Retrying automatically…",
   "chat.share.assistant": "Assistant",
   "chat.share.cancelled": "Cancelled",

@@ -126,6 +126,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     error,
     // Always present: clients skip turn updates whose fields are unchanged.
     isRetrying: turn.isRetrying === true,
+    isPaused: turn.isPaused === true,
     startedAt: common.createdAt,
     endedAt: terminal ? common.updatedAt : null,
   });

@@ -28,6 +28,7 @@ describe('Pi persisted tool failures', () => {
       kind: 'cherry.tool-budget',
       version: 1,
       scope: 'conversation',
+      checkpointWhen: () => false,
       history: 'latest',
       fork: 'current',
       initial: () => legacyState,

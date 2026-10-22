@@ -12,9 +12,11 @@ import {
   ProviderDoc,
   UserEntry,
   type ConversationId,
+  type TaskGraphNode,
+  type TaskId,
 } from '@earendil-works/pi-durable';
 
-import { PiDurableRuntime } from '../PiDurableRuntime';
+import { hasRunnablePiTasks, PiDurableRuntime } from '../PiDurableRuntime';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { ToolInstructions } from '../piToolInstructions';
 
@@ -24,6 +26,7 @@ function options() {
       authContext: { env: async () => undefined, fileExists: async () => false },
     }),
     registry: createRegistry(),
+    settings: { afterFailedRun: 'continue' as const },
   };
 }
 
@@ -38,6 +41,32 @@ const seed = {
     },
   ],
 };
+
+test('execution protection follows runnable work, including due sleeps and cancellation', () => {
+  const task: TaskGraphNode = {
+    id: 1 as TaskId,
+    kind: 'pi.generation',
+    conversationId: 1 as ConversationId,
+    background: false,
+    abortRequested: false,
+    conversations: [],
+    state: { status: 'sleeping', phase: 'generate', until: 2000 },
+  };
+  expect(hasRunnablePiTasks({ tasks: { '1': task } }, 1000)).toBe(false);
+  expect(hasRunnablePiTasks({ tasks: { '1': task } }, 2000)).toBe(true);
+  expect(hasRunnablePiTasks({ tasks: { '1': { ...task, abortRequested: true } } }, 1000)).toBe(
+    true,
+  );
+  const pending: TaskGraphNode = { ...task, state: { status: 'pending', phase: 'generate' } };
+  expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'restart_limit' } } })).toBe(
+    false,
+  );
+  expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'missing_task' } } })).toBe(
+    false,
+  );
+  expect(hasRunnablePiTasks({ tasks: { '1': pending, '2': task } }, 1000)).toBe(true);
+  expect(hasRunnablePiTasks({ tasks: {} })).toBe(false);
+});
 
 describe('PiDurableRuntime identity and handoff', () => {
   test('forks replace current source grants with the supplied history prefix grants', async () => {
@@ -75,7 +104,7 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test('reopening leaves an existing run and its waiting input in place', async () => {
+  test('reopens an existing run and advances waiting input after a missing-model failure', async () => {
     class ReopenableStorage extends MemoryStorage {
       override async close() {}
     }
@@ -122,51 +151,13 @@ describe('PiDurableRuntime identity and handoff', () => {
         ['waiting', 'queued'],
       ]);
       expect(inspected.tasks).toHaveLength(1);
-    } finally {
-      await reopened.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  test('reopens an idle durable inbox and advances every input after a predecessor fails', async () => {
-    class ReopenableStorage extends MemoryStorage {
-      override async close() {}
-    }
-    const storage = new ReopenableStorage();
-    const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
-    const conversation = await first.createConversation(
-      { ownership: { kind: 'ownerless' } },
-      BACKGROUND_CONTEXT,
-    );
-    const ids = await conversation.commit(async (tx) => {
-      const inbox = await tx.doc(InboxDoc, conversation.id);
-      const ids = [];
-      for (const requestId of ['first', 'second']) {
-        const record = await tx.createSubmission({
-          conversationId: conversation.id,
-          type: 'input',
-          status: 'queued',
-          requestId,
-        });
-        inbox.items.push({ id: record.id, mode: 'followUp', content: requestId });
-        ids.push(record.id);
-      }
-      return ids;
-    }, BACKGROUND_CONTEXT);
-    await first.close(BACKGROUND_CONTEXT);
-    const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
-    try {
-      // Recovery restores the first input's run without executing it before resume.
-      const initial = await reopened.inspect(BACKGROUND_CONTEXT);
-      expect(initial.submissions.map((record) => record.status)).toEqual(['placed', 'queued']);
-      expect(initial.tasks).toHaveLength(1);
       reopened.resume();
       await reopened.waitForIdle(BACKGROUND_CONTEXT);
       const records = await Promise.all(
-        ids.map(async (id) =>
+        inspected.submissions.map(async ({ id }) =>
           (await reopened.submission(id, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
         ),
       );
-      // No model is configured: failure must release the next waiting input, not strand it.
       expect(records.map((record) => record.status)).toEqual(['unanswered', 'unanswered']);
       expect(records.every((record) => record.entry !== undefined)).toBe(true);
       expect((await reopened.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
@@ -203,6 +194,7 @@ describe('PiDurableRuntime identity and handoff', () => {
       {
         ...configuration,
         settings: {
+          ...configuration.settings,
           compaction: {
             enabled: true,
             reserveTokens: 32,
@@ -351,6 +343,7 @@ describe('PiDurableRuntime identity and handoff', () => {
       kind: 'cherry.session',
       version: 1,
       scope: 'session',
+      checkpointWhen: () => false,
       family: true,
       initial: () => ({ conversationId: null }),
     });

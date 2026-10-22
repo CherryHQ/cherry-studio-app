@@ -503,6 +503,7 @@
   "chat.reasoningStatus.thinking": "Düşünme",
   "chat.reasoningStatus.thought": "Enine boyuna düşündüm",
   "chat.runtime.failed": "Ajan kullanılamıyor. Devam etmek için yeniden deneyin.",
+  "chat.runtime.paused": "Tekrarlanan kesintiler nedeniyle yürütme duraklatıldı. Bu yanıtı durdurup yeniden deneyin.",
   "chat.runtime.retrying": "İstek başarısız oldu. Otomatik olarak yeniden deneniyor…",
   "chat.share.assistant": "Asistan",
   "chat.share.cancelled": "İptal edildi",

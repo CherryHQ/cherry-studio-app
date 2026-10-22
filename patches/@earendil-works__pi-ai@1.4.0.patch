@@ -11,8 +11,8 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
 +import { normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
- import { parseJsonWithRepair, parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.js";
-@@ -352,7 +353,14 @@
+ import { getIdentityHeaders } from "../utils/identity.js";
+@@ -349,7 +350,14 @@
      let sawMessageEnd = false;
      for await (const sse of iterateSseMessages(response.body, signal)) {
          if (sse.event === "error") {
@@ -28,7 +28,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
          }
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
-@@ -718,6 +726,12 @@
+@@ -715,6 +723,12 @@
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
              output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -113,7 +113,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
  import { registerSessionResourceCleanup } from "../session-resources.js";
  import { combineAbortSignals } from "../utils/abort-signals.js";
  import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic, formatThrownValue, } from "../utils/diagnostics.js";
-@@ -300,7 +300,12 @@
+@@ -302,7 +302,12 @@
                          statusText: response.statusText,
                      });
                      const info = await parseErrorResponse(fakeResponse);
@@ -127,7 +127,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
                  }
                  catch (error) {
                      if (error instanceof Error) {
-@@ -345,7 +350,13 @@
+@@ -347,7 +352,13 @@
                  delete block.customInput;
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -142,7 +142,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1242,12 +1253,13 @@
+@@ -1248,12 +1259,13 @@
      const raw = await response.text();
      let message = raw || response.statusText || "Request failed";
      let friendlyMessage;
@@ -154,11 +154,11 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
 -            const code = err.code || err.type || "";
 -            if (/usage_limit_reached|usage_not_included|rate_limit_exceeded/i.test(code) || response.status === 429) {
 +            code = err.code || err.type || "";
-+            if (/^(usage_limit_reached|usage_not_included|subscription_sharing_usage_limit_exceeded)$/i.test(code)) {
++            if (/^(usage_limit_reached|usage_not_included|subscription_sharing_usage_limit_exceeded|subscription_sharing_workplace_individual_usage_limit_exceeded)$/i.test(code)) {
                  const plan = err.plan_type ? ` (${err.plan_type.toLowerCase()} plan)` : "";
                  const mins = err.resets_at
                      ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
-@@ -1259,7 +1271,7 @@
+@@ -1265,7 +1277,7 @@
          }
      }
      catch { }
@@ -202,7 +202,7 @@ diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-sha
  import { shortHash } from "../utils/hash.js";
  import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.js";
  import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
-@@ -653,7 +653,10 @@
+@@ -705,7 +705,10 @@
              finalizeResponse(event.response);
          }
          else if (event.type === "error") {
@@ -214,7 +214,7 @@ diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-sha
          }
          else if (event.type === "response.failed") {
              sawTerminalResponseEvent = true;
-@@ -665,7 +668,7 @@
+@@ -717,7 +720,7 @@
                  : details?.reason
                      ? `incomplete: ${details.reason}`
                      : "Unknown error (no error details in response)";
@@ -234,15 +234,21 @@ diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
- import { getPiUserAgent } from "../utils/pi-user-agent.js";
-@@ -180,9 +181,15 @@
+ import { getIdentityHeaders } from "../utils/identity.js";
+@@ -179,7 +180,8 @@
+                 delete block.customInput;
+             }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-             const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
-             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
+-            const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
 +            const normalizedError = normalizeProviderError(error);
-             output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
-                 ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
-                 : errorMessage;
++            const errorMessage = formatProviderError(normalizedError, `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
+             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
+             // On ChatGPT Business plans, the workspace admin also sets a per-user limit.
+             if (errorMessage.includes("subscription_sharing_usage_limit_exceeded")) {
+@@ -191,6 +193,11 @@
+             else {
+                 output.errorMessage = errorMessage;
+             }
 +            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
 +                status: normalizedError.status,
 +                body: normalizedError.body,
@@ -627,34 +633,10 @@ diff --git a/dist/utils/provider-env.js b/dist/utils/provider-env.js
  }
  /**
   * Resolve a provider env value from scoped overrides, normal process.env, then
-diff --git a/package.json b/package.json
---- a/package.json
-+++ b/package.json
-@@ -46,6 +46,10 @@
- 		"./bun-oauth": {
- 			"types": "./dist/bun-oauth.d.ts",
- 			"import": "./dist/bun-oauth.js"
-+		},
-+		"./native-oauth": {
-+			"types": "./dist/native-oauth.d.ts",
-+			"import": "./dist/native-oauth.js"
- 		}
- 	},
- 	"bin": {
-@@ -102,5 +106,9 @@
- 		"@types/node": "22.19.19",
- 		"canvas": "3.2.3",
- 		"vitest": "4.1.11"
-+	},
-+	"browser": {
-+		"./dist/auth/oauth/callback-server.js": "./dist/auth/oauth/callback-server.native.js",
-+		"./dist/auth/context.js": "./dist/auth/context.native.js"
- 	}
- }
 diff --git a/dist/utils/retry.js b/dist/utils/retry.js
 --- a/dist/utils/retry.js
 +++ b/dist/utils/retry.js
-@@ -191,11 +191,21 @@
+@@ -200,11 +200,21 @@
   * before restarting the assistant turn.
   */
  export function isRetryableAssistantError(message) {
@@ -679,3 +661,27 @@ diff --git a/dist/utils/retry.js b/dist/utils/retry.js
  }
  //# sourceMappingURL=retry.js.map
 \ No newline at end of file
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -46,6 +46,10 @@
+ 		"./bun-oauth": {
+ 			"types": "./dist/bun-oauth.d.ts",
+ 			"import": "./dist/bun-oauth.js"
++		},
++		"./native-oauth": {
++			"types": "./dist/native-oauth.d.ts",
++			"import": "./dist/native-oauth.js"
+ 		}
+ 	},
+ 	"bin": {
+@@ -102,5 +106,9 @@
+ 		"@types/node": "22.19.19",
+ 		"canvas": "3.2.3",
+ 		"vitest": "4.1.11"
++	},
++	"browser": {
++		"./dist/auth/oauth/callback-server.js": "./dist/auth/oauth/callback-server.native.js",
++		"./dist/auth/context.js": "./dist/auth/context.native.js"
+ 	}
+ }

@@ -90,3 +90,17 @@ test('runtime recovery replaces transient notices', async () => {
   expect(text()).toContain('chat.runtime.failed');
   expect(text()).not.toContain('chat.runtime.retrying');
 });
+
+test('a paused execution takes precedence over retry and compaction until it resumes', async () => {
+  mockState.activeTurn = { ...activeTurn(true)!, isPaused: true };
+  mockState.contextStatus = 'compacting';
+  await render();
+  expect(text()).toContain('chat.runtime.paused');
+  expect(text()).not.toContain('chat.runtime.retrying');
+  expect(text()).not.toContain('chat.compaction.compacting');
+
+  mockState.activeTurn = activeTurn(false);
+  mockState.contextStatus = null;
+  await render();
+  expect(renderer?.toJSON()).toBeNull();
+});

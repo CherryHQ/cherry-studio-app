@@ -341,6 +341,34 @@ test('preserves durable failure correlation and retry facts through persistent l
   expect(JSON.stringify(exported)).not.toMatch(/private|stack|input/);
 });
 
+test('retains classified Pi reports through export without copying failure payloads', () => {
+  const record = projectDiagnosticLog(
+    createLogRecord('warn', 'Pi durable runtime reported a failure', 'PiDurableAgentRuntime', {}, [
+      {
+        operation: 'pi.host_error',
+        callback: 'models',
+        taskKind: 'pi.generation',
+        taskId: 42,
+        extension: 'cherry.tools',
+        error: new Error('private provider response'),
+        body: 'private chat',
+      },
+    ]),
+  );
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(record)));
+  expect(exported).toMatchObject({
+    message: 'Pi durable runtime reported a failure',
+    facts: {
+      operation: 'pi.host_error',
+      callback: 'models',
+      taskKind: 'pi.generation',
+      taskId: 42,
+      extension: 'cherry.tools',
+    },
+  });
+  expect(JSON.stringify(exported)).not.toMatch(/private|stack|body/);
+});
+
 test('projects repetition counts and times without accepting payload fields or invalid ranges', () => {
   const record = {
     schemaVersion: 1,
