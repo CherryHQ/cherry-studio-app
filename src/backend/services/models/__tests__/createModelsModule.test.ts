@@ -1,3 +1,5 @@
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+
 import type { ModelsModule } from '@/shared/contracts';
 import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/shared/contracts';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
@@ -122,6 +124,56 @@ describe('createModelsModule', () => {
     await expect(backend.pull('openai')).resolves.toEqual({
       status: 'up-to-date',
     });
+  });
+
+  it('keeps voice models through discovery and persistence without exposing them to chat checks', async () => {
+    const speech = model('tts-1', { capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION] });
+    const transcription = model('transcribe', {
+      capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+      inputModalities: ['audio'],
+      outputModalities: ['text'],
+    });
+    const voiceProvider: Provider = {
+      ...provider,
+      endpointConfigs: {
+        'openai-chat-completions': {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://example.test/v1',
+        },
+      },
+    };
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.providers.get).mockResolvedValue(voiceProvider);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([speech, transcription]);
+    jest.mocked(dependencies.models.get).mockResolvedValue(speech);
+    await expect(backend.pull(provider.id)).resolves.toMatchObject({
+      status: 'changes',
+      preview: { added: [speech, transcription], missing: [] },
+    });
+    await backend.reconcile(provider.id, { toAdd: [speech, transcription] });
+    expect(dependencies.models.reconcile).toHaveBeenCalledWith(
+      provider.id,
+      {
+        toAdd: [
+          expect.objectContaining({
+            modelId: 'tts-1',
+            capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+          }),
+          expect.objectContaining({
+            modelId: 'transcribe',
+            inputModalities: ['audio'],
+            outputModalities: ['text'],
+          }),
+        ],
+        toRemove: [],
+      },
+      voiceProvider,
+    );
+    await expect(backend.checkChat({ modelId: speech.id })).resolves.toEqual({
+      status: 'failed',
+      reason: 'model',
+    });
+    expect(dependencies.checkChatModel).not.toHaveBeenCalled();
   });
 
   it('returns an up-to-date result without an implicit enable result', async () => {

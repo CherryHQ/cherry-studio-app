@@ -1,7 +1,18 @@
 import type { Model } from '@/shared/data/types/model';
-import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
+import {
+  isImageGenerationModel,
+  isSpeechToTextModel,
+  isTextGenerationModel,
+  isTextToSpeechModel,
+} from '@/shared/utils/modelPurpose';
 
-export const PROVIDER_MODEL_PURPOSES = ['all', 'chat', 'painting'] as const;
+export const PROVIDER_MODEL_PURPOSES = [
+  'all',
+  'chat',
+  'painting',
+  'speech',
+  'transcription',
+] as const;
 
 export type ProviderModelPurpose = (typeof PROVIDER_MODEL_PURPOSES)[number];
 
@@ -13,6 +24,10 @@ export function matchesProviderModelPurpose(model: Model, purpose: ProviderModel
       return isTextGenerationModel(model);
     case 'painting':
       return isImageGenerationModel(model);
+    case 'speech':
+      return isTextToSpeechModel(model);
+    case 'transcription':
+      return isSpeechToTextModel(model);
     default:
       return true;
   }
@@ -34,6 +49,8 @@ export function getProviderModelPurposeCounts(
     all: models.length,
     chat: 0,
     painting: 0,
+    speech: 0,
+    transcription: 0,
   };
 
   for (const model of models) {
@@ -41,6 +58,10 @@ export function getProviderModelPurposeCounts(
       counts.chat += 1;
     } else if (isImageGenerationModel(model)) {
       counts.painting += 1;
+    } else if (isTextToSpeechModel(model)) {
+      counts.speech += 1;
+    } else if (isSpeechToTextModel(model)) {
+      counts.transcription += 1;
     }
   }
 
@@ -55,5 +76,7 @@ export function getEffectiveProviderModelPurpose(
 }
 
 export function hasMultipleProviderModelPurposes(counts: ProviderModelPurposeCounts): boolean {
-  return counts.chat > 0 && counts.painting > 0;
+  return (
+    PROVIDER_MODEL_PURPOSES.filter((purpose) => purpose !== 'all' && counts[purpose] > 0).length > 1
+  );
 }

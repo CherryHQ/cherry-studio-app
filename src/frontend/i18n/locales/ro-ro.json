@@ -2123,6 +2123,8 @@
   "settings.provider.models.purpose.chat": "Chat",
   "settings.provider.models.purpose.label": "Scopul modelului",
   "settings.provider.models.purpose.painting": "Pictură",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "Niciun model care se potrivește.",
   "settings.provider.models.section.chat": "Modele de chat pentru agenți",
   "settings.provider.models.section.painting": "Pictură modele",

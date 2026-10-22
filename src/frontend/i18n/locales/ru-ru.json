@@ -2140,6 +2140,8 @@
   "settings.provider.models.purpose.chat": "Чат",
   "settings.provider.models.purpose.label": "Назначение модели",
   "settings.provider.models.purpose.painting": "Живопись",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "Нет подходящих моделей.",
   "settings.provider.models.section.chat": "Модели чата агентов",
   "settings.provider.models.section.painting": "Окрашивание моделей",

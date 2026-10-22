@@ -43,8 +43,12 @@ not desktop's structure.
   shaping against the upstream AI SDK packages, and they guard the image path that routes through
   those vendors.
 
-Voice model adaptation is exported through `provider`. It supports configured API-key accounts
-with an OpenAI or OpenAI-compatible endpoint, using OpenAI's audio protocol with the account's
-resolved URL, credential, headers, and injected platform fetch. Audio IDs are independent of
-the conversation model picker. The backend owns cancellation and temporary files; see
+The `provider` subpath also exposes the account endpoint resolver for OpenAI-compatible voice
+models. Model discovery keeps known one-shot TTS/STT families and their input/output modalities;
+unsupported realtime/audio-chat/video routes stay filtered from official OpenAI discovery.
+Application model management owns admission, catalog enrichment and the visible TTS/STT labels.
+
+Voice model adaptation is exported through `provider`. It uses OpenAI's audio protocol with the
+saved model's API ID and the account's resolved URL, credential, headers, and injected platform
+fetch. The backend owns cancellation and temporary files; see
 [Voice Input And Speech](../../docs/references/voice.md).

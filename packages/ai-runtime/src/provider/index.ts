@@ -46,5 +46,6 @@ export * from './listModels';
 export * from './listModels/vertex';
 export * from './listModelsSchemas';
 export * from './vertex';
+export * from './voiceEndpoint';
 export * from './voiceModels';
 export * from './zhipuWebSearch';

@@ -2089,6 +2089,8 @@
   "settings.provider.models.purpose.chat": "チャット",
   "settings.provider.models.purpose.label": "モデルの目的",
   "settings.provider.models.purpose.painting": "絵画",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "一致するモデルがありません。",
   "settings.provider.models.section.chat": "エージェントチャットモデル",
   "settings.provider.models.section.painting": "塗装モデル",

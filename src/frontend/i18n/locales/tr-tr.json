@@ -2106,6 +2106,8 @@
   "settings.provider.models.purpose.chat": "Sohbet",
   "settings.provider.models.purpose.label": "Model amacı",
   "settings.provider.models.purpose.painting": "Boyama",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "Eşleşen model yok.",
   "settings.provider.models.section.chat": "Ajan sohbet modelleri",
   "settings.provider.models.section.painting": "Boyama modelleri",

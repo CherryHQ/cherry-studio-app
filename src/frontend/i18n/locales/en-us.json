@@ -2106,6 +2106,8 @@
   "settings.provider.models.purpose.chat": "Chat",
   "settings.provider.models.purpose.label": "Model purpose",
   "settings.provider.models.purpose.painting": "Painting",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "No matching models.",
   "settings.provider.models.section.chat": "Agent chat models",
   "settings.provider.models.section.painting": "Painting models",

@@ -2123,6 +2123,8 @@
   "settings.provider.models.purpose.chat": "Chat",
   "settings.provider.models.purpose.label": "Propósito do modelo",
   "settings.provider.models.purpose.painting": "Pintura",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "Não existem modelos correspondentes.",
   "settings.provider.models.section.chat": "Modelos de chat de agentes",
   "settings.provider.models.section.painting": "Modelos de pintura",

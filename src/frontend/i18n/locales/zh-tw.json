@@ -2089,6 +2089,8 @@
   "settings.provider.models.purpose.chat": "對話",
   "settings.provider.models.purpose.label": "模型用途",
   "settings.provider.models.purpose.painting": "繪圖",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "沒有匹配的模型。",
   "settings.provider.models.section.chat": "Agent 對話模型",
   "settings.provider.models.section.painting": "繪圖模型",

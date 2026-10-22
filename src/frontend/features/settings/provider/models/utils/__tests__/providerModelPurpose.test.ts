@@ -12,16 +12,35 @@ import {
 
 const chatModel = model('chat-model');
 const paintingModel = model('painting-model', [MODEL_CAPABILITY.IMAGE_GENERATION]);
+const speechModel = model('speech-model', [MODEL_CAPABILITY.AUDIO_GENERATION]);
+const transcriptionModel = model('transcription-model', [MODEL_CAPABILITY.AUDIO_TRANSCRIPT]);
 
 describe('provider model purpose', () => {
-  test('exposes only chat and painting as product purposes', () => {
+  test('counts chat and painting without inventing voice models', () => {
     const models = [chatModel, paintingModel];
     const counts = getProviderModelPurposeCounts(models);
 
-    expect(counts).toEqual({ all: 2, chat: 1, painting: 1 });
+    expect(counts).toEqual({ all: 2, chat: 1, painting: 1, speech: 0, transcription: 0 });
     expect(hasMultipleProviderModelPurposes(counts)).toBe(true);
     expect(filterProviderModelsByPurpose(models, 'chat')).toEqual([chatModel]);
     expect(filterProviderModelsByPurpose(models, 'painting')).toEqual([paintingModel]);
+  });
+
+  test('keeps pulled TTS and STT visible in grouped lists and separate purpose filters', () => {
+    const models = [chatModel, speechModel, transcriptionModel];
+    const counts = getProviderModelPurposeCounts(models);
+    expect(counts).toEqual({ all: 3, chat: 1, painting: 0, speech: 1, transcription: 1 });
+    expect(hasMultipleProviderModelPurposes(counts)).toBe(true);
+    expect(hasMultipleProviderModelPurposes(getProviderModelPurposeCounts([speechModel]))).toBe(
+      false,
+    );
+    expect(filterProviderModelsByPurpose(models, 'speech')).toEqual([speechModel]);
+    expect(filterProviderModelsByPurpose(models, 'transcription')).toEqual([transcriptionModel]);
+    expect(
+      buildProviderModelListItems(models, true)
+        .filter((item) => item.type === 'model')
+        .map((item) => item.model),
+    ).toEqual(models);
   });
 
   test('falls back to all when the selected purpose no longer exists', () => {

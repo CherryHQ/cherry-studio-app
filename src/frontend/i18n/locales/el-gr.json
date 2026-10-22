@@ -2106,6 +2106,8 @@
   "settings.provider.models.purpose.chat": "Συνομιλία",
   "settings.provider.models.purpose.label": "Σκοπός του μοντέλου",
   "settings.provider.models.purpose.painting": "Ζωγραφική",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "Δεν ταιριάζουν μοντέλα.",
   "settings.provider.models.section.chat": "Μοντέλα συνομιλίας πρακτόρων",
   "settings.provider.models.section.painting": "Μοντέλα ζωγραφικής",

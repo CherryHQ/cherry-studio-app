@@ -29,8 +29,8 @@ export interface LanguageServingSupport {
 
 export interface SystemModelSupport {
   /**
-   * Whether one configured model can be executed by at least one product
-   * feature currently shipped on mobile. Conversation support is owned by the
+   * Whether one configured model can be offered by product model management.
+   * Conversation support is owned by the
    * bound Runtime; image generation and voice use independent AI SDK capabilities.
    */
   isModelSupportedBySystem(provider: Provider, model: Model): boolean;

@@ -1,44 +1,9 @@
 import { generateSpeech, transcribe } from '@cherrystudio/ai-core';
-import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
-import { DEFAULT_API_FEATURES, type Provider } from '@cherrystudio/universal/data/types/provider';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveVoiceEndpoint, resolveVoiceModel } from '../voiceModels';
-
-const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
-function provider(overrides: Partial<Provider> = {}): Provider {
-  return {
-    id: 'gateway',
-    name: 'Gateway',
-    authType: 'api-key',
-    apiKeys: [],
-    isEnabled: true,
-    apiFeatures: DEFAULT_API_FEATURES,
-    settings: {},
-    defaultChatEndpoint: endpoint,
-    endpointConfigs: {
-      [endpoint]: { adapterFamily: 'openai-compatible', baseUrl: 'https://voice.invalid/v1' },
-    },
-    ...overrides,
-  };
-}
+import { resolveVoiceModel } from '../voiceModels';
 
 describe('voice model adaptation', () => {
-  it('supports configured OpenAI audio routes, excluding OAuth and unrelated protocols', () => {
-    expect(resolveVoiceEndpoint(provider())).toBe(endpoint);
-    expect(resolveVoiceEndpoint(provider({ authType: 'iam-gcp' }))).toBeUndefined();
-    expect(resolveVoiceEndpoint(provider({ endpointConfigs: {} }))).toBeUndefined();
-    expect(
-      resolveVoiceEndpoint(
-        provider({
-          endpointConfigs: {
-            [endpoint]: { adapterFamily: 'anthropic', baseUrl: 'https://other.invalid' },
-          },
-        }),
-      ),
-    ).toBeUndefined();
-  });
-
   it('uses the selected audio model, credential, custom header and WAV response format', async () => {
     const audio = new Uint8Array([82, 73, 70, 70, 0, 0, 0, 0, 87, 65, 86, 69]);
     const fetch = vi

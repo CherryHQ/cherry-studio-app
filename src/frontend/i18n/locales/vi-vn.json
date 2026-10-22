@@ -2089,6 +2089,8 @@
   "settings.provider.models.purpose.chat": "Trò chuyện",
   "settings.provider.models.purpose.label": "Mục đích của mô hình",
   "settings.provider.models.purpose.painting": "Bức tranh",
+  "settings.provider.models.purpose.speech": "TTS",
+  "settings.provider.models.purpose.transcription": "STT",
   "settings.provider.models.search.empty": "Không có mẫu nào phù hợp.",
   "settings.provider.models.section.chat": "Mô hình trò chuyện tác nhân",
   "settings.provider.models.section.painting": "Tranh mẫu",
