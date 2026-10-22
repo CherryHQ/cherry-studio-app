@@ -36,7 +36,6 @@ import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
-import { ChatInputDictationButton } from '../../voice/ChatInputDictationButton';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
@@ -468,12 +467,8 @@ function TextChatInput({
                           replyModels={replyModels}
                         />
                       }
-                      trailingAction={
-                        <>
-                          <ChatInputDictationButton />
-                          {effortGauge}
-                        </>
-                      }
+                      trailingAction={effortGauge}
+                      dictation
                     />
                   </ChatInputComposer>
                 )}

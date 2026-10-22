@@ -13,6 +13,8 @@ import {
 } from '@/frontend/components/Composer';
 import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
 
+import { ChatInputPrimaryAction } from '../../voice/ChatInputPrimaryAction';
+
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
 export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
   const { attachments, draft } = useComposerState();
@@ -37,6 +39,7 @@ export function ChatInputSurface({
   fieldStyle,
   placeholder,
   attachmentMode = 'images',
+  dictation = false,
 }: {
   leadingAction?: ReactNode;
   secondaryAction?: ReactNode;
@@ -46,11 +49,18 @@ export function ChatInputSurface({
   fieldStyle?: StyleProp<TextStyle>;
   placeholder?: string;
   attachmentMode?: 'images' | 'text-only';
+  /** Voice input takes the send slot while there is nothing to send. */
+  dictation?: boolean;
 }) {
   const { t } = useTranslation();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
+  const send = (
+    <Composer.Send
+      testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
+    />
+  );
   return (
     <ComposerEditor
       active={isEditing || draft.length > 0 || attachments.length > 0}
@@ -75,9 +85,7 @@ export function ChatInputSurface({
             <PauseIcon className="size-6 text-foreground" />
           </Composer.Action>
         ) : null}
-        <Composer.Send
-          testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
-        />
+        {dictation ? <ChatInputPrimaryAction send={send} streaming={streaming} /> : send}
       </View>
     </ComposerEditor>
   );

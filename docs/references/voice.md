@@ -1,7 +1,8 @@
 # Voice Input And Speech
 
-> Status: engines, attachment transcription and settings are implemented; the chat and settings
-> controls are interim and await their UI design. iOS/Android device acceptance is pending.
+> Status: engines, attachment transcription and settings are implemented; the message read-aloud
+> and settings controls are interim and await their UI design. iOS/Android device acceptance is
+> pending.
 
 ## Capabilities
 
@@ -14,6 +15,11 @@
 System engines are free, need no setup and spend no tokens. AI engines are optional upgrades that
 the user configures once in **Settings → Voice**; voice actions never ask for a provider or model.
 Users can also dictate with their keyboard's own voice input, which needs no app support.
+
+The chat composer has one primary action slot, as mainstream chat apps do: voice input while the
+draft and attachments are empty, send once there is content, and stop while a reply streams.
+Dictation keeps the slot until it ends even as its text fills the draft. Adding to a typed draft by
+voice goes through the keyboard's own voice input.
 
 ## Module Boundaries
 
