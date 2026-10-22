@@ -888,6 +888,22 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('working storage size reports synchronous read failures as promise rejections', async () => {
+    const failure = new Error('stat failed');
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => {
+          throw failure;
+        },
+        discard: () => {},
+        notifyTranscript: () => {},
+      },
+    });
+
+    await expect(state.host.getWorkingStorageSize()).rejects.toBe(failure);
+  });
+
   test('clearing working storage deletes the closed file before reopening it', async () => {
     const discard = jest.fn(() => {
       state.steps.push('discard');

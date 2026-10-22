@@ -1,4 +1,6 @@
-import { cleanupStorageAfterBoot } from '../storagePaths';
+import { File } from 'expo-file-system';
+
+import { cleanupStorageAfterBoot, databaseDirectory } from '../storagePaths';
 
 const mockDocumentUri = 'file:///data/user/0/app/files';
 const mockExisting = new Set<string>();
@@ -48,6 +50,20 @@ jest.mock('../../../../../modules/backup-storage', () => ({
     writeControl: () => {},
   }),
 }));
+
+beforeEach(() => mockExisting.clear());
+
+test.each([
+  ['legacy', `${mockDocumentUri}/SQLite`],
+  [
+    '20000000-0000-4000-8000-000000000001',
+    `${mockDocumentUri}/stores/20000000-0000-4000-8000-000000000001/database`,
+  ],
+])('reads the existing %s database through a file URI', (storageId, directory) => {
+  mockExisting.add(`${directory}/cherry.db`);
+
+  expect(new File(databaseDirectory(storageId), 'cherry.db').exists).toBe(true);
+});
 
 test('cleanup after a restore removes the legacy database through file URIs', () => {
   const legacyDatabase = `${mockDocumentUri}/SQLite/cherry.db`;

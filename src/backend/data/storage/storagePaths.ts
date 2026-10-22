@@ -67,9 +67,12 @@ export function storageDirectory(id = getStorageBoot().storageId): Directory {
 }
 
 export function databaseDirectory(id = getStorageBoot().storageId): string {
-  return id === 'legacy'
-    ? defaultDatabaseDirectory
-    : new Directory(storageDirectory(id), 'database').uri;
+  const directory =
+    id === 'legacy'
+      ? defaultDatabaseDirectory
+      : new Directory(storageDirectory(id), 'database').uri;
+  // SQLite accepts native paths, but FileSystem requires a file URI for the same location.
+  return directory.startsWith('/') ? `file://${directory}` : directory;
 }
 
 export function stageStorage(id: string): void {
