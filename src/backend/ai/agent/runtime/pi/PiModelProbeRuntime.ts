@@ -12,7 +12,7 @@ import type {
   RuntimeOutputPart,
 } from '../types';
 import { toPiConversation } from './modelMessages';
-import { createPiDurableModels } from './piDurableModels';
+import { cherryClientIdentity, createPiDurableModels } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import { piSubmissionMetadata } from './piDurableProjection';
 import { PiDurableRuntime } from './PiDurableRuntime';
@@ -86,6 +86,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
       models: bridge.models,
       registry: createRegistry(),
       settings: { extensions: [], retry: { maxRetries: 0 }, compaction: { enabled: false } },
+      identity: cherryClientIdentity(),
     });
     this.controller.signal.throwIfAborted();
     await this.runtime.ensureConversation({

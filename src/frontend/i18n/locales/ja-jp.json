@@ -497,6 +497,7 @@
   "chat.reasoningStatus.thinking": "思考",
   "chat.reasoningStatus.thought": "考え抜いた",
   "chat.runtime.failed": "エージェントを利用できません。再試行して再開してください。",
+  "chat.runtime.paused": "中断が繰り返されたため、実行を一時停止しました。この応答を停止してから再試行してください。",
   "chat.runtime.retrying": "リクエストに失敗しました。自動で再試行しています…",
   "chat.share.assistant": "アシスタント",
   "chat.share.cancelled": "キャンセル",

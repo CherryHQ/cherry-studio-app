@@ -507,6 +507,7 @@
   "chat.reasoningStatus.thinking": "Gândire",
   "chat.reasoningStatus.thought": "M-am gândit bine",
   "chat.runtime.failed": "Agentul nu este disponibil. Încercați din nou pentru a continua.",
+  "chat.runtime.paused": "Execuția a fost pusă pe pauză după întreruperi repetate. Opriți acest răspuns, apoi încercați din nou.",
   "chat.runtime.retrying": "Solicitarea a eșuat. Se reîncearcă automat…",
   "chat.share.assistant": "Asistent",
   "chat.share.cancelled": "Anulat",

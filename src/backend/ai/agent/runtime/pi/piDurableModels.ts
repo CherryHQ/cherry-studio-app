@@ -3,6 +3,7 @@ import type {
   Api,
   AssistantMessage,
   AssistantMessageEvent,
+  ClientIdentity,
   JsonObject,
   Model,
   SimpleStreamOptions,
@@ -10,6 +11,9 @@ import type {
 } from '@earendil-works/pi-ai';
 import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { createModels, createProvider } from '@earendil-works/pi-ai/models';
+import type { CompactionPolicy } from '@earendil-works/pi-durable';
+
+import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
@@ -32,6 +36,14 @@ type PiRequestConfiguration = (
   signal: AbortSignal | undefined,
 ) => Promise<RuntimeOptions>;
 
+/** Every Harness, including provider checks, identifies its model requests as Cherry. */
+export function cherryClientIdentity(): ClientIdentity {
+  return {
+    userAgent: { custom: defaultAppHeaders()['User-Agent']! },
+    attribution: { name: 'CherryStudioMobile', url: 'https://cherry-ai.com' },
+  };
+}
+
 /** Keep Cherry identities in stored model references; materialize credentials only when sending. */
 export function createPiDurableModels(
   dependencies: PiRuntimeDependencies,
@@ -51,6 +63,7 @@ export function createPiDurableModels(
     authContext: { env: async () => undefined, fileExists: async () => false },
   });
   const providers = new Map<string, Map<string, Model<Api>>>();
+  const compactionOverrides: Record<string, Partial<CompactionPolicy>> = {};
 
   async function registerModel(
     reference: RuntimeModel,
@@ -85,6 +98,18 @@ export function createPiDurableModels(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     });
     providers.set(reference.providerId, registered);
+    // Preserve Pi's defaults for large contexts; smaller models need room for both summary and reply.
+    compactionOverrides[`${reference.providerId}/${piDurableModelKey(reference, kind)}`] =
+      kind === 'image'
+        ? { enabled: false }
+        : {
+            reserveTokens: Math.max(
+              1,
+              Math.min(16_384, preflight.maxOutputTokens, Math.floor(contextWindow / 8)),
+            ),
+            keepRecentTokens: Math.min(20_000, Math.floor(contextWindow / 4)),
+            backgroundTokens: Math.min(32_768, Math.floor(contextWindow / 4)),
+          };
 
     const streamSimple = (
       model: Model<Api>,
@@ -244,6 +269,7 @@ export function createPiDurableModels(
   return {
     models,
     registerModel,
+    compactionOverrides,
     getModel: (reference: RuntimeModel, kind: 'language' | 'image' = 'language') =>
       models.getModel(reference.providerId, piDurableModelKey(reference, kind)),
   };

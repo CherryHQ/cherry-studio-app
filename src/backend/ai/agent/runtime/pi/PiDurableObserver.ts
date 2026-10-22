@@ -1,6 +1,6 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import { CompactionEntry } from '@earendil-works/pi-durable';
+import { CompactionEntry, GenerationTask } from '@earendil-works/pi-durable';
 import type {
   AgentEvent,
   AgentEventStream,
@@ -10,6 +10,8 @@ import type {
   SnapshotEvent,
   SubmissionId,
   SubmissionRecord,
+  TaskGraph,
+  TaskGraphWatch,
 } from '@earendil-works/pi-durable';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -31,6 +33,8 @@ const logger = loggerService.withContext('PiDurableObserver');
 /** A disposable presentation mount. Stopping it releases observation and preserves execution. */
 export class PiDurableObserver {
   private stream: AgentEventStream | undefined;
+  private workWatch: TaskGraphWatch | undefined;
+  private tasks: TaskGraph = { tasks: {} };
   private readonly inputs = new Map<SubmissionId, InputView>();
   private readonly entries = new Map<number, EntryRecord>();
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
@@ -57,9 +61,21 @@ export class PiDurableObserver {
     const stream = await this.runtime.watch(laneKey(this.lane));
     this.stream = stream;
     try {
+      const workWatch = await this.runtime.watchWork();
+      this.workWatch = workWatch;
+      this.tasks = workWatch.value;
       await this.loadSnapshot(stream.snapshot);
       const snapshot = this.snapshot();
       stream.start(async (events) => this.advance(events));
+      workWatch.start(async (tasks) => {
+        const previous = this.tasks;
+        this.tasks = tasks;
+        for (const id of this.run) {
+          const input = this.inputs.get(id);
+          if (input && this.isPaused(input, previous) !== this.isPaused(input, tasks))
+            this.listener({ type: 'turn.updated', turn: this.project(input) });
+        }
+      });
       return snapshot;
     } catch (error) {
       await this.stop();
@@ -69,8 +85,11 @@ export class PiDurableObserver {
 
   async stop(): Promise<void> {
     const stream = this.stream;
+    const workWatch = this.workWatch;
     this.stream = undefined;
-    if (stream) await stream.stop();
+    this.workWatch = undefined;
+    await Promise.all([stream?.stop(), workWatch?.stop()]);
+    this.tasks = { tasks: {} };
     this.inputs.clear();
     this.entries.clear();
     this.toolStates.clear();
@@ -335,6 +354,25 @@ export class PiDurableObserver {
     };
   }
 
+  private isPaused(input: InputView, graph = this.tasks): boolean {
+    return Object.values(graph.tasks).some((task) => {
+      if (task.blocked !== 'restart_limit') return false;
+      let owner = task;
+      while (owner.owner !== undefined) {
+        if (owner.background) return false;
+        const parent = graph.tasks[String(owner.owner)];
+        if (!parent) return false;
+        owner = parent;
+      }
+      // Child conversations belong to the generation that awaits them; standalone compactions do not.
+      return (
+        !owner.background &&
+        owner.kind === GenerationTask.definition.name &&
+        owner.conversationId === input.record.conversationId
+      );
+    });
+  }
+
   private project(input: InputView) {
     const active = this.run.includes(input.record.id);
     const start = input.record.entry;
@@ -362,7 +400,9 @@ export class PiDurableObserver {
           }
         : {}),
     });
-    return active && this.retrying ? { ...turn, isRetrying: true } : turn;
+    return active
+      ? { ...turn, ...(this.retrying ? { isRetrying: true } : {}), isPaused: this.isPaused(input) }
+      : turn;
   }
 }
 

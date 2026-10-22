@@ -4,15 +4,14 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
 @@ -1,7 +1,8 @@
  import Anthropic, {} from "@anthropic-ai/sdk";
  import { ANTHROPIC_FEDERATION_RULE_ID_ENV, ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, ANTHROPIC_ORGANIZATION_ID_ENV, ANTHROPIC_SERVICE_ACCOUNT_ID_ENV, ANTHROPIC_WORKSPACE_ID_ENV, } from "../env-api-keys.js";
--import { calculateCost } from "../models.js";
+ import { calculateCost } from "../models.js";
 -import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
-+import { calculateCost } from "../utils/model-runtime.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
 +import { normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
- import { parseJsonWithRepair, parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.js";
-@@ -352,7 +353,14 @@
+ import { getIdentityHeaders } from "../utils/identity.js";
+@@ -349,7 +350,14 @@
      let sawMessageEnd = false;
      for await (const sse of iterateSseMessages(response.body, signal)) {
          if (sse.event === "error") {
@@ -28,7 +27,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
          }
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
-@@ -718,6 +726,12 @@
+@@ -715,6 +723,12 @@
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
              output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -46,8 +45,7 @@ diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-response
 +++ b/dist/api/azure-openai-responses.js
 @@ -1,5 +1,6 @@
  import { AzureOpenAI } from "openai";
--import { clampThinkingLevel } from "../models.js";
-+import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { clampThinkingLevel } from "../models.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
@@ -71,8 +69,7 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
 +++ b/dist/api/google-generative-ai.js
 @@ -1,5 +1,6 @@
  import { GoogleGenAI, } from "@google/genai";
--import { calculateCost, clampThinkingLevel } from "../models.js";
-+import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { calculateCost, clampThinkingLevel } from "../models.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
@@ -92,28 +89,10 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-diff --git a/dist/api/google-shared.js b/dist/api/google-shared.js
---- a/dist/api/google-shared.js
-+++ b/dist/api/google-shared.js
-@@ -2,7 +2,7 @@
-  * Shared utilities for Google Generative AI and Google Vertex providers.
-  */
- import { FinishReason, FunctionCallingConfigMode, ThinkingLevel as GoogleSdkThinkingLevel, } from "@google/genai";
--import { clampThinkingLevel } from "../models.js";
-+import { clampThinkingLevel } from "../utils/model-runtime.js";
- import { retryProviderRequest } from "../utils/provider-retry.js";
- import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
- import { collapseSystemMessages, withoutInitialSystemMessage } from "../utils/transcript.js";
 diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-responses.js
 --- a/dist/api/openai-codex-responses.js
 +++ b/dist/api/openai-codex-responses.js
-@@ -1,4 +1,4 @@
--import { clampThinkingLevel } from "../models.js";
-+import { clampThinkingLevel } from "../utils/model-runtime.js";
- import { registerSessionResourceCleanup } from "../session-resources.js";
- import { combineAbortSignals } from "../utils/abort-signals.js";
- import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic, formatThrownValue, } from "../utils/diagnostics.js";
-@@ -300,7 +300,12 @@
+@@ -302,7 +302,12 @@
                          statusText: response.statusText,
                      });
                      const info = await parseErrorResponse(fakeResponse);
@@ -127,7 +106,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
                  }
                  catch (error) {
                      if (error instanceof Error) {
-@@ -345,7 +350,13 @@
+@@ -347,7 +352,13 @@
                  delete block.customInput;
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -142,7 +121,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1242,12 +1253,13 @@
+@@ -1248,12 +1259,13 @@
      const raw = await response.text();
      let message = raw || response.statusText || "Request failed";
      let friendlyMessage;
@@ -154,11 +133,11 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
 -            const code = err.code || err.type || "";
 -            if (/usage_limit_reached|usage_not_included|rate_limit_exceeded/i.test(code) || response.status === 429) {
 +            code = err.code || err.type || "";
-+            if (/^(usage_limit_reached|usage_not_included|subscription_sharing_usage_limit_exceeded)$/i.test(code)) {
++            if (/^(usage_limit_reached|usage_not_included|subscription_sharing_usage_limit_exceeded|subscription_sharing_workplace_individual_usage_limit_exceeded)$/i.test(code)) {
                  const plan = err.plan_type ? ` (${err.plan_type.toLowerCase()} plan)` : "";
                  const mins = err.resets_at
                      ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
-@@ -1259,7 +1271,7 @@
+@@ -1265,7 +1277,7 @@
          }
      }
      catch { }
@@ -172,8 +151,7 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -1,5 +1,6 @@
  import OpenAI from "openai";
--import { calculateCost, clampThinkingLevel } from "../models.js";
-+import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { calculateCost, clampThinkingLevel } from "../models.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
@@ -196,13 +174,7 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
-@@ -1,4 +1,4 @@
--import { calculateCost } from "../models.js";
-+import { calculateCost } from "../utils/model-runtime.js";
- import { shortHash } from "../utils/hash.js";
- import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.js";
- import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
-@@ -653,7 +653,10 @@
+@@ -705,7 +705,10 @@
              finalizeResponse(event.response);
          }
          else if (event.type === "error") {
@@ -214,7 +186,7 @@ diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-sha
          }
          else if (event.type === "response.failed") {
              sawTerminalResponseEvent = true;
-@@ -665,7 +668,7 @@
+@@ -717,7 +720,7 @@
                  : details?.reason
                      ? `incomplete: ${details.reason}`
                      : "Unknown error (no error details in response)";
@@ -228,21 +200,26 @@ diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
 +++ b/dist/api/openai-responses.js
 @@ -1,6 +1,7 @@
  import OpenAI from "openai";
--import { clampThinkingLevel } from "../models.js";
-+import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { clampThinkingLevel } from "../models.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
- import { getPiUserAgent } from "../utils/pi-user-agent.js";
-@@ -180,9 +181,15 @@
+ import { getIdentityHeaders } from "../utils/identity.js";
+@@ -179,7 +180,8 @@
+                 delete block.customInput;
+             }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-             const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
-             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
+-            const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
 +            const normalizedError = normalizeProviderError(error);
-             output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
-                 ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
-                 : errorMessage;
++            const errorMessage = formatProviderError(normalizedError, `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
+             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
+             // On ChatGPT Business plans, the workspace admin also sets a per-user limit.
+             if (errorMessage.includes("subscription_sharing_usage_limit_exceeded")) {
+@@ -191,6 +193,11 @@
+             else {
+                 output.errorMessage = errorMessage;
+             }
 +            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
 +                status: normalizedError.status,
 +                body: normalizedError.body,
@@ -526,135 +503,10 @@ diff --git a/dist/utils/json-parse.js b/dist/utils/json-parse.js
      try {
          return parseJsonWithRepair(partialJson);
      }
-diff --git a/dist/utils/model-runtime.js b/dist/utils/model-runtime.js
-new file mode 100644
---- /dev/null
-+++ b/dist/utils/model-runtime.js
-@@ -0,0 +1,53 @@
-+// Runtime-only helpers keep provider adapters independent from the Node-oriented
-+// model catalog and authentication graph.
-+export function calculateCost(model, usage) {
-+    const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
-+    let rates = model.cost;
-+    let matchedThreshold = -1;
-+    for (const tier of model.cost.tiers ?? []) {
-+        if (inputTokens > tier.inputTokensAbove && tier.inputTokensAbove > matchedThreshold) {
-+            rates = tier;
-+            matchedThreshold = tier.inputTokensAbove;
-+        }
-+    }
-+    const longWrite = usage.cacheWrite1h ?? 0;
-+    const shortWrite = usage.cacheWrite - longWrite;
-+    usage.cost.input = (rates.input / 1000000) * usage.input;
-+    usage.cost.output = (rates.output / 1000000) * usage.output;
-+    usage.cost.cacheRead = (rates.cacheRead / 1000000) * usage.cacheRead;
-+    usage.cost.cacheWrite = (rates.cacheWrite * shortWrite + rates.input * 2 * longWrite) / 1000000;
-+    usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
-+    return usage.cost;
-+}
-+const EXTENDED_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-+function getSupportedThinkingLevels(model) {
-+    if (!model.reasoning)
-+        return ["off"];
-+    return EXTENDED_THINKING_LEVELS.filter((level) => {
-+        const mapped = model.thinkingLevelMap?.[level];
-+        if (mapped === null)
-+            return false;
-+        if (level === "xhigh" || level === "max")
-+            return mapped !== undefined;
-+        return true;
-+    });
-+}
-+export function clampThinkingLevel(model, level) {
-+    const availableLevels = getSupportedThinkingLevels(model);
-+    if (availableLevels.includes(level))
-+        return level;
-+    const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
-+    if (requestedIndex === -1)
-+        return availableLevels[0] ?? "off";
-+    for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
-+        const candidate = EXTENDED_THINKING_LEVELS[i];
-+        if (availableLevels.includes(candidate))
-+            return candidate;
-+    }
-+    for (let i = requestedIndex - 1; i >= 0; i--) {
-+        const candidate = EXTENDED_THINKING_LEVELS[i];
-+        if (availableLevels.includes(candidate))
-+            return candidate;
-+    }
-+    return availableLevels[0] ?? "off";
-+}
-diff --git a/dist/utils/provider-env.js b/dist/utils/provider-env.js
---- a/dist/utils/provider-env.js
-+++ b/dist/utils/provider-env.js
-@@ -1,35 +1,9 @@
--let procEnvCache = null;
- /**
-- * Fallback for https://github.com/oven-sh/bun/issues/27802.
-- * Bun compiled binaries can expose an empty process.env inside Linux sandboxes
-- * even though /proc/self/environ contains the environment.
-- *
-- * This intentionally duplicates restoreSandboxEnv() in
-- * packages/coding-agent/src/bun/restore-sandbox-env.ts. The ai package can be
-- * used directly, without going through that entrypoint, so provider env lookup
-- * must not depend on process.env having been patched.
-+ * React Native receives provider credentials explicitly from Cherry Studio.
-+ * Node-only Bun sandbox environment discovery is intentionally disabled.
-  */
--function getBunSandboxEnvValue(name) {
--    if (typeof process === "undefined" || !process.versions?.bun || Object.keys(process.env).length > 0) {
--        return undefined;
--    }
--    if (procEnvCache === null) {
--        procEnvCache = new Map();
--        try {
--            const { readFileSync } = require("node:fs");
--            const data = readFileSync("/proc/self/environ", "utf-8");
--            for (const entry of data.split("\0")) {
--                const idx = entry.indexOf("=");
--                if (idx > 0) {
--                    procEnvCache.set(entry.slice(0, idx), entry.slice(idx + 1));
--                }
--            }
--        }
--        catch {
--            // /proc/self/environ may not exist or may not be readable.
--        }
--    }
--    return procEnvCache.get(name);
-+function getBunSandboxEnvValue(_name) {
-+    return undefined;
- }
- /**
-  * Resolve a provider env value from scoped overrides, normal process.env, then
-diff --git a/package.json b/package.json
---- a/package.json
-+++ b/package.json
-@@ -46,6 +46,10 @@
- 		"./bun-oauth": {
- 			"types": "./dist/bun-oauth.d.ts",
- 			"import": "./dist/bun-oauth.js"
-+		},
-+		"./native-oauth": {
-+			"types": "./dist/native-oauth.d.ts",
-+			"import": "./dist/native-oauth.js"
- 		}
- 	},
- 	"bin": {
-@@ -102,5 +106,9 @@
- 		"@types/node": "22.19.19",
- 		"canvas": "3.2.3",
- 		"vitest": "4.1.11"
-+	},
-+	"browser": {
-+		"./dist/auth/oauth/callback-server.js": "./dist/auth/oauth/callback-server.native.js",
-+		"./dist/auth/context.js": "./dist/auth/context.native.js"
- 	}
- }
 diff --git a/dist/utils/retry.js b/dist/utils/retry.js
 --- a/dist/utils/retry.js
 +++ b/dist/utils/retry.js
-@@ -191,11 +191,21 @@
+@@ -200,11 +200,21 @@
   * before restarting the assistant turn.
   */
  export function isRetryableAssistantError(message) {
@@ -679,3 +531,27 @@ diff --git a/dist/utils/retry.js b/dist/utils/retry.js
  }
  //# sourceMappingURL=retry.js.map
 \ No newline at end of file
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -46,6 +46,10 @@
+ 		"./bun-oauth": {
+ 			"types": "./dist/bun-oauth.d.ts",
+ 			"import": "./dist/bun-oauth.js"
++		},
++		"./native-oauth": {
++			"types": "./dist/native-oauth.d.ts",
++			"import": "./dist/native-oauth.js"
+ 		}
+ 	},
+ 	"bin": {
+@@ -102,5 +106,9 @@
+ 		"@types/node": "22.19.19",
+ 		"canvas": "3.2.3",
+ 		"vitest": "4.1.11"
++	},
++	"browser": {
++		"./dist/auth/oauth/callback-server.js": "./dist/auth/oauth/callback-server.native.js",
++		"./dist/auth/context.js": "./dist/auth/context.native.js"
+ 	}
+ }

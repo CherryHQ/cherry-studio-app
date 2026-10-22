@@ -497,6 +497,7 @@
   "chat.reasoningStatus.thinking": "思考中",
   "chat.reasoningStatus.thought": "已深度思考",
   "chat.runtime.failed": "智能体暂不可用，重试以恢复。",
+  "chat.runtime.paused": "多次中断后，执行已暂停。请停止本次回复后重试。",
   "chat.runtime.retrying": "请求失败，正在自动重试…",
   "chat.share.assistant": "助手",
   "chat.share.cancelled": "已取消",

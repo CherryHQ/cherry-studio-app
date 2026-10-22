@@ -242,6 +242,7 @@ describe('Persistent Agent facade', () => {
         kind: 'cherry.submission',
         version: 1,
         scope: 'session',
+        checkpointWhen: () => false,
         family: true,
         initial: (value) => ({ value }),
       });

@@ -48,13 +48,13 @@ describe('upstream tool discovery', () => {
   test.each(['pi-durable', 'pi-codemode'])(
     'pins the %s patch to the installed dependency',
     (name) => {
-      const path = `patches/@earendil-works__${name}@1.3.0.patch`;
+      const path = `patches/@earendil-works__${name}@1.4.0.patch`;
       const hash = createHash('sha256').update(readFileSync(path)).digest('hex');
       expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(
-        `'@earendil-works/${name}@1.3.0': ${path}`,
+        `'@earendil-works/${name}@1.4.0': ${path}`,
       );
       expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(
-        `  '@earendil-works/${name}@1.3.0': ${hash}\n`,
+        `  '@earendil-works/${name}@1.4.0': ${hash}\n`,
       );
     },
   );

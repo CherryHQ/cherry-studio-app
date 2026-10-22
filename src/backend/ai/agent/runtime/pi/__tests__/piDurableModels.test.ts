@@ -28,7 +28,10 @@ const wire: Model<Api> = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
 
-function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
+function setup(
+  traceRequest?: Parameters<typeof createPiDurableModels>[3],
+  modelPreflight = preflight,
+) {
   const streamFn = jest.fn(() => {
     const stream = new AssistantMessageEventStream();
     const message = { ...emptyAssistantMessage(wire), stopReason: 'stop' as const };
@@ -58,7 +61,7 @@ function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
   const configuration = jest.fn(async () => ({ maxOutputTokens: 512, temperature: 0.3 }));
   const bridge = createPiDurableModels(
     {
-      preflightModel: async () => preflight,
+      preflightModel: async () => modelPreflight,
       resolveModel,
     },
     configuration,
@@ -69,6 +72,36 @@ function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
 }
 
 describe('Pi durable model bridge', () => {
+  test('fits compaction into small input windows without changing large-window defaults', async () => {
+    for (const contextWindow of [512, 8_192, 131_072]) {
+      const bridge = setup(undefined, {
+        ...preflight,
+        contextWindow,
+        maxInputTokens: contextWindow,
+        maxOutputTokens: 16_384,
+      });
+      await bridge.registerModel(reference);
+      const policy = bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]!;
+      expect(
+        policy.reserveTokens! + policy.keepRecentTokens! + policy.backgroundTokens!,
+      ).toBeLessThan(contextWindow);
+      if (contextWindow === 131_072)
+        expect(policy).toEqual({
+          reserveTokens: 16_384,
+          keepRecentTokens: 20_000,
+          backgroundTokens: 32_768,
+        });
+      await bridge.registerModel(reference, 'image');
+      const image = bridge.getModel(reference, 'image')!;
+      expect(bridge.compactionOverrides[`${image.provider}/${image.id}`]).toEqual({
+        enabled: false,
+      });
+      expect(bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]).toEqual(
+        policy,
+      );
+    }
+  });
+
   test('records configuration failures that happen before resolving the provider transport', async () => {
     const { traces, records } = createTraceRecorder();
     const bridge = setup(async () => traces.startTrace('pi.generate_content'));
