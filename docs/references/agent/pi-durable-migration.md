@@ -50,7 +50,10 @@ repair patch is retired; it was not fixed upstream.
 
 The full test suite, type checks, lint and iOS/Android `expo export:embed` bundles pass for this
 upgrade, including failed-run queue progression, runnable-work protection, parked-state projection,
-small-model compaction policies and the Metro graph guard. Device acceptance has not been run.
+small-model compaction policies and the Metro graph guard. iOS simulator acceptance with real
+CherryIN calls passed plain replies, queued follow-ups, Code Mode scripts and managed output files,
+recovery after killing the app mid-reply, provider checks, and continuing a conversation after
+clearing the runtime cache. Android was not run.
 
 ## Previous Pi 1.3.0 Upgrade
 
