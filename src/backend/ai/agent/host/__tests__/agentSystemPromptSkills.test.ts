@@ -36,9 +36,12 @@ describe('agent system prompt Skills section', () => {
       tools: createSkillTools(EMPTY_SKILL_SCOPE),
       skills: EMPTY_TURN_SKILL_PLAN,
     });
-    expect(prompt).toContain('0 automatically discoverable Skills');
+    expect(prompt).toContain('this Agent has no enabled, bound and readable Skill packages');
     expect(prompt).toContain('not the total installed in the app');
     expect(prompt).toContain('app-owned System Skills');
+    expect(prompt).toContain('`list_local_skills` with `include_manual: true`');
+    expect(prompt).not.toContain('### Available Skills');
+    expect(prompt).not.toContain('nextCursor');
   });
 
   it('gives an authoritative count and pagination rules for a complete inventory', () => {

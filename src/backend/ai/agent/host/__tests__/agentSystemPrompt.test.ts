@@ -1,5 +1,6 @@
 import type { RuntimeTool } from '../../runtime';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
+import { EMPTY_TURN_SKILL_PLAN } from '../turnPreparation';
 
 function tool(capabilityId: string, providerName = capabilityId): RuntimeTool {
   return {
@@ -285,32 +286,48 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('<agent_instructions>\nKeep the answer brief.\n</agent_instructions>');
   });
 
-  test('grounds Skill authoring in offered tools without exposing internal or denied names as callable tools', () => {
+  test('names deferred built-in tools for tool_search without denied or MCP names', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',
       appLanguage: 'en-US',
       tools: [
-        tool('create_skill'),
         tool('calendar_list_events'),
-        tool('run_js'),
-        { ...tool('calendar_delete_event'), approval: 'deny' },
+        { ...tool('health_query_data'), deferred: true },
+        { ...tool('agent_update'), deferred: true },
+        { ...tool('agent_create'), deferred: true, approval: 'deny' },
+        { ...mcpTool(), deferred: true },
       ],
     });
     expect(prompt).toContain(
-      'Cherry built-in tools offered in this turn: create_skill, calendar_list_events.',
+      'load it with `tool_search` using its exact name, then call it: `health_query_data`, `agent_update`.',
     );
-    expect(prompt).toContain(
-      'run_js is an internal capability identifier, not a callable model tool',
-    );
-    expect(prompt).toContain('metadata.version as 1.0');
-    expect(prompt).not.toContain('calendar_delete_event');
+    expect(prompt).not.toContain('agent_create');
     expect(
       buildAgentSystemPrompt({
         agentInstructions: '',
         appLanguage: 'en-US',
         tools: [tool('calendar_list_events')],
       }),
-    ).not.toContain('## Create Skills');
+    ).not.toContain('## Tools On Demand');
+  });
+
+  test('states the create-skill workflow only when the user selected it', () => {
+    const tools = [tool('create_skill')];
+    const skills = { ...EMPTY_TURN_SKILL_PLAN, create: true };
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools, skills }),
+    ).toContain('The user selected the built-in create-skill workflow.');
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools }),
+    ).not.toContain('## Create Skill');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [{ ...tool('create_skill'), approval: 'deny' }],
+        skills,
+      }),
+    ).not.toContain('## Create Skill');
   });
 
   test('states the workspace contract only when the turn has a workspace', () => {

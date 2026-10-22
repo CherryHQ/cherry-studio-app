@@ -189,8 +189,10 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation, library
-management and Office operations) register as upstream `deferred` tools. Upstream `tool_search`
+MCP capabilities and built-in tools marked `deferred` (Skill creation/installation/adaptation,
+library management, Office operations, Health and Agent management) register as upstream `deferred`
+tools. The system prompt's Tools On Demand section names each deferred built-in tool of the turn,
+because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
@@ -209,9 +211,9 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
 For MCP calls, `value.content` contains the bounded model-visible content, including serialized
 structured output and managed image references. UI-only metadata never enters this script channel.
-Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
-carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
-rest through the discovery helpers.
+Cherry sets Code Mode's declaration `inlineBudget` to 0. Direct tools already carry their complete
+schemas, and any inlined declaration would repeat one of them, so scripts inspect signatures through
+the discovery helpers.
 The initial prompt retains plugin capability overviews, critical constraints, and shared operation
 rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
 connection's tools are refused before approval until its guide is present. Loading ends its tool
@@ -498,8 +500,8 @@ real OAuth providers, protocol negotiation, and third-party Apps still require a
 
 ### Health And Fitness
 
-Health is an iOS-only built-in tool group, not a separate page. The `health` Agent capability
-contains these tools:
+Health is an iOS-only built-in tool group, not a separate page. Its tools are deferred and loaded
+through `tool_search`. The `health` Agent capability contains these tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -921,6 +923,7 @@ background execution or recovery after the operating system terminates the app.
 ## Agent Management
 
 The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+All four are deferred and loaded through `tool_search`.
 The editor lists it as Agent management alongside the other capability groups; it needs no OS
 permission. New Agents start with it disabled,
 whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a

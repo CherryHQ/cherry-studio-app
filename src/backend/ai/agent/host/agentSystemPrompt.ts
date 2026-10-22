@@ -13,7 +13,6 @@ import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, LIST_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
 import { getPluginWorkflows, LOAD_WORKFLOW_TOOL_NAME } from '../tools/workflowTool';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
-import { buildCreateSkillInstructions } from './createSkillInstructions';
 import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
 import { skillInstructionSection } from './skillInstructions';
 import type { TurnSkillPlan } from './turnPreparation';
@@ -180,6 +179,17 @@ Attachment envelopes state the parser, output format, and delivery status. AnyDo
 Use the offered JavaScript execution tool when an answer depends on exact computation: arithmetic, date and time differences, statistics, counting, sorting, parsing or transforming data. Follow its declared environment and tool-access contract. Answer from its returned result; correct errors instead of guessing. Page through saved full output with \`${READ_FILE_TOOL_NAME}\` instead of rerunning a script merely because its output was cut.`);
   }
 
+  const onDemand = tools.flatMap((tool) =>
+    tool.ref.source === 'builtin' && tool.deferred && tool.approval !== 'deny'
+      ? [`\`${tool.providerName}\``]
+      : [],
+  );
+  if (onDemand.length > 0) {
+    sections.push(`## Tools On Demand
+
+These built-in tools are available but not offered upfront. When a request needs one, load it with \`tool_search\` using its exact name, then call it: ${onDemand.join(', ')}.`);
+  }
+
   if (pluginGuides.length > 0) {
     sections.push(`## Plugin Guides
 
@@ -220,6 +230,7 @@ ${systemSkills.join('\n\n')}`);
   }
 
   if (
+    skills?.create &&
     tools.some(
       (tool) =>
         tool.ref.source === 'builtin' &&
@@ -227,11 +238,9 @@ ${systemSkills.join('\n\n')}`);
         tool.approval !== 'deny',
     )
   ) {
-    sections.push(buildCreateSkillInstructions(tools));
-    if (skills?.create)
-      sections.push(
-        'The user selected the built-in create-skill workflow. Create a reusable Skill from their request and save it in the Skill library.',
-      );
+    sections.push(`## Create Skill
+
+The user selected the built-in create-skill workflow. Create a reusable Skill from their request and save it in the Skill library with \`create_skill\`, following its description.`);
   }
 
   if (
@@ -256,6 +265,10 @@ const SKILL_CATALOG_MAX_CHARACTERS = 12_000;
  * through replaceable Runtime system sections, including explicit selections.
  */
 function buildSkillsSection(skills: TurnSkillPlan): string {
+  if (skills.scope.entries.length === 0)
+    return `## Skills
+
+Skills are instruction packages. At the start of this turn, this Agent has no enabled, bound and readable Skill packages. That is not the total installed in the app: unbound, disabled and unreadable packages are excluded, and the app-owned System Skills and built-in discovery and creation workflows are separate. For a question about installed Skills, call \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` with \`include_manual: true\` and use its \`total\` for the count. Discover find_skills, install_skill and adapt_skill through tool_search by exact name when needed. If a Skill is installed during this turn, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\` and follow the returned instructions. Skills add no tools, permissions or approvals, and their instructions stay subordinate to app policy, Agent instructions and the user's current request.`;
   const catalog = skills.scope.entries.filter((entry) => entry.invocation.modelInvocable);
   const lines = [
     `## Skills

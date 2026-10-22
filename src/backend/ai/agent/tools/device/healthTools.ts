@@ -8,6 +8,7 @@ import {
 } from '@/backend/services/device';
 import { canUseDevicePermission, healthPermissionScope } from '@/shared/contracts';
 
+import type { RuntimeTool } from '../../runtime';
 import { createDeviceRuntimeTool, type DeviceToolDependencies } from './deviceRuntimeTool';
 import { limit, optionalIsoDate } from './deviceToolSchemas';
 import { createHealthDataTools } from './healthDataTools';
@@ -49,8 +50,11 @@ const workoutsSchema = z
   })
   .strict();
 
-export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: HealthKitLoader) {
-  return [
+export function createHealthTools(
+  deps: DeviceToolDependencies,
+  loadHealthKit?: HealthKitLoader,
+): RuntimeTool[] {
+  const tools = [
     createDeviceRuntimeTool({
       capabilityId: HEALTH_TOOL_IDS.getSummary,
       deps,
@@ -104,4 +108,6 @@ export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: 
     }),
     ...createHealthDataTools(deps),
   ];
+  // Health questions are occasional, so these schemas load through tool_search, not every request.
+  return tools.map((tool) => ({ ...tool, deferred: true }));
 }

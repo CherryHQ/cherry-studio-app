@@ -631,7 +631,7 @@ export async function prepareResolvedTurn(
     if (dependencies.skillWorkflow && dependencies.skills) {
       skillTools = [
         ...skillTools,
-        createSkillCreationTool(dependencies.skillWorkflow),
+        createSkillCreationTool(dependencies.skillWorkflow, { deferred: !skills.create }),
         ...createSkillManagementTools({
           workflow: dependencies.skillWorkflow,
           source: dependencies.skills,

@@ -214,8 +214,10 @@ the Skill targets Cherry Studio App in standard mode with a tool-capable model. 
 are also projected into the existing library record. There is no separate preview, save-option
 sheet, editor or trial flow. The ordinary Agent tool approval policy applies.
 
-The authoring prompt derives its built-in tool inventory from the executable turn snapshot and
-uses the offered descriptions and schemas for arguments and behavior. Code Mode uses its offered
+The authoring guidance is the `create_skill` description, so it enters context only with the tool.
+The tool is deferred and found through `tool_search`, except for the explicit `create` action,
+which offers it upfront. The model takes tool names from the offered and on-demand tools of the
+turn and uses their descriptions and schemas for arguments and behavior. Code Mode uses its offered
 model-facing name, not the internal `run_js` capability name. For MCP/plugin workflows the model
 uses existing discovery to inspect tool definitions and records required services in compatibility.
 It selects only tools needed by the workflow for `allowed-tools`, and writes concrete steps,
@@ -326,8 +328,9 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
 These are application built-ins. Skill metadata, instruction and package file readers are directly
-exposed; discovery, installation and adaptation tools are deferred and found with
-`tool_search` by exact name. A search for a generic Skill tool does not describe installed package
+exposed; discovery, installation, adaptation and creation tools are deferred and found with
+`tool_search` by exact name. When the Agent has no Skill packages, the Skills section keeps only
+the inventory, discovery and in-turn installation rules. A search for a generic Skill tool does not describe installed package
 availability: use `list_local_skills` for that inventory. Pi Durable does not need a desktop
 filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
 sections while `load_skill` returns a receipt.
