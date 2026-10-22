@@ -6,7 +6,12 @@ import { Text, View } from 'react-native';
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
+import {
+  isImageGenerationModel,
+  isSpeechToTextModel,
+  isTextGenerationModel,
+  isTextToSpeechModel,
+} from '@/shared/utils/modelPurpose';
 
 import { SettingsScrollPage } from '../../../components/SettingsScrollPage';
 import {
@@ -39,7 +44,11 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
       ? 'settings.provider.models.section.chat'
       : isImageGenerationModel(model)
         ? 'settings.provider.models.section.painting'
-        : 'settings.provider.models.detail.otherPurpose',
+        : isTextToSpeechModel(model)
+          ? 'settings.provider.models.classification.speech'
+          : isSpeechToTextModel(model)
+            ? 'settings.provider.models.classification.transcription'
+            : 'settings.provider.models.detail.otherPurpose',
   );
   return (
     <SettingsScrollPage
