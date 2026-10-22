@@ -246,6 +246,13 @@ page for visual debugging.
 `MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
 caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
 
+`MessagePart.Section` composes a quiet heading, an optional action, and content. Its `tone="danger"`
+marks the heading with an error indicator while keeping the content readable. `SectionBody` is the
+neutral padded reading surface for prose and fact rows; code renderers with their own surface are
+composed directly below the section heading. `TextSection` and `ValueSection` use these same
+primitives. The app supplies translated copy controls and highlighted code, so the UI package never
+reads the clipboard or imports application preferences.
+
 `MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.

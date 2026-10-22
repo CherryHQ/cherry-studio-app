@@ -1,10 +1,10 @@
-import { Button, Image, useToast } from '@cherrystudio/ui/components';
-import * as Clipboard from 'expo-clipboard';
+import { Image, MessagePart } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
+import { MessageDetailSection } from '@/frontend/components/MessageDetail';
 import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
 
 import { SourceLink } from '../SourceLink';
@@ -17,6 +17,8 @@ import {
 } from './toolResultContent';
 
 type ToolResultContentRendererProps = {
+  title: string;
+  tone?: 'danger';
   contents: readonly ToolResultContent[];
   imageAccessibilityLabel: string;
   renderResourceLink?: (
@@ -25,53 +27,42 @@ type ToolResultContentRendererProps = {
 };
 
 export function ToolResultContentRenderer({
+  title,
+  tone,
   contents,
   imageAccessibilityLabel,
   renderResourceLink,
 }: ToolResultContentRendererProps) {
   const preview = createToolResultPreview(contents);
-
-  return (
-    <View className="gap-2">
-      {preview.contents.map((content, index) => (
-        <ToolResultContentItem
-          content={content}
-          imageAccessibilityLabel={imageAccessibilityLabel}
-          renderResourceLink={renderResourceLink}
-          key={createContentKey(content, index)}
-        />
-      ))}
-      {preview.isTruncated ? <ToolResultOverflow contents={contents} /> : null}
-    </View>
-  );
-}
-
-function ToolResultOverflow({ contents }: { contents: readonly ToolResultContent[] }) {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const copy = async () => {
-    try {
-      await Clipboard.setStringAsync(getToolResultCopyText(contents));
-      toast.show({ label: t('chat.tool.copied'), variant: 'success' });
-    } catch {
-      toast.show({ label: t('chat.tool.copyFailed'), variant: 'danger' });
-    }
-  };
 
   return (
-    <View className="items-start gap-1">
-      <Text className="text-muted-foreground text-xs">
-        {t('chat.tool.previewTruncated', { count: TOOL_RESULT_PREVIEW_LIMIT })}
-      </Text>
-      <Button
-        onPress={() => void copy()}
-        size="sm"
-        testID="tool-result-copy-full-text"
-        variant="ghost"
-      >
-        {t('chat.tool.copyFullText')}
-      </Button>
-    </View>
+    <MessageDetailSection
+      title={title}
+      tone={tone}
+      copyText={
+        contents.some((content) => content.kind !== 'image')
+          ? () => getToolResultCopyText(contents)
+          : undefined
+      }
+      copyTestID="tool-result-copy-full-text"
+    >
+      <View className="gap-4">
+        {preview.contents.map((content, index) => (
+          <ToolResultContentItem
+            content={content}
+            imageAccessibilityLabel={imageAccessibilityLabel}
+            renderResourceLink={renderResourceLink}
+            key={createContentKey(content, index)}
+          />
+        ))}
+      </View>
+      {preview.isTruncated ? (
+        <Text className="text-muted-foreground text-xs">
+          {t('chat.tool.previewTruncated', { count: TOOL_RESULT_PREVIEW_LIMIT })}
+        </Text>
+      ) : null}
+    </MessageDetailSection>
   );
 }
 
@@ -121,9 +112,11 @@ function CodeContent({ content, language }: { content: string; language?: string
 
 function SelectableText({ value }: { value: string }) {
   return (
-    <Text className="text-base text-foreground" selectable>
-      {value}
-    </Text>
+    <MessagePart.SectionBody>
+      <Text className="text-base text-foreground" selectable>
+        {value}
+      </Text>
+    </MessagePart.SectionBody>
   );
 }
 

@@ -1,6 +1,8 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
+
 import { GenericToolPart } from './GenericToolPart';
 import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
 
@@ -85,7 +87,7 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
       testID="write-file-tool-part"
       title={t('chat.builtinTool.file.write')}
     >
-      <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={rejection} />
+      <MessageDetailText tone="danger" title={t('chat.tool.error')} value={rejection} />
     </MessagePart.Tool>
   );
 }

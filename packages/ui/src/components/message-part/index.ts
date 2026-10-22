@@ -7,6 +7,7 @@ export type {
   MessagePartProcessProps,
   MessagePartReasoningProps,
   MessagePartRootProps,
+  MessagePartSectionProps,
   MessagePartSectionTitleProps,
   MessagePartSourceProps,
   MessagePartStatusProps,

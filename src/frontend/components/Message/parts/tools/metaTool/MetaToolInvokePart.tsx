@@ -1,5 +1,7 @@
-import { formatMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
+import { formatMessagePartValue } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
+
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 
 import { isRecord, type ToolMessagePart } from '../toolPartState';
 import { MetaToolFrame } from './MetaToolFrame';
@@ -25,17 +27,18 @@ export function MetaToolInvokePart({ part, toolName }: MetaToolInvokePartProps) 
   return (
     <MetaToolFrame part={part} toolName={toolName}>
       {toolName === 'tool_invoke' && part.state === 'output-available' ? (
-        <MessagePart.TextSection
+        <MessageDetailText
           title={t('chat.tool.response')}
-          value={formatMessagePartValue(part.output)}
+          value={formatMessagePartValue(part.output, Number.POSITIVE_INFINITY)}
+          language={isStructuredValue(part.output) ? 'json' : undefined}
           variant={isStructuredValue(part.output) ? 'code' : 'body'}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={errorText} />
+        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={errorText} />
       ) : null}
       {toolName === 'tool_invoke' ? (
-        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={params ?? input} />
+        <MessageDetailValue title={t('chat.tool.arguments')} value={params ?? input} />
       ) : null}
     </MetaToolFrame>
   );

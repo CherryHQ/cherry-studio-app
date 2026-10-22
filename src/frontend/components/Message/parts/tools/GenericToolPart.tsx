@@ -1,7 +1,8 @@
 import { hasMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
@@ -47,23 +48,23 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
       {part.progress ? <ToolProgress progress={part.progress} /> : null}
       {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
       {part.state === 'output-error' && isSettledByApp ? (
-        <Text className="text-foreground text-base italic" selectable>
+        <Text className="text-muted-foreground text-sm" selectable>
           {t('chat.tool.unfinishedDetail')}
         </Text>
       ) : null}
       {part.state === 'output-error' && !isSettledByApp ? (
-        <MessagePart.TextSection
+        <MessageDetailText
           tone="danger"
           title={t('chat.tool.error')}
           value={part.errorText || t('chat.tool.callError')}
         />
       ) : null}
       {shouldShowNoDetails(part) ? (
-        <Text className="text-foreground text-base italic" selectable>
+        <Text className="text-muted-foreground text-sm" selectable>
           {t('chat.tool.noOutput')}
         </Text>
       ) : null}
-      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={part.input} />
+      <MessageDetailValue title={t('chat.tool.arguments')} value={part.input} />
     </MessagePart.Tool>
   );
 }
@@ -73,20 +74,18 @@ function ToolOutputSection({ output }: { output: unknown }) {
 
   if (!hasMessagePartValue(output)) {
     return (
-      <Text className="text-foreground text-base italic" selectable>
+      <Text className="text-muted-foreground text-sm" selectable>
         {t('chat.tool.noOutput')}
       </Text>
     );
   }
 
   return (
-    <View className="gap-1">
-      <MessagePart.SectionTitle title={t('chat.tool.output')} />
-      <ToolResultContentRenderer
-        contents={[genericToolResultContent(output)]}
-        imageAccessibilityLabel={t('chat.attachments.image')}
-      />
-    </View>
+    <ToolResultContentRenderer
+      title={t('chat.tool.output')}
+      contents={[genericToolResultContent(output)]}
+      imageAccessibilityLabel={t('chat.attachments.image')}
+    />
   );
 }
 

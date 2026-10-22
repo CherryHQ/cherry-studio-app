@@ -14,6 +14,15 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+  return {
+    MessageDetailValue: ({ value }: { value: unknown }) => (
+      <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
+    ),
+  };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
