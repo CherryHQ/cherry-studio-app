@@ -40,6 +40,8 @@ export type AiSpeechDependencies = {
   scratch: VoiceScratch;
 };
 
+const END_TOLERANCE_SECONDS = 0.5;
+
 function play(uri: string, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const player = createAudioPlayer(uri);
@@ -54,10 +56,19 @@ function play(uri: string, signal: AbortSignal): Promise<void> {
       player.pause();
       settle(signal.reason);
     };
-    // An interruption only pauses: expo-audio resumes it, or the user stops reading.
+    let started = false;
     const subscription = player.addListener('playbackStatusUpdate', (status) => {
-      if (status.didJustFinish) settle();
-      else if (status.error) settle(new VoiceError('failed', status.error));
+      if (status.didJustFinish) return settle();
+      if (status.error) return settle(new VoiceError('failed', status.error));
+      if (status.playing) started = true;
+      // Only reading's own stop pauses it; a system pause before the end (a call, unplugged
+      // headphones) fails the reading. Near the end, pausing is how the item finishes.
+      else if (
+        started &&
+        !status.isBuffering &&
+        status.currentTime < status.duration - END_TOLERANCE_SECONDS
+      )
+        settle(new VoiceError('failed', 'Playback was interrupted.'));
     });
     signal.addEventListener('abort', abort, { once: true });
     player.play();

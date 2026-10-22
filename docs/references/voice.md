@@ -27,9 +27,8 @@ Callers never pick an engine: they start dictation, read text, and observe the c
 - `VoiceRuntime.ts` is the only place that chooses an engine. An explicit preference is used as is;
   with none (`null`), the first engine in `VOICE_ENGINES` the device supports is used. The runtime
   allows one activity at a time: dictation stops reading, reading replaces reading, and reading
-  cannot start during dictation. Backgrounding the app and host disposal abort the activity; an
-  aborted dictation rejects with `interrupted` unless the caller cancelled it. It turns Markdown
-  into prose (`speechText.ts`) before any engine sees it.
+  cannot start during dictation. Backgrounding the app and host disposal abort the activity. It
+  turns Markdown into prose (`speechText.ts`) before any engine sees it.
 - Each native library appears in exactly one adapter: `systemDictation.ts`
   (`expo-speech-recognition`), `systemSpeech.ts` (`expo-speech`), `aiDictation.ts` (`expo-audio`
   recording) and `aiSpeech.ts` (`expo-audio` playback). Adapters own their permissions, native
@@ -42,7 +41,8 @@ The frontend uses `useBackendModule('voice')` only. Chat owns the dictation and 
 
 Dictation owns only the text it appended to the draft. A write applies only while the draft is
 still what dictation last wrote, so typing or sending during dictation hands the draft back to the
-user. Cancelling restores the earlier draft; an interruption keeps the text already shown.
+user. Only stopping keeps the dictated text. Cancelling, backgrounding and any failure release the
+session and restore the earlier draft; failures other than cancelling are reported.
 
 ## Engines
 
@@ -66,8 +66,9 @@ optional system voice for the app language.
 
 **AI speech** splits prose into requests of at most 4,096 characters at sentence boundaries,
 generates the next part while the current one plays, and deletes each WAV after playback. A part
-that cannot play fails the reading; an audio interruption only pauses it. The voice list is
-OpenAI's; a compatible gateway rejects the voices it lacks.
+that cannot play fails the reading. A pause or stop the reading did not request, such as an audio
+interruption, also fails it in both speech engines, instead of waiting for playback to resume. The
+voice list is OpenAI's; a compatible gateway rejects the voices it lacks.
 
 Dictation and system speech use the resolved app language. AI transcription detects the language
 itself.

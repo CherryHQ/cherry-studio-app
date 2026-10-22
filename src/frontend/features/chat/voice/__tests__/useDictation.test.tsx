@@ -98,14 +98,16 @@ describe('dictation into the composer draft', () => {
     expect(mockToast).not.toHaveBeenCalled();
   });
 
-  test('an interruption by the app keeps the shown text, without an error', async () => {
+  test('a failure, including the app ending dictation, restores the draft and reports it', async () => {
     await act(async () => {
       void dictation.start();
     });
     act(() => options.onText?.('half a sentence'));
-    await act(async () => result.reject(new VoiceError('interrupted', 'backgrounded')));
-    expect(mockDraft).toBe('Meeting notes: half a sentence');
-    expect(mockToast).not.toHaveBeenCalled();
+    await act(async () => result.reject(new DOMException('backgrounded', 'AbortError')));
+    expect(mockDraft).toBe('Meeting notes:');
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'voice.error.failed' }),
+    );
     expect(dictation.state).toBe('idle');
   });
 

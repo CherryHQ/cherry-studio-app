@@ -28,7 +28,8 @@ export function createSystemSpeechEngine({
         language,
         ...(voiceId ? { voice: voiceId } : {}),
         onDone: () => settle(),
-        onStopped: () => settle(),
+        // A stop that reading did not request, such as an audio interruption, fails it.
+        onStopped: () => settle(new Error('System speech was stopped.')),
         onError: (error) => settle(error),
       });
     });
