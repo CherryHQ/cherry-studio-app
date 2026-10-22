@@ -127,7 +127,7 @@ describe('createSystemModelSupport', () => {
       const model = createModel({ capabilities: [capability] });
       expect(isModelSupportedBySystem(createProvider(), model)).toBe(true);
       expect(isModelSupportedBySystem(createProvider({ endpointConfigs: {} }), model)).toBe(false);
-      expect(isModelSupportedBySystem(createProvider({ authType: 'oauth' }), model)).toBe(false);
+      expect(isModelSupportedBySystem(createProvider({ authType: 'iam-gcp' }), model)).toBe(false);
       expect(supportsLanguageModel).not.toHaveBeenCalled();
     },
   );
