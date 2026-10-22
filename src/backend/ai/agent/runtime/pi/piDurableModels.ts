@@ -3,6 +3,7 @@ import type {
   Api,
   AssistantMessage,
   AssistantMessageEvent,
+  ClientIdentity,
   JsonObject,
   Model,
   SimpleStreamOptions,
@@ -11,6 +12,8 @@ import type {
 import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { createModels, createProvider } from '@earendil-works/pi-ai/models';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
+
+import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
@@ -32,6 +35,14 @@ type PiRequestConfiguration = (
   providerSessionId: string | undefined,
   signal: AbortSignal | undefined,
 ) => Promise<RuntimeOptions>;
+
+/** Every Harness, including provider checks, identifies its model requests as Cherry. */
+export function cherryClientIdentity(): ClientIdentity {
+  return {
+    userAgent: { custom: defaultAppHeaders()['User-Agent']! },
+    attribution: { name: 'CherryStudioMobile', url: 'https://cherry-ai.com' },
+  };
+}
 
 /** Keep Cherry identities in stored model references; materialize credentials only when sending. */
 export function createPiDurableModels(

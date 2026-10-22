@@ -22,15 +22,17 @@ and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.4.0/packages/
 - A foreground task parked by `restart_limit` is projected as `isPaused` while the turn remains
   running. The chat status explains that the user can stop the reply and retry. Background tasks
   do not pause the reply's presentation; the existing stop/retry flow owns cancellation and replay.
+  Mobile does not call `harness.retryTask()`: rerunning a task that crashed its process repeatedly
+  would repeat the same crash, while stop/retry settles the turn and starts from Cherry history.
 - Compaction uses exact `provider/modelId` overrides from registered model limits. Reply reserve
   is capped at 16,384, the model output limit, and one eighth of the usable context; recent context
   and background headroom are capped at 20,000 and 32,768 respectively, each at most one quarter
   of the usable context. Large-window models retain Pi defaults when their output limits allow it.
   Image scheduling models disable compaction. This does not remove Durable's upstream summary
   output cap of 80% of reserved tokens.
-- Model requests identify Cherry Studio Mobile. `onReport` distinguishes session failures,
-  task faults, parked tasks, extension errors and host/listener errors in the existing logger.
-  This change does not introduce a new telemetry pipeline.
+- Model requests, including provider checks, identify Cherry Studio Mobile. `onReport`
+  distinguishes session failures, task faults, parked tasks, extension errors and host/listener
+  errors in the existing logger. This change does not introduce a new telemetry pipeline.
 - Pi AI preserves the 1.4.0 retry text improvements and ChatGPT Business workspace-limit hint
   alongside Mobile's structured diagnostics and terminal subscription-limit classification.
 

@@ -21,7 +21,6 @@ import {
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 
-import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -47,7 +46,7 @@ import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { fitPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
-import { createPiDurableModels, piDurableModelKey } from './piDurableModels';
+import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
   detachedJson,
@@ -176,10 +175,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           afterFailedRun: 'continue',
           compaction: { modelOverrides: this.models.compactionOverrides },
         }),
-        identity: {
-          userAgent: { custom: defaultAppHeaders()['User-Agent']! },
-          attribution: { name: 'CherryStudioMobile', url: 'https://cherry-ai.com' },
-        },
+        identity: cherryClientIdentity(),
         onReport: (error, info) => {
           logger.warn('Pi durable runtime reported a failure', {
             error,

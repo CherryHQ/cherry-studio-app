@@ -32,6 +32,7 @@ const wire: Model<Api> = {
 describe('Pi durable execution integration', () => {
   test('model probes deliver the answer and complete without storing a production conversation', async () => {
     const requests: TranscriptContext[] = [];
+    const identities: unknown[] = [];
     const runtime = new PiModelProbeRuntime({
       preflightModel: async () => ({
         contextWindow: 32768,
@@ -55,8 +56,9 @@ describe('Pi durable execution integration', () => {
           reportedCostCurrency: null,
           credentialReceipt: { attribution: 'unknown' },
         },
-        streamFn: (_model, context) => {
+        streamFn: (_model, context, options) => {
           requests.push(context);
+          identities.push(options?.identity);
           const stream = new AssistantMessageEventStream();
           stream.push({
             type: 'done',
@@ -96,6 +98,12 @@ describe('Pi durable execution integration', () => {
       expect(requests).toHaveLength(1);
       expect(requests[0]?.messages.filter((message) => message.role === 'user')).toEqual([
         expect.objectContaining({ role: 'user', content: 'Hello' }),
+      ]);
+      // Provider checks are attributed to Cherry, not Pi's default identity.
+      expect(identities).toEqual([
+        expect.objectContaining({
+          attribution: expect.objectContaining({ name: 'CherryStudioMobile' }),
+        }),
       ]);
     } finally {
       await session.close();
