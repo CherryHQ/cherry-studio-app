@@ -36,6 +36,5 @@ export {
   listHealthDataTypes,
   queryHealthData,
   resolveHealthDataType,
-  shareVerifiableHealthRecords,
 } from './healthData';
 export type { HealthDataReaderLoader } from './healthData';
