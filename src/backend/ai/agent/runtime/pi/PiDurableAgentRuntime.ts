@@ -46,7 +46,7 @@ import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { fitPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
-import { createPiDurableModels, piDurableModelKey } from './piDurableModels';
+import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
   detachedJson,
@@ -58,7 +58,7 @@ import {
   readPiSubmission,
   type PiStoredConfiguration,
 } from './piDurableProjection';
-import { PiDurableRuntime } from './PiDurableRuntime';
+import { hasRunnablePiTasks, PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import { PiToolBudget } from './piToolBudget';
@@ -170,9 +170,23 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       this.runtime = await PiDurableRuntime.open(storage, {
         models: this.models.models,
         registry: this.registry,
-        settings: { followUpMode: 'one-at-a-time' },
-        onReport: (error) => {
-          logger.warn('Pi durable extension failed', { error, operation: 'pi.extension' });
+        settings: () => ({
+          followUpMode: 'one-at-a-time',
+          afterFailedRun: 'continue',
+          compaction: { modelOverrides: this.models.compactionOverrides },
+        }),
+        identity: cherryClientIdentity(),
+        onReport: (error, info) => {
+          logger.warn('Pi durable runtime reported a failure', {
+            error,
+            operation: `pi.${info.type}`,
+            ...('task' in info && info.task
+              ? { taskId: Number(info.task.id), taskKind: info.task.kind }
+              : {}),
+            ...('reason' in info ? { reasonCode: info.reason } : {}),
+            ...('extension' in info ? { extension: info.extension } : {}),
+            ...('callback' in info ? { callback: info.callback } : {}),
+          });
         },
       });
       const opened = this.runtime;
@@ -237,8 +251,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async watchWork(listener: (active: boolean) => void) {
     const watch = await this.requireRuntime().watchWork();
-    const active = Object.keys(watch.value.tasks).length > 0;
-    watch.start(async (value) => listener(Object.keys(value.tasks).length > 0));
+    const active = hasRunnablePiTasks(watch.value);
+    watch.start(async (value) => listener(hasRunnablePiTasks(value)));
     let observing = true;
     void watch.closed.then(() => {
       if (observing) listener(false);
@@ -661,8 +675,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             codemode: createCodemodeExtension({
               sandbox: this.codemodeSandbox,
               models: false,
-              // Keep a few useful signatures for scripts; discover the rest instead of duplicating all schemas.
-              inlineBudget: 600,
+              // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
+              inlineBudget: 0,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [

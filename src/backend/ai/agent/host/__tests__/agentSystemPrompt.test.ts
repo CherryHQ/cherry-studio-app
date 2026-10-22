@@ -1,5 +1,6 @@
 import type { RuntimeTool } from '../../runtime';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
+import { EMPTY_TURN_SKILL_PLAN } from '../turnPreparation';
 
 function tool(capabilityId: string, providerName = capabilityId): RuntimeTool {
   return {
@@ -57,54 +58,12 @@ describe('buildAgentSystemPrompt', () => {
       'Plugin Guides',
       'Tool Availability',
       'Answer Recovery',
-      'System Skills',
       'Skills',
     ]) {
       expect(prompt).not.toContain(`## ${heading}`);
     }
     expect(prompt).not.toContain('Plugin guide body.');
     expect(prompt).not.toContain('Discovery failed.');
-  });
-
-  test('provides system workflows without installation and only with their available built-in tools', () => {
-    const base = { agentInstructions: '', appLanguage: 'en-US' as const };
-    const textOnly = buildAgentSystemPrompt({ ...base, tools: [] });
-    expect(textOnly).toContain('### structured-notes');
-    expect(textOnly).toContain('## Action items');
-    expect(textOnly).not.toContain('### daily-agenda');
-    expect(textOnly).not.toContain('### research-brief');
-    expect(textOnly).not.toContain('### Available Skills');
-
-    const complete = buildAgentSystemPrompt({
-      ...base,
-      tools: [
-        tool('calendar_list_collections', 'mobile_calendar_collections'),
-        tool('calendar_list_events', 'mobile_calendar_events'),
-        tool('web_search', 'mobile_web_search'),
-        tool('web_fetch', 'mobile_web_fetch'),
-      ],
-    });
-    expect(complete).toContain('### daily-agenda');
-    expect(complete).toContain('`mobile_calendar_collections`');
-    expect(complete).toContain('`mobile_calendar_events`');
-    expect(complete).toContain('travel gaps under 15 minutes');
-    expect(complete).toContain('### research-brief');
-    expect(complete).toContain('`mobile_web_fetch`');
-    expect(complete).toContain('at most five bullets');
-    expect(complete).not.toContain('Read `references/');
-
-    const incomplete = buildAgentSystemPrompt({
-      ...base,
-      tools: [tool('calendar_list_events'), tool('web_search')],
-    });
-    expect(incomplete).not.toContain('### daily-agenda');
-    expect(incomplete).not.toContain('### research-brief');
-
-    const denied = buildAgentSystemPrompt({
-      ...base,
-      tools: [tool('web_search'), { ...tool('web_fetch'), approval: 'deny' }],
-    });
-    expect(denied).not.toContain('### research-brief');
   });
 
   test('explains discovery failures even when no MCP tool reached the turn catalog', () => {
@@ -227,7 +186,7 @@ describe('buildAgentSystemPrompt', () => {
       appLanguage: 'en-US',
       tools: [tool('create_document')],
     });
-    expect(prompt).toContain('discover `create_document` with `tool_search`');
+    expect(prompt).toContain('For Office work, use `create_document`');
     expect(prompt).not.toContain('`create_workbook`');
     expect(prompt).not.toContain('Editing requires');
     expect(prompt).not.toContain('run_office_script');
@@ -285,32 +244,48 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('<agent_instructions>\nKeep the answer brief.\n</agent_instructions>');
   });
 
-  test('grounds Skill authoring in offered tools without exposing internal or denied names as callable tools', () => {
+  test('names deferred built-in tools for tool_search without denied or MCP names', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',
       appLanguage: 'en-US',
       tools: [
-        tool('create_skill'),
         tool('calendar_list_events'),
-        tool('run_js'),
-        { ...tool('calendar_delete_event'), approval: 'deny' },
+        { ...tool('health_query_data'), deferred: true },
+        { ...tool('agent_update'), deferred: true },
+        { ...tool('agent_create'), deferred: true, approval: 'deny' },
+        { ...mcpTool(), deferred: true },
       ],
     });
     expect(prompt).toContain(
-      'Cherry built-in tools offered in this turn: create_skill, calendar_list_events.',
+      'not offered upfront: `health_query_data`, `agent_update`. When a request needs some of them, call `tool_search` once with their exact names as the query and `limit` equal to the number of names',
     );
-    expect(prompt).toContain(
-      'run_js is an internal capability identifier, not a callable model tool',
-    );
-    expect(prompt).toContain('metadata.version as 1.0');
-    expect(prompt).not.toContain('calendar_delete_event');
+    expect(prompt).not.toContain('agent_create');
     expect(
       buildAgentSystemPrompt({
         agentInstructions: '',
         appLanguage: 'en-US',
         tools: [tool('calendar_list_events')],
       }),
-    ).not.toContain('## Create Skills');
+    ).not.toContain('## Tools On Demand');
+  });
+
+  test('states the create-skill workflow only when the user selected it', () => {
+    const tools = [tool('create_skill')];
+    const skills = { ...EMPTY_TURN_SKILL_PLAN, create: true };
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools, skills }),
+    ).toContain('The user selected the built-in create-skill workflow.');
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools }),
+    ).not.toContain('## Create Skill');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [{ ...tool('create_skill'), approval: 'deny' }],
+        skills,
+      }),
+    ).not.toContain('## Create Skill');
   });
 
   test('states the workspace contract only when the turn has a workspace', () => {

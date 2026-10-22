@@ -11,8 +11,10 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
   const state = useAgentSessionState(sessionId);
   const failed = state.status === 'error';
   const retrying = state.activeTurn?.status === 'running' && state.activeTurn.isRetrying === true;
-  const notice =
-    state.contextStatus === 'compacting'
+  const paused = state.activeTurn?.status === 'running' && state.activeTurn.isPaused === true;
+  const notice = paused
+    ? t('chat.runtime.paused')
+    : state.contextStatus === 'compacting'
       ? t('chat.compaction.compacting')
       : retrying
         ? t('chat.runtime.retrying')

@@ -10,9 +10,9 @@ const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_HISTORY_BYTES = 20 * MAX_FILE_BYTES;
 const MAX_AGE_MS = 7 * 86400000;
 const MAX_PENDING_BYTES = 64 * 1024;
-const STARTUP_FLUSH_DELAY_MS = 100;
+const INFO_FLUSH_DELAY_MS = 100;
 
-/** Warning/error and allowlisted startup metadata, independent of database or host startup. */
+/** Warning/error and allowlisted lifecycle metadata, independent of database or host startup. */
 export function createDiagnosticLogWriter(): LogWriter {
   const directory = diagnosticDirectory('logs');
   const encoder = new TextEncoder();
@@ -83,7 +83,7 @@ export function createDiagnosticLogWriter(): LogWriter {
     pending.push(bytes);
     pendingBytes += bytes.length;
 
-    // Preserve every startup event without opening and closing a file at each milestone.
+    // Preserve lifecycle events without opening and closing a file at each milestone.
     // Errors still persist synchronously, including any preceding startup context.
     if (safe.level !== 'info') {
       try {
@@ -103,7 +103,7 @@ export function createDiagnosticLogWriter(): LogWriter {
         } catch {
           // Keep the bounded batch for the next event or explicit flush; never log recursively.
         }
-      }, STARTUP_FLUSH_DELAY_MS);
+      }, INFO_FLUSH_DELAY_MS);
     }
   });
   return Object.assign(

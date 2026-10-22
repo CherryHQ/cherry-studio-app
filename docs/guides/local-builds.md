@@ -122,18 +122,23 @@ iOS production uses `production-ios`; preview uses `preview`. Existing installat
 native package first. Development and Storybook do not automatically fetch OTA updates. See
 [Application Updates](./app-updates.md) for publication and runtime compatibility.
 
-Only packaged Android builds on the native update channel `production-apk` (the `production`
-profile) show Check for updates in Settings and About. The app checks in the background after
-startup. The row reads that result and shows `NEW` for a newer APK, with no description; tapping it
-asks for confirmation before opening the browser download. Google Play, preview, and iOS builds use
-other channels and stay disabled; a downloaded manifest cannot change the channel. Disabled builds
-also reject detection and download calls.
+The native update channel selects the shared package-update strategy: `production-apk` checks
+GitCode and downloads inside the app, `production-google-play` checks Play availability and opens
+Play, and `production-ios` checks published App Store metadata and opens the store. Preview stays
+disabled. Notifications and About share one state; native updates require an explicit user action.
+See the [update infrastructure](../../src/backend/services/appUpdate/README.md).
 
-GitCode is the fixed update source. Never give a store profile the `production-apk` channel or
-upload the public APK as a store artifact. For an explicitly authorized Android development session
-exercising this feature, supply `APK_UPDATES_ENABLED=true` to Metro; `app.config.ts` reads it into
-`extra.isApkUpdatesEnabled` only for the development profile, and accepts only `true` or `false`.
-The local build wrapper's default remains development.
+`APK_UPDATES_ENABLED` is the existing build-time switch for APK installation capability. The Android
+`production` profile sets it to `true`; `production-google-play` sets it to `false`, excluding
+`REQUEST_INSTALL_PACKAGES`. Do not override it in shared EAS environments or upload the public APK
+as a store artifact. The native installer independently checks the embedded channel.
+
+For an explicitly authorized development session, supply `APK_UPDATES_ENABLED=true` during both
+the Android native build and Metro startup. Changing only Metro cannot add an installation
+permission. The development package ID/signature must still match the update being installed;
+a production APK cannot update the `.dev` application. Values must be `true` or `false`. The local
+build wrapper's default remains development. Adding the native update module or changing permissions
+requires a new native package; no OTA can supply them.
 
 ## Sentry Environment Variables
 

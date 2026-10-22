@@ -1,7 +1,7 @@
 import type { Api, Model, TranscriptContext } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
-import { emptyAssistantMessage } from './piStreamEvents';
+import { emptyAssistantMessage, providerErrorEvent } from './piStreamEvents';
 
 export const PI_IMAGE_TOOL_NAME = 'cherry_generate_image';
 
@@ -29,9 +29,18 @@ export function imageModelStream(model: Model<Api>, context: TranscriptContext) 
           },
         ],
   };
-  if (message.stopReason === 'error')
-    stream.push({ type: 'error', reason: 'error', error: message });
-  else stream.push({ type: 'done', reason: message.stopReason, message });
-  stream.end(message);
+  if (message.stopReason === 'error') {
+    // Scheduling again would only read this same failed tool result. The owning tool error
+    // retains the provider's retryability for an explicit new submission.
+    const event = providerErrorEvent(message, {
+      message: message.errorMessage,
+      retryable: false,
+    });
+    stream.push(event);
+    stream.end(event.error);
+  } else {
+    stream.push({ type: 'done', reason: message.stopReason, message });
+    stream.end(message);
+  }
   return stream;
 }

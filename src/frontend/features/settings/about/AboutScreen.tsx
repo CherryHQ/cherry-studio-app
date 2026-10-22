@@ -13,10 +13,10 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
 
+import { useAppUpdateEntry } from '@/frontend/appShell/appUpdate';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
-import { useAppUpdateCheck } from './useAppUpdateCheck';
 
 const APP_VERSION = Application.nativeApplicationVersion?.trim();
 const APP_BUILD = Application.nativeBuildVersion;
@@ -34,7 +34,7 @@ export default function AboutSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
-  const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateCheck();
+  const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateEntry();
   const versionLabel = APP_VERSION ? `v${APP_VERSION}` : t('settings.about.version.unknown');
   const buildLabel = APP_BUILD ? t('settings.about.version.build', { build: APP_BUILD }) : null;
   const environmentLabel =
@@ -97,17 +97,17 @@ export default function AboutSettingsScreen() {
         <Section>
           {isEnabled ? (
             <Section.Item
-              accessibilityHint={hasAvailableUpdate ? t('settings.update.confirmTitle') : undefined}
+              accessibilityHint={hasAvailableUpdate ? t('appUpdate.confirmTitle') : undefined}
               accessibilityState={{ busy: isFetching }}
-              label={t('settings.update.check')}
+              label={t('appUpdate.check')}
               leading={<RefreshCwIcon className="size-4 text-foreground" />}
-              onPress={checkForUpdates}
+              onPress={() => void checkForUpdates()}
               showChevron={false}
               testID="settings-check-update"
               trailing={
                 hasAvailableUpdate ? (
                   <Chip.Tag className="px-2 py-0.5" testID="settings-update-new">
-                    <Chip.Label className="text-xs">{t('settings.update.newBadge')}</Chip.Label>
+                    <Chip.Label className="text-xs">{t('appUpdate.newBadge')}</Chip.Label>
                   </Chip.Tag>
                 ) : undefined
               }

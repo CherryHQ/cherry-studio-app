@@ -58,9 +58,9 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
-  '@earendil-works/pi-durable@1.3.0': patches/@earendil-works__pi-durable@1.3.0.patch
-  '@earendil-works/pi-codemode@1.3.0': patches/@earendil-works__pi-codemode@1.3.0.patch
-  '@earendil-works/pi-ai@1.3.0': patches/@earendil-works__pi-ai@1.3.0.patch
+  '@earendil-works/pi-durable@1.4.0': patches/@earendil-works__pi-durable@1.4.0.patch
+  '@earendil-works/pi-codemode@1.4.0': patches/@earendil-works__pi-codemode@1.4.0.patch
+  '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.5: patches/metro@0.84.5.patch
@@ -92,16 +92,16 @@ patchedDependencies:
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
-  '@earendil-works/chord@1.3.0': patches/@earendil-works__chord@1.3.0.patch
+  '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
 
 minimumReleaseAgeExclude:
-  # Pi 1.3.0 is upgraded as one release, including its internal dependencies.
-  - '@earendil-works/chord@1.3.0'
-  - '@earendil-works/pi-ai@1.3.0'
-  - '@earendil-works/pi-durable@1.3.0'
-  - '@earendil-works/pi-codemode@1.3.0'
-  - '@earendil-works/pi-telemetry@1.3.0'
+  # Pi 1.4.0 is upgraded as one release, including its internal dependencies.
+  - '@earendil-works/chord@1.4.0'
+  - '@earendil-works/pi-ai@1.4.0'
+  - '@earendil-works/pi-durable@1.4.0'
+  - '@earendil-works/pi-codemode@1.4.0'
+  - '@earendil-works/pi-telemetry@1.4.0'
   - '@cherrystudio/provider-registry@0.2.3'
   - '@cherrystudio/web-search@0.2.0'
   - '@cherrystudio/file-preview@0.1.3'

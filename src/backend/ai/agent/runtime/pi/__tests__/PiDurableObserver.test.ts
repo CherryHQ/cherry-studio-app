@@ -9,6 +9,9 @@ import type {
   SubmissionId,
   SubmissionRecord,
   TaskId,
+  TaskGraph,
+  TaskGraphWatch,
+  ConversationId,
 } from '@earendil-works/pi-durable';
 
 import { installLogWriter, type LogRecord } from '@/shared/core/logger/LoggerService';
@@ -53,6 +56,7 @@ test.each([
     );
     let advance!: Parameters<AgentEventStream['start']>[0];
     const runtime = {
+      watchWork: async () => ({ value: { tasks: {} }, start: () => {}, stop: async () => {} }),
       watch: async () => ({
         snapshot,
         start: (listener: typeof advance) => {
@@ -130,6 +134,7 @@ test('restores compaction failure, shows progress, and clears failure only after
   };
   let advance!: (events: readonly AgentEvent[]) => Promise<void>;
   const runtime = {
+    watchWork: async () => ({ value: { tasks: {} }, start: () => {}, stop: async () => {} }),
     watch: async () => ({
       snapshot,
       start: (listener: typeof advance) => {
@@ -155,7 +160,11 @@ test('restores compaction failure, shows progress, and clears failure only after
   await observer.stop();
 });
 
-function attach(snapshot: Omit<SnapshotEvent, 'type' | 'agent' | 'usage'>, running = false) {
+function attach(
+  snapshot: Omit<SnapshotEvent, 'type' | 'agent' | 'usage'>,
+  running = false,
+  tasks: TaskGraph = { tasks: {} },
+) {
   const inputId = 1 as SubmissionId;
   const metadata = piSubmissionMetadata(
     {
@@ -170,7 +179,15 @@ function attach(snapshot: Omit<SnapshotEvent, 'type' | 'agent' | 'usage'>, runni
     [],
   );
   let advance!: (events: readonly AgentEvent[]) => Promise<void>;
+  let advanceWork!: Parameters<TaskGraphWatch['start']>[0];
   const runtime = {
+    watchWork: async () => ({
+      value: tasks,
+      start: (listener: typeof advanceWork) => {
+        advanceWork = listener;
+      },
+      stop: async () => {},
+    }),
     watch: async () => ({
       snapshot: {
         type: 'snapshot',
@@ -206,8 +223,118 @@ function attach(snapshot: Omit<SnapshotEvent, 'type' | 'agent' | 'usage'>, runni
   const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, (event) =>
     events.push(event),
   );
-  return { observer, events, advance: (batch: readonly AgentEvent[]) => advance(batch) };
+  return {
+    observer,
+    events,
+    advance: (batch: readonly AgentEvent[]) => advance(batch),
+    advanceWork: (graph: TaskGraph) => advanceWork(graph, [], BACKGROUND_CONTEXT),
+  };
 }
+
+test('records compaction tasks separately from committed summaries and keeps private errors out of logs', async () => {
+  const { observer, advance } = attach({
+    entries: [],
+    tools: [],
+    nestedTools: [],
+    compactions: [],
+    inbox: [],
+  });
+  const taskId = 42 as TaskId<CompactionResult>;
+  const records: LogRecord[] = [];
+  const dispose = installLogWriter((record) => records.push(record));
+  try {
+    await observer.start();
+    await advance([{ type: 'compaction_start', taskId, reason: 'overflow', blocking: true }]);
+    await advance([
+      { type: 'compaction_end', taskId, reason: 'overflow', error: 'private provider response' },
+    ]);
+    await advance([{ type: 'compaction_start', taskId, reason: 'threshold', blocking: false }]);
+    await advance([{ type: 'compaction_end', taskId, reason: 'threshold' }]);
+    await advance([
+      {
+        type: 'entry_appended',
+        entry: {
+          id: 10,
+          kind: 'pi.compaction',
+          data: { reason: 'threshold' },
+        } as unknown as EntryRecord,
+      },
+    ]);
+    const compactions = records.filter(
+      (record) => record.message === 'Pi durable context compaction',
+    );
+    expect(compactions.map((record) => record.outcome)).toEqual([
+      'started',
+      'failed',
+      'started',
+      'ended',
+      'committed',
+    ]);
+    expect(compactions[1]).toMatchObject({ taskId: 42, reasonCode: 'overflow', blocking: true });
+    expect(compactions.at(-1)).toMatchObject({
+      entryId: 10,
+      reasonCode: 'threshold',
+      sessionId: 'session',
+      slot: 0,
+    });
+    expect(compactions.every((record) => record.turnId === undefined)).toBe(true);
+    expect(JSON.stringify(records)).not.toContain('private');
+  } finally {
+    dispose();
+    await observer.stop();
+  }
+});
+
+test('restores a parked turn and clears its pause when the task can run again', async () => {
+  const tasks: TaskGraph = {
+    tasks: {
+      '42': {
+        id: 42 as TaskId,
+        kind: 'pi.generation',
+        conversationId: 1 as ConversationId,
+        background: false,
+        abortRequested: false,
+        conversations: [],
+        blocked: 'restart_limit',
+        state: { status: 'pending', phase: 'generate' },
+      },
+    },
+  };
+  const { observer, events, advanceWork } = attach(
+    { entries: [], tools: [], nestedTools: [], compactions: [], inbox: [] },
+    true,
+    tasks,
+  );
+  try {
+    expect((await observer.start()).activeTurn).toMatchObject({
+      status: 'running',
+      isPaused: true,
+    });
+    await advanceWork({ tasks: { '42': { ...tasks.tasks['42']!, blocked: undefined } } });
+    expect(events.at(-1)).toMatchObject({ type: 'turn.updated', turn: { isPaused: false } });
+    await advanceWork({ tasks: { '42': { ...tasks.tasks['42']!, background: true } } });
+    expect(events).toHaveLength(1);
+    await advanceWork({ tasks: { '42': { ...tasks.tasks['42']!, kind: 'pi.compaction' } } });
+    expect(events).toHaveLength(1);
+    await advanceWork({
+      tasks: {
+        '42': { ...tasks.tasks['42']!, blocked: undefined },
+        '43': {
+          ...tasks.tasks['42']!,
+          id: 43 as TaskId,
+          kind: 'pi.tool',
+          owner: 42 as TaskId,
+          conversationId: 2 as ConversationId,
+        },
+      },
+    });
+    expect(events.at(-1)).toMatchObject({ type: 'turn.updated', turn: { isPaused: true } });
+    await advanceWork(tasks);
+    expect(events.at(-1)).toMatchObject({ type: 'turn.updated', turn: { isPaused: true } });
+  } finally {
+    await observer.stop();
+  }
+});
 
 test('reports blocking compaction only; background compaction never delays the reply', async () => {
   const backgroundId = 5 as TaskId<CompactionResult>;

@@ -201,6 +201,8 @@ export type RuntimeDurableTurn = {
   hasAssistant: boolean;
   /** A provider attempt failed and the engine is retrying it automatically. */
   isRetrying?: boolean;
+  /** Repeated process interruptions paused execution; the input is still durable. */
+  isPaused?: boolean;
 };
 
 export type RuntimeConversationSnapshot = {

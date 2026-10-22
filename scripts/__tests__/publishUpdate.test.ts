@@ -12,14 +12,21 @@ const eas = JSON.parse(readFileSync('eas.json', 'utf8'));
 
 test.each([
   ['preview', 'preview', 'preview', undefined, false, { PROFILE: 'preview' }],
-  ['apk', 'production-apk', 'production', 'android', true, { PROFILE: 'production' }],
+  [
+    'apk',
+    'production-apk',
+    'production',
+    'android',
+    true,
+    { PROFILE: 'production', APK_UPDATES_ENABLED: 'true' },
+  ],
   [
     'google-play',
     'production-google-play',
     'production',
     'android',
     true,
-    { PROFILE: 'production', ANDROID_COMPRESS_NATIVE_LIBS: 'false' },
+    { PROFILE: 'production', ANDROID_COMPRESS_NATIVE_LIBS: 'false', APK_UPDATES_ENABLED: 'false' },
   ],
   ['ios', 'production-ios', 'production', 'ios', true, { PROFILE: 'production' }],
 ])(

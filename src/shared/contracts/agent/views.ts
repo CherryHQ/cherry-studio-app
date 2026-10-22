@@ -233,6 +233,8 @@ export const AgentTurnViewSchema = z.strictObject({
   error: AgentErrorViewSchema.nullable(),
   /** A provider attempt failed and is being retried; its error is not final. */
   isRetrying: z.boolean().optional(),
+  /** Repeated interruptions paused execution without settling the input. */
+  isPaused: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });
