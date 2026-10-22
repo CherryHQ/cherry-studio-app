@@ -28,7 +28,10 @@ export type DictationOptions = VoiceRequestOptions & {
 };
 
 export interface DictationSession {
-  /** Settles after `stop()`, an engine-initiated end, abort or failure. */
+  /**
+   * Settles after `stop()`, an engine-initiated end, abort or failure. When the app ends
+   * dictation itself, such as on backgrounding, it rejects with `interrupted`.
+   */
   readonly result: Promise<string>;
   /** Ends capture and keeps what was said. Aborting the start signal discards it instead. */
   stop(): void;
@@ -52,6 +55,7 @@ export type VoiceErrorCode =
   | 'busy'
   | 'no-speech'
   | 'audio-too-large'
+  | 'interrupted'
   | 'failed';
 
 export class VoiceError extends Error {

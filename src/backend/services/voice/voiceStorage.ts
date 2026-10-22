@@ -1,8 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import type { TranscriptCache } from './audioFileTranscription';
-
 /** Per-host scratch space for generated speech; removed with the host. */
 export function createVoiceScratch() {
   const directory = new Directory(Paths.cache, 'Voice', randomUUID());
@@ -39,20 +37,4 @@ export function deleteFile(uri: string | null | undefined) {
   } catch {
     // Cache files the system already reclaimed need no cleanup.
   }
-}
-
-/** System-reclaimable cache: losing an entry only costs one more transcription. */
-export function createTranscriptCache(): TranscriptCache {
-  const directory = new Directory(Paths.cache, 'VoiceTranscripts');
-  const entry = (key: string) => new File(directory, `${key}.txt`);
-  return {
-    async read(key) {
-      const file = entry(key);
-      return file.exists ? file.text() : undefined;
-    },
-    async write(key, text) {
-      directory.create({ idempotent: true, intermediates: true });
-      entry(key).write(text);
-    },
-  };
 }

@@ -219,7 +219,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
-      transcribeAudio: this.files.transcribeAudio,
+      files: this.files,
     }));
   }
 

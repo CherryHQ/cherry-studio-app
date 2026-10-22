@@ -51,7 +51,7 @@ test('resolves the selected account credential and an independent audio model, w
   expect(f.spies.recordInvocation).not.toHaveBeenCalled();
 });
 
-test('transcribes original bytes using the audio model and selected account', async () => {
+test('transcribes original bytes with their stated container type, using the audio model and selected account', async () => {
   const f = createContractFixture();
   const generate = jest.fn(async (_options: TranscriptionModelV3CallOptions) => ({
     text: '你好',
@@ -62,13 +62,14 @@ test('transcribes original bytes using the audio model and selected account', as
     response: { timestamp: new Date(), modelId: 'whisper-1' },
   }));
   mockResolve.mockReturnValue(new MockTranscriptionModelV3({ doGenerate: generate }));
-  const audio = new Uint8Array([1, 2, 3]);
+  // An M4A header: ai-sdk alone would sniff this as WAV.
+  const audio = new Uint8Array([0, 0, 0, 32, 102, 116, 121, 112, 77, 52, 65, 32]);
   const result = await new AiService(f.services).transcribe(
-    { providerId: f.provider.id, modelId: 'whisper-1', audio },
+    { providerId: f.provider.id, modelId: 'whisper-1', audio, mediaType: 'audio/mp4' },
     new AbortController().signal,
   );
   expect(result.text).toBe('你好');
-  expect(generate.mock.calls[0][0].audio).toEqual(audio);
+  expect(generate.mock.calls[0][0]).toMatchObject({ audio, mediaType: 'audio/mp4' });
   expect(mockResolve.mock.calls[0][1]).toBe('transcription');
 });
 
@@ -136,7 +137,12 @@ test('rejects unsupported and disabled accounts before selecting a credential', 
     const f = createContractFixture({ providerOverrides });
     await expect(
       new AiService(f.services).transcribe(
-        { providerId: f.provider.id, modelId: 'whisper-1', audio: new Uint8Array([1]) },
+        {
+          providerId: f.provider.id,
+          modelId: 'whisper-1',
+          audio: new Uint8Array([1]),
+          mediaType: 'audio/mpeg',
+        },
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: 'not-configured' });

@@ -14,6 +14,9 @@ export type DictationState = 'idle' | 'starting' | 'listening' | 'finishing';
 /**
  * Dictates into the composer draft: recognized text follows what was already typed and is
  * updated live. Cancelling restores the draft as it was; nothing is sent automatically.
+ *
+ * Dictation owns only the text it appended. Each write applies when the draft is still exactly
+ * what dictation last wrote, so typing or sending meanwhile hands the draft back to the user.
  */
 export function useDictation() {
   const { t } = useTranslation();
@@ -54,17 +57,25 @@ export function useDictation() {
     const owner: { controller: AbortController; session?: DictationSession } = { controller };
     active.current = owner;
     const base = draft;
+    let written = base;
+    const write = (next: string) => {
+      const expected = written;
+      written = next;
+      setDraft((current) => (current === expected ? next : current));
+    };
     setState('starting');
     try {
       owner.session = await voice.startDictation({
         signal: controller.signal,
-        onText: (text) => setDraft(appendUtterance(base, text)),
+        onText: (text) => write(appendUtterance(base, text)),
         onLevel: setLevel,
       });
       setState('listening');
-      setDraft(appendUtterance(base, await owner.session.result));
+      write(appendUtterance(base, await owner.session.result));
     } catch (error) {
-      setDraft(base);
+      // An interruption by the app keeps what was already shown, like stopping.
+      if (error instanceof VoiceError && error.code === 'interrupted') return;
+      write(base);
       if (!controller.signal.aborted) report(error);
     } finally {
       if (active.current === owner) {

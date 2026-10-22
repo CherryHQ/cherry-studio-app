@@ -334,10 +334,26 @@ export class AiService extends BaseService {
     );
   }
 
-  async transcribe(input: VoiceModelSelection & { audio: Uint8Array }, signal: AbortSignal) {
-    return this.executeVoice(input, signal, (config) =>
-      aiCoreTranscribe(resolveVoiceModel(config, 'transcription'), input.audio, {}, signal),
-    );
+  async transcribe(
+    input: VoiceModelSelection & { audio: Uint8Array; mediaType: string },
+    signal: AbortSignal,
+  ) {
+    return this.executeVoice(input, signal, (config) => {
+      const model = resolveVoiceModel(config, 'transcription');
+      // ai-sdk sniffs the container from the bytes and reads MP4/M4A as WAV, naming the upload
+      // `audio.wav`; the caller knows the real type.
+      return aiCoreTranscribe(
+        {
+          specificationVersion: model.specificationVersion,
+          provider: model.provider,
+          modelId: model.modelId,
+          doGenerate: (options) => model.doGenerate({ ...options, mediaType: input.mediaType }),
+        },
+        input.audio,
+        {},
+        signal,
+      );
+    });
   }
 
   private async executeVoice<TResult>(

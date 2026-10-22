@@ -6,7 +6,10 @@ import { useDictation } from '../useDictation';
 
 const mockToast = jest.fn();
 const mockConfirm = jest.fn();
-const mockSetDraft = jest.fn();
+// The composer's draft state: functional updates apply to the current draft.
+const mockSetDraft = jest.fn((next: string | ((current: string) => string)) => {
+  mockDraft = typeof next === 'function' ? next(mockDraft) : next;
+});
 const mockStartDictation = jest.fn();
 let mockDraft = '';
 
@@ -68,10 +71,21 @@ describe('dictation into the composer draft', () => {
     });
     expect(dictation.state).toBe('listening');
     act(() => options.onText?.('first draft'));
-    expect(mockSetDraft).toHaveBeenLastCalledWith('Meeting notes: first draft');
+    expect(mockDraft).toBe('Meeting notes: first draft');
     await act(async () => result.resolve('final words'));
-    expect(mockSetDraft).toHaveBeenLastCalledWith('Meeting notes: final words');
+    expect(mockDraft).toBe('Meeting notes: final words');
     expect(dictation.state).toBe('idle');
+  });
+
+  test('sending or typing during dictation hands the draft back to the user', async () => {
+    await act(async () => {
+      void dictation.start();
+    });
+    act(() => options.onText?.('first'));
+    mockDraft = '';
+    act(() => options.onText?.('first words'));
+    await act(async () => result.resolve('first words.'));
+    expect(mockDraft).toBe('');
   });
 
   test('cancelling restores the draft as it was, without an error', async () => {
@@ -80,8 +94,19 @@ describe('dictation into the composer draft', () => {
     });
     act(() => options.onText?.('half a sentence'));
     await act(async () => dictation.cancel());
-    expect(mockSetDraft).toHaveBeenLastCalledWith('Meeting notes:');
+    expect(mockDraft).toBe('Meeting notes:');
     expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  test('an interruption by the app keeps the shown text, without an error', async () => {
+    await act(async () => {
+      void dictation.start();
+    });
+    act(() => options.onText?.('half a sentence'));
+    await act(async () => result.reject(new VoiceError('interrupted', 'backgrounded')));
+    expect(mockDraft).toBe('Meeting notes: half a sentence');
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(dictation.state).toBe('idle');
   });
 
   test('a blocked permission offers system settings instead of a toast', async () => {
@@ -91,6 +116,6 @@ describe('dictation into the composer draft', () => {
       expect.objectContaining({ confirmLabel: 'settings.permissions.openSystemSettings' }),
     );
     expect(mockToast).not.toHaveBeenCalled();
-    expect(mockSetDraft).toHaveBeenLastCalledWith('Meeting notes:');
+    expect(mockDraft).toBe('Meeting notes:');
   });
 });

@@ -54,8 +54,10 @@ function play(uri: string, signal: AbortSignal): Promise<void> {
       player.pause();
       settle(signal.reason);
     };
+    // An interruption only pauses: expo-audio resumes it, or the user stops reading.
     const subscription = player.addListener('playbackStatusUpdate', (status) => {
       if (status.didJustFinish) settle();
+      else if (status.error) settle(new VoiceError('failed', status.error));
     });
     signal.addEventListener('abort', abort, { once: true });
     player.play();

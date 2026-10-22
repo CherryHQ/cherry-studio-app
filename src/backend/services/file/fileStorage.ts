@@ -25,6 +25,7 @@ import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
+import { deleteAudioTranscripts } from './audioTranscriptCache';
 import { deleteFilePreview } from './filePreviewCache';
 
 const DATA_DIRECTORY_NAME = 'Data';
@@ -268,6 +269,7 @@ export async function discardInternalEntries(
     try {
       deleteInternalFile(entry);
       deleteFilePreview(entry);
+      deleteAudioTranscripts(entry);
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
@@ -325,7 +327,7 @@ export async function rewriteInternalTextEntry(
 }
 
 /**
- * Hard-delete an entry, its bytes and its preview. The row is removed first; the unlink is
+ * Hard-delete an entry, its bytes and its derived preview and transcripts. The row is removed first; the unlink is
  * best-effort (a leftover blob is reclaimable by the future cache-cleanup
  * sweep, while a dangling row would not be). A `deletedAt` limits removal to that trash
  * incarnation, so a concurrent restore wins over stale cleanup.
@@ -358,6 +360,7 @@ export function deleteInternalEntryFiles(entry: FileEntry): void {
   try {
     deleteInternalFile(entry);
     deleteFilePreview(entry);
+    deleteAudioTranscripts(entry);
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
   }

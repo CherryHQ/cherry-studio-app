@@ -136,8 +136,8 @@ export type SystemCapabilityServices = {
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
-  /** Lets file tools read audio as a transcript. */
-  transcribeAudio?: ManagedFileResolver['transcribeAudio'];
+  /** The host's resolver, which can also read audio as a transcript. */
+  files?: ManagedFileResolver;
 };
 
 export function createSystemCapabilitySource(
@@ -166,12 +166,9 @@ export function createSystemCapabilitySource(
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
-      const files: ManagedFileResolver = services.transcribeAudio
-        ? { ...managedFileResolver, transcribeAudio: services.transcribeAudio }
-        : managedFileResolver;
       const catalog = createCatalog(
         deps,
-        files,
+        services.files ?? managedFileResolver,
         scope,
         resources,
         documentParserMode,

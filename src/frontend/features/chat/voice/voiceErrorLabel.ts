@@ -10,6 +10,8 @@ const VOICE_ERROR_KEYS = {
   busy: 'voice.error.busy',
   'no-speech': 'voice.error.noSpeech',
   'audio-too-large': 'voice.error.audioTooLarge',
+  // Never shown: an interruption keeps the dictated text and ends quietly.
+  interrupted: 'voice.error.failed',
   failed: 'voice.error.failed',
 } satisfies Record<VoiceErrorCode, string>;
 

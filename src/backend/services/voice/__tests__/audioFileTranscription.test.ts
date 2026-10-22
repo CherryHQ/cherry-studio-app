@@ -15,6 +15,7 @@ const model: VoiceModelSelection = { providerId: 'openai', modelId: 'whisper-1' 
 
 function setup(selection: VoiceModelSelection | null = model) {
   const entries = new Map<string, string>();
+  const key = (fact: FileAttachmentFact) => `${fact.fileEntryId}/${fact.revision}`;
   const transcribe = jest.fn(
     async (): Promise<TranscriptionResult> => ({
       text: 'hello world',
@@ -26,16 +27,15 @@ function setup(selection: VoiceModelSelection | null = model) {
       durationInSeconds: 3726,
     }),
   );
-  const transcriber = createAiTranscriber({
-    ai: { transcribe },
-    preference: { get: async () => selection },
-  });
   const readBytes = jest.fn(async () => new Uint8Array([1, 2, 3]));
+  const preference = { get: jest.fn(async () => selection) };
+  const transcriber = createAiTranscriber({ ai: { transcribe }, preference });
   const cache = {
-    read: async (key: string) => entries.get(key),
-    write: async (key: string, text: string) => void entries.set(key, text),
+    read: async (fact: FileAttachmentFact) => entries.get(key(fact)),
+    write: async (fact: FileAttachmentFact, text: string) => void entries.set(key(fact), text),
   };
   return {
+    preference,
     transcribe,
     readBytes,
     run: (fact = file) =>
@@ -61,16 +61,21 @@ test('formats timed segments under a transcript header for the model', () => {
   expect(formatTranscript({ text: ' ', segments: [] })).toBe('');
 });
 
-test('transcribes a revision once per model and reuses the cached transcript', async () => {
-  const { run, transcribe, readBytes } = setup();
+test('transcribes a revision once and reuses the transcript across model changes', async () => {
+  const { run, transcribe, readBytes, preference } = setup();
   const first = await run();
+  preference.get.mockResolvedValue({ providerId: 'other', modelId: 'whisper-2' });
+  await expect(run()).resolves.toBe(first);
+  // A cached transcript needs no configured model.
+  preference.get.mockResolvedValue(null);
   await expect(run()).resolves.toBe(first);
   expect(transcribe).toHaveBeenCalledTimes(1);
   expect(transcribe).toHaveBeenCalledWith(
-    { ...model, audio: new Uint8Array([1, 2, 3]) },
+    { ...model, audio: new Uint8Array([1, 2, 3]), mediaType: 'audio/mp4' },
     expect.any(AbortSignal),
   );
   // A new revision of the file is transcribed again.
+  preference.get.mockResolvedValue(model);
   await run({ ...file, revision: 2 });
   expect(transcribe).toHaveBeenCalledTimes(2);
   expect(readBytes).toHaveBeenCalledTimes(2);

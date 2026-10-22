@@ -4,6 +4,9 @@ import {
   type VoiceModelSelection,
 } from '@/shared/contracts/voice';
 
+/** Audio bytes and their container type, which the upload is named after. */
+export type TranscriptionAudio = { audio: Uint8Array; mediaType: string };
+
 export type TranscriptionResult = {
   text: string;
   segments: { text: string; startSecond: number; endSecond: number }[];
@@ -14,7 +17,7 @@ export type TranscriptionResult = {
 export type AiTranscriptionDependencies = {
   ai: {
     transcribe(
-      input: VoiceModelSelection & { audio: Uint8Array },
+      input: VoiceModelSelection & TranscriptionAudio,
       signal: AbortSignal,
     ): Promise<TranscriptionResult>;
   };
@@ -35,7 +38,7 @@ export function createAiTranscriber({ ai, preference }: AiTranscriptionDependenc
       return (await selection()) ? 'ready' : 'needs-setup';
     },
     async transcribe(
-      audio: Uint8Array,
+      audio: TranscriptionAudio,
       signal: AbortSignal,
       model?: VoiceModelSelection,
     ): Promise<TranscriptionResult> {
@@ -43,7 +46,7 @@ export function createAiTranscriber({ ai, preference }: AiTranscriptionDependenc
       signal.throwIfAborted();
       if (!configured)
         throw new VoiceError('not-configured', 'No transcription model is configured.');
-      return ai.transcribe({ ...configured, audio }, signal);
+      return ai.transcribe({ ...configured, ...audio }, signal);
     },
   };
 }

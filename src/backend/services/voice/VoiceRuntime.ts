@@ -146,6 +146,11 @@ export function createVoiceRuntime({
       if (current?.activity.kind === 'dictating')
         throw new VoiceError('busy', 'Dictation is already running.');
       const activity = claim({ kind: 'dictating' }, options?.signal);
+      // The caller's own signal discards; the app ending dictation is an interruption.
+      const settled = (error: unknown) =>
+        activity.signal.aborted && !options?.signal?.aborted
+          ? new VoiceError('interrupted', 'Dictation was interrupted.', { cause: error })
+          : error;
       try {
         const engine = await track(resolve<DictationEngine>('dictation', activity.signal));
         const session = await track(
@@ -156,12 +161,16 @@ export function createVoiceRuntime({
             onLevel: (level) => options?.onLevel?.(level),
           }),
         );
-        const result = track(session.result);
+        const result = track(
+          session.result.catch((error: unknown) => {
+            throw settled(error);
+          }),
+        );
         void result.then(activity.release, activity.release);
         return { result, stop: () => session.stop() };
       } catch (error) {
         activity.release();
-        throw error;
+        throw settled(error);
       }
     },
 

@@ -11,8 +11,11 @@ export function useMessageSpeech(messageId: string, text: string | undefined) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
-  const activity = useSyncExternalStore(voice.subscribeActivity, voice.getActivity);
-  const isSpeaking = activity.kind === 'speaking' && activity.key === messageId;
+  // A boolean snapshot re-renders only the toolbars whose own state changed.
+  const isSpeaking = useSyncExternalStore(voice.subscribeActivity, () => {
+    const activity = voice.getActivity();
+    return activity.kind === 'speaking' && activity.key === messageId;
+  });
   const toggle = useCallback(() => {
     if (isSpeaking) {
       voice.stopSpeaking();

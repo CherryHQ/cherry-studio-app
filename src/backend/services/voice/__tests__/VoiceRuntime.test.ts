@@ -154,14 +154,21 @@ describe('one voice activity at a time', () => {
     expect(module.getActivity()).toEqual({ kind: 'idle' });
   });
 
-  test('backgrounding ends dictation and discards its text', async () => {
+  test('backgrounding interrupts dictation, while the caller cancelling only aborts', async () => {
     const dictation = dictationEngine();
     const runtime = setup({ dictation: { system: dictation.engine } });
     const session = await runtime.module.startDictation();
     runtime.background();
-    await expect(session.result).rejects.toBeDefined();
+    await expect(session.result).rejects.toMatchObject({ code: 'interrupted' });
     await flush();
     expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+
+    const again = dictationEngine();
+    const cancelled = setup({ dictation: { system: again.engine } });
+    const controller = new AbortController();
+    const second = await cancelled.module.startDictation({ signal: controller.signal });
+    controller.abort();
+    await expect(second.result).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   test('disposal aborts the activity and waits for the engine to settle', async () => {

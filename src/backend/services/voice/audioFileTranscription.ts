@@ -1,13 +1,13 @@
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import { VoiceError } from '@/shared/contracts/voice';
-import { sha256HexOfText } from '@/shared/utils/sha256';
+import { transcriptionMediaType } from '@/shared/utils/audioFileTypes';
 
 import type { AiTranscriber, TranscriptionResult } from './aiTranscription';
 
-/** Transcripts keyed by file revision and model, so later turns do not pay to transcribe again. */
+/** Transcripts per file revision, so later turns and model changes do not transcribe again. */
 export type TranscriptCache = {
-  read(key: string): Promise<string | undefined>;
-  write(key: string, text: string): Promise<void>;
+  read(file: FileAttachmentFact): Promise<string | undefined>;
+  write(file: FileAttachmentFact, text: string): Promise<void>;
 };
 
 function timestamp(seconds: number): string {
@@ -46,27 +46,24 @@ export function createAudioFileTranscriber(transcriber: AiTranscriber, cache: Tr
     signal: AbortSignal,
   ): Promise<string> {
     const issue = { fileEntryId: file.fileEntryId, name: file.name };
+    const cached = await cache.read(file).catch(() => undefined);
+    signal.throwIfAborted();
+    if (cached) return cached;
     const model = await transcriber.selection();
     signal.throwIfAborted();
     if (!model) throw new FileAttachmentError({ ...issue, code: 'transcription-unconfigured' });
-    const key = sha256HexOfText(
-      JSON.stringify([
-        file.fileEntryId,
-        file.revision ?? null,
-        file.size,
-        model.providerId,
-        model.modelId,
-      ]),
-    );
-    const cached = await cache.read(key).catch(() => undefined);
-    signal.throwIfAborted();
-    if (cached) return cached;
     const bytes = await readBytes(signal);
     signal.throwIfAborted();
     if (!bytes) throw new FileAttachmentError({ ...issue, code: 'unavailable' });
     let text: string;
     try {
-      text = formatTranscript(await transcriber.transcribe(bytes, signal, model));
+      text = formatTranscript(
+        await transcriber.transcribe(
+          { audio: bytes, mediaType: transcriptionMediaType(file) ?? file.mediaType },
+          signal,
+          model,
+        ),
+      );
     } catch (error) {
       signal.throwIfAborted();
       throw new FileAttachmentError(
@@ -81,7 +78,7 @@ export function createAudioFileTranscriber(transcriber: AiTranscriber, cache: Tr
       );
     }
     if (!text) throw new FileAttachmentError({ ...issue, code: 'document-empty' });
-    await cache.write(key, text).catch(() => undefined);
+    await cache.write(file, text).catch(() => undefined);
     return text;
   };
 }

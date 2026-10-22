@@ -27,8 +27,9 @@ Callers never pick an engine: they start dictation, read text, and observe the c
 - `VoiceRuntime.ts` is the only place that chooses an engine. An explicit preference is used as is;
   with none (`null`), the first engine in `VOICE_ENGINES` the device supports is used. The runtime
   allows one activity at a time: dictation stops reading, reading replaces reading, and reading
-  cannot start during dictation. Backgrounding the app and host disposal abort the activity. It
-  turns Markdown into prose (`speechText.ts`) before any engine sees it.
+  cannot start during dictation. Backgrounding the app and host disposal abort the activity; an
+  aborted dictation rejects with `interrupted` unless the caller cancelled it. It turns Markdown
+  into prose (`speechText.ts`) before any engine sees it.
 - Each native library appears in exactly one adapter: `systemDictation.ts`
   (`expo-speech-recognition`), `systemSpeech.ts` (`expo-speech`), `aiDictation.ts` (`expo-audio`
   recording) and `aiSpeech.ts` (`expo-audio` playback). Adapters own their permissions, native
@@ -38,6 +39,10 @@ Callers never pick an engine: they start dictation, read text, and observe the c
 
 The frontend uses `useBackendModule('voice')` only. Chat owns the dictation and read-aloud hooks in
 `src/frontend/features/chat/voice`; settings owns `src/frontend/features/settings/voice`.
+
+Dictation owns only the text it appended to the draft. A write applies only while the draft is
+still what dictation last wrote, so typing or sending during dictation hands the draft back to the
+user. Cancelling restores the earlier draft; an interruption keeps the text already shown.
 
 ## Engines
 
@@ -49,15 +54,20 @@ without one report it as unsupported and settings disables it. Vendor recognizer
 implement the same `RecognitionService` and are a candidate once verified on devices. The config
 plugin declares the Google packages for Android package visibility.
 
-**AI dictation** records mono 16 kHz AAC for up to ten minutes, then sends the recording once to
-the transcription model and deletes it. It has no live text: the transcript arrives on stop.
+**AI dictation** records mono 16 kHz AAC (M4A) for up to ten minutes, then sends the recording once
+to the transcription model and deletes it. It has no live text: the transcript arrives on stop.
+
+Each transcription request states the audio's container type. The SDK's own byte sniffing reads
+MP4/M4A as WAV and would name the upload `audio.wav`; attachments take their type from
+`transcriptionMediaType`.
 
 **System speech** reads through the platform engine, split to Android's input limit, with an
 optional system voice for the app language.
 
 **AI speech** splits prose into requests of at most 4,096 characters at sentence boundaries,
-generates the next part while the current one plays, and deletes each WAV after playback. The voice
-list is OpenAI's; a compatible gateway rejects the voices it lacks.
+generates the next part while the current one plays, and deletes each WAV after playback. A part
+that cannot play fails the reading; an audio interruption only pauses it. The voice list is
+OpenAI's; a compatible gateway rejects the voices it lacks.
 
 Dictation and system speech use the resolved app language. AI transcription detects the language
 itself.
@@ -76,9 +86,10 @@ file service never depends on voice or AI. `AgentHostDependencies` supplies the 
 mode is `audio-transcript`. Without a transcription model, sending fails with the
 `transcription-unconfigured` attachment issue; a failed request reports `transcription-failed`.
 
-Transcripts are cached in the system cache directory, keyed by file id, revision, size and model,
-so later turns and paged reads do not transcribe again. Losing the cache only costs another
-transcription. Audio is transcribed only when a turn or tool actually reads it; importing never
+Transcripts are cached in the system cache directory by `audioTranscriptCache` in the file service,
+keyed by file id, revision and size, and removed with their entry. A transcript describes the
+recording, so later turns, paged reads and model changes do not transcribe again, and a cached
+transcript needs no configured model. Losing the cache only costs another transcription. Audio is transcribed only when a turn or tool actually reads it; importing never
 transcribes.
 
 ## AI Models And Accounts

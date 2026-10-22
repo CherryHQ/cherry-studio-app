@@ -1,5 +1,5 @@
 import { Section, useToast } from '@cherrystudio/ui/components';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
@@ -23,8 +23,12 @@ export function VoiceEngineSection({
   const { toast } = useToast();
   const voice = useBackendModule('voice');
   const [, setSelected] = usePreference(VOICE_ENGINE_PREFERENCE[capability]);
+  // The AI engine is ready once its model is set, so its status follows that preference.
+  const [model] = usePreference(
+    capability === 'dictation' ? 'feature.voice.transcription_model' : 'feature.voice.speech_model',
+  );
   const statuses = useQuery({
-    queryKey: ['voice', 'engine-status', capability],
+    queryKey: ['voice', 'engine-status', capability, model],
     queryFn: async ({ signal }) =>
       Object.fromEntries(
         await Promise.all(
@@ -34,6 +38,7 @@ export function VoiceEngineSection({
           ),
         ),
       ) as Record<VoiceEngineId, VoiceEngineStatus>,
+    placeholderData: keepPreviousData,
   });
   const describe = (engine: VoiceEngineId) => {
     const status = statuses.data?.[engine];

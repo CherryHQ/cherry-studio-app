@@ -2,6 +2,7 @@ import { resolveVoiceEndpoint } from '@cherrystudio/ai-runtime/provider';
 import { AppState, Platform } from 'react-native';
 
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import { audioTranscriptCache } from '@/backend/services/file/audioTranscriptCache';
 import type { VoiceEngineId, VoiceModelSelection } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
@@ -13,7 +14,7 @@ import type { SystemPromptQueue } from './microphoneAccess';
 import { createSystemDictationEngine } from './systemDictation';
 import { createSystemSpeechEngine } from './systemSpeech';
 import { createVoiceRuntime } from './VoiceRuntime';
-import { createTranscriptCache, createVoiceScratch } from './voiceStorage';
+import { createVoiceScratch } from './voiceStorage';
 
 type VoicePreferences = {
   get(
@@ -85,5 +86,5 @@ export function createVoice({
 
 /** The attachment reader's audio port, backed by the configured transcription model. */
 export function createAudioAttachmentTranscriber(dependencies: AiTranscriptionDependencies) {
-  return createAudioFileTranscriber(createAiTranscriber(dependencies), createTranscriptCache());
+  return createAudioFileTranscriber(createAiTranscriber(dependencies), audioTranscriptCache);
 }

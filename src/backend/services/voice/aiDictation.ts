@@ -15,7 +15,7 @@ import type { DictationEngine } from './engines';
 import { requireAccess, type SystemPromptQueue } from './microphoneAccess';
 import { deleteFile, takeRecording } from './voiceStorage';
 
-/** Mono 16 kHz AAC: enough for speech, about 2 MB for the whole recording. */
+/** Mono 16 kHz AAC in an M4A (audio/mp4) container: enough for speech, about 2 MB in total. */
 const MAX_RECORDING_SECONDS = 10 * 60;
 const COMMON_OPTIONS = {
   extension: '.m4a',
@@ -62,7 +62,6 @@ export function createAiDictationEngine({
         shouldPlayInBackground: false,
         allowsBackgroundRecording: false,
       });
-      signal.throwIfAborted();
       const recorder = new nativeAudio.AudioRecorder({
         ...COMMON_OPTIONS,
         ...PLATFORM_OPTIONS[platform],
@@ -93,6 +92,8 @@ export function createAiDictationEngine({
       signal.addEventListener('abort', abort, { once: true });
 
       try {
+        // Checked inside the cleanup path, which also leaves recording mode.
+        signal.throwIfAborted();
         await recorder.prepareToRecordAsync();
         signal.throwIfAborted();
         recorder.record({ forDuration: MAX_RECORDING_SECONDS });
@@ -117,7 +118,7 @@ export function createAiDictationEngine({
         const audio = await takeRecording(uri);
         if (audio.length > MAX_AUDIO_ATTACHMENT_BYTES)
           throw new VoiceError('audio-too-large', 'The recording exceeds the upload limit.');
-        const { text } = await transcriber.transcribe(audio, signal);
+        const { text } = await transcriber.transcribe({ audio, mediaType: 'audio/mp4' }, signal);
         signal.throwIfAborted();
         if (!text.trim()) throw new VoiceError('no-speech', 'No speech was recognized.');
         onText(text.trim());
