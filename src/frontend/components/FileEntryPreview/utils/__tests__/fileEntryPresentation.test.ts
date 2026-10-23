@@ -5,6 +5,7 @@ describe('fileEntryPreviewKind', () => {
     ['image/png', 'image'],
     ['application/pdf', 'document'],
     ['text/markdown', 'markdown'],
+    ['text/x-markdown', 'markdown'],
     ['application/zip', 'document'],
     ['text/html', 'html'],
     ['text/plain', 'text'],
