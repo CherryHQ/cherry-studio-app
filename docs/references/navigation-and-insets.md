@@ -96,7 +96,13 @@ leaves at least 64 points of chat visible and is capped at 400 points on wider w
 windows make the same drawer permanent: a 280-point sidebar column beside chat, without the chat
 header's sidebar and new-chat buttons, which the sidebar already provides. Switching classes during
 rotation or resizing keeps the chat tree mounted. Sidebar destinations still push full-screen root
-routes that cover the sidebar until they return to chat.
+routes that cover the sidebar until they return to chat, except Files.
+
+In medium and expanded windows, Files opens the [file pane](../../src/frontend/appShell/pane/README.md)
+beside the current chat instead of pushing `/library`: the `(chat)` layout lays out the pane and the
+chat stack side by side, and file previews replace the list inside the pane. The pane belongs to the
+drawer group, so it hides with a desktop chat source and in compact windows, and routes pushed over
+the drawer keep opening their own viewer page. Android back leaves a pane preview, then the pane.
 
 The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
 content to 800 points and form/management content to 720, inside the horizontal safe area. They
@@ -297,6 +303,8 @@ enabled.
 - Only the chat route exposes the sidebar button and full-width drawer gesture; every other route
   exposes back and returns to chat. In expanded windows the permanent sidebar replaces both, and
   resizing across the threshold keeps the chat, its draft, and its scroll position.
+- In medium and expanded windows, Files and file previews open beside the chat without changing its
+  route, draft, or scroll position; closing and reopening the pane keeps the list's place.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
 - Opening model selection from chat input keeps the picker stable; focusing or clearing in-place
   search changes the sheet size without a competing route, back handler, or inset jump.

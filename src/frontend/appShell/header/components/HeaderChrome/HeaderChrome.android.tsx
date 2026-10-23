@@ -2,12 +2,19 @@ import { Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
+
 import { headerScreenOptions, mainHeaderRowHeight } from '../../headerScreenOptions';
 import { HeaderActionGroup } from '../HeaderActionGroup/HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
+import { InlineHeaderChrome } from './InlineHeaderChrome';
 
-/** Mounts the shared header contract through Android native-stack options. */
-export function HeaderChrome({
+/** Mounts the shared header contract through Android native-stack options, or inline in a pane. */
+export function HeaderChrome(props: HeaderChromeProps) {
+  return usePaneChrome() ? <InlineHeaderChrome {...props} /> : <NativeHeaderChrome {...props} />;
+}
+
+function NativeHeaderChrome({
   actionTone,
   leftActions,
   rightActions,

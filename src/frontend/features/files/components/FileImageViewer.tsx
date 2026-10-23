@@ -17,6 +17,7 @@ import { View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
+import { usePaneChrome } from '@/frontend/appShell/layout';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { queryKeys } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
@@ -37,6 +38,8 @@ export function FileImageViewer({
   const { theme } = useUniwind();
   const { toast } = useToast();
   const editing = useFileImageEdit(initialFile, imageEditRequestId);
+  // A pane is not a stack screen: it has no screen options to set, and sits below the status bar.
+  const isInPane = usePaneChrome() !== null;
   const { file } = editing;
   const { isSharing, share } = useShareFile(file);
   const saveToPhotos = useSaveImageToPhotos({ uri: file.uri, provenance: file.entry.provenance });
@@ -91,8 +94,14 @@ export function FileImageViewer({
 
   if (editing.isEditing) {
     return (
-      <View className="flex-1 bg-background px-safe pt-safe pb-safe">
-        <Stack.Screen options={{ gestureEnabled: false, headerShown: false }} />
+      <View
+        className={
+          isInPane
+            ? 'flex-1 bg-background px-safe pb-safe'
+            : 'flex-1 bg-background px-safe pt-safe pb-safe'
+        }
+      >
+        {isInPane ? null : <Stack.Screen options={{ gestureEnabled: false, headerShown: false }} />}
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         <ImageEditor
           uri={file.uri}
@@ -143,7 +152,9 @@ export function FileImageViewer({
 
   return (
     <>
-      <Stack.Screen options={{ gestureEnabled: !isZoomed, headerShown: true }} />
+      {isInPane ? null : (
+        <Stack.Screen options={{ gestureEnabled: !isZoomed, headerShown: true }} />
+      )}
       <FileViewerHeader file={file} />
       <View
         className="flex-1 bg-background px-safe pb-safe"

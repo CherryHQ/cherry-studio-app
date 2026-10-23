@@ -10,6 +10,8 @@ type SidebarNavRowProps = {
   onPress: () => void;
   testID: string;
   disabled?: boolean;
+  /** The module currently open beside chat. */
+  isSelected?: boolean;
 };
 
 // Gesture Handler's Pressable, not React Native's: these rows sit inside the
@@ -24,11 +26,12 @@ export function SidebarNavRow({
   onPress,
   testID,
   disabled,
+  isSelected,
 }: SidebarNavRowProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, selected: isSelected }}
       disabled={disabled}
       onPress={onPress}
       testID={testID}
@@ -37,11 +40,14 @@ export function SidebarNavRow({
         <View
           className={cn(
             'w-full flex-row items-center gap-4 rounded-xl px-5 py-2.5',
+            isSelected && 'bg-secondary/70',
             pressed && 'bg-sidebar-accent',
           )}
         >
           <Icon className="size-[18px] text-sidebar-foreground" strokeWidth={1.6} />
-          <Text className="text-base text-sidebar-foreground">{label}</Text>
+          <Text className={cn('text-base text-sidebar-foreground', isSelected && 'font-medium')}>
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>

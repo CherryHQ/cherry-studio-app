@@ -1,4 +1,4 @@
-import { resolveWindowClass } from '../windowClass';
+import { resolveFilePaneWidth, resolveWindowClass } from '../windowClass';
 
 const noInsets = { insetLeft: 0, insetRight: 0, textScale: 1 };
 
@@ -25,5 +25,16 @@ describe('resolveWindowClass', () => {
     expect(resolveWindowClass({ ...noInsets, textScale: 1.25, width: 1210 })).toBe('medium');
     expect(resolveWindowClass({ ...noInsets, textScale: 1.25, width: 834 })).toBe('compact');
     expect(resolveWindowClass({ ...noInsets, textScale: 0.85, width: 1000 })).toBe('medium');
+  });
+});
+
+describe('resolveFilePaneWidth', () => {
+  test.each([
+    [800, 360],
+    [930, 400],
+    [1160, 499],
+    [1600, 520],
+  ])('gives %ipt of content a %ipt file pane', (contentWidth, paneWidth) => {
+    expect(resolveFilePaneWidth(contentWidth)).toBe(paneWidth);
   });
 });

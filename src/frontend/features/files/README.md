@@ -1,7 +1,8 @@
 # File Viewer
 
 `/files/[fileEntryId]` is the shared page for managed images, Markdown, text, HTML, PDF, and Office
-Open XML documents, and RTF.
+Open XML documents, and RTF. `FileViewerPane` renders the same viewer in the file pane beside chat;
+only the route sets native screen options, and Office references go to the chat beside the pane.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.

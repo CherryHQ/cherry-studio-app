@@ -20,9 +20,10 @@ logging, and the single opening policy shared by the composer, messages, and fil
   `document`. JSON, XML, and YAML belong to `text`; PDF, Office, RTF and unsupported types belong
   to `document`.
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
-- `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
-  unsupported documents to the platform; PDF, Office Open XML and RTF open in the app. Previews
-  opened from a chat retain that chat's route identity so
+- `useOpenFileEntry`: `openFileEntry` opens supported kinds in the file pane beside chat when the
+  drawer group has room for one, otherwise routes them to `/files/[fileEntryId]`, and hands
+  unsupported documents to the platform; PDF, Office Open XML and RTF open in the app. It reports
+  where the file opened. Previews opened from a chat retain that chat's route identity so
   Office selections return to its existing composer. `openFileEntryWithSystem` is the viewer's
   explicit escape hatch.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
