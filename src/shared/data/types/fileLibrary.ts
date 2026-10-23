@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, type ErrorCode } from '@/shared/data/api/errors';
 
 import { FileEntrySchema, SafeNameSchema, TimestampSchema } from './file';
 
@@ -22,6 +22,13 @@ export const LibraryFileSchema = z.strictObject({
   versionCount: z.int().positive(),
 });
 export type LibraryFile = z.infer<typeof LibraryFileSchema>;
+
+export const MAX_FILE_MOVE_BATCH_SIZE = 50;
+
+/** Moves apply to the logical file, even when the selected entry is an older version. */
+export type FileMoveResult =
+  | { fileEntryId: string; status: 'moved' | 'unchanged' }
+  | { fileEntryId: string; status: 'failed'; code: ErrorCode };
 
 export type FilePlacement = {
   folderId?: string | null;

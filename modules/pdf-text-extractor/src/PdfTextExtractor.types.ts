@@ -7,7 +7,21 @@ export interface ExtractOptions {
    * 超过此限制的页面将被截断
    */
   maxPages?: number;
+  /** Resolved app language. Selects recognition languages; unsupported scripts skip OCR. */
+  language?: string;
 }
+
+export type ExtractionProgress = {
+  requestId: string;
+  completedPages: number;
+  totalPages: number;
+  phase: 'text' | 'ocr';
+};
+
+export type ExtractionControl = {
+  signal?: AbortSignal;
+  onProgress?: (progress: ExtractionProgress) => void;
+};
 
 /**
  * PDF 文本提取结果
@@ -29,7 +43,7 @@ export interface ExtractResult {
   extractedPages: number;
 
   /**
-   * 是否因页数限制而截断
+   * 是否因页数或文字长度限制而截断
    */
   isTruncated: boolean;
 
@@ -38,19 +52,32 @@ export interface ExtractResult {
    * 当为 true 时，text 可能为空或不完整
    */
   extractionError: boolean;
+  /** Rendering or recognition failed; partial text must not be sent. */
+  ocrError: boolean;
+  /** Image pages were skipped because the engine cannot read the app language's script. */
+  ocrUnavailable: boolean;
+  /** One-based nonblank pages whose visual content yielded no usable text. */
+  unrecognizedPages: number[];
 }
 
 /**
  * PDF 文本提取模块接口
  */
 export interface PdfTextExtractorModule {
+  /** Reserve before dispatch so cancellation cannot overtake a queued extraction. */
+  createRequest(): string;
+  cancelRequest(requestId: string): void;
+  addListener(
+    event: 'onProgress',
+    listener: (progress: ExtractionProgress) => void,
+  ): { remove(): void };
   /**
    * 异步提取 PDF 文本
    * @param filePath - PDF 文件路径（支持 file:// 协议或绝对路径）
    * @param options - 提取选项
    * @returns 提取结果
    */
-  extractText(filePath: string, options?: ExtractOptions): Promise<ExtractResult>;
+  extractText(filePath: string, options: ExtractOptions, requestId: string): Promise<ExtractResult>;
   /**
    * 获取 PDF 页数（异步方法）
    * @param filePath - PDF 文件路径

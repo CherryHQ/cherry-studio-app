@@ -79,6 +79,110 @@ describe('file library folders, versions, and workspaces', () => {
     validate();
   });
 
+  it('organizes files from different folders without changing their versions or entry references', async () => {
+    const source = await library.createFolder(null, 'Source');
+    const target = await library.createFolder(null, 'Archive');
+    await create(1, { folderId: source.id });
+    await create(2, { baseFileEntryId: id(1) });
+    await create(3);
+    await create(4, { filename: 'Painting.png', mediaType: 'image/png' });
+    await create(5, { folderId: target.id });
+    const before = await Promise.all([1, 2, 3, 4].map((n) => entries.getById(id(n))));
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      expect(await library.moveFiles([id(2), id(3), id(4), id(2)], target.id)).toEqual([
+        { fileEntryId: id(2), status: 'moved' },
+        { fileEntryId: id(3), status: 'moved' },
+        { fileEntryId: id(4), status: 'moved' },
+      ]);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(changed).toHaveBeenCalledWith(['/files/library']);
+    } finally {
+      unsubscribe();
+    }
+    expect(
+      (await library.list({ folderId: target.id })).items.map((file) => file.name).sort(),
+    ).toEqual(['Notes (2).md', 'Notes (3).md', 'Notes.md', 'Painting.png']);
+    expect((await library.list({ folderId: source.id })).items).toEqual([]);
+    expect((await library.history(id(1))).map((entry) => entry.id)).toEqual([id(2), id(1)]);
+    expect(await Promise.all([1, 2, 3, 4].map((n) => entries.getById(id(n))))).toEqual(before);
+    validate();
+  });
+
+  it('preserves duplicate root names and treats files already at the destination as unchanged', async () => {
+    const first = await library.createFolder(null, 'First');
+    const second = await library.createFolder(null, 'Second');
+    await create(1, { folderId: first.id });
+    await create(2, { folderId: second.id });
+    await create(3);
+    const existing = await library.file(id(3));
+    expect(await library.moveFiles([id(1), id(2), id(3)], null)).toEqual([
+      { fileEntryId: id(1), status: 'moved' },
+      { fileEntryId: id(2), status: 'moved' },
+      { fileEntryId: id(3), status: 'unchanged' },
+    ]);
+    expect((await library.list({ folderId: null })).items.map((file) => file.name)).toEqual([
+      'Notes.md',
+      'Notes.md',
+      'Notes.md',
+    ]);
+    expect(await library.file(id(3))).toEqual(existing);
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      expect(await library.moveFiles([id(1), id(2), id(3)], null)).toEqual(
+        [1, 2, 3].map((n) => ({ fileEntryId: id(n), status: 'unchanged' })),
+      );
+      expect(changed).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+    }
+    validate();
+  });
+
+  it('keeps successful moves committed when another file fails and retries without moving it twice', async () => {
+    const target = await library.createFolder(null, 'Archive');
+    await create(1);
+    await create(2);
+    await create(3);
+    database.sqlite.exec(`CREATE TRIGGER reject_file_move BEFORE UPDATE OF folder_id ON library_file
+      WHEN OLD.id = '${id(2)}' BEGIN SELECT RAISE(ABORT, 'Rejected move'); END;`);
+    expect(await library.moveFiles([id(1), id(2), id(3)], target.id)).toEqual([
+      { fileEntryId: id(1), status: 'moved' },
+      { fileEntryId: id(2), status: 'failed', code: 'INTERNAL_SERVER_ERROR' },
+      { fileEntryId: id(3), status: 'moved' },
+    ]);
+    expect((await library.list({ folderId: null })).items.map((file) => file.id)).toEqual([id(2)]);
+    database.sqlite.exec('DROP TRIGGER reject_file_move');
+    expect(await library.moveFiles([id(1), id(2), id(3)], target.id)).toEqual([
+      { fileEntryId: id(1), status: 'unchanged' },
+      { fileEntryId: id(2), status: 'moved' },
+      { fileEntryId: id(3), status: 'unchanged' },
+    ]);
+    validate();
+  });
+
+  it('reports unavailable sources and destinations without restoring files or falling back to root', async () => {
+    const source = await library.createFolder(null, 'Source');
+    const target = await library.createFolder(null, 'Archive');
+    await create(1, { folderId: source.id });
+    await create(2, { folderId: source.id });
+    await library.trashFileEntry(id(2));
+    expect(await library.moveFiles([id(1), id(2), id(99)], target.id)).toEqual([
+      { fileEntryId: id(1), status: 'moved' },
+      { fileEntryId: id(2), status: 'failed', code: 'NOT_FOUND' },
+      { fileEntryId: id(99), status: 'failed', code: 'NOT_FOUND' },
+    ]);
+    await library.trashFolder(source.id);
+    expect(await library.moveFiles([id(1)], source.id)).toEqual([
+      { fileEntryId: id(1), status: 'failed', code: 'NOT_FOUND' },
+    ]);
+    expect((await library.file(id(1))).folderId).toBe(target.id);
+    expect((await library.list({ folderId: null })).items).toEqual([]);
+    validate();
+  });
+
   it('keeps a stable path and rejects a second writer based on an old version', async () => {
     const folder = await library.createFolder(null, 'Research');
     const original = await create(1, { folderId: folder.id });

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { usePdfOcrActive } from '@/frontend/hooks/file';
 import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
@@ -123,7 +124,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
         </View>
       ) : null}
       {isWaitingForResponse ? (
-        <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
+        message.inputFileEntryIds ? (
+          <PendingInputReply fileEntryIds={message.inputFileEntryIds} />
+        ) : (
+          <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
+        )
       ) : null}
       {isStoppedWithoutAnswer ? (
         <MessagePart.Status testID="chat-message-stopped">
@@ -131,5 +136,17 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
         </MessagePart.Status>
       ) : null}
     </>
+  );
+}
+
+/** Names local attachment work, such as scan recognition, that delays the first token. */
+function PendingInputReply({ fileEntryIds }: { fileEntryIds: readonly string[] }) {
+  const { t } = useTranslation();
+  const recognizing = usePdfOcrActive(fileEntryIds);
+  return (
+    <MessagePart.Pending
+      accessibilityLabel={t('chat.message.waitingForResponse')}
+      reason={recognizing ? t('chat.message.recognizingScan') : undefined}
+    />
   );
 }

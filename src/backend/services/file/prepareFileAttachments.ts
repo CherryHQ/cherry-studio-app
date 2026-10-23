@@ -201,6 +201,7 @@ export async function prepareFileAttachments(
             ? { parser: content.parser }
             : {}),
           sourceTruncated: content.sourceTruncated,
+          ...(content.unrecognizedPages ? { unrecognizedPages: content.unrecognizedPages } : {}),
           requestTruncated: projected.didTruncate,
           includedCharacters: projected.characters,
         },

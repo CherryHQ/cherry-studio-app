@@ -8,8 +8,13 @@ import * as z from 'zod';
  */
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
-import { SafeNameSchema } from '@/shared/data/types/file';
-import type { FileFolder, LibraryFile } from '@/shared/data/types/fileLibrary';
+import { FileEntryIdSchema, SafeNameSchema } from '@/shared/data/types/file';
+import {
+  MAX_FILE_MOVE_BATCH_SIZE,
+  type FileFolder,
+  type FileMoveResult,
+  type LibraryFile,
+} from '@/shared/data/types/fileLibrary';
 
 export const FileLibraryQuerySchema = z.strictObject({
   folderId: z.uuid().nullable().optional(),
@@ -28,6 +33,10 @@ export const UpdateFileFolderSchema = z.strictObject({
 export const UpdateLibraryFileSchema = z.strictObject({
   folderId: z.uuid().nullable().optional(),
   name: SafeNameSchema.optional(),
+});
+export const MoveLibraryFilesSchema = z.strictObject({
+  fileEntryIds: z.array(FileEntryIdSchema).min(1).max(MAX_FILE_MOVE_BATCH_SIZE),
+  folderId: z.uuid().nullable(),
 });
 
 /**
@@ -53,6 +62,12 @@ export type FileSchemas = {
       params: { id: string };
       body: z.infer<typeof UpdateLibraryFileSchema>;
       response: undefined;
+    };
+  };
+  '/files/library/move': {
+    POST: {
+      body: z.infer<typeof MoveLibraryFilesSchema>;
+      response: FileMoveResult[];
     };
   };
   '/files/history': { GET: { query: { id: string }; response: FileEntry[] } };

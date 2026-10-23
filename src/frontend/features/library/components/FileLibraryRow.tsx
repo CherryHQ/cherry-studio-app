@@ -49,8 +49,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
       : t('library.modifiedAt', { date: modifiedDate });
 
   // Opening and selection retain one press target while drags yield to the
-  // result list. Long press opens the row's menu; selection is entered from
-  // the page's More menu.
+  // result list. Long press opens the row's menu, which also offers selection.
   return (
     <ContextMenu items={menuItems}>
       <Pressable

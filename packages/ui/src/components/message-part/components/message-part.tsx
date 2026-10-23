@@ -13,6 +13,8 @@ import { MessagePartError } from './message-part-feedback';
 import { MessagePartPending } from './message-part-pending';
 import { MessagePartPlaceholder } from './message-part-placeholder';
 import {
+  MessagePartSection,
+  MessagePartSectionBody,
   MessagePartSectionTitle,
   MessagePartTextSection,
   MessagePartValueSection,
@@ -37,6 +39,8 @@ export const MessagePart = Object.assign(MessagePartRoot, {
   Placeholder: MessagePartPlaceholder,
   Process: MessagePartProcess,
   Reasoning: MessagePartReasoning,
+  Section: MessagePartSection,
+  SectionBody: MessagePartSectionBody,
   SectionTitle: MessagePartSectionTitle,
   Source: MessagePartSource,
   Status: MessagePartStatus,

@@ -33,6 +33,7 @@ export type ReadAttachmentContent =
       kind: 'text';
       text: string;
       sourceTruncated: boolean;
+      unrecognizedPages?: number[];
       parser?: 'builtin' | 'native-pdf' | 'transcription';
     }
   | { kind: 'document'; parsed: ParsedAnydocDocument };
@@ -70,6 +71,9 @@ export async function readAttachmentContent(
         kind: 'text',
         text: parsed.output.text,
         sourceTruncated: parsed.output.truncated,
+        ...(parsed.output.unrecognizedPages
+          ? { unrecognizedPages: parsed.output.unrecognizedPages }
+          : {}),
         parser: parsed.parser,
       };
     }
@@ -93,7 +97,11 @@ export async function readAttachmentContent(
           ? 'file-bytes'
           : error.failure === 'empty'
             ? 'document-empty'
-            : 'document-invalid',
+            : error.failure === 'ocr'
+              ? 'document-ocr-failed'
+              : error.failure === 'ocr-unsupported'
+                ? 'document-ocr-unsupported'
+                : 'document-invalid',
       );
     }
     return fail('unavailable');

@@ -8,11 +8,13 @@ import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
 /** Tapping a folder enters it; its actions live in the same menu as long press. */
 export function FileLibraryFolderItem({
+  disabled,
   folder,
   menuItems,
   modifiedDate,
   onOpen,
 }: {
+  disabled?: boolean;
   folder: FileFolder;
   menuItems: readonly MenuItem[];
   modifiedDate: string;
@@ -26,8 +28,10 @@ export function FileLibraryFolderItem({
           <Pressable
             accessibilityLabel={folder.name}
             accessibilityRole="button"
+            accessibilityState={{ disabled }}
             className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
             onPress={() => onOpen(folder.id)}
+            disabled={disabled}
             testID={`file-library-folder-${folder.id}`}
           >
             <View className="size-10 items-center justify-center">
@@ -44,16 +48,18 @@ export function FileLibraryFolderItem({
           </Pressable>
         </ContextMenu>
       </View>
-      <ActionMenu items={menuItems}>
-        <Button
-          accessibilityLabel={t('library.manage', { name: folder.name })}
-          hitSlop={6}
-          icon={<EllipsisIcon />}
-          size="sm"
-          testID={`file-library-manage-${folder.id}`}
-          variant="ghost"
-        />
-      </ActionMenu>
+      {menuItems.length > 0 ? (
+        <ActionMenu items={menuItems}>
+          <Button
+            accessibilityLabel={t('library.manage', { name: folder.name })}
+            hitSlop={6}
+            icon={<EllipsisIcon />}
+            size="sm"
+            testID={`file-library-manage-${folder.id}`}
+            variant="ghost"
+          />
+        </ActionMenu>
+      ) : null}
     </View>
   );
 }

@@ -22,7 +22,11 @@ const RELATIONSHIP_NAMESPACE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const NOTES_LAYOUT_PLACEHOLDERS = new Set(['sldNum', 'dt', 'hdr', 'ftr', 'sldImg']);
 
-export type ExtractedDocumentText = { text: string; truncated: boolean };
+export type ExtractedDocumentText = {
+  text: string;
+  truncated: boolean;
+  unrecognizedPages?: number[];
+};
 
 /** Local OOXML extraction; ZIP entries never become filesystem paths. */
 export function extractOfficeText(

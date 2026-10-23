@@ -1,12 +1,16 @@
+import { getLocales } from 'expo-localization';
+
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import { configurePdfOcrLanguage } from '@/backend/services/file/pdfText';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { createDataServices } from './createDataServices';
 
@@ -38,6 +42,12 @@ export function createBackendServices({
   webSearch,
 }: BackendInfrastructure) {
   const data = createDataServices({ cache, preference });
+  configurePdfOcrLanguage(() =>
+    resolveAppLanguage(
+      preference.readCached('app.language'),
+      getLocales().map((locale) => locale.languageTag),
+    ),
+  );
   return {
     ...data,
     agent,
