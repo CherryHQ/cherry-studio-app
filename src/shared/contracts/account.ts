@@ -3,6 +3,7 @@ export type AccountErrorCode =
   | 'unavailable'
   | 'address'
   | 'connection'
+  | 'credentials'
   /** The enterprise server rejected the account or organization. */
   | 'rejected';
 
@@ -15,6 +16,7 @@ export class AccountError extends Error {
 
 /** Installation account state. Tokens and SDK objects never reach the UI. */
 export type AccountState = Readonly<{
+  /** Whether the build supports cloud sign-in. Private sign-in needs no portal configuration. */
   isAvailable: boolean;
   isSignedIn: boolean;
   /** Whether this runtime serves an enterprise profile rather than local data. */
@@ -25,20 +27,24 @@ export type AccountState = Readonly<{
   hasPrompted: boolean;
   isBusy: boolean;
   name?: string;
+  /** Preselects private sign-in when restoring or switching a private account. */
+  privateAddress?: string;
 }>;
 
+export type PrivateSignIn = { address: string; username: string; password: string };
+
 /**
- * Accounts Portal sign-in. A community profile opens local data; an enterprise profile opens its
+ * Account sign-in. A community profile opens local data; an enterprise profile opens its
  * own data. Switching between them reloads the app.
  */
 export interface AccountModule {
   getState(): AccountState;
   subscribe(listener: () => void): () => void;
   /**
-   * Browser sign-in. `address` selects a private enterprise deployment. Resolves true when a
+   * Cloud browser sign-in, or direct password sign-in to a private deployment. Resolves true when a
    * community account signed in; an enterprise account reloads the app instead.
    */
-  signIn(options?: { address?: string }): Promise<boolean>;
+  signIn(options?: PrivateSignIn): Promise<boolean>;
   signOut(): Promise<void>;
   /** Opens local data and keeps the account signed in. */
   useLocal(): Promise<void>;

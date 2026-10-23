@@ -1,7 +1,7 @@
 import { Button, Image, Input, TextField, useToast } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, type TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AccountError, type AccountErrorCode } from '@/shared/contracts/account';
@@ -14,6 +14,7 @@ export const ACCOUNT_ERROR_KEYS = {
   unavailable: 'account.error.unavailable',
   address: 'account.error.address',
   connection: 'account.error.connection',
+  credentials: 'account.error.credentials',
   rejected: 'account.error.rejected',
 } as const satisfies Record<AccountErrorCode, string>;
 
@@ -26,20 +27,27 @@ type LoginScreenProps = {
 };
 
 /**
- * Accounts Portal sign-in in the external browser. The portal chooses between the community
- * account and an organization; a private deployment supplies its own server address.
+ * Cloud sign-in opens Accounts Portal; private deployments use their own password endpoint.
  */
 export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScreenProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const insets = useSafeAreaInsets();
   const { account, state } = useAccount();
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [address, setAddress] = useState('');
+  const [isPrivate, setIsPrivate] = useState(Boolean(state.privateAddress));
+  const [address, setAddress] = useState(state.privateAddress ?? '');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const usernameInput = useRef<TextInput>(null);
+  const passwordInput = useRef<TextInput>(null);
+  const canSignIn =
+    !state.isBusy &&
+    (isPrivate ? Boolean(address.trim() && username.trim() && password) : state.isAvailable);
 
   const signIn = () => {
+    if (!canSignIn) return;
     void account
-      .signIn(isPrivate ? { address } : {})
+      .signIn(isPrivate ? { address, username, password } : undefined)
       .then((signedIn) => {
         if (signedIn) onSignedIn?.();
       })
@@ -55,6 +63,7 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
     >
       <ScrollView
+        automaticallyAdjustKeyboardInsets
         contentContainerClassName="flex-grow justify-between gap-8 pb-4"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -73,36 +82,74 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
               {t(expired ? 'account.login.expiredTitle' : 'account.login.title')}
             </Text>
             <Text className="text-center text-base text-muted-foreground">
-              {t(expired ? 'account.login.expiredDescription' : 'account.login.description')}
+              {t(
+                expired
+                  ? 'account.login.expiredDescription'
+                  : isPrivate
+                    ? 'account.login.privateDescription'
+                    : 'account.login.description',
+              )}
             </Text>
           </View>
         </View>
         <View className="gap-3 px-6">
           {isPrivate ? (
-            <TextField disabled={state.isBusy}>
-              <TextField.Label>{t('account.address')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('account.address')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                onChangeText={setAddress}
-                onSubmitEditing={signIn}
-                returnKeyType="go"
-                value={address}
-              />
-              <TextField.Description>{t('account.addressHint')}</TextField.Description>
-            </TextField>
+            <View className="gap-3">
+              <TextField disabled={state.isBusy}>
+                <TextField.Label>{t('account.address')}</TextField.Label>
+                <Input
+                  accessibilityLabel={t('account.address')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  onChangeText={setAddress}
+                  onSubmitEditing={() => usernameInput.current?.focus()}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  value={address}
+                />
+                <TextField.Description>{t('account.addressHint')}</TextField.Description>
+              </TextField>
+              <TextField disabled={state.isBusy}>
+                <TextField.Label>{t('account.username')}</TextField.Label>
+                <Input
+                  accessibilityLabel={t('account.username')}
+                  autoCapitalize="none"
+                  autoComplete="username"
+                  autoCorrect={false}
+                  onChangeText={setUsername}
+                  onSubmitEditing={() => passwordInput.current?.focus()}
+                  ref={usernameInput}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  textContentType="username"
+                  value={username}
+                />
+              </TextField>
+              <TextField disabled={state.isBusy}>
+                <TextField.Label>{t('account.password')}</TextField.Label>
+                <Input
+                  accessibilityLabel={t('account.password')}
+                  autoComplete="current-password"
+                  onChangeText={setPassword}
+                  onSubmitEditing={signIn}
+                  ref={passwordInput}
+                  returnKeyType="go"
+                  textContentType="password"
+                  type="password"
+                  value={password}
+                  visibilityAccessibilityLabels={{
+                    hide: t('account.hidePassword'),
+                    show: t('account.showPassword'),
+                  }}
+                />
+              </TextField>
+            </View>
           ) : null}
-          <Button
-            disabled={!state.isAvailable || state.isBusy || (isPrivate && !address.trim())}
-            loading={state.isBusy}
-            onPress={signIn}
-            size="lg"
-          >
+          <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">
             {t('account.login.signIn')}
           </Button>
-          {state.isAvailable ? null : (
+          {state.isAvailable || isPrivate ? null : (
             <Text className="text-center text-sm text-muted-foreground">
               {t('account.error.unavailable')}
             </Text>
@@ -110,7 +157,10 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
           <View className="min-h-12 flex-row items-center justify-center gap-2">
             <Button
               disabled={state.isBusy}
-              onPress={() => setIsPrivate((value) => !value)}
+              onPress={() => {
+                setPassword('');
+                setIsPrivate((value) => !value);
+              }}
               size="xs"
               variant="ghost"
             >

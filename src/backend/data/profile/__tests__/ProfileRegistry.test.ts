@@ -49,4 +49,20 @@ describe('ProfileRegistry', () => {
     expect(registry.getActive()).toBe(LOCAL_PROFILE);
     expect(JSON.parse(stored()!)).toEqual({ version: 1, profiles: [], active: 'local' });
   });
+
+  it('isolates private identities from portal identities and retains them across server moves', () => {
+    const { registry, stored } = createRegistry();
+    const cloud = registry.resolve(identity, 'https://cloud.example.com');
+    const privateIdentity = {
+      authentication: 'password' as const,
+      deployment: identity.deployment,
+      subject: identity.subject,
+    };
+    const privateProfile = registry.resolve(privateIdentity, 'https://private.example.com');
+    expect(privateProfile.id).not.toBe(cloud.id);
+    const moved = registry.resolve(privateIdentity, 'https://moved.example.com/api');
+    expect(moved.id).toBe(privateProfile.id);
+    registry.setActive(moved);
+    expect(createRegistry(stored()).registry.getActive()).toEqual(moved);
+  });
 });

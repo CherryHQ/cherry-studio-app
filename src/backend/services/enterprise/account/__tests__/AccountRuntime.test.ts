@@ -1,5 +1,6 @@
 import type { AuthState } from '@cherryinternal/accounts-portal/client';
 
+import { HttpError } from '@/backend/services/http';
 import { type ActiveProfile, LOCAL_PROFILE } from '@/shared/data/activeProfile';
 
 import { AccountRuntime } from '../AccountRuntime';
@@ -19,11 +20,23 @@ const enterpriseProfile: ActiveProfile = {
   address: 'https://cse.example.com',
 };
 
+const privateProfile: ActiveProfile = {
+  id: '9b2e5f0d-3c8e-4d2b-8f4a-2e3d4c5b6a71',
+  identity: { authentication: 'password', deployment: 'server-1', subject: 'user-1' },
+  address: 'https://private.example.com/api',
+};
+const privateCredentials = {
+  accessToken: 'private-token',
+  refreshToken: 'refresh-1',
+  serverUniqueId: 'server-1',
+  user: { id: 'user-1', username: 'Ada' },
+};
+
 function setup(session: AuthState, active: ActiveProfile = LOCAL_PROFILE) {
   const portal = {
     ready: Promise.resolve(),
     getState: jest.fn(() => session),
-    subscribe: jest.fn(),
+    subscribe: jest.fn((_listener: (state: AuthState) => void) => () => {}),
     beginSignIn: jest.fn(async () => ({ url: 'https://portal/sign-in', redirectUri: 'cb://' })),
     completeSignIn: jest.fn(async () => session),
     getProductToken: jest.fn(async () => 'product-token'),
@@ -37,10 +50,24 @@ function setup(session: AuthState, active: ActiveProfile = LOCAL_PROFILE) {
     profiles: { resolve: jest.fn(() => enterpriseProfile), setActive: jest.fn() },
     prompt: { read: () => false, write: jest.fn() },
     createApi: jest.fn(() => ({
+      getUser: jest.fn(async () => privateCredentials.user),
       getConfiguration: jest.fn(async () => ({ serverUniqueId: 'server-1' })),
       setupAgent: jest.fn(),
       downloadLibraryItem: jest.fn(),
     })),
+    createPrivateApi: jest.fn(() => ({
+      signIn: jest.fn(async () => privateCredentials),
+      refresh: jest.fn(async () => ({
+        ...privateCredentials,
+        accessToken: 'rotated-token',
+        refreshToken: 'refresh-2',
+      })),
+    })),
+    credentials: {
+      read: jest.fn(async (): Promise<string | null> => JSON.stringify(privateCredentials)),
+      write: jest.fn(async (_id: string, _value: string) => {}),
+      delete: jest.fn(async (_id: string) => {}),
+    },
     openBrowser: jest.fn(async (): Promise<string | null> => 'cb://?code=1'),
     reload: jest.fn(async () => {}),
   };
@@ -62,9 +89,9 @@ describe('AccountRuntime', () => {
     expect(runtime.getState().hasPrompted).toBe(true);
   });
 
-  it('opens the enterprise profile reached at the entered private address', async () => {
+  it('opens the cloud enterprise profile using the configured cloud address', async () => {
     const { runtime, options } = setup(signedIn('enterprise'));
-    await expect(runtime.signIn({ address: 'ai.corp.example/api' })).resolves.toBe(false);
+    await expect(runtime.signIn()).resolves.toBe(false);
     expect(options.profiles.resolve).toHaveBeenCalledWith(
       {
         deployment: 'server-1',
@@ -72,7 +99,7 @@ describe('AccountRuntime', () => {
         subject: 'user-1',
         productProfileId: 'org-1',
       },
-      'https://ai.corp.example/api',
+      'https://cse.example.com',
     );
     expect(options.profiles.setActive).toHaveBeenCalledWith(enterpriseProfile);
     expect(options.reload).toHaveBeenCalled();
@@ -96,5 +123,155 @@ describe('AccountRuntime', () => {
     const { runtime } = setup({ _tag: 'signedOut' }, enterpriseProfile);
     await runtime.verify();
     expect(runtime.getState().needsSignIn).toBe(true);
+  });
+
+  it('signs into a private deployment without a portal and persists tokens before switching', async () => {
+    const { options } = setup({ _tag: 'signedOut' });
+    options.profiles.resolve.mockReturnValue(privateProfile);
+    const api = options.createPrivateApi();
+    options.createPrivateApi.mockReturnValue(api);
+    const runtime = new AccountRuntime({ ...options, portal: null });
+    await runtime.signIn({
+      address: 'private.example.com/api/',
+      username: ' Ada ',
+      password: ' secret ',
+    });
+    expect(api.signIn).toHaveBeenCalledWith('Ada', ' secret ');
+    expect(options.createPrivateApi).toHaveBeenLastCalledWith('https://private.example.com/api');
+    expect(options.profiles.resolve).toHaveBeenCalledWith(
+      privateProfile.identity,
+      privateProfile.address,
+    );
+    expect(options.credentials.write).toHaveBeenCalledWith(
+      privateProfile.id,
+      JSON.stringify(privateCredentials),
+    );
+    expect(options.credentials.write.mock.invocationCallOrder[0]).toBeLessThan(
+      options.profiles.setActive.mock.invocationCallOrder[0]!,
+    );
+    expect(options.profiles.setActive).toHaveBeenCalledWith(privateProfile);
+    expect(options.openBrowser).not.toHaveBeenCalled();
+  });
+
+  it('keeps the active profile and credentials when a private password is rejected', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' });
+    const api = options.createPrivateApi();
+    api.signIn.mockRejectedValue(new HttpError('Unauthorized', { kind: 'http', status: 401 }));
+    options.createPrivateApi.mockReturnValue(api);
+    await expect(
+      runtime.signIn({ address: privateProfile.address!, username: 'Ada', password: 'bad' }),
+    ).rejects.toMatchObject({ code: 'credentials' });
+    expect(options.credentials.write).not.toHaveBeenCalled();
+    expect(options.profiles.setActive).not.toHaveBeenCalled();
+    expect(options.openBrowser).not.toHaveBeenCalled();
+  });
+
+  it('restores a private session independently of a signed-out portal, including offline starts', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    const api = options.createApi();
+    api.getUser.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
+    options.createApi.mockReturnValue(api);
+    await runtime.verify();
+    options.portal.subscribe.mock.calls[0]![0]({ _tag: 'signedOut' });
+    expect(runtime.getState()).toMatchObject({
+      isSignedIn: true,
+      needsSignIn: false,
+      name: 'Ada',
+      privateAddress: privateProfile.address,
+    });
+    expect(await runtime.getProductToken()).toBe('private-token');
+    expect(options.portal.getProductToken).not.toHaveBeenCalled();
+  });
+
+  it('shares concurrent refreshes and does not rotate again for a late 401 from the old token', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    const api = options.createPrivateApi();
+    options.createPrivateApi.mockReturnValue(api);
+    await expect(
+      Promise.all([
+        runtime.refreshProductToken('private-token'),
+        runtime.refreshProductToken('private-token'),
+      ]),
+    ).resolves.toEqual(['rotated-token', 'rotated-token']);
+    expect(await runtime.refreshProductToken('private-token')).toBe('rotated-token');
+    expect(await runtime.getProductToken()).toBe('rotated-token');
+    expect(api.refresh).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(options.credentials.write.mock.calls[0]![1])).toMatchObject({
+      refreshToken: 'refresh-2',
+    });
+  });
+
+  it('rejects a rotated identity before it can overwrite stored credentials', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    const api = options.createPrivateApi();
+    api.refresh.mockResolvedValue({
+      ...privateCredentials,
+      user: { id: 'someone-else', username: 'Other' },
+    });
+    options.createPrivateApi.mockReturnValue(api);
+    await expect(runtime.refreshProductToken('private-token')).rejects.toMatchObject({
+      code: 'rejected',
+    });
+    expect(options.credentials.write).not.toHaveBeenCalled();
+    expect(runtime.getState().needsSignIn).toBe(true);
+  });
+
+  it('does not let an in-flight refresh recreate credentials after sign-out', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    const api = options.createPrivateApi();
+    let finish!: (value: typeof privateCredentials) => void;
+    let started!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    api.refresh.mockImplementation(() => {
+      started();
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    options.createPrivateApi.mockReturnValue(api);
+    const refresh = runtime.refreshProductToken('private-token');
+    const rejection = expect(refresh).rejects.toMatchObject({ code: 'rejected' });
+    await pending;
+    const signOut = runtime.signOut();
+    finish(privateCredentials);
+    await Promise.all([rejection, signOut]);
+    expect(options.credentials.write).not.toHaveBeenCalled();
+    expect(options.credentials.delete).toHaveBeenCalledWith(privateProfile.id);
+    expect(options.portal.signOut).not.toHaveBeenCalled();
+    expect(options.profiles.setActive).toHaveBeenCalledWith(LOCAL_PROFILE);
+  });
+
+  it('asks a private account to sign in again when its stored credentials are missing', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    options.credentials.read.mockResolvedValue(null);
+    await runtime.verify();
+    expect(runtime.getState().needsSignIn).toBe(true);
+  });
+
+  it('refuses a late 401 once sign-out has started deleting credentials', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    await runtime.getProductToken();
+    let finishDelete!: () => void;
+    let started!: () => void;
+    const deleting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    options.credentials.delete.mockImplementation(() => {
+      started();
+      return new Promise<void>((resolve) => {
+        finishDelete = resolve;
+      });
+    });
+    const signOut = runtime.signOut();
+    await deleting;
+    await expect(runtime.refreshProductToken('private-token')).rejects.toMatchObject({
+      code: 'rejected',
+    });
+    finishDelete();
+    await signOut;
+    expect(options.createPrivateApi).not.toHaveBeenCalled();
+    expect(options.credentials.write).not.toHaveBeenCalled();
   });
 });

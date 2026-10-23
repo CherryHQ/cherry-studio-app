@@ -1,7 +1,8 @@
 # Enterprise Edition
 
-Users sign in with Accounts Portal. A community account keeps the installation's local data. An
-enterprise account, on the cloud service or a private deployment, opens its own data and receives
+Cloud users sign in with Accounts Portal; private deployments use their own username and password
+through `/auth/login`. A community account keeps the installation's local data. An enterprise
+account, on the cloud service or a private deployment, opens its own data and receives
 model providers, models, default models, Agents, Skills and MCP servers from its organization's
 enterprise server.
 
@@ -10,6 +11,8 @@ enterprise server.
 Each enterprise identity owns a separate data profile; local data is the `local` profile, shared by
 community accounts and use without an account. An identity is the enterprise server id
 (`serverUniqueId`), the IdP issuer and subject, and the Accounts Portal organization profile id.
+A private password identity consists of the server id, user id and password authentication kind,
+so it never shares a profile with a cloud identity. Existing cloud identities keep their shape.
 Tokens, roles and display names are not part of it. The registry also records the address each
 enterprise profile was last reached at, so a moved server keeps its data.
 
@@ -17,6 +20,7 @@ enterprise profile was last reached at, so a moved server keeps its data.
 | --- | --- |
 | Installation directory of profiles (`ProfileRegistry`) | MMKV `cherry-installation-profiles` |
 | Accounts Portal session and the sign-in prompt flag | SecureStore `accounts-portal.*`, MMKV `cherry-installation-account` |
+| Private access and refresh tokens (never the password) | SecureStore `profile.<id>.private-account` |
 | Local profile | Original Documents, SQLite, MMKV and SecureStore names |
 | Enterprise profile | `Documents/profiles/<id>/`; MMKV stores and SecureStore keys prefixed `profile.<id>.` |
 
@@ -32,10 +36,12 @@ profile only, never by generation, so a restore keeps them.
 `AccountRuntime` (`src/backend/services/enterprise/account`, exposed as `Backend.account`) owns the
 installation's single Accounts Portal SDK instance, composed natively in
 `src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage and refresh.
+The runtime also owns private credentials; `privateAccountApi` validates the v2 password exchange
+over the shared HTTP transport. Private sign-in works without Accounts Portal build configuration.
 
 - **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) opens the portal in the external
   browser, where the user picks the community account or an organization. A private deployment
-  enters its server address on the same page; otherwise the build's enterprise address is used.
+  enters its server address, username and password on the same page and signs in directly.
 - **New installation:** `FirstUseGate` shows `/login` before onboarding. Signing in to the community
   account or choosing "Not now" continues to the existing provider setup; an enterprise account
   reloads into its profile and skips onboarding. Installations with data never see the page; they
@@ -43,7 +49,12 @@ installation's single Accounts Portal SDK instance, composed natively in
 - **Enterprise sign-in:** reads `/configurations` once with the product token to learn the server
   id, resolves the profile and reloads into it.
 - **Cold start:** the last profile opens without the network. `verify()` then checks that the
-  restored session still matches it.
+  restored session still matches it. Private sessions validate `/users/me` and `/configurations`
+  against the stored user and server ids; an offline start keeps the cached session and data.
+- **Private refresh:** a 401 on an authenticated request rotates credentials through `/auth/refresh`
+  and retries that request once. Concurrent rejections share one rotation. Refresh cannot change
+  the user or server identity. Sign-out waits for pending rotation and deletes that profile's
+  credentials; cloud sessions remain independent.
 - **Expiry:** an explicit rejection (401/403, `signed_out`, or a session that no longer matches)
   replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the device;
   the page offers sign-in again or local data.

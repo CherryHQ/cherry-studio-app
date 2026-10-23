@@ -9,12 +9,19 @@ import {
 
 const logger = loggerService.withContext('ProfileRegistry');
 
-const IdentitySchema = z.strictObject({
-  deployment: z.string().min(1),
-  issuer: z.string().min(1),
-  subject: z.string().min(1),
-  productProfileId: z.string().min(1),
-});
+const IdentitySchema = z.union([
+  z.strictObject({
+    deployment: z.string().min(1),
+    issuer: z.string().min(1),
+    subject: z.string().min(1),
+    productProfileId: z.string().min(1),
+  }),
+  z.strictObject({
+    deployment: z.string().min(1),
+    subject: z.string().min(1),
+    authentication: z.literal('password'),
+  }),
+]);
 const RegistrySchema = z.strictObject({
   version: z.literal(1),
   profiles: z.array(
@@ -31,11 +38,11 @@ export interface ProfileRegistryStorage {
   write(value: string): void;
 }
 
-const sameIdentity = (a: EnterpriseIdentity, b: EnterpriseIdentity) =>
-  a.deployment === b.deployment &&
-  a.issuer === b.issuer &&
-  a.subject === b.subject &&
-  a.productProfileId === b.productProfileId;
+const sameIdentity = (a: EnterpriseIdentity, b: EnterpriseIdentity) => {
+  if (a.deployment !== b.deployment || a.subject !== b.subject) return false;
+  if ('authentication' in a) return 'authentication' in b;
+  return 'issuer' in b && a.issuer === b.issuer && a.productProfileId === b.productProfileId;
+};
 
 /**
  * Installation directory of data profiles: which enterprise identity owns which profile id, and

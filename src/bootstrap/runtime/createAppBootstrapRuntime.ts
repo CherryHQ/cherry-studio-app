@@ -160,6 +160,7 @@ export function createAppBootstrapRuntime(
   const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
   enterpriseSync.configure({
     getProductToken: account.getProductToken,
+    refreshProductToken: account.refreshProductToken,
     reportRejected: account.reportRejected,
   });
   const services = createBackendServices({

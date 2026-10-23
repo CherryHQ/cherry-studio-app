@@ -56,6 +56,7 @@ const SETUP_CONCURRENCY = 4;
 /** The installation account, as the sync needs it. */
 export interface EnterpriseSession {
   getProductToken(): Promise<string>;
+  refreshProductToken?(rejectedToken: string): Promise<string | null>;
   /** The server refused the session; the user must sign in again. */
   reportRejected(): void;
 }
@@ -139,6 +140,7 @@ export class EnterpriseSyncService extends BaseService {
     const api = createEnterpriseApi({
       baseUrl: profile.address,
       getToken: session.getProductToken,
+      refreshToken: session.refreshProductToken,
     });
     const skipped: SkipLog = [];
     const configuration = parseConfiguration(await api.getConfiguration(), skipped);

@@ -8,7 +8,11 @@ import * as WebBrowser from 'expo-web-browser';
 import { createMMKV } from 'react-native-mmkv';
 import * as z from 'zod';
 
-import { AccountRuntime, createEnterpriseApi } from '@/backend/services/enterprise';
+import {
+  AccountRuntime,
+  createEnterpriseApi,
+  createPrivateAccountApi,
+} from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
 import { AccountError } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
@@ -99,7 +103,15 @@ function createAccount(): AccountRuntime {
       read: () => store.getBoolean('sign-in-prompted') ?? false,
       write: () => store.set('sign-in-prompted', true),
     },
-    createApi: (baseUrl, getToken) => createEnterpriseApi({ baseUrl, getToken }),
+    createApi: (baseUrl, getToken, refreshToken) =>
+      createEnterpriseApi({ baseUrl, getToken, refreshToken }),
+    createPrivateApi: createPrivateAccountApi,
+    credentials: {
+      read: (id) => SecureStore.getItemAsync(`profile.${id}.private-account`, STORAGE_OPTIONS),
+      write: (id, value) =>
+        SecureStore.setItemAsync(`profile.${id}.private-account`, value, STORAGE_OPTIONS),
+      delete: (id) => SecureStore.deleteItemAsync(`profile.${id}.private-account`, STORAGE_OPTIONS),
+    },
     openBrowser: async (url, callbackUrl) => {
       const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl);
       return result.type === 'success' ? result.url : null;

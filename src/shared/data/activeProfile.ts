@@ -4,14 +4,13 @@
  */
 
 /** Stable enterprise identity. Tokens, roles and display names are not part of it. */
-export type EnterpriseIdentity = Readonly<{
-  /** Enterprise server id (`serverUniqueId`), not its address. */
-  deployment: string;
-  issuer: string;
-  subject: string;
-  /** Accounts Portal enterprise profile id. */
-  productProfileId: string;
-}>;
+export type EnterpriseIdentity = Readonly<
+  {
+    /** Enterprise server id (`serverUniqueId`), not its address. */
+    deployment: string;
+    subject: string;
+  } & ({ issuer: string; productProfileId: string } | { authentication: 'password' })
+>;
 
 export type ActiveProfile =
   | Readonly<{ id: 'local'; identity: null; address: null }>
