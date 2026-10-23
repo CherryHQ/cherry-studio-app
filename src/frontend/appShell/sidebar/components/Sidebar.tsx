@@ -10,6 +10,7 @@ import {
   parseChatRoute,
   type ChatRouteParamsInput,
 } from '@/frontend/appShell/navigation/chat';
+import { useFilePane } from '@/frontend/appShell/pane';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
@@ -39,6 +40,7 @@ export function Sidebar({ navigation }: SidebarProps) {
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
   const isPersistent = useIsSidebarPersistent();
+  const pane = useFilePane();
 
   // A permanent drawer has nothing to close, but an overlay left open before the window widened
   // would otherwise reappear over the chat once the window narrows again.
@@ -62,7 +64,9 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
       openLibrary: () => {
         navigation.closeDrawer();
-        router.push('/library');
+        // Files open beside the current chat when the window has room for both.
+        if (pane?.isAvailable) pane.open();
+        else router.push('/library');
       },
       openPaintings: () => {
         navigation.closeDrawer();
@@ -94,6 +98,7 @@ export function Sidebar({ navigation }: SidebarProps) {
       sessionId,
       navigation,
       openSessionSearch,
+      pane,
       router,
       source,
       startRemoteChat,

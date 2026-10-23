@@ -19,8 +19,9 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
   `document`. JSON, XML, and YAML belong to `text`; PDF and unsupported types belong to `document`.
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
-- `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
-  `document` to the platform. Previews opened from a chat retain that chat's route identity so
+- `useOpenFileEntry`: `openFileEntry` opens supported kinds in the file pane beside chat when the
+  drawer group has room for one, otherwise routes them to `/files/[fileEntryId]`, and hands
+  unsupported `document` kinds to the platform. It reports where the file opened. Previews opened from a chat retain that chat's route identity so
   Office selections return to its existing composer. `openFileEntryWithSystem` is the viewer's
   explicit escape hatch.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by

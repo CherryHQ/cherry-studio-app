@@ -13,6 +13,7 @@ import {
   parseChatRoute,
   type ChatRouteParamsInput,
 } from '@/frontend/appShell/navigation/chat';
+import { useFilePane } from '@/frontend/appShell/pane';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { canEditFileImage } from '@/shared/contracts/fileImageEdit';
@@ -26,6 +27,9 @@ import {
 
 const logger = loggerService.withContext('FileEntryPreview');
 
+/** Where a file opened: beside chat, on its own page, or in another app. */
+export type FileEntryOpenTarget = 'pane' | 'route' | 'system';
+
 /** Shared by cards and the viewer's explicit system-open escape hatch. */
 export function useOpenFileEntry(options: FileExportOptions = {}) {
   const router = useRouter();
@@ -35,6 +39,7 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   const { toast } = useToast();
   const createWatermark = useExportWatermark(options.watermark);
   const requestImageEdit = useImagePreviewEditRequest();
+  const pane = useFilePane();
 
   const openFileEntryWithSystem = async ({ entry, uri }: ResolvedFile) => {
     try {
@@ -59,31 +64,40 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
     }
   };
 
-  const openFileEntry = (file: ResolvedFile, replaceImage?: ReplacePreviewImage) => {
+  const openFileEntry = (
+    file: ResolvedFile,
+    replaceImage?: ReplacePreviewImage,
+  ): FileEntryOpenTarget => {
     if (fileEntryPreviewKind(file.entry) === 'document' && !canPreviewDocument(file.entry)) {
       void openFileEntryWithSystem(file);
-    } else {
-      const imageEditRequestId =
-        replaceImage && canEditFileImage(file.entry.mediaType)
-          ? requestImageEdit(file.entry.id, replaceImage)
-          : undefined;
-      const chat = pathname === '/' ? parseChatRoute(params) : undefined;
-      try {
-        router.push({
-          pathname: '/files/[fileEntryId]',
-          params: {
-            fileEntryId: file.entry.id,
-            ...(imageEditRequestId ? { imageEditRequestId } : {}),
-            ...(chat?.status === 'ready'
-              ? { sourceChat: JSON.stringify(chatRouteParams(chat.target)) }
-              : {}),
-          },
-        });
-      } catch (error) {
-        if (imageEditRequestId) finishImagePreviewEditRequest(imageEditRequestId);
-        throw error;
-      }
+      return 'system';
     }
+    const imageEditRequestId =
+      replaceImage && canEditFileImage(file.entry.mediaType)
+        ? requestImageEdit(file.entry.id, replaceImage)
+        : undefined;
+    // Beside chat, a file opens in the pane instead of covering the conversation.
+    if (pane?.isAvailable) {
+      pane.openFile({ entryId: file.entry.id, imageEditRequestId });
+      return 'pane';
+    }
+    const chat = pathname === '/' ? parseChatRoute(params) : undefined;
+    try {
+      router.push({
+        pathname: '/files/[fileEntryId]',
+        params: {
+          fileEntryId: file.entry.id,
+          ...(imageEditRequestId ? { imageEditRequestId } : {}),
+          ...(chat?.status === 'ready'
+            ? { sourceChat: JSON.stringify(chatRouteParams(chat.target)) }
+            : {}),
+        },
+      });
+    } catch (error) {
+      if (imageEditRequestId) finishImagePreviewEditRequest(imageEditRequestId);
+      throw error;
+    }
+    return 'route';
   };
 
   return { openFileEntry, openFileEntryWithSystem };

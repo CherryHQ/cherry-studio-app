@@ -1,13 +1,19 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
 import { ContentState } from '@cherrystudio/ui/components';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useGlobalSearchParams, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import { parseChatPreviewSource, type ChatTarget } from '@/frontend/appShell/navigation/chat';
+import {
+  parseChatPreviewSource,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+  type ChatTarget,
+} from '@/frontend/appShell/navigation/chat';
+import type { FilePaneFile } from '@/frontend/appShell/pane';
 import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -19,6 +25,8 @@ import { FileTextViewer } from './components/FileTextViewer';
 
 export function FileViewerScreen() {
   const { t } = useTranslation();
+  const [background, foreground] = useThemeColor(['background', 'foreground']);
+  const { theme } = useUniwind();
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     imageEditRequestId?: string | string[];
@@ -39,16 +47,41 @@ export function FileViewerScreen() {
     );
   }
   return (
-    <FileViewerRoute
-      entryId={entryId.data}
+    <>
+      <Stack.Screen
+        options={{
+          contentStyle: { backgroundColor: background },
+          headerStyle: { backgroundColor: background },
+          headerTintColor: foreground,
+          headerTransparent: false,
+        }}
+      />
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      <FileViewer
+        entryId={entryId.data}
+        imageEditRequestId={imageEditRequestId}
+        sourceChat={sourceChat}
+        key={`${entryId.data}:${imageEditRequestId ?? ''}`}
+      />
+    </>
+  );
+}
+
+/** The same viewer beside the chat; Office references go to the conversation it sits next to. */
+export function FileViewerPane({ entryId, imageEditRequestId }: FilePaneFile) {
+  const chatRoute = parseChatRoute(useGlobalSearchParams<ChatRouteParamsInput>());
+
+  return (
+    <FileViewer
+      entryId={entryId}
       imageEditRequestId={imageEditRequestId}
-      sourceChat={sourceChat}
-      key={`${entryId.data}:${imageEditRequestId ?? ''}`}
+      sourceChat={chatRoute.status === 'ready' ? chatRoute.target : undefined}
+      key={`${entryId}:${imageEditRequestId ?? ''}`}
     />
   );
 }
 
-function FileViewerRoute({
+function FileViewer({
   entryId,
   imageEditRequestId,
   sourceChat,
@@ -59,22 +92,11 @@ function FileViewerRoute({
 }) {
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
-  const [background, foreground] = useThemeColor(['background', 'foreground']);
-  const { theme } = useUniwind();
   const file = query.data;
   const kind = file ? fileEntryPreviewKind(file.entry) : 'document';
 
   return (
     <View className="flex-1 bg-background">
-      <Stack.Screen
-        options={{
-          contentStyle: { backgroundColor: background },
-          headerStyle: { backgroundColor: background },
-          headerTintColor: foreground,
-          headerTransparent: false,
-        }}
-      />
-      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       {!file ? (
         <>
           <RouteHeader

@@ -21,6 +21,11 @@ narrower class sooner. The thresholds come from the narrowest readable regions i
 a 360-point file pane beside a 440-point conversation needs 800 points, and a 280-point sidebar
 beside both needs 1080. Layout owners read the class; pages and components never branch on device
 names. `useIsSidebarPersistent` is the shell's single rule for keeping the sidebar beside chat.
+`resolveFilePaneWidth` gives a pane 43% of the content width, kept between 360 and 520 points.
+
+`PaneChromeProvider` marks a page rendered in a side pane rather than its own native-stack screen.
+Headers and bottom toolbars inside it render inline, and the provider supplies the pane's exit as
+the header's leading action.
 
 `ChatDockLayoutProvider` shares the height measured by `ChatDockFooter`, including its top gap,
 across the chat and drawer. The sidebar adds this space to the composer's action-center offset so

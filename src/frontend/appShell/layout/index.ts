@@ -4,5 +4,6 @@ export {
   ReadingContentFrame,
   useIsFormContentConstrained,
 } from './ScreenContentFrame';
+export { PaneChromeProvider, usePaneChrome } from './PaneChrome';
 export { useIsSidebarPersistent, useWindowClass } from './useWindowClass';
-export { type WindowClass, windowRegionWidths } from './windowClass';
+export { resolveFilePaneWidth, type WindowClass, windowRegionWidths } from './windowClass';

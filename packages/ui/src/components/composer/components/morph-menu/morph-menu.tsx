@@ -38,8 +38,10 @@ const defaultTriggerSize = composerActionSize;
 //
 // Proportional rather than fixed, because what has to fit is a translated label
 // beside a trailing control, and that pair scales with the screen, not with a
-// number chosen on one device.
+// number chosen on one device. Labels stop growing past phone widths, so tablets
+// and split panes keep the widest phone's floor instead of a window-wide panel.
 const defaultPanelWidthRatio = 0.6;
+const panelWidthReferenceMax = 440;
 // Only ever on screen for the frame before the first measurement lands.
 const fallbackPanelHeight = 172;
 
@@ -78,7 +80,7 @@ function MorphMenuRoot({
   const insets = useSafeAreaInsets();
   const maxPanelWidth = Math.max(0, windowWidth - insets.left - insets.right - 32);
   const minPanelWidth = Math.min(
-    width ?? Math.round(windowWidth * defaultPanelWidthRatio),
+    width ?? Math.round(Math.min(windowWidth, panelWidthReferenceMax) * defaultPanelWidthRatio),
     maxPanelWidth,
   );
   const fallbackTriggerRef = useRef<View>(null);
