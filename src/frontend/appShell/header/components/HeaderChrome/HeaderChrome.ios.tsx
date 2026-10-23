@@ -2,15 +2,21 @@ import { Stack, useIsPreview } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { headerScreenOptions } from '../../headerScreenOptions';
 import { HeaderAction } from '../HeaderAction';
 import { HeaderActionGroup } from '../HeaderActionGroup/HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
+import { InlineHeaderChrome } from './InlineHeaderChrome';
 
-/** Mounts the shared header contract through iOS native toolbar slots. */
-export function HeaderChrome({
+/** Mounts the shared header contract through iOS native toolbar slots, or inline in a pane. */
+export function HeaderChrome(props: HeaderChromeProps) {
+  return usePaneChrome() ? <InlineHeaderChrome {...props} /> : <NativeHeaderChrome {...props} />;
+}
+
+function NativeHeaderChrome({
   actionTone,
   leftActions,
   rightActions,

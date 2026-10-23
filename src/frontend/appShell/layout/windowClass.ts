@@ -11,6 +11,7 @@ export const windowRegionBodyTextSize = 16;
 /** Narrowest regions that stay readable at that text size, in logical points. */
 export const windowRegionWidths = {
   conversationMin: 440,
+  filePaneMax: 520,
   filePaneMin: 360,
   sidebar: 280,
 } as const;
@@ -40,4 +41,10 @@ export function resolveWindowClass({
   if (availableWidth >= EXPANDED_MIN_WIDTH) return 'expanded';
   if (availableWidth >= MEDIUM_MIN_WIDTH) return 'medium';
   return 'compact';
+}
+
+/** The file pane takes 43% of the content width, kept between its readable bounds. */
+export function resolveFilePaneWidth(contentWidth: number) {
+  const { filePaneMax, filePaneMin } = windowRegionWidths;
+  return Math.min(filePaneMax, Math.max(filePaneMin, Math.round(contentWidth * 0.43)));
 }

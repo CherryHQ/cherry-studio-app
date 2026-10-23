@@ -1,11 +1,23 @@
 import { Color, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
+
+import { InlineSelectionToolbar } from './InlineSelectionToolbar';
 import type { SelectionToolbarProps } from './types';
 
 // Native bottom toolbar, matching the Android bar's selection and file actions.
 // The header owns the selected count and exit; this bar owns batch actions.
-export function SelectionToolbar({
+// A pane has no native-stack screen to host the toolbar, so it draws the app's own bar.
+export function SelectionToolbar(props: SelectionToolbarProps) {
+  return usePaneChrome() ? (
+    <InlineSelectionToolbar {...props} />
+  ) : (
+    <NativeSelectionToolbar {...props} />
+  );
+}
+
+function NativeSelectionToolbar({
   actions,
   allSelected,
   isPending,
