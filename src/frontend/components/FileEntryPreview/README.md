@@ -23,8 +23,9 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `useOpenFileEntry`: `openFileEntry` opens supported kinds in the file pane beside chat when the
   drawer group has room for one, otherwise routes them to `/files/[fileEntryId]`, and hands
   unsupported documents to the platform; PDF, Office Open XML and RTF open in the app. It reports
-  where the file opened. Previews opened from a chat retain that chat's route identity so
-  Office selections return to its existing composer. `openFileEntryWithSystem` is the viewer's
+  where the file opened. Previews opened from a chat, or from a library page that carries the chat
+  it was opened from, retain that chat's route identity so Office selections and added files return
+  to its existing composer. `openFileEntryWithSystem` is the viewer's
   explicit escape hatch.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
   the attachment image and painting outputs so neither renders a broken frame.

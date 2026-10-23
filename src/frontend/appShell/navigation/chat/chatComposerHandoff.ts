@@ -34,10 +34,11 @@ export function getChatComposerHandoff(token: string | undefined): ChatComposerH
 
 type ChatSelectionHandoff = {
   attachment: ComposerAttachmentReady;
-  selection: NonNullable<ChatComposerHandoff['selection']>;
+  /** Absent when a preview hands over the whole file rather than a selection within it. */
+  selection?: NonNullable<ChatComposerHandoff['selection']>;
 };
 
-// Appending a selection must not replace the entry action that seeded the current draft.
+// Appending a file or selection must not replace the entry action that seeded the current draft.
 let pendingSelection: { token: string; handoff: ChatSelectionHandoff } | undefined;
 
 export function createChatSelectionHandoff(handoff: ChatSelectionHandoff): string {

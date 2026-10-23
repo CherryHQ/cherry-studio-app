@@ -11,20 +11,32 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import type { FileEntryKind } from '@/frontend/components/FileEntryPreview';
 import { queryKeys } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useHtmlConversion } from '../hooks/useHtmlConversion';
 import { readFileText } from '../utils/readFileText';
 import { FileHtmlBody } from './FileHtmlBody';
 import { FileTextBody } from './FileTextBody';
+import { FileViewerFooter } from './FileViewerFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 const logger = loggerService.withContext('FileViewer');
 
-export function FileTextViewer({ file, kind }: { file: ResolvedFile; kind: FileEntryKind }) {
+export function FileTextViewer({
+  file,
+  kind,
+  sourceChat,
+}: {
+  file: ResolvedFile;
+  kind: FileEntryKind;
+  sourceChat?: ChatTarget;
+}) {
+  const addToChat = useAddFileToChat(file, sourceChat);
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isSourceVisible, setIsSourceVisible] = useState(false);
@@ -158,7 +170,7 @@ export function FileTextViewer({ file, kind }: { file: ResolvedFile; kind: FileE
                   <ContentState.Empty title={t('fileViewer.empty')} />
                 </View>
               ) : showHtml ? (
-                <View className="flex-1 pb-safe">
+                <View className={addToChat.returnsToSourceChat ? 'flex-1' : 'flex-1 pb-safe'}>
                   <FileHtmlBody html={content.text} onFailure={() => setHasHtmlFailed(true)} />
                 </View>
               ) : (
@@ -177,6 +189,13 @@ export function FileTextViewer({ file, kind }: { file: ResolvedFile; kind: FileE
           )}
         </View>
       </View>
+      {content && addToChat.returnsToSourceChat ? (
+        <FileViewerFooter>
+          <Button disabled={addToChat.isResolving} onPress={addToChat.add}>
+            {t('fileViewer.addToChat')}
+          </Button>
+        </FileViewerFooter>
+      ) : null}
     </>
   );
 }

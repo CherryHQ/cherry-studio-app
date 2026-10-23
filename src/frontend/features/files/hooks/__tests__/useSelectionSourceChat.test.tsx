@@ -44,6 +44,12 @@ describe('useSelectionSourceChat', () => {
     expect(read({ agentId: 'agent-minimal', kind: 'draft' }).returnsToSourceChat).toBe(false);
   });
 
+  it('returns to a minimal source chat for a handoff every Agent accepts', () => {
+    expect(
+      read({ kind: 'session', sessionId: 'session-minimal' }, () => true).returnsToSourceChat,
+    ).toBe(true);
+  });
+
   it('chooses another Agent when the source chat Agent no longer exists', () => {
     expect(read({ agentId: 'agent-deleted', kind: 'draft' }).returnsToSourceChat).toBe(false);
   });
@@ -63,10 +69,10 @@ describe('useSelectionSourceChat', () => {
   });
 });
 
-function read(sourceChat: ChatTarget | undefined) {
+function read(sourceChat: ChatTarget | undefined, accepts?: () => boolean) {
   let result: ReturnType<typeof useSelectionSourceChat> | undefined;
   function Probe() {
-    result = useSelectionSourceChat(sourceChat);
+    result = useSelectionSourceChat(sourceChat, accepts);
     return null;
   }
   act(() => {

@@ -10,10 +10,13 @@ import {
 } from '@/frontend/appShell/imagePreview';
 import {
   chatRouteParams,
+  parseChatPreviewSource,
   parseChatRoute,
   type ChatRouteParamsInput,
+  type ChatTarget,
 } from '@/frontend/appShell/navigation/chat';
 import { useFilePane } from '@/frontend/appShell/pane';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { canEditFileImage } from '@/shared/contracts/fileImageEdit';
@@ -34,7 +37,7 @@ export type FileEntryOpenTarget = 'pane' | 'route' | 'system';
 export function useOpenFileEntry(options: FileExportOptions = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useLocalSearchParams<ChatRouteParamsInput>();
+  const params = useLocalSearchParams<ChatRouteParamsInput & { sourceChat?: string | string[] }>();
   const { t } = useTranslation();
   const { toast } = useToast();
   const createWatermark = useExportWatermark(options.watermark);
@@ -81,16 +84,14 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
       pane.openFile({ entryId: file.entry.id, imageEditRequestId });
       return 'pane';
     }
-    const chat = pathname === '/' ? parseChatRoute(params) : undefined;
+    const sourceChat = resolveSourceChat(pathname, params);
     try {
       router.push({
         pathname: '/files/[fileEntryId]',
         params: {
           fileEntryId: file.entry.id,
           ...(imageEditRequestId ? { imageEditRequestId } : {}),
-          ...(chat?.status === 'ready'
-            ? { sourceChat: JSON.stringify(chatRouteParams(chat.target)) }
-            : {}),
+          ...(sourceChat ? { sourceChat: JSON.stringify(chatRouteParams(sourceChat)) } : {}),
         },
       });
     } catch (error) {
@@ -101,4 +102,14 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   };
 
   return { openFileEntry, openFileEntryWithSystem };
+}
+
+/** The chat a preview returns to: the chat page itself, or the chat a library page came from. */
+function resolveSourceChat(
+  pathname: string,
+  params: ChatRouteParamsInput & { sourceChat?: string | string[] },
+): ChatTarget | undefined {
+  if (pathname !== '/') return parseChatPreviewSource(getSingleRouteParam(params.sourceChat));
+  const chat = parseChatRoute(params);
+  return chat.status === 'ready' ? chat.target : undefined;
 }
