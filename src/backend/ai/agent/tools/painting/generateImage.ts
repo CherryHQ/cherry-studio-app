@@ -34,6 +34,7 @@ import {
 } from '@/shared/data/types/model';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import {
+  createPaintingGenerationStrategy,
   PaintingGenerationError,
   type PaintingGenerationStrategy,
 } from '@/shared/utils/paintingGenerationStrategy';
@@ -88,6 +89,7 @@ export function toGenerateImageOutput(entries: readonly FileEntry[]): GenerateIm
   return entries.map((entry) => ({ id: entry.id, name: entry.filename }));
 }
 
+/** Only a model the shared strategy can run counts as configured, so an unusable one omits the tool. */
 export async function resolveConfiguredPaintingModel(
   dependencies: Pick<PaintingToolDependencies, 'preference' | 'models'>,
 ): Promise<ConfiguredPaintingModel | null> {
@@ -96,9 +98,13 @@ export async function resolveConfiguredPaintingModel(
     return null;
   }
 
-  const model = await dependencies.models.getById(uniqueModelId);
+  const stored = await dependencies.models.getById(uniqueModelId);
+  if (!stored) return null;
   // Parsing copies nested capability data so later model updates cannot mutate this turn's rules.
-  return model ? { model: ModelSchema.parse(model), uniqueModelId } : null;
+  const model = ModelSchema.parse(stored);
+  return createPaintingGenerationStrategy(model).kind === 'unavailable'
+    ? null
+    : { model, uniqueModelId };
 }
 
 export async function generateImageFromPrompt(
@@ -111,7 +117,7 @@ export async function generateImageFromPrompt(
   usageAttribution?: AiUsageAttribution,
 ): Promise<PaintingResult> {
   throwIfAborted(signal);
-  if (!configuredModel) {
+  if (!configuredModel || strategy.kind === 'unavailable') {
     return paintingError('image_model_unavailable', PAINTING_MODEL_NOT_CONFIGURED_NOTE);
   }
 
@@ -160,13 +166,11 @@ export async function generateImageFromPrompt(
   } catch (error) {
     if (error instanceof PaintingGenerationError) {
       const message =
-        error.issue.code === 'model-unavailable'
-          ? PAINTING_MODEL_NOT_CONFIGURED_NOTE
-          : error.issue.code === 'images-unsupported'
-            ? PAINTING_EDIT_NOT_SUPPORTED_NOTE
-            : error.issue.code === 'image-required'
-              ? PAINTING_GENERATE_NOT_SUPPORTED_NOTE
-              : `Invalid image request: ${error.issue.code}. Correct the request before trying again.`;
+        error.issue.code === 'images-unsupported'
+          ? PAINTING_EDIT_NOT_SUPPORTED_NOTE
+          : error.issue.code === 'image-required'
+            ? PAINTING_GENERATE_NOT_SUPPORTED_NOTE
+            : `Invalid image request: ${error.issue.code}. Correct the request before trying again.`;
       return paintingError('invalid_image_request', message);
     }
     if (error instanceof ZodError)

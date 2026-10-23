@@ -194,13 +194,18 @@ describe('createGenerateImageTool', () => {
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
   });
 
-  test.each([{ isEnabled: false }, { isHidden: true }])(
-    'rejects an unavailable model before spending provider quota: %j',
-    async (model) => {
+  test.each([{ isEnabled: false }, { isHidden: true }, { imageGeneration: { modes: {} } }])(
+    'treats an unusable drawing model as unconfigured: %j',
+    async (overrides) => {
       const deps = createDependencies();
-      const tool = createGenerateImageTool(deps, configuredModel(model), TURN_FILES);
+      const unusable = configuredModel(overrides);
+      jest.mocked(deps.preference.get).mockResolvedValue(unusable.uniqueModelId);
+      jest.mocked(deps.models.getById).mockResolvedValue(unusable.model);
+      await expect(resolveConfiguredPaintingModel(deps)).resolves.toBeNull();
+
+      const tool = createGenerateImageTool(deps, unusable, TURN_FILES);
       const result = await execute(tool, { prompt: 'A cherry.' });
-      expect(result.failure?.error.code).toBe('invalid_image_request');
+      expect(result.failure?.error.code).toBe('image_model_unavailable');
       expect(deps.ai.generateImage).not.toHaveBeenCalled();
     },
   );
@@ -226,30 +231,48 @@ describe('createGenerateImageTool', () => {
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
   });
 
-  test('adapts tool custom-size input to the shared canonical parameter request', async () => {
-    const deps = createDependencies();
-    const tool = createGenerateImageTool(
-      deps,
-      configuredModel({
-        imageGeneration: {
-          modes: {
-            generate: {
-              supports: {
-                size: { type: 'enum', options: ['auto', 'custom'] },
-                customSize: { type: 'size', pairedEnumKey: 'size', minSide: 512, maxSide: 2048 },
+  test.each([
+    { options: ['auto', 'custom'], advertised: { enum: ['auto'] } },
+    { options: ['custom'], advertised: undefined },
+  ])(
+    'adapts tool custom-size input without advertising the paired custom sentinel: $options',
+    async ({ options, advertised }) => {
+      const deps = createDependencies();
+      const tool = createGenerateImageTool(
+        deps,
+        configuredModel({
+          imageGeneration: {
+            modes: {
+              generate: {
+                supports: {
+                  size: { type: 'enum', options },
+                  customSize: { type: 'size', pairedEnumKey: 'size', minSide: 512, maxSide: 2048 },
+                },
               },
             },
           },
-        },
-      }),
-      TURN_FILES,
-    );
-    const result = await execute(tool, { prompt: 'A cherry.', customSize: '1024X1536' });
-    expect(result.failure).toBeUndefined();
-    expect(deps.ai.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({ paramValues: { size: '1024x1536' } }),
-    );
-  });
+        }),
+        TURN_FILES,
+      );
+      const properties = (tool.inputSchema as { properties: Record<string, unknown> }).properties;
+      expect(properties.size).toEqual(advertised && expect.objectContaining(advertised));
+
+      const result = await execute(tool, { prompt: 'A cherry.', customSize: '1024X1536' });
+      expect(result.failure).toBeUndefined();
+      expect(deps.ai.generateImage).toHaveBeenCalledWith(
+        expect.objectContaining({ paramValues: { size: '1024x1536' } }),
+      );
+
+      deps.ai.generateImage.mockClear();
+      const sentinel = await execute(tool, {
+        prompt: 'A cherry.',
+        size: 'custom',
+        customSize: '1024x1536',
+      });
+      expect(sentinel.failure?.error.code).toBe('invalid_image_request');
+      expect(deps.ai.generateImage).not.toHaveBeenCalled();
+    },
+  );
 
   test.each<{
     name: string;

@@ -115,6 +115,16 @@ function constrainedParamSchema(key: CanonicalParamKey, spec: SupportSpec): z.Zo
   }
 }
 
+/**
+ * The tool takes custom sizes through its size-typed field, which admission maps onto the paired
+ * enum. Advertising that enum's `custom` sentinel would offer a value admission rejects.
+ */
+function withoutCustomOption(spec: SupportSpec): SupportSpec | undefined {
+  if (spec.type !== 'enum') return spec;
+  const options = spec.options.filter((option) => option !== 'custom');
+  return options.length === 0 ? undefined : { ...spec, options };
+}
+
 function resolveToolModes(strategy: PaintingGenerationStrategy): ToolMode[] {
   return [...new Set([strategy.resolveMode(0), strategy.resolveMode(1)])].filter(
     (mode): mode is ToolMode => mode !== undefined,
@@ -169,8 +179,13 @@ export function buildGenerateImageToolSchema(
     ),
   );
   for (const [mode, definition] of modes) {
-    const modeSupports = definition.supports;
-    for (const [key, spec] of Object.entries(modeSupports) as [CanonicalParamKey, SupportSpec][]) {
+    const supports = Object.entries(definition.supports) as [CanonicalParamKey, SupportSpec][];
+    const sizePairedKeys = new Set(
+      supports.flatMap(([, spec]) => (spec.type === 'size' ? [spec.pairedEnumKey ?? 'size'] : [])),
+    );
+    for (const [key, supported] of supports) {
+      const spec = sizePairedKeys.has(key) ? withoutCustomOption(supported) : supported;
+      if (!spec) continue;
       const entries = params.get(key) ?? [];
       entries.push({ mode, spec });
       params.set(key, entries);

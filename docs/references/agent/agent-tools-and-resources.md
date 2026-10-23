@@ -579,8 +579,11 @@ categories and selected AI service. See [Health Review](../../guides/health-revi
 - Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
   `generate_image` is never auto-approval eligible, so even an Agent in automatic approval mode
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
-  model is configured. Its description, input schema and request admission use one model capability
-  snapshot and the same `createPaintingGenerationStrategy` as painting jobs and direct image chat.
+  model is configured. A disabled, hidden or non-drawing model counts as unconfigured, so it omits
+  the tool rather than failing approved calls. Its description, input schema and request admission
+  use one model capability snapshot and the same `createPaintingGenerationStrategy` as painting jobs
+  and direct image chat. Custom sizes go in the size field; the paired enum's `custom` sentinel is
+  not advertised.
 - Reference support is a model capability, not a synonym for the provider's `edit` mode. A
   reference-capable `generate` route stays `generate`; declared image-input endpoints can provide
   support when the detailed capability block is absent. `image_ids` accepts at most one conversation
