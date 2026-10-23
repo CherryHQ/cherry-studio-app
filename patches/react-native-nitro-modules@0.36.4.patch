@@ -1,0 +1,34 @@
+diff --git a/ios/utils/RuntimeError.hpp b/ios/utils/RuntimeError.hpp
+--- a/ios/utils/RuntimeError.hpp
++++ b/ios/utils/RuntimeError.hpp
+@@ -14,7 +14,12 @@
+ namespace margelo::nitro {
+ 
+ static inline std::exception_ptr makeException(const std::string& message) {
+-  return std::make_exception_ptr(std::runtime_error(message));
++  // TODO: Switch to `std::make_exception_ptr(..)` instead of `try` + `catch` once we drop iOS 18 support or fix https://github.com/margelo/nitro/issues/1652 differently
++  try {
++    throw std::runtime_error(message);
++  } catch (...) {
++    return std::current_exception();
++  }
+ }
+ 
+ static inline std::string getExceptionMessage(const std::exception_ptr& exception) {
+diff --git a/cpp/core/Promise.hpp b/cpp/core/Promise.hpp
+--- a/cpp/core/Promise.hpp
++++ b/cpp/core/Promise.hpp
+@@ -36,7 +36,12 @@
+   ~Promise() {
+     if (isPending()) [[unlikely]] {
+       auto message = std::string("Timeouted: Promise<") + TypeInfo::getFriendlyTypename<TResult>() + "> was destroyed!";
+-      reject(std::make_exception_ptr(std::runtime_error(message)));
++      // TODO: Switch to `std::make_exception_ptr(..)` instead of `try` + `catch` once we drop iOS 18 support or fix https://github.com/margelo/nitro/issues/1652 differently
++      try {
++        throw std::runtime_error(message);
++      } catch (...) {
++        reject(std::current_exception());
++      }
+     }
+   }
+ 
