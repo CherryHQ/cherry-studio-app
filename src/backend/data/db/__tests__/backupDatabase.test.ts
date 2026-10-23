@@ -157,6 +157,43 @@ test('preserves content and portable settings, but never resumes work or imports
   }
 });
 
+test('restore requires fresh remote MCP OAuth without changing manual connections', async () => {
+  const { raw, adapter } = database();
+  try {
+    const originalId = '00000000-0000-4000-8000-000000000001';
+    raw
+      .prepare(
+        'INSERT INTO mcp_server (id, name, base_url, oauth, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 1)',
+      )
+      .run(
+        'remote-oauth',
+        'OAuth',
+        'https://example.com/mcp',
+        JSON.stringify({ authorizationId: originalId, clientId: 'public-client' }),
+      );
+    raw.exec(`
+      INSERT INTO mcp_server (id, name, base_url, headers, is_active, created_at, updated_at)
+      VALUES ('manual', 'Manual', 'https://manual.example/mcp', '{"X-API-Key":"manual-key"}', 1, 1, 1);
+    `);
+
+    await restoreDeviceState(adapter, []);
+    const restored = raw
+      .prepare("SELECT oauth, is_active FROM mcp_server WHERE id = 'remote-oauth'")
+      .get() as { oauth: string; is_active: number };
+    expect(JSON.parse(restored.oauth)).toEqual({
+      authorizationId: expect.any(String),
+      clientId: 'public-client',
+    });
+    expect(JSON.parse(restored.oauth).authorizationId).not.toBe(originalId);
+    expect(restored.is_active).toBe(0);
+    expect(
+      raw.prepare("SELECT oauth, headers, is_active FROM mcp_server WHERE id = 'manual'").get(),
+    ).toEqual({ oauth: null, headers: '{"X-API-Key":"manual-key"}', is_active: 1 });
+  } finally {
+    raw.close();
+  }
+});
+
 test('a normalization failure rolls back execution state, credentials and pairing together', async () => {
   const { raw, adapter } = database();
   try {

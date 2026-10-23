@@ -15,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAccount } from '@/frontend/appShell/account';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -28,7 +27,6 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [userName] = usePreference('app.user.name');
   const { openProviderList, prepareProviderList } = useProviderListNavigation();
-  const { state: account } = useAccount();
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
@@ -46,15 +44,13 @@ export default function SettingsScreen() {
       >
         <ProfileHero onPress={openProfileSettings} userName={userName} />
         <View className="gap-6 px-4 pt-2">
-          {account.isAvailable ? (
-            <Section>
-              <Section.Item
-                label={t('account.title')}
-                leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
-                onPress={() => router.push('/settings/account')}
-              />
-            </Section>
-          ) : null}
+          <Section>
+            <Section.Item
+              label={t('account.title')}
+              leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/account')}
+            />
+          </Section>
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}

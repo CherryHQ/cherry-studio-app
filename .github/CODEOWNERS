@@ -1,3 +1,44 @@
 # Enterprise implementation stays in this public repository; its owner reviews changes to it.
 /src/backend/services/enterprise/ @zhangjiadi225
 /src/bootstrap/profile/ @zhangjiadi225
+
+# Shared identity, account entry points, and profile-owned storage.
+/src/shared/contracts/account.ts @zhangjiadi225
+/src/shared/data/activeProfile.ts @zhangjiadi225
+/src/backend/data/profile/ @zhangjiadi225
+/src/backend/data/storage/storagePaths.ts @zhangjiadi225
+/src/backend/data/CacheService.ts @zhangjiadi225
+/src/frontend/data/CacheService.ts @zhangjiadi225
+/src/frontend/appShell/account/ @zhangjiadi225
+/src/frontend/appShell/navigation/components/FirstUseGate.tsx @zhangjiadi225
+/src/frontend/features/settings/SettingsScreen.tsx @zhangjiadi225
+/src/backend/services/mcp/McpOAuthRuntime.ts @zhangjiadi225
+/src/backend/services/builtInMcp/authorization/PluginCredentialStore.ts @zhangjiadi225
+/src/backend/data/db/backupDatabase.ts @zhangjiadi225
+
+# Shared resource write owners enforce organization policy, including OAuth and account workflows.
+/src/backend/data/services/managedResources.ts @zhangjiadi225
+/src/backend/data/services/AgentService.ts @zhangjiadi225
+/src/backend/data/services/AgentGlobalSkillService.ts @zhangjiadi225
+/src/backend/data/services/AgentToolBindingService.ts @zhangjiadi225
+/src/backend/data/services/McpServerService.ts @zhangjiadi225
+/src/backend/ai/mcp/McpRuntimeService.ts @zhangjiadi225
+/src/backend/data/services/ModelService.ts @zhangjiadi225
+/src/backend/data/services/ProviderService.ts @zhangjiadi225
+/src/backend/data/services/ProviderAccountService.ts @zhangjiadi225
+/src/backend/data/PreferenceService.ts @zhangjiadi225
+/src/shared/data/types/agent.ts @zhangjiadi225
+/src/shared/data/preference/preferenceSchema.ts @zhangjiadi225
+/src/backend/data/db/schemas/agent.ts @zhangjiadi225
+/src/backend/data/db/schemas/agentGlobalSkill.ts @zhangjiadi225
+/src/backend/data/db/schemas/mcpServer.ts @zhangjiadi225
+/src/backend/data/db/schemas/appState.ts @zhangjiadi225
+/src/backend/data/db/seeding/index.ts @zhangjiadi225
+/migrations/sqlite-drizzle/ @zhangjiadi225
+
+# Assembly and dependency rules must retain enterprise admission, teardown, and import isolation.
+/src/bootstrap/runtime/createAppBootstrapRuntime.ts @zhangjiadi225
+/src/backend/core/application/serviceRegistry.ts @zhangjiadi225
+/eslint.config.js @zhangjiadi225
+/scripts/__tests__/architectureBoundaries.test.ts @zhangjiadi225
+/docs/references/enterprise.md @zhangjiadi225

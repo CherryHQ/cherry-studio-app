@@ -27,6 +27,17 @@ import { ThemeMode } from './preferenceTypes';
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;
 export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
+/** These defaults are delivered by the organization in enterprise profiles. */
+export const ENTERPRISE_DEFAULT_MODEL_KEYS = [
+  'agent.default_model_id',
+  'agent.session_naming.model_id',
+  'feature.translate.model_id',
+] as const;
+export type EnterpriseDefaultModels = Pick<
+  PreferenceSchema,
+  (typeof ENTERPRISE_DEFAULT_MODEL_KEYS)[number]
+>;
+
 export interface PreferenceSchema {
   /** Device-local opt-in to foreground shake detection and feedback screenshots. */
   'app.feedback.shake_enabled': boolean;

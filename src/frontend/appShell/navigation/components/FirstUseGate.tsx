@@ -46,5 +46,5 @@ export function FirstUseGate({ children }: PropsWithChildren) {
   )
     return children;
   // A new installation signs in, or skips signing in, before choosing how to set up models.
-  return <Redirect href={account.isAvailable && !account.hasPrompted ? '/login' : '/onboarding'} />;
+  return <Redirect href={!account.hasPrompted ? '/login' : '/onboarding'} />;
 }

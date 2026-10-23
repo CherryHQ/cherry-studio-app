@@ -1,13 +1,21 @@
+import { ContentState } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
 import { LoginScreen } from './LoginScreen';
 import { useAccount } from './useAccount';
 
-/** An enterprise profile whose session the server rejected returns to sign-in; its data stays. */
+/** Enterprise data is shown only after the restored session matches its profile. */
 export function AccountSessionGate({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const { account, state } = useAccount();
+  if (state.isRestoringSession)
+    return (
+      <View className="flex-1 justify-center">
+        <ContentState.Loading />
+      </View>
+    );
   if (!state.isEnterprise || !state.needsSignIn) return children;
   return (
     <LoginScreen

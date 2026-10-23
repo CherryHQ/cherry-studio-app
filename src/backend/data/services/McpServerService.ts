@@ -206,6 +206,7 @@ export class McpServerService {
           .select()
           .from(mcpServerTable)
           .where(eq(mcpServerTable.id, previous.id));
+        assertUserOwned(current?.managedRemoteId != null, 'mcp.saveOAuthConnection');
         if (
           !current ||
           current.origin !== 'remote' ||
@@ -240,13 +241,18 @@ export class McpServerService {
   }
 
   async disconnectOAuth(id: string): Promise<McpServer> {
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select({ managedRemoteId: mcpServerTable.managedRemoteId })
+        .from(mcpServerTable)
+        .where(eq(mcpServerTable.id, id));
+      assertUserOwned(current?.managedRemoteId != null, 'mcp.disconnectOAuth');
+      return tx
         .update(mcpServerTable)
         .set({ oauth: null, isEnabled: false })
         .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.origin, 'remote')))
-        .returning(),
-    );
+        .returning();
+    });
     if (!row) throw DataApiErrorFactory.notFound('McpServer', id);
     return rowToMcpServer(row);
   }

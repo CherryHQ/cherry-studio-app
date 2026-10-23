@@ -105,4 +105,36 @@ describe('resolved architecture boundaries', () => {
   ])('preserves a permitted dependency from %s: %s', async (filePath, source) => {
     expect(await boundaryErrors(filePath, source)).toEqual([]);
   });
+
+  describe('enterprise implementation boundary', () => {
+    describe.each([
+      ['src/backend/services/models/probe.ts', '@/backend/services/enterprise'],
+      ['src/backend/services/models/probe.ts', '@src/backend/services/enterprise'],
+      ['src/backend/services/models/probe.ts', '../enterprise'],
+      ['src/backend/data/probe.ts', '../services/enterprise'],
+      ['src/backend/core/probe.ts', '../services/enterprise'],
+      ['src/backend/ai/generation/probe.ts', '../../services/enterprise'],
+      ['src/backend/ai/agent/runtime/pi/probe.ts', '../../../../services/enterprise'],
+      ['src/frontend/utils/probe.ts', '../../backend/services/enterprise'],
+      ['src/shared/contracts/probe.ts', '../../backend/services/enterprise'],
+    ])('keeps %s outside %s', (filePath, moduleId) => {
+      it.each([
+        `import '${moduleId}';`,
+        `export { EnterpriseSyncService } from '${moduleId}';`,
+        `void import('${moduleId}');`,
+        `require('${moduleId}');`,
+      ])('rejects %s', async (source) => {
+        expect(await boundaryErrors(filePath, source)).not.toHaveLength(0);
+      });
+    });
+
+    it.each([
+      ['src/bootstrap/profile/installationAccount.ts', '@/backend/services/enterprise'],
+      ['src/bootstrap/runtime/createAppBootstrapRuntime.ts', '@/backend/services/enterprise'],
+      ['src/backend/core/application/serviceRegistry.ts', '@/backend/services/enterprise'],
+      ['src/backend/services/enterprise/sync/probe.ts', '../enterpriseApi'],
+    ])('allows enterprise assembly or internal use from %s', async (filePath, moduleId) => {
+      expect(await boundaryErrors(filePath, `import '${moduleId}';`)).toEqual([]);
+    });
+  });
 });

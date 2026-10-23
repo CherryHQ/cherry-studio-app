@@ -1,4 +1,8 @@
-import type { AccountsPortal, ProfileChoice } from '@cherryinternal/accounts-portal/client';
+import type {
+  AccountsPortal,
+  AuthState,
+  ProfileChoice,
+} from '@cherryinternal/accounts-portal/client';
 import { loggerService } from '@logger';
 import * as z from 'zod';
 
@@ -93,27 +97,36 @@ export class AccountRuntime implements AccountModule {
   private isPrivateSessionClosed = false;
 
   constructor(private readonly options: AccountRuntimeOptions) {
+    const { active, portal } = options;
+    const isCloudProfile = active.identity !== null && !('authentication' in active.identity);
     this.state = {
-      isAvailable: options.portal !== null,
+      isCloudSignInAvailable: portal !== null,
       isSignedIn: false,
-      isEnterprise: options.active.identity !== null,
-      needsSignIn: false,
+      isEnterprise: active.identity !== null,
+      isRestoringSession: portal !== null && isCloudProfile,
+      needsSignIn: portal === null && isCloudProfile,
       hasPrompted: options.prompt.read(),
       isBusy: false,
       privateAddress:
-        options.active.identity && 'authentication' in options.active.identity
-          ? options.active.address
-          : undefined,
+        active.identity && 'authentication' in active.identity ? active.address : undefined,
     };
-    options.portal?.subscribe((session) => {
-      if (this.state.privateAddress) return;
-      const isSignedIn = session._tag === 'signedIn';
-      this.update({
-        isSignedIn,
-        name: isSignedIn ? session.name : undefined,
-        ...(!isSignedIn && this.state.isEnterprise && { needsSignIn: true }),
+    if (portal) {
+      portal.subscribe((session) => {
+        if (!this.state.isRestoringSession) this.updateCloudSession(session);
       });
-    });
+      void portal.ready.then(
+        () => {
+          this.updateCloudSession(portal.getState());
+          this.update({ isRestoringSession: false });
+        },
+        () => {
+          this.update({
+            isRestoringSession: false,
+            ...(isCloudProfile && { needsSignIn: true }),
+          });
+        },
+      );
+    }
   }
 
   readonly getState = () => this.state;
@@ -130,7 +143,12 @@ export class AccountRuntime implements AccountModule {
       const { url, redirectUri } = await portal.beginSignIn();
       const result = await this.options.openBrowser(url, redirectUri);
       if (!result) return false;
+      // The SDK replaces credentials before it publishes the new identity. Fence the old cloud
+      // profile before that replacement, including failures after the SDK has saved new tokens.
+      if (this.state.isEnterprise && !this.state.privateAddress)
+        this.update({ needsSignIn: true, isSignedIn: false, name: undefined });
       const session = await portal.completeSignIn(result);
+      this.updateCloudSession(session);
       this.dismissPrompt();
       if (session._tag !== 'signedIn' || session.profile?.product !== 'enterprise') {
         // A community account keeps the installation's own local data.
@@ -192,9 +210,20 @@ export class AccountRuntime implements AccountModule {
     const { identity, address } = this.options.active;
     if (!identity) throw new AccountError('rejected');
     try {
-      if ('authentication' in identity) return (await this.readPrivateCredentials()).accessToken;
+      if ('authentication' in identity) {
+        const credentials = await this.readPrivateCredentials();
+        if (this.state.needsSignIn || this.isPrivateSessionClosed)
+          throw new AccountError('rejected');
+        return credentials.accessToken;
+      }
+      const portal = this.requirePortal();
+      await portal.ready;
+      this.assertCloudSession(portal.getState());
       const choice: ProfileChoice = { product: 'enterprise', profileId: identity.productProfileId };
-      return await this.requirePortal().getProductToken(address, choice);
+      const token = await portal.getProductToken(address, choice);
+      // A product entry can finish after the installation has switched accounts.
+      this.assertCloudSession(portal.getState());
+      return token;
     } catch (error) {
       if (isAuthenticationRejection(error)) this.reportRejected();
       throw error;
@@ -252,26 +281,46 @@ export class AccountRuntime implements AccountModule {
       return;
     }
     if (!portal) return;
-    await portal.ready;
-    const session = portal.getState();
-    this.update({
-      isSignedIn: session._tag === 'signedIn',
-      name: session._tag === 'signedIn' ? session.name : undefined,
-    });
-    if (!active.identity) return;
-    if (
-      session._tag !== 'signedIn' ||
-      session.subject !== active.identity.subject ||
-      session.profile?.profileId !== active.identity.productProfileId
-    ) {
-      this.reportRejected();
-      return;
-    }
-    await this.getProductToken().catch((error: unknown) => {
+    try {
+      await portal.ready;
+      this.updateCloudSession(portal.getState());
+      if (active.identity) await this.getProductToken();
+    } catch (error) {
       if (!isAuthenticationRejection(error))
         logger.warn('Could not verify the session', error as Error);
-    });
+    }
   };
+
+  private matchesCloudProfile(session: AuthState): boolean {
+    const { identity } = this.options.active;
+    return Boolean(
+      identity &&
+      !('authentication' in identity) &&
+      identity.issuer === this.options.issuer &&
+      session._tag === 'signedIn' &&
+      session.subject === identity.subject &&
+      session.profile?.product === 'enterprise' &&
+      session.profile.profileId === identity.productProfileId,
+    );
+  }
+
+  private updateCloudSession(session: AuthState): void {
+    if (this.state.privateAddress) return;
+    const matchesProfile = !this.state.isEnterprise || this.matchesCloudProfile(session);
+    const isSignedIn = session._tag === 'signedIn' && matchesProfile && !this.state.needsSignIn;
+    this.update({
+      isSignedIn,
+      name: isSignedIn ? session.name : undefined,
+      // Reauthentication reloads the profile. A later SDK notification cannot clear a rejection
+      // or reopen the old profile while sign-in admission is still in progress.
+      ...(!matchesProfile && { needsSignIn: true }),
+    });
+  }
+
+  private assertCloudSession(session: AuthState): void {
+    if (this.state.needsSignIn || !this.matchesCloudProfile(session))
+      throw new AccountError('rejected');
+  }
 
   private async signInPrivate({ address, username, password }: PrivateSignIn): Promise<boolean> {
     const enterpriseAddress = normalizeEnterpriseAddress(address);

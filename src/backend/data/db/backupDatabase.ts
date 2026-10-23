@@ -260,6 +260,18 @@ export async function restoreDeviceState(
         grant.id,
       );
     }
+    const mcpGrants = await db.getAllAsync<{ id: string }>(
+      "SELECT id FROM mcp_server WHERE origin = 'remote' AND oauth IS NOT NULL",
+    );
+    for (const grant of mcpGrants) {
+      // Preserve the OAuth/client configuration, but never reuse a source profile's grant.
+      await db.runAsync(
+        "UPDATE mcp_server SET oauth = json_set(oauth, '$.authorizationId', ?), is_active = 0, updated_at = ? WHERE id = ?",
+        randomUUID(),
+        now,
+        grant.id,
+      );
+    }
     for (const key of DEVICE_LOCAL_PREFERENCE_KEYS) {
       await db.runAsync("DELETE FROM preference WHERE scope = 'default' AND key = ?", key);
     }

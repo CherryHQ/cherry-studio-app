@@ -22,7 +22,8 @@ type Database = Pick<
 >;
 type NativeStorage = Pick<typeof SecureStore, 'getItemAsync' | 'setItemAsync' | 'deleteItemAsync'>;
 const OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
-const secretKey = (reference: PluginSecretReference) => `plugin-secret.${reference.id}`;
+const secretKey = (reference: PluginSecretReference) =>
+  profileScopedName(`plugin-secret.${reference.id}`);
 
 /** Local credentials only. The manager owns this queue and drains it before the database closes. */
 export class PluginCredentialStore {

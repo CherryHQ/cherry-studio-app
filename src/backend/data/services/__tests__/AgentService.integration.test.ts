@@ -227,6 +227,11 @@ describe('AgentService persistence', () => {
     insertUserModel(sqlite, 'openai', 'gpt-4');
     const agent = await agentService.create({ name: 'Managed', instructions: 'Hidden' });
     sqlite.prepare("UPDATE agent SET managed_remote_id = '7' WHERE id = ?").run(agent.id);
+    sqlite.exec(`
+      CREATE TRIGGER preserve_organization_fields BEFORE UPDATE OF name, instructions ON agent
+      WHEN OLD.managed_remote_id IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'organization fields must not be written'); END;
+    `);
 
     // The editor resubmits unchanged locked fields alongside the allowed change.
     await expect(
@@ -246,6 +251,38 @@ describe('AgentService persistence', () => {
       code: 'INVALID_OPERATION',
     });
   });
+
+  it.each([false, true])(
+    'checks current ownership and locked values inside the write transaction (already managed: %s)',
+    async (alreadyManaged) => {
+      const agent = await agentService.create({ name: 'Agent', instructions: 'Original' });
+      if (alreadyManaged) {
+        sqlite.prepare("UPDATE agent SET managed_remote_id = '7' WHERE id = ?").run(agent.id);
+      }
+      const write = dbService.withWriteTx.bind(dbService);
+      jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce(async (callback) => {
+        // A queued enterprise projection commits after an editor's preflight read.
+        sqlite
+          .prepare(
+            "UPDATE agent SET managed_remote_id = '7', instructions = 'Organization update', updated_at = updated_at + 1 WHERE id = ?",
+          )
+          .run(agent.id);
+        return write(callback);
+      });
+
+      await expect(
+        agentService.update(agent.id, {
+          instructions: alreadyManaged ? 'Original' : 'User edit',
+          toolApprovalMode: 'default',
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+      expect(await agentService.getById(agent.id)).toMatchObject({
+        isManaged: true,
+        instructions: 'Organization update',
+        toolApprovalMode: 'auto',
+      });
+    },
+  );
 
   it('persists mode switches without resetting capability or approval preferences', async () => {
     const agent = await agentService.create({

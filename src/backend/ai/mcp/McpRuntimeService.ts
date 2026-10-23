@@ -15,6 +15,7 @@ import {
 } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
+import { assertUserOwned } from '@/backend/data/services/managedResources';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import {
   createBuiltInMcpClient,
@@ -300,6 +301,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const previous = input.serverId ? await mcpServerService.getById(input.serverId) : undefined;
     this.lifetime.signal.throwIfAborted();
     if (previous?.origin === 'builtin') throw new McpAuthorizationError('configuration');
+    assertUserOwned(previous?.isManaged, 'mcp.beginOAuth');
     return this.oauth.begin(input, previous);
   }
 

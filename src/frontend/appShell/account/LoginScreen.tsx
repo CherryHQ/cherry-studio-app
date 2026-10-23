@@ -34,7 +34,9 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
   const { toast } = useToast();
   const insets = useSafeAreaInsets();
   const { account, state } = useAccount();
-  const [isPrivate, setIsPrivate] = useState(Boolean(state.privateAddress));
+  const [isPrivate, setIsPrivate] = useState(
+    !state.isCloudSignInAvailable || Boolean(state.privateAddress),
+  );
   const [address, setAddress] = useState(state.privateAddress ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -42,7 +44,9 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
   const passwordInput = useRef<TextInput>(null);
   const canSignIn =
     !state.isBusy &&
-    (isPrivate ? Boolean(address.trim() && username.trim() && password) : state.isAvailable);
+    (isPrivate
+      ? Boolean(address.trim() && username.trim() && password)
+      : state.isCloudSignInAvailable);
 
   const signIn = () => {
     if (!canSignIn) return;
@@ -149,23 +153,20 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
           <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">
             {t('account.login.signIn')}
           </Button>
-          {state.isAvailable || isPrivate ? null : (
-            <Text className="text-center text-sm text-muted-foreground">
-              {t('account.error.unavailable')}
-            </Text>
-          )}
           <View className="min-h-12 flex-row items-center justify-center gap-2">
-            <Button
-              disabled={state.isBusy}
-              onPress={() => {
-                setPassword('');
-                setIsPrivate((value) => !value);
-              }}
-              size="xs"
-              variant="ghost"
-            >
-              {t(isPrivate ? 'account.login.cloud' : 'account.login.private')}
-            </Button>
+            {state.isCloudSignInAvailable ? (
+              <Button
+                disabled={state.isBusy}
+                onPress={() => {
+                  setPassword('');
+                  setIsPrivate((value) => !value);
+                }}
+                size="xs"
+                variant="ghost"
+              >
+                {t(isPrivate ? 'account.login.cloud' : 'account.login.private')}
+              </Button>
+            ) : null}
             {secondaryAction ? (
               <Button
                 disabled={state.isBusy}

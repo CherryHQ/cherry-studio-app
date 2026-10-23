@@ -17,11 +17,13 @@ export class AccountError extends Error {
 /** Installation account state. Tokens and SDK objects never reach the UI. */
 export type AccountState = Readonly<{
   /** Whether the build supports cloud sign-in. Private sign-in needs no portal configuration. */
-  isAvailable: boolean;
+  isCloudSignInAvailable: boolean;
   isSignedIn: boolean;
   /** Whether this runtime serves an enterprise profile rather than local data. */
   isEnterprise: boolean;
-  /** The enterprise server no longer accepts this session; the user must sign in again. */
+  /** The stored cloud session has not yet been matched to this enterprise profile. */
+  isRestoringSession: boolean;
+  /** The session was rejected, does not match this profile, or is being replaced by sign-in. */
   needsSignIn: boolean;
   /** A new installation has seen the sign-in page, whether it signed in or not. */
   hasPrompted: boolean;

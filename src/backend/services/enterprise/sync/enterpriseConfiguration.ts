@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import { normalizeEnterpriseAddress } from '@/shared/contracts/account';
+import type { EnterpriseDefaultModels } from '@/shared/data/preference';
 import {
   createUniqueModelId,
   ENDPOINT_TYPE,
@@ -13,7 +14,8 @@ import {
 
 /**
  * Enterprise `/configurations` and `/agents/:id/setup` responses, reduced to what Mobile can run.
- * Anything Mobile cannot honour is skipped item by item and reported, never the whole response.
+ * Identifiable unsupported items keep their remote presence, without a runnable projection.
+ * Invalid identity inventories reject the snapshot: absence must mean server deletion.
  */
 
 const ProviderSchema = z.object({
@@ -128,13 +130,6 @@ const CAPABILITIES: Readonly<Record<string, ModelCapability>> = {
   computer_use: MODEL_CAPABILITY.COMPUTER_USE,
 };
 
-export const DEFAULT_MODEL_KEYS = [
-  'agent.default_model_id',
-  'agent.session_naming.model_id',
-  'feature.translate.model_id',
-] as const;
-export type DefaultModelKey = (typeof DEFAULT_MODEL_KEYS)[number];
-
 const DEFAULT_SYNC_INTERVAL_MINUTES = 10;
 
 export type ManagedModel = Readonly<{
@@ -169,28 +164,33 @@ export type ManagedMcpServer = Readonly<{
 }>;
 
 export type ManagedAgent = Readonly<{
-  remoteId: string;
   name: string;
   instructions: string;
   avatar: string | null;
   model: UniqueModelId;
   toolApprovalMode: 'default' | 'auto';
-  skillRemoteIds: string[];
-  mcpServerRemoteIds: string[];
 }>;
 
 export type EnterpriseConfiguration = Readonly<{
   serverUniqueId: string;
   apiKey: string;
   syncIntervalMinutes: number;
+  providerIds: string[];
+  modelIds: UniqueModelId[];
+  mcpServerRemoteIds: string[];
   providers: ManagedProvider[];
   mcpServers: ManagedMcpServer[];
   agentIds: number[];
-  defaults: Record<DefaultModelKey, UniqueModelId | null>;
+  defaults: EnterpriseDefaultModels;
 }>;
 
 export type AgentSetup = Readonly<{
-  agent: ManagedAgent;
+  remoteId: string;
+  /** Null means unsupported; existing Agent identity and conversations remain untouched. */
+  agent: ManagedAgent | null;
+  /** Library identities: an unknown item type must not revoke a previously installed Skill. */
+  skillRemoteIds: string[];
+  mcpServerRemoteIds: string[];
   /** Agent-skill library items with their server revision. */
   skills: { remoteId: string; itemId: number; updatedAt: string }[];
   mcpServers: ManagedMcpServer[];
@@ -201,6 +201,17 @@ export type SkipLog = string[];
 
 export function parseConfiguration(input: unknown, skipped: SkipLog): EnterpriseConfiguration {
   const raw = ConfigurationSchema.parse(input);
+  const providerIds = (raw.providers ?? []).map(
+    (item) => z.object({ provider_id: z.string().min(1) }).parse(item).provider_id,
+  );
+  const modelIdsOnServer = (raw.models ?? []).map((item) => {
+    const model = z.object({ id: z.string().min(1), provider: z.string().min(1) }).parse(item);
+    return managedModelId(model.provider, model.id);
+  });
+  const mcpServersOnServer = (raw.mcpServers ?? []).map((item) => ({
+    key: z.object({ id: z.string().min(1) }).parse(item).id,
+    config: item,
+  }));
   const providers: ManagedProvider[] = [];
   const models = parseItems(raw.models, ModelSchema, 'model', skipped);
   for (const provider of parseItems(raw.providers, ProviderSchema, 'provider', skipped)) {
@@ -238,14 +249,11 @@ export function parseConfiguration(input: unknown, skipped: SkipLog): Enterprise
     serverUniqueId: raw.serverUniqueId,
     apiKey: raw.apiKey?.trim() ?? '',
     syncIntervalMinutes: parseSyncInterval(raw.settings),
+    providerIds,
+    modelIds: modelIdsOnServer,
+    mcpServerRemoteIds: mcpServersOnServer.map((server) => server.key),
     providers,
-    mcpServers: parseMcpServers(
-      (raw.mcpServers ?? []).map((value) => {
-        const id = z.object({ id: z.string().min(1) }).safeParse(value);
-        return { key: id.success ? id.data.id : '', config: value };
-      }),
-      skipped,
-    ),
+    mcpServers: parseMcpServers(mcpServersOnServer, skipped),
     agentIds: [...new Set((raw.agents ?? []).map((agent) => agent.id))],
     defaults: {
       'agent.default_model_id': defaultModel(raw.defaultAssistantModel, 'assistant'),
@@ -255,18 +263,13 @@ export function parseConfiguration(input: unknown, skipped: SkipLog): Enterprise
   };
 }
 
-/** Returns null when the Agent cannot run on Mobile; its unusable references are dropped. */
+/** Keeps the complete remote inventory even when this Agent has no Mobile-compatible model. */
 export function parseAgentSetup(
   input: unknown,
   configuration: EnterpriseConfiguration,
   skipped: SkipLog,
-): AgentSetup | null {
-  const setup = SetupSchema.safeParse(input);
-  if (!setup.success) {
-    skipped.push('agent setup: malformed response');
-    return null;
-  }
-  const { agent, tasks } = setup.data;
+): AgentSetup {
+  const { agent, tasks } = SetupSchema.parse(input);
   const modelIds = new Set(
     configuration.providers.flatMap((provider) => provider.models.map((model) => model.id)),
   );
@@ -274,10 +277,7 @@ export function parseAgentSetup(
   const model = [...(agent.models ?? []), ...(agent.model ? [agent.model] : [])]
     .map((candidate) => managedModelId(candidate.provider.provider_id, candidate.model_id))
     .find((id) => modelIds.has(id));
-  if (!model) {
-    skipped.push(`agent ${agent.id}: no usable model`);
-    return null;
-  }
+  if (!model) skipped.push(`agent ${agent.id}: no usable model`);
   const mcpServers = parseMcpServers(agent.mcpServers ?? [], skipped);
   const skills = (agent.libraryItems ?? []).flatMap((item) => {
     const task = tasks.find((candidate) => candidate.libraryItemId === item.id);
@@ -285,18 +285,22 @@ export function parseAgentSetup(
     return [{ remoteId: String(item.id), itemId: item.id, updatedAt: task.updatedAt }];
   });
   return {
-    agent: {
-      remoteId: String(agent.id),
-      name: agent.name,
-      instructions: agent.instructions ?? '',
-      avatar: emojiAvatar(agent.configuration?.avatar),
-      model,
-      // Anything but explicit bypass keeps Mobile's ask-first default.
-      toolApprovalMode:
-        agent.configuration?.default_permission_mode === 'bypassPermissions' ? 'auto' : 'default',
-      skillRemoteIds: skills.map((skill) => skill.remoteId),
-      mcpServerRemoteIds: mcpServers.map((server) => server.remoteId),
-    },
+    remoteId: String(agent.id),
+    skillRemoteIds: (agent.libraryItems ?? []).map((item) => String(item.id)),
+    mcpServerRemoteIds: (agent.mcpServers ?? []).map((server) => server.key),
+    agent: model
+      ? {
+          name: agent.name,
+          instructions: agent.instructions ?? '',
+          avatar: emojiAvatar(agent.configuration?.avatar),
+          model,
+          // Anything but explicit bypass keeps Mobile's ask-first default.
+          toolApprovalMode:
+            agent.configuration?.default_permission_mode === 'bypassPermissions'
+              ? 'auto'
+              : 'default',
+        }
+      : null,
     skills,
     mcpServers,
   };

@@ -191,45 +191,47 @@ export class AgentService {
       options.skillUpdates === undefined
         ? undefined
         : ReplaceAgentSkillsSchema.parse({ updates: options.skillUpdates }).updates;
-    const current = await this.getById(id);
     const expectedTimestamp =
       options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
     if (expectedTimestamp !== undefined && !Number.isFinite(expectedTimestamp)) {
       throw DataApiErrorFactory.validation({ expectedUpdatedAt: ['Invalid Agent version'] });
     }
-    if (
-      options.expectedUpdatedAt !== undefined &&
-      Date.parse(current.updatedAt) !== expectedTimestamp
-    ) {
-      throw DataApiErrorFactory.conflict(
-        'The Agent changed since it was read. Read it again before editing.',
-      );
-    }
-
     if (dto.name !== undefined) {
       this.validateName(dto.name);
     }
 
-    const updates = Object.fromEntries(
-      Object.entries(dto).filter(([, value]) => value !== undefined),
-    ) as Partial<typeof agentTable.$inferInsert>;
-    // Editors resubmit the whole form, so only fields whose value changes count as edits.
-    assertManagedAgentUpdate(current.isManaged, [
-      ...Object.entries(updates)
-        .filter(([field, value]) => !deepEqual(value, current[field as keyof Agent]))
-        .map(([field]) => field),
-      ...(skillUpdates?.length ? ['skills'] : []),
-    ]);
+    const { row, changed } = await this.dbService.withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(agentTable)
+        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .limit(1);
+      if (!current) throw DataApiErrorFactory.notFound('Agent', id);
+      if (expectedTimestamp !== undefined && current.updatedAt !== expectedTimestamp) {
+        throw DataApiErrorFactory.conflict(
+          'The Agent changed since it was read. Read it again before editing.',
+        );
+      }
 
-    if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
-      return current;
-    }
+      // Editors resubmit whole forms. Compare and authorize against the same row we write.
+      const updates = Object.fromEntries(
+        Object.entries(dto).filter(
+          ([field, value]) =>
+            value !== undefined && !deepEqual(value, current[field as keyof AgentRow]),
+        ),
+      ) as Partial<typeof agentTable.$inferInsert>;
+      assertManagedAgentUpdate(current.managedRemoteId !== null, [
+        ...Object.keys(updates),
+        ...(skillUpdates?.length ? ['skills'] : []),
+      ]);
+      if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
+        return { row: current, changed: false };
+      }
 
-    const row = await this.dbService.withWriteTx(async (tx) => {
-      if (dto.model && !(await this.modelExistsTx(tx, dto.model))) {
+      if (updates.model && !(await this.modelExistsTx(tx, updates.model))) {
         throw DataApiErrorFactory.validation(
-          { model: [`Model '${dto.model}' is not registered in user_model`] },
-          `Agent model '${dto.model}' is not registered - add the model first or pass null`,
+          { model: [`Model '${updates.model}' is not registered in user_model`] },
+          `Agent model '${updates.model}' is not registered - add the model first or pass null`,
         );
       }
 
@@ -260,20 +262,18 @@ export class AgentService {
       if (skillUpdates?.length) {
         await agentGlobalSkillService.applyBindingUpdatesTx(tx, id, skillUpdates);
       }
-      return updated as AgentRow;
+      return { row: updated as AgentRow, changed: true };
     });
 
-    publishDataApiChanges([
-      '/agents',
-      `/agents/${id}`,
-      ...(skillUpdates?.length ? ['/skills', `/agents/${id}/skills`] : []),
-    ]);
-    const modelName =
-      dto.model !== undefined && dto.model !== current.model
-        ? await this.getModelName(dto.model)
-        : current.modelName;
+    if (changed) {
+      publishDataApiChanges([
+        '/agents',
+        `/agents/${id}`,
+        ...(skillUpdates?.length ? ['/skills', `/agents/${id}/skills`] : []),
+      ]);
+    }
 
-    return rowToAgent(row, modelName);
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   /**

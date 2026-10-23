@@ -1,9 +1,14 @@
+import { loggerService } from '@logger';
 import { eq } from 'drizzle-orm';
 
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
-import type { DbService } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from '@/backend/data/db/schemas';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
+  ENTERPRISE_DEFAULT_MODEL_KEYS,
+  type EnterpriseDefaultModels,
   getDefaultValue,
   getPreferenceKeys,
   isPreferenceKey,
@@ -27,6 +32,8 @@ type PreferenceMappedResult<T extends PreferenceMapping> = {
   [P in keyof T]: PreferenceSchema[T[P]];
 };
 type PreferenceUpdateMap = Partial<Record<PreferenceKeyType, PreferenceValue>>;
+
+const logger = loggerService.withContext('PreferenceService');
 
 const defaultUpdateOptions: PreferenceUpdateOptions = {
   optimistic: true,
@@ -141,7 +148,40 @@ export class PreferenceService extends BaseService implements PreferenceClient {
     updates: PreferenceUpdates<K>,
     options: PreferenceUpdateOptions = defaultUpdateOptions,
   ) {
+    if (
+      isEnterpriseProfile() &&
+      ENTERPRISE_DEFAULT_MODEL_KEYS.some(
+        (key) => (updates as PreferenceUpdateMap)[key] !== undefined,
+      )
+    ) {
+      throw DataApiErrorFactory.invalidOperation(
+        'preference.set',
+        'managed by the enterprise server',
+      );
+    }
     await this.enqueueUpdate(updates as PreferenceUpdateMap, options);
+  }
+
+  /**
+   * Enterprise projection writes these three defaults in its own resource transaction.
+   * Invoke the returned cache publication only after that transaction commits.
+   */
+  async writeEnterpriseDefaults(
+    tx: Database,
+    defaults: EnterpriseDefaultModels,
+  ): Promise<() => void> {
+    for (const key of ENTERPRISE_DEFAULT_MODEL_KEYS) {
+      const value = defaults[key];
+      // react-doctor-disable-next-line async-await-in-loop -- one SQLite write transaction
+      await tx
+        .insert(preferenceTable)
+        .values({ key, scope: DEFAULT_PREFERENCE_SCOPE, value })
+        .onConflictDoUpdate({
+          target: [preferenceTable.scope, preferenceTable.key],
+          set: { value },
+        });
+    }
+    return () => this.applyUpdates(defaults, this.getChangedKeys(defaults));
   }
 
   subscribeChange<K extends PreferenceKeyType>(key: K) {
@@ -260,7 +300,12 @@ export class PreferenceService extends BaseService implements PreferenceClient {
       }
 
       for (const listener of listeners) {
-        listener();
+        try {
+          listener();
+        } catch (error) {
+          // Observers cannot turn a committed preference write into a failed update.
+          logger.warn('Preference listener failed', error as Error);
+        }
       }
     }
   }

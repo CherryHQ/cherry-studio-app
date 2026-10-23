@@ -16,7 +16,11 @@ const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
 const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
-const mockEnterpriseSync = { configure: jest.fn() };
+const mockEnterpriseSync = {
+  configure: jest.fn(),
+  hasPendingStorageWork: jest.fn(() => false),
+  stop: jest.fn(async () => {}),
+};
 const mockEnterpriseAccount = { kind: 'enterprise-account', verify: jest.fn(async () => {}) };
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
@@ -177,6 +181,42 @@ describe('createAppBootstrapRuntime', () => {
     } finally {
       mockMcpRuntime.hasPendingStorageWork.mockReturnValue(false);
       await runtime.dispose();
+    }
+  });
+
+  test('includes pending enterprise sync in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockEnterpriseSync.hasPendingStorageWork.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockEnterpriseSync.hasPendingStorageWork.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
+
+  test('drains first enterprise sync before uninstalling its host', async () => {
+    let finish!: () => void;
+    mockEnterpriseSync.stop.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      uninstall.mockRestore();
     }
   });
 

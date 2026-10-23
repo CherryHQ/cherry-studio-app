@@ -144,6 +144,27 @@ describe('McpServerService', () => {
     await expect(service.getById(server.id)).resolves.toEqual(updated);
   });
 
+  it('rejects OAuth attachment and disconnect after the organization takes ownership', async () => {
+    const server = await service.saveOAuthConnection(oauthInput, oauth);
+    // The authorization workflow may still hold a user-owned snapshot when sync acquires it.
+    sqlite
+      .prepare("UPDATE mcp_server SET managed_remote_id = 'managed' WHERE id = ?")
+      .run(server.id);
+    const managed = await service.getById(server.id);
+
+    await expect(
+      service.saveOAuthConnection(
+        { ...oauthInput, name: 'User replacement' },
+        { ...oauth, authorizationId: '00000000-0000-4000-8000-000000000002' },
+        server,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    await expect(service.disconnectOAuth(server.id)).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+    await expect(service.getById(server.id)).resolves.toEqual(managed);
+  });
+
   it('checks the current grant after an authorization queued ahead of a header edit', async () => {
     const server = await service.create(oauthInput);
     let release!: () => void;

@@ -47,6 +47,9 @@ describe('enterprise configuration', () => {
       }),
     ]);
     expect(parsed.mcpServers.map((server) => server.remoteId)).toEqual(['search']);
+    expect(parsed.providerIds).toEqual(['openai', 'azure']);
+    expect(parsed.modelIds).toContain('openai::broken@openai');
+    expect(parsed.mcpServerRemoteIds).toEqual(['search', 'local']);
     // An unavailable default falls back to the first chat model.
     expect(parsed.defaults['agent.default_model_id']).toBe('openai::gpt-4o@openai');
     expect(skipped).toEqual(
@@ -58,7 +61,20 @@ describe('enterprise configuration', () => {
     );
   });
 
-  it('maps an Agent to one usable model and drops references Mobile cannot use', () => {
+  it('rejects a snapshot whose remote identity inventory cannot be trusted', () => {
+    expect(() =>
+      parseConfiguration({ ...configuration, providers: [{ name: 'Missing ID' }] }, []),
+    ).toThrow();
+    expect(() =>
+      parseAgentSetup(
+        { agent: { id: 7, name: 'Broken' } },
+        parseConfiguration(configuration, []),
+        [],
+      ),
+    ).toThrow();
+  });
+
+  it('keeps remote references separate from the configuration Mobile can run', () => {
     const skipped: SkipLog = [];
     const parsed = parseConfiguration(configuration, skipped);
     const setup = parseAgentSetup(
@@ -75,7 +91,10 @@ describe('enterprise configuration', () => {
             avatar: 'https://cdn.example.com/a.png',
             default_permission_mode: 'plan',
           },
-          libraryItems: [{ id: 3, type: 'agent_skill', status: 'ready' }],
+          libraryItems: [
+            { id: 3, type: 'agent_skill', status: 'ready' },
+            { id: 4, type: 'future-skill', status: 'ready' },
+          ],
           mcpServers: [{ key: 'local', config: { name: 'Local', type: 'stdio' } }],
         },
         tasks: [{ libraryItemId: 3, type: 'agent_skill', updatedAt: '2026-10-01' }],
@@ -84,18 +103,20 @@ describe('enterprise configuration', () => {
       skipped,
     );
 
-    expect(setup?.agent).toEqual({
-      remoteId: '7',
+    expect(setup.mcpServers).toEqual([]);
+    expect(setup.mcpServerRemoteIds).toEqual(['local']);
+    expect(setup.skillRemoteIds).toEqual(['3', '4']);
+    expect(setup.skills.map((skill) => skill.remoteId)).toEqual(['3']);
+    expect(setup.remoteId).toBe('7');
+    expect(setup.agent).toEqual({
       name: 'Analyst',
       instructions: 'Secret prompt',
       avatar: null,
       model: 'openai::gpt-4o@openai',
       toolApprovalMode: 'default',
-      skillRemoteIds: ['3'],
-      mcpServerRemoteIds: [],
     });
     expect(
       parseAgentSetup({ agent: { id: 8, name: 'Lost', models: [] }, tasks: [] }, parsed, skipped),
-    ).toBeNull();
+    ).toMatchObject({ remoteId: '8', agent: null });
   });
 });

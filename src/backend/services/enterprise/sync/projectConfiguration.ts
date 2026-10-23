@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, notInArray, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { Database } from '@/backend/data/db/DbService';
@@ -8,6 +8,7 @@ import {
   agentTable,
   agentToolBindingTable,
   mcpServerTable,
+  monotonicUpdateTimestamp,
   userModelTable,
   userProviderTable,
 } from '@/backend/data/db/schemas';
@@ -32,8 +33,6 @@ export type ProjectionInput = Readonly<{
   agents: readonly AgentSetup[];
   /** Skills whose package changed; unchanged managed Skills keep their rows. */
   publishedSkills: readonly PublishedSkill[];
-  /** Every Skill the server still delivers, changed or not. */
-  skillRemoteIds: ReadonlySet<string>;
 }>;
 
 /**
@@ -43,12 +42,28 @@ export type ProjectionInput = Readonly<{
  */
 export async function projectConfiguration(tx: Database, input: ProjectionInput) {
   const { configuration, agents } = input;
+  const agentsWithRemovedBindings: { id: string }[] = [];
   const apiKeys = configuration.apiKey
     ? [{ id: 'enterprise-gateway', key: configuration.apiKey, isEnabled: true }]
     : [];
 
   // Providers and models: every provider in an enterprise profile belongs to the server.
-  const providerIds = configuration.providers.map((provider) => provider.providerId);
+  const providerIds = configuration.providerIds;
+  const removedModels = or(
+    notInArray(userModelTable.id, configuration.modelIds),
+    notInArray(userModelTable.providerId, providerIds),
+  );
+  const agentsWithRemovedModels = await tx
+    .update(agentTable)
+    .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+    .where(
+      inArray(
+        agentTable.model,
+        tx.select({ id: userModelTable.id }).from(userModelTable).where(removedModels),
+      ),
+    )
+    .returning({ id: agentTable.id });
+  await tx.delete(userModelTable).where(removedModels);
   await tx.delete(userProviderTable).where(notInArray(userProviderTable.providerId, providerIds));
   for (const provider of configuration.providers) {
     const values = {
@@ -85,15 +100,6 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
         },
       );
     }
-    const modelIds = provider.models.map((model) => model.id);
-    await tx
-      .delete(userModelTable)
-      .where(
-        and(
-          eq(userModelTable.providerId, provider.providerId),
-          notInArray(userModelTable.id, modelIds),
-        ),
-      );
     for (const model of provider.models) {
       const values = {
         providerId: provider.providerId,
@@ -138,23 +144,34 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
     ...agents.flatMap((setup) => setup.mcpServers),
   ])
     if (!servers.has(server.remoteId)) servers.set(server.remoteId, server);
+  const serverRemoteIds = new Set([
+    ...configuration.mcpServerRemoteIds,
+    ...agents.flatMap((setup) => setup.mcpServerRemoteIds),
+  ]);
   const removedServers = await tx
     .select({ id: mcpServerTable.id })
     .from(mcpServerTable)
     .where(
       and(
         isNotNull(mcpServerTable.managedRemoteId),
-        notInArray(mcpServerTable.managedRemoteId, [...servers.keys()]),
+        notInArray(mcpServerTable.managedRemoteId, [...serverRemoteIds]),
       ),
     );
   const changedServers = removedServers.map((server) => server.id);
   if (changedServers.length) {
-    await tx
-      .delete(agentToolBindingTable)
-      .where(inArray(agentToolBindingTable.mcpServerId, changedServers));
+    agentsWithRemovedBindings.push(
+      ...(await tx
+        .delete(agentToolBindingTable)
+        .where(inArray(agentToolBindingTable.mcpServerId, changedServers))
+        .returning({ id: agentToolBindingTable.agentId })),
+    );
     await tx.delete(mcpServerTable).where(inArray(mcpServerTable.id, changedServers));
   }
-  const serverIds = new Map<string, string>();
+  const retainedServers = await tx
+    .select({ id: mcpServerTable.id, remoteId: mcpServerTable.managedRemoteId })
+    .from(mcpServerTable)
+    .where(isNotNull(mcpServerTable.managedRemoteId));
+  const serverIds = new Map(retainedServers.map((server) => [server.remoteId!, server.id]));
   for (const server of servers.values()) {
     const values = {
       name: server.name,
@@ -175,7 +192,10 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
         JSON.stringify(existing.disabledTools) !== JSON.stringify(values.disabledTools) ||
         existing.isEnabled !== values.isEnabled
       ) {
-        await tx.update(mcpServerTable).set(values).where(eq(mcpServerTable.id, existing.id));
+        await tx
+          .update(mcpServerTable)
+          .set({ ...values, updatedAt: monotonicUpdateTimestamp(mcpServerTable.updatedAt) })
+          .where(eq(mcpServerTable.id, existing.id));
         changedServers.push(existing.id);
       }
       serverIds.set(server.remoteId, existing.id);
@@ -189,14 +209,28 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
   }
 
   // Skills: changed packages replace their row; removed ones go with their bindings.
-  await tx
-    .delete(agentGlobalSkillTable)
-    .where(
-      and(
-        isNotNull(agentGlobalSkillTable.managedRemoteId),
-        notInArray(agentGlobalSkillTable.managedRemoteId, [...input.skillRemoteIds]),
-      ),
-    );
+  const removedSkills = and(
+    isNotNull(agentGlobalSkillTable.managedRemoteId),
+    notInArray(
+      agentGlobalSkillTable.managedRemoteId,
+      agents.flatMap((setup) => setup.skillRemoteIds),
+    ),
+  );
+  agentsWithRemovedBindings.push(
+    ...(await tx
+      .delete(agentSkillTable)
+      .where(
+        inArray(
+          agentSkillTable.skillId,
+          tx
+            .select({ id: agentGlobalSkillTable.id })
+            .from(agentGlobalSkillTable)
+            .where(removedSkills),
+        ),
+      )
+      .returning({ id: agentSkillTable.agentId })),
+  );
+  await tx.delete(agentGlobalSkillTable).where(removedSkills);
   for (const { remoteId, ...skill } of input.publishedSkills) {
     const [existing] = await tx
       .select({ id: agentGlobalSkillTable.id })
@@ -205,7 +239,7 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
     if (existing) {
       await tx
         .update(agentGlobalSkillTable)
-        .set(skill)
+        .set({ ...skill, updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt) })
         .where(eq(agentGlobalSkillTable.id, existing.id));
     } else {
       await tx
@@ -220,7 +254,7 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
   const skillIds = new Map(skillRows.map((row) => [row.remoteId!, row.id]));
 
   // Agents: removed ones detach and keep their conversations as ordinary user Agents.
-  const agentRemoteIds = agents.map((setup) => setup.agent.remoteId);
+  const agentRemoteIds = configuration.agentIds.map(String);
   const detached = await tx
     .select({ id: agentTable.id })
     .from(agentTable)
@@ -235,22 +269,63 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
     // Instructions were never shown to the user, so they do not pass to the user's copy.
     await tx
       .update(agentTable)
-      .set({ managedRemoteId: null, instructions: '' })
+      .set({
+        managedRemoteId: null,
+        instructions: '',
+        updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
+      })
       .where(inArray(agentTable.id, ids));
     await tx.delete(agentToolBindingTable).where(inArray(agentToolBindingTable.agentId, ids));
+    await tx.delete(agentSkillTable).where(inArray(agentSkillTable.agentId, ids));
   }
-  for (const { agent } of agents) {
-    const locked = { name: agent.name, instructions: agent.instructions, avatar: agent.avatar };
+  for (const { agent, remoteId, skillRemoteIds, mcpServerRemoteIds } of agents) {
     const [existing] = await tx
       .select({ id: agentTable.id, model: agentTable.model })
       .from(agentTable)
-      .where(eq(agentTable.managedRemoteId, agent.remoteId));
+      .where(eq(agentTable.managedRemoteId, remoteId));
+    if (!agent) {
+      if (!existing) continue;
+      // A known but unsupported Agent keeps its definition and retained authorizations.
+      // Its authoritative setup can still revoke individual bindings to shared resources.
+      const retainedSkillIds = skillRemoteIds.flatMap((id) => skillIds.get(id) ?? []);
+      const retainedServerIds = mcpServerRemoteIds.flatMap((id) => serverIds.get(id) ?? []);
+      agentsWithRemovedBindings.push(
+        ...(await tx
+          .delete(agentSkillTable)
+          .where(
+            and(
+              eq(agentSkillTable.agentId, existing.id),
+              notInArray(agentSkillTable.skillId, retainedSkillIds),
+            ),
+          )
+          .returning({ id: agentSkillTable.agentId })),
+      );
+      agentsWithRemovedBindings.push(
+        ...(await tx
+          .delete(agentToolBindingTable)
+          .where(
+            and(
+              eq(agentToolBindingTable.agentId, existing.id),
+              eq(agentToolBindingTable.source, 'mcp'),
+              notInArray(agentToolBindingTable.mcpServerId, retainedServerIds),
+            ),
+          )
+          .returning({ id: agentToolBindingTable.agentId })),
+      );
+      continue;
+    }
+    const locked = { name: agent.name, instructions: agent.instructions, avatar: agent.avatar };
     let id = existing?.id;
     if (id) {
       // Model, mode, approval and capability choices are the user's; only fill a lost model.
       await tx
         .update(agentTable)
-        .set({ ...locked, deletedAt: null, ...(existing!.model ? {} : { model: agent.model }) })
+        .set({
+          ...locked,
+          deletedAt: null,
+          updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
+          ...(existing!.model ? {} : { model: agent.model }),
+        })
         .where(eq(agentTable.id, id));
     } else {
       id = uuidv4();
@@ -262,25 +337,36 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
           id,
           model: agent.model,
           toolApprovalMode: agent.toolApprovalMode,
-          managedRemoteId: agent.remoteId,
+          managedRemoteId: remoteId,
         },
         { pkColumn: agentTable.id },
       );
     }
     await tx.delete(agentSkillTable).where(eq(agentSkillTable.agentId, id));
-    const boundSkills = agent.skillRemoteIds.flatMap((remoteId) => {
+    const boundSkills = skillRemoteIds.flatMap((remoteId) => {
       const skillId = skillIds.get(remoteId);
       return skillId ? [{ agentId: id, skillId, isEnabled: true }] : [];
     });
     if (boundSkills.length) await tx.insert(agentSkillTable).values(boundSkills);
     await tx.delete(agentToolBindingTable).where(eq(agentToolBindingTable.agentId, id));
-    const boundServers = agent.mcpServerRemoteIds.flatMap((remoteId) => {
+    const boundServers = mcpServerRemoteIds.flatMap((remoteId) => {
       const mcpServerId = serverIds.get(remoteId);
       return mcpServerId ? [{ agentId: id, source: 'mcp' as const, mcpServerId }] : [];
     });
     if (boundServers.length) await tx.insert(agentToolBindingTable).values(boundServers);
   }
 
+  if (agentsWithRemovedBindings.length) {
+    await tx
+      .update(agentTable)
+      .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+      .where(
+        inArray(
+          agentTable.id,
+          agentsWithRemovedBindings.map(({ id }) => id),
+        ),
+      );
+  }
   const agentIds = await tx
     .select({ id: agentTable.id })
     .from(agentTable)
@@ -296,7 +382,12 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
       ...[...serverIds.values(), ...changedServers].map((id) => `/mcp-servers/${id}`),
       '/skills',
       '/agents',
-      ...[...agentIds, ...detached].flatMap(({ id }) => [`/agents/${id}`, `/agents/${id}/skills`]),
+      ...[
+        ...agentIds,
+        ...detached,
+        ...agentsWithRemovedModels,
+        ...agentsWithRemovedBindings,
+      ].flatMap(({ id }) => [`/agents/${id}`, `/agents/${id}/skills`]),
     ],
   };
 }
