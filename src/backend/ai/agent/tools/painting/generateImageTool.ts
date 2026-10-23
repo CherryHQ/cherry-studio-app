@@ -8,13 +8,16 @@ import type { RuntimeTool } from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 import {
   type ConfiguredPaintingModel,
-  GENERATE_IMAGE_DESCRIPTION,
   generateImageFromPrompt,
   isPaintingError,
   type PaintingToolDependencies,
   toGenerateImageOutput,
 } from './generateImage';
-import { buildGenerateImageToolSchema, type GenerateImageToolInput } from './generateImageSchema';
+import {
+  buildGenerateImageToolDescription,
+  buildGenerateImageToolSchema,
+  type GenerateImageToolInput,
+} from './generateImageSchema';
 
 export { GENERATE_IMAGE_TOOL_NAME };
 
@@ -35,7 +38,7 @@ export function createGenerateImageTool(
     ref: { source: 'builtin', capabilityId: GENERATE_IMAGE_TOOL_NAME },
     providerName: GENERATE_IMAGE_TOOL_NAME,
     displayName: 'Generate image',
-    description: GENERATE_IMAGE_DESCRIPTION,
+    description: buildGenerateImageToolDescription(configuredModel?.support),
     inputSchema: toRuntimeInputSchema(inputSchema),
     // Generation spends the user's provider quota, so it asks unless an Agent
     // binding says otherwise (agent-tools-and-resources.md, Image Generation).

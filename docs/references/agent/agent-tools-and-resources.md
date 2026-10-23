@@ -581,6 +581,16 @@ categories and selected AI service. See [Health Review](../../guides/health-revi
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
   model is configured. Its input schema is built from that model's capability block so the model is
   never offered a parameter its provider rejects.
+- The tool description uses the same capability snapshot as its schema. `generate` accepts a
+  prompt without a reference; `edit` accepts one conversation image through `image_ids`, required
+  when the configured model supports only editing. Missing capability metadata does not enable
+  editing. An unsupported reference-based request must not silently become text-only generation.
+- The Agent selects references from uploaded attachment `fileEntryId`, an earlier `generate_image`
+  result's `id`, or an artifact's `ref.fileEntryId`. Users do not need to supply these technical ids;
+  an ambiguous reference needs clarification, and an unavailable image needs reattachment. The
+  tool reads the original managed image and passes it to the drawing model. A direct `read_file`
+  call is needed only when the Agent must inspect pixels that are no longer in context; generated
+  results expose reusable references rather than automatically sending pixels to the Agent.
 
 ### Office Files
 
