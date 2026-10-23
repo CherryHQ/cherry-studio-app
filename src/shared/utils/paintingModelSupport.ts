@@ -24,6 +24,7 @@ export function resolvePaintingGenerationMode(
   }
 
   const mode = hasInputImages ? 'edit' : 'generate';
+  const acceptsImageInput = model.inputModalities?.includes(MODALITY.IMAGE) === true;
   const imageEndpointTypes =
     model.endpointTypes?.filter(
       (endpointType) =>
@@ -31,14 +32,13 @@ export function resolvePaintingGenerationMode(
         endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
     ) ?? [];
   if (imageEndpointTypes.length > 0) {
-    const requiredEndpoint = hasInputImages
-      ? ENDPOINT_TYPE.OPENAI_IMAGE_EDIT
-      : ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION;
-    return imageEndpointTypes.includes(requiredEndpoint) ? mode : undefined;
+    if (!hasInputImages)
+      return imageEndpointTypes.includes(ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION) ? mode : undefined;
+    // Declared image input is enough, matching Desktop; the provider rejects what it cannot edit.
+    return imageEndpointTypes.includes(ENDPOINT_TYPE.OPENAI_IMAGE_EDIT) || acceptsImageInput
+      ? mode
+      : undefined;
   }
 
-  return isImageGenerationModel(model) &&
-    (!hasInputImages || model.inputModalities?.includes(MODALITY.IMAGE) === true)
-    ? mode
-    : undefined;
+  return isImageGenerationModel(model) && (!hasInputImages || acceptsImageInput) ? mode : undefined;
 }
