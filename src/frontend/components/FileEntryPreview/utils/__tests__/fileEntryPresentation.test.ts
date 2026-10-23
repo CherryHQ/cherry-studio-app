@@ -7,6 +7,7 @@ describe('fileEntryPreviewKind', () => {
     ['application/rtf', 'document'],
     ['Text/Rtf; charset=utf-8', 'document'],
     ['text/markdown', 'markdown'],
+    ['text/x-markdown', 'markdown'],
     ['application/zip', 'document'],
     ['text/html', 'html'],
     ['text/plain', 'text'],

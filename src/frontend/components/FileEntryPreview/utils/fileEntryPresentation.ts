@@ -15,6 +15,8 @@ export type FileEntryKind = 'document' | 'html' | 'image' | 'markdown' | 'text';
 const kindByMediaType = new Map<string, FileEntryKind>([
   ['text/html', 'html'],
   ['text/markdown', 'markdown'],
+  // iOS reports Markdown picked from Files under its legacy type.
+  ['text/x-markdown', 'markdown'],
   ['application/json', 'text'],
   ['application/xml', 'text'],
   ['application/yaml', 'text'],
