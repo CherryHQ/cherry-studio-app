@@ -30,6 +30,7 @@ const RegistrySchema = z.strictObject({
       id: z.uuid(),
       identity: EnterpriseIdentitySchema,
       address: z.string().min(1),
+      displayName: z.string().min(1).optional(),
     }),
   ),
   active: z.union([z.literal('local'), z.uuid()]),
@@ -67,17 +68,20 @@ export class ProfileRegistry {
 
   /**
    * Reuses the profile of a known identity and records the address it was reached at, so a
-   * server that moves keeps its data. The local profile is never adopted by a login.
+   * server that moves keeps its data. An unknown display name keeps the recorded one. The local
+   * profile is never adopted by a login.
    */
-  resolve(identity: EnterpriseIdentity, address: string): ActiveProfile {
+  resolve(identity: EnterpriseIdentity, address: string, displayName?: string): ActiveProfile {
     const parsed = EnterpriseIdentitySchema.parse(identity);
     const existing = this.data.profiles.find((profile) =>
       isSameEnterpriseIdentity(profile.identity, parsed),
     );
+    const name = displayName?.trim() || existing?.displayName;
     const profile = {
       id: existing?.id ?? z.uuid().parse(this.createId()),
       identity: parsed,
       address,
+      ...(name && { displayName: name }),
     };
     this.write({
       ...this.data,

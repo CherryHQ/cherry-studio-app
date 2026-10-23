@@ -30,6 +30,15 @@ describe('ProfileRegistry', () => {
     expect(registry.getActive()).toBe(LOCAL_PROFILE);
   });
 
+  it('keeps the recorded organization name when a later sign-in cannot read it', () => {
+    const { registry, stored } = createRegistry();
+    registry.resolve(identity, 'https://a.example.com', 'Acme');
+    const profile = registry.resolve(identity, 'https://a.example.com');
+    registry.setActive(profile);
+    expect(profile).toMatchObject({ displayName: 'Acme' });
+    expect(createRegistry(stored()).registry.getActive()).toMatchObject({ displayName: 'Acme' });
+  });
+
   it('reuses one profile per identity and persists the next launch selection', () => {
     const { registry, stored } = createRegistry();
     const profile = registry.resolve(identity, 'https://a.example.com');

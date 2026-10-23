@@ -64,18 +64,25 @@ installation's single Accounts Portal SDK instance, composed natively in
 `src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage and refresh.
 The runtime also owns private credentials; `privateAccountApi` validates the v2 password exchange
 over the shared HTTP transport. Private sign-in works without Accounts Portal build configuration.
-`isCloudSignInAvailable` controls the cloud login choice only. The account settings entry and first-use
-sign-in remain available for private deployments when Portal configuration is absent.
+`isCloudSignInAvailable` controls the cloud login choice only. The profile's account section and
+first-use sign-in remain available for private deployments when Portal configuration is absent.
 
 The account UI offers only sign-in, account switching and sign-out; users never choose a data
-profile. A community account uses the installation's own data whether or not it is signed in;
+profile. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
+community account, the organization name or the private server host, and opens the profile page,
+which holds the account rows, switching and sign-out. Signing out of an organization asks for
+confirmation; a community sign-out does not. A community account uses the installation's own data whether or not it is signed in;
 signing in adds only the account identity, and its entitlements are not designed yet. An
 enterprise or private account's data is visible only while that account is signed in. In the local
 profile, only a community session counts as signed in.
 
-- **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) opens the portal in the external
+- **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) serves first use, sign-in and
+  switching from the profile, and an expired session. Cloud sign-in opens the portal in the external
   browser, where the user picks the community account or an organization. A private deployment
-  enters its server address, username and password on the same page and signs in directly.
+  enters its server address, username and password on the same page and signs in directly; an
+  expired private session keeps its server and user and asks only for the password.
+- **Organization name:** cloud enterprise sign-in reads the organization's display name from the
+  portal's profile list and records it in the registry; failing to read it never blocks sign-in.
 - **New installation:** `FirstUseGate` shows `/login` before onboarding. Signing in to the community
   account or choosing "Not now" continues to the existing provider setup; an enterprise account
   reloads into its profile and skips onboarding. Installations with data never see the page; they

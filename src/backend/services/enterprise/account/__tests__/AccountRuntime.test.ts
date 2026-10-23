@@ -44,6 +44,17 @@ function setup(
     beginSignIn: jest.fn(async () => ({ url: 'https://portal/sign-in', redirectUri: 'cb://' })),
     completeSignIn: jest.fn(async () => session),
     getProductToken: jest.fn(async () => 'product-token'),
+    listProfiles: jest.fn(async () => ({
+      profiles: [
+        {
+          product: 'enterprise' as const,
+          id: 'org-1',
+          kind: 'organization' as const,
+          displayName: 'Acme',
+        },
+      ],
+      unavailable: [],
+    })),
     signOut: jest.fn(async () => ({ revoked: true, loggedOut: true })),
   };
   const options = {
@@ -125,8 +136,21 @@ describe('AccountRuntime', () => {
         productProfileId: 'org-1',
       },
       'https://cse.example.com',
+      'Acme',
     );
     expect(options.profiles.setActive).toHaveBeenCalledWith(enterpriseProfile);
+    expect(options.reload).toHaveBeenCalled();
+  });
+
+  it('still opens the organization when its display name cannot be read', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'));
+    options.portal.listProfiles.mockRejectedValueOnce(new Error('offline'));
+    await expect(runtime.signIn()).resolves.toBe(false);
+    expect(options.profiles.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ productProfileId: 'org-1' }),
+      'https://cse.example.com',
+      undefined,
+    );
     expect(options.reload).toHaveBeenCalled();
   });
 

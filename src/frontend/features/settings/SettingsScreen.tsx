@@ -1,5 +1,4 @@
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
-import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
@@ -15,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { organizationLabel, useAccount } from '@/frontend/appShell/account';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -26,6 +26,13 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [userName] = usePreference('app.user.name');
+  const { state: account } = useAccount();
+  const organization = organizationLabel(account);
+  const accountDetail = organization
+    ? { label: organization.label, icon: organization.kind }
+    : account.isSignedIn && account.name
+      ? { label: account.name }
+      : undefined;
   const { openProviderList, prepareProviderList } = useProviderListNavigation();
 
   const openProfileSettings = useCallback(() => {
@@ -42,15 +49,15 @@ export default function SettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <ProfileHero onPress={openProfileSettings} userName={userName} />
+        <ProfileHero
+          detail={accountDetail}
+          onPress={openProfileSettings}
+          onSignIn={
+            account.isSignedIn || account.isEnterprise ? undefined : () => router.push('/login')
+          }
+          userName={userName}
+        />
         <View className="gap-6 px-4 pt-2">
-          <Section>
-            <Section.Item
-              label={t('account.title')}
-              leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/account')}
-            />
-          </Section>
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}

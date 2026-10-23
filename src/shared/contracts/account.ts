@@ -31,6 +31,8 @@ export type AccountState = Readonly<{
   name?: string;
   /** Preselects private sign-in when restoring or switching a private account. */
   privateAddress?: string;
+  /** The active cloud organization's display name, when Accounts Portal provided one. */
+  organizationName?: string;
 }>;
 
 export type PrivateSignIn = { address: string; username: string; password: string };

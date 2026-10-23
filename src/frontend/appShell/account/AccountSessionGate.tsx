@@ -22,15 +22,13 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
   if (!state.isEnterprise || !state.needsSignIn) return children;
   return (
     <LoginScreen
-      expired
-      secondaryAction={{
-        label: t('account.signOut'),
-        onPress: () =>
-          void account.signOut().catch((error: unknown) => {
-            const code = error instanceof AccountError ? error.code : 'connection';
-            toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
-          }),
-      }}
+      onLeave={() =>
+        void account.signOut().catch((error: unknown) => {
+          const code = error instanceof AccountError ? error.code : 'connection';
+          toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
+        })
+      }
+      purpose="expired"
     />
   );
 }

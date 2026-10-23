@@ -1,3 +1,4 @@
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button, Image, Input, TextField, useToast } from '@cherrystudio/ui/components';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AccountError, type AccountErrorCode } from '@/shared/contracts/account';
 
+import { organizationLabel } from './organizationLabel';
 import { useAccount } from './useAccount';
 
 const APP_LOGO = require('@/assets/cherry-studio-logo.png');
@@ -18,27 +20,35 @@ export const ACCOUNT_ERROR_KEYS = {
   rejected: 'account.error.rejected',
 } as const satisfies Record<AccountErrorCode, string>;
 
+/**
+ * `first-use` may be skipped; `sign-in` and `switch` open from the profile and close back to it;
+ * `expired` replaces an organization whose session was refused and offers sign-out instead.
+ */
+export type LoginPurpose = 'first-use' | 'sign-in' | 'switch' | 'expired';
+
 type LoginScreenProps = {
-  /** Shown when the enterprise server stopped accepting the session. */
-  expired?: boolean;
+  purpose: LoginPurpose;
+  /** Leaves without signing in: skips on first use, closes from the profile, signs out when expired. */
+  onLeave: () => void;
   /** Called after a community sign-in; enterprise sign-in reloads into its profile instead. */
   onSignedIn?: () => void;
-  secondaryAction?: { label: string; onPress: () => void };
 };
 
-/**
- * Cloud sign-in opens Accounts Portal; private deployments use their own password endpoint.
- */
-export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScreenProps) {
+/** Cloud sign-in opens Accounts Portal; private deployments use their own password endpoint. */
+export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const insets = useSafeAreaInsets();
   const { account, state } = useAccount();
+  const isExpired = purpose === 'expired';
+  // An expired private session signs in again to the same server and, when known, the same user.
+  const lockedAddress = isExpired ? state.privateAddress : undefined;
+  const lockedUsername = lockedAddress ? state.name : undefined;
   const [isPrivate, setIsPrivate] = useState(
-    !state.isCloudSignInAvailable || Boolean(state.privateAddress),
+    !state.isCloudSignInAvailable || Boolean(isExpired ? lockedAddress : state.privateAddress),
   );
   const [address, setAddress] = useState(state.privateAddress ?? '');
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(lockedUsername ?? '');
   const [password, setPassword] = useState('');
   const usernameInput = useRef<TextInput>(null);
   const passwordInput = useRef<TextInput>(null);
@@ -47,6 +57,7 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
     (isPrivate
       ? Boolean(address.trim() && username.trim() && password)
       : state.isCloudSignInAvailable);
+  const organization = organizationLabel(state);
 
   const signIn = () => {
     if (!canSignIn) return;
@@ -61,18 +72,49 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
       });
   };
 
+  const title = isExpired
+    ? t('account.login.expiredTitle')
+    : isPrivate
+      ? t('account.login.private')
+      : purpose === 'switch'
+        ? t('account.switch')
+        : t('account.login.title');
+  const description = isExpired
+    ? lockedAddress
+      ? t('account.login.expiredPrivateDescription')
+      : organization?.kind === 'organization'
+        ? t('account.login.expiredOrganizationDescription', { organization: organization.label })
+        : t('account.login.expiredDescription')
+    : isPrivate
+      ? t('account.login.privateDescription')
+      : purpose === 'switch'
+        ? t('account.login.switchDescription')
+        : t('account.login.description');
+
   return (
     <View
       className="flex-1 bg-background"
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
     >
+      {purpose === 'sign-in' || purpose === 'switch' ? (
+        <View className="flex-row px-4 py-2">
+          <Button
+            accessibilityLabel={t('common.close')}
+            disabled={state.isBusy}
+            icon={<XIcon />}
+            onPress={onLeave}
+            shape="pill"
+            variant="tonal"
+          />
+        </View>
+      ) : null}
       <ScrollView
         automaticallyAdjustKeyboardInsets
         contentContainerClassName="flex-grow justify-between gap-8 pb-4"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-grow items-center justify-center gap-6 px-8 py-12">
+        <View className="flex-grow items-center justify-center gap-5 px-8 py-12">
           <Image
             accessibilityIgnoresInvertColors
             className="size-20 rounded-2xl"
@@ -83,23 +125,15 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
               accessibilityRole="header"
               className="text-center font-semibold text-3xl text-foreground"
             >
-              {t(expired ? 'account.login.expiredTitle' : 'account.login.title')}
+              {title}
             </Text>
-            <Text className="text-center text-base text-muted-foreground">
-              {t(
-                expired
-                  ? 'account.login.expiredDescription'
-                  : isPrivate
-                    ? 'account.login.privateDescription'
-                    : 'account.login.description',
-              )}
-            </Text>
+            <Text className="text-center text-base text-muted-foreground">{description}</Text>
           </View>
         </View>
-        <View className="gap-3 px-6">
+        <View className="gap-4 px-6">
           {isPrivate ? (
-            <View className="gap-3">
-              <TextField disabled={state.isBusy}>
+            <View className="gap-4">
+              <TextField disabled={state.isBusy || Boolean(lockedAddress)}>
                 <TextField.Label>{t('account.address')}</TextField.Label>
                 <Input
                   accessibilityLabel={t('account.address')}
@@ -112,9 +146,8 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
                   submitBehavior="submit"
                   value={address}
                 />
-                <TextField.Description>{t('account.addressHint')}</TextField.Description>
               </TextField>
-              <TextField disabled={state.isBusy}>
+              <TextField disabled={state.isBusy || Boolean(lockedUsername)}>
                 <TextField.Label>{t('account.username')}</TextField.Label>
                 <Input
                   accessibilityLabel={t('account.username')}
@@ -150,31 +183,25 @@ export function LoginScreen({ expired, onSignedIn, secondaryAction }: LoginScree
               </TextField>
             </View>
           ) : null}
-          <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">
-            {t('account.login.signIn')}
-          </Button>
-          <View className="min-h-12 flex-row items-center justify-center gap-2">
-            {state.isCloudSignInAvailable ? (
+          <View className="gap-2">
+            <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">
+              {t(isExpired ? 'account.login.reSignIn' : 'account.login.signIn')}
+            </Button>
+            {state.isCloudSignInAvailable && !lockedAddress && !isExpired ? (
               <Button
                 disabled={state.isBusy}
                 onPress={() => {
                   setPassword('');
                   setIsPrivate((value) => !value);
                 }}
-                size="xs"
                 variant="ghost"
               >
                 {t(isPrivate ? 'account.login.cloud' : 'account.login.private')}
               </Button>
             ) : null}
-            {secondaryAction ? (
-              <Button
-                disabled={state.isBusy}
-                onPress={secondaryAction.onPress}
-                size="xs"
-                variant="ghost"
-              >
-                {secondaryAction.label}
+            {purpose === 'first-use' || isExpired ? (
+              <Button disabled={state.isBusy} onPress={onLeave} variant="ghost">
+                {t(isExpired ? 'account.signOut' : 'account.login.skip')}
               </Button>
             ) : null}
           </View>

@@ -40,6 +40,7 @@ type Portal = Pick<
   | 'beginSignIn'
   | 'completeSignIn'
   | 'getProductToken'
+  | 'listProfiles'
   | 'signOut'
 >;
 
@@ -52,7 +53,7 @@ export interface AccountRuntimeOptions {
   /** The profile this runtime serves. */
   active: ActiveProfile;
   profiles: {
-    resolve(identity: EnterpriseIdentity, address: string): ActiveProfile;
+    resolve(identity: EnterpriseIdentity, address: string, displayName?: string): ActiveProfile;
     setActive(profile: ActiveProfile): void;
   };
   prompt: { read(): boolean; write(): void };
@@ -105,6 +106,7 @@ export class AccountRuntime implements AccountModule {
       isBusy: false,
       privateAddress:
         active.identity && 'authentication' in active.identity ? active.address : undefined,
+      organizationName: active.identity ? active.displayName : undefined,
     };
     if (portal) {
       portal.subscribe((session) => {
@@ -162,6 +164,14 @@ export class AccountRuntime implements AccountModule {
         });
       const server = ServerIdentitySchema.safeParse(configuration);
       if (!server.success) throw new AccountError('connection');
+      // The display name is presentation only; an unreachable profile list never blocks sign-in.
+      const organization = await portal.listProfiles().then(
+        ({ profiles }) =>
+          profiles.find(
+            (candidate) => candidate.product === 'enterprise' && candidate.id === choice.profileId,
+          )?.displayName,
+        () => undefined,
+      );
       const profile = this.options.profiles.resolve(
         {
           deployment: server.data.serverUniqueId,
@@ -170,6 +180,7 @@ export class AccountRuntime implements AccountModule {
           productProfileId: choice.profileId,
         },
         enterpriseAddress,
+        organization,
       );
       await this.open(profile);
       return false;

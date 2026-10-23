@@ -19,6 +19,8 @@ export type ActiveProfile =
       identity: EnterpriseIdentity;
       /** Enterprise service address, including a private deployment's API path. */
       address: string;
+      /** The organization's display name from Accounts Portal; private deployments have none. */
+      displayName?: string;
     }>;
 
 export const LOCAL_PROFILE: ActiveProfile = Object.freeze({

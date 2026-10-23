@@ -66,7 +66,8 @@ function createAccount(): AccountRuntime {
               ),
             ),
         },
-        // Only the SDK's own endpoints and an enterprise product entry, so tokens go nowhere else.
+        // Only the SDK's own endpoints, its profile list and an enterprise product entry, so tokens
+        // go nowhere else.
         fetch: createFetchBridge({
           maxResponseBytes: 1024 * 1024,
           timeoutMs: 20_000,
@@ -77,6 +78,7 @@ function createAccount(): AccountRuntime {
               `${config.issuer}/oauth/v2/token`,
               `${config.issuer}/oauth/v2/revoke`,
               `${config.origin}/api/v1/logout`,
+              `${config.origin}/api/v1/profiles`,
             ];
             if (
               !fixed.includes(url.toString()) &&
