@@ -1,8 +1,9 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 
+import { useIsSidebarPersistent } from '@/frontend/appShell/layout';
 import {
   useStartNewChat,
   useChatSource,
@@ -21,7 +22,7 @@ type SidebarProps = {
   navigation: DrawerContentComponentProps['navigation'];
 };
 
-/** Drawer sidebar whose root owns the drawer-scoped actions. */
+/** Sidebar whose root owns the drawer-scoped actions, whether it overlays the chat or sits beside it. */
 export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
   const { source, remoteTarget, viewMode, startRemoteChat } = useChatSource();
@@ -37,6 +38,13 @@ export function Sidebar({ navigation }: SidebarProps) {
       : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
+  const isPersistent = useIsSidebarPersistent();
+
+  // A permanent drawer has nothing to close, but an overlay left open before the window widened
+  // would otherwise reappear over the chat once the window narrows again.
+  useEffect(() => {
+    if (isPersistent) navigation.closeDrawer();
+  }, [isPersistent, navigation]);
 
   const actions = useMemo<SidebarActions>(
     () => ({

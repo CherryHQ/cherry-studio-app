@@ -7,17 +7,23 @@ import { useTranslation } from 'react-i18next';
 
 import SidebarExpandIcon from '../../icons/SidebarExpandIcon';
 import type { HeaderToolbarAction } from '../components/HeaderAction';
+import type { RouteHeaderRootAction } from './RouteHeader.types';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
 
 /** Resolves drawer child screens to back and route roots to their declared action. */
+export function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
+  const rootAction = useRouteHeaderRootAction();
+  const isStackChild = useNavigationState((state) => state.index > 0);
+
+  return rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
+}
+
 export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarAction {
   const { t } = useTranslation();
   const router = useRouter();
   const openDrawer = useOpenDrawer();
-  const rootAction = useRouteHeaderRootAction();
-  const isStackChild = useNavigationState((state) => state.index > 0);
-  const action = rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
+  const action = useRouteHeaderLeadingKind();
   const goBack = useCallback(() => {
     if (onBack) {
       onBack();
