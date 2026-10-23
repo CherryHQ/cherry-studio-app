@@ -46,8 +46,9 @@ export interface AccountModule {
   getState(): AccountState;
   subscribe(listener: () => void): () => void;
   /**
-   * Cloud browser sign-in, or direct password sign-in to a private deployment. Resolves true when a
-   * community account signed in; an enterprise account reloads the app instead.
+   * Cloud browser sign-in, or direct password sign-in to a private deployment. Resolves true when
+   * the app stays where it is: a community account signed in, or the open organization signed in
+   * again. Another organization reloads the app instead.
    */
   signIn(options?: PrivateSignIn): Promise<boolean>;
   /** Ends the session. An enterprise or private account returns to the community data. */

@@ -16,12 +16,12 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 const profileAvatarSize = 96;
 const logger = loggerService.withContext('ProfileSettingsScreen');
 
-function Value({ children }: { children: string | undefined }) {
-  return children ? (
+function Value({ children }: { children: string }) {
+  return (
     <Text className="text-right text-base text-muted-foreground" numberOfLines={1}>
       {children}
     </Text>
-  ) : null;
+  );
 }
 
 /** The person's avatar, nickname and account: sign in, switch accounts or sign out. */
@@ -63,14 +63,24 @@ export default function ProfileSettingsScreen() {
     Keyboard.dismiss();
   }, []);
 
+  const reportAccountError = (error: unknown) => {
+    const code = error instanceof AccountError ? error.code : 'connection';
+    toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
+  };
   const openSignIn = () => router.push('/login');
+  // A cloud organization switches through the portal's choice; community and private accounts
+  // pick a sign-in method first.
+  const switchAccount = () => {
+    if (state.isEnterprise && !state.privateAddress)
+      void account.signIn().catch(reportAccountError);
+    else openSignIn();
+  };
   /** Resolves whether the sign-out completed; a failure is reported here. */
   const signOut = () =>
     account.signOut().then(
       () => true,
       (error: unknown) => {
-        const code = error instanceof AccountError ? error.code : 'connection';
-        toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
+        reportAccountError(error);
         return false;
       },
     );
@@ -138,7 +148,8 @@ export default function ProfileSettingsScreen() {
             onPress={openSignIn}
           />
         ) : null}
-        {isSignedIn && !state.isEnterprise ? (
+        {/* The identity provider may omit the account's name; an empty row says nothing. */}
+        {state.isSignedIn && !state.isEnterprise && state.name ? (
           <Section.Item label={t('account.cloudAccount')} trailing={<Value>{state.name}</Value>} />
         ) : null}
         {organization ? (
@@ -147,14 +158,18 @@ export default function ProfileSettingsScreen() {
             trailing={<Value>{organization.label}</Value>}
           />
         ) : null}
-        {state.isEnterprise ? (
+        {state.isEnterprise && state.name ? (
           <Section.Item
             label={t(state.privateAddress ? 'account.username' : 'account.accountName')}
             trailing={<Value>{state.name}</Value>}
           />
         ) : null}
         {isSignedIn ? (
-          <Section.Item disabled={state.isBusy} label={t('account.switch')} onPress={openSignIn} />
+          <Section.Item
+            disabled={state.isBusy}
+            label={t('account.switch')}
+            onPress={switchAccount}
+          />
         ) : null}
       </Section>
       {isSignedIn ? (

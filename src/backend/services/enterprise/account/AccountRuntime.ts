@@ -57,6 +57,11 @@ export interface AccountRuntimeOptions {
     setActive(profile: ActiveProfile): void;
   };
   prompt: { read(): boolean; write(): void };
+  /**
+   * Set when a sign-out could not end the portal session, so the browser may still remember it.
+   * The next browser sign-in then asks who signs in instead of reusing that session.
+   */
+  browserSession: { isStale(): boolean; setStale(stale: boolean): void };
   createApi(baseUrl: string, session: EnterpriseSession): EnterpriseApi;
   createPrivateApi: typeof createPrivateAccountApi;
   /** SecureStore entries scoped to the resolved private data profile. Never stores passwords. */
@@ -138,7 +143,16 @@ export class AccountRuntime implements AccountModule {
       if (options) return this.signInPrivate(options);
       const portal = this.requirePortal();
       const enterpriseAddress = normalizeEnterpriseAddress(this.options.defaultAddress);
-      const { url, redirectUri } = await portal.beginSignIn();
+      // An installation that already holds a cloud session is switching or signing in again, so
+      // the portal must ask who signs in instead of returning the remembered browser session.
+      // Until the portal can reuse a session and still show its profile choice, switching asks
+      // for the sign-in again.
+      const { url, redirectUri } = await portal.beginSignIn({
+        forceLogin:
+          portal.getState()._tag === 'signedIn' ||
+          this.state.needsSignIn ||
+          this.options.browserSession.isStale(),
+      });
       const result = await this.options.openBrowser(url, redirectUri);
       if (!result) return false;
       // The SDK replaces credentials before it publishes the new identity. Fence the old cloud
@@ -146,6 +160,7 @@ export class AccountRuntime implements AccountModule {
       if (this.state.isEnterprise && !this.state.privateAddress)
         this.update({ needsSignIn: true, isSignedIn: false, name: undefined });
       const session = await portal.completeSignIn(result);
+      this.options.browserSession.setStale(false);
       this.updateCloudSession(session);
       this.dismissPrompt();
       if (session._tag !== 'signedIn' || session.profile?.product !== 'enterprise') {
@@ -154,34 +169,53 @@ export class AccountRuntime implements AccountModule {
         return session._tag === 'signedIn';
       }
       const choice = session.profile;
-      const configuration = await this.options
-        .createApi(enterpriseAddress, {
-          getProductToken: () => portal.getProductToken(enterpriseAddress, choice),
-        })
-        .getConfiguration()
-        .catch((error: unknown) => {
-          throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
-        });
-      const server = ServerIdentitySchema.safeParse(configuration);
-      if (!server.success) throw new AccountError('connection');
-      // The display name is presentation only; an unreachable profile list never blocks sign-in.
-      const organization = await portal.listProfiles().then(
-        ({ profiles }) =>
-          profiles.find(
-            (candidate) => candidate.product === 'enterprise' && candidate.id === choice.profileId,
-          )?.displayName,
-        () => undefined,
-      );
-      const profile = this.options.profiles.resolve(
-        {
-          deployment: server.data.serverUniqueId,
-          issuer: this.options.issuer,
-          subject: session.subject,
-          productProfileId: choice.profileId,
-        },
-        enterpriseAddress,
-        organization,
-      );
+      const isOpenIdentity = this.matchesCloudProfile(session);
+      // The open organization signed in again: lift the fence above instead of reloading.
+      const keepOpenSession = () => {
+        this.update({ needsSignIn: false });
+        this.updateCloudSession(session);
+      };
+      let profile: ActiveProfile;
+      try {
+        const configuration = await this.options
+          .createApi(enterpriseAddress, {
+            getProductToken: () => portal.getProductToken(enterpriseAddress, choice),
+          })
+          .getConfiguration()
+          .catch((error: unknown) => {
+            throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
+          });
+        const server = ServerIdentitySchema.safeParse(configuration);
+        if (!server.success) throw new AccountError('connection');
+        // The display name is presentation only; an unreachable profile list never blocks sign-in.
+        const organization = await portal.listProfiles().then(
+          ({ profiles }) =>
+            profiles.find(
+              (candidate) =>
+                candidate.product === 'enterprise' && candidate.id === choice.profileId,
+            )?.displayName,
+          () => undefined,
+        );
+        profile = this.options.profiles.resolve(
+          {
+            deployment: server.data.serverUniqueId,
+            issuer: this.options.issuer,
+            subject: session.subject,
+            productProfileId: choice.profileId,
+          },
+          enterpriseAddress,
+          organization,
+        );
+      } catch (error) {
+        // Entering another organization failed: end the session just received.
+        if (isOpenIdentity) keepOpenSession();
+        else await this.endCloudSession();
+        throw error;
+      }
+      if (profile.id === this.options.active.id) {
+        keepOpenSession();
+        return true;
+      }
       await this.open(profile);
       return false;
     })) ?? false;
@@ -197,12 +231,22 @@ export class AccountRuntime implements AccountModule {
         this.privateCredentials = undefined;
         this.update({ isSignedIn: false, name: undefined });
       } else {
-        // The SDK forgets local credentials even when revocation cannot reach the server.
-        await this.requirePortal().signOut();
+        await this.endCloudSession();
       }
       if (this.state.isEnterprise) await this.open(LOCAL_PROFILE);
     });
   };
+
+  /**
+   * Revokes the cloud session and ends the portal's browser sign-in. The SDK forgets local
+   * credentials even when the server is unreachable; the browser may then still remember it.
+   */
+  private async endCloudSession(): Promise<void> {
+    const { loggedOut } = await this.requirePortal()
+      .signOut()
+      .catch(() => ({ loggedOut: false }));
+    if (!loggedOut) this.options.browserSession.setStale(true);
+  }
 
   readonly dismissPrompt = () => {
     if (this.state.hasPrompted) return;
@@ -374,11 +418,18 @@ export class AccountRuntime implements AccountModule {
       }
       await this.privateRefresh?.catch(() => {});
       await this.options.credentials.write(profile.id, JSON.stringify(credentials));
+      this.dismissPrompt();
       if (profile.id === this.options.active.id) {
+        // The open deployment signed in again: keep the running profile instead of reloading.
         this.privateCredentials = Promise.resolve(credentials);
         this.isPrivateSessionClosed = false;
+        this.update({
+          needsSignIn: false,
+          isSignedIn: true,
+          name: user.data.username ?? user.data.id,
+        });
+        return true;
       }
-      this.dismissPrompt();
       await this.open(profile);
       return false;
     } catch (error) {

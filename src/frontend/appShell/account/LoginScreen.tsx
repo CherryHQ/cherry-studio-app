@@ -30,7 +30,7 @@ type LoginScreenProps = {
   purpose: LoginPurpose;
   /** Leaves without signing in: skips on first use, closes from the profile, signs out when expired. */
   onLeave: () => void;
-  /** Called after a community sign-in; enterprise sign-in reloads into its profile instead. */
+  /** Called when sign-in keeps the app in place; another organization reloads it instead. */
   onSignedIn?: () => void;
 };
 
@@ -44,8 +44,9 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
   // An expired private session signs in again to the same server and, when known, the same user.
   const lockedAddress = isExpired ? state.privateAddress : undefined;
   const lockedUsername = lockedAddress ? state.name : undefined;
+  // The method page opens on the Cherry Studio account; the private form keeps the last address.
   const [isPrivate, setIsPrivate] = useState(
-    !state.isCloudSignInAvailable || Boolean(isExpired ? lockedAddress : state.privateAddress),
+    !state.isCloudSignInAvailable || Boolean(lockedAddress),
   );
   const [address, setAddress] = useState(state.privateAddress ?? '');
   const [username, setUsername] = useState(lockedUsername ?? '');

@@ -110,9 +110,22 @@ profile, only a community session counts as signed in.
 - **Expiry:** a refused session, an Accounts Portal `signed_out`, or a session that no longer
   matches replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the
   device; the page offers sign-in again or sign-out.
-- **Sign-out:** an enterprise or private sign-out ends that session, keeps the profile's data on the
-  device and returns to the community data. Signing in again to the same identity, matched by server, issuer,
-  subject and organization (or server, user and password sign-in), reopens that data.
+- **Switching:** a cloud organization switches directly through the portal; community and private
+  accounts open the sign-in method page first. A browser sign-in forces the portal's login page
+  whenever the installation already holds a cloud session, has a refused session, or could not end
+  the portal session at sign-out, so a remembered browser sign-in never returns silently. Until
+  the portal can reuse a session and still show its profile choice, switching asks for the
+  sign-in again. Choosing the open identity again keeps the app in place without reloading.
+- **Sign-out:** a cloud sign-out revokes the refresh token and ends the portal's browser sign-in;
+  local tokens, profile choice and product tokens are forgotten even when the server is
+  unreachable, which marks the browser session stale for the next sign-in. A private sign-out
+  deletes that deployment's credentials; the deployment has no revocation endpoint yet. An
+  enterprise or private sign-out keeps the profile's data on the device and returns to the
+  community data. Signing in again to the same identity, matched by server, issuer, subject and
+  organization (or server, user and password sign-in), reopens that data.
+- **Failed entry:** when a cloud sign-in cannot enter a different organization, the session just
+  received is signed out instead of lingering; the open organization signing in again keeps its
+  session.
 
 Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Non-production
 builds default to the cn-dev staging deployment. Production has no default. Every build uses the

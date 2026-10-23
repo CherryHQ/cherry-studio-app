@@ -64,6 +64,13 @@ function setup(
     active,
     profiles: { resolve: jest.fn(() => enterpriseProfile), setActive: jest.fn() },
     prompt: { read: () => false, write: jest.fn() },
+    browserSession: (() => {
+      let stale = false;
+      return {
+        isStale: jest.fn(() => stale),
+        setStale: jest.fn((value: boolean) => (stale = value)),
+      };
+    })(),
     createApi: jest.fn(() => ({
       getUser: jest.fn(async () => privateCredentials.user),
       getConfiguration: jest.fn(async () => ({ serverUniqueId: 'server-1' })),
@@ -140,6 +147,61 @@ describe('AccountRuntime', () => {
     );
     expect(options.profiles.setActive).toHaveBeenCalledWith(enterpriseProfile);
     expect(options.reload).toHaveBeenCalled();
+  });
+
+  it('asks the portal who signs in when the installation already holds a cloud session', async () => {
+    const signedOut = setup({ _tag: 'signedOut' });
+    await signedOut.runtime.signIn();
+    expect(signedOut.options.portal.beginSignIn).toHaveBeenCalledWith({ forceLogin: false });
+    // Otherwise the remembered browser session returns at once and switching is impossible.
+    const switching = setup(signedIn('cloud'));
+    await switching.runtime.signIn();
+    expect(switching.options.portal.beginSignIn).toHaveBeenCalledWith({ forceLogin: true });
+  });
+
+  it('makes the next sign-in ask who signs in when a sign-out could not end the portal session', async () => {
+    const { runtime, options, publish } = setup(signedIn('cloud'));
+    options.portal.signOut.mockImplementationOnce(async () => {
+      publish({ _tag: 'signedOut' });
+      return { revoked: false, loggedOut: false };
+    });
+    options.portal.getState.mockReturnValue({ _tag: 'signedOut' });
+    await runtime.signOut();
+    await runtime.signIn();
+    expect(options.portal.beginSignIn).toHaveBeenLastCalledWith({ forceLogin: true });
+    // A completed sign-in proves the browser session is current again.
+    await runtime.signIn();
+    expect(options.portal.beginSignIn).toHaveBeenLastCalledWith({ forceLogin: false });
+  });
+
+  it('ends a session it could not take into another organization', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'));
+    const api = options.createApi();
+    api.getConfiguration.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
+    options.createApi.mockReturnValue(api);
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    expect(options.portal.signOut).toHaveBeenCalledTimes(1);
+    expect(options.reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the open organization usable when signing in again cannot reach its server', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
+    await runtime.verify();
+    const api = options.createApi();
+    api.getConfiguration.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
+    options.createApi.mockReturnValue(api);
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    expect(options.portal.signOut).not.toHaveBeenCalled();
+    expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false });
+  });
+
+  it('keeps the open organization in place when the same identity signs in again', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
+    await runtime.verify();
+    await expect(runtime.signIn()).resolves.toBe(true);
+    expect(options.reload).not.toHaveBeenCalled();
+    expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false });
+    await expect(runtime.getProductToken()).resolves.toBe('product-token');
   });
 
   it('still opens the organization when its display name cannot be read', async () => {
