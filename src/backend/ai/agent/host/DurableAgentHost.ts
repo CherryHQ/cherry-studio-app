@@ -245,9 +245,21 @@ export class DurableAgentHost implements AgentProtocol {
     this.naming = ports.naming(this.controller.signal);
   }
 
-  async initialize() {
+  async initialize(signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    const cancel = () => this.controller.abort(signal?.reason);
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      await this.initializeGeneration();
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+    }
+  }
+
+  private async initializeGeneration() {
     if (!this.ports.durableStorage || !this.ports.recordDurableUsage)
       throw new Error('Persistent Agent storage and usage ports are required.');
+    let initialized = false;
     const execution: RuntimeExecutionPorts = {
       scriptSandbox: this.ports.scriptSandbox?.(),
       writeToolOutput: this.ports.writeToolOutput
@@ -317,6 +329,7 @@ export class DurableAgentHost implements AgentProtocol {
         }
       },
       recordUsage: async (identity, report) => {
+        if (!initialized) this.controller.signal.throwIfAborted();
         const prepared = identity.requestId
           ? this.prepared.get(executionKey(identity, identity.requestId))
           : undefined;
@@ -332,6 +345,7 @@ export class DurableAgentHost implements AgentProtocol {
               })
             ).turns[0]
           : undefined;
+        if (!initialized) this.controller.signal.throwIfAborted();
         await this.ports.recordDurableUsage!(identity, report, {
           agentId,
           agentName: prepared?.plan.agent.name ?? null,
@@ -342,35 +356,55 @@ export class DurableAgentHost implements AgentProtocol {
     const recovery = this.ports.traces?.startTrace('ai.recovery');
     try {
       this.controller.signal.throwIfAborted();
-      await this.conversations.initialize(await this.ports.durableStorage.open(), execution);
+      const database = await this.ports.durableStorage.open();
+      if (this.controller.signal.aborted) {
+        await database.close();
+        this.controller.signal.throwIfAborted();
+      }
+      await this.conversations.initialize(database, execution, this.controller.signal);
+      this.controller.signal.throwIfAborted();
       const copies = await this.conversations.sessions();
+      this.controller.signal.throwIfAborted();
       // Upstream abort enables scheduling too. Attach current owners before retiring stale copies.
       // Every unfinished copy is observed from here on, so later reads need no engine-wide scan.
       const unfinished = await this.conversations.unfinishedLanes();
+      this.controller.signal.throwIfAborted();
       recovery?.setAttributes({
         'agent.recovery.session_count': copies.length,
         'agent.recovery.unfinished_count': unfinished.length,
       });
-      for (const lane of unfinished)
-        if (await this.isCurrentConversation(lane)) await this.attach(lane);
-      for (const { lane } of copies)
-        if (!(await this.isCurrentConversation(lane)))
-          await this.conversations.discardConversation(lane);
+      for (const lane of unfinished) {
+        const current = await this.isCurrentConversation(lane);
+        this.controller.signal.throwIfAborted();
+        if (current) await this.attach(lane);
+      }
+      for (const { lane } of copies) {
+        const current = await this.isCurrentConversation(lane);
+        this.controller.signal.throwIfAborted();
+        if (!current) await this.conversations.discardConversation(lane);
+      }
       // Working copies outlive the process: continuing a conversation reuses its native context.
-      await this.reconcileUnsettled();
+      await this.reconcileUnsettled(undefined, this.controller.signal);
+      this.controller.signal.throwIfAborted();
       await this.conversations.drainUsage();
+      this.controller.signal.throwIfAborted();
       const work = await this.conversations.watchWork((active) => this.protectWork(active));
+      if (this.controller.signal.aborted) {
+        await work.unsubscribe();
+        this.controller.signal.throwIfAborted();
+      }
       this.workWatch = work;
       this.protectWork(work.active);
-      this.controller.signal.throwIfAborted();
       this.accepting = true;
+      initialized = true;
       this.conversations.resume();
       recovery?.end('ok');
     } catch (error) {
       recovery?.end('error', traceErrorAttributes(error));
-      logger.error('Agent operation failed', { error, operation: 'ai.recovery' });
-      if (!this.controller.signal.aborted)
+      if (!this.controller.signal.aborted) {
+        logger.error('Agent operation failed', { error, operation: 'ai.recovery' });
         await this.suspend(error instanceof Error ? error : new Error(String(error)));
+      }
       throw error;
     }
   }
@@ -1587,33 +1621,42 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   /** Each unsettled Cherry row is a durable receipt awaiting its full Pi result, with no cursor gaps. */
-  private async reconcileUnsettled(onlySessionId?: string) {
+  private async reconcileUnsettled(onlySessionId?: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     const rows = await this.store.listUnsettledAssistantMessages();
+    signal?.throwIfAborted();
     const sessionCopies = new Map<string, RuntimeLane[]>();
     for (const row of rows) {
       if (onlySessionId && row.sessionId !== onlySessionId) continue;
       let copies = sessionCopies.get(row.sessionId);
       if (!copies) {
         const revision = await this.store.getRuntimeRevision(row.sessionId);
+        signal?.throwIfAborted();
         copies = (await this.conversations.lanes(row.sessionId))
           .filter((copy) => copy.revision === revision)
           .map((copy) => copy.lane);
+        signal?.throwIfAborted();
         sessionCopies.set(row.sessionId, copies);
       }
       // The answer ran on whichever current copy still holds it.
       let selected: Awaited<ReturnType<DurableAgentRuntime['message']>>;
-      for (const lane of copies)
-        if ((selected = await this.conversations.message(lane, row.assistantMessageId))) break;
+      for (const lane of copies) {
+        selected = await this.conversations.message(lane, row.assistantMessageId);
+        signal?.throwIfAborted();
+        if (selected) break;
+      }
       if (selected?.turn.identity.turnId === row.turnId) {
         if (selected.turn.status !== 'running' && selected.turn.status !== 'queued') {
           const turn = this.timed(selected.turn);
-          await this.persistTurn(turn);
+          await this.persistTurn(turn, signal);
+          signal?.throwIfAborted();
           if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
         }
         continue;
       }
       // Reservation committed, but admission did not. Preserve any recorded output as interrupted.
       const message = await this.store.getMessage(row.sessionId, row.assistantMessageId);
+      signal?.throwIfAborted();
       if (!message) continue;
       // Administrative recovery is not conversation activity: settle at the reservation time.
       const reservedAt = Date.parse(message.createdAt);
@@ -1638,6 +1681,7 @@ export class DurableAgentHost implements AgentProtocol {
           runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
         },
       });
+      signal?.throwIfAborted();
       this.ports.durableStorage?.notifyTranscript(row.sessionId);
       logger.warn('Agent reservation recovered as interrupted', {
         sessionId: row.sessionId,
@@ -1671,7 +1715,8 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
-  private async persistTurn(turn: RuntimeDurableTurn) {
+  private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     if (turn.status === 'cancelled' && turn.inputBoundary === null) {
       // A withdrawn inbox item never entered model context. Remove its reservation without
       // invalidating the working copy; reconciliation retries this after a process interruption.
@@ -1680,10 +1725,12 @@ export class DurableAgentHost implements AgentProtocol {
         sessionId,
         turnId: turn.identity.turnId,
       });
+      signal?.throwIfAborted();
       if (messageIds.length) {
         this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
         this.ports.durableStorage?.notifyTranscript(sessionId);
         const session = await this.store.getSession(sessionId);
+        signal?.throwIfAborted();
         if (session) this.publish(sessionId, { type: 'session.updated', session });
       }
       this.prepared.delete(executionKey(turn.identity, turn.identity.requestId));
@@ -1700,6 +1747,7 @@ export class DurableAgentHost implements AgentProtocol {
           turn.identity,
           turn.identity.requestId,
         );
+        signal?.throwIfAborted();
         const timing = durableRuntimeTiming(turn) ?? { startedAt: turn.createdAt, spans: [] };
         await this.store.finalizeAssistantMessage({
           assistantMessageId: assistant.id,
@@ -1717,9 +1765,11 @@ export class DurableAgentHost implements AgentProtocol {
             },
           },
         });
+        signal?.throwIfAborted();
         this.ports.durableStorage?.notifyTranscript(turn.identity.sessionId);
       },
     );
+    signal?.throwIfAborted();
     // Settlement can outlive the current UI turn, including recovery without an observer.
     this.recordTurnState({ ...turn.identity, messageId: assistant.id }, view.status, view.error);
   }
@@ -1752,6 +1802,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private async attach(copy: RuntimeLane): Promise<LiveSession> {
+    this.controller.signal.throwIfAborted();
     const lane = runtimeLane(copy.sessionId, copy.slot);
     const key = laneKey(lane);
     const existing = this.live.get(key);
@@ -1781,9 +1832,14 @@ export class DurableAgentHost implements AgentProtocol {
       let installed = false;
       const pending: RuntimeConversationEvent[] = [];
       const observed = await this.conversations.observe(lane, (event) => {
+        if (!installed && this.controller.signal.aborted) return;
         if (installed) this.consume(state, event);
         else pending.push(event);
       });
+      if (this.controller.signal.aborted) {
+        await observed.unsubscribe();
+        this.controller.signal.throwIfAborted();
+      }
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
       state.contextStatus = observed.snapshot.contextStatus ?? null;
       state.unsubscribe = observed.unsubscribe;

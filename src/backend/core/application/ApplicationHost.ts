@@ -33,9 +33,9 @@ export type HostState = 'created' | 'starting' | 'ready' | 'disposing' | 'dispos
  *
  * **Construction claims nothing.** No database is opened, no job is claimed, no
  * audio session starts until `start()` runs. That is what makes replacement
- * safe: `application.install()` awaits the outgoing host's disposal before
- * starting the incoming one, so two generations never hold the same SQLite
- * connection or job claim at once.
+ * ordered: `application.install()` awaits the outgoing host's bounded disposal
+ * before starting the incoming one. Initialization owners must honor the closing
+ * signal after asynchronous work and release any resources that arrive late.
  */
 export class ApplicationHost {
   readonly container: ServiceContainer;
@@ -68,7 +68,7 @@ export class ApplicationHost {
 
     this.hostState = 'starting';
     await this.lifecycle.startPhase(Phase.Gate);
-    this.hostState = 'ready';
+    if (this.hostState === 'starting') this.hostState = 'ready';
   }
 
   /**
@@ -109,11 +109,11 @@ export class ApplicationHost {
 
   private async runDisposal(): Promise<TeardownSummary> {
     this.hostState = 'disposing';
+    this.lifecycle.closeInitialization();
 
-    // PostReady is off the first-paint path, not outside the host lifetime. If
-    // it is already initializing, let it finish before deriving the reverse
-    // stop order; otherwise a service can become Ready after the stop pass and
-    // keep subscriptions, timers, or native resources from a dead generation.
+    // Give cooperative hooks time to settle before stopping their dependencies.
+    // A hook that exceeds the ceiling stays owned by its initialization
+    // continuation; the manager prevents later layers and releases late resources.
     const postReadyOutcome = await raceWithTimeout(
       (this.postReady ?? Promise.resolve()).then(() => 'completed' as const),
       SERVICE_TEARDOWN_TIMEOUT_MS,
@@ -130,8 +130,8 @@ export class ApplicationHost {
     this.hostState = 'disposed';
 
     return {
-      failed: [...stopped.failed, ...destroyed.failed],
-      timedOut: [...stopped.timedOut, ...destroyed.timedOut],
+      failed: [...new Set([...stopped.failed, ...destroyed.failed])],
+      timedOut: [...new Set([...stopped.timedOut, ...destroyed.timedOut])],
     };
   }
 }

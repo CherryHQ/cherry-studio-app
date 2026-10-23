@@ -161,7 +161,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     await this.native?.dismissCompletedBackgroundTaskNotification?.(deepLinkUrl);
   };
 
-  protected async onInit(): Promise<void> {
+  protected async onInit(signal?: AbortSignal): Promise<void> {
     if (Platform.OS !== 'android') return;
     // Match the other native services' lazy loading so iOS never evaluates
     // these modules and CommonJS test environments can use the native mocks.
@@ -175,14 +175,18 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.native = getSystemIntegration();
     const handleProtectionChanged = () => this.publishStatus();
     background.on('protectionChanged', handleProtectionChanged);
-    this.registerDisposable(() => background.off('protectionChanged', handleProtectionChanged));
+    const protectionChanged = this.registerDisposable(() =>
+      background.off('protectionChanged', handleProtectionChanged),
+    );
     const handleServiceStopped = () => {
       void this.interruptLeases(new KeepAliveInterruptionError('service-stopped')).catch(
         (error: unknown) => logger.warn('Background service interruption failed', { error }),
       );
     };
     background.on('stopped', handleServiceStopped);
-    this.registerDisposable(() => background.off('stopped', handleServiceStopped));
+    const serviceStopped = this.registerDisposable(() =>
+      background.off('stopped', handleServiceStopped),
+    );
     notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldPlaySound: AppState.currentState === 'background',
@@ -191,8 +195,10 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         shouldShowList: AppState.currentState === 'background',
       }),
     });
-    this.registerDisposable(() => notifications.setNotificationHandler(null));
-    this.registerAppStateListener((state) => {
+    const notificationHandler = this.registerDisposable(() =>
+      notifications.setNotificationHandler(null),
+    );
+    const appState = this.registerAppStateListener((state) => {
       if (state === 'active') {
         this.backgroundStartedAt = undefined;
         this.backgroundLimitReached = false;
@@ -204,14 +210,36 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         this.armDeadline();
       }
     });
-    // The notification bridge creates channels at delivery, after locale initialization.
-    await this.native?.clearBackgroundTaskNotifications?.();
-    // Never restore a dead process's stream or replay paid work.
-    for (const notification of await notifications.getPresentedNotificationsAsync()) {
-      const data = notification.request.content.data;
-      if (data?.owner === BACKGROUND_NOTIFICATION_OWNER && data.terminal !== true) {
-        await notifications.dismissNotificationAsync(notification.request.identifier);
+    const cancel = () => {
+      this.disposed = true;
+      this.clearDeadline();
+      protectionChanged.dispose();
+      serviceStopped.dispose();
+      notificationHandler.dispose();
+      appState.dispose();
+      // Startup has not admitted dependent owners. Retire global registrations
+      // now; a late stop must not stop the replacement's native service.
+      this.background = undefined;
+      this.notifications = undefined;
+      this.native = undefined;
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      // The notification bridge creates channels at delivery, after locale initialization.
+      await this.native?.clearBackgroundTaskNotifications?.();
+      signal?.throwIfAborted();
+      // Never restore a dead process's stream or replay paid work.
+      const presented = await notifications.getPresentedNotificationsAsync();
+      signal?.throwIfAborted();
+      for (const notification of presented) {
+        signal?.throwIfAborted();
+        const data = notification.request.content.data;
+        if (data?.owner === BACKGROUND_NOTIFICATION_OWNER && data.terminal !== true) {
+          await notifications.dismissNotificationAsync(notification.request.identifier);
+        }
       }
+    } finally {
+      signal?.removeEventListener('abort', cancel);
     }
   }
 
@@ -330,6 +358,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   }
 
   protected async onStop(): Promise<void> {
+    if (this.disposed) return;
     this.disposed = true;
     this.clearDeadline();
     this.leases.clear();

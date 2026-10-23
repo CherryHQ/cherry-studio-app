@@ -160,13 +160,19 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return Promise.resolve(this.dependencies.preflightModel(model));
   }
 
-  async initialize(database: RuntimeSqlDatabase, ports: RuntimeExecutionPorts): Promise<void> {
+  async initialize(
+    database: RuntimeSqlDatabase,
+    ports: RuntimeExecutionPorts,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (this.runtime) throw new Error('The durable Agent runtime is already initialized.');
     this.ports = ports;
     this.codemodeSandbox = createPiCodemodeSandbox(ports.scriptSandbox);
     let storage: Storage | undefined;
     try {
+      signal?.throwIfAborted();
       storage = await this.createStorage(database);
+      signal?.throwIfAborted();
       this.runtime = await PiDurableRuntime.open(storage, {
         models: this.models.models,
         registry: this.registry,
@@ -189,6 +195,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           });
         },
       });
+      signal?.throwIfAborted();
       const opened = this.runtime;
       void opened.closed
         .then((end) => {
@@ -204,17 +211,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const lane of await this.unfinishedLanes()) {
+        signal?.throwIfAborted();
         const stored = await this.runtime.configuration(laneKey(lane));
+        signal?.throwIfAborted();
         const configuration = PiConfigurationSchema.parse(stored);
-        const agent = await this.installConfiguration(lane, configuration, true);
+        const agent = await this.installConfiguration(lane, configuration, true, signal);
+        signal?.throwIfAborted();
         if (stored?.version === 1)
           await this.runtime.restoreConfiguration(
             laneKey(lane),
             detachedJson(configuration),
             agent,
           );
+        signal?.throwIfAborted();
         await this.bindProvider(lane);
       }
+      signal?.throwIfAborted();
     } catch (error) {
       try {
         if (this.runtime) await this.runtime.close();
@@ -651,6 +663,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     lane: RuntimeLane,
     configuration: PiStoredConfiguration,
     rehydrating = false,
+    signal?: AbortSignal,
   ): Promise<AgentChange> {
     const key = laneKey(lane);
     try {
@@ -663,6 +676,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       // still preflights strictly, and Pi settles recovered requests with its native no-model result.
       if (!rehydrating) throw error;
     }
+    signal?.throwIfAborted();
     const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
     const extension = createPiDurableToolExtension({
