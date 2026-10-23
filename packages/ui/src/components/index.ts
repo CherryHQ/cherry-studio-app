@@ -16,6 +16,7 @@ export * from './input';
 export * from './loading';
 export * from './markdown-text';
 export * from './menu';
+export { MermaidDiagram, type MermaidDiagramProps } from './mermaid-diagram';
 export * from './message-part';
 export * from './option-picker-bottom-sheet';
 export * from './portal';
