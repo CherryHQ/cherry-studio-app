@@ -1,5 +1,5 @@
 /**
- * The `generate_image` input contract is built from the configured drawing
+ * The `generate_image` description and input contract are built from the configured drawing
  * model's capability block rather than fixed: two providers expose different
  * canonical parameters, and offering a model a parameter it rejects wastes a
  * call. A turn with no configured model gets the fallback contract.
@@ -22,7 +22,7 @@ const GENERATE_IMAGE_PROMPT_FIELD = z
   .min(1)
   .max(4000)
   .describe(
-    'Vivid, self-contained description of the image to produce. Include subject, style, composition, and mood.',
+    'Describe the desired result vividly, including subject, style, composition, and mood.',
   );
 
 type ToolMode = Extract<ImageGenerationMode, 'generate' | 'edit'>;
@@ -123,6 +123,44 @@ function resolveToolModes(support: ImageGenerationSupport | null | undefined): T
   return modes;
 }
 
+/** Uses the same capability snapshot as the input schema. */
+export function buildGenerateImageToolDescription(
+  support: ImageGenerationSupport | null | undefined,
+): string {
+  const modes = resolveToolModes(support);
+  const instructions = [
+    `Use the user's configured drawing model for image requests. Available operations: ${modes.join(', ') || 'none'}.`,
+  ];
+
+  if (modes.includes('generate')) {
+    instructions.push(
+      'Generate a new image, illustration, logo, or icon from a prompt without image_ids.',
+    );
+  } else {
+    instructions.push(
+      'New-image generation without a reference is unavailable with this drawing model.',
+    );
+  }
+
+  if (modes.includes('edit')) {
+    instructions.push(
+      `Edit or use a user-uploaded image or an earlier generated image as a reference: pass its id in image_ids (attachment fileEntryId, generate_image result id, or artifact ref.fileEntryId). Never invent ids or ask the user for one; ask which image only when ambiguous, and ask to reattach one that is unavailable. Describe the changes and what to keep in prompt; never replace the reference with a text-only approximation. At most ${MAX_INPUT_IMAGES} reference image per call; if more are needed, ask which one. This tool reads the original itself; call read_file first only to inspect pixels no longer in context.`,
+    );
+    if (!modes.includes('generate')) {
+      instructions.push('image_ids is required for every call with this drawing model.');
+    }
+  } else {
+    instructions.push(
+      'Reference-image editing is unavailable with the current drawing model configuration. For edits, tell the user to choose a drawing model with image editing enabled in Settings > Model; do not substitute text-only generation.',
+    );
+  }
+
+  instructions.push(
+    'Generated images are displayed automatically in the conversation. Returned ids and names are reusable file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text. Generation can take 10-60 seconds.',
+  );
+  return instructions.join('\n\n');
+}
+
 /** Builds the runtime tool contract from the configured model's capability block. */
 export function buildGenerateImageToolSchema(
   support: ImageGenerationSupport | null | undefined,
@@ -167,7 +205,7 @@ export function buildGenerateImageToolSchema(
       .min(1)
       .max(MAX_INPUT_IMAGES)
       .describe(
-        'File entry id of an existing image to edit or use as a reference. Omit to generate a new image.',
+        `Reference image file entry id, not a message id, tool call id, or URL. ${modes.includes('generate') ? 'Omit only to generate a new image without a reference.' : 'Required for every call.'}`,
       );
     inputShape.image_ids = modes.includes('generate') ? imageIds.optional() : imageIds;
   }

@@ -76,6 +76,104 @@ describe('createGenerateImageTool', () => {
     ]);
   });
 
+  test('edits an uploaded image by its attachment id', async () => {
+    const uploaded = FileEntrySchema.parse({
+      ...ENTRY,
+      id: '00000000-0000-7000-8000-000000000002',
+      provenance: 'imported',
+    });
+    const deps = createDependencies();
+    jest
+      .mocked(deps.files.resolve)
+      .mockResolvedValue({ entry: uploaded, uri: 'file:///uploaded.png' });
+    jest.mocked(deps.files.readDataUrl).mockResolvedValue('data:image/png;base64,VVBMT0FE');
+    const tool = createGenerateImageTool(deps, EDIT_MODEL, {
+      fileEntryIds: new Set([uploaded.id]),
+    });
+
+    const result = await execute(tool, {
+      image_ids: [uploaded.id],
+      prompt: 'Keep the subject and change the style to watercolor.',
+    });
+
+    expect(deps.files.resolve).toHaveBeenCalledWith(uploaded.id);
+    expect(deps.ai.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'edit',
+        inputImages: ['data:image/png;base64,VVBMT0FE'],
+        prompt: 'Keep the subject and change the style to watercolor.',
+        uniqueModelId: EDIT_MODEL.uniqueModelId,
+      }),
+    );
+    expect(result.value).toEqual([{ id: ENTRY.id, name: ENTRY.filename }]);
+  });
+
+  test.each<{
+    name: string;
+    support: ConfiguredPaintingModel['support'];
+    operations: string;
+    reference: 'optional' | 'required' | 'unavailable';
+  }>([
+    {
+      name: 'generation and editing',
+      support: { modes: { generate: { supports: {} }, edit: { supports: {} } } },
+      operations: 'generate, edit',
+      reference: 'optional',
+    },
+    {
+      name: 'editing only',
+      support: EDIT_MODEL.support,
+      operations: 'edit',
+      reference: 'required',
+    },
+    {
+      name: 'generation only',
+      support: { modes: { generate: { supports: {} } } },
+      operations: 'generate',
+      reference: 'unavailable',
+    },
+    {
+      name: 'missing capability metadata',
+      support: null,
+      operations: 'generate',
+      reference: 'unavailable',
+    },
+    {
+      name: 'no supported tool modes',
+      support: { modes: {} },
+      operations: 'none',
+      reference: 'unavailable',
+    },
+  ])(
+    'advertises the same operations and reference requirements as its schema: $name',
+    ({ support, operations, reference }) => {
+      const tool = createGenerateImageTool(createDependencies(), { ...MODEL, support }, TURN_FILES);
+
+      expect(tool.description).toContain(`Available operations: ${operations}.`);
+      if (reference === 'unavailable') {
+        expect(tool.inputSchema).not.toHaveProperty('properties.image_ids');
+        expect(tool.description).toContain('Reference-image editing is unavailable');
+      } else {
+        expect(tool.inputSchema).toMatchObject({
+          properties: { image_ids: { type: 'array', minItems: 1, maxItems: 1 } },
+        });
+        expect(tool.description).toContain('user-uploaded image or an earlier generated image');
+      }
+      if (reference === 'required') {
+        expect(tool.inputSchema).toMatchObject({ required: expect.arrayContaining(['image_ids']) });
+        expect(tool.description).toContain('image_ids is required for every call');
+        expect(tool.inputSchema).toHaveProperty(
+          'properties.image_ids.description',
+          expect.not.stringContaining('Omit'),
+        );
+      } else {
+        expect(tool.inputSchema).not.toMatchObject({
+          required: expect.arrayContaining(['image_ids']),
+        });
+      }
+    },
+  );
+
   test('reads the reserved Agent message at execution rather than tool creation', async () => {
     const deps = createDependencies();
     const usageAttribution: AiUsageAttribution = {
@@ -165,6 +263,25 @@ describe('createGenerateImageTool', () => {
     });
     expect(deps.files.resolve).not.toHaveBeenCalled();
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
+  });
+
+  test('reports an unavailable reference without falling back to text-only generation', async () => {
+    const deps = createDependencies();
+    const tool = createGenerateImageTool(deps, EDIT_MODEL, TURN_FILES);
+
+    const result = await execute(tool, {
+      image_ids: [ENTRY.id],
+      prompt: 'Make the background blue.',
+    });
+
+    expect(result.value).toMatchObject({
+      status: 'error',
+      message: expect.stringContaining('attach it again'),
+    });
+    expect(result.artifacts).toEqual([]);
+    expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+    expect(deps.ai.generateImage).not.toHaveBeenCalled();
+    expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
   });
 
   test('publishes a parameter shared by generate and edit with a concrete type', () => {

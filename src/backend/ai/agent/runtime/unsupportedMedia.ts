@@ -23,13 +23,17 @@ function gatedModality(mediaType: string): GatedModality | undefined {
   return undefined;
 }
 
-/** Return the provider-visible note for an unsupported media type. */
+/**
+ * Return the provider-visible note for an unsupported media type. A managed file keeps its id so
+ * tools that read the original, such as `generate_image`, can still reference it.
+ */
 export function unsupportedMediaNote(
   mediaType: string,
   caps: MediaCapabilities,
+  file?: { fileEntryId: string; name?: string },
 ): string | undefined {
   const modality = gatedModality(mediaType);
-  return modality && caps[modality] === false
-    ? `[${modality} attachment omitted: this model does not accept ${modality} input]`
-    : undefined;
+  if (!modality || caps[modality] !== false) return undefined;
+  const note = `[${modality} attachment omitted: this model does not accept ${modality} input]`;
+  return file ? `${note} Cherry managed file: ${JSON.stringify(file)}` : note;
 }

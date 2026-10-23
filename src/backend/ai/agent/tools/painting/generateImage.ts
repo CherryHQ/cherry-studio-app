@@ -36,19 +36,6 @@ import { type GenerateImageToolInput, limitGenerateImageInputIds } from './gener
 
 const logger = loggerService.withContext('GenerateImageTool');
 
-export const GENERATE_IMAGE_DESCRIPTION = `Generate or edit an image using the user's configured drawing model.
-
-Use this when:
-- The user asks you to draw, paint, illustrate, or generate an image, picture, logo, or icon.
-- The user asks you to modify a previously generated image and provides its file entry id.
-
-Notes:
-- Describe the desired image or edit vividly in the prompt.
-- Pass image_ids only when editing or using an existing image as a reference.
-- Generated images are displayed automatically in the conversation. Returned ids and names are file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text.
-- Generation can take 10-60 seconds.
-- Requires a drawing model configured in Settings > Model. If none is set, tell the user instead of retrying.`;
-
 export const PAINTING_ERROR_NOTE =
   'Image generation failed (provider error); retry or inform the user.';
 export const PAINTING_MODEL_NOT_CONFIGURED_NOTE =
@@ -58,9 +45,9 @@ export const PAINTING_EDIT_NOT_SUPPORTED_NOTE =
 export const PAINTING_GENERATE_NOT_SUPPORTED_NOTE =
   "The configured drawing model can't generate a new image without input images. Ask for image references or tell the user to choose a generation-capable drawing model.";
 export const PAINTING_INPUT_IMAGE_ERROR_NOTE =
-  'One or more image references could not be read as images. Ask the user for valid generated-image file entry ids.';
+  'The reference image is unavailable or could not be read as an image. Use the intended image file entry id already visible in this conversation. If that image is no longer available, ask the user to attach it again, not to supply a technical id. Do not substitute text-only generation.';
 export const PAINTING_INPUT_IMAGE_NOT_IN_TURN_NOTE =
-  'One or more image references are not part of this conversation. Only file entry ids visible in this session may be used; ask the user to attach the image instead.';
+  'One or more image references are not part of this conversation. Reuse the intended image file entry id from a conversation attachment or an earlier tool result. If the image is outside this conversation, ask the user to attach it, not to supply a technical id.';
 
 export type ConfiguredPaintingModel = {
   support: ImageGenerationSupport | null;
