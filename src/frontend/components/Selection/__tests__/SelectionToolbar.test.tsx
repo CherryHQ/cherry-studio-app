@@ -1,4 +1,3 @@
-import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { SelectionToolbar as AndroidSelectionToolbar } from '../SelectionToolbar/SelectionToolbar.android';
@@ -91,8 +90,8 @@ describe.each([
 
   function findButton(label: string) {
     const button = renderer.root
-      .findAllByType(Pressable)
-      .find((node) => node.props.accessibilityLabel === label);
+      .findAllByProps({ accessibilityLabel: label })
+      .find((node) => typeof node.props.onPress === 'function');
     if (!button) throw new Error(`Missing selection action: ${label}`);
     return button;
   }
