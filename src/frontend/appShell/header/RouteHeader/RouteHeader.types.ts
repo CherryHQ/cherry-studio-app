@@ -9,6 +9,8 @@ export type RouteHeaderProps = {
   leftActions?: readonly HeaderToolbarAction[];
   onBack?: () => void;
   rightActions?: readonly HeaderToolbarAction[];
+  /** Selection mode replaces the page title and actions with a count and one exit. */
+  selection?: { onExit: () => void; selectedCount: number };
   /** Centered native text title used when `titleElement` is not provided. */
   title?: string;
   /** Business-owned interactive content that replaces the native text title. */

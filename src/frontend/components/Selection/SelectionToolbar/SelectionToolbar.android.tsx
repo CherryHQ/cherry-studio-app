@@ -7,18 +7,21 @@ import { selectionToolbarGap } from '../selectionToolbarLayout';
 import type { SelectionToolbarProps } from './types';
 
 export function SelectionToolbar({
-  isDeleting,
+  actions,
+  allSelected,
+  isPending,
   onDelete,
   onToggleAll,
   selectedCount,
+  selectableCount,
 }: SelectionToolbarProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const isDeleteDisabled = selectedCount === 0 || isDeleting;
-  const selectionLabel =
-    selectedCount === 0
-      ? t('common.selection.selectAll')
-      : t('common.selection.count', { count: selectedCount });
+  const isDeleteDisabled = selectedCount === 0 || isPending;
+  const selectionLabel = t(
+    allSelected ? 'common.selection.deselectAll' : 'common.selection.selectAll',
+  );
+  const isToggleAllDisabled = isPending || selectableCount === 0;
 
   return (
     <Animated.View
@@ -31,12 +34,17 @@ export function SelectionToolbar({
       ]}
     >
       <View className="bg-background/85" pointerEvents="none" style={styles.backdrop} />
-      <View className="flex-row justify-between" style={styles.controls} testID="selection-toolbar">
+      <View
+        className="flex-row justify-between gap-2"
+        style={styles.controls}
+        testID="selection-toolbar"
+      >
         <Pressable
           accessibilityLabel={selectionLabel}
           accessibilityRole="button"
-          className="items-center justify-center rounded-full border border-border bg-field px-5 py-3 active:opacity-60 android:shadow-lg"
-          disabled={isDeleting}
+          accessibilityState={{ disabled: isToggleAllDisabled }}
+          className="min-w-0 shrink items-center justify-center rounded-full border border-border bg-field px-4 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
+          disabled={isToggleAllDisabled}
           onPress={onToggleAll}
         >
           <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
@@ -44,10 +52,27 @@ export function SelectionToolbar({
           </Text>
         </Pressable>
 
+        {actions?.map((action) => (
+          <Pressable
+            accessibilityLabel={action.label}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isDeleteDisabled || action.disabled }}
+            className="min-w-0 shrink items-center justify-center rounded-full border border-border bg-field px-4 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
+            disabled={isDeleteDisabled || action.disabled}
+            key={action.id}
+            onPress={action.onPress}
+            testID={`selection-${action.id}`}
+          >
+            <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
+              {action.label}
+            </Text>
+          </Pressable>
+        ))}
+
         <Pressable
           accessibilityLabel={t('common.delete')}
           accessibilityRole="button"
-          className="items-center justify-center rounded-full border border-border bg-field px-5 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
+          className="min-w-0 shrink items-center justify-center rounded-full border border-border bg-field px-4 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
           disabled={isDeleteDisabled}
           onPress={onDelete}
         >

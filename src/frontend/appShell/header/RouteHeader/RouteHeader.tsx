@@ -1,4 +1,6 @@
+import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { HeaderChrome } from '../components/HeaderChrome';
@@ -10,19 +12,35 @@ export function RouteHeader({
   leftActions,
   onBack,
   rightActions,
+  selection,
   title = '',
   titleElement,
 }: RouteHeaderProps) {
+  const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
   const defaultLeftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
+  const selectionActions: HeaderToolbarAction[] | undefined = selection
+    ? [
+        {
+          accessibilityLabel: t('common.cancel'),
+          icon: ArrowLeftIcon,
+          key: 'exit-selection',
+          onPress: selection.onExit,
+          type: 'icon',
+        },
+      ]
+    : undefined;
 
   return (
     <HeaderChrome
-      leftActions={leftActions && leftActions.length > 0 ? leftActions : defaultLeftActions}
-      rightActions={rightActions}
-      title={title}
+      leftActions={
+        selectionActions ??
+        (leftActions && leftActions.length > 0 ? leftActions : defaultLeftActions)
+      }
+      rightActions={selection ? undefined : rightActions}
+      title={selection ? t('common.selection.count', { count: selection.selectedCount }) : title}
       titleAlign="center"
-      titleElement={titleElement}
+      titleElement={selection ? undefined : titleElement}
     />
   );
 }

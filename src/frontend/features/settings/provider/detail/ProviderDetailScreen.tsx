@@ -213,37 +213,19 @@ function ProviderDetailSettings({
   return (
     <>
       <RouteHeader
-        onBack={management.isSelecting ? management.finishSelection : requestClose}
-        rightActions={
+        onBack={requestClose}
+        rightActions={activeTab === 'configuration' ? undefined : modelActions}
+        selection={
           management.isSelecting
-            ? [
-                {
-                  type: 'label',
-                  key: 'finish-selection',
-                  label: t('common.done'),
-                  accessibilityLabel: t('common.done'),
-                  disabled: management.isDeleting,
-                  onPress: management.finishSelection,
-                },
-              ]
-            : activeTab === 'configuration'
-              ? undefined
-              : modelActions
+            ? { onExit: management.finishSelection, selectedCount: management.selectedIds.size }
+            : undefined
         }
         title={
           // The route param is only there to name the page before the record
           // lands; once it has, it is what a rename shows up in.
-          management.isSelecting
-            ? t('settings.provider.models.management.selectedCount', {
-                count: management.selectedIds.size,
-              })
-            : (provider?.name ?? providerName ?? t('settings.provider.tabs.configuration'))
+          provider?.name ?? providerName ?? t('settings.provider.tabs.configuration')
         }
-        titleElement={
-          management.isSelecting ? undefined : (
-            <ProviderDetailTabs onTabChange={handleTabChange} tab={activeTab} />
-          )
-        }
+        titleElement={<ProviderDetailTabs onTabChange={handleTabChange} tab={activeTab} />}
       />
       {activeTab === 'configuration' ? (
         <ProviderConfiguration
@@ -274,15 +256,12 @@ function ProviderDetailSettings({
             />
           )}
           <ModelRegistryGate>
-            {managedModels.length > 0 ? (
+            {!management.isSelecting && managedModels.length > 0 ? (
               <View className="px-4 py-2">
                 <Text className="text-muted-foreground text-sm">
-                  {t(
-                    management.isSelecting
-                      ? 'settings.provider.models.management.scope'
-                      : 'settings.provider.models.management.listTitle',
-                    { count: managedModels.length },
-                  )}
+                  {t('settings.provider.models.management.listTitle', {
+                    count: managedModels.length,
+                  })}
                 </Text>
               </View>
             ) : null}
@@ -322,10 +301,12 @@ function ProviderDetailSettings({
           </ModelRegistryGate>
           {management.isSelecting ? (
             <SelectionToolbar
-              isDeleting={management.isDeleting}
+              allSelected={management.allSelected}
+              isPending={management.isDeleting}
               onDelete={() => management.requestDelete()}
               onToggleAll={management.toggleAll}
               selectedCount={management.selectedIds.size}
+              selectableCount={management.selectableCount}
             />
           ) : null}
         </>

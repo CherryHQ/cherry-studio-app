@@ -9,6 +9,7 @@ import {
   MODEL_SETTING_KIND_TITLE_KEYS,
   useModelSettingSelections,
 } from '@/frontend/components/ModelPicker';
+import { areAllSelected } from '@/frontend/components/Selection';
 import { useMutation } from '@/frontend/data';
 import { MODELS_DELETE_MAX_IDS } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
@@ -38,6 +39,8 @@ export function useProviderModelManagement(
     () => new Set(models.filter((model) => selection?.has(model.id)).map((model) => model.id)),
     [models, selection],
   );
+  const visibleIds = visibleModels.map((model) => model.id);
+  const allSelected = areAllSelected(selectedIds, visibleIds);
   const beginSelection = useCallback((model?: Model) => {
     if (!deleting.current) setSelection(new Set(model ? [model.id] : []));
   }, []);
@@ -62,11 +65,7 @@ export function useProviderModelManagement(
       });
       return;
     }
-    setSelection(
-      visibleModels.every((model) => selectedIds.has(model.id))
-        ? new Set()
-        : new Set(visibleModels.map((model) => model.id)),
-    );
+    setSelection(allSelected ? new Set() : new Set(visibleIds));
   };
 
   useEffect(
@@ -148,12 +147,14 @@ export function useProviderModelManagement(
   };
 
   return {
+    allSelected,
     beginSelection,
     finishSelection,
     isDeleting,
     isSelecting,
     requestDelete,
     selectedIds,
+    selectableCount: visibleIds.length,
     toggleAll,
     toggleModel,
   };

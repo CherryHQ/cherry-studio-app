@@ -44,7 +44,9 @@ jest.mock('../components/HeaderChrome', () =>
 );
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, values?: { count: number }) => (values ? `${key}:${values.count}` : key),
+  }),
 }));
 
 describe('RouteHeader.android', () => {
@@ -129,6 +131,35 @@ describe('RouteHeader.android', () => {
     expect(headerRight().props.actions[0]?.items).toBe(menuItems);
   });
 
+  it('replaces page chrome with one selection exit and restores it when selection ends', async () => {
+    const exitSelection = jest.fn();
+    const pageProps = {
+      rightActions: [
+        { key: 'create', label: 'Create', onPress: jest.fn(), type: 'label' as const },
+      ],
+      title: 'Models',
+      titleElement: <Text>Tabs</Text>,
+    };
+
+    await renderRouteHeader(
+      <RouteHeader {...pageProps} selection={{ onExit: exitSelection, selectedCount: 2 }} />,
+      'drawer',
+    );
+
+    expect(getOptions().title).toBe('common.selection.count:2');
+    expect(getOptions().headerTitle).toBeUndefined();
+    expect(getOptions().headerRight).toBeUndefined();
+    expect(getLeadingAction().accessibilityLabel).toBe('common.cancel');
+    getLeadingAction().onPress();
+    expect(exitSelection).toHaveBeenCalledTimes(1);
+
+    await renderRouteHeader(<RouteHeader {...pageProps} />, 'drawer');
+
+    expect(getLeadingAction().accessibilityLabel).toBe('navigation.openMenu');
+    expect(getOptions().headerTitle).toEqual(expect.any(Function));
+    expect(getOptions().headerRight).toEqual(expect.any(Function));
+  });
+
   async function renderRouteHeader(
     element: ReactElement,
     rootAction: 'back' | 'close' | 'drawer' = 'back',
@@ -146,7 +177,7 @@ describe('RouteHeader.android', () => {
 
   function getLeadingAction() {
     const headerLeft = getOptions().headerLeft as () => ReactElement<{
-      actions: readonly { accessibilityLabel?: string }[];
+      actions: readonly { accessibilityLabel?: string; onPress: () => void }[];
     }>;
     const action = headerLeft().props.actions[0];
 
