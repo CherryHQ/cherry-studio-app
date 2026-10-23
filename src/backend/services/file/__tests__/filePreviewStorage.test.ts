@@ -1,11 +1,22 @@
+import { Image } from 'expo-image';
+
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { imageThumbnailCacheKey } from '../filePreviewCache';
 import {
+  createInternalEntryWithPreview,
   getTrashedImagePreviewUri,
   resolveCachedFilePreviewUris,
   resolveFilePreviewUris,
 } from '../filePreviewStorage';
+import { createInternalEntry, type CreateInternalEntryInput } from '../fileStorage';
+
+jest.mock('../fileStorage', () => ({
+  ...jest.requireActual('../fileStorage'),
+  createInternalEntry: jest.fn(),
+}));
+
+jest.mock('expo-image', () => ({ Image: { loadAsync: jest.fn() } }));
 
 jest.mock('expo-file-system', () => {
   const directories = new Set<string>();
@@ -183,6 +194,74 @@ describe('filePreviewStorage', () => {
     await expect(resolveFilePreviewUris(entry)).resolves.toEqual({
       previewUri: sourceUri,
       uri: sourceUri,
+    });
+  });
+
+  describe('new image outputs', () => {
+    const generatedEntry = { ...entry, provenance: 'generated' as const };
+    const input: CreateInternalEntryInput = {
+      data: 'encoded-image',
+      mediaType: entry.mediaType,
+      provenance: 'generated',
+      source: 'base64',
+    };
+    const entries = { create: jest.fn(), delete: jest.fn() };
+
+    beforeEach(() => {
+      jest.mocked(createInternalEntry).mockResolvedValue(generatedEntry);
+      testState.files.add(sourceUri);
+      ImageManipulator.manipulate.mockReturnValue({
+        release: jest.fn(),
+        renderAsync: jest.fn().mockRejectedValue(new Error('Thumbnail source cannot be decoded')),
+      });
+    });
+
+    it('rejects an unreadable generated image and removes its entry and stored bytes', async () => {
+      const error = new Error('Image cannot be decoded');
+      jest.mocked(Image.loadAsync).mockRejectedValueOnce(error);
+
+      await expect(createInternalEntryWithPreview(entries, input)).rejects.toBe(error);
+
+      expect(entries.delete).toHaveBeenCalledWith(entry.id);
+      expect(testState.files.has(sourceUri)).toBe(false);
+    });
+
+    it('keeps the original when the renderer can display it despite the thumbnail failure', async () => {
+      const release = jest.fn();
+      jest.mocked(Image.loadAsync).mockResolvedValueOnce({ release } as never);
+
+      await expect(createInternalEntryWithPreview(entries, input)).resolves.toEqual(generatedEntry);
+
+      expect(Image.loadAsync).toHaveBeenCalledWith(sourceUri);
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(entries.delete).not.toHaveBeenCalled();
+      expect(testState.files.has(sourceUri)).toBe(true);
+    });
+
+    it('uses a successful thumbnail without decoding the generated image again', async () => {
+      testState.files.add(`file:///cache/FilePreviewImages/${imageThumbnailCacheKey(entry)}`);
+
+      await expect(createInternalEntryWithPreview(entries, input)).resolves.toEqual(generatedEntry);
+
+      expect(Image.loadAsync).not.toHaveBeenCalled();
+      expect(entries.delete).not.toHaveBeenCalled();
+    });
+
+    it('preserves imported files when a thumbnail cannot be generated', async () => {
+      jest.mocked(createInternalEntry).mockResolvedValueOnce(entry);
+
+      await expect(
+        createInternalEntryWithPreview(entries, {
+          mediaType: entry.mediaType,
+          provenance: 'imported',
+          source: 'uri',
+          uri: 'file:///picker/photo.jpg',
+        }),
+      ).resolves.toEqual(entry);
+
+      expect(Image.loadAsync).not.toHaveBeenCalled();
+      expect(entries.delete).not.toHaveBeenCalled();
+      expect(testState.files.has(sourceUri)).toBe(true);
     });
   });
 
