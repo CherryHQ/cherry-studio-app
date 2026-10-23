@@ -37,13 +37,17 @@ describe('ReadFileToolPart', () => {
   it('shows recognition progress of the scanned PDF a running call reads', () => {
     jest
       .mocked(usePdfOcrState)
-      .mockImplementation((id) =>
-        id === 'entry-1'
+      .mockImplementation((key) =>
+        key === 'call-1'
           ? { status: 'recognizing', completedPages: 12, totalPages: 40 }
           : undefined,
       );
     const running = toolPart({ input: { file_entry_id: 'entry-1' }, state: 'input-available' });
     expect(render(running).root.findByType('GenericToolPart').props.runningStatusText).toBe(
+      'chat.builtinTool.file.recognizing',
+    );
+    const byPath = toolPart({ input: { path: 'docs/scan.pdf' }, state: 'input-available' });
+    expect(render(byPath).root.findByType('GenericToolPart').props.runningStatusText).toBe(
       'chat.builtinTool.file.recognizing',
     );
     jest.mocked(usePdfOcrState).mockReturnValueOnce({ status: 'queued' });

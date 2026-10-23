@@ -6,25 +6,34 @@ import type { UserMessageAttachmentPart } from './partitionUserMessageParts';
 export function attachmentNotices(
   attachments: readonly UserMessageAttachmentPart[],
   t: TFunction,
-): string[] {
+): { key: string; text: string }[] {
   const named = attachments.length > 1;
-  return attachments.flatMap(({ part, report }) => {
+  return attachments.flatMap(({ index, part, report }) => {
     if (!report) return [];
     const notices = [
       ...(report.unrecognizedPages?.length
         ? [
-            t('attachments.notice.unrecognizedPages', {
-              pages: report.unrecognizedPages.join(', '),
-            }),
+            {
+              kind: 'unrecognizedPages',
+              text: t('attachments.notice.unrecognizedPages', {
+                pages: report.unrecognizedPages.join(t('attachments.notice.pageSeparator')),
+              }),
+            },
           ]
         : []),
-      ...(report.sourceTruncated ? [t('attachments.notice.sourceTruncated')] : []),
-      ...(report.requestTruncated ? [t('attachments.notice.requestTruncated')] : []),
+      ...(report.sourceTruncated
+        ? [{ kind: 'sourceTruncated', text: t('attachments.notice.sourceTruncated') }]
+        : []),
+      ...(report.requestTruncated
+        ? [{ kind: 'requestTruncated', text: t('attachments.notice.requestTruncated') }]
+        : []),
     ];
-    return named
-      ? notices.map((notice) =>
-          t('attachments.notice.withFilename', { name: part.filename, notice }),
-        )
-      : notices;
+    // Keyed by message part position: same-named attachments can produce identical text.
+    return notices.map(({ kind, text }) => ({
+      key: `${index}:${kind}`,
+      text: named
+        ? t('attachments.notice.withFilename', { name: part.filename, notice: text })
+        : text,
+    }));
   });
 }

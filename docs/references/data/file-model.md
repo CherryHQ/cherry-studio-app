@@ -223,7 +223,8 @@ finishes the current ML Kit call before releasing its bitmap and the extraction 
 over queued reads. Each extraction clears only its own state. Queued files, including text PDFs,
 show a neutral processing wait until extraction starts. Actual OCR draws the transcript tile's
 progress stroke and page count, names the pending reply's wait, and adds the page count to a running
-`read_file` row. Cache hits report nothing. The originating send/tool operation owns cancellation.
+`read_file` row, which observes its call ID linked to the resolved entry (reads by path included).
+Cache hits report nothing. The originating send/tool operation owns cancellation.
 The original PDF is never modified and derived page images
 are not stored. A new native development client is required.
 

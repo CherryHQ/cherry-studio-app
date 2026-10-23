@@ -142,6 +142,7 @@
   "attachments.issue.unavailable": "O ficheiro está em falta ou não pode ser lido. Selecione-o novamente em Os meus ficheiros.",
   "attachments.issue.unsupported-type": "Este formato de ficheiro não é suportado para esta ação. Converta-o para um formato compatível ou remova-o.",
   "attachments.notice.documentText": "Texto extraído foi enviado; imagens e o layout do documento não foram incluídos.",
+  "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Apenas parte do texto foi enviada devido ao limite de capacidade deste pedido.",
   "attachments.notice.sourceTruncated": "A extração de documentos atingiu o seu limite; apenas parte da fonte estava disponível.",
   "attachments.notice.unrecognizedPages": "Não foi reconhecido texto nestas páginas: {{pages}}. O modelo não as consegue ver.",

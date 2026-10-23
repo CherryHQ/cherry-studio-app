@@ -20,6 +20,8 @@ let extracting = 0;
 // Each extraction owns its state, including retries and reads in another language.
 const states = new Map<string, Map<AbortSignal, PdfOcrState>>();
 const observers = new Map<string, Set<OcrObserver>>();
+// A running read_file call is observed by its call ID; a workspace path resolves its entry later.
+const links = new Map<string, string>();
 let appLanguage = (): AppLanguage => DEFAULT_APP_LANGUAGE;
 
 /** Composition supplies the shared language resolver; recognition languages follow it. */
@@ -27,15 +29,30 @@ export function configurePdfOcrLanguage(resolve: () => AppLanguage): void {
   appLanguage = resolve;
 }
 
-export function observePdfOcr(fileEntryId: string, observer: OcrObserver): () => void {
-  let set = observers.get(fileEntryId);
-  if (!set) observers.set(fileEntryId, (set = new Set()));
+export function observePdfOcr(key: string, observer: OcrObserver): () => void {
+  let set = observers.get(key);
+  if (!set) observers.set(key, (set = new Set()));
   set.add(observer);
-  observer(getState(fileEntryId));
+  observer(getState(links.get(key) ?? key));
   return () => {
     set.delete(observer);
-    if (set.size === 0 && observers.get(fileEntryId) === set) observers.delete(fileEntryId);
+    if (set.size === 0 && observers.get(key) === set) observers.delete(key);
   };
+}
+
+/** Lets observers of `key` follow one file's state until the returned unlink is called. */
+export function linkPdfOcr(key: string, fileEntryId: string): () => void {
+  links.set(key, fileEntryId);
+  notify(key, getState(fileEntryId));
+  return () => {
+    if (links.get(key) !== fileEntryId) return;
+    links.delete(key);
+    notify(key, undefined);
+  };
+}
+
+function notify(key: string, state: PdfOcrState | undefined) {
+  for (const observer of observers.get(key) ?? []) observer(state);
 }
 
 function getState(fileEntryId: string): PdfOcrState | undefined {
@@ -58,9 +75,9 @@ function setState(fileEntryId: string, signal: AbortSignal, state: PdfOcrState |
     if (extractions.size === 0) states.delete(fileEntryId);
   }
   const current = getState(fileEntryId);
-  if (current !== previous) {
-    for (const observer of observers.get(fileEntryId) ?? []) observer(current);
-  }
+  if (current === previous) return;
+  notify(fileEntryId, current);
+  for (const [key, linked] of links) if (linked === fileEntryId) notify(key, current);
 }
 
 async function extract(

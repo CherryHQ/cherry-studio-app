@@ -47,11 +47,11 @@ export type PdfOcrState =
   | { status: 'recognizing'; completedPages: number; totalPages: number };
 
 export interface FileModule {
-  /** Recognition of one file; calls back immediately, then on change. Undefined when idle. */
-  observePdfOcr(
-    fileEntryId: string,
-    observer: (state: PdfOcrState | undefined) => void,
-  ): () => void;
+  /**
+   * Recognition of one file, keyed by its entry ID or by the running read_file call reading it.
+   * Calls back immediately, then on change. Undefined when idle.
+   */
+  observePdfOcr(key: string, observer: (state: PdfOcrState | undefined) => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
   /** Reuse a workspace file or copy an explicitly attached outside version into it. */

@@ -142,6 +142,7 @@
   "attachments.issue.unavailable": "Die Datei fehlt oder kann nicht gelesen werden. Wählen Sie es erneut unter „Meine Dateien“ aus.",
   "attachments.issue.unsupported-type": "Dieses Dateiformat wird für diese Aktion nicht unterstützt. Konvertieren Sie es in ein unterstütztes Format oder entfernen Sie es.",
   "attachments.notice.documentText": "Extrahierter Text wurde gesendet; Dokumentbilder und Layout waren nicht enthalten.",
+  "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Aufgrund der Kapazitätsbeschränkung dieser Anfrage wurde nur ein Teil des Textes gesendet.",
   "attachments.notice.sourceTruncated": "Die Dokumentenextraktion hat ihre Grenzen erreicht; nur ein Teil der Quelle war verfügbar.",
   "attachments.notice.unrecognizedPages": "Auf diesen Seiten wurde kein Text erkannt: {{pages}}. Das Modell kann sie nicht sehen.",

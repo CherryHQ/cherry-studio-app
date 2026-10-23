@@ -3,19 +3,19 @@ import { useEffect, useState } from 'react';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import type { PdfOcrState } from '@/shared/contracts/file';
 
-/** One file's extraction queue or recognition progress. Undefined when neither is active. */
-export function usePdfOcrState(fileEntryId: string | undefined): PdfOcrState | undefined {
+/**
+ * One file's extraction queue or recognition progress, keyed by entry ID or running read_file call
+ * ID. Undefined when neither is active.
+ */
+export function usePdfOcrState(key: string | undefined): PdfOcrState | undefined {
   const file = useBackendModule('file');
-  const [state, setState] = useState<PdfOcrState>();
+  // Tagged with its key so a changed key never shows the previous file's progress.
+  const [observed, setObserved] = useState<{ key: string; state: PdfOcrState | undefined }>();
   useEffect(() => {
-    if (!fileEntryId) return;
-    const stop = file.observePdfOcr(fileEntryId, setState);
-    return () => {
-      stop();
-      setState(undefined);
-    };
-  }, [file, fileEntryId]);
-  return state;
+    if (!key) return;
+    return file.observePdfOcr(key, (state) => setObserved({ key, state }));
+  }, [file, key]);
+  return key && observed?.key === key ? observed.state : undefined;
 }
 
 /** Whether any of these files is actively recognizing scanned text. Queued files may be text PDFs. */

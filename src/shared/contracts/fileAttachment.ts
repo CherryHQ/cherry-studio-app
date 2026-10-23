@@ -136,9 +136,9 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
     case 'document-invalid':
       return `${name} could not be parsed. It may be damaged or password-protected.`;
     case 'document-ocr-failed':
-      return `${name} contains a page that could not be recognized. Try a clearer scan or attach the relevant pages as images.`;
+      return `${name} could not be read because scanned-page text recognition failed. The user can retry, or attach the relevant pages as images.`;
     case 'document-ocr-unsupported':
-      return `${name} has no text layer, and scanned-page recognition does not support the current app language. Attach the relevant pages as images.`;
+      return `${name} has no text layer, and scanned-page recognition does not support the current app language. The user can attach the relevant pages as images.`;
     case 'parser-unavailable':
       return 'The document parser is unavailable. Rebuild the development client or select the built-in parser.';
     case 'parser-unsupported':

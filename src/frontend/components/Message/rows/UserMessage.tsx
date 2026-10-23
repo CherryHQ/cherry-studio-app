@@ -39,9 +39,9 @@ export const UserMessage = memo(function UserMessage({ attachments, message }: U
         {notices.length > 0 ? (
           <View className="items-end gap-1">
             {notices.map((notice) => (
-              <View className="flex-row items-start gap-1.5" key={notice}>
+              <View className="flex-row items-start gap-1.5" key={notice.key}>
                 <TriangleAlertIcon className="mt-0.5 size-3.5 text-warning" />
-                <Text className="shrink text-muted-foreground text-xs">{notice}</Text>
+                <Text className="shrink text-muted-foreground text-xs">{notice.text}</Text>
               </View>
             ))}
           </View>

@@ -142,6 +142,7 @@
   "attachments.issue.unavailable": "Fișierul lipsește sau nu poate fi citit. Selectați-l din nou din Fișierele mele.",
   "attachments.issue.unsupported-type": "Acest format de fișier nu este acceptat pentru această acțiune. Convertiți-l într-un format acceptat sau eliminați-l.",
   "attachments.notice.documentText": "Text extras a fost trimis; imaginile și aspectul documentului nu au fost incluse.",
+  "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Doar o parte a textului a fost trimisă din cauza limitei de capacitate a acestei solicitări.",
   "attachments.notice.sourceTruncated": "Extragerea documentelor a atins limita; doar o parte din sursă era disponibilă.",
   "attachments.notice.unrecognizedPages": "Nu s-a recunoscut text pe aceste pagini: {{pages}}. Modelul nu le poate vedea.",

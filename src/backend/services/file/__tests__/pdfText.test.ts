@@ -1,7 +1,7 @@
 import { File } from 'expo-file-system';
 
 import { extractPdfText, type ExtractResult } from '../../../../../modules/pdf-text-extractor';
-import { configurePdfOcrLanguage, observePdfOcr, readPdfText } from '../pdfText';
+import { configurePdfOcrLanguage, linkPdfOcr, observePdfOcr, readPdfText } from '../pdfText';
 import { readPdfTextCache, writePdfTextCache } from '../pdfTextCache';
 
 jest.mock('expo-file-system', () => ({ File: jest.fn() }));
@@ -60,6 +60,31 @@ test('history re-reads of cached results show no recognition activity on the fil
   await expect(readPdfText(source, signal())).resolves.toMatchObject({ unrecognizedPages: [2] });
   expect(extractPdfText).not.toHaveBeenCalled();
   expect(states.mock.calls).toEqual([[undefined]]);
+  stop();
+});
+
+test('a linked read_file call follows the file it resolved until unlinked', async () => {
+  const native = deferred<ExtractResult>();
+  const states = jest.fn();
+  const stop = observePdfOcr('call-1', states);
+  jest.mocked(extractPdfText).mockImplementationOnce((_uri, _options, control) => {
+    control!.onProgress!({ requestId: 'request', completedPages: 1, totalPages: 3, phase: 'ocr' });
+    return native.promise;
+  });
+  const unlink = linkPdfOcr('call-1', ID);
+  const read = readPdfText(source, signal());
+  await Promise.resolve();
+  await Promise.resolve();
+  native.resolve(result);
+  await read;
+  unlink();
+  expect(states.mock.calls).toEqual([
+    [undefined],
+    [undefined],
+    [{ status: 'recognizing', completedPages: 1, totalPages: 3 }],
+    [undefined],
+    [undefined],
+  ]);
   stop();
 });
 

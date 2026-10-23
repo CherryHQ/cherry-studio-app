@@ -142,6 +142,7 @@
   "attachments.issue.unavailable": "檔案已刪除或暫時無法讀取，請從“我的檔案”重新選擇。",
   "attachments.issue.unsupported-type": "當前用途暫不支持這種檔案格式。請轉換為支持的格式，或移除此附件。",
   "attachments.notice.documentText": "已發送提取的文字，不含文檔圖片和版式。",
+  "attachments.notice.pageSeparator": "、",
   "attachments.notice.requestTruncated": "受本次請求容量限制，僅發送了部分文字。",
   "attachments.notice.sourceTruncated": "文檔提取達到限制，僅獲取了部分內容。",
   "attachments.notice.unrecognizedPages": "第 {{pages}} 頁沒有辨識出文字，模型看不到這些頁面。",

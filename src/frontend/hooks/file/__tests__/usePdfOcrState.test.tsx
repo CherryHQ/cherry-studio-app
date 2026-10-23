@@ -4,7 +4,7 @@ import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
 import type { PdfOcrState } from '@/shared/contracts/file';
 
-import { usePdfOcrActive } from '../usePdfOcrState';
+import { usePdfOcrActive, usePdfOcrState } from '../usePdfOcrState';
 
 type Observer = (state: PdfOcrState | undefined) => void;
 const observers = new Map<string, Observer>();
@@ -45,6 +45,30 @@ test('stays active only while a listed file is recognizing, and unsubscribes', (
   expect(active()).toBe(false);
   act(() => observers.get('b')!(undefined));
   expect(active()).toBe(false);
+  act(() => renderer!.unmount());
+  expect(observers.size).toBe(0);
+});
+
+test('a changed key never shows the previous file’s progress', () => {
+  const seen: (PdfOcrState | undefined)[] = [];
+  function StateProbe({ id }: { id: string }) {
+    seen.push(usePdfOcrState(id));
+    return null;
+  }
+  const tree = (id: string) => (
+    <BackendProvider backend={{ file } as unknown as Backend}>
+      <StateProbe id={id} />
+    </BackendProvider>
+  );
+  let renderer: ReactTestRenderer | undefined;
+  act(() => {
+    renderer = create(tree('a'));
+  });
+  act(() => observers.get('a')!({ status: 'recognizing', completedPages: 2, totalPages: 5 }));
+  expect(seen.at(-1)).toEqual({ status: 'recognizing', completedPages: 2, totalPages: 5 });
+  seen.length = 0;
+  act(() => renderer!.update(tree('b')));
+  expect(seen).not.toContainEqual(expect.objectContaining({ status: 'recognizing' }));
   act(() => renderer!.unmount());
   expect(observers.size).toBe(0);
 });
