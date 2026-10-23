@@ -48,7 +48,7 @@ import type { TraceContext } from '@/shared/data/types/trace';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
-  createErrorToolResult,
+  createImageRequestErrorToolResult,
   LANES_PER_SESSION,
   laneKey,
   raceAbort,
@@ -62,7 +62,6 @@ import {
   type RuntimeDurableTurn,
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
-  type RuntimeError,
   type RuntimeJsonValue,
   type RuntimeToolCall,
   type RuntimeToolRef,
@@ -1461,19 +1460,7 @@ export class DurableAgentHost implements AgentProtocol {
           if (signal.aborted || !(error instanceof AiRequestError)) throw error;
           // AiService already normalized and redacted this request failure. Preserve it at the
           // capability boundary so both tool traces and the final reply keep its structured facts.
-          const { message, retryable, failure } = error.detail;
-          const runtimeError: RuntimeError = {
-            code: failure.source.code ?? 'image_generation_failed',
-            message,
-            retryable,
-            origin: failure.source.layer,
-            ...(failure.source.name ? { name: failure.source.name } : {}),
-            ...(failure.context ? { context: failure.context } : {}),
-          };
-          return {
-            ...createErrorToolResult(runtimeError),
-            failure: { error: runtimeError, scope: 'call' },
-          };
+          return createImageRequestErrorToolResult(error.detail);
         }
       },
     };
