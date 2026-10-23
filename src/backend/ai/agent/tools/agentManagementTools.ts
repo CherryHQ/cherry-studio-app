@@ -124,7 +124,7 @@ export function createAgentManagementTools(
   return [
     tool(
       'agent_list',
-      'Find saved Cherry Agents by name. Results omit instructions; use agent_get for a full definition. Follow pagination when needed. Names need not be unique: resolve ambiguous matches with the user before editing.',
+      'Find saved Cherry Agents by name. Results omit instructions; use agent_get for a full definition. Follow pagination when needed. Names need not be unique: resolve ambiguous matches with the user before editing. Agents marked isManaged are delivered by the user’s organization and cannot be read or edited with these tools.',
       listSchema,
       'auto',
       async (input) => {
@@ -132,12 +132,13 @@ export function createAgentManagementTools(
         return {
           value: {
             ...page,
-            items: page.items.map(({ id, name, model, modelName, updatedAt }) => ({
+            items: page.items.map(({ id, name, model, modelName, updatedAt, isManaged }) => ({
               id,
               name,
               model,
               modelName,
               updatedAt,
+              ...(isManaged && { isManaged }),
             })),
           },
           artifacts: [],
@@ -152,6 +153,7 @@ export function createAgentManagementTools(
       async ({ agent_id }) => {
         const id = target(agent_id);
         const agent = await agents.getById(id);
+        if (agent.isManaged) return managedAgentFailure();
         const bindings = await agents.listSkillBindings(id);
         return {
           value: {
@@ -196,8 +198,10 @@ export function createAgentManagementTools(
         );
         if (!Object.keys(patch).length && !skills?.length)
           return failure('agent_invalid_input', 'Provide at least one field to change.');
+        const id = target(agent_id);
+        if ((await agents.getById(id)).isManaged) return managedAgentFailure();
         signal.throwIfAborted();
-        const agent = await agents.update(target(agent_id), patch, {
+        const agent = await agents.update(id, patch, {
           expectedUpdatedAt: expected_updated_at,
           ...(skills?.length
             ? {
@@ -215,6 +219,14 @@ export function createAgentManagementTools(
       },
     ),
   ];
+}
+
+/** Organization-delivered Agents are never managed by the model, even for user-adjustable fields. */
+function managedAgentFailure(): RuntimeToolResult {
+  return failure(
+    'agent_managed',
+    'This Agent is delivered by the user’s organization. Agent tools cannot read or change it.',
+  );
 }
 
 function failure(code: string, message: string): RuntimeToolResult {
