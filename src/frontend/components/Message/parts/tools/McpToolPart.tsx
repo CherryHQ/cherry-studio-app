@@ -6,13 +6,14 @@ import {
 } from '@cherrystudio/universal/ai/tools/mcpResult';
 import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import {
   McpAppConversationBridge,
   McpAppLauncher,
   useMcpAppConversation,
 } from '@/frontend/components/McpApp';
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 import {
   type CherryToolMeta,
   readCherryMeta,
@@ -32,8 +33,6 @@ import { ToolResultContentRenderer } from './ToolResultContentRenderer';
 type McpToolPartProps = {
   part: ToolMessagePart;
 };
-
-const MAX_ARG_VALUE_LENGTH = 1200;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
@@ -65,23 +64,19 @@ export function McpToolPart({ part }: McpToolPartProps) {
           <McpOutputSection normalized={normalizedOutput} source={part.mcpSource} />
         ) : null}
         {readCherryMeta(part)?.settledByApp ? (
-          <MessagePart.TextSection
+          <MessageDetailText
             tone="danger"
             title={t('chat.mcpTool.response')}
             value={t('chat.mcpTool.unfinishedDetail')}
           />
         ) : part.state === 'output-error' ? (
-          <MessagePart.TextSection
+          <MessageDetailText
             tone="danger"
             title={t('chat.mcpTool.response')}
             value={part.errorText}
           />
         ) : null}
-        <MessagePart.ValueSection
-          maxLength={MAX_ARG_VALUE_LENGTH}
-          title={t('chat.mcpTool.arguments')}
-          value={part.input}
-        />
+        <MessageDetailValue title={t('chat.mcpTool.arguments')} value={part.input} />
       </McpAppConversationBridge>
     </MessagePart.Tool>
   );
@@ -99,27 +94,24 @@ function McpOutputSection({
 
   if (visibleContent.length === 0) {
     return (
-      <Text className="text-foreground text-base italic" selectable>
+      <Text className="text-muted-foreground text-sm" selectable>
         {t('chat.mcpTool.noOutput')}
       </Text>
     );
   }
 
   return (
-    <View className="gap-1">
-      <MessagePart.SectionTitle title={t('chat.mcpTool.response')} />
-      <ToolResultContentRenderer
-        contents={visibleContent}
-        imageAccessibilityLabel={t('chat.attachments.image')}
-        renderResourceLink={
-          source
-            ? (content) => (
-                <McpResourceLink source={source} uri={content.uri} label={content.label} />
-              )
-            : undefined
-        }
-      />
-    </View>
+    <ToolResultContentRenderer
+      title={t('chat.mcpTool.response')}
+      tone={normalized.isError ? 'danger' : undefined}
+      contents={visibleContent}
+      imageAccessibilityLabel={t('chat.attachments.image')}
+      renderResourceLink={
+        source
+          ? (content) => <McpResourceLink source={source} uri={content.uri} label={content.label} />
+          : undefined
+      }
+    />
   );
 }
 

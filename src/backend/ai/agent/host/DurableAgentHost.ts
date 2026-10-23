@@ -39,6 +39,7 @@ import {
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -47,6 +48,7 @@ import type { TraceContext } from '@/shared/data/types/trace';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
+  createErrorToolResult,
   LANES_PER_SESSION,
   laneKey,
   raceAbort,
@@ -60,6 +62,7 @@ import {
   type RuntimeDurableTurn,
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
+  type RuntimeError,
   type RuntimeJsonValue,
   type RuntimeToolCall,
   type RuntimeToolRef,
@@ -209,8 +212,8 @@ export class DurableAgentHost implements AgentProtocol {
     await this.captureCheckpoints();
     await this.naming.drain();
   }
-  getWorkingStorageSize() {
-    return Promise.resolve(this.ports.durableStorage?.size() ?? 0);
+  async getWorkingStorageSize(): Promise<number> {
+    return this.ports.durableStorage?.size() ?? 0;
   }
   /**
    * Pi keeps retired and superseded copies until its file is removed. Cherry transcripts and
@@ -1440,16 +1443,38 @@ export class DurableAgentHost implements AgentProtocol {
       approval: 'auto',
       execute: async ({ signal }) => {
         if (!plan.imageGeneration) throw new Error('The image request is unavailable.');
-        const entries = await plan.imageGeneration.execute(signal, plan.usageAttribution.resolve());
-        return {
-          value: { status: 'completed' },
-          artifacts: entries.map((entry) => ({
-            ref: { kind: 'managed-file', fileEntryId: entry.id },
-            mediaType: entry.mediaType,
-            name: entry.filename,
-            kind: 'created',
-          })),
-        };
+        try {
+          const entries = await plan.imageGeneration.execute(
+            signal,
+            plan.usageAttribution.resolve(),
+          );
+          return {
+            value: { status: 'completed' },
+            artifacts: entries.map((entry) => ({
+              ref: { kind: 'managed-file', fileEntryId: entry.id },
+              mediaType: entry.mediaType,
+              name: entry.filename,
+              kind: 'created',
+            })),
+          };
+        } catch (error) {
+          if (signal.aborted || !(error instanceof AiRequestError)) throw error;
+          // AiService already normalized and redacted this request failure. Preserve it at the
+          // capability boundary so both tool traces and the final reply keep its structured facts.
+          const { message, retryable, failure } = error.detail;
+          const runtimeError: RuntimeError = {
+            code: failure.source.code ?? 'image_generation_failed',
+            message,
+            retryable,
+            origin: failure.source.layer,
+            ...(failure.source.name ? { name: failure.source.name } : {}),
+            ...(failure.context ? { context: failure.context } : {}),
+          };
+          return {
+            ...createErrorToolResult(runtimeError),
+            failure: { error: runtimeError, scope: 'call' },
+          };
+        }
       },
     };
   }
@@ -2121,6 +2146,7 @@ export class DurableAgentHost implements AgentProtocol {
     const span = this.ports.traces?.startTrace('ai.turn_state', context, {
       'agent.turn.status': status,
       ...traceErrorAttributes(error),
+      ...(error ? { 'error.retry_scope': 'user' } : {}),
     });
     span?.end(
       status === 'failed'

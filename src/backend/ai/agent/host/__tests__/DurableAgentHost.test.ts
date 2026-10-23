@@ -5,7 +5,9 @@ import type {
   AgentInferenceSnapshotV1,
   AgentMessagePart,
 } from '@/shared/contracts/agent';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import { createAiFailure } from '@/shared/utils/createAiFailure';
 
 import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import {
@@ -19,6 +21,7 @@ import {
   type RuntimeConversationEvent,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
+  type RuntimeError,
   type RuntimeTool,
   type RuntimeToolResult,
 } from '../../runtime';
@@ -888,6 +891,22 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('working storage size reports synchronous read failures as promise rejections', async () => {
+    const failure = new Error('stat failed');
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => {
+          throw failure;
+        },
+        discard: () => {},
+        notifyTranscript: () => {},
+      },
+    });
+
+    await expect(state.host.getWorkingStorageSize()).rejects.toBe(failure);
+  });
+
   test('clearing working storage deletes the closed file before reopening it', async () => {
     const discard = jest.fn(() => {
       state.steps.push('discard');
@@ -985,7 +1004,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         status,
         error:
           status === 'failed'
-            ? { code: 'TIMEOUT', message: 'private provider response', retryable: true }
+            ? {
+                code: 'provider_error',
+                message: 'Maximum context length exceeded: private provider response',
+                retryable: true,
+                origin: 'provider',
+                context: { statusCode: 400 },
+              }
             : null,
       });
       await entered;
@@ -1039,7 +1064,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           attributes: expect.objectContaining({
             'agent.turn.status': status,
             ...(status === 'failed'
-              ? { 'error.code': 'EXECUTION_FAILED', 'error.retryable': true }
+              ? {
+                  'error.code': 'EXECUTION_FAILED',
+                  'error.source.code': 'provider_error',
+                  'error.product_reason': 'context_length',
+                  'error.retryable': true,
+                  'error.retry_scope': 'user',
+                  'http.status_code': 400,
+                }
               : {}),
           }),
         }),
@@ -1436,6 +1468,82 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await state.host.close();
     }
   });
+
+  test.each([
+    { statusCode: 403, retryable: false, cancelled: false },
+    { statusCode: 503, retryable: true, cancelled: false },
+    { statusCode: 503, retryable: true, cancelled: true },
+  ])(
+    'preserves image provider failures and safe trace facts: %j',
+    async ({ statusCode, retryable, cancelled }) => {
+      const failure: RuntimeError = {
+        code: 'image_provider_error',
+        name: 'APIError',
+        message: 'Private provider failure detail',
+        retryable,
+        origin: 'provider',
+        context: {
+          statusCode,
+          providerId: 'provider',
+          modelId: 'image-model',
+          responseBody: 'Private provider response',
+        },
+      };
+      const error = new AiRequestError(createAiFailure(failure));
+      const controller = new AbortController();
+      const { traces, records } = createTraceRecorder();
+      const state = fixture({
+        traces,
+        imageGeneration: {
+          prepare: async () => ({
+            settings: { mode: 'generate', paramValues: {} },
+            execute: async () => {
+              if (cancelled) controller.abort();
+              throw error;
+            },
+          }),
+        },
+      });
+      const turn = await state.reserve('running');
+      await state.host.initialize();
+      try {
+        const tool = await state
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'image_generation' },
+            controller.signal,
+          );
+        const result = tool.execute({
+          input: {},
+          signal: controller.signal,
+          toolCallId: 'image-call',
+          turnId: turn.identity.turnId,
+        });
+        if (cancelled) await expect(result).rejects.toBe(error);
+        else {
+          await expect(result).resolves.toMatchObject({
+            value: { status: 'error' },
+            artifacts: [],
+            failure: { scope: 'call', error: failure },
+          });
+          expect(records.at(-1)?.attributes).toMatchObject({
+            'tool.name': 'cherry_generate_image',
+            'tool.result.status': 'error',
+            'error.type': 'APIError',
+            'error.code': failure.code,
+            'error.origin': 'provider',
+            'error.retryable': retryable,
+            'http.status_code': statusCode,
+          });
+        }
+        expect(records.at(-1)?.status).toBe(cancelled ? 'cancelled' : 'error');
+        expect(JSON.stringify(records)).not.toMatch(/Private|responseBody/);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
 
   test('regenerating an earlier answer prepares and seeds only the fork prefix file grants', async () => {
     const earlierFile = uuid();

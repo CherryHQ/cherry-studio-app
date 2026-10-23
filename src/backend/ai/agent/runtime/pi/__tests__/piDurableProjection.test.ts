@@ -2,7 +2,9 @@ import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
-import { toAgentMessagePart } from '../../../host/runtimeProjection';
+import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
+import type { RuntimeError } from '../../types';
+import { PI_IMAGE_TOOL_NAME } from '../piDurableImageModel';
 import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
@@ -107,6 +109,104 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  test.each([
+    { api: 'cherry-image', statusCode: 403, retryable: false },
+    { api: 'cherry-image', statusCode: 503, retryable: true },
+    { api: 'cherry', statusCode: 403, retryable: false },
+  ])('uses the tool failure only for a direct image scheduling error: %j', (scenario) => {
+    const failure: RuntimeError = {
+      code: 'image_provider_error',
+      message: 'Provider rejected the image request.',
+      name: 'APIError',
+      origin: 'provider',
+      retryable: scenario.retryable,
+      context: {
+        statusCode: scenario.statusCode,
+        providerId: 'provider',
+        modelId: 'image-model',
+        responseBody: 'Sanitized provider response',
+      },
+    };
+    const imageTool = {
+      ...writeFile,
+      ref: { source: 'builtin', capabilityId: 'image_generation' },
+      providerName: PI_IMAGE_TOOL_NAME,
+    };
+    const scheduled: AssistantMessage = {
+      ...call('', 2000),
+      api: scenario.api,
+      content: [{ type: 'toolCall', id: 'call', name: PI_IMAGE_TOOL_NAME, arguments: {} }],
+    };
+    const terminal: AssistantMessage = {
+      ...scheduled,
+      content: [],
+      stopReason: 'error',
+      errorMessage: 'The image request ended without a successful result.',
+      timestamp: 2200,
+    };
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata: { ...metadata, tools: [imageTool] },
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'unanswered',
+        reason: 'model_error',
+        entry: 1,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [scheduled] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'call',
+              toolName: PI_IMAGE_TOOL_NAME,
+              content: [{ type: 'text', text: failure.message }],
+              details: {
+                kind: 'cherry.tool-result',
+                ref: imageTool.ref,
+                providerName: imageTool.providerName,
+                displayName: 'Generate image',
+                output: {
+                  value: { status: 'error' },
+                  artifacts: [],
+                  failure: { scope: 'call', error: failure },
+                },
+              },
+              isError: true,
+              timestamp: 2100,
+            },
+          ],
+        },
+        { id: 4, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+
+    expect(turn.status).toBe('failed');
+    if (scenario.api === 'cherry-image') {
+      expect(turn.error).toEqual(failure);
+      expect(toAgentErrorView(turn.error!)).toMatchObject({
+        message: failure.message,
+        retryable: failure.retryable,
+        failure: {
+          source: { layer: 'provider', code: failure.code, name: failure.name },
+          context: failure.context,
+        },
+      });
+    } else {
+      expect(turn.error).toMatchObject({
+        code: 'provider_error',
+        message: terminal.errorMessage,
+        retryable: true,
+      });
+    }
+  });
+
   test('preserves upstream loaded tool names for search presentation', () => {
     const turn = projectPiTurn({
       lane: { sessionId: 'session', slot: 0 },

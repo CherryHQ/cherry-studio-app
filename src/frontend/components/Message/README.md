@@ -87,7 +87,7 @@ instead of creating feature-owned rows or sheets:
 | Process | `MessagePart.Process` | After streaming settles, renders one neutral total-duration disclosure before the answer. Defaults closed unless the reader already opened a tool group. |
 | Grouping | `MessagePart.ToolGroup` | Owns the group summary row and inline step container. Defaults closed during both streaming and completion; the message retains manual group state across completion and outer folding. |
 | Detail shell | `MessagePart.Detail` | Owns the `BottomSheet`, title, dismissal, scrolling, content insets, and spacing. Tool and source details share this shell. |
-| Detail content | The part renderer | Supplies the business-specific content inside the shell. This content remains intentionally unconstrained until its visual variants are designed. |
+| Detail content | The part renderer | Supplies business content through shared sections; source cards and media retain their specialized renderers. |
 
 Tool summaries deliberately omit decorative icons and implementation-specific arguments. The
 adapter derives a localized action title and status text plus the semantic status tone; URLs,
@@ -178,14 +178,23 @@ live while the script runs, and from the result's summaries once it finishes. Co
 
 ### Detail Content Status
 
-Detail content currently accepts arbitrary React children. Raw text, structured values, source
-links, and media therefore keep their existing feature-owned presentation. This is an explicit
-temporary boundary, not a recommendation to create more one-off layouts.
+Default details align with the sheet header's horizontal inset and separate sections with spacing.
+CherryUI's `MessagePart.Section` owns the quiet heading, error indicator, and optional action;
+`SectionBody` owns the neutral rounded reading surface. Text, code, and metadata share the
+`code-block` surface token without nested cards. Metadata uses `MessagePart.ValueSection` fact rows;
+source lists keep their own card spacing and inset.
 
-Do not add a controlled detail-layout API until the text, structured-data, list, media, empty, and
-error variants have approved visual designs. When that work begins, evolve the single
-`MessagePart.Detail` boundary rather than adding parallel shells. The matching implementation TODO
-lives beside `MessagePartDetail` in `packages/ui/src/components/message-part/components/message-part-disclosure.tsx`.
+The app's [MessageDetail](../MessageDetail/README.md) adapters render arguments as highlighted JSON,
+prose as selectable text, and scripts as highlighted code. Every text section has a compact copy
+action beside its heading. Copy uses the full original value, including beyond the visible preview.
+Generic and MCP output retain one shared text preview budget across all blocks and one copy action
+for the complete response. Image-only output has no text-copy action. Arbitrary tool text is not
+automatically treated as Markdown.
+
+Business adapters own output-before-arguments ordering, translations, and media. Errors mark the
+heading and keep the body readable in the normal foreground color. Long sections use bounded
+previews with a localized notice; full text stays available through copy. Extend these shared
+content primitives rather than introducing parallel sheet shells.
 
 ### Renderer Inventory And Visual Acceptance
 

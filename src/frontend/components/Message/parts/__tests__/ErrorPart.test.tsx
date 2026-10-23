@@ -9,6 +9,13 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    MessageDetailText: (props: object) => createElement('MessagePartTextSection', props),
+  };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {

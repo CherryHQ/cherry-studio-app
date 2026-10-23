@@ -129,6 +129,16 @@ describe('image generation parameter resolution', () => {
     expect(resolvePaintingGenerationMode(editOnly, true) !== undefined).toBe(true);
   });
 
+  it('accepts reference images for a generation endpoint that declares image input', () => {
+    const visionGenerate = model({
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+      inputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
+    });
+
+    expect(resolvePaintingGenerationMode(visionGenerate, false)).toBe('generate');
+    expect(resolvePaintingGenerationMode(visionGenerate, true)).toBe('edit');
+  });
+
   it('retains capability and modality fallback for legacy image models', () => {
     const generateModel = model({ capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION] });
     const editModel = model({

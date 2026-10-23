@@ -2,6 +2,7 @@ import { MessagePart } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 
 import { readAiFailureDetail, type AiFailureData } from './aiFailureDetail';
@@ -114,14 +115,15 @@ export function AiFailureDetailSheet({
       title={t('chat.errorPart.detail.title')}
     >
       {detail.message ? (
-        <MessagePart.TextSection
+        <MessageDetailText
+          tone="danger"
           title={t('chat.errorPart.detail.message')}
           value={detail.message}
         />
       ) : null}
       <MessagePart.ValueSection title={t('chat.errorPart.detail.facts')} value={facts} />
       {detail.responseBody ? (
-        <MessagePart.TextSection
+        <MessageDetailText
           title={t('chat.errorPart.detail.responseBody')}
           value={detail.responseBody}
           variant="code"

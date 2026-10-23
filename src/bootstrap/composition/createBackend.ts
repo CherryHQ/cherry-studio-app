@@ -89,6 +89,7 @@ export type BackendComposition = {
   hasPendingSkillStorageWork(): boolean;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
+  disposeAppUpdate(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -324,7 +325,12 @@ export function createBackend(
 
   services.agent.configureSkills(skills);
 
+  const appUpdate = createAppUpdateModule({
+    requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
+  });
+
   return {
+    disposeAppUpdate: appUpdate.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -341,7 +347,7 @@ export function createBackend(
       }
     },
     backend: {
-      appUpdate: createAppUpdateModule(),
+      appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,
       systemEntry: systemEntry.module,

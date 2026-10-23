@@ -38,6 +38,14 @@ function resolveEarendilModule(specifier: string, origin: string): string | unde
   return undefined;
 }
 
+// Metro skips an unresolvable require inside try (allowOptionalDependencies). Upstream's Bun-only
+// environment fallback must keep that shape; any other Node import still fails the graph checks.
+const OPTIONAL_NODE_FS_REQUIRE = /try\s*\{\s*const \{ readFileSync \} = require\("node:fs"\);/;
+
+function withoutOptionalNodeFsRequire(source: string): string {
+  return source.replace(OPTIONAL_NODE_FS_REQUIRE, 'try {');
+}
+
 /** Every Earendil module Metro reaches from the entries the app imports. */
 function readModuleGraph(entries: string[]): Map<string, string> {
   const pending = entries.map((entry) => resolveEarendilModule(entry, process.cwd()) ?? entry);
@@ -72,7 +80,9 @@ describe('Pi React Native patches', () => {
     for (const [file, source] of graph) {
       expect({
         file,
-        nodeImport: /(?:from\s+|require\(|import\()\s*["']node:/.test(source),
+        nodeImport: /(?:from\s+|require\(|import\()\s*["']node:/.test(
+          withoutOptionalNodeFsRequire(source),
+        ),
         computedImport: /\bimport\((?!\s*["'])/.test(source),
       }).toEqual({ file, nodeImport: false, computedImport: false });
     }
@@ -100,21 +110,29 @@ describe('Pi React Native patches', () => {
     ]);
     const aiDist = `${realpathSync(`${process.cwd()}/node_modules/@earendil-works/pi-ai`)}/dist`;
 
-    // The pi-ai entry reaches OAuth loaders that Metro cannot bundle. The catalog's auth
-    // resolution stays on the native-safe modules the selective OAuth entry also uses.
-    expect([...graph.keys()]).not.toContain(`${aiDist}/index.js`);
+    // Tool search reaches the pi-ai entry; its auth exports stay off the OAuth loaders that Metro
+    // cannot bundle and on the native-safe modules the selective OAuth entry also uses.
     expect(
       [...graph.keys()]
         .filter((file) => file.startsWith(`${aiDist}/auth/`))
         .map((file) => file.slice(aiDist.length + 1))
         .sort(),
-    ).toEqual(['auth/context.native.js', 'auth/credential-store.js', 'auth/resolve.js']);
+    ).toEqual([
+      'auth/context.native.js',
+      'auth/credential-store.js',
+      'auth/helpers.js',
+      'auth/resolve.js',
+      'auth/types.js',
+    ]);
     for (const [file, source] of graph) {
       expect({ file, wasmImport: /(?:from|import)\s*["']quickjs-wasi/.test(source) }).toEqual({
         file,
         wasmImport: false,
       });
-      expect({ file, nodeImport: /(?:from\s+|require\()["']node:/.test(source) }).toEqual({
+      expect({
+        file,
+        nodeImport: /(?:from\s+|require\()["']node:/.test(withoutOptionalNodeFsRequire(source)),
+      }).toEqual({
         file,
         nodeImport: false,
       });
@@ -137,23 +155,15 @@ describe('Pi React Native patches', () => {
     for (const [file, source] of graph) {
       expect({
         file,
-        nodeImport: /(?:from\s+|require\(|import\()\s*["']node:/.test(source),
+        nodeImport: /(?:from\s+|require\(|import\()\s*["']node:/.test(
+          withoutOptionalNodeFsRequire(source),
+        ),
       }).toEqual({ file, nodeImport: false });
       expect({ file, computedImport: /\bimport\((?!\s*["'])/.test(source) }).toEqual({
         file,
         computedImport: false,
       });
     }
-  });
-
-  test('does not leave the Bun node:fs fallback in the Pi AI bundle', () => {
-    const providerEnv = readFileSync(
-      `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/utils/provider-env.js`,
-      'utf8',
-    );
-
-    expect(providerEnv).not.toContain('require("node:fs")');
-    expect(providerEnv).toContain('function getBunSandboxEnvValue(_name)');
   });
 
   test('retains structured errors in the supported Pi adapters', () => {

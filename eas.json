@@ -54,6 +54,7 @@
       },
       "android": {
         "channel": "production-apk",
+        "env": { "APK_UPDATES_ENABLED": "true" },
         "buildType": "apk",
         "withoutCredentials": false,
         "credentialsSource": "remote",
@@ -70,6 +71,7 @@
       },
       "android": {
         "channel": "production-google-play",
+        "env": { "APK_UPDATES_ENABLED": "false" },
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
       }

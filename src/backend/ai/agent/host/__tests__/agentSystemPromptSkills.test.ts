@@ -36,9 +36,12 @@ describe('agent system prompt Skills section', () => {
       tools: createSkillTools(EMPTY_SKILL_SCOPE),
       skills: EMPTY_TURN_SKILL_PLAN,
     });
-    expect(prompt).toContain('0 automatically discoverable Skills');
+    expect(prompt).toContain('this Agent has no enabled, bound and readable Skill packages');
     expect(prompt).toContain('not the total installed in the app');
-    expect(prompt).toContain('app-owned System Skills');
+    expect(prompt).toContain('`list_local_skills` with `include_manual: true`');
+    expect(prompt).not.toContain('### Available Skills');
+    expect(prompt).not.toContain('nextCursor');
+    expect(prompt).toContain('are offered directly; do not search for them');
   });
 
   it('gives an authoritative count and pagination rules for a complete inventory', () => {
@@ -125,7 +128,6 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('- manual (skill_id: manual)');
     expect(prompt).not.toContain('Follow the manual.');
     expect(prompt).toContain('read the needed references or templates with `read_skill_file`');
-    expect(prompt).toContain('through tool_search by exact name when needed');
     expect(prompt).toContain('repeat `load_skill` to recover a missing instruction body');
     expect(prompt).not.toContain('without another loading call, file lookup');
     expect(prompt).toContain('built-in tools exposed directly to you');

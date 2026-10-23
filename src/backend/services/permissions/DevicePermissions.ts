@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import * as Calendar from 'expo-calendar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -19,6 +20,7 @@ import {
 import { healthRecordSelectionType } from '@/shared/contracts/health';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
 import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
 
@@ -120,6 +122,21 @@ export class DevicePermissions implements PermissionsModule {
       return;
     }
     await Linking.openSettings();
+  }
+
+  /** The update workflow owns the explanation; this owner serializes the system authorization. */
+  requestPackageInstallAuthorization(): Promise<boolean> {
+    return this.runWithSystemPrompt(async () => {
+      if (Platform.OS !== 'android' || !Application.applicationId) return false;
+      const native = getNativeAppUpdate();
+      if (!native?.isApkInstallationEnabled()) return false;
+      if (native.canInstallPackages()) return true;
+      const { ActivityAction, startActivityAsync } = await import('expo-intent-launcher');
+      await startActivityAsync(ActivityAction.MANAGE_UNKNOWN_APP_SOURCES, {
+        data: `package:${Application.applicationId}`,
+      });
+      return native.canInstallPackages();
+    });
   }
 
   private async getStatus(scope: DevicePermissionScope): Promise<DevicePermissionStatus> {

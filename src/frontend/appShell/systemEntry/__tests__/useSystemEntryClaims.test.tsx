@@ -18,6 +18,8 @@ const claimNext = jest.fn(
 );
 const module: SystemEntryModule = {
   claimNext,
+  isReceiving: () => false,
+  subscribeReceiving: () => () => {},
   subscribePending(listener) {
     pendingListeners.add(listener);
     return () => pendingListeners.delete(listener);

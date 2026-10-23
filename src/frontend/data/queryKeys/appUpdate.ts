@@ -1,3 +1,7 @@
+import type { AppUpdateChannel } from '@/shared/contracts/appUpdate';
+
 export const appUpdateQueryKeys = {
-  latest: () => ['appUpdate', 'gitcode'] as const,
+  latest: (channel: AppUpdateChannel | null) => ['appUpdate', channel] as const,
+  notes: (releaseId: string, language: string) =>
+    ['appUpdate', 'notes', releaseId, language] as const,
 };

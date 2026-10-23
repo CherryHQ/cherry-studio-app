@@ -59,6 +59,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
+      [
+        './scripts/withAppUpdates.js',
+        {
+          apkUpdatesEnabled:
+            profile !== 'preview' &&
+            apkUpdatesSetting === 'true' &&
+            process.env.EAS_BUILD_PROFILE !== 'production-google-play',
+        },
+      ] as [string, { apkUpdatesEnabled: boolean }],
       ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),
       ...(config.plugins ?? []),
       '@preeternal/react-native-file-hash',
@@ -104,7 +113,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     extra: {
       ...config.extra,
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
-      // Keeping it out of packaged configs keeps it out of their runtime fingerprints.
+      // Native APK installation capability is separately embedded by withAppUpdates.
       isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,

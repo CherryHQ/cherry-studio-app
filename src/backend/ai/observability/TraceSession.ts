@@ -119,17 +119,18 @@ export class TraceSession {
       }
     }
     this.openSpans.delete(spanId);
+    const final = {
+      ...attributes,
+      ...(isRoot && this.droppedSpans > 0 ? { 'trace.dropped_spans': this.droppedSpans } : {}),
+    };
     this.write({
       ...open.record,
       revision: open.record.revision + 1,
       status,
       endedAt: this.now(),
       durationMs: Math.max(0, this.monotonicNow() - open.monotonicStart),
-      attributes: sanitizeTraceAttributes({
-        ...open.record.attributes,
-        ...attributes,
-        ...(isRoot && this.droppedSpans > 0 ? { 'trace.dropped_spans': this.droppedSpans } : {}),
-      }),
+      // Terminal facts come first so the attribute limit drops earlier request facts instead.
+      attributes: sanitizeTraceAttributes({ ...final, ...open.record.attributes, ...final }),
     });
     if (isRoot) this.options.onEnd();
   }

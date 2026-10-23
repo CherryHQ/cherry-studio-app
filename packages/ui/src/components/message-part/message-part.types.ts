@@ -123,6 +123,12 @@ export type MessagePartSectionTitleProps = {
   title: string;
 };
 
+export type MessagePartSectionProps = MessagePartSectionTitleProps & {
+  action?: ReactNode;
+  children: ReactNode;
+  tone?: Extract<MessagePartTone, 'danger'>;
+};
+
 export type MessagePartTextSectionProps = MessagePartSectionTitleProps & {
   tone?: Extract<MessagePartTone, 'danger'>;
   value: string;

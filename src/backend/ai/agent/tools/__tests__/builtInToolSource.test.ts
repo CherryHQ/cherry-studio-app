@@ -93,6 +93,30 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(disabled)).toContain('read_file');
   });
 
+  test('defers occasional health and Agent management tools while device schedules stay direct', async () => {
+    const tools = await resolve({
+      deviceAccess: {
+        'calendar.read': 'granted',
+        'calendar.write': 'granted',
+        'health.steps.read': 'granted',
+        'health.workouts.read': 'granted',
+      },
+    });
+    const deferred = (name: string) => tools.find((tool) => tool.providerName === name)?.deferred;
+    for (const name of [
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'health_get_summary',
+      'health_list_workouts',
+      'health_list_data_types',
+    ])
+      expect(deferred(name)).toBe(true);
+    expect(deferred('calendar_list_events')).toBeUndefined();
+    expect(deferred('ask_user_question')).toBeUndefined();
+  });
+
   test('names the linked folder in the workspace tools only for a workspace conversation', async () => {
     const folder = jest.spyOn(fileLibraryService, 'folder').mockResolvedValue({
       id: 'folder-1',

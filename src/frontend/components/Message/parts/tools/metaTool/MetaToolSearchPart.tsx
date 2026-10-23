@@ -1,6 +1,7 @@
-import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 
 import { isRecord, type ToolMessagePart } from '../toolPartState';
 import { MetaToolFrame } from './MetaToolFrame';
@@ -15,7 +16,7 @@ export function MetaToolSearchPart({ part }: { part: ToolMessagePart }) {
   return (
     <MetaToolFrame part={part} toolName="tool_search">
       {part.state === 'output-available' && namespaces.length === 0 ? (
-        <Text className="text-foreground text-base italic" selectable>
+        <Text className="text-muted-foreground text-sm" selectable>
           {t('chat.metaToolSearch.noResults')}
         </Text>
       ) : null}
@@ -43,13 +44,9 @@ export function MetaToolSearchPart({ part }: { part: ToolMessagePart }) {
         </View>
       ))}
       {part.state === 'output-error' ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.tool.error')}
-          value={part.errorText}
-        />
+        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
-      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
+      <MessageDetailValue title={t('chat.tool.arguments')} value={input} />
     </MetaToolFrame>
   );
 }

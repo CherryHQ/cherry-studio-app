@@ -93,6 +93,15 @@ describe('durable message timing', () => {
     expect(projectDurableHostTurn(turn({ status: 'running' })).turn.isRetrying).toBe(false);
   });
 
+  test('a parked turn stays running and explicitly clears its pause when resumed', () => {
+    expect(projectDurableHostTurn(turn({ status: 'running', isPaused: true })).turn).toMatchObject({
+      status: 'running',
+      isPaused: true,
+      endedAt: null,
+    });
+    expect(projectDurableHostTurn(turn({ status: 'running' })).turn.isPaused).toBe(false);
+  });
+
   test('a stopped answer retains its output and retryable status without an execution error', () => {
     const projected = projectDurableHostTurn(
       turn({
