@@ -44,8 +44,12 @@ export async function createInternalEntryWithPreview(
     ) {
       // A thumbnail failure is harmless only if the renderer can display the original.
       // Successful thumbnails already decoded the source, so avoid decoding those twice.
+      // A bounded decode proves the bytes are displayable without a full-size bitmap.
       if (!uri) throw new FileAttachmentError({ code: 'unavailable', fileEntryId: entry.id });
-      const image = await Image.loadAsync(uri);
+      const image = await Image.loadAsync(uri, {
+        maxHeight: thumbnailMaxDimension,
+        maxWidth: thumbnailMaxDimension,
+      });
       image.release();
     }
     return entry;

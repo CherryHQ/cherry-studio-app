@@ -232,7 +232,7 @@ describe('filePreviewStorage', () => {
 
       await expect(createInternalEntryWithPreview(entries, input)).resolves.toEqual(generatedEntry);
 
-      expect(Image.loadAsync).toHaveBeenCalledWith(sourceUri);
+      expect(Image.loadAsync).toHaveBeenCalledWith(sourceUri, { maxHeight: 512, maxWidth: 512 });
       expect(release).toHaveBeenCalledTimes(1);
       expect(entries.delete).not.toHaveBeenCalled();
       expect(testState.files.has(sourceUri)).toBe(true);
