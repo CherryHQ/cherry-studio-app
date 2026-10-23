@@ -103,8 +103,7 @@ function createAccount(): AccountRuntime {
       read: () => store.getBoolean('sign-in-prompted') ?? false,
       write: () => store.set('sign-in-prompted', true),
     },
-    createApi: (baseUrl, getToken, refreshToken) =>
-      createEnterpriseApi({ baseUrl, getToken, refreshToken }),
+    createApi: (baseUrl, session) => createEnterpriseApi({ baseUrl, session }),
     createPrivateApi: createPrivateAccountApi,
     credentials: {
       read: (id) => SecureStore.getItemAsync(`profile.${id}.private-account`, STORAGE_OPTIONS),

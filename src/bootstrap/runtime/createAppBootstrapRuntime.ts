@@ -160,7 +160,7 @@ export function createAppBootstrapRuntime(
   const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
   enterpriseSync.configure({
     getProductToken: account.getProductToken,
-    refreshProductToken: account.refreshProductToken,
+    refuseProductToken: account.refuseProductToken,
     reportRejected: account.reportRejected,
   });
   const services = createBackendServices({
@@ -290,9 +290,10 @@ export function createAppBootstrapRuntime(
           resetFilePreviewsForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
-        // An enterprise profile opens offline from its last sync; only the very first sync blocks.
+        // An enterprise profile opens offline from its last sync; only the very first sync blocks,
+        // and only for resources. Skill packages download after startup reconciles Skill storage.
         if (isEnterpriseProfile() && !(await enterpriseSync.hasSynced()))
-          await measureStartupStage('startup.enterprise', () => enterpriseSync.sync());
+          await measureStartupStage('startup.enterprise', () => enterpriseSync.syncResources());
         await initializeAppRuntime(services);
         await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();

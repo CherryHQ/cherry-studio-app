@@ -1,63 +1,121 @@
-import { createHttpClient, HttpError, type HttpResponse } from '@/backend/services/http';
+import {
+  AxiosError,
+  AxiosHeaders,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 
-import { createEnterpriseApi } from '../enterpriseApi';
+import { AccountError } from '@/shared/contracts/account';
 
+import { createEnterpriseApi, type EnterpriseSession } from '../enterpriseApi';
+
+const mockAdapter = jest.fn<Promise<AxiosResponse>, [InternalAxiosRequestConfig]>();
+
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+jest.mock('@logger', () => {
+  const logger = { debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() };
+  return { loggerService: { withContext: () => logger } };
+});
+// The real client and interceptor dispatch run over a scripted Axios adapter.
 jest.mock('@/backend/services/http', () => ({
-  ...jest.requireActual('@/backend/services/http/HttpError'),
-  createHttpClient: jest.fn(),
+  ...jest.requireActual('@/backend/services/http'),
+  createHttpClient: jest
+    .requireActual('@/backend/services/http/createHttpClient')
+    .__testing.createHttpClientFactoryWithAdapter((config: InternalAxiosRequestConfig) =>
+      mockAdapter(config),
+    ),
 }));
 
-const unauthorized = () => new HttpError('Unauthorized', { kind: 'http', status: 401 });
+const respond = (config: InternalAxiosRequestConfig, status: number): AxiosResponse => ({
+  config,
+  data: { serverUniqueId: 'server' },
+  headers: new AxiosHeaders(),
+  status,
+  statusText: String(status),
+});
 
-function setup() {
-  const request = jest.fn<Promise<HttpResponse<unknown>>, [unknown]>();
-  jest.mocked(createHttpClient).mockReturnValue({ request } as ReturnType<typeof createHttpClient>);
-  const refreshToken = jest.fn(async () => 'new-token');
-  const api = createEnterpriseApi({
-    baseUrl: 'https://private.example.com/api',
-    getToken: async () => 'old-token',
-    refreshToken,
-  });
-  return { api, request, refreshToken };
+function answer(...statuses: number[]) {
+  for (const status of statuses) {
+    mockAdapter.mockImplementationOnce(async (config) => {
+      if (status < 400) return respond(config, status);
+      throw new AxiosError('failed', AxiosError.ERR_BAD_REQUEST, config, undefined, {
+        ...respond(config, status),
+        data: {},
+      });
+    });
+  }
 }
 
-describe('enterprise API authentication', () => {
-  it('retries a rejected request once with the rotated token on the same route', async () => {
-    const { api, request, refreshToken } = setup();
-    request
-      .mockRejectedValueOnce(unauthorized())
-      .mockResolvedValueOnce({ data: { serverUniqueId: 'private' }, status: 200, headers: {} });
-    await expect(api.getConfiguration()).resolves.toEqual({ serverUniqueId: 'private' });
-    expect(refreshToken).toHaveBeenCalledWith('old-token');
-    expect(request.mock.calls.map(([input]) => input)).toEqual([
-      expect.objectContaining({
-        path: '/configurations',
-        credentials: 'omit',
-        redirect: 'error',
-        headers: { Authorization: 'Bearer old-token' },
-      }),
-      expect.objectContaining({
-        path: '/configurations',
-        credentials: 'omit',
-        redirect: 'error',
-        headers: { Authorization: 'Bearer new-token' },
-      }),
-    ]);
+const sentTokens = () =>
+  mockAdapter.mock.calls.map(([config]) => AxiosHeaders.from(config.headers).get('Authorization'));
+
+function privateSession() {
+  let token = 'old-token';
+  const session = {
+    getProductToken: jest.fn(async () => token),
+    refuseProductToken: jest.fn(async () => {
+      token = 'new-token';
+    }),
+    reportRejected: jest.fn(),
+  } satisfies Required<EnterpriseSession>;
+  return session;
+}
+
+const api = (session: EnterpriseSession) =>
+  createEnterpriseApi({ baseUrl: 'https://enterprise.example.com/api', session });
+
+beforeEach(() => mockAdapter.mockReset());
+
+describe('enterprise API session handling', () => {
+  it('replays a 401 once with the private token the interceptor rotated', async () => {
+    const session = privateSession();
+    answer(401, 200);
+    await expect(api(session).getConfiguration()).resolves.toEqual({ serverUniqueId: 'server' });
+    expect(session.refuseProductToken).toHaveBeenCalledWith('old-token');
+    expect(sentTokens()).toEqual(['Bearer old-token', 'Bearer new-token']);
+    expect(session.reportRejected).not.toHaveBeenCalled();
   });
 
-  it('stops after the server rejects the refreshed token', async () => {
-    const { api, request, refreshToken } = setup();
-    request.mockRejectedValue(unauthorized());
-    await expect(api.getUser()).rejects.toMatchObject({ status: 401 });
-    expect(request).toHaveBeenCalledTimes(2);
-    expect(refreshToken).toHaveBeenCalledTimes(1);
+  it.each([
+    ['an Agent setup', (session: EnterpriseSession) => api(session).setupAgent(1)],
+    ['a Skill package', (session: EnterpriseSession) => api(session).downloadLibraryItem(7, 1024)],
+  ])('leaves the session alone when the role may not read %s', async (_, read) => {
+    const session = privateSession();
+    answer(403);
+    await expect(read(session)).rejects.toMatchObject({ status: 403 });
+    expect(session.refuseProductToken).not.toHaveBeenCalled();
+    expect(session.reportRejected).not.toHaveBeenCalled();
+    expect(mockAdapter).toHaveBeenCalledTimes(1);
   });
 
-  it('does not refresh or replay a forbidden request', async () => {
-    const { api, request, refreshToken } = setup();
-    request.mockRejectedValue(new HttpError('Forbidden', { kind: 'http', status: 403 }));
-    await expect(api.setupAgent(1)).rejects.toMatchObject({ status: 403 });
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(refreshToken).not.toHaveBeenCalled();
+  it('refuses the session when the organization configuration is forbidden', async () => {
+    const session = privateSession();
+    answer(403);
+    await expect(api(session).getConfiguration()).rejects.toMatchObject({ status: 403 });
+    expect(session.reportRejected).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails a refused cloud session while reading its token, before a replay is sent', async () => {
+    let refused = false;
+    const session: EnterpriseSession = {
+      getProductToken: async () => {
+        if (refused) throw new AccountError('rejected');
+        return 'product-token';
+      },
+      refuseProductToken: async () => {
+        refused = true;
+      },
+    };
+    answer(401);
+    await expect(api(session).getUser()).rejects.toMatchObject({ code: 'rejected' });
+    expect(mockAdapter).toHaveBeenCalledTimes(1);
+  });
+
+  it('neither refuses nor replays for a sign-in exchange', async () => {
+    answer(401);
+    await expect(
+      api({ getProductToken: async () => 'sign-in-token' }).getConfiguration(),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(mockAdapter).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,1 +1,5 @@
-export { ProfileRegistry, type ProfileRegistryStorage } from './ProfileRegistry';
+export {
+  EnterpriseIdentitySchema,
+  ProfileRegistry,
+  type ProfileRegistryStorage,
+} from './ProfileRegistry';

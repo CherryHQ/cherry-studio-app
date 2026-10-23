@@ -100,6 +100,20 @@ describe('AccountRuntime', () => {
     expect(runtime.getState().hasPrompted).toBe(true);
   });
 
+  it('shows community data as signed in only for a community session', async () => {
+    const community = setup(signedIn('cloud'));
+    await community.runtime.verify();
+    expect(community.runtime.getState()).toMatchObject({ isSignedIn: true, name: 'Ada' });
+    // An organization session whose enterprise sign-in did not finish is not a community login.
+    const organization = setup(signedIn('enterprise'));
+    await organization.runtime.verify();
+    expect(organization.runtime.getState()).toMatchObject({
+      isSignedIn: false,
+      needsSignIn: false,
+      name: undefined,
+    });
+  });
+
   it('opens the cloud enterprise profile using the configured cloud address', async () => {
     const { runtime, options } = setup(signedIn('enterprise'));
     await expect(runtime.signIn()).resolves.toBe(false);
@@ -366,14 +380,13 @@ describe('AccountRuntime', () => {
     const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
     const api = options.createPrivateApi();
     options.createPrivateApi.mockReturnValue(api);
-    await expect(
-      Promise.all([
-        runtime.refreshProductToken('private-token'),
-        runtime.refreshProductToken('private-token'),
-      ]),
-    ).resolves.toEqual(['rotated-token', 'rotated-token']);
-    expect(await runtime.refreshProductToken('private-token')).toBe('rotated-token');
+    await Promise.all([
+      runtime.refuseProductToken('private-token'),
+      runtime.refuseProductToken('private-token'),
+    ]);
+    await runtime.refuseProductToken('private-token');
     expect(await runtime.getProductToken()).toBe('rotated-token');
+    expect(runtime.getState().needsSignIn).toBe(false);
     expect(api.refresh).toHaveBeenCalledTimes(1);
     expect(JSON.parse(options.credentials.write.mock.calls[0]![1])).toMatchObject({
       refreshToken: 'refresh-2',
@@ -388,7 +401,7 @@ describe('AccountRuntime', () => {
       user: { id: 'someone-else', username: 'Other' },
     });
     options.createPrivateApi.mockReturnValue(api);
-    await expect(runtime.refreshProductToken('private-token')).rejects.toMatchObject({
+    await expect(runtime.refuseProductToken('private-token')).rejects.toMatchObject({
       code: 'rejected',
     });
     expect(options.credentials.write).not.toHaveBeenCalled();
@@ -410,7 +423,7 @@ describe('AccountRuntime', () => {
       });
     });
     options.createPrivateApi.mockReturnValue(api);
-    const refresh = runtime.refreshProductToken('private-token');
+    const refresh = runtime.refuseProductToken('private-token');
     const rejection = expect(refresh).rejects.toMatchObject({ code: 'rejected' });
     await pending;
     const signOut = runtime.signOut();
@@ -420,6 +433,14 @@ describe('AccountRuntime', () => {
     expect(options.credentials.delete).toHaveBeenCalledWith(privateProfile.id);
     expect(options.portal.signOut).not.toHaveBeenCalled();
     expect(options.profiles.setActive).toHaveBeenCalledWith(LOCAL_PROFILE);
+  });
+
+  it('asks a cloud session to sign in again when the enterprise server refuses its product token', async () => {
+    const { runtime } = setup(signedIn('enterprise'), enterpriseProfile);
+    await runtime.verify();
+    await runtime.refuseProductToken('product-token');
+    expect(runtime.getState().needsSignIn).toBe(true);
+    await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
   });
 
   it('asks a private account to sign in again when its stored credentials are missing', async () => {
@@ -445,7 +466,7 @@ describe('AccountRuntime', () => {
     });
     const signOut = runtime.signOut();
     await deleting;
-    await expect(runtime.refreshProductToken('private-token')).rejects.toMatchObject({
+    await expect(runtime.refuseProductToken('private-token')).rejects.toMatchObject({
       code: 'rejected',
     });
     finishDelete();

@@ -27,6 +27,14 @@ export const LOCAL_PROFILE: ActiveProfile = Object.freeze({
   address: null,
 });
 
+/** Whether two identities name the same person in the same organization on the same server. */
+export function isSameEnterpriseIdentity(a: EnterpriseIdentity, b: EnterpriseIdentity): boolean {
+  if (a.deployment !== b.deployment || a.subject !== b.subject) return false;
+  if ('authentication' in a || 'authentication' in b)
+    return 'authentication' in a && 'authentication' in b;
+  return a.issuer === b.issuer && a.productProfileId === b.productProfileId;
+}
+
 let active: ActiveProfile = LOCAL_PROFILE;
 
 export function setActiveProfile(profile: ActiveProfile): void {

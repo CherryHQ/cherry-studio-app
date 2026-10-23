@@ -12,7 +12,7 @@ import {
 import { Phase } from '@/backend/core/lifecycle/types';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
-import type { DbService } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import {
   agentGlobalSkillTable,
   appStateTable,
@@ -30,8 +30,7 @@ import {
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import { isAuthenticationRejection } from '../account/AccountRuntime';
-import { createEnterpriseApi, type EnterpriseApi } from '../enterpriseApi';
+import { createEnterpriseApi, type EnterpriseApi, type EnterpriseSession } from '../enterpriseApi';
 import {
   type AgentSetup,
   type EnterpriseConfiguration,
@@ -46,33 +45,32 @@ const logger = loggerService.withContext('EnterpriseSync');
 const StateSchema = z.object({
   hash: z.string(),
   syncIntervalMinutes: z.number().int().positive(),
-  /** Server revision of each delivered Skill package. */
+  /** Server revision of each installed delivered Skill package. */
   skills: z.record(z.string(), z.string()),
 });
 type SyncState = z.infer<typeof StateSchema>;
 
+/** One accepted server snapshot. Agents whose setup could not be read stay as installed. */
+type Snapshot = Readonly<{
+  configuration: EnterpriseConfiguration;
+  agents: AgentSetup[];
+  unreadAgentIds: string[];
+}>;
+
 const FOREGROUND_MIN_GAP_MS = 5 * 60_000;
 const SETUP_CONCURRENCY = 4;
-
-/** The installation account, as the sync needs it. */
-export interface EnterpriseSession {
-  getProductToken(): Promise<string>;
-  refreshProductToken?(rejectedToken: string): Promise<string | null>;
-  /** The server refused the session; the user must sign in again. */
-  reportRejected(): void;
-}
 
 /**
  * Keeps the enterprise profile's managed configuration current. It runs only in an enterprise
  * profile, never blocks the app after the first successful sync, and on failure keeps what is
- * already in the database and only logs.
+ * already in the database and only logs. Session refusals are the enterprise API's concern.
  */
 @Injectable('EnterpriseSyncService')
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('foreground-refresh')
 @DependsOn(['DbService', 'PreferenceService', 'McpRuntimeService'])
 export class EnterpriseSyncService extends BaseService {
-  private session: EnterpriseSession | undefined;
+  private session: Required<EnterpriseSession> | undefined;
   private running: Promise<void> | undefined;
   private readonly lifetime = new AbortController();
   private readonly pendingInvalidations = new Set<string>();
@@ -88,35 +86,30 @@ export class EnterpriseSyncService extends BaseService {
     super();
   }
 
-  configure(session: EnterpriseSession): void {
+  configure(session: Required<EnterpriseSession>): void {
     this.session = session;
   }
 
   /** Whether this profile has ever completed a sync; the app waits for the first one. */
   async hasSynced(): Promise<boolean> {
-    return (await this.readState()) !== null;
+    return (await this.readState(this.db.getDb())) !== null;
   }
 
   hasPendingStorageWork(): boolean {
     return this.running !== undefined;
   }
 
-  /** One admitted attempt includes network reads, Skill publication and the resource commit. */
+  /** One admitted attempt: the organization's resources, then changed Skill packages. */
   sync(): Promise<void> {
-    try {
-      this.assertWritable();
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    this.running ??= this.run()
-      .catch((error: unknown) => {
-        if (isAuthenticationRejection(error)) this.session?.reportRejected();
-        throw error;
-      })
-      .finally(() => {
-        this.running = undefined;
-      });
-    return this.running;
+    return this.admit(true);
+  }
+
+  /**
+   * The first launch waits for resources only. Skill packages follow in the background attempt,
+   * which starts after startup has reconciled Skill storage.
+   */
+  syncResources(): Promise<void> {
+    return this.admit(false);
   }
 
   protected override async onAllReady(): Promise<void> {
@@ -125,7 +118,7 @@ export class EnterpriseSyncService extends BaseService {
       if (status === 'active' && Date.now() - this.lastAttempt >= FOREGROUND_MIN_GAP_MS)
         this.syncInBackground();
     });
-    const state = await this.readState();
+    const state = await this.readState(this.db.getDb());
     if (this.lifetime.signal.aborted) return;
     this.schedule(state?.syncIntervalMinutes ?? 10);
     this.syncInBackground();
@@ -140,6 +133,18 @@ export class EnterpriseSyncService extends BaseService {
 
   protected override onStop(): Promise<void> {
     return this.stop();
+  }
+
+  private admit(installSkills: boolean): Promise<void> {
+    try {
+      this.assertWritable();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    this.running ??= this.run(installSkills).finally(() => {
+      this.running = undefined;
+    });
+    return this.running;
   }
 
   private assertWritable(): void {
@@ -160,68 +165,65 @@ export class EnterpriseSyncService extends BaseService {
     this.stopTimer = this.registerInterval(() => this.syncInBackground(), minutes * 60_000);
   }
 
-  private async run(): Promise<void> {
+  private async run(installSkills: boolean): Promise<void> {
     const profile = getActiveProfile();
     const { identity } = profile;
     if (!identity || !this.session) return;
     this.lastAttempt = Date.now();
     const session = this.session;
-    const api = createEnterpriseApi({
-      baseUrl: profile.address,
-      getToken: session.getProductToken,
-      refreshToken: session.refreshProductToken,
-    });
+    const api = createEnterpriseApi({ baseUrl: profile.address, session });
     this.invalidateServers();
     const skipped: SkipLog = [];
-    const configuration = parseConfiguration(
-      await api.getConfiguration(this.lifetime.signal),
-      skipped,
-    );
-    this.assertWritable();
-    if (configuration.serverUniqueId !== identity.deployment) {
-      session.reportRejected();
-      throw new Error('The enterprise address now points to a different server');
+    try {
+      const configuration = parseConfiguration(
+        await api.getConfiguration(this.lifetime.signal),
+        skipped,
+      );
+      this.assertWritable();
+      if (configuration.serverUniqueId !== identity.deployment) {
+        session.reportRejected();
+        throw new Error('The enterprise address now points to a different server');
+      }
+      this.schedule(configuration.syncIntervalMinutes);
+      const snapshot: Snapshot = {
+        configuration,
+        ...(await this.loadAgents(api, configuration, skipped)),
+      };
+      this.assertWritable();
+      const hash = sha256HexOfText(JSON.stringify(snapshot));
+      if ((await this.readState(this.db.getDb()))?.hash !== hash)
+        await this.commitResources(snapshot, hash);
+      if (installSkills) await this.installSkills(api, snapshot, skipped);
+    } finally {
+      if (skipped.length) logger.info('Skipped enterprise items Mobile cannot use', { skipped });
     }
-    const agents = await this.loadAgents(api, configuration, skipped);
-    this.assertWritable();
-    const previous = await this.readState();
-    const hash = sha256HexOfText(JSON.stringify({ configuration, agents }));
-    this.schedule(configuration.syncIntervalMinutes);
-    const pendingSkill = agents.some((setup) =>
-      setup.skills.some((skill) => previous?.skills[skill.remoteId] !== skill.updatedAt),
-    );
-    this.assertWritable();
-    if (previous?.hash === hash && !pendingSkill) return;
+  }
 
-    const skills = await this.publishSkills(api, agents, previous?.skills ?? {}, skipped);
-    if (skipped.length) logger.info('Skipped enterprise items Mobile cannot use', { skipped });
-    this.assertWritable();
+  /** Resources, default models and the applied sync state commit together. */
+  private async commitResources(snapshot: Snapshot, hash: string): Promise<void> {
     const { changedServers, changedPaths, publishDefaults } = await this.db.withWriteTx(
       async (tx) => {
         this.assertWritable();
-        const result = await projectConfiguration(tx, {
-          configuration,
-          agents,
-          publishedSkills: skills.published,
-        });
+        const result = await projectConfiguration(tx, { ...snapshot, publishedSkills: [] });
         const publishDefaults = await this.preference.writeEnterpriseDefaults(
           tx,
-          configuration.defaults,
+          snapshot.configuration.defaults,
         );
-        const state: SyncState = {
+        const previous = await this.readState(tx);
+        await this.writeState(tx, {
           hash,
-          syncIntervalMinutes: configuration.syncIntervalMinutes,
-          skills: skills.revisions,
-        };
-        await tx
-          .insert(appStateTable)
-          .values({ key: ENTERPRISE_SYNC_STATE_KEY, value: state })
-          .onConflictDoUpdate({ target: appStateTable.key, set: { value: state } });
+          syncIntervalMinutes: snapshot.configuration.syncIntervalMinutes,
+          skills: installedRevisions(previous?.skills ?? {}, result.skillRemoteIds),
+        });
         this.assertWritable();
         return { ...result, publishDefaults };
       },
     );
     publishDefaults();
+    this.publishChanges(changedServers, changedPaths);
+  }
+
+  private publishChanges(changedServers: readonly string[], changedPaths: string[]): void {
     for (const id of changedServers) this.pendingInvalidations.add(id);
     this.invalidateServers();
     publishDataApiChanges(changedPaths);
@@ -239,45 +241,58 @@ export class EnterpriseSyncService extends BaseService {
     }
   }
 
+  /** One Agent's failed setup leaves that Agent as installed; the rest of the snapshot applies. */
   private async loadAgents(
     api: EnterpriseApi,
     configuration: EnterpriseConfiguration,
     skipped: SkipLog,
-  ): Promise<AgentSetup[]> {
-    const setups: AgentSetup[] = [];
+  ): Promise<Omit<Snapshot, 'configuration'>> {
+    const agents: AgentSetup[] = [];
+    const unreadAgentIds: string[] = [];
     const queue = [...configuration.agentIds];
     // Relation changes do not update an Agent's timestamp, so every Agent's setup is read.
     const results = await Promise.allSettled(
       Array.from({ length: Math.min(SETUP_CONCURRENCY, queue.length) }, async () => {
         for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
           this.assertWritable();
-          const setup = parseAgentSetup(
-            await api.setupAgent(id, this.lifetime.signal),
-            configuration,
-            skipped,
-          );
-          if (setup.remoteId !== String(id))
-            throw new Error('Enterprise Agent setup identity mismatch');
-          setups.push(setup);
+          try {
+            const setup = parseAgentSetup(
+              await api.setupAgent(id, this.lifetime.signal),
+              configuration,
+              skipped,
+            );
+            if (setup.remoteId !== String(id))
+              throw new Error('Enterprise Agent setup identity mismatch');
+            agents.push(setup);
+          } catch (error) {
+            // Stopping or freezing storage ends the attempt instead of skipping this Agent.
+            this.assertWritable();
+            skipped.push(`agent ${id}: ${(error as Error).message}`);
+            unreadAgentIds.push(String(id));
+          }
         }
       }),
     );
     for (const result of results) {
       if (result.status === 'rejected') throw result.reason;
     }
-    return setups.sort((a, b) => a.remoteId.localeCompare(b.remoteId));
+    return {
+      agents: agents.sort((a, b) => a.remoteId.localeCompare(b.remoteId)),
+      unreadAgentIds: unreadAgentIds.sort(),
+    };
   }
 
-  /** Downloads only packages whose server revision changed. A failed package keeps its old row. */
-  private async publishSkills(
+  /**
+   * Downloads packages whose server revision changed, then binds them in a second commit. A failed
+   * package keeps its installed revision and is retried by a later attempt.
+   */
+  private async installSkills(
     api: EnterpriseApi,
-    agents: readonly AgentSetup[],
-    previous: Record<string, string>,
+    snapshot: Snapshot,
     skipped: SkipLog,
-  ): Promise<{ published: PublishedSkill[]; revisions: Record<string, string> }> {
-    const delivered = new Map(
-      agents.flatMap((setup) => setup.skills.map((skill) => [skill.remoteId, skill])),
-    );
+  ): Promise<void> {
+    const state = await this.readState(this.db.getDb());
+    if (!state) return;
     const rows = await this.db
       .getDb()
       .select({
@@ -286,17 +301,15 @@ export class EnterpriseSyncService extends BaseService {
       })
       .from(agentGlobalSkillTable);
     const installed = new Set(rows.map((row) => row.remoteId));
-    const published: PublishedSkill[] = [];
-    const retainedIds = new Set(agents.flatMap((setup) => setup.skillRemoteIds));
-    const revisions = Object.fromEntries(
-      Object.entries(previous).filter(([id]) => retainedIds.has(id) && installed.has(id)),
+    const delivered = new Map(
+      snapshot.agents.flatMap((setup) => setup.skills.map((skill) => [skill.remoteId, skill])),
     );
+    const published: PublishedSkill[] = [];
+    const revisions: Record<string, string> = {};
     for (const skill of delivered.values()) {
       this.assertWritable();
-      if (previous[skill.remoteId] === skill.updatedAt && installed.has(skill.remoteId)) {
-        revisions[skill.remoteId] = skill.updatedAt;
+      if (state.skills[skill.remoteId] === skill.updatedAt && installed.has(skill.remoteId))
         continue;
-      }
       let handle: string | undefined;
       try {
         // react-doctor-disable-next-line async-await-in-loop -- bound memory to one package at a time
@@ -338,24 +351,51 @@ export class EnterpriseSyncService extends BaseService {
         revisions[skill.remoteId] = skill.updatedAt;
       } catch (error) {
         this.assertWritable();
-        if (isAuthenticationRejection(error)) throw error;
+        // Any download failure, including a role that may not read the package, skips it only.
         skipped.push(`skill ${skill.remoteId}: ${(error as Error).message}`);
-        // The previous installed revision remains; the next sync retries this package.
       } finally {
         if (handle) skillStorage.discardStaging(handle);
       }
     }
-    return { published, revisions };
+    if (!published.length) return;
+    const { changedServers, changedPaths } = await this.db.withWriteTx(async (tx) => {
+      this.assertWritable();
+      const result = await projectConfiguration(tx, { ...snapshot, publishedSkills: published });
+      const current = await this.readState(tx);
+      if (current)
+        await this.writeState(tx, {
+          ...current,
+          skills: installedRevisions({ ...current.skills, ...revisions }, result.skillRemoteIds),
+        });
+      this.assertWritable();
+      return result;
+    });
+    this.publishChanges(changedServers, changedPaths);
   }
 
-  private async readState(): Promise<SyncState | null> {
-    const [row] = await this.db
-      .getDb()
+  private async readState(db: Database): Promise<SyncState | null> {
+    const [row] = await db
       .select({ value: appStateTable.value })
       .from(appStateTable)
       .where(eq(appStateTable.key, ENTERPRISE_SYNC_STATE_KEY));
     return StateSchema.safeParse(row?.value).data ?? null;
   }
+
+  private async writeState(tx: Database, state: SyncState): Promise<void> {
+    await tx
+      .insert(appStateTable)
+      .values({ key: ENTERPRISE_SYNC_STATE_KEY, value: state })
+      .onConflictDoUpdate({ target: appStateTable.key, set: { value: state } });
+  }
+}
+
+/** Revisions of the managed Skills still installed after a commit. */
+function installedRevisions(
+  revisions: Record<string, string>,
+  installed: readonly string[],
+): Record<string, string> {
+  const ids = new Set(installed);
+  return Object.fromEntries(Object.entries(revisions).filter(([id]) => ids.has(id)));
 }
 
 /** Library downloads are a bare `SKILL.md` or a ZIP holding one package directory. */

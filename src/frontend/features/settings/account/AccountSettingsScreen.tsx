@@ -7,7 +7,7 @@ import { AccountError } from '@/shared/contracts/account';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
-/** Who is signed in, and the ways to switch accounts, return to local data or sign out. */
+/** Who is signed in, and the ways to sign in, switch accounts or sign out. */
 export default function AccountSettingsScreen() {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -23,7 +23,7 @@ export default function AccountSettingsScreen() {
     ? t('account.enterprise', { name: state.name ?? '' })
     : state.isSignedIn
       ? t('account.community', { name: state.name ?? '' })
-      : t('account.local');
+      : t('account.signedOut');
 
   return (
     <SettingsScrollPage headerProps={{ title: t('account.title') }}>
@@ -33,13 +33,6 @@ export default function AccountSettingsScreen() {
           label={state.isSignedIn ? t('account.switch') : t('account.login.signIn')}
           onPress={() => router.push('/login')}
         />
-        {state.isEnterprise ? (
-          <Section.Item
-            disabled={state.isBusy}
-            label={t('account.useLocal')}
-            onPress={() => run(account.useLocal)}
-          />
-        ) : null}
         {state.isSignedIn ? (
           <Section.Item
             destructive

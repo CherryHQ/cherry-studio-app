@@ -36,8 +36,9 @@ export type AccountState = Readonly<{
 export type PrivateSignIn = { address: string; username: string; password: string };
 
 /**
- * Account sign-in. A community profile opens local data; an enterprise profile opens its
- * own data. Switching between them reloads the app.
+ * Sign-in, switching and sign-out. A community account, signed in or not, uses the installation's
+ * own data; an enterprise or private account opens its organization's data. Changing between them
+ * reloads the app.
  */
 export interface AccountModule {
   getState(): AccountState;
@@ -47,9 +48,8 @@ export interface AccountModule {
    * community account signed in; an enterprise account reloads the app instead.
    */
   signIn(options?: PrivateSignIn): Promise<boolean>;
+  /** Ends the session. An enterprise or private account returns to the community data. */
   signOut(): Promise<void>;
-  /** Opens local data and keeps the account signed in. */
-  useLocal(): Promise<void>;
   /** Continues a new installation without signing in. */
   dismissPrompt(): void;
 }

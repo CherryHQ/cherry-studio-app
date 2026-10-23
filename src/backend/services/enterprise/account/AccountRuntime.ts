@@ -21,7 +21,7 @@ import {
   LOCAL_PROFILE,
 } from '@/shared/data/activeProfile';
 
-import type { EnterpriseApi } from '../enterpriseApi';
+import type { EnterpriseApi, EnterpriseSession } from '../enterpriseApi';
 import {
   type createPrivateAccountApi,
   type PrivateCredentials,
@@ -56,11 +56,7 @@ export interface AccountRuntimeOptions {
     setActive(profile: ActiveProfile): void;
   };
   prompt: { read(): boolean; write(): void };
-  createApi(
-    baseUrl: string,
-    getToken: () => Promise<string>,
-    refreshToken?: (rejectedToken: string) => Promise<string | null>,
-  ): EnterpriseApi;
+  createApi(baseUrl: string, session: EnterpriseSession): EnterpriseApi;
   createPrivateApi: typeof createPrivateAccountApi;
   /** SecureStore entries scoped to the resolved private data profile. Never stores passwords. */
   credentials: {
@@ -157,7 +153,9 @@ export class AccountRuntime implements AccountModule {
       }
       const choice = session.profile;
       const configuration = await this.options
-        .createApi(enterpriseAddress, () => portal.getProductToken(enterpriseAddress, choice))
+        .createApi(enterpriseAddress, {
+          getProductToken: () => portal.getProductToken(enterpriseAddress, choice),
+        })
         .getConfiguration()
         .catch((error: unknown) => {
           throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
@@ -195,10 +193,6 @@ export class AccountRuntime implements AccountModule {
     });
   };
 
-  readonly useLocal = async () => {
-    await this.busy(() => this.open(LOCAL_PROFILE));
-  };
-
   readonly dismissPrompt = () => {
     if (this.state.hasPrompted) return;
     this.options.prompt.write();
@@ -230,9 +224,13 @@ export class AccountRuntime implements AccountModule {
     }
   };
 
-  /** Concurrent 401s share one rotation; a late failure reuses the already-rotated token. */
-  readonly refreshProductToken = async (rejectedToken: string): Promise<string | null> => {
-    if (!this.state.privateAddress) return null;
+  /**
+   * The enterprise server answered 401 to `rejectedToken`. A private session rotates it; concurrent
+   * refusals share one rotation and a late one reuses the rotated token. A cloud product token has
+   * no rotation, so the user must sign in again.
+   */
+  readonly refuseProductToken = async (rejectedToken: string): Promise<void> => {
+    if (!this.state.privateAddress) return this.reportRejected();
     this.privateRefresh ??= this.refreshPrivateCredentials(rejectedToken)
       .catch((error: unknown) => {
         if (isAuthenticationRejection(error)) this.reportRejected();
@@ -241,7 +239,7 @@ export class AccountRuntime implements AccountModule {
       .finally(() => {
         this.privateRefresh = undefined;
       });
-    return this.privateRefresh;
+    await this.privateRefresh;
   };
 
   /** Records a server-side rejection observed by an authenticated enterprise request. */
@@ -260,11 +258,11 @@ export class AccountRuntime implements AccountModule {
           isSignedIn: true,
           name: credentials.user.username ?? active.identity.subject,
         });
-        const api = this.options.createApi(
-          active.address,
-          this.getProductToken,
-          this.refreshProductToken,
-        );
+        const api = this.options.createApi(active.address, {
+          getProductToken: this.getProductToken,
+          refuseProductToken: this.refuseProductToken,
+          reportRejected: this.reportRejected,
+        });
         const user = PrivateUserSchema.safeParse(await api.getUser());
         const server = ServerIdentitySchema.safeParse(await api.getConfiguration());
         if (!user.success || !server.success) throw new AccountError('connection');
@@ -275,7 +273,8 @@ export class AccountRuntime implements AccountModule {
           throw new AccountError('rejected');
         this.update({ name: user.data.username ?? user.data.id });
       } catch (error) {
-        if (isAuthenticationRejection(error)) this.reportRejected();
+        // The API's own refusals already reached the session through its interceptor.
+        if (error instanceof AccountError && error.code === 'rejected') this.reportRejected();
         else logger.warn('Could not verify the private session', error as Error);
       }
       return;
@@ -306,14 +305,18 @@ export class AccountRuntime implements AccountModule {
 
   private updateCloudSession(session: AuthState): void {
     if (this.state.privateAddress) return;
-    const matchesProfile = !this.state.isEnterprise || this.matchesCloudProfile(session);
+    // Community data is signed in only by a community session; an organization session left by a
+    // failed enterprise sign-in does not count.
+    const matchesProfile = this.state.isEnterprise
+      ? this.matchesCloudProfile(session)
+      : session._tag === 'signedIn' && session.profile?.product !== 'enterprise';
     const isSignedIn = session._tag === 'signedIn' && matchesProfile && !this.state.needsSignIn;
     this.update({
       isSignedIn,
       name: isSignedIn ? session.name : undefined,
       // Reauthentication reloads the profile. A later SDK notification cannot clear a rejection
       // or reopen the old profile while sign-in admission is still in progress.
-      ...(!matchesProfile && { needsSignIn: true }),
+      ...(this.state.isEnterprise && !matchesProfile && { needsSignIn: true }),
     });
   }
 
@@ -329,7 +332,9 @@ export class AccountRuntime implements AccountModule {
       const tokens = await this.options
         .createPrivateApi(enterpriseAddress)
         .signIn(username.trim(), password);
-      const api = this.options.createApi(enterpriseAddress, async () => tokens.accessToken);
+      const api = this.options.createApi(enterpriseAddress, {
+        getProductToken: async () => tokens.accessToken,
+      });
       const user = PrivateUserSchema.safeParse(await api.getUser());
       const server = ServerIdentitySchema.safeParse(await api.getConfiguration());
       if (!user.success || !server.success) throw new AccountError('connection');

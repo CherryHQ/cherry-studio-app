@@ -31,7 +31,7 @@ export function AppBootstrapGate({ children }: PropsWithChildren) {
     return (
       <StartupFailureScreen
         onRetry={state.retry}
-        onUseLocal={isEnterpriseProfile() ? () => void installationAccount().useLocal() : undefined}
+        onSignOut={isEnterpriseProfile() ? () => void installationAccount().signOut() : undefined}
       />
     );
   }

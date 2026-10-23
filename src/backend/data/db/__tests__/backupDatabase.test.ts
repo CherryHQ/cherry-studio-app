@@ -3,7 +3,19 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { readBackupSchema, restoreDeviceState } from '../backupDatabase';
+import {
+  type ActiveProfile,
+  type EnterpriseIdentity,
+  LOCAL_PROFILE,
+  setActiveProfile,
+} from '@/shared/data/activeProfile';
+
+import {
+  assertBackupBelongsToActiveProfile,
+  readBackupSchema,
+  restoreDeviceState,
+  stampBackupProfile,
+} from '../backupDatabase';
 
 function database() {
   const raw = new DatabaseSync(':memory:');
@@ -214,4 +226,84 @@ test('a normalization failure rolls back execution state, credentials and pairin
   } finally {
     raw.close();
   }
+});
+
+describe('enterprise backups', () => {
+  const identity: EnterpriseIdentity = {
+    deployment: 'server-1',
+    issuer: 'https://auth',
+    subject: 'user-1',
+    productProfileId: 'org-1',
+  };
+  const profile = (value: EnterpriseIdentity): ActiveProfile => ({
+    id: '00000000-0000-4000-8000-000000000001',
+    identity: value,
+    address: 'https://enterprise.example.com',
+  });
+  const managedData = `
+    INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at) VALUES ('openai', 'OpenAI', 'a0', 1, 1);
+    UPDATE agent SET managed_remote_id = '7', instructions = 'Organization prompt';
+    INSERT INTO app_state (key, value, created_at, updated_at) VALUES ('enterprise.sync', '{"hash":"h","syncIntervalMinutes":10,"skills":{}}', 1, 1);
+  `;
+
+  afterEach(() => setActiveProfile(LOCAL_PROFILE));
+
+  test('restores into its own identity with every organization marker and the sync state', async () => {
+    const { raw, adapter } = database();
+    try {
+      raw.exec(managedData);
+      setActiveProfile(profile(identity));
+      await stampBackupProfile(adapter);
+      await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
+      await restoreDeviceState(adapter, []);
+      expect(raw.prepare('SELECT managed_remote_id, instructions FROM agent').get()).toEqual({
+        managed_remote_id: '7',
+        instructions: 'Organization prompt',
+      });
+      expect(raw.prepare('SELECT provider_id FROM user_provider').all()).toEqual([
+        { provider_id: 'openai' },
+      ]);
+      expect(raw.prepare('SELECT key FROM app_state').all()).toEqual([{ key: 'enterprise.sync' }]);
+    } finally {
+      raw.close();
+    }
+  });
+
+  test.each<[string, ActiveProfile]>([
+    ['local data', LOCAL_PROFILE],
+    ['another organization', profile({ ...identity, productProfileId: 'org-2' })],
+    [
+      'a private sign-in to the same server',
+      profile({ deployment: 'server-1', subject: 'user-1', authentication: 'password' }),
+    ],
+  ])('refuses to restore into %s', async (_, target) => {
+    const { raw, adapter } = database();
+    try {
+      setActiveProfile(profile(identity));
+      await stampBackupProfile(adapter);
+      setActiveProfile(target);
+      await expect(assertBackupBelongsToActiveProfile(adapter)).rejects.toMatchObject({
+        code: 'other-account',
+      });
+    } finally {
+      raw.close();
+    }
+  });
+
+  test('restores local data into an enterprise profile, whose providers come from the next sync', async () => {
+    const { raw, adapter } = database();
+    try {
+      raw.exec(managedData);
+      await stampBackupProfile(adapter);
+      setActiveProfile(profile(identity));
+      await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
+      await restoreDeviceState(adapter, []);
+      expect(raw.prepare('SELECT COUNT(*) AS count FROM user_provider').get()).toEqual({
+        count: 0,
+      });
+      expect(raw.prepare('SELECT COUNT(*) AS count FROM app_state').get()).toEqual({ count: 0 });
+    } finally {
+      raw.close();
+    }
+  });
 });

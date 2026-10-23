@@ -10,6 +10,7 @@ const ERROR_KEYS: Record<BackupErrorCode, string> = {
   cancelled: 'common.cancel',
   invalid: 'backup.error.invalid',
   incompatible: 'backup.error.incompatible',
+  'other-account': 'backup.error.otherAccount',
   'too-large': 'backup.limits',
   'disk-space': 'backup.error.space',
   'missing-files': 'backup.error.missing',

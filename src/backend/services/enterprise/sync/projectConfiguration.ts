@@ -31,6 +31,8 @@ export type PublishedSkill = Readonly<
 export type ProjectionInput = Readonly<{
   configuration: EnterpriseConfiguration;
   agents: readonly AgentSetup[];
+  /** Listed Agents whose setup could not be read: they and what they bind stay as installed. */
+  unreadAgentIds: readonly string[];
   /** Skills whose package changed; unchanged managed Skills keep their rows. */
   publishedSkills: readonly PublishedSkill[];
 }>;
@@ -38,10 +40,12 @@ export type ProjectionInput = Readonly<{
 /**
  * Writes one accepted configuration into the profile database. Removed providers, models, MCP
  * servers and Skills are deleted; a removed Agent is detached and becomes the user's own.
- * Returns the local ids of MCP servers whose connection must be rebuilt.
+ * Returns the local ids of MCP servers whose connection must be rebuilt and the remote ids of the
+ * managed Skills installed afterwards.
  */
 export async function projectConfiguration(tx: Database, input: ProjectionInput) {
   const { configuration, agents } = input;
+  const unread = await boundByUnreadAgents(tx, input.unreadAgentIds);
   const agentsWithRemovedBindings: { id: string }[] = [];
   const apiKeys = configuration.apiKey
     ? [{ id: 'enterprise-gateway', key: configuration.apiKey, isEnabled: true }]
@@ -147,6 +151,7 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
   const serverRemoteIds = new Set([
     ...configuration.mcpServerRemoteIds,
     ...agents.flatMap((setup) => setup.mcpServerRemoteIds),
+    ...unread.serverRemoteIds,
   ]);
   const removedServers = await tx
     .select({ id: mcpServerTable.id })
@@ -211,10 +216,10 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
   // Skills: changed packages replace their row; removed ones go with their bindings.
   const removedSkills = and(
     isNotNull(agentGlobalSkillTable.managedRemoteId),
-    notInArray(
-      agentGlobalSkillTable.managedRemoteId,
-      agents.flatMap((setup) => setup.skillRemoteIds),
-    ),
+    notInArray(agentGlobalSkillTable.managedRemoteId, [
+      ...agents.flatMap((setup) => setup.skillRemoteIds),
+      ...unread.skillRemoteIds,
+    ]),
   );
   agentsWithRemovedBindings.push(
     ...(await tx
@@ -373,6 +378,7 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
     .where(isNotNull(agentTable.managedRemoteId));
   return {
     changedServers,
+    skillRemoteIds: [...skillIds.keys()],
     changedPaths: [
       '/providers',
       '/providers/page',
@@ -389,5 +395,28 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
         ...agentsWithRemovedBindings,
       ].flatMap(({ id }) => [`/agents/${id}`, `/agents/${id}/skills`]),
     ],
+  };
+}
+
+/** Managed resources an unread Agent binds. Its setup is unknown, so they are not withdrawn. */
+async function boundByUnreadAgents(tx: Database, remoteIds: readonly string[]) {
+  if (!remoteIds.length) return { serverRemoteIds: [], skillRemoteIds: [] };
+  const agentIds = tx
+    .select({ id: agentTable.id })
+    .from(agentTable)
+    .where(inArray(agentTable.managedRemoteId, [...remoteIds]));
+  const servers = await tx
+    .select({ remoteId: mcpServerTable.managedRemoteId })
+    .from(agentToolBindingTable)
+    .innerJoin(mcpServerTable, eq(mcpServerTable.id, agentToolBindingTable.mcpServerId))
+    .where(inArray(agentToolBindingTable.agentId, agentIds));
+  const skills = await tx
+    .select({ remoteId: agentGlobalSkillTable.managedRemoteId })
+    .from(agentSkillTable)
+    .innerJoin(agentGlobalSkillTable, eq(agentGlobalSkillTable.id, agentSkillTable.skillId))
+    .where(inArray(agentSkillTable.agentId, agentIds));
+  return {
+    serverRemoteIds: servers.flatMap(({ remoteId }) => remoteId ?? []),
+    skillRemoteIds: skills.flatMap(({ remoteId }) => remoteId ?? []),
   };
 }

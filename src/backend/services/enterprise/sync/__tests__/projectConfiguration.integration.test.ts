@@ -56,6 +56,22 @@ const agent = (
   mcpServers: [],
 });
 
+const researchSkill: PublishedSkill = {
+  remoteId: '7',
+  name: 'research',
+  description: null,
+  folderName: 'research',
+  source: 'marketplace',
+  sourceUrl: null,
+  author: null,
+  version: null,
+  tags: [],
+  contentHash: 'directory-sha256:abc',
+  manifest: [],
+  profile: { declaredTools: [] },
+  invocation: { modelInvocable: true, userInvocable: true },
+};
+
 describe('projectConfiguration', () => {
   let db: TestDb;
 
@@ -66,11 +82,17 @@ describe('projectConfiguration', () => {
 
   afterEach(() => db.sqlite.close());
 
-  const project = (input: unknown, agents: AgentSetup[], publishedSkills: PublishedSkill[] = []) =>
+  const project = (
+    input: unknown,
+    agents: AgentSetup[],
+    publishedSkills: PublishedSkill[] = [],
+    unreadAgentIds: string[] = [],
+  ) =>
     db.dbService.withWriteTx((tx) =>
       projectConfiguration(tx, {
         configuration: parseConfiguration(input, []),
         agents,
+        unreadAgentIds,
         publishedSkills,
       }),
     );
@@ -129,25 +151,39 @@ describe('projectConfiguration', () => {
     expect(detached).toMatchObject({ name: 'Agent 1', managedRemoteId: null, instructions: '' });
     expect(await db.database.select().from(agentToolBindingTable)).toEqual([]);
   });
-  it('preserves unsupported identities and conversations while removing truly withdrawn resources', async () => {
-    const skill: PublishedSkill = {
-      remoteId: '7',
-      name: 'research',
-      description: null,
-      folderName: 'research',
-      source: 'marketplace',
-      sourceUrl: null,
-      author: null,
-      version: null,
-      tags: [],
-      contentHash: 'directory-sha256:abc',
-      manifest: [],
-      profile: { declaredTools: [] },
-      invocation: { modelInvocable: true, userInvocable: true },
-    };
+  it('keeps an Agent whose setup could not be read, with its bindings and what only it binds', async () => {
     const initial = agent('1');
     initial.skillRemoteIds.push('7');
-    await project(raw, [initial], [skill]);
+    initial.mcpServerRemoteIds.push('docs');
+    initial.mcpServers.push({
+      remoteId: 'docs',
+      name: 'Docs',
+      endpointUrl: 'https://docs.example.com/',
+      headers: {},
+      disabledTools: [],
+      isEnabled: true,
+    });
+    const other = { id: 'other', name: 'Other', type: 'http', baseUrl: 'https://o.example.com' };
+    await project({ ...raw, mcpServers: [...raw.mcpServers, other] }, [initial], [researchSkill]);
+    const agents = await db.database.select().from(agentTable);
+    const skillBindings = await db.database.select().from(agentSkillTable);
+    const toolBindings = await db.database.select().from(agentToolBindingTable);
+
+    const result = await project({ ...raw, mcpServers: [] }, [], [], ['1']);
+    expect(await db.database.select().from(agentTable)).toEqual(agents);
+    expect(await db.database.select().from(agentSkillTable)).toEqual(skillBindings);
+    expect(await db.database.select().from(agentToolBindingTable)).toEqual(toolBindings);
+    const servers = await db.database
+      .select({ remoteId: mcpServerTable.managedRemoteId })
+      .from(mcpServerTable);
+    expect(servers.map(({ remoteId }) => remoteId).sort()).toEqual(['docs', 'search']);
+    expect(result.skillRemoteIds).toEqual(['7']);
+  });
+
+  it('preserves unsupported identities and conversations while removing truly withdrawn resources', async () => {
+    const initial = agent('1');
+    initial.skillRemoteIds.push('7');
+    await project(raw, [initial], [researchSkill]);
     const [original] = await db.database.select().from(agentTable);
     await db.database
       .insert(agentSessionTable)

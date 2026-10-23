@@ -1,8 +1,4 @@
-export {
-  AccountRuntime,
-  type AccountRuntimeOptions,
-  isAuthenticationRejection,
-} from './account/AccountRuntime';
+export { AccountRuntime, type AccountRuntimeOptions } from './account/AccountRuntime';
 export { createPrivateAccountApi } from './account/privateAccountApi';
-export { createEnterpriseApi, type EnterpriseApi } from './enterpriseApi';
-export { type EnterpriseSession, EnterpriseSyncService } from './sync/EnterpriseSyncService';
+export { createEnterpriseApi, type EnterpriseApi, type EnterpriseSession } from './enterpriseApi';
+export { EnterpriseSyncService } from './sync/EnterpriseSyncService';

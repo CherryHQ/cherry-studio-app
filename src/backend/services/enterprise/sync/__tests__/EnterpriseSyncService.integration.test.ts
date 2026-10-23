@@ -4,6 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import {
   agentGlobalSkillTable,
+  agentSkillTable,
+  agentTable,
+  agentToolBindingTable,
   appStateTable,
   mcpServerTable,
   preferenceTable,
@@ -12,6 +15,7 @@ import {
 import { PreferenceService } from '@/backend/data/PreferenceService';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { HttpError } from '@/backend/services/http';
 import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 
 import { EnterpriseSyncService } from '../EnterpriseSyncService';
@@ -29,7 +33,6 @@ const mockSkillStorage = {
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 jest.mock('../../enterpriseApi', () => ({ createEnterpriseApi: () => mockApi }));
-jest.mock('../../account/AccountRuntime', () => ({ isAuthenticationRejection: () => false }));
 // Package validation has its own byte-level suites; this suite owns publication and its lifetime.
 jest.mock('@/backend/services/skill', () => ({
   skillStorage: {
@@ -109,7 +112,11 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
     preference = new PreferenceService(db.dbService);
     await preference._doInit();
     service = new EnterpriseSyncService(db.dbService, preference, mcp);
-    service.configure({ getProductToken: async () => 'token', reportRejected });
+    service.configure({
+      getProductToken: async () => 'token',
+      refuseProductToken: async () => {},
+      reportRejected,
+    });
   });
 
   afterEach(async () => {
@@ -207,26 +214,72 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
     await expect(service.sync()).rejects.toThrow();
   });
 
-  it('joins the other setup requests when one fails instead of releasing backup admission early', async () => {
-    const started = deferred<void>();
-    const response = deferred<unknown>();
-    mockApi.getConfiguration.mockResolvedValueOnce({
+  it('applies the rest of the snapshot when one Agent setup fails, leaving that Agent as installed', async () => {
+    mockApi.getConfiguration.mockResolvedValue({ ...configuration, agents: [{ id: 1 }] });
+    await service.sync();
+    const installed = {
+      agents: await db.database.select().from(agentTable),
+      skills: await db.database.select().from(agentSkillTable),
+    };
+    expect(installed.skills).toHaveLength(1);
+
+    mockApi.getConfiguration.mockResolvedValue({
       ...configuration,
+      providers: [{ ...configuration.providers[0], name: 'Renamed' }],
       agents: [{ id: 1 }, { id: 2 }],
     });
-    mockApi.setupAgent.mockImplementation((id: number) => {
-      if (id === 1) return Promise.reject(new Error('setup failed'));
-      started.resolve();
-      return response.promise;
+    mockApi.setupAgent.mockImplementation(async (id: number) => {
+      if (id === 1) throw new HttpError('Unavailable', { kind: 'http', status: 503 });
+      return {
+        agent: {
+          id: 2,
+          name: 'Writer',
+          model: { model_id: 'chat', provider: { provider_id: 'openai' } },
+        },
+        tasks: [],
+      };
     });
-    const syncing = service.sync();
-    const rejected = expect(syncing).rejects.toThrow('setup failed');
-    await started.promise;
-    await Promise.resolve();
-    expect(service.hasPendingStorageWork()).toBe(true);
-    response.resolve({ agent: { id: 2, name: 'No supported model' }, tasks: [] });
-    await rejected;
-    expect(await db.database.select().from(appStateTable)).toEqual([]);
+    await service.sync();
+    const [provider] = await db.database.select().from(userProviderTable);
+    expect(provider!.name).toBe('Renamed');
+    const agents = await db.database.select().from(agentTable);
+    expect(agents.map(({ managedRemoteId }) => managedRemoteId).sort()).toEqual(['1', '2']);
+    expect(agents.find(({ managedRemoteId }) => managedRemoteId === '1')).toEqual(
+      installed.agents[0],
+    );
+    expect(await db.database.select().from(agentSkillTable)).toEqual(installed.skills);
+    expect(reportRejected).not.toHaveBeenCalled();
+  });
+
+  it('commits resources for the first launch and installs Skill packages in the next attempt', async () => {
+    mockApi.getConfiguration.mockResolvedValue({ ...configuration, agents: [{ id: 1 }] });
+    await service.syncResources();
+    expect(await service.hasSynced()).toBe(true);
+    expect(mockApi.downloadLibraryItem).not.toHaveBeenCalled();
+    expect(await db.database.select().from(agentTable)).toHaveLength(1);
+    expect(await db.database.select().from(agentGlobalSkillTable)).toEqual([]);
+
+    await service.sync();
+    const [agent] = await db.database.select().from(agentTable);
+    const [skill] = await db.database.select().from(agentGlobalSkillTable);
+    expect(skill).toMatchObject({ managedRemoteId: '7' });
+    expect(await db.database.select().from(agentSkillTable)).toEqual([
+      expect.objectContaining({ agentId: agent!.id, skillId: skill!.id }),
+    ]);
+    await service.sync();
+    expect(mockApi.downloadLibraryItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a Skill package the role may not download without refusing the session', async () => {
+    mockApi.getConfiguration.mockResolvedValue({ ...configuration, agents: [{ id: 1 }] });
+    mockApi.downloadLibraryItem.mockRejectedValue(
+      new HttpError('Forbidden', { kind: 'http', status: 403 }),
+    );
+    await service.sync();
+    expect(reportRejected).not.toHaveBeenCalled();
+    expect(await db.database.select().from(agentTable)).toHaveLength(1);
+    expect(await db.database.select().from(agentToolBindingTable)).toEqual([]);
+    expect(await db.database.select().from(agentGlobalSkillTable)).toEqual([]);
   });
 
   it('discards completed staging after stop and never publishes its package', async () => {
@@ -272,7 +325,8 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
     await stopping;
     expect(mockSkillStorage.discardStaging).toHaveBeenCalledWith('staging');
     expect(await db.database.select().from(agentGlobalSkillTable)).toEqual([]);
-    expect(await service.hasSynced()).toBe(false);
+    // Resources committed before the package; its row waits for a later attempt.
+    expect(await service.hasSynced()).toBe(true);
   });
 
   it('retries a failed MCP invalidation even when the next snapshot has the same hash', async () => {

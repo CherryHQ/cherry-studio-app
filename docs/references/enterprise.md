@@ -48,8 +48,8 @@ enterprise profile was last reached at, so a moved server keeps its data.
 
 The entry point (`index.ts`) selects the active profile before any store opens
 (`src/bootstrap/profile/installationProfiles.ts`). `src/shared/data/activeProfile.ts` exposes it for
-the rest of the runtime. Sign-in, sign-out, organization switching and returning to local data write
-the next profile to the registry and reload JavaScript with `reloadAppAsync`. Nothing swaps stores
+the rest of the runtime. Sign-in, account switching and sign-out write the next profile to the
+registry and reload JavaScript with `reloadAppAsync`. Nothing swaps stores
 in place. Backup generations stay inside a profile root; credentials and stores are scoped by
 profile only, never by generation, so a restore keeps them.
 
@@ -66,6 +66,12 @@ The runtime also owns private credentials; `privateAccountApi` validates the v2 
 over the shared HTTP transport. Private sign-in works without Accounts Portal build configuration.
 `isCloudSignInAvailable` controls the cloud login choice only. The account settings entry and first-use
 sign-in remain available for private deployments when Portal configuration is absent.
+
+The account UI offers only sign-in, account switching and sign-out; users never choose a data
+profile. A community account uses the installation's own data whether or not it is signed in;
+signing in adds only the account identity, and its entitlements are not designed yet. An
+enterprise or private account's data is visible only while that account is signed in. In the local
+profile, only a community session counts as signed in.
 
 - **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) opens the portal in the external
   browser, where the user picks the community account or an organization. A private deployment
@@ -85,13 +91,21 @@ sign-in remain available for private deployments when Portal configuration is ab
   after awaiting the SDK. Browser completion fences the old cloud profile before the SDK can replace
   its credentials. A failed switch remains behind sign-in until a profile reload; dismissing the
   browser leaves the current session usable. Private sessions are independent of cloud notifications.
-- **Private refresh:** a 401 on an authenticated request rotates credentials through `/auth/refresh`
-  and retries that request once. Concurrent rejections share one rotation. Refresh cannot change
+- **Session refusal:** the enterprise API client (`enterpriseApi.ts`) attaches the product token and
+  its HTTP error interceptor decides whether the server refused the session. Only a 401, or a 403 on
+  `/configurations`, refuses it. A 403 on any other path denies one resource, such as an Agent setup
+  or Skill package the user's role cannot read, and stays that request's failure. Callers such as
+  the sync never interpret authentication errors.
+- **Private refresh:** on a 401 the interceptor rotates credentials through `/auth/refresh` and the
+  client replays the request once. Concurrent rejections share one rotation. Refresh cannot change
   the user or server identity. Sign-out waits for pending rotation and deletes that profile's
   credentials; cloud sessions remain independent.
-- **Expiry:** an explicit rejection (401/403, `signed_out`, or a session that no longer matches)
-  replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the device;
-  the page offers sign-in again or local data.
+- **Expiry:** a refused session, an Accounts Portal `signed_out`, or a session that no longer
+  matches replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the
+  device; the page offers sign-in again or sign-out.
+- **Sign-out:** an enterprise or private sign-out ends that session, keeps the profile's data on the
+  device and returns to the community data. Signing in again to the same identity, matched by server, issuer,
+  subject and organization (or server, user and password sign-in), reopens that data.
 
 Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Non-production
 builds default to the cn-dev staging deployment. Production has no default. Every build uses the
@@ -105,17 +119,21 @@ receives it, so development and preview builds may not return from the browser.
 
 - **Triggers:** after startup, every `sync_interval` minutes (server setting, default 10), and on
   return to the foreground when the last attempt is at least five minutes old.
-- **First launch:** only the first launch of a profile waits for a sync. Later launches use what the
-  database already holds.
-- **Success:** a sync reads `/configurations` and every Agent's `/agents/:id/setup`. It downloads
-  only Skill packages whose server revision changed. Resources, default-model preferences and the
-  applied sync state commit in one transaction. Preference caches and resource observers update
-  after commit; failed MCP connection invalidations are retried even when the next snapshot is unchanged.
-- **Failure:** configuration/setup fetch failures, invalid inventories or database failures leave
-  the previous resource configuration in place. A failed individual Skill download keeps that
-  Skill's installed revision and retries on a later sync. Immutable Skill files published before
-  a rolled-back transaction can remain unreferenced. Background failures are logged; no sync state
-  is shown to the user.
+- **First launch:** only the first launch of a profile waits, and only for resources. Skill packages
+  download in the background attempt that follows startup, after Skill storage reconciliation.
+  Later launches use what the database already holds.
+- **Success:** a sync reads `/configurations` and every Agent's `/agents/:id/setup`. Resources,
+  default-model preferences and the applied sync state commit in one transaction. Skill packages
+  whose server revision changed then download and bind in a second commit. Preference caches and
+  resource observers update after each commit; failed MCP connection invalidations are retried even
+  when the next snapshot is unchanged.
+- **Failure:** a configuration fetch failure, an invalid configuration inventory or a database
+  failure leaves the previous resource configuration in place. An Agent whose setup cannot be read
+  or parsed stays as installed, with its bindings and the MCP servers and Skills it binds; the rest
+  of the snapshot still applies. A failed Skill download, including a 403, keeps that Skill's
+  installed revision and retries on a later sync. Immutable Skill files published before a
+  rolled-back transaction can remain unreferenced. Background failures are logged; no sync state is
+  shown to the user.
 - **Storage lifetime:** admitted sync work participates in backup busy checks and observes the
   storage freeze before publication and transaction writes. Shutdown aborts network work and joins
   the admitted attempt before its database dependencies close, including a first sync started
@@ -124,8 +142,8 @@ receives it, so development and preview builds may not return from the browser.
 Original remote identity lists determine removal. An identifiable but unsupported resource keeps
 its previously installed row; it is not treated as server deletion. An unsupported Agent retains
 its definition and history, while bindings absent from its validated setup are removed even when
-other Agents still receive those resources. Invalid identity inventories or Agent setup structures
-reject the snapshot. Unsupported items are logged: unknown provider types,
+other Agents still receive those resources. An invalid configuration identity inventory rejects the
+snapshot. Unsupported items are logged: unknown provider types,
 endpoints or capabilities, non-HTTP MCP transports, and Agents without a usable model. An Agent keeps its first
 usable model; plan/small models and turn limits are ignored. Any permission mode other than bypass
 maps to the default ask-first approval mode. Skills are installed whether or not Mobile can run
@@ -163,6 +181,8 @@ writes through its own transaction:
 OAuth save/disconnect and provider-account key replacement enforce the same rules as ordinary
 resource edits. Agent updates compare and authorize submitted fields inside their write transaction,
 so a stale full form cannot overwrite a concurrently changed organization-owned field.
+The Agent management tools refuse to read or change a managed Agent at all, including its
+user-adjustable fields; `agent_list` marks it `isManaged`.
 
 The UI hides provider creation and configuration, shows default models read-only, marks delivered
 resources with `ManagedBadge`, and never shows a managed Agent's instructions or a managed MCP
@@ -170,10 +190,12 @@ server's headers. Users may still create their own Agents, MCP servers and Skill
 
 ## Backup
 
-An export strips enterprise data from the database copy. It deletes managed MCP servers and Skills,
-detaches managed Agents, and in an enterprise profile deletes all providers. The archive therefore
-restores into any profile. Restoring into an enterprise profile deletes the backup's providers and
-clears the sync state; the next launch syncs again.
+An export keeps organization-delivered resources and their `managed_remote_id` markers, together
+with the providers and sync state. The database copy records the enterprise identity it came from
+(`app_state` key `backup.profile`), and only that identity can restore it; any other profile refuses
+the archive before confirmation. Restoring into the same identity keeps every marker, and the next
+background sync updates the configuration. Local data restores into any profile; restoring it into
+an enterprise profile deletes its providers and clears the sync state, so that launch syncs first.
 Restored remote OAuth MCP connections retain their client configuration but receive fresh,
 unresolved authorization references and are disabled until the user authorizes them again.
 
@@ -182,6 +204,6 @@ unresolved authorization references and are disabled until the user authorizes t
 Enterprise implementation lives in `src/backend/services/enterprise`. Only bootstrap and
 `serviceRegistry.ts` import it (ESLint `enterpriseIsolation`). Shared rules live with their owners:
 the column in the core schemas, guards in data services, `ManagedBadge` in `src/frontend/components`.
-`CODEOWNERS` also names these shared identity, storage, write-policy and assembly boundaries.
+`CODEOWNERS` names the enterprise implementation and the installation profile bootstrap.
 Enterprise import allow/deny cases live in `scripts/__tests__/architectureBoundaries.test.ts`;
 resource and account regressions stay with their owning services.
