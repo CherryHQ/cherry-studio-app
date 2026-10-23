@@ -185,10 +185,9 @@ describe('tool message detail sheets', () => {
       findByTestID('tool-part-trigger').props.onPress();
     });
 
-    expect(findByTestID('mock-markdown-text').props).toMatchObject({
-      markdown: '```json\n{\n  "answer": 42\n}\n```',
-      selectable: false,
-    });
+    expect(findByTestID('mock-markdown-text').props.markdown).toBe(
+      '```json\n{\n  "answer": 42\n}\n```',
+    );
   });
 
   it('clips JSON before Markdown rendering and copies the full output on demand', async () => {

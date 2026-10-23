@@ -34,8 +34,6 @@ type McpToolPartProps = {
   part: ToolMessagePart;
 };
 
-const MAX_ARG_VALUE_LENGTH = 1200;
-
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
   const conversation = useMcpAppConversation();
@@ -78,11 +76,7 @@ export function McpToolPart({ part }: McpToolPartProps) {
             value={part.errorText}
           />
         ) : null}
-        <MessageDetailValue
-          maxLength={MAX_ARG_VALUE_LENGTH}
-          title={t('chat.mcpTool.arguments')}
-          value={part.input}
-        />
+        <MessageDetailValue title={t('chat.mcpTool.arguments')} value={part.input} />
       </McpAppConversationBridge>
     </MessagePart.Tool>
   );

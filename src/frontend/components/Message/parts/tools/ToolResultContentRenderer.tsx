@@ -93,7 +93,7 @@ function ToolResultContentItem({
     case 'json':
       return <CodeContent content={formatToolResultJson(content.value)} language="json" />;
     case 'markdown':
-      return <MarkdownText markdown={content.content} selectable={false} />;
+      return <MarkdownText markdown={content.content} />;
     case 'resource-link':
       if (renderResourceLink) return renderResourceLink(content);
       return isExternalResourceUri(content.uri) ? (
@@ -107,7 +107,7 @@ function ToolResultContentItem({
 }
 
 function CodeContent({ content, language }: { content: string; language?: string }) {
-  return <MarkdownText markdown={createCodeBlockMarkdown(content, language)} selectable={false} />;
+  return <MarkdownText markdown={createCodeBlockMarkdown(content, language)} />;
 }
 
 function SelectableText({ value }: { value: string }) {

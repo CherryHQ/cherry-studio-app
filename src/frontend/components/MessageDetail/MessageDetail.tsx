@@ -57,28 +57,32 @@ export function MessageDetailSection({
   );
 }
 
+const PREVIEW_MAX_LENGTH = 4_000;
+
 type MessageDetailTextProps = Pick<MessagePartSectionProps, 'title' | 'tone'> & {
   language?: string;
-  maxLength?: number;
-  value: string;
+  /** Persisted and remote parts can omit error text despite their declared type. */
+  value: string | undefined;
   variant?: 'body' | 'code';
 };
 
 export function MessageDetailText({
   language,
-  maxLength = 4_000,
   value,
   variant = 'body',
   ...props
 }: MessageDetailTextProps) {
   const { t } = useTranslation();
-  const isTruncated = value.length > maxLength;
-  const preview = isTruncated ? value.slice(0, maxLength).replace(/[\uD800-\uDBFF]$/, '') : value;
+  if (!value) return null;
+  const isTruncated = value.length > PREVIEW_MAX_LENGTH;
+  const preview = isTruncated
+    ? value.slice(0, PREVIEW_MAX_LENGTH).replace(/[\uD800-\uDBFF]$/, '')
+    : value;
 
   return (
-    <MessageDetailSection {...props} copyText={value ? () => value : undefined}>
+    <MessageDetailSection {...props} copyText={() => value}>
       {variant === 'code' ? (
-        <MarkdownText markdown={createCodeBlockMarkdown(preview, language)} selectable={false} />
+        <MarkdownText markdown={createCodeBlockMarkdown(preview, language)} />
       ) : (
         <MessagePart.SectionBody>
           <Text className="text-base text-foreground" selectable>
@@ -88,7 +92,7 @@ export function MessageDetailText({
       )}
       {isTruncated ? (
         <Text className="text-muted-foreground text-xs">
-          {t('chat.tool.previewTruncated', { count: maxLength })}
+          {t('chat.tool.previewTruncated', { count: PREVIEW_MAX_LENGTH })}
         </Text>
       ) : null}
     </MessageDetailSection>
@@ -99,7 +103,7 @@ export function MessageDetailText({
 export function MessageDetailValue({
   value,
   ...props
-}: Pick<MessageDetailTextProps, 'title' | 'maxLength'> & { value: unknown }) {
+}: Pick<MessageDetailTextProps, 'title'> & { value: unknown }) {
   if (!hasMessagePartValue(value)) return null;
   return (
     <MessageDetailText
