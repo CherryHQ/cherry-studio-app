@@ -63,9 +63,12 @@ purging or corrupt cache files require extraction again; ordinary follow-up read
 
 Each consumer can stop immediately. Only the last consumer cancels the shared native request;
 the extraction slot remains occupied until native cleanup finishes. Aborted or failed extraction
-is never cached. `observePdfOcr` reports one file entry's queued or page-progress state (keyed by
-the managed filename's entry ID) to its transcript tile, the pending reply and a running `read_file`
-row. A cache hit reports nothing.
+is never cached. `observePdfOcr` aggregates each file's extraction states, preferring active
+recognition over queued reads. Cancelling or finishing one extraction cannot clear another's state.
+The transcript tile and a running `read_file` row show a neutral processing wait while queued,
+including for text PDFs. Queue state ends when extraction starts; recognition progress appears
+only after OCR begins. The pending reply names scan recognition only while it is active. A cache
+hit reports nothing.
 
 ## Integration
 

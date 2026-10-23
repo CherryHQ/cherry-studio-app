@@ -41,7 +41,7 @@ export type PreparedFile = ResolvedFile & {
   content?: FileAttachmentContent;
 };
 
-/** On-device recognition of a scanned PDF that a send or file tool is reading. */
+/** PDF extraction waiting for capacity, or confirmed on-device scan recognition. */
 export type PdfOcrState =
   | { status: 'queued' }
   | { status: 'recognizing'; completedPages: number; totalPages: number };

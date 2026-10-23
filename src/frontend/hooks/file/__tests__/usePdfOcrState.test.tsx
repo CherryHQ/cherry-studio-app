@@ -23,7 +23,7 @@ function Probe({ ids }: { ids: readonly string[] }) {
   return null;
 }
 
-test('stays active while any listed file is queued or recognizing, and unsubscribes', () => {
+test('stays active only while a listed file is recognizing, and unsubscribes', () => {
   let renderer: ReactTestRenderer | undefined;
   act(() => {
     renderer = create(
@@ -34,9 +34,15 @@ test('stays active while any listed file is queued or recognizing, and unsubscri
   });
   expect(active()).toBe(false);
   act(() => observers.get('a')!({ status: 'queued' }));
+  expect(active()).toBe(false);
   act(() => observers.get('b')!({ status: 'recognizing', completedPages: 1, totalPages: 4 }));
-  act(() => observers.get('a')!(undefined));
   expect(active()).toBe(true);
+  act(() => observers.get('a')!({ status: 'recognizing', completedPages: 0, totalPages: 2 }));
+  act(() => observers.get('b')!(undefined));
+  expect(active()).toBe(true);
+  act(() => observers.get('b')!({ status: 'queued' }));
+  act(() => observers.get('a')!(undefined));
+  expect(active()).toBe(false);
   act(() => observers.get('b')!(undefined));
   expect(active()).toBe(false);
   act(() => renderer!.unmount());

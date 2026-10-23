@@ -46,6 +46,10 @@ describe('ReadFileToolPart', () => {
     expect(render(running).root.findByType('GenericToolPart').props.runningStatusText).toBe(
       'chat.builtinTool.file.recognizing',
     );
+    jest.mocked(usePdfOcrState).mockReturnValueOnce({ status: 'queued' });
+    expect(render(running).root.findByType('GenericToolPart').props.runningStatusText).toBe(
+      'chat.builtinTool.file.processingQueued',
+    );
     const done = toolPart({ input: { file_entry_id: 'entry-1' }, output: 'not an object' });
     expect(render(done).root.findByType('GenericToolPart').props.runningStatusText).toBeUndefined();
     jest.mocked(usePdfOcrState).mockReset();

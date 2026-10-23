@@ -219,10 +219,12 @@ Hard deletion removes the entry's derived text; restore clears the cache. Evicti
 and policy changes may require extraction again. No derived text enters the library or database.
 Each consumer's cancellation is independent; the last consumer cancels native work. Android
 finishes the current ML Kit call before releasing its bitmap and the extraction slot.
-`FileModule.observePdfOcr` reports one file's queued or page-progress state while it is recognized,
-keyed by file entry. The transcript tile of that file draws the progress stroke and page count, a
-pending reply names the wait, and a running `read_file` row shows the page count. Cache hits report
-nothing. The originating send/tool operation owns cancellation. The original PDF is never modified and derived page images
+`FileModule.observePdfOcr` aggregates extraction states by file entry, preferring active recognition
+over queued reads. Each extraction clears only its own state. Queued files, including text PDFs,
+show a neutral processing wait until extraction starts. Actual OCR draws the transcript tile's
+progress stroke and page count, names the pending reply's wait, and adds the page count to a running
+`read_file` row. Cache hits report nothing. The originating send/tool operation owns cancellation.
+The original PDF is never modified and derived page images
 are not stored. A new native development client is required.
 
 In built-in mode,

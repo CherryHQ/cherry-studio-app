@@ -22,5 +22,5 @@ export function useReadFileOcrStatus(part: ToolMessagePart | undefined): string 
         completed: state.completedPages,
         total: state.totalPages,
       })
-    : t('chat.builtinTool.file.recognitionQueued');
+    : t('chat.builtinTool.file.processingQueued');
 }

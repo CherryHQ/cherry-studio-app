@@ -17,8 +17,8 @@ type OcrObserver = (state: PdfOcrState | undefined) => void;
 const pending = new Map<string, PendingExtraction>();
 const slots = createConcurrencySlots(1);
 let extracting = 0;
-// Keyed by file entry: the transcript tile and tool row of that file show its own work.
-const states = new Map<string, PdfOcrState>();
+// Each extraction owns its state, including retries and reads in another language.
+const states = new Map<string, Map<AbortSignal, PdfOcrState>>();
 const observers = new Map<string, Set<OcrObserver>>();
 let appLanguage = (): AppLanguage => DEFAULT_APP_LANGUAGE;
 
@@ -31,17 +31,36 @@ export function observePdfOcr(fileEntryId: string, observer: OcrObserver): () =>
   let set = observers.get(fileEntryId);
   if (!set) observers.set(fileEntryId, (set = new Set()));
   set.add(observer);
-  observer(states.get(fileEntryId));
+  observer(getState(fileEntryId));
   return () => {
     set.delete(observer);
     if (set.size === 0 && observers.get(fileEntryId) === set) observers.delete(fileEntryId);
   };
 }
 
-function setState(fileEntryId: string, state: PdfOcrState | undefined) {
-  if (state) states.set(fileEntryId, state);
-  else states.delete(fileEntryId);
-  for (const observer of observers.get(fileEntryId) ?? []) observer(state);
+function getState(fileEntryId: string): PdfOcrState | undefined {
+  let queued: PdfOcrState | undefined;
+  for (const state of states.get(fileEntryId)?.values() ?? []) {
+    if (state.status === 'recognizing') return state;
+    queued = state;
+  }
+  return queued;
+}
+
+function setState(fileEntryId: string, signal: AbortSignal, state: PdfOcrState | undefined) {
+  const previous = getState(fileEntryId);
+  let extractions = states.get(fileEntryId);
+  if (state) {
+    if (!extractions) states.set(fileEntryId, (extractions = new Map()));
+    extractions.set(signal, state);
+  } else if (extractions) {
+    extractions.delete(signal);
+    if (extractions.size === 0) states.delete(fileEntryId);
+  }
+  const current = getState(fileEntryId);
+  if (current !== previous) {
+    for (const observer of observers.get(fileEntryId) ?? []) observer(current);
+  }
 }
 
 async function extract(
@@ -55,11 +74,15 @@ async function extract(
   if (cached) return cached;
   // Managed filenames are the immutable entry ID plus an extension.
   const fileEntryId = source.name.split('.')[0]!;
-  if (extracting > 0) setState(fileEntryId, { status: 'queued' });
+  const clearState = () => setState(fileEntryId, signal, undefined);
+  signal.addEventListener('abort', clearState, { once: true });
+  if (extracting > 0) setState(fileEntryId, signal, { status: 'queued' });
   extracting += 1;
   try {
     const release = await slots.acquire(signal);
     try {
+      // Waiting for extraction does not establish that this document needs OCR.
+      clearState();
       const result = await extractPdfText(
         source.uri,
         { maxPages: MAX_PDF_ATTACHMENT_PAGES, language },
@@ -67,7 +90,7 @@ async function extract(
           signal,
           onProgress: ({ phase, completedPages, totalPages }) => {
             if (phase === 'ocr')
-              setState(fileEntryId, { status: 'recognizing', completedPages, totalPages });
+              setState(fileEntryId, signal, { status: 'recognizing', completedPages, totalPages });
           },
         },
       );
@@ -80,7 +103,8 @@ async function extract(
     }
   } finally {
     extracting -= 1;
-    setState(fileEntryId, undefined);
+    signal.removeEventListener('abort', clearState);
+    clearState();
   }
 }
 

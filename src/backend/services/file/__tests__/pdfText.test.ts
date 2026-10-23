@@ -157,6 +157,118 @@ test('a queued document can be cancelled without starting its native extraction'
   stop();
 });
 
+test('an old cancelled read cannot clear its retry queued behind another document', async () => {
+  const firstStarted = deferred<void>();
+  const otherStarted = deferred<void>();
+  const firstNative = deferred<ExtractResult>();
+  const otherNative = deferred<ExtractResult>();
+  jest
+    .mocked(extractPdfText)
+    .mockImplementationOnce((_uri, _options, control) => {
+      control!.onProgress!({ requestId: 'first', completedPages: 0, totalPages: 2, phase: 'ocr' });
+      firstStarted.resolve();
+      return firstNative.promise;
+    })
+    .mockImplementationOnce(() => {
+      otherStarted.resolve();
+      return otherNative.promise;
+    });
+  const states = jest.fn();
+  const stop = observePdfOcr(ID, states);
+  const controller = new AbortController();
+  const first = readPdfText(source, controller.signal);
+  await firstStarted.promise;
+  const other = readPdfText(managed(OTHER_ID), signal());
+  await new Promise(setImmediate);
+  const stopped = expect(first).rejects.toThrow('stopped');
+  controller.abort(new Error('stopped'));
+  await stopped;
+  const retry = readPdfText(source, signal());
+  await new Promise(setImmediate);
+  expect(states).toHaveBeenLastCalledWith({ status: 'queued' });
+
+  firstNative.resolve(result);
+  await otherStarted.promise;
+  expect(states).toHaveBeenLastCalledWith({ status: 'queued' });
+  const resumedObserver = jest.fn();
+  const stopResumed = observePdfOcr(ID, resumedObserver);
+  expect(resumedObserver).toHaveBeenLastCalledWith({ status: 'queued' });
+
+  otherNative.resolve(result);
+  await Promise.all([other, retry]);
+  expect(states).toHaveBeenLastCalledWith(undefined);
+  stopResumed();
+  stop();
+});
+
+test("queuing and cancelling another language preserves the file's active recognition", async () => {
+  const started = deferred<void>();
+  const native = deferred<ExtractResult>();
+  const recognizing = { status: 'recognizing', completedPages: 1, totalPages: 2 } as const;
+  jest.mocked(extractPdfText).mockImplementationOnce((_uri, _options, control) => {
+    control!.onProgress!({ requestId: 'first', phase: 'ocr', completedPages: 1, totalPages: 2 });
+    started.resolve();
+    return native.promise;
+  });
+  const states = jest.fn();
+  const stop = observePdfOcr(ID, states);
+  configurePdfOcrLanguage(() => 'en-US');
+  const first = readPdfText(source, signal());
+  await started.promise;
+  const controller = new AbortController();
+  let queued: Promise<ExtractResult>;
+  try {
+    configurePdfOcrLanguage(() => 'de-DE');
+    queued = readPdfText(source, controller.signal);
+  } finally {
+    configurePdfOcrLanguage(() => 'en-US');
+  }
+  await new Promise(setImmediate);
+  expect(states).toHaveBeenLastCalledWith(recognizing);
+  const stopped = expect(queued).rejects.toThrow('stopped');
+  controller.abort(new Error('stopped'));
+  await stopped;
+  expect(states).toHaveBeenLastCalledWith(recognizing);
+
+  native.resolve(result);
+  await first;
+  expect(states).toHaveBeenLastCalledWith(undefined);
+  expect(extractPdfText).toHaveBeenCalledTimes(1);
+  stop();
+});
+
+test('a text PDF stops reporting a queue once extraction starts, without reporting OCR', async () => {
+  const firstStarted = deferred<void>();
+  const textStarted = deferred<void>();
+  const firstNative = deferred<ExtractResult>();
+  const textNative = deferred<ExtractResult>();
+  jest
+    .mocked(extractPdfText)
+    .mockImplementationOnce(() => {
+      firstStarted.resolve();
+      return firstNative.promise;
+    })
+    .mockImplementationOnce(() => {
+      textStarted.resolve();
+      return textNative.promise;
+    });
+  const first = readPdfText(source, signal());
+  await firstStarted.promise;
+  const states = jest.fn();
+  const stop = observePdfOcr(OTHER_ID, states);
+  const text = readPdfText(managed(OTHER_ID), signal());
+  await new Promise(setImmediate);
+  expect(states).toHaveBeenLastCalledWith({ status: 'queued' });
+
+  firstNative.resolve(result);
+  await textStarted.promise;
+  expect(states).toHaveBeenLastCalledWith(undefined);
+  textNative.resolve(result);
+  await Promise.all([first, text]);
+  expect(states.mock.calls).toEqual([[undefined], [{ status: 'queued' }], [undefined]]);
+  stop();
+});
+
 test('keeps the body with unrecognized pages, and clears file activity on engine failure', async () => {
   jest.mocked(extractPdfText).mockResolvedValueOnce({ ...result, unrecognizedPages: [1] });
   await expect(readPdfText(source, signal())).resolves.toMatchObject({
