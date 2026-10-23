@@ -776,7 +776,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const controller = new AbortController();
     const initializing = state.host.initialize(controller.signal);
     controller.abort(new Error('Host replaced'));
-    finishOpen({ close } as RuntimeSqlDatabase);
+    finishOpen({ close } as unknown as RuntimeSqlDatabase);
 
     await expect(initializing).rejects.toThrow('Host replaced');
     await state.host.close();

@@ -1768,6 +1768,7 @@ export class DurableAgentHost implements AgentProtocol {
         signal?.throwIfAborted();
         this.ports.durableStorage?.notifyTranscript(turn.identity.sessionId);
       },
+      signal,
     );
     signal?.throwIfAborted();
     // Settlement can outlive the current UI turn, including recovery without an observer.
@@ -1809,47 +1810,52 @@ export class DurableAgentHost implements AgentProtocol {
     if (existing) return existing;
     const pending = this.attachments.get(key);
     if (pending) return pending;
-    const operation = this.traceOperation('ai.observe', { sessionId: lane.sessionId }, async () => {
-      const state: LiveSession = {
-        lane,
-        waiters: new Set(),
-        users: new Set(),
-        assistant: null,
-        active: null,
-        queue: [],
-        contextStatus: null,
-        unsubscribe: async () => {},
-        background: null,
-        backgroundRequestId: null,
-        backgroundCompleted: false,
-        turn: null,
-        lastAnswerId: null,
-        question: null,
-        questions: new TurnUserQuestions(),
-        approvals: new Map(),
-      };
-      // The engine's exact watch is acquired before scheduling. App route listeners are independent.
-      let installed = false;
-      const pending: RuntimeConversationEvent[] = [];
-      const observed = await this.conversations.observe(lane, (event) => {
-        if (!installed && this.controller.signal.aborted) return;
-        if (installed) this.consume(state, event);
-        else pending.push(event);
-      });
-      if (this.controller.signal.aborted) {
-        await observed.unsubscribe();
-        this.controller.signal.throwIfAborted();
-      }
-      state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
-      state.contextStatus = observed.snapshot.contextStatus ?? null;
-      state.unsubscribe = observed.unsubscribe;
-      this.live.set(key, state);
-      this.updateQueue(state, observed.snapshot.queue);
-      if (state.active) this.present(state.active);
-      installed = true;
-      for (const event of pending) this.consume(state, event);
-      return state;
-    });
+    const operation = this.traceOperation(
+      'ai.observe',
+      { sessionId: lane.sessionId },
+      async () => {
+        const state: LiveSession = {
+          lane,
+          waiters: new Set(),
+          users: new Set(),
+          assistant: null,
+          active: null,
+          queue: [],
+          contextStatus: null,
+          unsubscribe: async () => {},
+          background: null,
+          backgroundRequestId: null,
+          backgroundCompleted: false,
+          turn: null,
+          lastAnswerId: null,
+          question: null,
+          questions: new TurnUserQuestions(),
+          approvals: new Map(),
+        };
+        // The engine's exact watch is acquired before scheduling. App route listeners are independent.
+        let installed = false;
+        const pending: RuntimeConversationEvent[] = [];
+        const observed = await this.conversations.observe(lane, (event) => {
+          if (!installed && this.controller.signal.aborted) return;
+          if (installed) this.consume(state, event);
+          else pending.push(event);
+        });
+        if (this.controller.signal.aborted) {
+          await observed.unsubscribe();
+          this.controller.signal.throwIfAborted();
+        }
+        state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
+        state.contextStatus = observed.snapshot.contextStatus ?? null;
+        state.unsubscribe = observed.unsubscribe;
+        this.live.set(key, state);
+        this.updateQueue(state, observed.snapshot.queue);
+        if (state.active) this.present(state.active);
+        installed = true;
+        for (const event of pending) this.consume(state, event);
+        return state;
+      },
+      this.controller.signal,
+    );
     this.attachments.set(key, operation);
     try {
       return await operation;

@@ -168,7 +168,7 @@ test('retires cancelled startup registrations without stopping or clearing a rep
           identifier: 'old-notification',
           content: { data: { owner: BACKGROUND_NOTIFICATION_OWNER } },
         },
-      } as notifications.Notification,
+      } as unknown as notifications.Notification,
     ]);
     await expect(initializing).rejects.toThrow('Host replaced');
     await runtime._doStop();

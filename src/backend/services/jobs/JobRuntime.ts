@@ -554,7 +554,8 @@ export class JobRuntime extends BaseService {
         claimed += await this.pumpOnce();
       } while (this.pumpDirty && !this.disposed);
     } catch (error) {
-      logger.error('pump loop failed', error as Error);
+      // Disposal fences in-flight writes by throwing; that is shutdown, not failure.
+      if (!this.disposed) logger.error('pump loop failed', error as Error);
     } finally {
       this.pumpRunning = false;
       this.currentLoop = null;
@@ -762,7 +763,7 @@ export class JobRuntime extends BaseService {
         return this.jobService.pruneTerminalOlderThanTx(tx, this.now() - GC_TERMINAL_TTL_MS);
       });
     } catch (error) {
-      logger.warn('job GC (terminal TTL) failed', error as Error);
+      if (!this.disposed) logger.warn('job GC (terminal TTL) failed', error as Error);
     }
     if (this.disposed) return;
     try {
@@ -771,7 +772,7 @@ export class JobRuntime extends BaseService {
         return this.jobService.pruneTerminalKeepLatestPerTypeTx(tx, GC_KEEP_PER_TYPE);
       });
     } catch (error) {
-      logger.warn('job GC (keep latest per type) failed', error as Error);
+      if (!this.disposed) logger.warn('job GC (keep latest per type) failed', error as Error);
     }
   }
 
