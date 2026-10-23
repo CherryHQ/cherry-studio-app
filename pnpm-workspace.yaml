@@ -94,6 +94,7 @@ patchedDependencies:
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
   '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
+  react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
 
 minimumReleaseAgeExclude:
   # Pi 1.4.0 is upgraded as one release, including its internal dependencies.
