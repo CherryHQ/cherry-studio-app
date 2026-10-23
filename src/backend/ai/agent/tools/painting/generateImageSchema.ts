@@ -143,11 +143,9 @@ export function buildGenerateImageToolDescription(
   }
 
   if (modes.includes('edit')) {
-    instructions.push(`Edit or use a user-uploaded image or an earlier generated image as a reference.
-- Resolve requests such as "the previous image" from conversation attachments and tool results. Reuse attachment fileEntryId, generated result id, or artifact ref.fileEntryId; never invent ids or ask the user to supply technical ids. Ask which image they mean only when the reference is ambiguous or missing.
-- For edits and reference-based generation, pass image_ids and describe the changes and what to preserve in prompt. Do not replace the reference with a text-only approximation.
-- This tool reads the original image and sends it to the drawing model. If you need to inspect details and the pixels are not in context, call read_file directly with file_entry_id first; otherwise pass the known id directly. Generated image results provide references, not pixels.
-- Use at most ${MAX_INPUT_IMAGES} reference image per call. If the request needs multiple reference images, explain this limit and ask which one to use.`);
+    instructions.push(
+      `Edit or use a user-uploaded image or an earlier generated image as a reference: pass its id in image_ids (attachment fileEntryId, generate_image result id, or artifact ref.fileEntryId). Never invent ids or ask the user for one; ask which image only when ambiguous, and ask to reattach one that is unavailable. Describe the changes and what to keep in prompt; never replace the reference with a text-only approximation. At most ${MAX_INPUT_IMAGES} reference image per call; if more are needed, ask which one. This tool reads the original itself; call read_file first only to inspect pixels no longer in context.`,
+    );
     if (!modes.includes('generate')) {
       instructions.push('image_ids is required for every call with this drawing model.');
     }
