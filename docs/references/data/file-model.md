@@ -154,7 +154,7 @@ the imported entry. Painting still admits images only.
 
 `readAttachmentContent` is the common controlled reader for attachments and file tools. Its
 document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
-the native text extractor. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
+the native text extractor with on-device OCR for pages without usable text and image pages whose text is sparse. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
 accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
 CSV stays on the text path. Format admission follows the published mobile entry point's
 [content detection](https://github.com/tulaafrica/anydoc/blob/rn-v0.4.1/src/formats/detect.rs),
@@ -192,10 +192,43 @@ UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as un
 content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
 unsupported binary media types fail closed before reservation. Text sources have a 5 MiB ceiling;
 PDFs have a 50 MiB source ceiling and other documents retain a 20 MiB ceiling. PDFs use the existing
-Expo native extractor (at most 100 pages). Android serializes PDF extraction and page-count reads,
+Expo native extractor (at most 100 pages and one million UTF-16 units). Android serializes PDF extraction and page-count reads,
 with PDFBox stream buffers limited to 16 MiB in memory and 128 MiB across memory and temporary
 storage in the app cache. Closing the document releases its scratch file. These are stream-buffer
-limits, not a bound on all parsed objects or extracted text. In built-in mode,
+limits, not a bound on all native allocations.
+
+The [native PDF module](../../../modules/pdf-text-extractor/README.md) reads each page's text layer
+first. Pages lacking usable text, or drawing images with fewer than 200 letters or digits of native
+text, are rendered for Apple Vision (iOS) or bundled ML Kit Chinese/Latin recognition (Android).
+Recognition follows the resolved app language and is skipped when the engine cannot read its
+script. OCR runs locally, sequentially, with at most a 2560-pixel edge and four million rendered
+pixels per page. Text and recognized pages are joined in order with blank-line separators. Blank
+pages are accepted. Successful OCR with no usable text retains the other text and records one-based
+`unrecognizedPages`, included in the attachment report, tool metadata and a leading model-facing
+text notice. When the engine cannot read the app language's script, image pages are reported the
+same way without recognition, and a document left with no text fails as `document-ocr-unsupported`.
+Rendering/recognition-engine failures still reject partial text as `document-ocr-failed`; corrupt
+native extraction fails as `document-invalid`. Android collects native page text and image facts in one PDFBox traversal.
+
+The PDF reader coalesces concurrent reads and persists successful results in the disposable
+`Paths.cache/PdfText` directory (64 MiB total, 8 MiB per entry). Keys contain the managed filename,
+size, modification time, extraction-policy version, page ceiling and app language, never absolute
+sandbox paths.
+Later turns and tools reuse these results after normal file authorization/availability checks.
+Hard deletion removes the entry's derived text; restore clears the cache. Eviction, cache purging
+and policy changes may require extraction again. No derived text enters the library or database.
+Each consumer's cancellation is independent; the last consumer cancels native work. Android
+finishes the current ML Kit call before releasing its bitmap and the extraction slot.
+`FileModule.observePdfOcr` aggregates extraction states by file entry, preferring active recognition
+over queued reads. Each extraction clears only its own state. Queued files, including text PDFs,
+show a neutral processing wait until extraction starts. Actual OCR draws the transcript tile's
+progress stroke and page count, names the pending reply's wait, and adds the page count to a running
+`read_file` row, which observes its call ID linked to the resolved entry (reads by path included).
+Cache hits report nothing. The originating send/tool operation owns cancellation.
+The original PDF is never modified and derived page images
+are not stored. A new native development client is required.
+
+In built-in mode,
 DOCX/PPTX/XLSX use bounded in-memory ZIP/XML parsing and SheetJS
 for workbook cells. Office ZIPs admit at most 2,048 entries, 32 MiB expanded data, and 4 MiB per XML
 part; workbook extraction caps each sheet at 10,000 rows, processes at most 100 sheets, and Office
@@ -209,11 +242,13 @@ PowerPoint follows slide relationships and includes speaker notes while excludin
 fields such as slide numbers, dates, headers, and footers. These fields do not make an otherwise
 textless document readable. Excel includes sheet names,
 cell addresses, formatted values, and stored formulas without evaluating them. Embedded images,
-charts as images, scanned-document OCR, and legacy DOC/PPT/XLS inputs are not supported by this path.
+charts as images, OCR inside Office documents, and legacy DOC/PPT/XLS inputs are not supported by
+the built-in Office path.
 DOCX/PPTX XML decoding remains UTF-8 only.
 Empty documents fail with `ATTACHMENT_NO_TEXT`; damaged, encrypted, or over-limit documents fail
 before reservation. Unreadable historical documents are omitted without failing a new turn.
-Extracted text remains request-local, is encoded as untrusted user content, and is never persisted.
+Extracted content is encoded as untrusted user content. PDF text additionally has the bounded,
+disposable disk cache described above; other document bodies remain request-local.
 
 In AnyDoc mode, the Agent projects the unchanged IR as a `RuntimeDocumentAttachmentPart`.
 Pi nests the original object in one JSON envelope with parser/version, trust, delivery facts, and
@@ -227,8 +262,9 @@ existing messages, attachment reports, and tool results are not rewritten.
 
 Settings exposes **Document parser** as a local preference with AnyDoc selected by default and
 Built-in available for comparison. Its picker describes both formats and the next-turn/PDF rules;
-a failed preference save reports through the existing toast gateway. The transcript displays file
-attachments without processing notices. Reports still persist the actual parser, complete versus
+a failed preference save reports through the existing toast gateway. Under a sent message's attachments,
+the transcript lists what the model did not receive from the reports: unrecognized PDF pages and
+source or request truncation, naming the file when there are several. Reports still persist the actual parser, complete versus
 deferred IR delivery, and image omission reasons; older messages without those facts remain
 unspecified rather than inferred from today's preference.
 

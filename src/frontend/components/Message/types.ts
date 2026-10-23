@@ -20,6 +20,8 @@ export type MessageListItem = Readonly<{
     translations?: MessageTranslations;
   }>;
   id: string;
+  /** Files a pending reply waits on while the send prepares them, such as scanned PDFs. */
+  inputFileEntryIds?: readonly string[];
   /** Image request settings captured by this message, independent of the current model. */
   imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */

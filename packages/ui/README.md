@@ -70,7 +70,8 @@ thumbnail caching. Loading placeholders belong to the caller because it owns the
 A caller may supply `metadata` before file bytes are available; the tile renders the shared type
 card without reading a URI. `disabled` prevents opening unavailable sources. Optional `transfer`
 state draws acknowledged progress around the frame or marks a failure, with a caller-localized
-accessible label. Removing that state restores the ordinary preview. Transfer tasks, retries,
+accessible label. `uploading` and `processing` (local work such as text recognition) share the
+progress stroke and the busy state. Removing that state restores the ordinary preview. Transfer tasks, retries,
 and file acquisition remain caller-owned; CherryUI does not start uploads or downloads.
 
 Rendering is plugin-based and `kind` is an open set. CherryUI ships an `image` renderer and falls
@@ -253,7 +254,8 @@ composed directly below the section heading. `TextSection` and `ValueSection` us
 primitives. The app supplies translated copy controls and highlighted code, so the UI package never
 reads the clipboard or imports application preferences.
 
-`MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
+`MessagePart.Pending` owns the empty-response loader and its stable text-line height. An optional
+`reason` names local work that delays the reply, such as attachment text recognition, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
 

@@ -4,19 +4,16 @@ import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
 } from '@/shared/utils/documentFileTypes';
-import {
-  documentAttachmentByteLimit,
-  MAX_PDF_ATTACHMENT_PAGES,
-} from '@/shared/utils/fileAttachmentPolicy';
+import { documentAttachmentByteLimit } from '@/shared/utils/fileAttachmentPolicy';
 
-import { extractPdfText } from '../../../../modules/pdf-text-extractor';
 import { readFileUriBytes } from './fileStorage';
 import type { ExtractedDocumentText } from './officeText';
+import { readPdfText } from './pdfText';
 
 export type { ExtractedDocumentText } from './officeText';
 
 export class DocumentTextError extends Error {
-  constructor(readonly failure: 'empty' | 'invalid' | 'file-bytes') {
+  constructor(readonly failure: 'empty' | 'invalid' | 'file-bytes' | 'ocr' | 'ocr-unsupported') {
     super(failure);
     this.name = 'DocumentTextError';
   }
@@ -33,14 +30,24 @@ export async function readDocumentUriText(
   if (!type || (type !== 'pdf' && !isBuiltinOfficeFileType(type)))
     throw new DocumentTextError('invalid');
   const maxBytes = documentAttachmentByteLimit(mediaType);
-  if (new File(uri).size > maxBytes) throw new DocumentTextError('file-bytes');
+  const source = new File(uri);
+  if (!source.exists) throw new DocumentTextError('invalid');
+  if (source.size > maxBytes) throw new DocumentTextError('file-bytes');
 
   let result: ExtractedDocumentText;
   try {
     if (type === 'pdf') {
-      const extracted = await extractPdfText(uri, { maxPages: MAX_PDF_ATTACHMENT_PAGES });
+      const extracted = await readPdfText(source, signal);
+      if (extracted.ocrError) throw new DocumentTextError('ocr');
       if (extracted.extractionError) throw new DocumentTextError('invalid');
+      if (extracted.ocrUnavailable && !extracted.text.trim())
+        throw new DocumentTextError('ocr-unsupported');
       result = { text: extracted.text.trim(), truncated: extracted.isTruncated };
+      if (result.text && extracted.unrecognizedPages.length > 0) {
+        result.unrecognizedPages = extracted.unrecognizedPages;
+        // Model-facing metadata precedes the body so attachment character budgets retain it.
+        result.text = `[PDF extraction notice: pages ${extracted.unrecognizedPages.join(', ')} contain visual content with no recognized text. The text below does not represent those pages; if their content matters, ask the user to attach them as images.]\n\n${result.text}`;
+      }
     } else {
       const bytes = await readFileUriBytes(uri, signal);
       if (bytes.byteLength > maxBytes) throw new DocumentTextError('file-bytes');

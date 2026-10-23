@@ -79,6 +79,9 @@ jest.mock('@/backend/services/backup/restoreStartup', () => ({
 jest.mock('@/backend/services/file/filePreviewStorage', () => ({
   resetFilePreviewsForRestore: jest.fn(),
 }));
+jest.mock('@/backend/services/file/pdfTextCache', () => ({
+  resetPdfTextCacheForRestore: jest.fn(),
+}));
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
 }));

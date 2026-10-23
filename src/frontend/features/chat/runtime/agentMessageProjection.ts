@@ -404,6 +404,9 @@ export function createPendingChatMessages(
   >,
 ): readonly [MessageListItem, MessageListItem] {
   const createdAt = new Date().toISOString();
+  const inputFileEntryIds = input.parts.flatMap((part) =>
+    part.type === 'file' ? [part.fileEntryId] : [],
+  );
   const parts = input.parts.map(
     (part, index): AgentMessagePart =>
       part.type === 'file'
@@ -423,6 +426,7 @@ export function createPendingChatMessages(
       data: { parts: [] },
       id: input.assistantMessageId,
       ...(input.imageGeneration ? { imageGeneration: input.imageGeneration } : {}),
+      ...(inputFileEntryIds.length > 0 ? { inputFileEntryIds } : {}),
       role: 'assistant',
       status: 'pending',
     },

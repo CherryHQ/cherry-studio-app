@@ -323,6 +323,29 @@ describe('agentMessageProjection', () => {
     expect(reopened?.data.parts?.[1]).toBe(live?.data.parts?.[1]);
   });
 
+  test('a pending reply records the attachments it waits on', () => {
+    const [, withFile] = createPendingChatMessages({
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [
+        { type: 'text', text: 'Summarize' },
+        {
+          type: 'file',
+          fileEntryId: '00000000-0000-7000-8000-000000000001',
+          mediaType: 'application/pdf',
+          filename: 'scan.pdf',
+        },
+      ],
+    });
+    expect(withFile.inputFileEntryIds).toEqual(['00000000-0000-7000-8000-000000000001']);
+    const [, textOnly] = createPendingChatMessages({
+      userMessageId: 'user-2',
+      assistantMessageId: 'assistant-2',
+      parts: [{ type: 'text', text: 'Hi' }],
+    });
+    expect(textOnly).not.toHaveProperty('inputFileEntryIds');
+  });
+
   test('keeps image request settings on pending and reopened assistant messages', () => {
     const imageGeneration = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
     const [, pending] = createPendingChatMessages({

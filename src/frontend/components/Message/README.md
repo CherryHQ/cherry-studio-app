@@ -26,7 +26,9 @@ history, message rows and parts, viewport following, and scroll restoration.
 - `UserMessage` owns standard user content, including managed attachments and the text bubble.
   Its attachment slot accepts source-owned cards without a layout wrapper. Both local and remote
   cards pass through `UserMessageAttachments`, which owns right alignment, wrapping, spacing, and
-  gesture exclusion above the bubble.
+  gesture exclusion above the bubble. Local cards draw a scanned PDF's recognition progress, and
+  a line under them lists what the model did not receive (unrecognized pages, truncation) from the
+  attachment reports. A pending reply's `inputFileEntryIds` lets it name that wait.
 - `getBuiltInToolDisplay` exposes the shared title and platform-specific icon used by
   feature-owned tool approval UI.
 - `ToolRendererProvider` lets a source supply tool detail loading and presentation inside the

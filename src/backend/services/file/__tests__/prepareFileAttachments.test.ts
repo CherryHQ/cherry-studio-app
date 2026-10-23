@@ -5,6 +5,7 @@ import {
 } from '@/shared/utils/fileAttachmentPolicy';
 
 import { parseAnydocDocument } from '../anydocParser';
+import { DocumentTextError } from '../documentText';
 import { prepareFileAttachments } from '../prepareFileAttachments';
 
 jest.mock('../anydocParser', () => ({
@@ -34,6 +35,32 @@ function input(files: FileAttachmentFact[]) {
 }
 
 describe('prepareFileAttachments', () => {
+  test('keeps unrecognized PDF page facts in the report alongside the explicit model notice', async () => {
+    const document = { ...text, mediaType: 'application/pdf', name: 'scan.pdf' };
+    const body =
+      '[PDF extraction notice: pages 1, 3 have no recognized image text.]\n\nReadable body';
+    const prepared = await prepareFileAttachments({
+      ...input([document]),
+      readDocumentText: async () => ({ text: body, truncated: false, unrecognizedPages: [1, 3] }),
+    });
+    expect(prepared.get(FILE_ID)).toMatchObject({
+      content: { kind: 'text', text: body },
+      report: { sourceTruncated: false, unrecognizedPages: [1, 3] },
+    });
+  });
+  test('preserves an actionable OCR failure instead of sending a partial document', async () => {
+    const document = { ...text, mediaType: 'application/pdf', name: 'scan.pdf' };
+    await expect(
+      prepareFileAttachments({
+        ...input([document]),
+        readDocumentText: async () => {
+          throw new DocumentTextError('ocr');
+        },
+      }),
+    ).rejects.toMatchObject({
+      issue: { code: 'document-ocr-failed', fileEntryId: FILE_ID, name: 'scan.pdf' },
+    });
+  });
   test('rejects the whole request before reading when a later attachment is unsupported', async () => {
     const request = input([
       text,

@@ -11,6 +11,7 @@
 import * as z from 'zod';
 
 import type { ParsedDocument } from '@/backend/services/file/documentParser';
+import { linkPdfOcr } from '@/backend/services/file/pdfText';
 import {
   readAttachmentContent,
   type ReadAttachmentContent,
@@ -114,8 +115,14 @@ export function createReadFileTool(
    */
   let lastDocument: { id: FileEntryId; content: ReadContent } | undefined;
 
-  const read = async (source: ManagedFileFact, signal: AbortSignal): Promise<ReadContent> => {
+  const read = async (
+    source: ManagedFileFact,
+    signal: AbortSignal,
+    toolCallId: string,
+  ): Promise<ReadContent> => {
     if (lastDocument?.id === source.fileEntryId) return lastDocument.content;
+    // The tool row observes recognition by call ID, including reads by workspace path.
+    const unlinkOcr = linkPdfOcr(toolCallId, source.fileEntryId);
     const content = await readAttachmentContent(
       source,
       {
@@ -125,7 +132,7 @@ export function createReadFileTool(
       signal,
       READ_FILE_MAX_SOURCE_BYTES,
       documentParserMode,
-    );
+    ).finally(unlinkOcr);
     const result: ReadContent =
       content.kind === 'document'
         ? { ...content, json: JSON.stringify(content.parsed.output.ir) }
@@ -147,7 +154,7 @@ export function createReadFileTool(
     } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. PNG, JPEG, WebP and GIF reads return bounded image pixels to vision models; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
-    async execute({ input, signal }): Promise<RuntimeToolResult> {
+    async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
       const parsed = readFileInputSchema.safeParse(input);
       if (!parsed.success) {
         return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
@@ -208,9 +215,10 @@ export function createReadFileTool(
       }
       let text: string;
       let sourceTruncated: boolean;
+      let unrecognizedPages: number[] | undefined;
       let parser: 'builtin' | 'native-pdf' | undefined;
       try {
-        const content = await read(source, signal);
+        const content = await read(source, signal, toolCallId);
         if (content.kind === 'document') {
           if (hasLineParameters)
             return invalid('AnyDoc JSON requires offset/max_characters, not start_line/limit.');
@@ -238,7 +246,7 @@ export function createReadFileTool(
             artifacts: [],
           };
         }
-        ({ text, sourceTruncated, parser } = content);
+        ({ text, sourceTruncated, parser, unrecognizedPages } = content);
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof FileAttachmentError) {
@@ -257,7 +265,7 @@ export function createReadFileTool(
           }
           return invalid(
             error.issue.code === 'document-empty'
-              ? 'The document has no extractable text. Scanned or image-only documents require OCR.'
+              ? 'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.'
               : error.message,
           );
         }
@@ -272,6 +280,7 @@ export function createReadFileTool(
         filename: source.name,
         size: source.size,
         ...(parser ? { parser } : {}),
+        ...(unrecognizedPages ? { unrecognizedPages } : {}),
       };
       if (hasJsonParameters) {
         return {

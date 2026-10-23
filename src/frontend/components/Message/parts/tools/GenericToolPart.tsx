@@ -18,9 +18,11 @@ import { ToolResultContentRenderer } from './ToolResultContentRenderer';
 
 type GenericToolPartProps = {
   part: ToolMessagePart;
+  /** Tool-specific live status, such as scan recognition progress. */
+  runningStatusText?: string;
 };
 
-export function GenericToolPart({ part }: GenericToolPartProps) {
+export function GenericToolPart({ part, runningStatusText }: GenericToolPartProps) {
   const { t } = useTranslation();
   const toolName = getToolName(part);
   const toolDisplay = getBuiltInToolDisplay(toolName);
@@ -29,10 +31,11 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
   const isSettledByApp = readCherryMeta(part)?.settledByApp === true;
   const statusText = isSettledByApp
     ? t('chat.tool.unfinished')
-    : // Live calls mean the tool is executing, not waiting on its input.
-      part.state === 'input-available' && part.progress
-      ? t('chat.tool.running')
-      : getToolStatusText(part, t);
+    : (runningStatusText ??
+      // Live calls mean the tool is executing, not waiting on its input.
+      (part.state === 'input-available' && part.progress
+        ? t('chat.tool.running')
+        : getToolStatusText(part, t)));
 
   return (
     <MessagePart.Tool

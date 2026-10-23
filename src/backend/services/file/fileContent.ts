@@ -40,6 +40,7 @@ import {
   rewriteInternalTextEntry,
 } from './fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
+import { observePdfOcr } from './pdfText';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -75,6 +76,7 @@ const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true 
  * factory to inject.
  */
 export const fileContent = {
+  observePdfOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {

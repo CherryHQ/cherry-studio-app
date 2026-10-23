@@ -64,6 +64,8 @@ export type MessagePartDetailProps = {
 
 export type MessagePartPendingProps = {
   accessibilityLabel: string;
+  /** Why the reply has not started, such as local attachment work. */
+  reason?: string;
   testID?: string;
 };
 

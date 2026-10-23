@@ -36,6 +36,7 @@ import type {
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
+import { resetPdfTextCacheForRestore } from '@/backend/services/file/pdfTextCache';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
@@ -277,6 +278,7 @@ export function createAppBootstrapRuntime(
           cache.resetForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
+          resetPdfTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
         await initializeAppRuntime(services);

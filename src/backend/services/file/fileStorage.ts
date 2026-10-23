@@ -26,6 +26,7 @@ import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
 import { deleteFilePreview } from './filePreviewCache';
+import { deletePdfTextCache } from './pdfTextCache';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
@@ -268,6 +269,7 @@ export async function discardInternalEntries(
     try {
       deleteInternalFile(entry);
       deleteFilePreview(entry);
+      deletePdfTextCache(entry);
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
@@ -358,6 +360,7 @@ export function deleteInternalEntryFiles(entry: FileEntry): void {
   try {
     deleteInternalFile(entry);
     deleteFilePreview(entry);
+    deletePdfTextCache(entry);
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
   }
