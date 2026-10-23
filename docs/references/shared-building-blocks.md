@@ -49,6 +49,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Need | Owner |
 | --- | --- |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Window size classes and the persistent-sidebar rule | `useWindowClass` and `useIsSidebarPersistent` in `src/frontend/appShell/layout` |
 | Readable message detail content and full-text copy | `MessageDetail` in `src/frontend/components/MessageDetail`, composing CherryUI sections and the existing Markdown code renderer |
 | Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
