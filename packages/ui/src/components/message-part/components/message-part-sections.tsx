@@ -1,6 +1,9 @@
+import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
+import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
 import type {
+  MessagePartSectionProps,
   MessagePartSectionTitleProps,
   MessagePartTextSectionProps,
   MessagePartValueSectionProps,
@@ -16,28 +19,50 @@ export function MessagePartValueSection({
   if (entries.length === 0) return null;
 
   return (
-    <View className="gap-1">
-      <MessagePartSectionTitle title={title} />
-      <View className="gap-1">
-        {entries.map(([key, entryValue]) => (
-          <View className="flex-row gap-2" key={key}>
-            <Text className="w-20 shrink-0 font-medium text-muted-foreground text-sm" selectable>
-              {key}
-            </Text>
-            <Text
-              className={
-                typeof entryValue === 'object' && entryValue !== null
-                  ? 'min-w-0 flex-1 font-mono text-foreground text-sm'
-                  : 'min-w-0 flex-1 text-foreground text-sm'
-              }
-              selectable
-            >
-              {formatMessagePartValue(entryValue, maxLength)}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
+    <MessagePartSection title={title}>
+      <MessagePartSectionBody>
+        <View className="gap-4">
+          {entries.map(([key, entryValue]) => {
+            const isStructured = typeof entryValue === 'object' && entryValue !== null;
+            const text = formatMessagePartValue(entryValue, maxLength);
+            // Longer values need the sheet's full width. Short rows can still wrap at large text sizes.
+            const isStacked = isStructured || text.length > 60 || /[\r\n]/.test(text);
+
+            return (
+              <View
+                className={
+                  isStacked ? 'gap-2' : 'flex-row flex-wrap items-baseline gap-x-6 gap-y-1'
+                }
+                key={key}
+              >
+                <Text
+                  className={
+                    isStacked
+                      ? 'text-muted-foreground text-xs'
+                      : 'min-w-24 flex-1 text-muted-foreground text-xs'
+                  }
+                  selectable
+                >
+                  {key}
+                </Text>
+                <Text
+                  className={
+                    isStructured
+                      ? 'font-mono text-foreground text-sm'
+                      : isStacked
+                        ? 'text-foreground text-sm'
+                        : 'max-w-full shrink text-right text-foreground text-sm tabular-nums'
+                  }
+                  selectable
+                >
+                  {text}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </MessagePartSectionBody>
+    </MessagePartSection>
   );
 }
 
@@ -47,28 +72,50 @@ export function MessagePartTextSection({
   value,
   variant = 'body',
 }: MessagePartTextSectionProps) {
-  const textClassName =
-    variant === 'code'
-      ? tone === 'danger'
-        ? 'font-mono text-error text-sm'
-        : 'font-mono text-foreground text-sm'
-      : tone === 'danger'
-        ? 'text-base text-error'
-        : 'text-base text-foreground';
-
   return (
-    <View className="gap-1">
-      <MessagePartSectionTitle title={title} />
-      <Text className={textClassName} selectable>
-        {value}
-      </Text>
+    <MessagePartSection title={title} tone={tone}>
+      <MessagePartSectionBody>
+        <Text
+          className={
+            variant === 'code' ? 'font-mono text-foreground text-sm' : 'text-base text-foreground'
+          }
+          selectable
+        >
+          {value}
+        </Text>
+      </MessagePartSectionBody>
+    </MessagePartSection>
+  );
+}
+
+export function MessagePartSection({ action, children, title, tone }: MessagePartSectionProps) {
+  return (
+    <View className="gap-2">
+      <View className="flex-row items-center gap-2">
+        {tone === 'danger' ? (
+          <CircleAlertIcon accessible={false} className="size-4 shrink-0 text-error" />
+        ) : null}
+        <Text
+          accessibilityRole="header"
+          className="min-w-0 flex-1 text-muted-foreground text-sm"
+          selectable
+        >
+          {title}
+        </Text>
+        {action}
+      </View>
+      {children}
     </View>
   );
 }
 
+export function MessagePartSectionBody({ children }: { children: ReactNode }) {
+  return <View className="rounded-xl bg-code-block p-4">{children}</View>;
+}
+
 export function MessagePartSectionTitle({ title }: MessagePartSectionTitleProps) {
   return (
-    <Text className="font-medium text-foreground text-sm" selectable>
+    <Text accessibilityRole="header" className="font-medium text-foreground text-sm" selectable>
       {title}
     </Text>
   );

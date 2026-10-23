@@ -6,6 +6,14 @@ import type { ToolMessagePart } from '../toolPartState';
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('../builtInTool/builtInToolDisplay', () => ({ getBuiltInToolDisplay: () => undefined }));
 jest.mock('../ToolResultContentRenderer', () => ({ ToolResultContentRenderer: () => null }));
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    MessageDetailText: (props: object) => createElement('TextSection', props),
+    MessageDetailValue: (props: object) => createElement('ValueSection', props),
+  };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {

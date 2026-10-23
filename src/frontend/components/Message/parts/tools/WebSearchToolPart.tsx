@@ -2,6 +2,7 @@ import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { enrichWebSources, parseWebSources } from '../webSource';
@@ -51,9 +52,9 @@ export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps
       title={actionTitle}
     >
       {outputError !== undefined ? (
-        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={outputError} />
+        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={outputError} />
       ) : results.length === 0 ? (
-        <Text className="text-foreground text-base italic" selectable>
+        <Text className="text-muted-foreground text-sm" selectable>
           {statusText}
         </Text>
       ) : (

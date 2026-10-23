@@ -15,6 +15,7 @@ import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conv
 import { ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { ToolRendererProvider } from '@/frontend/components/Message';
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import { filenameExtension } from '@/shared/data/types/file';
 
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
@@ -93,7 +94,20 @@ function ConversationResourceSection({
               null,
               2,
             );
-  return <MessagePart.TextSection title={title} value={value} />;
+  return (
+    <MessageDetailText
+      title={title}
+      value={value}
+      language="json"
+      variant={
+        result.data.kind === 'json' ||
+        result.data.kind === 'user-question' ||
+        result.data.kind === 'question'
+          ? 'code'
+          : 'body'
+      }
+    />
+  );
 }
 export function ConversationAttachments({
   attachments,

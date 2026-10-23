@@ -34,6 +34,12 @@ jest.mock('@/frontend/components/Message', () => ({
   ),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { Text } = jest.requireActual('react-native');
+  return {
+    MessageDetailText: ({ value }: { value: string }) => <Text testID="tool-content">{value}</Text>,
+  };
+});
 jest.mock('@cherrystudio/ui/components', () => {
   const { Image, Text } = jest.requireActual('react-native');
   return {
