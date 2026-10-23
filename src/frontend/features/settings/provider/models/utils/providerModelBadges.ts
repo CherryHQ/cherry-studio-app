@@ -1,7 +1,7 @@
 import {
   getModelPickerBadges,
   MODEL_PICKER_BADGES,
-} from '@/frontend/components/ModelPicker/utils/modelPickerBadges';
+} from '@/frontend/components/ModelPicker/badges';
 import type { Model } from '@/shared/data/types/model';
 import { isSpeechToTextModel, isTextToSpeechModel } from '@/shared/utils/modelPurpose';
 

@@ -8,7 +8,10 @@ import { useAgentAnswers } from '../useAgentAnswers';
 const mockGet = jest.fn();
 let mockLive: readonly (AgentMessageView | undefined)[] = [];
 
-jest.mock('@/frontend/data/DataApiProvider', () => ({ useApiClient: () => ({ get: mockGet }) }));
+jest.mock('@/frontend/data', () => ({
+  ...jest.requireActual('@/frontend/data'),
+  useApiClient: () => ({ get: mockGet }),
+}));
 jest.mock('../ChatProvider', () => ({ useAgentLiveAnswers: () => mockLive }));
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
