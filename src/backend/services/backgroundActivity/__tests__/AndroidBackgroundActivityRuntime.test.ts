@@ -397,6 +397,31 @@ test('unexpected native destruction interrupts every protected task without rest
   expect(native.start).toHaveBeenCalledTimes(2);
 });
 
+test('a hidden admission stays local while a failed service start is reported', async () => {
+  const reporter = jest.fn();
+  const removeReporter = loggerService.setErrorReporter(reporter);
+  try {
+    setAppState('background');
+    const hidden = runtime.acquire('chat');
+    await flush();
+    expect(reporter).not.toHaveBeenCalled();
+    hidden.release();
+    await flush();
+    setAppState('active');
+    native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
+    runtime.acquire('next-task');
+    await flush();
+
+    expect(reporter).toHaveBeenCalledTimes(1);
+    expect(reporter).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ operation: 'background.start' }),
+    );
+  } finally {
+    removeReporter();
+  }
+});
+
 test('expected native interruption does not enter error reporting', async () => {
   const reporter = jest.fn();
   const removeReporter = loggerService.setErrorReporter(reporter);
