@@ -1,4 +1,5 @@
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
+import { MAX_AUDIO_ATTACHMENT_BYTES } from '@/shared/utils/audioFileTypes';
 import {
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_TEXT_ATTACHMENT_CHARACTERS,
@@ -287,5 +288,46 @@ describe('AnyDoc attachment preparation', () => {
     expect(contextLimited.get(FILE_ID)?.content).toMatchObject({
       assetDelivery: [{ status: 'sent' }, { status: 'budget' }],
     });
+  });
+});
+
+describe('audio attachments', () => {
+  const audio: FileAttachmentFact = {
+    ...text,
+    mediaType: 'application/octet-stream',
+    name: 'meeting.m4a',
+    size: 1024,
+  };
+
+  test('send the transcript as text without reading the bytes themselves', async () => {
+    const transcribeAudio = jest.fn(async () => '[Audio transcript]\nhello');
+    const request = { ...input([audio]), transcribeAudio };
+    const prepared = await prepareFileAttachments(request);
+    expect(prepared.get(FILE_ID)).toMatchObject({
+      content: { kind: 'text', text: '[Audio transcript]\nhello' },
+      report: { mode: 'audio-transcript', sourceTruncated: false, requestTruncated: false },
+    });
+    expect(prepared.get(FILE_ID)?.report).not.toHaveProperty('parser');
+    expect(transcribeAudio).toHaveBeenCalledWith(audio, request.signal);
+    expect(request.readBytes).not.toHaveBeenCalled();
+  });
+
+  test('reject audio before any request when it cannot be transcribed or used', async () => {
+    await expect(prepareFileAttachments(input([audio]))).rejects.toMatchObject({
+      issue: { code: 'transcription-unconfigured', fileEntryId: FILE_ID },
+    });
+    await expect(
+      prepareFileAttachments({
+        ...input([{ ...audio, size: MAX_AUDIO_ATTACHMENT_BYTES + 1 }]),
+        transcribeAudio: jest.fn(),
+      }),
+    ).rejects.toMatchObject({ issue: { code: 'file-bytes', limit: MAX_AUDIO_ATTACHMENT_BYTES } });
+    await expect(
+      prepareFileAttachments({
+        ...input([audio]),
+        transcribeAudio: jest.fn(),
+        target: { purpose: 'painting', acceptsImages: true },
+      }),
+    ).rejects.toMatchObject({ issue: { code: 'unsupported-type' } });
   });
 });

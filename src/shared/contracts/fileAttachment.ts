@@ -20,6 +20,8 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'document-ocr-unsupported',
     'parser-unavailable',
     'parser-unsupported',
+    'transcription-unconfigured',
+    'transcription-failed',
   ]),
   fileEntryId: FileEntryIdSchema.optional(),
   name: z.string().optional(),
@@ -39,7 +41,7 @@ export class FileAttachmentError extends Error {
 
 /** Persist facts about what was sent, never extracted file bodies. */
 export const FileAttachmentReportSchema = z.strictObject({
-  mode: z.enum(['image', 'text', 'document-text', 'document-ir']),
+  mode: z.enum(['image', 'text', 'document-text', 'document-ir', 'audio-transcript']),
   sourceTruncated: z.boolean(),
   /** One-based PDF pages whose visual content did not yield recognized text. */
   unrecognizedPages: z.array(z.number().int().positive()).optional(),
@@ -143,6 +145,10 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
       return 'The document parser is unavailable. Rebuild the development client or select the built-in parser.';
     case 'parser-unsupported':
       return `${name} is not supported by the selected document parser.`;
+    case 'transcription-unconfigured':
+      return `${name} is audio. Configure a transcription model in voice settings to attach it.`;
+    case 'transcription-failed':
+      return `${name} could not be transcribed.`;
     default:
       return `${name}: ${issue.code}`;
   }

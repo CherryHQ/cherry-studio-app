@@ -556,6 +556,29 @@ describe('lineWindow', () => {
   });
 });
 
+describe('audio reads', () => {
+  test('page a transcript like text and transcribe the recording only once', async () => {
+    const files = createFiles('');
+    files.resolveAvailable.mockResolvedValue(
+      new Map([
+        [FILE_ID, { fileEntryId: FILE_ID, mediaType: 'audio/mpeg', name: 'call.mp3', size: 9 }],
+      ]),
+    );
+    const transcribeAudio = jest.fn(async () => '[Audio transcript]\n[00:00] one\n[00:05] two');
+    const tool = createReadFileTool({ ...files, transcribeAudio }, IN_SCOPE);
+    const head = await execute(tool, { file_entry_id: FILE_ID, start_line: 1, limit: 2 });
+    expect(head.value).toMatchObject({
+      status: 'ok',
+      parser: 'transcription',
+      text: '[Audio transcript]\n[00:00] one',
+    });
+    const tail = await execute(tool, { file_entry_id: FILE_ID, start_line: 3 });
+    expect(tail.value).toMatchObject({ text: '[00:05] two' });
+    expect(transcribeAudio).toHaveBeenCalledTimes(1);
+    expect(files.readAsBytes).not.toHaveBeenCalled();
+  });
+});
+
 function createFiles(content: string | Uint8Array, declaredSize?: number) {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   const source: ManagedFileFact = {

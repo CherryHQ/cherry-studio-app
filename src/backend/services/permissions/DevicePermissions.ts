@@ -92,8 +92,8 @@ export class DevicePermissions implements PermissionsModule {
     }, signal);
   }
 
-  /** Serialize native operations that may present a system authorization sheet. */
-  private runWithSystemPrompt<TResult>(
+  /** Backend-only: serialize native operations that may present a system authorization sheet. */
+  runWithSystemPrompt<TResult>(
     operation: () => Promise<TResult>,
     signal?: AbortSignal,
   ): Promise<TResult> {

@@ -4,6 +4,8 @@ import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
+import SquareIcon from '@cherrystudio/app-icons/icons/square';
+import Volume2Icon from '@cherrystudio/app-icons/icons/volume-2';
 import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +13,9 @@ import { View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 import { resolveAppLanguage } from '@/shared/utils/languages';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
 
+import { useMessageSpeech } from '../../../voice/useMessageSpeech';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -52,6 +56,11 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
     [isSettled, message],
   );
+  const speechText = useMemo(
+    () => (isSettled ? messageTranslationText(message.data.parts ?? []) : undefined),
+    [isSettled, message],
+  );
+  const speech = useMessageSpeech(message.id, speechText);
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
@@ -120,6 +129,22 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
           size="xs"
           testID="assistant-message-copy"
+          variant="ghost"
+        />
+      ) : null}
+      {speechText ? (
+        <Button
+          accessibilityLabel={t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start')}
+          icon={
+            speech.isSpeaking ? (
+              <SquareIcon className="text-foreground" size={15} />
+            ) : (
+              <Volume2Icon className="text-muted-foreground" size={15} />
+            )
+          }
+          onPress={speech.toggle}
+          size="xs"
+          testID="assistant-message-read-aloud"
           variant="ghost"
         />
       ) : null}

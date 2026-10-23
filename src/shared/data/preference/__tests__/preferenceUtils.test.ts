@@ -39,3 +39,19 @@ test('shake feedback requires a device-local opt-in', () => {
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_hint_decision');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
 });
+
+test('voice engines default to the device and AI models need explicit selection', () => {
+  expect(getDefaultValue('feature.voice.dictation_engine')).toBeNull();
+  expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();
+  expect(getDefaultValue('feature.voice.transcription_model')).toBeNull();
+  expect(getDefaultValue('feature.voice.speech_model')).toBeNull();
+  // Engine support and system voices are facts of this device, not of a restored backup.
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toEqual(
+    expect.arrayContaining([
+      'feature.voice.dictation_engine',
+      'feature.voice.speech_engine',
+      'feature.voice.system_voice',
+    ]),
+  );
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).not.toContain('feature.voice.transcription_model');
+});

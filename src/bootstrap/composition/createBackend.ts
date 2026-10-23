@@ -1,3 +1,4 @@
+import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
@@ -75,6 +76,7 @@ import {
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
+import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -82,6 +84,7 @@ import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
   backend: Backend;
@@ -89,6 +92,7 @@ export type BackendComposition = {
   hasPendingSkillStorageWork(): boolean;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
+  disposeVoice(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
@@ -324,12 +328,30 @@ export function createBackend(
   });
 
   services.agent.configureSkills(skills);
+  const appLanguage = (preference: string | null) =>
+    resolveAppLanguage(
+      preference,
+      getLocales().map((locale) => locale.languageTag),
+    );
+  const voice = createVoice({
+    ai: services.ai,
+    preference: services.preference,
+    providers: services.provider,
+    permissions: services.devicePermissions,
+    language: () => appLanguage(services.preference.readCached('app.language')),
+    dictationLanguage: () =>
+      appLanguage(
+        services.preference.readCached('feature.voice.dictation_language') ??
+          services.preference.readCached('app.language'),
+      ),
+  });
 
   const appUpdate = createAppUpdateModule({
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
   });
 
   return {
+    disposeVoice: voice.dispose,
     disposeAppUpdate: appUpdate.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
@@ -401,6 +423,7 @@ export function createBackend(
         models: services.model,
       }),
       webSearch: services.webSearch,
+      voice: voice.module,
     },
     dataApiDependencies: {
       agentAvatars,

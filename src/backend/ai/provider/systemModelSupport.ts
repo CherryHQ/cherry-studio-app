@@ -44,7 +44,7 @@ export function createSystemModelSupport(language: LanguageServingSupport): Syst
     }
 
     if (isTextToSpeechModel(model) || isSpeechToTextModel(model)) {
-      return resolveVoiceEndpoint(provider) !== undefined;
+      return resolveVoiceEndpoint(provider, model) !== undefined;
     }
 
     return isTextGenerationModel(model) && language.supportsLanguageModel(provider, model);

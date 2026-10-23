@@ -1,7 +1,7 @@
 # AI Runtime
 
-Provider adapters and AI SDK support for Cherry Mobile's image and model-list path: provider
-connection facts, per-vendor request and transport shaping, image generation, model listing, and
+Provider adapters and AI SDK support for Cherry Mobile's image, voice, and model-list paths: provider
+connection facts, per-vendor request and transport shaping, image generation, explicit speech/transcription, model listing, and
 usage capture. Language generation, including single-call text, runs through Pi.
 
 Despite the package name, this is not Cherry Mobile's Agent Runtime. Pi is the sole local
@@ -47,3 +47,8 @@ The `provider` subpath also exposes the account endpoint resolver for OpenAI-com
 models. Model discovery keeps known one-shot TTS/STT families and their input/output modalities;
 unsupported realtime/audio-chat/video routes stay filtered from official OpenAI discovery.
 Application model management owns admission, catalog enrichment and the visible TTS/STT labels.
+
+Voice model adaptation is exported through `provider`. It uses OpenAI's audio protocol with the
+saved model's API ID and the account's resolved URL, credential, headers, and injected platform
+fetch. The backend owns cancellation and temporary files; see
+[Voice Input And Speech](../../docs/references/voice.md).

@@ -4,6 +4,7 @@ import {
   type FileAttachmentTarget,
 } from '@/shared/contracts/fileAttachment';
 
+import { isTranscribableAudio, MAX_AUDIO_ATTACHMENT_BYTES } from './audioFileTypes';
 import { documentFileTypeFromMediaType } from './documentFileTypes';
 import { isAiSupportedImageMediaType } from './imageFileTypes';
 import { isSupportedTextAttachment } from './textFileTypes';
@@ -26,6 +27,7 @@ export function fileAttachmentMode(file: Pick<FileAttachmentFact, 'mediaType' | 
   if (isAiSupportedImageMediaType(file.mediaType)) return 'image';
   if (documentFileTypeFromMediaType(file.mediaType)) return 'document';
   if (isSupportedTextAttachment(file)) return 'text';
+  if (isTranscribableAudio(file)) return 'audio';
   return undefined;
 }
 
@@ -62,7 +64,9 @@ export function validateFileAttachments(
         ? MAX_IMAGE_ATTACHMENT_BYTES
         : mode === 'document'
           ? documentAttachmentByteLimit(file.mediaType)
-          : MAX_TEXT_ATTACHMENT_BYTES;
+          : mode === 'audio'
+            ? MAX_AUDIO_ATTACHMENT_BYTES
+            : MAX_TEXT_ATTACHMENT_BYTES;
     if (file.size > limit) throw new FileAttachmentError({ ...issue, code: 'file-bytes', limit });
   }
   // Painting models declare how many references they accept; chat images are unbounded.

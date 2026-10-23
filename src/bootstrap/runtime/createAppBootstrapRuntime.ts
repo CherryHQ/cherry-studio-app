@@ -169,6 +169,7 @@ export function createAppBootstrapRuntime(
     disposeSystemEntry,
     disposeAppUpdate,
     disposeSkills,
+    disposeVoice,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
@@ -243,11 +244,16 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Drain system-entry consumers before the host's resources.
+      // Drain system-entry consumers, Skill writes, and voice files before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await Promise.all([disposeSystemEntry(), disposeSkills(), disposeAppUpdate()]);
+        await Promise.all([
+          disposeSystemEntry(),
+          disposeSkills(),
+          disposeVoice(),
+          disposeAppUpdate(),
+        ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;

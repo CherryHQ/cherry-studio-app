@@ -1,6 +1,6 @@
 # AI Runtime Instructions
 
-This package is the vendor-adaptation layer for the AI SDK image and model-list path, not a staging
+This package is the vendor-adaptation layer for the AI SDK image, voice, and model-list paths, not a staging
 area for migration into `src/backend/ai`. Read [README.md](README.md) and
 [Backend AI Target Architecture](../../docs/references/ai/target-architecture.md) before changing
 source.

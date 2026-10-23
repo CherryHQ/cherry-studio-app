@@ -468,6 +468,7 @@ function TextChatInput({
                         />
                       }
                       trailingAction={effortGauge}
+                      dictation
                     />
                   </ChatInputComposer>
                 )}

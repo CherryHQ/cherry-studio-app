@@ -1,5 +1,7 @@
 import {
   generateImage as aiCoreGenerateImage,
+  generateSpeech as aiCoreGenerateSpeech,
+  transcribe as aiCoreTranscribe,
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
@@ -8,7 +10,11 @@ import {
   isImageTransportDescriptorSupported,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/image';
-import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import {
+  type AppProviderSettingsMap,
+  resolveVoiceEndpoint,
+  resolveVoiceModel,
+} from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
@@ -27,11 +33,13 @@ import {
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { VoiceError, type VoiceModelSelection } from '@/shared/contracts/voice';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import { parseUniqueModelId } from '@/shared/data/types/model';
+import { createUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
+import { isSpeechToTextModel, isTextToSpeechModel } from '@/shared/utils/modelPurpose';
 
 import { listModels as listProviderModels } from './generation/listModels';
 import { resolveAiSdkServing } from './generation/providerConfig';
@@ -311,6 +319,109 @@ export class AiService extends BaseService {
       })),
       usage: result.usage,
     };
+  }
+
+  async generateSpeech(
+    input: VoiceModelSelection & { text: string; voice: string },
+    signal: AbortSignal,
+  ) {
+    return this.executeVoice(input, 'speech', signal, (config) =>
+      aiCoreGenerateSpeech(
+        resolveVoiceModel(config, 'speech'),
+        input.text,
+        { voice: input.voice },
+        signal,
+      ),
+    );
+  }
+
+  async transcribe(
+    input: VoiceModelSelection & { audio: Uint8Array; mediaType: string },
+    signal: AbortSignal,
+  ) {
+    return this.executeVoice(input, 'transcription', signal, (config) => {
+      const model = resolveVoiceModel(config, 'transcription');
+      // ai-sdk sniffs the container from the bytes and reads MP4/M4A as WAV, naming the upload
+      // `audio.wav`; the caller knows the real type.
+      return aiCoreTranscribe(
+        {
+          specificationVersion: model.specificationVersion,
+          provider: model.provider,
+          modelId: model.modelId,
+          doGenerate: (options) => model.doGenerate({ ...options, mediaType: input.mediaType }),
+        },
+        input.audio,
+        {},
+        signal,
+      );
+    });
+  }
+
+  private async executeVoice<TResult>(
+    selection: VoiceModelSelection,
+    operation: 'speech' | 'transcription',
+    signal: AbortSignal,
+    invoke: (config: Parameters<typeof resolveVoiceModel>[0]) => Promise<TResult>,
+  ): Promise<TResult> {
+    signal.throwIfAborted();
+    if (!selection.providerId || !selection.modelId.trim() || selection.modelId.length > 256)
+      throw new VoiceError('not-configured', 'A voice provider and model ID are required.');
+    const provider = await this.services.provider.getByProviderId(selection.providerId);
+    const model = await this.services.model.getById(
+      createUniqueModelId(provider.id, selection.modelId.trim()),
+    );
+    signal.throwIfAborted();
+    if (
+      !model ||
+      !model.isEnabled ||
+      model.isHidden ||
+      !(operation === 'speech' ? isTextToSpeechModel(model) : isSpeechToTextModel(model))
+    )
+      throw new VoiceError('not-configured', 'Select an available model for this voice operation.');
+    const endpointType = resolveVoiceEndpoint(provider, model);
+    if (!provider.isEnabled || !endpointType)
+      throw new VoiceError('not-configured', 'This provider cannot serve the audio protocol.');
+    const { sdkConfig } = await resolveAiSdkServing({
+      provider,
+      // The account's compatible base URL serves the audio routes, while the model owns its API ID.
+      model: { ...model, endpointTypes: [endpointType] },
+      providerService: this.services.provider,
+    });
+    signal.throwIfAborted();
+    try {
+      const settings = sdkConfig.providerSettings;
+      const configuredHeaders = settings?.headers;
+      const headers = await (typeof configuredHeaders === 'function'
+        ? configuredHeaders()
+        : configuredHeaders);
+      signal.throwIfAborted();
+      const result = await invoke({
+        modelId: sdkConfig.modelId,
+        settings: {
+          ...settings,
+          headers: stripUndefinedHeaders(headers ?? {}),
+          fetch: expoFetch,
+        },
+      });
+      signal.throwIfAborted();
+      // ai-core's one-shot audio results contain no usage or price facts. Do not manufacture
+      // language-token records or zero-cost receipts in AiUsageRecordService.
+      return result;
+    } catch (error) {
+      signal.throwIfAborted();
+      const apiKey =
+        sdkConfig.providerSettings && 'apiKey' in sdkConfig.providerSettings
+          ? sdkConfig.providerSettings.apiKey
+          : undefined;
+      throw new AiRequestError(
+        createAiFailure(
+          normalizeAiError(error, typeof apiKey === 'string' ? [apiKey] : [], {
+            providerId: provider.id,
+            modelId: model.modelId,
+          }),
+        ),
+      );
+    }
   }
 
   private async getProviderForListModels(request: ListModelsRequest): Promise<Provider> {
