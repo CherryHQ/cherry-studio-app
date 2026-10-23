@@ -18,6 +18,9 @@ This module owns Expo Router header adapters used by the app screens.
   the default back action replaces to `/`.
 - The right side defaults to empty. Business screens choose `menu`, `icon`, or `label` according to
   the action semantics; multiple secondary actions belong in a menu, while save/done remain direct.
+- Management selection uses `RouteHeader.selection`: the header replaces the normal title and
+  actions with the selected count and one leading exit action. Commit actions for forms and
+  pickers remain feature-owned.
 - `components/HeaderChrome` is the single native placement boundary. Android mounts actions through
   native-stack options, while iOS mounts the same actions through `Stack.Toolbar`.
 - `components/HeaderAction` owns the explicit `icon`, `label`, `menu`, and `custom` action contract

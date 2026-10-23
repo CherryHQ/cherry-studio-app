@@ -289,6 +289,13 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 **File library.** `library_file` owns the logical name, folder placement and current-version pointer;
 `file_folder` owns the hierarchy, and `file_entry` owns each content version. The library query joins
 the logical file to its active current version; history reads the versions of that logical file.
+Multi-select can move files from Recents, a kind filter, or a folder into one existing or newly
+created folder, or back to the library root. This is also the batch organization flow for existing
+painting outputs. Selection covers loaded files. Moves resolve selected
+entry IDs to logical files inside each write transaction, keep all versions and references intact,
+and apply the existing destination-name rules. Bounded requests report moved, unchanged, and failed
+entries separately; failures remain selected for retry. Selecting a future output folder for a
+standalone painting board remains separate.
 The Sharing tab selects `provenance: 'document-export'` without reclassifying historical rows. See
 [Document Export](../document-export.md).
 General imported/generated provenance filters remain unshipped. Deletion sets `deletedAt` and keeps
