@@ -30,6 +30,7 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
   }),
 }));
 
+jest.mock('@/frontend/appShell/layout', () => ({ useIsSidebarPersistent: () => false }));
 jest.mock('../../hooks/useSessionSearch', () => ({ useSessionSearch: () => jest.fn() }));
 jest.mock('../../SidebarSelectionProvider', () => ({
   SidebarSelectionProvider: ({ children }: { children: ReactNode }) => children,
