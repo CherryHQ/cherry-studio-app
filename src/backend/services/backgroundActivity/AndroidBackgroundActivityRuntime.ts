@@ -367,7 +367,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         if (this.unprotected) return;
         // Android 12+: start only from a visible Activity, never from a background retry.
         if (AppState.currentState !== 'active' || this.backgroundLimitReached) {
-          this.continueUnprotected(new Error('Background execution was requested while hidden.'));
+          this.continueUnprotected();
           return;
         }
         try {
@@ -412,14 +412,17 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
    * Protection is best effort: work that could not get it keeps running and ends through its
    * own result or a real platform revocation. Returning to the foreground retries admission.
    */
-  private continueUnprotected(cause: unknown): void {
+  private continueUnprotected(cause?: unknown): void {
     this.unprotected = true;
     this.publishStatus();
-    logger.error('Background execution is unprotected', cause as Error, {
+    const context = {
       operation: 'background.start',
       appState: AppState.currentState,
       leaseCount: this.leases.size,
-    });
+    };
+    // A hidden request or a spent platform budget is an expected limit; only a failed start reports.
+    if (cause === undefined) logger.warn('Background execution is unprotected', context);
+    else logger.error('Background execution is unprotected', cause as Error, context);
   }
 
   private async stopService(): Promise<void> {

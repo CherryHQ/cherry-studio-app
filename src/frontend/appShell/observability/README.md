@@ -102,7 +102,13 @@ finalization, chat terminal persistence, and render failures caught by an `Error
 their operations today. Existing service
 initialization errors include database migration failures through their call stacks. Adding a call
 site to the upload set means adding an `operation` to its log context; keep the documented collection
-scope accurate when the set grows.
+scope accurate when the set grows. Expected platform limits, such as Android refusing background
+protection while the app is hidden, log a warning instead.
+
+The JS `beforeSend` sends each error once per JS runtime, keyed by its `operation` tag, exception
+types, and stack positions. Every event counts against the shared organization quota, and repeats
+from loops, list rows, or retries add no diagnostic signal. Native crashes and hangs are outside this
+filter.
 
 Android NDK minidumps remain necessary for native crash diagnosis and may contain process memory;
 structured event filtering cannot scrub that binary content. Do not claim these reports are fully

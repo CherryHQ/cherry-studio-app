@@ -9,6 +9,7 @@ import {
   isExpectedSentryError,
   sanitizeSentryBreadcrumb,
   sanitizeSentryEvent,
+  sentryEventKey,
   sentryIdentifier,
 } from './sentryEvent';
 
@@ -25,6 +26,9 @@ let runtime: SentryRuntime = { dsn: undefined, environment: '', isProduction: fa
 let removeErrorReporter: (() => void) | undefined;
 let javaScriptReportingInitialized = false;
 let configureGeneration = 0;
+// A JS runtime sends each error once: the quota counts every event, and repeats from loops,
+// list rows, or retries add no signal.
+const reportedEvents = new Set<string>();
 
 export function recordSentryBreadcrumb(code: string): void {
   if (!status.active || !policy.breadcrumbCodes.includes(code)) return;
@@ -180,7 +184,6 @@ function initializeJavaScriptReporting() {
         Sentry.nativeLinkedErrorsIntegration(),
         Sentry.inboundFiltersIntegration(),
         Sentry.functionToStringIntegration(),
-        Sentry.dedupeIntegration(),
         Sentry.nativeReleaseIntegration(),
         Sentry.deviceContextIntegration(),
         // Attributes events to the running OTA group; also copied to the native scope.
@@ -190,10 +193,15 @@ function initializeJavaScriptReporting() {
         // Must follow the rewrite so the canonical bundle filename is in place.
         debugMetaIntegration(),
       ],
-      beforeSend: (event, hint) =>
-        status.active && !isExpectedSentryError(hint.originalException)
-          ? sanitizeSentryEvent(event, hint.originalException)
-          : null,
+      beforeSend: (event, hint) => {
+        if (!status.active || isExpectedSentryError(hint.originalException)) return null;
+        const clean = sanitizeSentryEvent(event, hint.originalException);
+        if (!clean) return null;
+        const key = sentryEventKey(clean);
+        if (reportedEvents.has(key)) return null;
+        reportedEvents.add(key);
+        return clean;
+      },
     });
 
     const client = Sentry.getClient();
