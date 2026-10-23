@@ -579,12 +579,20 @@ categories and selected AI service. See [Health Review](../../guides/health-revi
 - Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
   `generate_image` is never auto-approval eligible, so even an Agent in automatic approval mode
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
-  model is configured. Its input schema is built from that model's capability block so the model is
-  never offered a parameter its provider rejects.
-- The tool description uses the same capability snapshot as its schema. `generate` accepts a
-  prompt without a reference; `edit` accepts one conversation image through `image_ids`, required
-  when the configured model supports only editing. Missing capability metadata does not enable
-  editing. An unsupported reference-based request must not silently become text-only generation.
+  model is configured. A disabled, hidden or non-drawing model counts as unconfigured, so it omits
+  the tool rather than failing approved calls. Its description, input schema and request admission
+  use one model capability snapshot and the same `createPaintingGenerationStrategy` as painting jobs
+  and direct image chat. Custom sizes go in the size field; the paired enum's `custom` sentinel is
+  not advertised.
+- Reference support is a model capability, not a synonym for the provider's `edit` mode. A
+  reference-capable `generate` route stays `generate`; declared image-input endpoints can provide
+  support when the detailed capability block is absent. `image_ids` accepts at most one conversation
+  image, subject to a stricter model limit, and is required when the model cannot generate without
+  an image. Unsupported references fail explicitly rather than becoming text-only requests.
+- Request failures retain the sanitized `AiRequestError` facts in `RuntimeToolResult.failure` with
+  call scope, so execution, transcript and diagnostics agree on failure. Output-storage failures
+  have their own stage instead of being labelled provider failures. Retryability describes the
+  cause; it does not authorize automatic replay of an image side effect.
 - The Agent selects references from uploaded attachment `fileEntryId`, an earlier `generate_image`
   result's `id`, or an artifact's `ref.fileEntryId`. Users do not need to supply these technical ids;
   an ambiguous reference needs clarification, and an unavailable image needs reattachment. The

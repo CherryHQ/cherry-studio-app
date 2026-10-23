@@ -111,6 +111,46 @@ it('starts from the saved snapshot without contacting the network until a model 
   await expect(updater.applyUpdate()).resolves.toEqual({ status: 'current' });
 });
 
+it('keeps the replacement registry when a cancelled startup restore and cleanup finish late', async () => {
+  let restoreStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    restoreStarted = resolve;
+  });
+  let finishRestore!: (snapshots: ReturnType<typeof snapshot>[]) => void;
+  const restore = new Promise<ReturnType<typeof snapshot>[]>((resolve) => {
+    finishRestore = resolve;
+  });
+  jest.mocked(readProviderRegistrySnapshots).mockImplementationOnce(() => {
+    restoreStarted();
+    return restore;
+  });
+  const controller = new AbortController();
+  const initializing = updater._doInit(controller.signal);
+  await started;
+  controller.abort();
+
+  const replacement = new Updater();
+  jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([snapshot(2)]);
+  try {
+    await replacement._doInit();
+    finishRestore([snapshot(1)]);
+    await initializing;
+    await updater.stop();
+
+    expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-2');
+    const listener = jest.fn();
+    const unsubscribe = providerRegistryUpdates.subscribe(listener);
+    unsubscribe();
+    expect(listener).toHaveBeenCalledWith({ revision: 2, source: 'cache' });
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
+  } finally {
+    finishRestore([snapshot(1)]);
+    await initializing;
+    await replacement.stop();
+  }
+});
+
 it('uses a saved older compatible snapshot offline and retains it after refresh failure', async () => {
   const cached = snapshot(1, '2.0.8');
   cached.manifest.schemaVersion = 1;

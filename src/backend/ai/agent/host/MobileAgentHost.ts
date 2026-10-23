@@ -39,8 +39,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.host = new DurableAgentHost(store, ports, background, runtime, runtime.conversations);
   }
 
-  protected override async onInit() {
-    await this.host.initialize();
+  protected override async onInit(signal?: AbortSignal) {
+    await this.host.initialize(signal);
+    signal?.throwIfAborted();
     this.registerAppStateListener((state) => {
       if (state === 'active')
         void this.host

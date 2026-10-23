@@ -7,7 +7,7 @@ import { Text, View } from 'react-native';
 
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { useAppSearch } from '@/frontend/appShell/search';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useApiClient } from '@/frontend/data';
 
 import { searchSessions, type SessionSearchResult } from './sessionSearch';
 

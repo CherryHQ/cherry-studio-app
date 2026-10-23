@@ -1,8 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import { queryKeys } from '@/frontend/data';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { queryKeys, useApiClient } from '@/frontend/data';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
 
 import {

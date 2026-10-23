@@ -19,6 +19,10 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `useModelSettingSelections` reads model selection preferences and saves partial updates. The
   settings screen persists each selection immediately.
 - Model setting and model type helpers are exported from `index.ts`.
+- Capability badges are public only through `@/frontend/components/ModelPicker/badges`: the
+  `ModelPickerBadge` mark, its value type `ModelPickerBadgeValue`, and the pure badge rules. Provider
+  settings use this entry so badge rows do not load the picker sheet. Other `components`, `hooks`,
+  and `utils` paths remain private; module internals import their own leaves.
 
 ## Organization
 

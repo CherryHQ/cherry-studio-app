@@ -22,6 +22,7 @@ import {
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
   type RuntimeError,
+  type RuntimeSqlDatabase,
   type RuntimeTool,
   type RuntimeToolResult,
 } from '../../runtime';
@@ -758,6 +759,106 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('closes a database that opens after startup cancellation without opening the runtime', async () => {
+    const close = jest.fn(async () => {});
+    let finishOpen!: (database: RuntimeSqlDatabase) => void;
+    const database = new Promise<RuntimeSqlDatabase>((resolve) => {
+      finishOpen = resolve;
+    });
+    const state = fixture({
+      durableStorage: {
+        open: () => database,
+        size: () => 0,
+        discard: () => {},
+        notifyTranscript: jest.fn(),
+      },
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    controller.abort(new Error('Host replaced'));
+    finishOpen({ close } as unknown as RuntimeSqlDatabase);
+
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(state.conversations.initialize).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
+  test('does not settle recovered reservations when their startup read finishes after cancellation', async () => {
+    const notifyTranscript = jest.fn();
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as RuntimeSqlDatabase,
+        size: () => 0,
+        discard: () => {},
+        notifyTranscript,
+      },
+    });
+    const turn = await state.reserve('completed');
+    let finishRead!: () => void;
+    let markReading!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      markReading = resolve;
+    });
+    const readGate = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const listUnsettled = state.store.listUnsettledAssistantMessages.bind(state.store);
+    jest.spyOn(state.store, 'listUnsettledAssistantMessages').mockImplementationOnce(async () => {
+      const rows = await listUnsettled();
+      markReading();
+      await readGate;
+      return rows;
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    await reading;
+    controller.abort(new Error('Host replaced'));
+    finishRead();
+
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+
+    expect((await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status).toBe(
+      'pending',
+    );
+    expect(notifyTranscript).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
+  test('releases a late startup work subscription without resuming or acquiring a lease', async () => {
+    const executionLease = jest.fn(() => ({ release: jest.fn() }));
+    const state = fixture({ executionLease });
+    const unsubscribe = jest.fn(async () => {});
+    let finishWatch!: () => void;
+    let markWatching!: () => void;
+    const watching = new Promise<void>((resolve) => {
+      markWatching = resolve;
+    });
+    const watchGate = new Promise<void>((resolve) => {
+      finishWatch = resolve;
+    });
+    jest.spyOn(state.conversations, 'watchWork').mockImplementationOnce(async () => {
+      markWatching();
+      await watchGate;
+      return { active: true, unsubscribe };
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    await watching;
+    controller.abort(new Error('Host replaced'));
+    finishWatch();
+
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(executionLease).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
   test('storage failure preserves pending turns and concurrent retries share one reopen', async () => {
     const release = jest.fn();
     const state = fixture({ executionLease: () => ({ release }) });

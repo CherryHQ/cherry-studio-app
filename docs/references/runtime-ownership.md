@@ -1,6 +1,6 @@
 # Runtime Ownership
 
-The active experimental Agent lifetime is specified in
+The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
 Ordinary disposal or OS expiry preserves work; foreground reopening reconstructs current capabilities
@@ -105,18 +105,20 @@ route-owned. It owns admission, per-input execution capabilities, normalized Age
 projection into Cherry history, and process-start reconciliation. Pi owns the durable model/tool loop
 and queued submissions; the Host reconstructs capabilities before scheduling resumes.
 
-The app-shell `ConversationProvider` owns the local conversation source and its
-`AgentSessionChatClient`. The feature `ChatProvider` consumes that client for existing local
-composer/navigation extensions during the conversation migration. The client observes
-only Sessions with React subscribers, composes snapshots and deltas into live state, refreshes those
-observations when the app returns to the foreground, and releases route observations on unmount. The app-shell owner disposes the client. Removing an
-observation does not cancel the Host's turn; reopening the route installs a fresh snapshot.
+The app-shell `ConversationProvider` owns the local catalog and retained remote sources shared by
+the sidebar and Agent picker. Local chat observation belongs to the feature `ChatProvider`, which
+creates and disposes `AgentSessionChatClient`, manages composer navigation, refreshes observed
+Sessions on foreground and invalidates their queries. The client observes only Sessions with React
+subscribers and composes snapshots/deltas into live state. Removing an observation does not cancel
+the Host's turn; reopening the route installs a fresh snapshot.
 
-The feature ChatProvider owns local composer navigation; the app-shell ConversationProvider owns
-observation and React Query invalidation. The local conversation adapter reads persisted transcripts
-through `/agent-sessions/:sessionId/messages` and projects protocol snapshots/events into the common
-consumption contract. `ConversationPresenter` reconciles history and live rows by stable message id.
-Backend code never imports Expo Router or TanStack Query.
+`features/chat/runtime` reads persisted transcripts through
+`/agent-sessions/:sessionId/messages`, retains the selected-branch history window and merges live
+rows by stable message id. It projects the result into the shared conversation read model consumed
+by `ChatWorkspace`. Remote revision-aware history reconciliation remains in the remote chat page.
+See [Conversation Consumption](../../src/frontend/appShell/conversation/README.md) and
+[Chat Screen](../../src/frontend/features/chat/README.md). Backend code never imports Expo Router
+or TanStack Query.
 
 User cancellation affects only the selected Session. Pi executes one input at a time within that
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
@@ -275,8 +277,10 @@ repair data, or run diagnostics.
 
 The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after status becomes
 `ready`. Agent reconciliation, MCP initialization, and the job cold-start pump stay off the
-first-paint path. Host-owned PostReady initialization is retained and awaited if that generation is
-disposed before it finishes.
+first-paint path. Disposal closes host-owned initialization immediately and gives the retained
+PostReady promise up to 5s to settle. Pending hooks keep generation-scoped cleanup; they must honor
+the closing signal before publishing results or reacquiring resources. See
+[Lifecycle Overview](./lifecycle/lifecycle-overview.md#shutdown-sequence).
 
 Current Agent Session, transcript history windows, provider queries, and feature state load at route
 level after the bootstrap gate.

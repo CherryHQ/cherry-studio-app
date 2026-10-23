@@ -222,7 +222,11 @@ export interface DurableAgentRuntime {
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
-  initialize(database: RuntimeSqlDatabase, ports: RuntimeExecutionPorts): Promise<void>;
+  initialize(
+    database: RuntimeSqlDatabase,
+    ports: RuntimeExecutionPorts,
+    signal?: AbortSignal,
+  ): Promise<void>;
   /** Enable scheduling only after business identities and capabilities have been reconstructed. */
   resume(): void;
   /** Native task demand, including background compaction; observing does not schedule work. */

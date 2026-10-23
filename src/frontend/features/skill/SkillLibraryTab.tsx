@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useApiClient } from '@/frontend/data';
 import { useSkillsApi } from '@/frontend/hooks/skill';
 import type { SkillListItem } from '@/shared/data/types/skill';
 

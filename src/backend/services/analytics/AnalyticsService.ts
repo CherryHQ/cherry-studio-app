@@ -100,6 +100,7 @@ export class AnalyticsService extends BaseService implements Activatable {
   async onActivate(): Promise<void> {
     const version = appVersion();
     const clientId = await resolveClientId(application.get('PreferenceService'));
+    this.initializationSignal?.throwIfAborted();
     this.client = new AnalyticsClient({
       channel: CHANNEL,
       clientId,

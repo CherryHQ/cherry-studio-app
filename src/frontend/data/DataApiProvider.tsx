@@ -48,7 +48,11 @@ export function DataApiProvider({ children, dataApi }: DataApiProviderProps) {
   return <DataApiContext value={dataApi}>{children}</DataApiContext>;
 }
 
-/** Internal transport access for the typed endpoint hooks. */
+/**
+ * Public through @/frontend/data for imperative resource work and custom Query lifetimes.
+ * Prefer the endpoint hooks for ordinary reads and mutations. Direct callers own cancellation,
+ * cache keys and refresh behavior; the client remains the typed in-process resource boundary.
+ */
 export function useApiClient(): ApiClient {
   const dataApi = use(DataApiContext);
 

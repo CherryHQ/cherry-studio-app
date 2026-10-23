@@ -1,8 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { queryKeys } from '@/frontend/data';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { queryKeys, useApiClient } from '@/frontend/data';
 import { useMessageRenderWindow } from '@/frontend/hooks/chat/useMessageRenderWindow';
 import { getOlderLoadAction } from '@/frontend/hooks/chat/utils/messageHistoryWindowStrategy';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';

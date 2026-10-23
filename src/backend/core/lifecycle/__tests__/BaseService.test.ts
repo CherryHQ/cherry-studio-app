@@ -69,6 +69,18 @@ describe('BaseService lifecycle', () => {
     expect(service.calls.filter((call) => call === 'onAllReady')).toHaveLength(1);
   });
 
+  it('skips initialization and readiness hooks when initialization is already closed', async () => {
+    const service = new Recorder();
+    const controller = new AbortController();
+    controller.abort();
+
+    await service._doInit(controller.signal);
+    await service._doAllReady();
+
+    expect(service.calls).toEqual([]);
+    expect(service.state).toBe(LifecycleState.Created);
+  });
+
   it('stops then destroys', async () => {
     const service = new Recorder();
     await service._doInit();
@@ -92,6 +104,31 @@ describe('BaseService lifecycle', () => {
 });
 
 describe('BaseService disposables', () => {
+  it('immediately releases late resources without releasing existing resources twice', async () => {
+    const service = new Recorder();
+    const controller = new AbortController();
+    const earlyCleanup = jest.fn();
+    const lateCleanup = jest.fn();
+    const destroyedCleanup = jest.fn();
+    await service._doInit(controller.signal);
+    service.track(earlyCleanup);
+
+    controller.abort();
+    service.track(lateCleanup);
+
+    expect(earlyCleanup).not.toHaveBeenCalled();
+    expect(lateCleanup).toHaveBeenCalledTimes(1);
+
+    await service._doStop();
+    await service._doDestroy();
+    service.track(destroyedCleanup);
+    await service._doDestroy();
+
+    expect(earlyCleanup).toHaveBeenCalledTimes(1);
+    expect(lateCleanup).toHaveBeenCalledTimes(1);
+    expect(destroyedCleanup).toHaveBeenCalledTimes(1);
+  });
+
   it('releases registered cleanups after onStop', async () => {
     const service = new Recorder();
     const cleanup = jest.fn();
@@ -275,6 +312,33 @@ describe('BaseService activation', () => {
 
     expect(service.deactivations).toBe(1);
     expect(service.isActivated).toBe(false);
+  });
+
+  it('does not activate after initialization closes while the service is still Ready', async () => {
+    const service = new Heavy();
+    const controller = new AbortController();
+    await service._doInit(controller.signal);
+    controller.abort();
+
+    expect(service.isReady).toBe(true);
+    expect(await service._doActivate()).toBe(false);
+    expect(service.activations).toBe(0);
+  });
+
+  it('does not reacquire resources through an activation queued during destroy', async () => {
+    const service = new Heavy();
+    await service._doInit();
+    await service._doActivate();
+
+    const destroying = service._doDestroy();
+    const lateActivation = service._doActivate();
+    await destroying;
+
+    expect(await lateActivation).toBe(false);
+    expect(service.activations).toBe(1);
+    expect(service.deactivations).toBe(1);
+    expect(service.isActivated).toBe(false);
+    expect(service.isDestroyed).toBe(true);
   });
 
   it('waits for an in-progress activation and deactivates it before stopping', async () => {

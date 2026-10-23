@@ -126,21 +126,38 @@ export class BackgroundActivityManager extends BaseService {
     super();
   }
 
-  protected async onInit(): Promise<void> {
+  protected async onInit(signal?: AbortSignal): Promise<void> {
     this.appState = AppState.currentState;
-    this.registerAppStateListener(this.handleAppStateChange);
-    this.registerDisposable(
+    const appState = this.registerAppStateListener(this.handleAppStateChange);
+    const presentationEnabled = this.registerDisposable(
       this.environment.subscribePresentationEnabled(this.handlePresentationEnabledChange),
     );
-    this.registerDisposable(
+    const visibleTask = this.registerDisposable(
       this.environment.subscribeVisibleTask((deepLinkUrl) => {
+        if (this.disposed) return;
         this.visibleTask = deepLinkUrl;
         void this.dismissTask(deepLinkUrl);
       }),
     );
-    await this.clearOrphanedSurfaces();
-    // Environments without a logo surface resolve `undefined`; no platform check here.
-    this.logoUris = await this.environment.prepareLogos();
+    const cancel = () => {
+      // Dependent owners have not started yet. Retire this initialization's
+      // listeners now, before a replacement can install its own subscriptions.
+      this.disposed = true;
+      appState.dispose();
+      presentationEnabled.dispose();
+      visibleTask.dispose();
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      await this.clearOrphanedSurfaces(signal);
+      signal?.throwIfAborted();
+      // Environments without a logo surface resolve `undefined`; no platform check here.
+      const logoUris = await this.environment.prepareLogos();
+      signal?.throwIfAborted();
+      this.logoUris = logoUris;
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+    }
   }
 
   startSession<Props extends BackgroundActivityBaseProps>(
@@ -506,14 +523,16 @@ export class BackgroundActivityManager extends BaseService {
     }
   }
 
-  private async clearOrphanedSurfaces(): Promise<void> {
+  private async clearOrphanedSurfaces(signal?: AbortSignal): Promise<void> {
     for (const presenter of this.environment.presenters) {
+      signal?.throwIfAborted();
       try {
         const count = await presenter.clearOrphans();
         if (count > 0) logger.info('Cleared orphaned background activities', { count });
       } catch (error) {
         logger.warn('Orphaned background activity cleanup failed', error as Error);
       }
+      signal?.throwIfAborted();
     }
   }
 

@@ -1,6 +1,6 @@
 /**
  * The `generate_image` description and input contract are built from the configured drawing
- * model's capability block rather than fixed: two providers expose different
+ * model's shared generation strategy rather than fixed: two providers expose different
  * canonical parameters, and offering a model a parameter it rejects wastes a
  * call. A turn with no configured model gets the fallback contract.
  */
@@ -9,17 +9,17 @@ import {
   type CanonicalParamKey,
   IMAGE_PARAM_CATALOG,
   type ImageGenerationMode,
-  type ImageGenerationSupport,
   type SupportSpec,
 } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
+
+import type { PaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
 const MAX_INPUT_IMAGES = 1;
 
 const GENERATE_IMAGE_PROMPT_FIELD = z
   .string()
   .trim()
-  .min(1)
   .max(4000)
   .describe(
     'Describe the desired result vividly, including subject, style, composition, and mood.',
@@ -115,24 +115,30 @@ function constrainedParamSchema(key: CanonicalParamKey, spec: SupportSpec): z.Zo
   }
 }
 
-function resolveToolModes(support: ImageGenerationSupport | null | undefined): ToolMode[] {
-  if (!support) return ['generate'];
-  const modes: ToolMode[] = [];
-  if (support.modes.generate) modes.push('generate');
-  if (support.modes.edit) modes.push('edit');
-  return modes;
+/**
+ * The tool takes custom sizes through its size-typed field, which admission maps onto the paired
+ * enum. Advertising that enum's `custom` sentinel would offer a value admission rejects.
+ */
+function withoutCustomOption(spec: SupportSpec): SupportSpec | undefined {
+  if (spec.type !== 'enum') return spec;
+  const options = spec.options.filter((option) => option !== 'custom');
+  return options.length === 0 ? undefined : { ...spec, options };
+}
+
+function resolveToolModes(strategy: PaintingGenerationStrategy): ToolMode[] {
+  return [...new Set([strategy.resolveMode(0), strategy.resolveMode(1)])].filter(
+    (mode): mode is ToolMode => mode !== undefined,
+  );
 }
 
 /** Uses the same capability snapshot as the input schema. */
-export function buildGenerateImageToolDescription(
-  support: ImageGenerationSupport | null | undefined,
-): string {
-  const modes = resolveToolModes(support);
+export function buildGenerateImageToolDescription(strategy: PaintingGenerationStrategy): string {
+  const modes = resolveToolModes(strategy);
   const instructions = [
     `Use the user's configured drawing model for image requests. Available operations: ${modes.join(', ') || 'none'}.`,
   ];
 
-  if (modes.includes('generate')) {
+  if (strategy.canGenerate) {
     instructions.push(
       'Generate a new image, illustration, logo, or icon from a prompt without image_ids.',
     );
@@ -142,11 +148,11 @@ export function buildGenerateImageToolDescription(
     );
   }
 
-  if (modes.includes('edit')) {
+  if (strategy.acceptsImages) {
     instructions.push(
       `Edit or use a user-uploaded image or an earlier generated image as a reference: pass its id in image_ids (attachment fileEntryId, generate_image result id, or artifact ref.fileEntryId). Never invent ids or ask the user for one; ask which image only when ambiguous, and ask to reattach one that is unavailable. Describe the changes and what to keep in prompt; never replace the reference with a text-only approximation. At most ${MAX_INPUT_IMAGES} reference image per call; if more are needed, ask which one. This tool reads the original itself; call read_file first only to inspect pixels no longer in context.`,
     );
-    if (!modes.includes('generate')) {
+    if (!strategy.canGenerate) {
       instructions.push('image_ids is required for every call with this drawing model.');
     }
   } else {
@@ -156,29 +162,42 @@ export function buildGenerateImageToolDescription(
   }
 
   instructions.push(
-    'Generated images are displayed automatically in the conversation. Returned ids and names are reusable file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text. Generation can take 10-60 seconds.',
+    'Generated images are displayed automatically in the conversation. Returned ids and names are reusable file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text. Generation can take 10-60 seconds. Do not automatically repeat a failed generation.',
   );
   return instructions.join('\n\n');
 }
 
-/** Builds the runtime tool contract from the configured model's capability block. */
+/** Builds the runtime tool contract from the same strategy used for request admission. */
 export function buildGenerateImageToolSchema(
-  support: ImageGenerationSupport | null | undefined,
+  strategy: PaintingGenerationStrategy,
 ): z.ZodObject<Record<string, z.ZodType>> {
-  const modes = resolveToolModes(support);
   const params = new Map<CanonicalParamKey, { mode: ToolMode; spec: SupportSpec }[]>();
 
-  for (const mode of modes) {
-    const modeSupports = support?.modes[mode]?.supports;
-    if (!modeSupports) continue;
-    for (const [key, spec] of Object.entries(modeSupports) as [CanonicalParamKey, SupportSpec][]) {
+  const modes = new Map(
+    [strategy.resolveParameters(0), strategy.resolveParameters(1)].flatMap((resolved) =>
+      resolved ? [[resolved.mode as ToolMode, resolved.definition] as const] : [],
+    ),
+  );
+  for (const [mode, definition] of modes) {
+    const supports = Object.entries(definition.supports) as [CanonicalParamKey, SupportSpec][];
+    const sizePairedKeys = new Set(
+      supports.flatMap(([, spec]) => (spec.type === 'size' ? [spec.pairedEnumKey ?? 'size'] : [])),
+    );
+    for (const [key, supported] of supports) {
+      const spec = sizePairedKeys.has(key) ? withoutCustomOption(supported) : supported;
+      if (!spec) continue;
       const entries = params.get(key) ?? [];
       entries.push({ mode, spec });
       params.set(key, entries);
     }
   }
 
-  const inputShape: Record<string, z.ZodType> = { prompt: GENERATE_IMAGE_PROMPT_FIELD };
+  const requiresPrompt =
+    (!strategy.canGenerate || strategy.requiresPrompt(0)) &&
+    (!strategy.acceptsImages || strategy.requiresPrompt(1));
+  const inputShape: Record<string, z.ZodType> = {
+    prompt: requiresPrompt ? GENERATE_IMAGE_PROMPT_FIELD.min(1) : GENERATE_IMAGE_PROMPT_FIELD,
+  };
 
   for (const [key, entries] of params) {
     // Modes usually share a spec. Identical branches would still emit an anyOf without a
@@ -199,20 +218,16 @@ export function buildGenerateImageToolSchema(
     inputShape[key] = schema.optional();
   }
 
-  if (modes.includes('edit')) {
+  if (strategy.acceptsImages) {
     const imageIds = z
       .array(z.string().trim().min(1))
       .min(1)
       .max(MAX_INPUT_IMAGES)
       .describe(
-        `Reference image file entry id, not a message id, tool call id, or URL. ${modes.includes('generate') ? 'Omit only to generate a new image without a reference.' : 'Required for every call.'}`,
+        `Reference image file entry id, not a message id, tool call id, or URL. ${strategy.canGenerate ? 'Omit only to generate a new image without a reference.' : 'Required for every call.'}`,
       );
-    inputShape.image_ids = modes.includes('generate') ? imageIds.optional() : imageIds;
+    inputShape.image_ids = strategy.canGenerate ? imageIds.optional() : imageIds;
   }
 
   return z.object(inputShape).strict();
-}
-
-export function limitGenerateImageInputIds(imageIds: readonly string[]): string[] {
-  return imageIds.slice(0, MAX_INPUT_IMAGES);
 }

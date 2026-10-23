@@ -9,12 +9,6 @@ export { ModelSearchControls } from './components/ModelSearchControls/ModelSearc
 export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export { type ModelPickerGroup, type ModelPickerModelItem } from './utils/modelPickerData';
-export {
-  getModelPickerBadges,
-  matchesModelPickerBadges,
-  MODEL_PICKER_BADGES,
-  type ModelPickerBadge,
-} from './utils/modelPickerBadges';
 export { buildModelPickerListItems } from './utils/modelPickerListItems';
 export {
   getNextModelSelection,
