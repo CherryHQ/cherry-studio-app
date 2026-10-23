@@ -197,7 +197,14 @@ function PaintingSettingField({
       );
     case 'enum': {
       const options = enumOptions(field, fields);
-      if (field.spec.render !== 'chips' && options.length <= MAX_SEGMENTS) {
+      // Segments always show a selection, so an enum without a default would
+      // display an option that is never sent. The row reports the unset state.
+      const defaultValue = field.spec.default;
+      if (
+        field.spec.render !== 'chips' &&
+        defaultValue !== undefined &&
+        options.length <= MAX_SEGMENTS
+      ) {
         return (
           <SegmentedField
             label={label}
@@ -206,7 +213,7 @@ function PaintingSettingField({
               label: imageParamOptionLabel(t, field.key, option),
               value: option,
             }))}
-            value={String(value ?? field.spec.default ?? options[0])}
+            value={String(value ?? defaultValue)}
           />
         );
       }
