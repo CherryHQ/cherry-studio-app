@@ -1,7 +1,7 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
-import { ProviderService } from '../ProviderService';
+import { batchUpsertProviders, ProviderService } from '../ProviderService';
 
 describe('ProviderService integration', () => {
   let testDatabase: ReturnType<typeof createServiceTestDatabase>;
@@ -41,6 +41,45 @@ describe('ProviderService integration', () => {
     const page = await service.listPage({ cursor: 'not-a-provider-cursor', limit: 1 });
 
     expect(page.items.map((provider) => provider.id)).toEqual(['enabled-a']);
+  });
+
+  it('preserves saved connections and credentials when seeding newer cloud defaults', async () => {
+    const apiKeys = [{ id: 'saved-key', key: 'saved-secret', isEnabled: true }];
+    await service.create({
+      providerId: 'saved-copy',
+      presetProviderId: 'openai',
+      name: 'My provider',
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'https://my-relay.example/v1' },
+      },
+      apiKeys,
+      authConfig: { type: 'api-key', required: true },
+    });
+    await testDatabase.dbService.withWriteTx((tx) =>
+      batchUpsertProviders(tx, [
+        {
+          providerId: 'saved-copy',
+          presetProviderId: 'openai',
+          name: 'New cloud name',
+          defaultChatEndpoint: 'openai-responses',
+          endpointConfigs: {
+            'openai-chat-completions': { baseUrl: 'https://new-cloud.example/v1' },
+          },
+          apiKeys: [{ id: 'replacement', key: 'replacement', isEnabled: true }],
+          authConfig: { type: 'api-key', required: false },
+        },
+      ]),
+    );
+    expect(await service.getRowByProviderId('saved-copy')).toMatchObject({
+      name: 'My provider',
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'https://my-relay.example/v1' },
+      },
+      apiKeys,
+      authConfig: { type: 'api-key', required: true },
+    });
   });
 
   function insertProvider(

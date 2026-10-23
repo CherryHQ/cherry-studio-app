@@ -1,3 +1,5 @@
+import providers from '@cherrystudio/provider-registry/data/providers.json';
+
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import { userModelTable, type UserModelRow } from '@/backend/data/db/schemas/userModel';
@@ -92,6 +94,7 @@ describe('ModelService', () => {
     const install = (contextWindow: number, maxOutputTokens: number) => {
       providerRegistryService.installRemoteSnapshot(
         providerRegistryService.parseRemoteSnapshot({
+          providers,
           models: {
             version: String(contextWindow),
             models: [{ id: 'test-model', name: 'Official', contextWindow, maxOutputTokens }],
@@ -364,6 +367,7 @@ describe('ModelService', () => {
   test('creates standalone registry override models through synthesized presets', async () => {
     providerRegistryService.installRemoteSnapshot(
       providerRegistryService.parseRemoteSnapshot({
+        providers,
         models: { version: 'standalone', models: [] },
         providerModels: {
           version: 'standalone',

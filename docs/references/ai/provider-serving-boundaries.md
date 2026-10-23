@@ -201,13 +201,12 @@ adds lifecycle, authentication, protocol-conversion, and suspension costs that a
 different on iOS and Android. Any future in-process AI SDK bridge requires a separate design and
 must prove tool calls, reasoning, images, usage, cancellation, and error parity before adoption.
 
-Mobile's remote registry protocol is a model-data distribution mechanism, not a replacement for
-the shared control plane. Unsigned snapshots may update model metadata and Provider-model
-overrides, including selecting an endpoint type already declared by the bundled Provider and
-updating image-generation `vendorTransport` relative paths and sync/async behavior. Provider
-definitions, base URLs, adapter families, headers, and credential behavior remain bundled. Mobile
-may accept a Desktop snapshot only after its schemas and Runtime interpreters implement that
-snapshot's semantics.
+Mobile's remote registry distributes provider defaults, model metadata, and Provider-model
+overrides from fixed official HTTPS sources. A complete snapshot is required before database
+seeding; later launches can use its persistent cache. Catalog activation does not rewrite saved
+connections or credentials. Provider definitions supply defaults for new imports, while Mobile's
+protocol and authentication implementations remain application code. Mobile may accept a Desktop
+snapshot only after its schemas and Runtime interpreters implement the consumed semantics.
 
 ## Migration
 

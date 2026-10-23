@@ -2,6 +2,7 @@ import {
   CatalogManifestSchema,
   createRegistry,
   ModelListSchema,
+  ProviderListSchema,
   ProviderModelListSchema,
   type CatalogManifest,
   type ModelConfig,
@@ -9,11 +10,7 @@ import {
   type Registry,
 } from '@cherrystudio/provider-registry';
 
-import {
-  findMobileProvider,
-  mobileProviders,
-  type MobileProviderConfig,
-} from './mobileProviderCatalog';
+import { createMobileProviderCatalog, type MobileProviderConfig } from './mobileProviderCatalog';
 
 export { CatalogManifestSchema };
 export type { CatalogManifest };
@@ -33,8 +30,12 @@ export const REGISTRY_SCHEMA_VERSION = 3;
  */
 export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.1.4';
 
-/** Unsigned remote data may describe models, never provider routing or credentials. */
-export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
+/** All catalog data comes from the fixed Desktop publication sources. */
+export const REMOTE_REGISTRY_FILES = [
+  'models.json',
+  'providers.json',
+  'provider-models.json',
+] as const;
 export type RemoteRegistryFileName = (typeof REMOTE_REGISTRY_FILES)[number];
 
 type VersionParts = readonly [major: number, minor: number, patch: number];
@@ -81,6 +82,7 @@ export function isCatalogManifestCompatible(
 
 export type MobileRemoteRegistrySnapshot = {
   models: ModelsBundle;
+  providers: ReturnType<typeof createMobileProviderCatalog>;
   providerModels: ProviderModelsBundle;
 };
 
@@ -88,7 +90,7 @@ export type MobileRemoteRegistrySnapshot = {
  * OAuth-only presets excluded from runtime reads, including saved providers.
  * These flows still require an external CLI. Keep temporary setup or product limitations
  * in the catalog-only exclusions below so existing
- * records remain readable. Provider definitions remain bundled in both cases.
+ * records remain readable. These exclusions apply to downloaded definitions too.
  */
 const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set(['grok-cli']);
 
@@ -122,12 +124,12 @@ export class MobileRegistryLoader {
   private registry: Registry | null = null;
 
   private getRegistry(): Registry {
-    this.registry ??= createRegistry({ ...this.requireSnapshot(), providers: mobileProviders });
+    this.registry ??= createRegistry(this.requireSnapshot());
     return this.registry;
   }
 
   loadProviders(): MobileProviderConfig[] {
-    return mobileProviders.providers;
+    return this.requireSnapshot().providers.providers;
   }
   loadProviderModels(): ProviderModelOverride[] {
     return this.requireSnapshot().providerModels.overrides;
@@ -152,8 +154,8 @@ export class MobileRegistryLoader {
     return this.remoteSnapshot?.models.version;
   }
 
-  getProvidersVersion(): string {
-    return mobileProviders.version;
+  getProvidersVersion(): string | undefined {
+    return this.remoteSnapshot?.providers.version;
   }
 
   getProviderModelsVersion(): string | undefined {
@@ -170,19 +172,25 @@ export class MobileRegistryLoader {
 
   private requireSnapshot(): MobileRemoteRegistrySnapshot {
     if (!this.remoteSnapshot) {
-      throw new Error('Model registry has not been downloaded yet');
+      throw new Error('Provider registry has not been downloaded yet');
     }
     return this.remoteSnapshot;
   }
 
   parseRemoteSnapshot(input: {
     models: unknown;
+    providers: unknown;
     providerModels: unknown;
   }): MobileRemoteRegistrySnapshot {
     const models = ModelListSchema.parse(input.models);
+    const providers = ProviderListSchema.parse(input.providers);
+    if (providers.providers.length === 0) {
+      throw new Error('The registry contains no compatible providers');
+    }
     const providerModels = ProviderModelListSchema.parse(input.providerModels);
     // The pinned native runtime cannot serialize Anthropic between_tools yet.
     return {
+      providers: createMobileProviderCatalog(providers),
       models: {
         ...models,
         models: models.models.filter(
@@ -219,7 +227,10 @@ export class MobileRegistryLoader {
     return this.getRegistry().findModel(modelId);
   }
   findProvider(providerId: string): MobileProviderConfig | null {
-    return findMobileProvider(providerId);
+    return (
+      this.remoteSnapshot?.providers.providers.find((provider) => provider.id === providerId) ??
+      null
+    );
   }
   findOverride(providerId: string, modelId: string): ProviderModelOverride | null {
     return this.getRegistry().findOverride(providerId, modelId);

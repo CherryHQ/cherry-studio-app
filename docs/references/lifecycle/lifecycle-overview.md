@@ -46,8 +46,9 @@ Desktop's `BeforeReady` / `Background` / `WhenReady` are all defined relative to
 enum carries mobile's boundary instead of a renamed Electron one. Within a phase, services are
 dependency-sorted and peers initialize in parallel — that layering algorithm is ported unchanged.
 
-`Gate` holds what a correct first render requires: `CacheService`, `DbService` (migration and
-seeding), `PreferenceService`. Boot theme and i18n remain app-level steps performed by
+`Gate` holds what a correct first render requires: `CacheService`, `ProviderRegistryUpdaterService`
+(complete catalog restore or first download), `DbService` (migration and seeding), and
+`PreferenceService`. The database depends on registry readiness. Boot theme and i18n remain app-level steps performed by
 `AppBootstrapProvider` after `host.start()` resolves — they are frontend concerns and do not become
 backend services.
 

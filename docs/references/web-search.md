@@ -62,7 +62,8 @@ Adapters, by the endpoint the model is actually requested on:
 | Kimi | External service | External service | | See below |
 | Every other endpoint | External service | External service | | |
 
-A model is eligible only when the trusted bundled catalog lists it for that provider. A sign-in
+A provider's native tool declarations come from the downloaded catalog with Mobile corrections;
+model-specific eligibility remains in the shared package's built-in rules. A sign-in
 uses native tools only when it authenticates the provider's ordinary API (xAI, OpenRouter);
 subscription sign-ins keep the external services. Vertex AI, Bedrock, and Azure Chat Completions
 are not served by Pi on Mobile and have no adapter.

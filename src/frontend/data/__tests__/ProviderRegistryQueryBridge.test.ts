@@ -3,6 +3,9 @@ import { isRegistryProjectionPath } from '../ProviderRegistryQueryBridge';
 test.each([
   '/models',
   '/models/provider::model',
+  '/providers',
+  '/providers/page',
+  '/providers/openai',
   '/providers/openai/models:resolve',
   'onboarding-models',
   // Agent records embed the model's display name.
@@ -15,7 +18,8 @@ test.each([
 test.each([
   '/agents/9917766f-c084-496f-b6b8-17f08e0c6c3a/tool-bindings',
   '/agent-sessions',
-  '/providers',
+  '/providers/openai/api-keys',
+  '/providers/openai/auth',
   '/mcp-servers',
   undefined,
 ])('leaves %s alone', (path) => {

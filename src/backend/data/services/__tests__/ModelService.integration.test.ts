@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 
+import providers from '@cherrystudio/provider-registry/data/providers.json';
+
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { createModelHandlers } from '@/backend/data/api/handlers/models';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
@@ -17,6 +19,7 @@ const pricing = { input: { perMillionTokens: 0.9 }, output: { perMillionTokens: 
 function installCatalog(inputPrice = 0.9) {
   providerRegistryService.installRemoteSnapshot(
     providerRegistryService.parseRemoteSnapshot({
+      providers,
       models: {
         version: 'test',
         models: [

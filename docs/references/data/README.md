@@ -205,34 +205,37 @@ code reaches this graph only through `Backend`, `ApiClient`, and `PreferenceClie
 Seeders apply default preferences, a small recommended provider set on fresh installs, and the
 managed CherryAI default model. Later catalog versions refresh only preset providers already present
 in `user_provider`; they do not install the entire catalog into an existing database, including one
-whose providers were all removed by the user. The complete trusted provider catalog remains
-bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do not create Agents,
+whose providers were all removed by the user. Other downloaded presets are imported explicitly
+through `ProvidersModule`. Seeders do not create Agents,
 Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
 journaled under `app_state` keys prefixed with `seed:`.
 
-`ProviderRegistryUpdaterService` restores the newest compatible saved model catalog after startup.
-When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
-in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with
-fallback to the other source. Startup also migrates an older schema snapshot to the current v3
-directory, retaining the old snapshot if offline or if the update fails. Once a v3 snapshot is
-saved, the later refresh trigger is opening a provider's model list. Applying a newer catalog while
-that list is visible shows a global success toast at the top of the screen. Offline or unchanged catalogs
-keep the saved snapshot without a toast. The app does not bundle these model files. Model selection,
-model editing, and model calls require a downloaded snapshot; welcome, provider configuration, and
-history remain accessible. Model workflows present a retry action when the initial download fails.
+`ProviderRegistryUpdaterService` restores a complete compatible catalog in the startup gate before
+`DbService` seeds the database. With no usable cache, it downloads `models.json`, `providers.json`,
+and `provider-models.json` from the fixed official Desktop v3 publication sources. First use requires
+network access, and a failed download uses the existing startup retry flow. China locale/zone signals
+prefer GitCode; other devices prefer GitHub, with fallback to the other source. Model-only caches
+from earlier versions require a complete download once. Older complete snapshots remain usable
+offline while startup attempts the schema upgrade.
 
-Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
-replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move
-is interrupted. Startup can fall back to the previous valid slot. Mounted model projections
-refresh after activation. User-model overrides and custom records are never rewritten by catalog
-updates; unset preset fields inherit the current snapshot.
+After startup, opening a provider's model list checks for newer catalog data. A successful update
+shows a toast while that list is visible; unchanged catalogs or offline failures keep the current
+snapshot. Provider and model JSON data are not imported from the package in application code.
+Mobile retains protocol/authentication adaptations and the few product presets missing upstream.
 
-`providers.json` remains bundled: the unsigned model channel cannot change provider API destinations,
-authentication modes, or importable providers. Schema and minimum-reader compatibility checks remain
-in place; newer readers can still use older compatible saved catalogs. Schema upgrades take priority
-over workflow revisions, and restoration prefers a valid v3 snapshot over an older-schema slot.
-Model metadata fixes and ordinary updates belong upstream, while Mobile owns interpretation and
-provider connection support.
+Complete, validated snapshots occupy two alternating files in persistent document storage. All three
+files must match the manifest before activation. Writes replace the inactive slot, preserving the
+active snapshot even when overwrite/move is interrupted. Startup can fall back to the previous valid
+slot. Mounted provider catalogs, provider records, and model projections refresh after activation.
+User-model overrides and custom records are never rewritten by catalog updates; unset preset fields
+inherit the current snapshot.
+
+The remote payload is unsigned and its integrity depends on the fixed official HTTPS sources.
+Provider defaults, including addresses, may change in the downloaded catalog. New imports use those
+defaults. Activation does not write saved connections or credentials; startup seeding preserves
+existing base URLs, default endpoints, and authentication data. Schema and minimum-reader checks
+remain in place, with schema upgrades taking priority over revisions. Mobile owns protocol execution,
+login flows, and provider support; remote configuration cannot implement a missing adapter.
 
 Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
 does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may

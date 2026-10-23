@@ -3,8 +3,8 @@
 Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.2` and
 `@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.2.3` for catalog schemas, queries, and trusted
-provider data. Mobile retains its loader, product extensions, and persisted-data projection.
+Mobile consumes `@cherrystudio/provider-registry@0.2.3` for catalog schemas and queries; catalog data comes from
+the Desktop publication sources. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
 
@@ -78,9 +78,9 @@ by itself is not a reason to change the Mobile graph.
 ## Published Provider Registry
 
 `@cherrystudio/provider-registry@0.2.3` supplies pure schemas, reasoning rules, and `createRegistry`
-through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
-filesystem loader and the complete model catalog stay outside the application bundle. Test-only
-fixtures use the package's JSON exports.
+through its root entry. Application code downloads all three catalog files; the `./node` filesystem
+loader and package data exports stay outside that loading path. Test-only fixtures use the package's
+JSON exports.
 
 `MobileRegistryLoader` owns download readiness, snapshot replacement, and Mobile compatibility
 checks, delegating model queries to the package. `mobileProviderCatalog.ts` adds Mobile-only presets,
@@ -90,7 +90,7 @@ existing persisted endpoint and feature shapes. Portable URL rules live in the e
 
 The saved Model schema retains the legacy `web-search` capability so existing user data remains
 readable. The published package models native search through `serverTools`; the Pi runtime consumes
-the bundled declarations and eligibility as described in [Web Search](../web-search.md). Mobile
+downloaded provider declarations and package-owned eligibility as described in [Web Search](../web-search.md). Mobile
 excludes `ultra` from selectable reasoning efforts and rejects
 `adaptive-between-tools` entries until the native runtime supports them.
 
@@ -101,38 +101,36 @@ check, platform exports, and device acceptance before the registry compatibility
 
 | Registry concern | Mobile state | Runtime scope |
 | --- | --- | --- |
-| Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older cached schemas remain readable offline; baseline `2.1.4` |
+| Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older complete cached schemas remain readable offline; baseline `2.1.4` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
 | Reasoning wire dialects | Implemented for Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
 | Service tiers | Materialized in Model data only | No request path sends a service tier |
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
-| Server tools and model eligibility | Implemented for the Pi conversation path from the bundled declarations; live-provider validation pending | Downloaded catalogs cannot grant a native tool; endpoints without an adapter keep the application Web Search |
+| Server tools and model eligibility | Implemented for the Pi conversation path from provider declarations and package-owned model eligibility; live-provider validation pending | Mobile adapters determine support; endpoints without an adapter keep the application Web Search |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
 | V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
-| Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; all model rows come from the remote snapshot |
+| Mobile-only presets and OAuth | Retained as product extensions | A few missing product presets and runtime adaptations stay local; upstream provider and model data come from the remote snapshot |
 
 ### Remote catalog policy
 
-Mobile fetches `models.json` and `provider-models.json` on first use, during a saved-schema upgrade,
-and after explicit model-list access. Before it admits a newer Desktop snapshot, the Runtime must
-understand every required field it consumes and
-explicitly classify unsupported optional fields as ignored product capabilities.
+Mobile fetches `models.json`, `providers.json`, and `provider-models.json` before first-use database
+seeding. First use requires network access. Later starts restore a complete persistent snapshot;
+opening a provider's model list checks for updates. The fixed official GitHub and GitCode HTTPS
+sources own publication integrity; the payload is unsigned. Every file must pass schema,
+compatibility, and manifest-version validation before activation.
 
-The remote payload is unsigned, so `providers.json` stays bundled and trusted. Remote data may
-refine model descriptions, capabilities, and Provider-model overrides. Those overrides may select
-an endpoint type already declared by the bundled Provider and may update image-generation
-`vendorTransport` relative paths and sync/async behavior. They cannot add or replace Provider
-definitions, base URLs, adapter families, headers, or credential behavior. Incompatible manifests
-are rejected before download and activation. The Mobile-owned provider extensions affect connection metadata only; remote snapshots replace
-all model rows, including the `github` namespace.
+Provider definitions supply defaults for new imports. Activating a snapshot does not rewrite saved
+connections or credentials. Startup seeding preserves existing base URLs, default endpoints, and
+authentication data. Mobile retains its protocol and OAuth implementations, compatibility patches,
+and Kimi Code, GitHub Models, Requesty, and Meta presets while they are missing upstream.
 
 The current download lane is v3. Unknown capabilities and efforts are dropped at the smallest list
-item; entries with an unsupported protocol are omitted. `serverTools` in a downloaded catalog and
-`ultra` have no Mobile consumer. The `adaptive-between-tools` model dialect is also excluded while the
-pinned Anthropic SDK lacks `between_tools`. Always-on adaptive reasoning uses the shared interpreter.
-Provider connection and authentication behavior stays bundled. Old snapshots remain usable offline
-while startup attempts the schema upgrade; schema version takes priority over workflow revision.
+item; entries with an unsupported protocol are omitted. `ultra` has no Mobile consumer. The
+`adaptive-between-tools` model dialect is excluded while the pinned Anthropic SDK lacks
+`between_tools`. Always-on adaptive reasoning uses the shared interpreter. Older complete snapshots
+remain usable offline while startup attempts the schema upgrade; old model-only caches require one
+complete download. Schema version takes priority over workflow revision.
 
 ## Pi Boundary
 

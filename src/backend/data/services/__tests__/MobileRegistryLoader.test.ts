@@ -1,5 +1,6 @@
 import models from '@cherrystudio/provider-registry/data/models.json';
 import providerModels from '@cherrystudio/provider-registry/data/provider-models.json';
+import providers from '@cherrystudio/provider-registry/data/providers.json';
 
 import {
   isCatalogManifestCompatible,
@@ -10,13 +11,14 @@ import {
 
 function downloadedLoader(): MobileRegistryLoader {
   const loader = new MobileRegistryLoader();
-  loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providerModels }));
+  loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providers, providerModels }));
   return loader;
 }
 
 const compatibleManifest = {
   files: {
     'models.json': 'models-version',
+    'providers.json': 'providers-version',
     'provider-models.json': 'provider-models-version',
   },
   minAppVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
@@ -83,15 +85,56 @@ describe('remote catalog compatibility', () => {
 });
 
 describe('MobileRegistryLoader', () => {
-  it('keeps trusted providers available but blocks model reads before download and after clearing', () => {
+  it('replaces provider definitions from the remote snapshot without retaining removed cloud presets', () => {
+    const loader = downloadedLoader();
+    const remoteProviders = {
+      version: 'remote-providers',
+      providers: [
+        {
+          id: 'cloud-provider',
+          name: 'Cloud Provider',
+          defaultChatEndpoint: 'openai-chat-completions',
+          endpointConfigs: {
+            'openai-chat-completions': { baseUrl: 'https://cloud.example/v1' },
+          },
+        },
+      ],
+    };
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({ models, providerModels, providers: remoteProviders }),
+    );
+    expect(loader.getProvidersVersion()).toBe('remote-providers');
+    expect(loader.findProvider('openai')).toBeNull();
+    expect(loader.findProvider('cloud-provider')).toMatchObject(remoteProviders.providers[0]);
+    expect(loader.findProvider('kimi-coding')?.authMethods).toEqual(['oauth']);
+  });
+
+  it('rejects a missing or wholly incompatible provider payload before activating a snapshot', () => {
+    const loader = downloadedLoader();
+    for (const invalidProviders of [
+      undefined,
+      { version: 'empty', providers: [] },
+      { version: 'invalid', providers: [{ id: 'missing-name' }] },
+    ]) {
+      expect(() =>
+        loader.parseRemoteSnapshot({ models, providerModels, providers: invalidProviders }),
+      ).toThrow();
+    }
+    expect(loader.findProvider('openai')).not.toBeNull();
+  });
+
+  it('requires a downloaded catalog for both provider lists and model reads', () => {
     const loader = new MobileRegistryLoader();
-    expect(loader.loadProviders().length).toBeGreaterThan(0);
+    expect(() => loader.loadProviders()).toThrow('not been downloaded');
+    expect(loader.findProvider('openai')).toBeNull();
     expect(loader.isReady()).toBe(false);
     expect(() => loader.findModel('gpt-4o')).toThrow('not been downloaded');
     expect(() => loader.loadProviderModels()).toThrow('not been downloaded');
-    loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providerModels }));
+    loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providers, providerModels }));
     expect(loader.isReady()).toBe(true);
     loader.clearRemoteSnapshot();
+    expect(() => loader.loadProviders()).toThrow('not been downloaded');
+    expect(loader.findProvider('openai')).toBeNull();
     expect(() => loader.findModel('gpt-4o')).toThrow('not been downloaded');
   });
 
@@ -104,6 +147,7 @@ describe('MobileRegistryLoader', () => {
       cacheRead: { perMillionTokens: 1.2 },
     };
     const snapshot = {
+      providers,
       models: {
         version: 'tiered',
         models: [
@@ -132,6 +176,7 @@ describe('MobileRegistryLoader', () => {
     const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
     loader.installRemoteSnapshot(
       loader.parseRemoteSnapshot({
+        providers,
         models: {
           version: 'v3-models',
           models: [
@@ -196,6 +241,7 @@ describe('MobileRegistryLoader', () => {
     ]) {
       loader.installRemoteSnapshot(
         loader.parseRemoteSnapshot({
+          providers,
           models: {
             version: 'v3',
             models: [
@@ -255,6 +301,7 @@ describe('MobileRegistryLoader', () => {
     const loader = new MobileRegistryLoader();
     loader.installRemoteSnapshot(
       loader.parseRemoteSnapshot({
+        providers,
         models: { version: 'standalone', models: [] },
         providerModels: {
           version: 'standalone',
@@ -303,7 +350,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('defaults Kimi Code to the protocol and endpoint used by its Pi OAuth models', () => {
-    expect(new MobileRegistryLoader().findProvider('kimi-coding')).toMatchObject({
+    expect(downloadedLoader().findProvider('kimi-coding')).toMatchObject({
       authMethods: ['oauth'],
       defaultChatEndpoint: 'openai-chat-completions',
       endpointConfigs: {
@@ -359,6 +406,7 @@ describe('MobileRegistryLoader', () => {
 
     loader.installRemoteSnapshot(
       loader.parseRemoteSnapshot({
+        providers,
         models: { models: [], version: 'remote-models' },
         providerModels: {
           overrides: [

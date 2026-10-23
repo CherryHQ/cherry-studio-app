@@ -64,16 +64,14 @@ type StagedSnapshot = {
 };
 
 /**
- * Checks and applies model metadata from the desktop-published registry lane.
+ * Restores or downloads the complete Desktop-published registry before database seeding.
  *
- * The payload is unsigned, so `providers.json` deliberately remains bundled:
- * remote data can improve model descriptions and capabilities, but can never
- * redirect credentials or change a provider's API destination. Startup restores
- * the persistent snapshot and downloads one only when none is saved. Later
- * refreshes happen when the user opens a provider's model list.
+ * The fixed HTTPS sources supply provider defaults as well as model metadata.
+ * Catalog activation does not write saved provider connections or credentials.
+ * First use requires a download; later starts use a complete persistent snapshot.
  */
 @Injectable('ProviderRegistryUpdaterService')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
 @AppStatePolicy('not-applicable')
 export class ProviderRegistryUpdaterService extends BaseService {
   private activeManifest: CatalogManifest | undefined;
@@ -85,7 +83,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
   protected async onReady(): Promise<void> {
     this.stopped = false;
-    await this.restoreSnapshot();
+    await this.ensureReady();
     if (
       this.stopped ||
       (providerRegistryService.isReady() &&
@@ -95,19 +93,19 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
     void this.applyUpdate().catch((error: unknown) => {
       if (!this.stopped) {
-        logger.warn('Could not download the model registry; model use will retry', toError(error));
+        logger.warn('Could not upgrade the registry; keeping the saved snapshot', toError(error));
       }
     });
   }
 
-  /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
+  /** Shared by startup and catalog consumers so first download is deduplicated and retryable. */
   public async ensureReady(): Promise<void> {
     await this.restoreSnapshot();
     if (!providerRegistryService.isReady()) {
       await this.applyUpdate();
     }
     if (!providerRegistryService.isReady()) {
-      throw new Error('No compatible model registry is available');
+      throw new Error('No compatible provider registry is available');
     }
   }
 
@@ -117,7 +115,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
         ? Promise.resolve()
         : this.activateCachedSnapshot().catch((error: unknown) => {
             logger.warn(
-              'Could not restore the model registry; a download is required',
+              'Could not restore the provider registry; a download is required',
               toError(error),
             );
           });
@@ -281,12 +279,14 @@ export class ProviderRegistryUpdaterService extends BaseService {
       return null;
     }
 
-    const [models, providerModels] = await Promise.all([
+    const [models, providers, providerModels] = await Promise.all([
       this.fetchText(source, 'models.json', MAX_REGISTRY_FILE_BYTES),
+      this.fetchText(source, 'providers.json', MAX_REGISTRY_FILE_BYTES),
       this.fetchText(source, 'provider-models.json', MAX_REGISTRY_FILE_BYTES),
     ]);
     const files = {
       'models.json': models,
+      'providers.json': providers,
       'provider-models.json': providerModels,
     } satisfies Record<RemoteRegistryFileName, string>;
 
@@ -348,11 +348,15 @@ export class ProviderRegistryUpdaterService extends BaseService {
   ): ReturnType<typeof providerRegistryService.parseRemoteSnapshot> {
     const parsed = providerRegistryService.parseRemoteSnapshot({
       models: JSON.parse(files['models.json']),
+      providers: JSON.parse(files['providers.json']),
       providerModels: JSON.parse(files['provider-models.json']),
     });
 
     if (parsed.models.version !== manifest.files['models.json']) {
       throw new Error('models.json version does not match the registry manifest');
+    }
+    if (parsed.providers.version !== manifest.files['providers.json']) {
+      throw new Error('providers.json version does not match the registry manifest');
     }
     if (parsed.providerModels.version !== manifest.files['provider-models.json']) {
       throw new Error('provider-models.json version does not match the registry manifest');

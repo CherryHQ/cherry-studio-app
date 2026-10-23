@@ -389,6 +389,7 @@ export class ProviderRegistryService {
   }
 
   getCatalogVersion(file: RemoteRegistryFileName): string | undefined {
+    if (file === 'providers.json') return this.loader.getProvidersVersion();
     return file === 'models.json'
       ? this.loader.getModelsVersion()
       : this.loader.getProviderModelsVersion();
@@ -402,7 +403,7 @@ export class ProviderRegistryService {
     return this.loader.isReady();
   }
 
-  parseRemoteSnapshot(input: { models: unknown; providerModels: unknown }) {
+  parseRemoteSnapshot(input: { models: unknown; providers: unknown; providerModels: unknown }) {
     return this.loader.parseRemoteSnapshot(input);
   }
 
@@ -476,7 +477,7 @@ export class ProviderRegistryService {
     );
   }
 
-  /** Native tool facts stay in the trusted bundled catalog, never unsigned model data. */
+  /** Provider declarations are constrained by the package's built-in model eligibility rules. */
   resolveServerTools(
     provider: Pick<ReasoningProviderContext, 'id' | 'presetProviderId'>,
     wireModelId: string,

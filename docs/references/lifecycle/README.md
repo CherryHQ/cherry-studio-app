@@ -47,9 +47,9 @@ Do **not** register:
 | Per-screen listeners and timers | The React component that created them |
 
 Stateful data services are the exception to the CRUD rule: `PreferenceService` (cache plus async
-init) registers as a service. `providerRegistryService` deliberately does not: its package-level
-loader memoizes immutable bundled JSON below the app host, so a per-generation wrapper would add
-resolution churn without creating a new resource lifetime.
+init) registers as a service. `providerRegistryService` is a synchronous query facade over the
+active downloaded snapshot. `ProviderRegistryUpdaterService` owns restore, download, and cleanup
+for each host generation. It runs in `Gate` before `DbService` so seeding can consume the catalog.
 
 ## Divergence from desktop
 

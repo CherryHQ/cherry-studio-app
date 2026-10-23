@@ -3,7 +3,7 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
-import { BaseService, Injectable } from '@/backend/core/lifecycle';
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import {
   assertStorageDatabaseExists,
   databaseDirectory,
@@ -36,6 +36,7 @@ const logger = loggerService.withContext('DbService');
 export type Database = ExpoSQLiteDatabase<DatabaseSchema>;
 
 @Injectable('DbService')
+@DependsOn(['ProviderRegistryUpdaterService'])
 export class DbService extends BaseService {
   private connection: { db: Database; sqlite: SQLite.SQLiteDatabase } | null = null;
   private disposed = false;

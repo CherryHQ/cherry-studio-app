@@ -62,11 +62,16 @@ const { testState } = jest.requireMock<{
 }>('expo-file-system');
 const files = {
   'models.json': '{"version":"models","models":[]}',
+  'providers.json': '{"version":"catalog","providers":[{"id":"openai","name":"OpenAI"}]}',
   'provider-models.json': '{"version":"providers","overrides":[]}',
 };
 function manifest(revision: number): CatalogManifest {
   return {
-    files: { 'models.json': 'models', 'provider-models.json': 'providers' },
+    files: {
+      'models.json': 'models',
+      'providers.json': 'catalog',
+      'provider-models.json': 'providers',
+    },
     minAppVersion: '2.0.8',
     sourceAppVersion: '2.0.8',
     schemaVersion: 1,
@@ -99,4 +104,13 @@ it('reads the previous slot when the newer slot is truncated', async () => {
   expect(await readProviderRegistrySnapshots()).toEqual([
     { files, manifest: manifest(1), slot: 'a' },
   ]);
+});
+
+it('does not restore model-only snapshots as a complete provider catalog', async () => {
+  const { 'providers.json': _providers, ...modelFiles } = files;
+  testState.files.set(
+    '/documents/provider-registry/snapshot-a.json',
+    JSON.stringify({ files: modelFiles, manifest: manifest(1) }),
+  );
+  expect(await readProviderRegistrySnapshots()).toEqual([]);
 });

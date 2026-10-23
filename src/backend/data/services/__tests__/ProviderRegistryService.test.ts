@@ -4,6 +4,7 @@ import {
   REASONING_EFFORT,
   REASONING_FORMAT_PROFILES,
 } from '@cherrystudio/provider-registry';
+import providers from '@cherrystudio/provider-registry/data/providers.json';
 
 import { MobileRegistryLoader } from '@/backend/data/services/MobileRegistryLoader';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
@@ -23,6 +24,7 @@ describe('provider-registry-service', () => {
     const loader = new MobileRegistryLoader();
     loader.installRemoteSnapshot(
       loader.parseRemoteSnapshot({
+        providers,
         models: {
           version: 'v3',
           models: [
@@ -122,6 +124,7 @@ describe('provider-registry-service', () => {
     const loader = new MobileRegistryLoader();
     loader.installRemoteSnapshot(
       loader.parseRemoteSnapshot({
+        providers,
         models: { version: 'standalone', models: [] },
         providerModels: {
           version: 'standalone',

@@ -39,13 +39,21 @@ class Updater extends ProviderRegistryUpdaterService {
 
 function snapshot(revision: number, minimum = '2.1.4') {
   const manifest: CatalogManifest = {
-    files: { 'models.json': `models-${revision}`, 'provider-models.json': `providers-${revision}` },
+    files: {
+      'models.json': `models-${revision}`,
+      'providers.json': `catalog-${revision}`,
+      'provider-models.json': `providers-${revision}`,
+    },
     minAppVersion: minimum,
     sourceAppVersion: minimum === '2.0.8' ? '2.0.8' : REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
     schemaVersion: REGISTRY_SCHEMA_VERSION,
     revision,
   };
   const files = {
+    'providers.json': JSON.stringify({
+      version: manifest.files['providers.json'],
+      providers: [{ id: 'openai', name: `OpenAI ${revision}` }],
+    }),
     'models.json': JSON.stringify({
       version: manifest.files['models.json'],
       models: [{ id: 'test-model', name: 'Test', maxOutputTokens: revision * 1000 }],
@@ -81,8 +89,7 @@ afterEach(async () => {
 
 it('automatically downloads on first launch and shares it with concurrent model selection', async () => {
   serve(snapshot(1));
-  await updater.start();
-  await Promise.all([updater.ensureReady(), updater.ensureReady()]);
+  await Promise.all([updater.start(), updater.ensureReady(), updater.ensureReady()]);
   expect(providerRegistryService.isReady()).toBe(true);
   expect(
     providerRegistryService.lookupModel('openai', 'test-model').presetModel?.maxOutputTokens,
@@ -91,6 +98,12 @@ it('automatically downloads on first launch and shares it with concurrent model 
   expect(
     mockRequest.mock.calls.filter(([, request]) => request.path === '/models.json'),
   ).toHaveLength(1);
+  expect(
+    mockRequest.mock.calls.filter(([, request]) => request.path === '/providers.json'),
+  ).toHaveLength(1);
+  expect(providerRegistryService.loadProviders()).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: 'openai', name: 'OpenAI 1' })]),
+  );
 });
 
 it('starts from the saved snapshot without contacting the network until a model list opens', async () => {
@@ -103,6 +116,7 @@ it('starts from the saved snapshot without contacting the network until a model 
 
   await expect(updater.applyUpdate()).resolves.toEqual({ status: 'updated' });
   expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-2');
+  expect(providerRegistryService.getCatalogVersion('providers.json')).toBe('catalog-2');
   expect(writeProviderRegistrySnapshot).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({ revision: 2 }),
@@ -199,6 +213,53 @@ it('does not replace the active snapshot when durable storage fails', async () =
   jest.mocked(writeProviderRegistrySnapshot).mockRejectedValue(new Error('Storage full'));
   await expect(updater.applyUpdate()).rejects.toThrow('Storage full');
   expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-1');
+});
+
+it('fails startup without a complete catalog and allows a later retry', async () => {
+  mockRequest.mockRejectedValue(new Error('Offline'));
+  await expect(updater.start()).rejects.toThrow('Offline');
+  expect(providerRegistryService.isReady()).toBe(false);
+  serve(snapshot(1));
+  await expect(updater.start()).resolves.toBeUndefined();
+  expect(providerRegistryService.isReady()).toBe(true);
+});
+
+it('downloads a complete catalog when an older cached snapshot has no providers', async () => {
+  const cached = snapshot(1);
+  const { 'providers.json': _providers, ...modelFiles } = cached.files;
+  jest
+    .mocked(readProviderRegistrySnapshots)
+    .mockResolvedValue([{ ...cached, files: modelFiles } as unknown as typeof cached]);
+  serve(snapshot(1));
+  await updater.start();
+  expect(providerRegistryService.getCatalogVersion('providers.json')).toBe('catalog-1');
+  expect(writeProviderRegistrySnapshot).toHaveBeenCalledTimes(1);
+});
+
+it('refreshes provider-only changes without replacing the catalog with an incomplete payload', async () => {
+  jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([snapshot(1)]);
+  await updater.start();
+  const remote = snapshot(2);
+  remote.manifest.files['models.json'] = 'models-1';
+  remote.manifest.files['provider-models.json'] = 'providers-1';
+  remote.files['models.json'] = snapshot(1).files['models.json'];
+  remote.files['provider-models.json'] = snapshot(1).files['provider-models.json'];
+  serve(remote);
+  await expect(updater.applyUpdate()).resolves.toEqual({ status: 'updated' });
+  expect(providerRegistryService.getCatalogVersion('providers.json')).toBe('catalog-2');
+
+  const invalid = snapshot(3);
+  invalid.files['providers.json'] = JSON.stringify({
+    version: 'mismatch',
+    providers: [{ id: 'openai', name: 'Invalid revision' }],
+  });
+  serve(invalid);
+  await expect(updater.applyUpdate()).rejects.toThrow('providers.json version does not match');
+  expect(providerRegistryService.getCatalogVersion('providers.json')).toBe('catalog-2');
+  expect(providerRegistryService.loadProviders().find(({ id }) => id === 'openai')?.name).toBe(
+    'OpenAI 2',
+  );
+  expect(writeProviderRegistrySnapshot).toHaveBeenCalledTimes(1);
 });
 
 it('rejects unsupported first downloads without reporting an empty catalog as current', async () => {

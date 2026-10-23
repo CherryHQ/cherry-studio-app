@@ -3,7 +3,6 @@ import {
   type ProviderConfig,
   type RegistryEndpointConfig,
 } from '@cherrystudio/provider-registry';
-import { bundledProviders } from '@cherrystudio/provider-registry/data/providers';
 
 import type {
   ApiFeatures,
@@ -259,37 +258,42 @@ const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = 
   },
 };
 
-const providersById = new Map<string, MobileProviderConfig>(
-  bundledProviders.providers.map((provider) => [provider.id, provider]),
-);
-for (const [id, extension] of Object.entries(mobileProviderExtensions)) {
-  const provider = providersById.get(id);
-  if (!provider) {
-    providersById.set(id, {
-      ...extension,
-      ...ProviderConfigSchema.parse({ ...extension, id }),
-    });
-    continue;
-  }
-  const endpointConfigs: Record<string, RegistryEndpointConfig> = { ...provider.endpointConfigs };
-  for (const [endpoint, config] of Object.entries(extension.endpointConfigs ?? {})) {
-    endpointConfigs[endpoint] = { ...endpointConfigs[endpoint], ...config };
-  }
-  providersById.set(id, { ...provider, ...extension, endpointConfigs });
-}
-
-// Preserve Mobile's promoted provider order while the rest follows the published catalog.
-const promotedIds = ['cherryin', 'radeon-cloud'];
-const providers = [
-  ...promotedIds.flatMap((id) => {
+/** Apply Mobile compatibility and missing product presets after a complete download. */
+export function createMobileProviderCatalog(catalog: {
+  version: string;
+  providers: ProviderConfig[];
+}): { version: string; providers: MobileProviderConfig[] } {
+  const providersById = new Map<string, MobileProviderConfig>(
+    catalog.providers.map((provider) => [provider.id, provider]),
+  );
+  for (const [id, extension] of Object.entries(mobileProviderExtensions)) {
     const provider = providersById.get(id);
-    return provider ? [provider] : [];
-  }),
-  ...[...providersById.values()].filter((provider) => !promotedIds.includes(provider.id)),
-];
+    if (!provider) {
+      // Only complete Mobile-only presets may add an entry; compatibility patches
+      // must not resurrect a provider removed from the remote catalog.
+      if (!extension.name) continue;
+      providersById.set(id, {
+        ...extension,
+        ...ProviderConfigSchema.parse({ ...extension, id }),
+      });
+      continue;
+    }
+    const endpointConfigs: Record<string, RegistryEndpointConfig> = { ...provider.endpointConfigs };
+    for (const [endpoint, config] of Object.entries(extension.endpointConfigs ?? {})) {
+      endpointConfigs[endpoint] = { ...endpointConfigs[endpoint], ...config };
+    }
+    providersById.set(id, { ...provider, ...extension, endpointConfigs });
+  }
 
-export const mobileProviders = { version: bundledProviders.version, providers };
+  // Preserve Mobile's promoted provider order while the rest follows the published catalog.
+  const promotedIds = ['cherryin', 'radeon-cloud'];
+  const providers = [
+    ...promotedIds.flatMap((id) => {
+      const provider = providersById.get(id);
+      return provider ? [provider] : [];
+    }),
+    ...[...providersById.values()].filter((provider) => !promotedIds.includes(provider.id)),
+  ];
 
-export function findMobileProvider(providerId: string): MobileProviderConfig | null {
-  return providersById.get(providerId) ?? null;
+  return { version: catalog.version, providers };
 }

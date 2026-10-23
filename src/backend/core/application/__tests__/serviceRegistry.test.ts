@@ -94,7 +94,7 @@ describe('service registry', () => {
     expect(layerOf('KeepAliveCoordinator')).toBeLessThan(layerOf('BackgroundReplyRuntime'));
   });
 
-  test('the gate boots cache, then database, then preferences', () => {
+  test('the gate loads the provider catalog before seeding the database and preferences', () => {
     const container = new ServiceContainer();
     container.registerAll(serviceList);
     const layers = new DependencyResolver().resolveLayered(
@@ -107,6 +107,8 @@ describe('service registry', () => {
     // preferences, which read the seeded database. Before the lifecycle
     // framework it was statement order in `createAppBootstrapRuntime`.
     expect(layerOf('DbService')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('ProviderRegistryUpdaterService')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('ProviderRegistryUpdaterService')).toBeLessThan(layerOf('DbService'));
     expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
   });
 

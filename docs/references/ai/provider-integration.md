@@ -207,32 +207,37 @@ configuration and API-version settings influence the generated provider settings
 
 ## Remote Registry Boundary
 
-Mobile downloads Desktop-published `models.json` and `provider-models.json` from schema v3 on first
-use and when upgrading an older saved schema. Later refreshes follow explicit model-list access.
+Mobile downloads Desktop-published `models.json`, `providers.json`, and `provider-models.json` from
+schema v3 before first-use database seeding. First use requires a network connection; subsequent
+starts restore a complete cached snapshot. Later refreshes follow explicit model-list access.
 The remote manifest must match v3 and the Desktop 2.1.4 semantic baseline supported by Mobile's
 consumed fields. This compatibility number is independent of the Mobile application version.
-Older saved schemas remain readable offline; startup attempts to replace them with v3.
+Older saved schemas remain readable when they contain all three files; model-only caches require
+one complete download. Startup attempts to replace older complete snapshots with v3.
 
-The snapshot is unsigned. `providers.json` therefore stays in the application bundle and cannot be
-replaced remotely. Provider base URLs, adapter families, headers, and credential behavior remain
-inside the reviewed binary. A remote Provider-model override may still select an endpoint type from
-that bundled Provider definition and update an image model's `vendorTransport` relative path and
-sync/async behavior. Remote protocol support is not a substitute for synchronizing schemas,
-interpreters, normalizers, or endpoint semantics: required behavior consumed by Mobile must be
-implemented and validated, while unsupported optional behavior must be explicitly classified,
-before the compatibility version advances.
+The fixed official GitHub and GitCode HTTPS sources supply provider defaults as well as models.
+The payload is unsigned: publication integrity depends on those sources. All three files must pass
+schema, compatibility, and manifest-version checks before the snapshot is persisted and activated.
+Activation does not write user connections or credentials. New imports use the current defaults;
+startup seeding preserves existing base URLs, default endpoints, and authentication data.
+Mobile retains its protocol/authentication adapters and product extensions, including Kimi Code,
+GitHub Models, Requesty, and Meta while those presets are absent upstream. Remote protocol support
+is not a substitute for synchronizing schemas, interpreters, normalizers, or endpoint semantics:
+required behavior consumed by Mobile must be implemented and validated, while unsupported optional
+behavior must be explicitly classified, before the compatibility version advances.
 
-The reader drops unknown list vocabulary and incompatible entries individually. `serverTools` and
-`ultra` in a downloaded catalog remain unsupported optional capabilities. Always-on adaptive
+The reader drops unknown list vocabulary and incompatible entries individually. Model-level
+`serverTools` flags and `ultra` remain unsupported optional capabilities. Always-on adaptive
 reasoning is projected through the existing wire interpreter. `adaptive-between-tools` models and
 overrides are omitted because the pinned Anthropic SDK cannot execute `between_tools`; they must not
 silently use another dialect. The v3 migration includes regression sources; local tests, typecheck,
 and device acceptance remain pending until explicitly requested.
 
-Native web tools are an application feature with trusted bundled `serverTools` declarations and
-explicit model eligibility; unsigned downloaded model flags cannot enable them. Adapters for the
-Responses, Anthropic Messages, Generate Content, and Chat Completions search contracts run in the Pi
-Durable execution path; an endpoint without one uses the application-owned external services. See
+Native web tools are an application feature with provider `serverTools` declarations, Mobile
+corrections, and package-owned model eligibility; model capability flags alone cannot enable them.
+Adapters for the Responses, Anthropic Messages, Generate Content, and Chat Completions search
+contracts run in the Pi Durable execution path; an endpoint without one uses the application-owned
+external services. See
 [Web Search](../web-search.md) for the adapter table, arbitration, metadata, replay, and failure
 semantics.
 

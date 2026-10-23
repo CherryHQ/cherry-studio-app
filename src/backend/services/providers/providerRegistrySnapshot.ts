@@ -10,7 +10,11 @@ import {
 
 const logger = loggerService.withContext('ProviderRegistrySnapshot');
 const SnapshotSchema = z.object({
-  files: z.object({ 'models.json': z.string(), 'provider-models.json': z.string() }),
+  files: z.object({
+    'models.json': z.string(),
+    'providers.json': z.string(),
+    'provider-models.json': z.string(),
+  }),
   manifest: CatalogManifestSchema,
 });
 const slots = ['a', 'b'] as const;
@@ -21,7 +25,7 @@ function snapshotFile(slot: SnapshotSlot): File {
   return new File(Paths.document, 'provider-registry', `snapshot-${slot}.json`);
 }
 
-/** Return newest first; the updater validates compatibility and both payloads before activation. */
+/** Return newest first; the updater validates compatibility and every payload before activation. */
 export async function readProviderRegistrySnapshots(): Promise<ProviderRegistrySnapshot[]> {
   const snapshots: ProviderRegistrySnapshot[] = [];
   for (const slot of slots) {

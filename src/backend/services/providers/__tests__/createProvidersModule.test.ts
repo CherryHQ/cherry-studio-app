@@ -1,4 +1,5 @@
 import { MobileRegistryLoader } from '@/backend/data/services/MobileRegistryLoader';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { ProviderSetupError } from '@/shared/contracts';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
@@ -81,6 +82,7 @@ describe('explicit provider activation', () => {
   it('filters unavailable presets from setup and rejects direct imports before creating records', async () => {
     const { dependencies } = subject();
     const loader = new MobileRegistryLoader();
+    installProviderRegistryTestSnapshot(loader);
     dependencies.catalog = {
       isExcluded: (providerId) => loader.isProviderExcludedFromCatalog(providerId),
       list: () => loader.loadProviders(),

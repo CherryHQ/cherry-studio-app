@@ -10,8 +10,8 @@ import {
 import type { CreateProviderInput } from './ProviderService';
 
 /**
- * The small provider set installed into a fresh database. The complete trusted
- * catalog remains bundled and can be imported from the provider catalog screen.
+ * The small provider set installed into a fresh database after the registry download.
+ * Other downloaded presets can be imported from the provider catalog screen.
  */
 export const RECOMMENDED_PRESET_PROVIDER_IDS: readonly string[] = [
   'cherryin',
