@@ -31,7 +31,9 @@ Normal conversation submission still sends the resulting text to the selected mo
   scan only routes pages: if it cannot parse a page's operators, the page is treated as containing
   images instead of rejecting text PDFKit can read.
 - Recognition follows the resolved app language passed as `language`. iOS selects the matching
-  Vision language first, then English and Chinese; Android's bundled model reads Chinese and Latin.
+  Vision language first, then English and Chinese. Vision reads with the first language's model, so
+  when that model is not Chinese, automatic language detection lets Chinese lines switch models;
+  without it they are dropped. Android's bundled model reads Chinese and Latin.
   When the engine cannot read the app language's script (Greek on iOS; Cyrillic, Greek and Japanese
   on Android), OCR is skipped because the engine would return plausible garbage instead of failing.
   Pages with images are listed in `unrecognizedPages` and `ocrUnavailable` is set; a document left
@@ -65,6 +67,8 @@ Each consumer can stop immediately. Only the last consumer cancels the shared na
 the extraction slot remains occupied until native cleanup finishes. Aborted or failed extraction
 is never cached. `observePdfOcr` aggregates each file's extraction states, preferring active
 recognition over queued reads. Cancelling or finishing one extraction cannot clear another's state.
+A running `read_file` call links its call ID to the entry it resolved, so its row follows reads by
+workspace path as well as by entry ID.
 The transcript tile and a running `read_file` row show a neutral processing wait while queued,
 including for text PDFs. Queue state ends when extraction starts; recognition progress appears
 only after OCR begins. The pending reply names scan recognition only while it is active. A cache

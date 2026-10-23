@@ -32,6 +32,9 @@ internal final class PdfExtractionRequest {
     recognition.recognitionLevel = .accurate
     recognition.usesLanguageCorrection = true
     recognition.recognitionLanguages = languages
+    // Vision reads with the first language's model only. Chinese models also read Latin text; any
+    // other first model drops Chinese lines unless Vision may switch models per detected language.
+    recognition.automaticallyDetectsLanguage = !(languages.first?.hasPrefix("zh") ?? false)
     lock.lock()
     if cancelled {
       lock.unlock()

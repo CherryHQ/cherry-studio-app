@@ -35,7 +35,8 @@ private func scanPdfImages(_ stream: CGPDFContentStreamRef, depth: Int) throws -
   guard let table = CGPDFOperatorTableCreate() else { throw FailedToLoadDocumentException() }
   defer { CGPDFOperatorTableRelease(table) }
   let state = PdfImageScan(depth: depth)
-  CGPDFOperatorTableSetCallback(table, "BI") { scanner, info in
+  // CGPDFScanner consumes BI/ID itself and reports an inline image only as EI.
+  CGPDFOperatorTableSetCallback(table, "EI") { scanner, info in
     guard let info else { return }
     Unmanaged<PdfImageScan>.fromOpaque(info).takeUnretainedValue().hasImages = true
     CGPDFScannerStop(scanner)
