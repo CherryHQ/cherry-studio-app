@@ -40,8 +40,16 @@ export function createSystemSpeechEngine({
     status: async () => 'ready',
     async listVoices(language) {
       const primary = primaryLanguage(language);
+      const identifiers = new Set<string>();
       return (await Speech.getAvailableVoicesAsync())
-        .filter((item) => primaryLanguage(item.language) === primary)
+        .filter((item) => {
+          if (primaryLanguage(item.language) !== primary || identifiers.has(item.identifier))
+            return false;
+          // Some Android engines return one identifier multiple times. The native speak API
+          // selects by identifier alone, so these are not independently selectable voices.
+          identifiers.add(item.identifier);
+          return true;
+        })
         .map((item) => ({ id: item.identifier, name: item.name, language: item.language }));
     },
     async speak({ text, language, signal }) {

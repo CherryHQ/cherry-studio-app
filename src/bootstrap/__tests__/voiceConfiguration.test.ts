@@ -1,7 +1,5 @@
 import { withPlugins, type ExportedConfig } from 'expo/config-plugins';
 
-import { GOOGLE_RECOGNITION_SERVICES } from '@/backend/services/voice/systemDictation';
-
 import appConfig from '../../../app.json';
 
 function voicePlugins(): ExportedConfig {
@@ -55,11 +53,14 @@ test('the combined camera, picker, audio and recognition plugins retain Android 
     $: { 'android:name': 'android.permission.RECORD_AUDIO', 'tools:node': 'remove' },
   });
   expect(result.modResults.manifest.application?.[0].service ?? []).toEqual([]);
-  // Package visibility is what lets the system engine find Google's recognizers.
-  const visible = (result.modResults.manifest.queries ?? []).flatMap(
-    (query) => query.package?.map((item) => item.$['android:name']) ?? [],
+  // Intent visibility covers any installed RecognitionService, including vendor engines.
+  const actions = (result.modResults.manifest.queries ?? []).flatMap(
+    (query) =>
+      query.intent?.flatMap(
+        (intent) => intent.action?.map((action) => action.$['android:name']) ?? [],
+      ) ?? [],
   );
-  expect(visible).toEqual(expect.arrayContaining([...GOOGLE_RECOGNITION_SERVICES]));
+  expect(actions).toContain('android.speech.RecognitionService');
 });
 
 test('the combined plugins retain the voice microphone purpose on iOS without background audio', async () => {

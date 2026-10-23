@@ -5,7 +5,7 @@ export type VoiceEngineId = (typeof VOICE_ENGINES)[number];
 /** `dictation` turns speech into composer text; `speech` reads text aloud. */
 export type VoiceCapability = 'dictation' | 'speech';
 
-/** Each capability's engine choice; null uses the first engine the device supports. */
+/** Null disables dictation; speech defaults to the first supported engine. */
 export const VOICE_ENGINE_PREFERENCE = {
   dictation: 'feature.voice.dictation_engine',
   speech: 'feature.voice.speech_engine',
@@ -76,7 +76,7 @@ export interface VoiceModule {
     engine: VoiceEngineId,
     options?: VoiceRequestOptions,
   ): Promise<VoiceEngineStatus>;
-  /** The user's choice, or the first engine this device supports; null when none is. */
+  /** Dictation requires a choice; speech defaults to a supported engine. Null means none. */
   getEffectiveEngine(
     capability: VoiceCapability,
     options?: VoiceRequestOptions,

@@ -7,7 +7,7 @@
 
 | Capability | Default engine | Optional engine |
 | --- | --- | --- |
-| Dictation into the composer draft | System speech recognition | AI transcription model |
+| Dictation into the composer draft | Off until selected | System recognition or AI transcription |
 | Reading an assistant reply aloud | System text-to-speech | AI speech model and voice |
 | Audio file attachments | AI transcription model | — |
 
@@ -22,8 +22,10 @@ audio attachments use it. Both model rows reuse the shared model picker, filtere
 synthesis (TTS) or transcription (STT). Selecting the current model again clears the selection.
 Add voice models in the existing provider model settings; account credentials are reused.
 
-The chat composer has one primary action slot, as mainstream chat apps do: voice input while the
-draft and attachments are empty, send once there is content, and stop while a reply streams.
+The chat composer has one primary action slot: voice input while the draft and attachments are
+empty and a configured dictation engine is available, send once there is content, and stop while a
+reply streams. With dictation off, no system recognizer, or no available selected AI transcription
+model/account, it keeps the send action. Dictation can be turned off again in voice settings.
 Dictation keeps the slot until it ends even as its text fills the draft. Adding to a typed draft by
 voice goes through the keyboard's own voice input. Reading aloud sits beside copy on a settled
 assistant reply's toolbar and turns into stop while that reply is read.
@@ -38,7 +40,7 @@ Callers never pick an engine: they start dictation, read text, and observe the c
 - `engines.ts` declares the `DictationEngine` and `SpeechEngine` ports. An engine may serve one
   capability only; a missing engine is unsupported.
 - `VoiceRuntime.ts` is the only place that chooses an engine. An explicit preference is used as is;
-  with none (`null`), the first engine in `VOICE_ENGINES` the device supports is used. The runtime
+  with none (`null`), dictation is off and speech uses the first supported `VOICE_ENGINES` entry. The runtime
   allows one activity at a time: dictation stops reading, reading replaces reading, and reading
   cannot start during dictation. Backgrounding the app and host disposal abort the activity. It
   turns Markdown into prose (`speechText.ts`) before any engine sees it.
@@ -62,10 +64,11 @@ session and restore the earlier draft; failures other than cancelling are report
 **System dictation** uses Apple's Speech framework on iOS and Android's `SpeechRecognizer`. It runs
 in continuous mode with live partial results; each final utterance is appended with
 `appendUtterance`, which adds no spaces between Chinese or Japanese utterances. On Android the
-engine currently requires a Google recognition service (`GOOGLE_RECOGNITION_SERVICES`); devices
-without one report it as unsupported and settings disables it. Vendor recognizers such as Xiaomi's
-implement the same `RecognitionService` and are a candidate once verified on devices. The config
-plugin declares the Google packages for Android package visibility.
+engine checks `isRecognitionAvailable()` and uses Android's configured default `RecognitionService`,
+including vendor implementations. It does not select a Google package or use a vendor allowlist.
+The installed config plugin already declares the generic `android.speech.RecognitionService` query
+for package visibility. Availability is a platform capability check; recognition quality and support
+for language, partial results and continuous mode still depend on the selected device service.
 
 **AI dictation** records mono 16 kHz AAC (M4A) for up to ten minutes, then sends the recording once
 to the transcription model and deletes it. It has no live text: the transcript arrives on stop.
@@ -76,6 +79,10 @@ MP4/M4A as WAV and would name the upload `audio.wav`; attachments take their typ
 
 **System speech** reads through the platform engine, split to Android's input limit, with an
 optional system voice for the app language.
+
+System voices are filtered by the app language and deduplicated by their native selection ID.
+Different IDs with the same display name remain selectable with language/ID details. The voice list
+refreshes when the app language changes.
 
 **AI speech** splits prose into requests of at most 4,096 characters at sentence boundaries,
 generates the next part while the current one plays, and deletes each WAV after playback. A part
@@ -114,8 +121,13 @@ transcribes.
 ID. `AiService` loads the current model, checks its availability and voice purpose, resolves its API
 model ID and account at request time, and uses the OpenAI audio adapter with the account URL,
 headers and credential
-(`resolveVoiceEndpoint`); only API-key accounts with an OpenAI or OpenAI-compatible endpoint
-qualify. Realtime and multimodal audio chat models are not TTS choices. Previously entered model IDs
+(`resolveVoiceEndpoint`); API-key accounts with an OpenAI, OpenAI-compatible or AiHubMix endpoint
+qualify. AiHubMix uses its compatible audio URL even when Gemini is the default chat endpoint.
+Its audio admission is limited to the supported OpenAI speech/transcription families, Gemini 2.5
+Flash/Pro preview TTS and Whisper variants declared in `voiceModelMetadata.ts`; catalog audio tags
+alone do not establish protocol compatibility. AiHubMix discovery preserves its voice types and
+modalities, with canonical metadata correcting known catalog errors for the supported families.
+Realtime and multimodal audio chat models are not TTS choices. Previously entered model IDs
 must exist in the model catalog with the correct voice type. Each action makes one attempt. Remote
 conversations also use the local voice settings.
 
@@ -138,9 +150,11 @@ to prose, request splitting, utterance joining, Android recognizer detection, au
 and limits, attachment transcription, caching and failures, transcript paging in `read_file`, and
 the composed native configuration. They use native fakes and do not establish device behavior.
 
-Device acceptance on iOS and on Android with and without Google services:
+Device acceptance on iOS and on Android with Google and vendor recognition services:
 
 - System dictation: permission grant and denial, live text, Chinese and English, stop, cancel,
-  backgrounding, and the disabled engine on Android devices without Google services.
+  backgrounding, and the disabled engine on Android devices without any recognition service.
+- Composer send fallback with dictation off or its AI model/account missing or unavailable.
+- System voice deduplication and same-name voice labels.
 - AI dictation and speech with a real OpenAI-compatible account, including long replies.
 - Audio attachments in chat and `read_file`, with and without a transcription model.

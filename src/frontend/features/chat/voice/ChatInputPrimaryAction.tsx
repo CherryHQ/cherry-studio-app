@@ -18,6 +18,7 @@ import { useComposerState } from '@/frontend/components/Composer';
 import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
 
 import { useDictation } from './useDictation';
+import { useDictationAvailability } from './useDictationAvailability';
 
 const swapTiming = { duration: duration.fast, easing: easing.settle };
 
@@ -60,9 +61,11 @@ export function ChatInputPrimaryAction({
 }) {
   const { attachments, draft } = useComposerState();
   const dictation = useDictation();
+  const canDictate = useDictationAvailability();
   const reducedMotion = useReducedMotion();
   const showsDictation =
-    dictation.state !== 'idle' || (!streaming && !hasComposerSendableContent(draft, attachments));
+    dictation.state !== 'idle' ||
+    (canDictate && !streaming && !hasComposerSendableContent(draft, attachments));
   const motion = reducedMotion ? {} : { entering: enter, exiting: exit };
 
   return (

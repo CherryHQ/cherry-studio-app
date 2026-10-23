@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useBackendModule, usePreference } from '@/frontend/data';
 import type { VoiceEngineId } from '@/shared/contracts/voice';
 
+import { speechVoiceOptions } from './speechVoiceOptions';
+
 const VOICE_PREFERENCE = {
   system: 'feature.voice.system_voice',
   ai: 'feature.voice.ai_voice',
@@ -13,18 +15,18 @@ const VOICE_PREFERENCE = {
 
 /** Voices belong to an engine, so the list follows the engine that reads aloud. */
 export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
   const [selected, setSelected] = usePreference(VOICE_PREFERENCE[engine]);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const voices = useQuery({
-    queryKey: ['voice', 'voices', engine],
+    queryKey: ['voice', 'voices', engine, i18n.resolvedLanguage],
     queryFn: ({ signal }) => voice.listVoices(engine, { signal }),
   });
   const options = [
     ...(engine === 'system' ? [{ value: '', label: t('settings.voice.defaultVoice') }] : []),
-    ...(voices.data ?? []).map((item) => ({ value: item.id, label: item.name })),
+    ...speechVoiceOptions(voices.data ?? []),
   ];
   const change = (value: string) => {
     void setSelected(value).catch(() => {

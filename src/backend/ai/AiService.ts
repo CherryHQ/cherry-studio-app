@@ -367,9 +367,6 @@ export class AiService extends BaseService {
     if (!selection.providerId || !selection.modelId.trim() || selection.modelId.length > 256)
       throw new VoiceError('not-configured', 'A voice provider and model ID are required.');
     const provider = await this.services.provider.getByProviderId(selection.providerId);
-    const endpointType = resolveVoiceEndpoint(provider);
-    if (!provider.isEnabled || !endpointType)
-      throw new VoiceError('not-configured', 'This provider cannot serve the audio protocol.');
     const model = await this.services.model.getById(
       createUniqueModelId(provider.id, selection.modelId.trim()),
     );
@@ -381,6 +378,9 @@ export class AiService extends BaseService {
       !(operation === 'speech' ? isTextToSpeechModel(model) : isSpeechToTextModel(model))
     )
       throw new VoiceError('not-configured', 'Select an available model for this voice operation.');
+    const endpointType = resolveVoiceEndpoint(provider, model);
+    if (!provider.isEnabled || !endpointType)
+      throw new VoiceError('not-configured', 'This provider cannot serve the audio protocol.');
     const { sdkConfig } = await resolveAiSdkServing({
       provider,
       // The account's compatible base URL serves the audio routes, while the model owns its API ID.

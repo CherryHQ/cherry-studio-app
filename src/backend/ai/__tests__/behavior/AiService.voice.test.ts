@@ -1,5 +1,5 @@
 import type { SpeechModelV3CallOptions, TranscriptionModelV3CallOptions } from '@ai-sdk/provider';
-import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { MockSpeechModelV3, MockTranscriptionModelV3 } from 'ai/test';
 
 import { AiService } from '@/backend/ai/AiService';
@@ -21,6 +21,56 @@ const speechResult = {
 };
 
 beforeEach(() => jest.clearAllMocks());
+
+test('serves an AiHubMix Gemini speech alias through its audio URL instead of its Gemini chat URL', async () => {
+  const f = createContractFixture({
+    modelId: 'saved-speech',
+    capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+    modelOverrides: {
+      apiModelId: 'gemini-2.5-flash-preview-tts',
+      endpointTypes: [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT],
+    },
+    providerOverrides: {
+      presetProviderId: 'aihubmix',
+      defaultChatEndpoint: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
+          adapterFamily: 'aihubmix',
+          baseUrl: 'https://aihubmix.com/gemini/v1beta',
+        },
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'aihubmix',
+          baseUrl: 'https://aihubmix.com/v1',
+        },
+      },
+    },
+  });
+  mockResolve.mockReturnValue(new MockSpeechModelV3({ doGenerate: async () => speechResult }));
+  await new AiService(f.services).generateSpeech(
+    { providerId: f.provider.id, modelId: f.model.modelId, text: '你好', voice: 'alloy' },
+    new AbortController().signal,
+  );
+  expect(mockResolve).toHaveBeenCalledWith(
+    expect.objectContaining({
+      modelId: 'gemini-2.5-flash-preview-tts',
+      settings: expect.objectContaining({
+        baseURL: 'https://aihubmix.com/v1',
+        apiKey: 'contract-key',
+      }),
+    }),
+    'speech',
+  );
+
+  f.model.apiModelId = 'unimplemented-tts';
+  mockResolve.mockClear();
+  await expect(
+    new AiService(f.services).generateSpeech(
+      { providerId: f.provider.id, modelId: f.model.modelId, text: '你好', voice: 'alloy' },
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'not-configured' });
+  expect(mockResolve).not.toHaveBeenCalled();
+});
 
 test('uses the saved speech model API ID and selected account without inventing usage', async () => {
   const f = createContractFixture({

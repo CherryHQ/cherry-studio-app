@@ -1,6 +1,6 @@
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
-import { createSystemDictationEngine, GOOGLE_RECOGNITION_SERVICES } from '../systemDictation';
+import { createSystemDictationEngine } from '../systemDictation';
 
 const native = jest.mocked(ExpoSpeechRecognitionModule);
 type Handler = (event: unknown) => void;
@@ -29,10 +29,10 @@ beforeEach(() => {
   native.start.mockImplementation(() => queueMicrotask(() => emit('start')));
 });
 
-async function start(platform: 'ios' | 'android' = 'ios') {
+async function start() {
   const onText = jest.fn();
   const controller = new AbortController();
-  const session = await createSystemDictationEngine({ platform, permissions: queue }).start({
+  const session = await createSystemDictationEngine({ permissions: queue }).start({
     language: 'zh-CN',
     signal: controller.signal,
     onText,
@@ -41,27 +41,26 @@ async function start(platform: 'ios' | 'android' = 'ios') {
   return { session, onText, controller };
 }
 
-test('Android has a system engine only with a Google recognition service', async () => {
-  const android = createSystemDictationEngine({ platform: 'android', permissions: queue });
+test('accepts a vendor recognizer and leaves service selection to Android', async () => {
+  const android = createSystemDictationEngine({ permissions: queue });
   native.getSpeechRecognitionServices.mockReturnValue(['com.xiaomi.mibrain.speech']);
-  await expect(android.status(new AbortController().signal)).resolves.toBe('unsupported');
-  native.getSpeechRecognitionServices.mockReturnValue([
-    'com.xiaomi.mibrain.speech',
-    'com.google.android.tts',
-  ]);
   await expect(android.status(new AbortController().signal)).resolves.toBe('ready');
 
-  native.getSpeechRecognitionServices.mockReturnValue([...GOOGLE_RECOGNITION_SERVICES]);
-  await start('android');
-  // The Google app is preferred over other Google recognizers.
+  await start();
   expect(native.start).toHaveBeenCalledWith(
     expect.objectContaining({
-      androidRecognitionServicePackage: 'com.google.android.googlequicksearchbox',
       continuous: true,
       interimResults: true,
       lang: 'zh-CN',
     }),
   );
+  expect(native.start.mock.calls[0][0]).not.toHaveProperty('androidRecognitionServicePackage');
+});
+
+test('reports unsupported when Android has no recognition service', async () => {
+  native.isRecognitionAvailable.mockReturnValue(false);
+  const engine = createSystemDictationEngine({ permissions: queue });
+  await expect(engine.status(new AbortController().signal)).resolves.toBe('unsupported');
 });
 
 test('live text accumulates utterances and stop keeps the final transcript', async () => {

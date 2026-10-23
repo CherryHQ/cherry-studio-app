@@ -7,6 +7,7 @@ import { ChatInputPrimaryAction } from '../ChatInputPrimaryAction';
 let mockDraft = '';
 let mockAttachments: unknown[] = [];
 let mockDictationState = 'idle';
+let mockCanDictate = true;
 
 jest.mock('@cherrystudio/ui/motion', () => ({ duration: { fast: 200 }, easing: {} }));
 jest.mock('react-native-reanimated', () => {
@@ -49,6 +50,9 @@ jest.mock('../useDictation', () => ({
     cancel: jest.fn(),
   }),
 }));
+jest.mock('../useDictationAvailability', () => ({
+  useDictationAvailability: () => mockCanDictate,
+}));
 
 function render(streaming = false) {
   let renderer!: ReactTestRenderer;
@@ -68,10 +72,16 @@ beforeEach(() => {
   mockDraft = '';
   mockAttachments = [];
   mockDictationState = 'idle';
+  mockCanDictate = true;
 });
 
 test('an empty draft offers voice input in the send slot', () => {
   expect(render()).toEqual({ dictation: true, send: false });
+});
+
+test('an empty draft keeps send when dictation is not configured or unavailable', () => {
+  mockCanDictate = false;
+  expect(render()).toEqual({ dictation: false, send: true });
 });
 
 test('text or an attachment turns the slot into send', () => {
@@ -85,6 +95,7 @@ test('text or an attachment turns the slot into send', () => {
 test('dictation keeps the slot while its text fills the draft', () => {
   mockDraft = 'recognized so far';
   mockDictationState = 'listening';
+  mockCanDictate = false;
   expect(render()).toEqual({ dictation: true, send: false });
 });
 

@@ -44,8 +44,12 @@ const END_TOLERANCE_SECONDS = 0.5;
 
 function play(uri: string, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    signal.throwIfAborted();
     const player = createAudioPlayer(uri);
+    let settled = false;
     const settle = (error?: unknown) => {
+      if (settled) return;
+      settled = true;
       subscription.remove();
       signal.removeEventListener('abort', abort);
       player.release();
@@ -71,7 +75,11 @@ function play(uri: string, signal: AbortSignal): Promise<void> {
         settle(new VoiceError('failed', 'Playback was interrupted.'));
     });
     signal.addEventListener('abort', abort, { once: true });
-    player.play();
+    try {
+      player.play();
+    } catch (error) {
+      settle(error);
+    }
   });
 }
 
@@ -111,12 +119,21 @@ export function createAiSpeechEngine({
         }
         return file.uri;
       };
+      // A prefetched request can fail while the preceding part is still playing. Observe its
+      // rejection immediately, then surface the failure when that part is consumed.
+      const prepare = (chunk: string) =>
+        generate(chunk).then(
+          (uri) => ({ uri }),
+          (error: unknown) => ({ error }),
+        );
       const chunks = splitSpeechText(text, MAX_REQUEST_CHARACTERS);
-      let next = chunks.length ? generate(chunks[0]!) : undefined;
+      let next = chunks.length ? prepare(chunks[0]!) : undefined;
       try {
         for (let index = 0; next; index += 1) {
-          const uri = await next;
-          next = index + 1 < chunks.length ? generate(chunks[index + 1]!) : undefined;
+          const part = await next;
+          if ('error' in part) throw part.error;
+          const { uri } = part;
+          next = index + 1 < chunks.length ? prepare(chunks[index + 1]!) : undefined;
           try {
             await setAudioModeAsync({
               allowsRecording: false,
@@ -130,7 +147,9 @@ export function createAiSpeechEngine({
         }
       } finally {
         // A part generated ahead of a stop is never played.
-        void next?.then(deleteFile, () => undefined);
+        void next?.then((part) => {
+          if ('uri' in part) deleteFile(part.uri);
+        });
       }
     },
   };

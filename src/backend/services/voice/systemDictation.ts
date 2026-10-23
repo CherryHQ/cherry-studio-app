@@ -12,17 +12,6 @@ import { requireAccess, type SystemPromptQueue } from './microphoneAccess';
 
 const logger = loggerService.withContext('SystemDictation');
 
-/**
- * Android support currently targets Google's recognizers. Vendor recognizers such as Xiaomi's
- * implement the same `RecognitionService` but are not yet verified on devices, so a device without
- * a Google one has no system engine. The config plugin declares these packages for visibility.
- */
-export const GOOGLE_RECOGNITION_SERVICES = [
-  'com.google.android.googlequicksearchbox',
-  'com.google.android.as',
-  'com.google.android.tts',
-] as const;
-
 const ERRORS: Partial<Record<ExpoSpeechRecognitionErrorCode, VoiceError['code']>> = {
   'no-speech': 'no-speech',
   'speech-timeout': 'no-speech',
@@ -37,23 +26,13 @@ const toLevel = (value: number) => Math.min(1, Math.max(0, value / 10));
 
 /** iOS Speech framework or Android SpeechRecognizer through expo-speech-recognition. */
 export function createSystemDictationEngine({
-  platform,
   permissions,
 }: {
-  platform: 'ios' | 'android';
   permissions: SystemPromptQueue;
 }): DictationEngine {
-  const recognitionService = () =>
-    platform === 'android'
-      ? GOOGLE_RECOGNITION_SERVICES.find((name) =>
-          ExpoSpeechRecognitionModule.getSpeechRecognitionServices().includes(name),
-        )
-      : undefined;
-
   return {
     async status() {
       try {
-        if (platform === 'android' && !recognitionService()) return 'unsupported';
         return ExpoSpeechRecognitionModule.isRecognitionAvailable() ? 'ready' : 'unsupported';
       } catch (error) {
         logger.warn('Could not query speech recognition', { error });
@@ -132,7 +111,7 @@ export function createSystemDictationEngine({
       void result.catch(() => undefined);
 
       try {
-        const service = recognitionService();
+        // Android selects its configured RecognitionService, including vendor implementations.
         ExpoSpeechRecognitionModule.start({
           lang: language,
           interimResults: true,
@@ -140,7 +119,6 @@ export function createSystemDictationEngine({
           addsPunctuation: true,
           iosTaskHint: 'dictation',
           volumeChangeEventOptions: { enabled: true, intervalMillis: 100 },
-          ...(service ? { androidRecognitionServicePackage: service } : {}),
         });
       } catch (error) {
         settle({ error });

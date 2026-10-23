@@ -50,7 +50,7 @@ export function VoiceEngineSection({
     if (status === 'needs-setup') return t('settings.voice.needsModel');
     return t(`settings.voice.engine.${engine}Description`);
   };
-  const select = (engine: VoiceEngineId) => {
+  const select = (engine: VoiceEngineId | null) => {
     void setSelected(engine).catch(() => {
       toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
     });
@@ -63,7 +63,13 @@ export function VoiceEngineSection({
           label={t('settings.voice.engine.title')}
           onPress={() => setIsPickerOpen(true)}
           testID={`settings-voice-${capability}-engine`}
-          value={effectiveEngine ? t(`settings.voice.engine.${effectiveEngine}`) : '—'}
+          value={
+            effectiveEngine
+              ? t(`settings.voice.engine.${effectiveEngine}`)
+              : capability === 'dictation'
+                ? t('settings.voice.engine.off')
+                : '—'
+          }
         />
         {children}
       </Section>
@@ -74,6 +80,17 @@ export function VoiceEngineSection({
         title={t(`settings.voice.${capability}.title`)}
       >
         <Section variant="plain">
+          {capability === 'dictation' ? (
+            <Section.RadioItem
+              label={t('settings.voice.engine.off')}
+              onPress={() => {
+                select(null);
+                setIsPickerOpen(false);
+              }}
+              selected={effectiveEngine === null}
+              testID="settings-voice-dictation-off"
+            />
+          ) : null}
           {VOICE_ENGINES.map((engine) => (
             <Section.RadioItem
               description={describe(engine)}

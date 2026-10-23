@@ -86,10 +86,11 @@ export function createVoiceRuntime({
     >;
   }
 
-  /** An explicit choice is used as is; with none, the first engine this device supports. */
+  /** Dictation is opt-in; speech defaults to the first supported engine. */
   async function effectiveEngine(capability: VoiceCapability, signal: AbortSignal) {
     const selected = await preference.get(VOICE_ENGINE_PREFERENCE[capability]);
     signal.throwIfAborted();
+    if (capability === 'dictation' && !selected) return null;
     for (const id of selected ? [selected] : VOICE_ENGINES) {
       const status = (await registry(capability)[id]?.status(signal)) ?? 'unsupported';
       signal.throwIfAborted();
@@ -103,6 +104,8 @@ export function createVoiceRuntime({
     signal: AbortSignal,
   ): Promise<T> {
     const effective = await effectiveEngine(capability, signal);
+    if (!effective && capability === 'dictation')
+      throw new VoiceError('not-configured', 'Select a dictation engine first.');
     if (effective?.status === 'ready') return registry(capability)[effective.id] as T;
     if (effective?.status === 'needs-setup')
       throw new VoiceError(

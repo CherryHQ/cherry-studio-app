@@ -80,6 +80,14 @@ function setup({
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('engine choice', () => {
+  test('dictation stays off until an engine is explicitly selected', async () => {
+    const system = dictationEngine();
+    const { module } = setup({ dictation: { system: system.engine } });
+    await expect(module.getEffectiveEngine('dictation')).resolves.toBeNull();
+    await expect(module.startDictation()).rejects.toMatchObject({ code: 'not-configured' });
+    expect(system.engine.start).not.toHaveBeenCalled();
+  });
+
   test('without a choice, uses the first engine this device supports', async () => {
     const system = speechEngine('unsupported');
     const ai = speechEngine();
@@ -93,6 +101,7 @@ describe('engine choice', () => {
 
   test('an AI engine without a model is reported as setup, never silently skipped', async () => {
     const { module } = setup({
+      selected: { dictation: 'ai' },
       dictation: {
         system: dictationEngine('unsupported').engine,
         ai: dictationEngine('needs-setup').engine,
@@ -117,6 +126,7 @@ describe('engine choice', () => {
     const dictation = dictationEngine();
     const speech = speechEngine();
     const { module } = setup({
+      selected: { dictation: 'system' },
       dictation: { system: dictation.engine },
       speech: { system: speech.engine },
     });
@@ -158,6 +168,7 @@ describe('one voice activity at a time', () => {
     const speech = speechEngine();
     const dictation = dictationEngine();
     const { module } = setup({
+      selected: { dictation: 'system' },
       speech: { system: speech.engine },
       dictation: { system: dictation.engine },
     });
@@ -177,7 +188,10 @@ describe('one voice activity at a time', () => {
 
   test('backgrounding ends dictation and discards its text', async () => {
     const dictation = dictationEngine();
-    const runtime = setup({ dictation: { system: dictation.engine } });
+    const runtime = setup({
+      dictation: { system: dictation.engine },
+      selected: { dictation: 'system' },
+    });
     const session = await runtime.module.startDictation();
     runtime.background();
     await expect(session.result).rejects.toBeDefined();

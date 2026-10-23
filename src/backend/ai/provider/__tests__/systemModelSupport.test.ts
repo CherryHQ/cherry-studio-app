@@ -146,6 +146,38 @@ describe('createSystemModelSupport', () => {
     ).toBe(true);
   });
 
+  it('offers compatible AiHubMix TTS/STT models independently of chat support', () => {
+    const supportsLanguageModel = jest.fn().mockReturnValue(false);
+    const { filterModelsSupportedBySystem } = supportWith(supportsLanguageModel);
+    const provider = createProvider({
+      presetProviderId: 'aihubmix',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'aihubmix',
+          baseUrl: 'https://aihubmix.com/v1',
+        },
+      },
+    });
+    const speech = createModel({
+      apiModelId: 'gemini-2.5-flash-preview-tts',
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+      inputModalities: [MODALITY.TEXT],
+      outputModalities: [MODALITY.AUDIO],
+    });
+    const transcription = createModel({
+      modelId: 'whisper-large-v3',
+      capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+      inputModalities: [MODALITY.AUDIO],
+      outputModalities: [MODALITY.TEXT],
+    });
+    const unsupported = { ...speech, apiModelId: 'unimplemented-tts' };
+
+    expect(filterModelsSupportedBySystem([speech, transcription, unsupported], [provider])).toEqual(
+      [speech, transcription],
+    );
+    expect(supportsLanguageModel).not.toHaveBeenCalled();
+  });
+
   it('filters out models whose provider is unknown', () => {
     const { filterModelsSupportedBySystem } = supportWith(jest.fn().mockReturnValue(true));
     const provider = createProvider();

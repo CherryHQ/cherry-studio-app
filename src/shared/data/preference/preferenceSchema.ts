@@ -69,7 +69,7 @@ export interface PreferenceSchema {
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
   'feature.voice.ai_voice': string;
-  /** Null uses the first engine this device supports. */
+  /** Null disables voice input and keeps the composer's send action. */
   'feature.voice.dictation_engine': VoiceEngineId | null;
   /** Null follows the app language. Only the system engine uses it; AI models detect it. */
   'feature.voice.dictation_language': LanguageVarious | null;

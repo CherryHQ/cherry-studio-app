@@ -51,7 +51,7 @@ export function createVoice({
   const runtime = createVoiceRuntime({
     engines: {
       dictation: {
-        system: createSystemDictationEngine({ platform, permissions }),
+        system: createSystemDictationEngine({ permissions }),
         ai: createAiDictationEngine({ platform, permissions, transcriber }),
       },
       speech: {

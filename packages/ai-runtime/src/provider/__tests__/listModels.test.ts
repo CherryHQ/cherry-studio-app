@@ -763,6 +763,120 @@ describe('listModels — gatewayFetcher (Vercel AI Gateway /v3/ai/config)', () =
 });
 
 describe('listModels — aiHubMixFetcher (configured base URL)', () => {
+  it('keeps voice catalog metadata and corrects known audio-model modality mistakes', async () => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: {
+        data: [
+          {
+            model_id: 'gemini-2.5-flash-preview-tts',
+            types: 'tts',
+            input_modalities: 'text',
+            output_modalities: 'audio',
+          },
+          {
+            model_id: 'tts-1-1106',
+            types: 'tts',
+            input_modalities: 'audio',
+            output_modalities: 'audio',
+          },
+          {
+            model_id: 'whisper-large-v3',
+            types: 'stt',
+            input_modalities: 'audio',
+            output_modalities: 'text',
+          },
+          {
+            model_id: 'future-speech',
+            types: ' TTS ',
+            input_modalities: ' text ',
+            output_modalities: ' audio ',
+          },
+          {
+            model_id: 'future-transcribe',
+            types: 'stt',
+            input_modalities: 'audio, text',
+            output_modalities: 'text',
+          },
+          {
+            model_id: 'gpt-realtime-2.1',
+            types: 'tts,stt',
+            input_modalities: 'text,audio,image',
+            output_modalities: 'audio,text',
+          },
+          {
+            model_id: 'chat-model',
+            types: 'llm',
+            input_modalities: 'text',
+            output_modalities: 'text',
+          },
+        ],
+      },
+    });
+    const models = await listModels(
+      makeProvider({
+        id: 'aihubmix',
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            adapterFamily: 'aihubmix',
+            baseUrl: 'https://aihubmix.com/v1',
+          },
+        },
+      }),
+    );
+    expect(
+      models.map(({ apiModelId, capabilities, inputModalities, outputModalities }) => ({
+        apiModelId,
+        capabilities,
+        inputModalities,
+        outputModalities,
+      })),
+    ).toEqual([
+      {
+        apiModelId: 'gemini-2.5-flash-preview-tts',
+        capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+        inputModalities: ['text'],
+        outputModalities: ['audio'],
+      },
+      {
+        apiModelId: 'tts-1-1106',
+        capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+        inputModalities: ['text'],
+        outputModalities: ['audio'],
+      },
+      {
+        apiModelId: 'whisper-large-v3',
+        capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+        inputModalities: ['audio'],
+        outputModalities: ['text'],
+      },
+      {
+        apiModelId: 'future-speech',
+        capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+        inputModalities: ['text'],
+        outputModalities: ['audio'],
+      },
+      {
+        apiModelId: 'future-transcribe',
+        capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+        inputModalities: ['audio', 'text'],
+        outputModalities: ['text'],
+      },
+      {
+        apiModelId: 'gpt-realtime-2.1',
+        capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION, MODEL_CAPABILITY.AUDIO_RECOGNITION],
+        inputModalities: ['text', 'audio', 'image'],
+        outputModalities: ['audio', 'text'],
+      },
+      {
+        apiModelId: 'chat-model',
+        capabilities: [],
+        inputModalities: undefined,
+        outputModalities: undefined,
+      },
+    ]);
+  });
+
   it('accepts a catalog containing models with null pricing', () => {
     const response = AIHubMixModelsResponseSchema.parse({
       data: [
