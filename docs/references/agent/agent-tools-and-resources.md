@@ -590,7 +590,9 @@ categories and selected AI service. See [Health Review](../../guides/health-revi
   an ambiguous reference needs clarification, and an unavailable image needs reattachment. The
   tool reads the original managed image and passes it to the drawing model. A direct `read_file`
   call is needed only when the Agent must inspect pixels that are no longer in context; generated
-  results expose reusable references rather than automatically sending pixels to the Agent.
+  results expose reusable references rather than automatically sending pixels to the Agent. When
+  the chat model does not accept images, the omission note that replaces an attachment still names
+  its `fileEntryId`, so the Agent can edit an uploaded image it cannot see.
 
 ### Office Files
 

@@ -207,7 +207,7 @@ export function buildGenerateImageToolSchema(
       .min(1)
       .max(MAX_INPUT_IMAGES)
       .describe(
-        `Reference image file entry ids from conversation attachment fileEntryId, earlier generate_image result id, or artifact ref.fileEntryId. At most ${MAX_INPUT_IMAGES} image; use existing file ids, not message ids, tool call ids, or URLs. ${modes.includes('generate') ? 'Required for edits or reference-based generation; omit only to generate a new image without a reference.' : 'Required for every call; this drawing model needs a reference image.'}`,
+        `Reference image file entry id, not a message id, tool call id, or URL. ${modes.includes('generate') ? 'Omit only to generate a new image without a reference.' : 'Required for every call.'}`,
       );
     inputShape.image_ids = modes.includes('generate') ? imageIds.optional() : imageIds;
   }

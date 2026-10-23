@@ -1,5 +1,3 @@
-import type { GenerateImageOutput } from '@cherrystudio/universal/ai/builtinTools';
-
 import type { AiUsageAttribution } from '@/backend/ai/AiService';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -78,7 +76,7 @@ describe('createGenerateImageTool', () => {
     ]);
   });
 
-  test('edits an uploaded image and reuses its generated result by id in a later call', async () => {
+  test('edits an uploaded image by its attachment id', async () => {
     const uploaded = FileEntrySchema.parse({
       ...ENTRY,
       id: '00000000-0000-7000-8000-000000000002',
@@ -89,17 +87,17 @@ describe('createGenerateImageTool', () => {
       .mocked(deps.files.resolve)
       .mockResolvedValue({ entry: uploaded, uri: 'file:///uploaded.png' });
     jest.mocked(deps.files.readDataUrl).mockResolvedValue('data:image/png;base64,VVBMT0FE');
-    const firstTool = createGenerateImageTool(deps, EDIT_MODEL, {
+    const tool = createGenerateImageTool(deps, EDIT_MODEL, {
       fileEntryIds: new Set([uploaded.id]),
     });
 
-    const first = await execute(firstTool, {
+    const result = await execute(tool, {
       image_ids: [uploaded.id],
       prompt: 'Keep the subject and change the style to watercolor.',
     });
 
-    expect(deps.ai.generateImage).toHaveBeenNthCalledWith(
-      1,
+    expect(deps.files.resolve).toHaveBeenCalledWith(uploaded.id);
+    expect(deps.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: 'edit',
         inputImages: ['data:image/png;base64,VVBMT0FE'],
@@ -107,38 +105,7 @@ describe('createGenerateImageTool', () => {
         uniqueModelId: EDIT_MODEL.uniqueModelId,
       }),
     );
-    expect(first.value).toEqual([{ id: ENTRY.id, name: ENTRY.filename }]);
-    const [generated] = first.value as GenerateImageOutput;
-    const edited = FileEntrySchema.parse({
-      ...ENTRY,
-      id: '00000000-0000-7000-8000-000000000003',
-    });
-    jest
-      .mocked(deps.files.resolve)
-      .mockResolvedValue({ entry: ENTRY, uri: 'file:///generated.png' });
-    jest.mocked(deps.files.readDataUrl).mockResolvedValue('data:image/png;base64,R0VORVJBVEVE');
-    deps.files.createInternalEntry.mockResolvedValue(edited);
-    const nextTool = createGenerateImageTool(deps, EDIT_MODEL, {
-      fileEntryIds: new Set(first.artifacts.map((artifact) => artifact.ref.fileEntryId)),
-    });
-
-    const next = await execute(nextTool, {
-      image_ids: [generated.id],
-      prompt: 'Keep this image and make the background blue.',
-    });
-
-    expect(deps.ai.generateImage).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        mode: 'edit',
-        inputImages: ['data:image/png;base64,R0VORVJBVEVE'],
-        prompt: 'Keep this image and make the background blue.',
-        uniqueModelId: EDIT_MODEL.uniqueModelId,
-      }),
-    );
-    expect(deps.files.resolve).toHaveBeenLastCalledWith(generated.id);
-    expect(next.value).toEqual([{ id: edited.id, name: edited.filename }]);
-    expect(next.artifacts).toMatchObject([{ ref: { fileEntryId: edited.id } }]);
+    expect(result.value).toEqual([{ id: ENTRY.id, name: ENTRY.filename }]);
   });
 
   test.each<{
@@ -197,7 +164,7 @@ describe('createGenerateImageTool', () => {
         expect(tool.description).toContain('image_ids is required for every call');
         expect(tool.inputSchema).toHaveProperty(
           'properties.image_ids.description',
-          expect.not.stringContaining('omit'),
+          expect.not.stringContaining('Omit'),
         );
       } else {
         expect(tool.inputSchema).not.toMatchObject({

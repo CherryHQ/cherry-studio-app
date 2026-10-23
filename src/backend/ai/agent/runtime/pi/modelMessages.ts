@@ -121,7 +121,11 @@ function collectUserContent(
       return toPiDocumentAttachment(part, mediaCapabilities.image);
     }
     if (part.type === 'file') {
-      const note = unsupportedMediaNote(part.mediaType, mediaCapabilities);
+      const note = unsupportedMediaNote(
+        part.mediaType,
+        mediaCapabilities,
+        part.fileEntryId ? { fileEntryId: part.fileEntryId, name: part.name } : undefined,
+      );
       if (note) return [{ type: 'text' as const, text: note }];
       return [
         ...(part.fileEntryId

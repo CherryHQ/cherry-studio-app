@@ -315,7 +315,7 @@ describe('turn attachments', () => {
     });
   });
 
-  test('replaces historical images with notes without reading bytes for a text model', async () => {
+  test('replaces historical images with id-labelled notes without reading bytes for a text model', async () => {
     const historical = fact(FIRST_ID, 'historical.png', 'image/png');
     const files = resolver(new Map([[FIRST_ID, historical]]));
     const resources = createTurnResourceLedger(
@@ -336,7 +336,7 @@ describe('turn attachments', () => {
 
     const omitted = {
       type: 'text',
-      text: '[image attachment omitted: this model does not accept image input]',
+      text: `[image attachment omitted: this model does not accept image input] Cherry managed file: ${JSON.stringify({ fileEntryId: FIRST_ID, name: 'historical.png' })}`,
     };
     expect(attachments).toEqual(new Map([[FIRST_ID, omitted]]));
     expect(files.readAsDataUrl).not.toHaveBeenCalled();
