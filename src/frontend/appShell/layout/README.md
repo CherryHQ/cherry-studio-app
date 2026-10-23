@@ -25,7 +25,8 @@ names. `useIsSidebarPersistent` is the shell's single rule for keeping the sideb
 
 `PaneChromeProvider` marks a page rendered in a side pane rather than its own native-stack screen.
 Headers and bottom toolbars inside it render inline, and the provider supplies the pane's exit as
-the header's leading action.
+the header's leading action and, optionally, one pane control placed before the page's trailing
+actions.
 
 `ChatDockLayoutProvider` shares the height measured by `ChatDockFooter`, including its top gap,
 across the chat and drawer. The sidebar adds this space to the composer's action-center offset so

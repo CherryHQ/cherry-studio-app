@@ -24,27 +24,38 @@ const sourceLimits: TextBlockLimits = {
 };
 const estimatedBlockHeight = 480;
 
+type TextBodyProps = { bottomInset: number; text: string };
+
 export function FileTextBody({
+  bottomInset,
   text,
   variant,
 }: {
+  /** Space kept clear below the text; defaults to the bottom safe area. */
+  bottomInset?: number;
   text: string;
   variant: 'markdown' | 'source' | 'text';
 }) {
-  if (variant === 'markdown') {
-    return (
-      <ScrollView className="flex-1" contentContainerClassName="p-4 pb-safe-offset-4">
-        <MarkdownText markdown={text} selectable={false} />
-      </ScrollView>
-    );
-  }
+  const { bottom } = useSafeAreaInsets();
+  const props = { bottomInset: bottomInset ?? bottom, text };
 
-  return variant === 'text' ? <PlainTextBody text={text} /> : <SourceTextBody text={text} />;
+  if (variant === 'markdown') return <MarkdownBody {...props} />;
+  return variant === 'text' ? <PlainTextBody {...props} /> : <SourceTextBody {...props} />;
 }
 
-function PlainTextBody({ text }: { text: string }) {
+function MarkdownBody({ bottomInset, text }: TextBodyProps) {
+  const contentContainerStyle = usePageContentStyle(pagePadding, bottomInset);
+
+  return (
+    <ScrollView className="flex-1" contentContainerStyle={contentContainerStyle}>
+      <MarkdownText markdown={text} selectable={false} />
+    </ScrollView>
+  );
+}
+
+function PlainTextBody({ bottomInset, text }: TextBodyProps) {
   const blocks = useMemo(() => splitTextBlocks(text, plainTextLimits), [text]);
-  const contentContainerStyle = usePageContentStyle(pagePadding);
+  const contentContainerStyle = usePageContentStyle(pagePadding, bottomInset);
 
   return (
     <LegendList
@@ -64,7 +75,7 @@ function PlainTextBody({ text }: { text: string }) {
  * which an invisible copy of that row measures; the horizontal scroll view stretches it to the
  * page height.
  */
-function SourceTextBody({ text }: { text: string }) {
+function SourceTextBody({ bottomInset, text }: TextBodyProps) {
   const blocks = useMemo(() => splitTextBlocks(text, sourceLimits), [text]);
   const longestRow = useMemo(() => {
     let longest = '';
@@ -74,7 +85,7 @@ function SourceTextBody({ text }: { text: string }) {
     return longest;
   }, [text]);
   const { onLayout, width } = useLayoutWidth();
-  const contentContainerStyle = usePageContentStyle(0);
+  const contentContainerStyle = usePageContentStyle(0, bottomInset);
 
   return (
     <ScrollView horizontal onLayout={onLayout} style={styles.list}>
@@ -102,11 +113,14 @@ function SourceTextBody({ text }: { text: string }) {
   );
 }
 
-function usePageContentStyle(paddingHorizontal: number) {
-  const { bottom } = useSafeAreaInsets();
+function usePageContentStyle(paddingHorizontal: number, bottomInset: number) {
   return useMemo(
-    () => ({ paddingBottom: bottom + pagePadding, paddingHorizontal, paddingTop: pagePadding }),
-    [bottom, paddingHorizontal],
+    () => ({
+      paddingBottom: bottomInset + pagePadding,
+      paddingHorizontal,
+      paddingTop: pagePadding,
+    }),
+    [bottomInset, paddingHorizontal],
   );
 }
 

@@ -110,4 +110,19 @@ describe('sidebar Skill chat handoff', () => {
       });
     },
   );
+
+  test.each([
+    ['local', { sourceChat: JSON.stringify({ sessionId: 'selected-session' }) }],
+    ['remote', {}],
+  ] as const)('lets a %s chat receive files from the library page', (source, params) => {
+    mockSource = source;
+    mockParams = { sessionId: 'selected-session' };
+    act(() => {
+      renderer = create(<Sidebar navigation={navigation} />);
+    });
+
+    act(() => mockActions.openLibrary());
+
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/library', params });
+  });
 });

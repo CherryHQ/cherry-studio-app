@@ -1,5 +1,6 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
 import DownloadIcon from '@cherrystudio/app-icons/icons/download';
+import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
 import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import {
@@ -18,11 +19,13 @@ import { useUniwind } from 'uniwind';
 
 import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { queryKeys } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { imageEditGeometry } from '@/shared/utils/imageEditGeometry';
 
+import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useFileImageEdit } from '../hooks/useFileImageEdit';
 import { readPngDimensions } from '../utils/readPngDimensions';
 import { FileViewerHeader } from './FileViewerHeader';
@@ -30,9 +33,11 @@ import { FileViewerHeader } from './FileViewerHeader';
 export function FileImageViewer({
   file: initialFile,
   imageEditRequestId,
+  sourceChat,
 }: {
   file: ResolvedFile;
   imageEditRequestId?: string;
+  sourceChat?: ChatTarget;
 }) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
@@ -43,6 +48,7 @@ export function FileImageViewer({
   const { file } = editing;
   const { isSharing, share } = useShareFile(file);
   const saveToPhotos = useSaveImageToPhotos({ uri: file.uri, provenance: file.entry.provenance });
+  const addToChat = useAddFileToChat(file, sourceChat);
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);
@@ -89,6 +95,14 @@ export function FileImageViewer({
         label={t('fileViewer.saveToPhotos')}
         onPress={() => void saveToPhotos()}
       />
+      {addToChat.returnsToSourceChat ? (
+        <ImagePreviewToolbar.Action
+          disabled={addToChat.isResolving}
+          icon={<PaperclipIcon className="size-5 text-foreground" />}
+          label={t('fileViewer.addToChat')}
+          onPress={addToChat.add}
+        />
+      ) : null}
     </ImagePreviewToolbar>
   );
 
