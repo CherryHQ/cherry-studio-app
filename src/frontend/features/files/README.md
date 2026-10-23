@@ -5,7 +5,8 @@ Open XML documents, and RTF. `FileViewerPane` renders the same viewer in the fil
 only the route sets native screen options, and Office references go to the chat beside the pane.
 A preview opened from a chat, or from the file library opened beside one, offers Add to current
 chat: `useAddFileToChat` hands the whole file to that chat's composer once, keeping its draft text,
-and returns to it. The image viewer shows it as a toolbar action; documents and text show a footer.
+and returns to it. The image viewer shows it as a toolbar action; documents and text show a footer,
+which owns the bottom safe area in place of the content.
 A preview without a chat, or whose chat's Agent cannot take the file, does not offer it.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
 this page and system opening, and shares file export actions with the painting viewer.

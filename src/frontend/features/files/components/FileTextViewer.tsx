@@ -175,6 +175,7 @@ export function FileTextViewer({
                 </View>
               ) : (
                 <FileTextBody
+                  bottomInset={addToChat.returnsToSourceChat ? 0 : undefined}
                   text={content.text}
                   variant={
                     kind === 'markdown' && !content.isTruncated
