@@ -1,0 +1,38 @@
+diff --git a/cpp/core/Promise.hpp b/cpp/core/Promise.hpp
+index 07eac1180a23d2ac0ccc4a9bc88ac9ea7f7f799d..e6557f5d9caecbe1d8d6ec4c64c138064eb57a8b 100644
+--- a/cpp/core/Promise.hpp
++++ b/cpp/core/Promise.hpp
+@@ -36,7 +36,13 @@ public:
+   ~Promise() {
+     if (isPending()) [[unlikely]] {
+       auto message = std::string("Timeouted: Promise<") + TypeInfo::getFriendlyTypename<TResult>() + "> was destroyed!";
+-      reject(std::make_exception_ptr(std::runtime_error(message)));
++      // Swift can instantiate this destructor; keep it compatible with iOS 17.
++      // https://github.com/margelo/nitro/pull/1824
++      try {
++        throw std::runtime_error(message);
++      } catch (...) {
++        reject(std::current_exception());
++      }
+     }
+   }
+ 
+diff --git a/ios/utils/RuntimeError.hpp b/ios/utils/RuntimeError.hpp
+index 1b721154a8e095933b94e58cd29c5f663d83f2d9..600325782dc7626bf027420693f7e1c70727b468 100644
+--- a/ios/utils/RuntimeError.hpp
++++ b/ios/utils/RuntimeError.hpp
+@@ -14,7 +14,13 @@
+ namespace margelo::nitro {
+ 
+ static inline std::exception_ptr makeException(const std::string& message) {
+-  return std::make_exception_ptr(std::runtime_error(message));
++  // Avoid iOS 18-only libc++ symbols emitted by Xcode 27's Swift/C++ interop.
++  // https://github.com/margelo/nitro/pull/1824
++  try {
++    throw std::runtime_error(message);
++  } catch (...) {
++    return std::current_exception();
++  }
+ }
+ 
+ static inline std::string getExceptionMessage(const std::exception_ptr& exception) {

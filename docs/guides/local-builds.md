@@ -381,6 +381,24 @@ instead of using Expo's precompiled binaries. Observe's source build requires Ap
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
 
+### iOS 17 Nitro Exception Compatibility Patch
+
+Build 46 (`0.4.0`) terminates at launch on iOS 17 with `DYLD 4 Symbol missing` for
+`std::exception_ptr::__from_native_exception_pointer(void*)`
+([#1442](https://github.com/CherryHQ/cherry-studio-app/issues/1442)). Nitro Modules 0.36.4's patch
+backports [Nitro #1824](https://github.com/margelo/nitro/pull/1824): `makeException()` and the inline
+pending `Promise<T>` destructor create exceptions through throw/catch and `std::current_exception()`.
+This avoids Xcode 27's Swift/C++ interop emitting references to iOS 18-only libc++ symbols while
+preserving the existing error messages and rejection behavior. Keep the iOS deployment target at
+17.0 and retain this patch until the installed Nitro version includes the upstream fix.
+
+`scripts/__tests__/nitroIosCompatibility.test.ts` guards the pinned version, patch registration/hash,
+and installed Swift-visible source paths in PR CI. These source guards do not establish binary or
+runtime compatibility. Before release, inspect a new iOS build for strong imports of
+`__ZNSt13exception_ptr31__from_native_exception_pointerEPv` and `___cxa_init_primary_exception`,
+then confirm startup on iOS 17 and a current iOS version, exception-message conversion, and pending
+promise rejection. A new native build is required; an OTA update cannot deliver this patch.
+
 ### iOS Text Measurement Cache Patch
 
 Expo SwiftUI content-size updates can synchronously enter React Native layout on the main thread,
