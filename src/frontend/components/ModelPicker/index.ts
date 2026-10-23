@@ -3,19 +3,12 @@ export {
   type ModelPickerDrawerVariant,
   type ModelPickerMultiSelect,
 } from './components/ModelPickerDrawer';
-export { ModelPickerBadge } from './components/ModelPickerBadge';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerList } from './components/ModelPickerList';
 export { ModelSearchControls } from './components/ModelSearchControls/ModelSearchControls';
 export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export { type ModelPickerGroup, type ModelPickerModelItem } from './utils/modelPickerData';
-export {
-  getModelPickerBadges,
-  matchesModelPickerBadges,
-  MODEL_PICKER_BADGES,
-  type ModelPickerBadge as ModelPickerBadgeValue,
-} from './utils/modelPickerBadges';
 export { buildModelPickerListItems } from './utils/modelPickerListItems';
 export {
   getNextModelSelection,

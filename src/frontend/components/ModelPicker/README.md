@@ -12,8 +12,6 @@ This module owns the model selection surface, model metadata UI, and model setti
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order.
 - `ModelPickerIcon` renders model identity used by picker consumers.
-- `ModelPickerBadge` renders a shared capability badge for picker rows and provider settings.
-  Its value type is exported as `ModelPickerBadgeValue` to distinguish it from the component.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
   embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value
   model traits (`Free` and `Vision`) as row badges and a compact filter menu; other workflows keep
@@ -21,9 +19,10 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `useModelSettingSelections` reads model selection preferences and saves partial updates. The
   settings screen persists each selection immediately.
 - Model setting and model type helpers are exported from `index.ts`.
-- Pure badge rules are also public through `@/frontend/components/ModelPicker/badges`. Consumers
-  that only filter or describe models use this entry to avoid loading the picker UI. Other
-  `components`, `hooks`, and `utils` paths remain private; module internals import their own leaves.
+- Capability badges are public only through `@/frontend/components/ModelPicker/badges`: the
+  `ModelPickerBadge` mark, its value type `ModelPickerBadgeValue`, and the pure badge rules. Provider
+  settings use this entry so badge rows do not load the picker sheet. Other `components`, `hooks`,
+  and `utils` paths remain private; module internals import their own leaves.
 
 ## Organization
 

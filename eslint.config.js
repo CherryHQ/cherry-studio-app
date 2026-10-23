@@ -173,7 +173,7 @@ const frontendPublicSurfaceZones = [
       'src/frontend/components/ModelPicker/utils',
     ],
     message:
-      'Import ModelPicker UI from @/frontend/components/ModelPicker or pure badge logic from its /badges entry.',
+      'Import ModelPicker UI from @/frontend/components/ModelPicker or capability badges from its /badges entry.',
   },
 ];
 

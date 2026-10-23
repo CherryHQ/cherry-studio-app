@@ -109,11 +109,11 @@ describe('resolved architecture boundaries', () => {
     ],
     [
       'src/frontend/features/settings/probe.ts',
-      "import { ModelPickerBadge } from '@/frontend/components/ModelPicker';",
+      "import { ModelPickerDrawer } from '@/frontend/components/ModelPicker';",
     ],
     [
       'src/frontend/features/settings/probe.ts',
-      "import { getModelPickerBadges } from '@/frontend/components/ModelPicker/badges';",
+      "import { ModelPickerBadge, getModelPickerBadges } from '@/frontend/components/ModelPicker/badges';",
     ],
     [
       'src/frontend/components/ModelPicker/components/probe.ts',

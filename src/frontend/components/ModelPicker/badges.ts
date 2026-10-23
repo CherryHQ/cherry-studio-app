@@ -1,4 +1,5 @@
-/** Public badge logic without loading the picker UI or native adapters. */
+/** Public badge rules and mark, without loading the picker sheet or its native adapters. */
+export { ModelPickerBadge } from './components/ModelPickerBadge';
 export {
   getModelPickerBadges,
   matchesModelPickerBadges,
