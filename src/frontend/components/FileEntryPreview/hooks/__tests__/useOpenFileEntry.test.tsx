@@ -137,6 +137,17 @@ it('retains an unsent chat with its seeded draft and workspace', () => {
   });
 });
 
+it('keeps the chat a library page was opened from', () => {
+  mockPathname = '/library';
+  mockParams = { sourceChat: JSON.stringify({ sessionId: 'session-1' }) };
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file));
+  expect(parseChatPreviewSource(mockPush.mock.calls[0][0].params.sourceChat)).toEqual({
+    kind: 'session',
+    sessionId: 'session-1',
+  });
+});
+
 it('does not treat a file-library route as a conversation', () => {
   mockParams = { sessionId: 'unrelated-route-param' };
   act(() => renderer.update(<Probe />));

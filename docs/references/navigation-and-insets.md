@@ -102,7 +102,9 @@ In medium and expanded windows, Files opens the [file pane](../../src/frontend/a
 beside the current chat instead of pushing `/library`: the `(chat)` layout lays out the pane and the
 chat stack side by side, and file previews replace the list inside the pane. The pane belongs to the
 drawer group, so it hides with a desktop chat source and in compact windows, and routes pushed over
-the drawer keep opening their own viewer page. Android back leaves a pane preview, then the pane.
+the drawer keep opening their own viewer page. A pane preview can expand over the chat's space;
+the chat stays mounted behind it. Android back first returns an expanded preview beside the chat,
+then leaves the preview, then the pane.
 
 The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
 content to 800 points and form/management content to 720, inside the horizontal safe area. They
@@ -305,6 +307,8 @@ enabled.
   resizing across the threshold keeps the chat, its draft, and its scroll position.
 - In medium and expanded windows, Files and file previews open beside the chat without changing its
   route, draft, or scroll position; closing and reopening the pane keeps the list's place.
+  Expanding a preview and returning to chat keeps the same draft and scroll position, and Add to
+  current chat attaches the file once without changing the draft text.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
 - Opening model selection from chat input keeps the picker stable; focusing or clearing in-place
   search changes the sheet size without a competing route, back handler, or inset jump.

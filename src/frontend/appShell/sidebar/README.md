@@ -11,6 +11,8 @@ drawer as closed, so visibility comes from `useSidebarPresence`: `persistent`, `
 Selection mode, the title marquee, and read receipts use it instead of the raw drawer status.
 In medium and expanded windows, Files opens the [file pane](../pane/README.md) beside chat and
 stays selected while the pane is open; other destinations and back navigation do not change.
+In compact windows the `/library` page carries the current local chat, so its previews can add
+files to that chat.
 
 The circular search button beside the sidebar title opens the shared `/search` page for local
 conversations. Before a query is entered, it shows the ten most recently active conversations.

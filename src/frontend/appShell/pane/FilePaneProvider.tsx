@@ -11,12 +11,15 @@ export type FilePane = {
   isAvailable: boolean;
   isOpen: boolean;
   file: FilePaneFile | null;
+  /** A preview fills the chat's space; the chat stays mounted behind it. */
+  isExpanded: boolean;
   open: () => void;
   /** Hides the pane; its list place and open file come back with it. */
   close: () => void;
   openFile: (file: FilePaneFile) => void;
   /** Returns from a preview to the list it was opened from. */
   closeFile: () => void;
+  setExpanded: (isExpanded: boolean) => void;
 };
 
 const FilePaneContext = createContext<FilePane | null>(null);
@@ -31,6 +34,7 @@ export function FilePaneProvider({ children }: PropsWithChildren) {
   const isLocal = useChatSource().source === 'local';
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<FilePaneFile | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const isAvailable = windowClass !== 'compact' && isLocal;
 
   const value = useMemo<FilePane>(
@@ -38,15 +42,24 @@ export function FilePaneProvider({ children }: PropsWithChildren) {
       isAvailable,
       isOpen,
       file,
+      isExpanded,
       open: () => setIsOpen(true),
-      close: () => setIsOpen(false),
+      // Leaving the preview always returns the chat to its place beside the pane.
+      close: () => {
+        setIsOpen(false);
+        setIsExpanded(false);
+      },
       openFile: (next) => {
         setFile(next);
         setIsOpen(true);
       },
-      closeFile: () => setFile(null),
+      closeFile: () => {
+        setFile(null);
+        setIsExpanded(false);
+      },
+      setExpanded: setIsExpanded,
     }),
-    [file, isAvailable, isOpen],
+    [file, isAvailable, isExpanded, isOpen],
   );
 
   return <FilePaneContext value={value}>{children}</FilePaneContext>;

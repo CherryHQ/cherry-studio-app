@@ -1,5 +1,7 @@
 import { Text, View } from 'react-native';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
+
 import { mainHeaderRowHeight } from '../../headerScreenOptions';
 import { InlineHeaderActionGroup } from '../HeaderActionGroup/InlineHeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
@@ -14,6 +16,9 @@ export function InlineHeaderChrome({
   title = '',
   titleElement,
 }: HeaderChromeProps) {
+  const paneAction = usePaneChrome()?.headerAction;
+  const trailingActions = paneAction ? [paneAction, ...rightActions] : rightActions;
+
   return (
     <View className="flex-row items-center px-4" style={{ height: mainHeaderRowHeight }}>
       {/* Equal flexible sides keep the title centered over the pane. */}
@@ -28,7 +33,7 @@ export function InlineHeaderChrome({
         )}
       </View>
       <View className="flex-1 flex-row items-center justify-end">
-        <InlineHeaderActionGroup actions={rightActions} placement="right" tone={actionTone} />
+        <InlineHeaderActionGroup actions={trailingActions} placement="right" tone={actionTone} />
       </View>
     </View>
   );
