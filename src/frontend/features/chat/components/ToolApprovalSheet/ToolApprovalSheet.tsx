@@ -23,6 +23,8 @@ type ToolApprovalSheetProps = {
   isOpen: boolean;
   canRespond?: boolean;
   canApprove?: boolean;
+  /** Replaces "Allow" where the approval also leads to a system permission request. */
+  approveLabel?: string;
   children?: ReactNode;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
@@ -33,6 +35,7 @@ export function ToolApprovalSheet({
   isOpen,
   canRespond = true,
   canApprove = true,
+  approveLabel,
   children,
   onRespond,
 }: ToolApprovalSheetProps) {
@@ -82,6 +85,7 @@ export function ToolApprovalSheet({
         <ToolApprovalSheetActions
           canRespond={canDecide}
           canApprove={canApprove}
+          approveLabel={approveLabel}
           isSubmitting={response.isSubmitting}
           onRespond={(approved) => void submit(approved)}
         />
@@ -115,11 +119,13 @@ export function ToolApprovalSheet({
 function ToolApprovalSheetActions({
   canRespond,
   canApprove,
+  approveLabel,
   isSubmitting,
   onRespond,
 }: {
   canRespond: boolean;
   canApprove: boolean;
+  approveLabel?: string;
   isSubmitting: boolean;
   onRespond: (approved: boolean) => void;
 }) {
@@ -139,7 +145,7 @@ function ToolApprovalSheetActions({
           onPress={() => onRespond(true)}
           variant="default"
         >
-          <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+          <Button.Label>{approveLabel ?? t('chat.tool.approval.allow')}</Button.Label>
         </Button>
       </View>
     </View>

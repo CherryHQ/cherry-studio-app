@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "NSCalendarsFullAccessUsageDescription": "Cherry Studio, sohbetteki isteğiniz üzerine bugünkü programınızı görmek veya bir toplantıyı yeniden planlamak gibi amaçlarla takvim etkinliklerini okur ve yönetir; ilgili etkinlik ayrıntılarını seçtiğiniz yapay zekâ hizmetine gönderir.",
+    "NSCalendarsUsageDescription": "Cherry Studio, sohbetteki isteğiniz üzerine bugünkü programınızı görmek veya bir toplantıyı yeniden planlamak gibi amaçlarla takvim etkinliklerini okur ve yönetir; ilgili etkinlik ayrıntılarını seçtiğiniz yapay zekâ hizmetine gönderir.",
+    "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio, seçtiğiniz yapay zekâ hizmetinden gelen ayrıntılarla, yarın saat 10’da bir toplantı gibi sohbette istediğiniz etkinlikleri takvime ekler.",
+    "NSLocationWhenInUseUsageDescription": "Cherry Studio, yakındaki restoranları bulmak gibi istekleri yanıtlamak için mevcut konumunuzu ve istendiğinde adresinizi seçtiğiniz yapay zekâ hizmetine yalnızca uygulamayı kullanırken gönderir.",
+    "NSRemindersFullAccessUsageDescription": "Cherry Studio, sohbetteki isteğiniz üzerine bugünkü görevleri listelemek veya alışveriş hatırlatıcısı eklemek gibi amaçlarla hatırlatıcıları okur ve yönetir; ilgili ayrıntıları seçtiğiniz yapay zekâ hizmetine gönderir.",
+    "NSRemindersUsageDescription": "Cherry Studio, sohbetteki isteğiniz üzerine bugünkü görevleri listelemek veya alışveriş hatırlatıcısı eklemek gibi amaçlarla hatırlatıcıları okur ve yönetir; ilgili ayrıntıları seçtiğiniz yapay zekâ hizmetine gönderir."
+  }
+}

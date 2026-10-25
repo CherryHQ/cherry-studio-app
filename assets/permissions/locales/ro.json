@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "NSCalendarsFullAccessUsageDescription": "Cherry Studio citește și gestionează evenimentele din calendar la cererea ta în conversație, de exemplu pentru a consulta programul de azi sau a reprograma o întâlnire, și trimite detaliile relevante serviciului AI ales de tine.",
+    "NSCalendarsUsageDescription": "Cherry Studio citește și gestionează evenimentele din calendar la cererea ta în conversație, de exemplu pentru a consulta programul de azi sau a reprograma o întâlnire, și trimite detaliile relevante serviciului AI ales de tine.",
+    "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio adaugă în calendar evenimentele solicitate în conversație, cum ar fi o întâlnire mâine la ora 10, folosind detaliile de la serviciul AI ales de tine.",
+    "NSLocationWhenInUseUsageDescription": "Cherry Studio trimite locația ta actuală și, la cerere, adresa ta serviciului AI ales de tine, pentru a răspunde unor solicitări precum găsirea restaurantelor din apropiere, doar cât timp folosești aplicația.",
+    "NSRemindersFullAccessUsageDescription": "Cherry Studio citește și gestionează mementourile la cererea ta în conversație, de exemplu pentru a lista sarcinile de azi sau a adăuga un memento pentru cumpărături, și trimite detaliile relevante serviciului AI ales de tine.",
+    "NSRemindersUsageDescription": "Cherry Studio citește și gestionează mementourile la cererea ta în conversație, de exemplu pentru a lista sarcinile de azi sau a adăuga un memento pentru cumpărături, și trimite detaliile relevante serviciului AI ales de tine."
+  }
+}

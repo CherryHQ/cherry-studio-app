@@ -3,6 +3,21 @@
     "name": "Cherry Studio",
     "slug": "cherry-studio",
     "version": "0.4.0",
+    "locales": {
+      "de": "./assets/permissions/locales/de.json",
+      "el": "./assets/permissions/locales/el.json",
+      "en": "./assets/permissions/locales/en.json",
+      "es": "./assets/permissions/locales/es.json",
+      "fr": "./assets/permissions/locales/fr.json",
+      "ja": "./assets/permissions/locales/ja.json",
+      "pt": "./assets/permissions/locales/pt.json",
+      "ro": "./assets/permissions/locales/ro.json",
+      "ru": "./assets/permissions/locales/ru.json",
+      "tr": "./assets/permissions/locales/tr.json",
+      "vi": "./assets/permissions/locales/vi.json",
+      "zh-Hans": "./assets/permissions/locales/zh-Hans.json",
+      "zh-Hant": "./assets/permissions/locales/zh-Hant.json"
+    },
     "runtimeVersion": {
       "policy": "fingerprint"
     },
@@ -91,7 +106,7 @@
           "UIInterfaceOrientationLandscapeLeft",
           "UIInterfaceOrientationLandscapeRight"
         ],
-        "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio adds calendar events you request in chat, such as a meeting tomorrow at 10 AM, using details from your selected AI service.",
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant and, with your approval, share it with your selected AI service for analysis.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
@@ -192,8 +207,8 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Allow Cherry Studio to access calendars when you ask the assistant.",
-          "remindersPermission": "Allow Cherry Studio to access reminders when you ask the assistant."
+          "calendarPermission": "Cherry Studio reads and manages calendar events you request in chat, such as reviewing today's schedule or rescheduling a meeting, and sends relevant event details to your selected AI service.",
+          "remindersPermission": "Cherry Studio reads and manages reminders you request in chat, such as listing today's tasks or adding a grocery reminder, and sends relevant reminder details to your selected AI service."
         }
       ],
       [
@@ -205,7 +220,7 @@
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
           "motionUsagePermission": "Cherry Studio does not read or track your motion and fitness activity. This permission description is required by the location service included in the app.",
-          "locationWhenInUsePermission": "Allow Cherry Studio to use your location when you ask the assistant."
+          "locationWhenInUsePermission": "Cherry Studio sends your current location and address, when requested, to your selected AI service to answer questions such as finding nearby restaurants, only while you use the app."
         }
       ],
       "expo-document-picker",

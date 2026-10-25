@@ -14,6 +14,7 @@ export function createBackgroundReplyActions(
   interaction: BackgroundReplyInteraction,
   t: BackgroundReplyTranslate,
 ): BackgroundActivityActions | undefined {
+  if (interaction.kind === 'approval' && interaction.requiresApp) return undefined;
   if (interaction.kind === 'approval')
     return {
       token: uuidv7(),
