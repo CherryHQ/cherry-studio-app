@@ -568,7 +568,6 @@
   "chat.share.user": "我",
   "chat.sources.count_other": "{{count}} 个来源",
   "chat.sources.title": "来源",
-  "chat.tool.approval.allow": "允许",
   "chat.tool.approval.continue": "继续",
   "chat.tool.approval.deny": "拒绝",
   "chat.tool.approval.failed": "未能保存你的决定，请重试。",

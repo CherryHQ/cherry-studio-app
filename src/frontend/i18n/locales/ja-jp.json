@@ -568,7 +568,6 @@
   "chat.share.user": "あなた",
   "chat.sources.count_other": "{{count}} 件の参照元",
   "chat.sources.title": "出典",
-  "chat.tool.approval.allow": "許可",
   "chat.tool.approval.continue": "続ける",
   "chat.tool.approval.deny": "拒否",
   "chat.tool.approval.failed": "決定を保存できませんでした。もう一度試してください。",

@@ -107,7 +107,7 @@
           "UIInterfaceOrientationLandscapeRight"
         ],
         "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio adds calendar events you request in chat, such as a meeting tomorrow at 10 AM, using details from your selected AI service.",
-        "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant and, with your approval, share it with your selected AI service for analysis.",
+        "NSHealthShareUsageDescription": "Cherry Studio reads the Apple Health data you select when you ask in chat, such as summarizing your sleep and steps over the past week, and with your approval sends it to your selected AI service for analysis.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
         "NSBonjourServices": ["_cherry-remote._tcp"],
@@ -243,7 +243,7 @@
         "expo-media-library",
         {
           "photosPermission": "Allow Cherry Studio to preview photos for drawings and chat messages.",
-          "savePhotosPermission": "Allow Cherry Studio to save photos.",
+          "savePhotosPermission": "Cherry Studio saves images to your photo library when you choose Save, such as a generated drawing or an image from chat.",
           "preventAutomaticLimitedAccessAlert": true,
           "granularPermissions": []
         }

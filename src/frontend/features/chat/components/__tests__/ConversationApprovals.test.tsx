@@ -36,7 +36,6 @@ jest.mock('@/frontend/data', () => ({
   useQuery: (path: unknown, options: unknown) => mockRecipientQuery(path, options),
 }));
 let sheet: {
-  approveLabel?: string;
   canRespond: boolean;
   onRespond(input: ToolApprovalRespondInput): Promise<void>;
   approvals: { approvalId: string; input: unknown }[];
@@ -144,18 +143,6 @@ it('responds only to the bound loaded decision and treats an accepted pending re
   await act(async () => sheet.onRespond({ approvalId: 'decision', approved: true }));
   expect(test.respond).toHaveBeenCalledWith({ kind: 'approve' });
   expect(mockToast).not.toHaveBeenCalled();
-});
-
-it('labels a health approval Continue because it can lead to the system Health request', async () => {
-  const test = fixture();
-  await render(test);
-  expect(sheet.approveLabel).toBeUndefined();
-  test.update({
-    ...test.snapshot,
-    interactions: [{ ...test.snapshot.interactions[0]!, healthDataSharing: { providerId: 'p' } }],
-  });
-  await render(test);
-  expect(sheet.approveLabel).toBe('chat.tool.approval.continue');
 });
 
 it('retirement removes sensitive resource values and cancels outstanding reads', async () => {

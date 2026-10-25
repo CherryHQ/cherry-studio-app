@@ -580,7 +580,6 @@
   "chat.sources.count_one": "{{count}} sursă",
   "chat.sources.count_other": "{{count}} de surse",
   "chat.sources.title": "Surse",
-  "chat.tool.approval.allow": "Permite",
   "chat.tool.approval.continue": "Continuați",
   "chat.tool.approval.deny": "Negați",
   "chat.tool.approval.failed": "Nu s-a putut salva decizia dvs. Vă rugăm să încercați din nou.",

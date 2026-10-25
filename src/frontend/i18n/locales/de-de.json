@@ -574,7 +574,6 @@
   "chat.sources.count_one": "{{count}} Quelle",
   "chat.sources.count_other": "{{count}} Quellen",
   "chat.sources.title": "Quellen",
-  "chat.tool.approval.allow": "Erlauben",
   "chat.tool.approval.continue": "Weiter",
   "chat.tool.approval.deny": "Ablehnen",
   "chat.tool.approval.failed": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",

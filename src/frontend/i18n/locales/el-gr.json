@@ -574,7 +574,6 @@
   "chat.sources.count_one": "{{count}} πηγή",
   "chat.sources.count_other": "{{count}} πηγές",
   "chat.sources.title": "Πηγές",
-  "chat.tool.approval.allow": "Επιτρέπεται",
   "chat.tool.approval.continue": "Συνέχεια",
   "chat.tool.approval.deny": "Αρνούμαι",
   "chat.tool.approval.failed": "Δεν ήταν δυνατή η αποθήκευση της απόφασής σας. Δοκιμάστε ξανά.",

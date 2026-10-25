@@ -574,7 +574,6 @@
   "chat.sources.count_one": "{{count}} kaynak",
   "chat.sources.count_other": "{{count}} kaynak",
   "chat.sources.title": "Kaynaklar",
-  "chat.tool.approval.allow": "İzin ver",
   "chat.tool.approval.continue": "Devam",
   "chat.tool.approval.deny": "Reddet",
   "chat.tool.approval.failed": "Kararınız kaydedilemedi. Lütfen tekrar deneyin.",

@@ -586,7 +586,6 @@
   "chat.sources.count_one": "{{count}} источник",
   "chat.sources.count_other": "{{count}} источника",
   "chat.sources.title": "Источники",
-  "chat.tool.approval.allow": "Разрешить",
   "chat.tool.approval.continue": "Продолжить",
   "chat.tool.approval.deny": "Отказать",
   "chat.tool.approval.failed": "Не удалось сохранить ваше решение. Пожалуйста, попробуйте еще раз.",

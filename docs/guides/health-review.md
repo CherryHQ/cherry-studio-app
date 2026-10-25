@@ -20,8 +20,8 @@ Apple reviewed 0.4.0 (46) on October 23, 2026 on an iPad Air 11-inch (M3). The l
 the same submission asks for a general explanation of HealthKit usage under Guideline 2.1. It
 also rejects the pre-permission "Allow access" button under 5.1.1(iv) and the calendar, reminders
 and location purpose strings under 5.1.1(ii). The planned 0.4.1 correction uses "Continue" in all
-UI languages for every button that leads to a system permission request, including the health
-sharing approval. It also adds concrete examples and the selected AI recipient to those native
+UI languages for every button that leads to a system permission request, including in-chat tool
+approvals that precede one on first use. It also adds concrete examples and the selected AI recipient to those native
 descriptions in every supported UI language; see [Internationalization](./internationalization.md)
 for the keys covered and native language selection. A new iOS binary is required; changing review
 notes or publishing an OTA is insufficient.

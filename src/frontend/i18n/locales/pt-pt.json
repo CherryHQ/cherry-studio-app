@@ -580,7 +580,6 @@
   "chat.sources.count_one": "{{count}} fonte",
   "chat.sources.count_other": "{{count}} fontes",
   "chat.sources.title": "Fontes",
-  "chat.tool.approval.allow": "Permitir",
   "chat.tool.approval.continue": "Continuar",
   "chat.tool.approval.deny": "Negar",
   "chat.tool.approval.failed": "Não foi possível salvar a sua decisão. Por favor, tente novamente.",

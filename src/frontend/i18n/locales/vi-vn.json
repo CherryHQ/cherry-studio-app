@@ -568,7 +568,6 @@
   "chat.share.user": "Bạn",
   "chat.sources.count_other": "{{count}} nguồn",
   "chat.sources.title": "Nguồn",
-  "chat.tool.approval.allow": "Cho phép",
   "chat.tool.approval.continue": "Tiếp tục",
   "chat.tool.approval.deny": "Từ chối",
   "chat.tool.approval.failed": "Không thể lưu quyết định của bạn. Vui lòng thử lại.",

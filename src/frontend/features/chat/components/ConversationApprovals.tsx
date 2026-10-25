@@ -52,7 +52,6 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       isOpen={isOpen}
       canRespond={canRespond}
       canApprove={!healthDataSharing || Boolean(recipient.data)}
-      approveLabel={healthDataSharing ? t('chat.tool.approval.continue') : undefined}
       onRespond={respond}
     >
       {healthDataSharing && recipient.data ? (
