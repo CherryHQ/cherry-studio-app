@@ -2,7 +2,7 @@ import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
-import type { RuntimeModelPreflight } from '../../types';
+import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
 import type { PiModelResolution } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -31,6 +31,7 @@ const wire: Model<Api> = {
 function setup(
   traceRequest?: Parameters<typeof createPiDurableModels>[3],
   modelPreflight = preflight,
+  resolvedModel = wire,
 ) {
   const streamFn = jest.fn(() => {
     const stream = new AssistantMessageEventStream();
@@ -41,7 +42,7 @@ function setup(
   });
   const resolveModel = jest.fn(
     async (): Promise<PiModelResolution> => ({
-      model: wire,
+      model: resolvedModel,
       streamFn,
       defaultThinkingLevel: 'off',
       maxInputTokens: modelPreflight.maxInputTokens,
@@ -59,7 +60,10 @@ function setup(
       },
     }),
   );
-  const configuration = jest.fn(async () => ({ maxOutputTokens: 512, temperature: 0.3 }));
+  const configuration = jest.fn<Promise<RuntimeOptions>, []>(async () => ({
+    maxOutputTokens: 512,
+    temperature: 0.3,
+  }));
   const bridge = createPiDurableModels(
     {
       preflightModel: async () => modelPreflight,
@@ -73,6 +77,42 @@ function setup(
 }
 
 describe('Pi durable model bridge', () => {
+  test.each([
+    [1_048_576, undefined, undefined, 65_536],
+    [1_048_576, 131_072, undefined, 131_072],
+    [1_048_576, undefined, 131_072, 131_072],
+    [1_048_576, 131_072, 262_144, 131_072],
+    [1_048_576, 1_024, 512, 512],
+    [1_048_576, 13_107, undefined, 13_107],
+    [128_000, undefined, undefined, 128_000],
+  ])(
+    'reserves output for ceiling %i, options %s, selected %s',
+    async (ceiling, options, selected, expected) => {
+      const model = { ...wire, maxTokens: ceiling, contextWindow: 1_048_576 };
+      const bridge = setup(
+        undefined,
+        {
+          ...preflight,
+          contextWindow: model.contextWindow,
+          maxInputTokens: 32_000,
+          maxOutputTokens: ceiling,
+        },
+        model,
+      );
+      bridge.configuration.mockResolvedValueOnce({ maxOutputTokens: selected });
+      await bridge.registerModel(reference);
+      const registered = bridge.getModel(reference)!;
+      expect(registered.maxTokens).toBe(ceiling);
+      expect(registered.contextWindow).toBe(32_000);
+      await bridge.models.completeSimple(registered, { messages: [] }, { maxTokens: options });
+      expect(bridge.streamFn).toHaveBeenCalledWith(
+        model,
+        expect.anything(),
+        expect.objectContaining({ maxTokens: expected }),
+      );
+    },
+  );
+
   test('fits compaction into small input windows without changing large-window defaults', async () => {
     for (const contextWindow of [512, 8_192, 131_072]) {
       const bridge = setup(undefined, {
