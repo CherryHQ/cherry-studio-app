@@ -116,13 +116,24 @@ index 164bf4f..9f65b16 100644
 + * @platform android
 + */
 +export function addNotificationPresentedListener(listener) {
-+    return emitter.addListener(didPresentNotificationEventName, (notification) => {
++    return NotificationsEmitterModule.addListener(didPresentNotificationEventName, (notification) => {
 +        listener(mapNotification(notification));
 +    });
 +}
  /**
   * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
   * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.
+diff --git a/build/NotificationsEmitterModule.types.d.ts b/build/NotificationsEmitterModule.types.d.ts
+--- a/build/NotificationsEmitterModule.types.d.ts
++++ b/build/NotificationsEmitterModule.types.d.ts
+@@ -2,6 +2,7 @@
+ import type { Notification, NotificationResponse } from './Notifications.types';
+ export type NotificationsEmitterModuleEvents = {
+     onDidReceiveNotification: (notification: Notification) => void;
++    onDidPresentNotification: (notification: Notification) => void;
+     onNotificationsDeleted: () => void;
+     onDidReceiveNotificationResponse: (response: NotificationResponse) => void;
+     onDidClearNotificationResponse: () => void;
 diff --git a/src/NotificationsEmitter.ts b/src/NotificationsEmitter.ts
 index ebc8f1c..f197234 100644
 --- a/src/NotificationsEmitter.ts
@@ -135,7 +146,7 @@ index ebc8f1c..f197234 100644
  const didDropNotificationsEventName = 'onNotificationsDeleted';
  const didReceiveNotificationResponseEventName = 'onDidReceiveNotificationResponse';
  const didClearNotificationResponseEventName = 'onDidClearNotificationResponse';
-@@ -48,6 +49,19 @@ export function addNotificationReceivedListener(
+@@ -48,6 +49,22 @@ export function addNotificationReceivedListener(
    );
  }
  
@@ -147,11 +158,25 @@ index ebc8f1c..f197234 100644
 +export function addNotificationPresentedListener(
 +  listener: (event: Notification) => void
 +): EventSubscription {
-+  return emitter.addListener<Notification>(didPresentNotificationEventName, (notification) => {
-+    listener(mapNotification(notification));
-+  });
++  return NotificationsEmitterModule.addListener(
++    didPresentNotificationEventName,
++    (notification: Notification) => {
++      listener(mapNotification(notification));
++    }
++  );
 +}
 +
  /**
   * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
   * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.
+diff --git a/src/NotificationsEmitterModule.types.ts b/src/NotificationsEmitterModule.types.ts
+--- a/src/NotificationsEmitterModule.types.ts
++++ b/src/NotificationsEmitterModule.types.ts
+@@ -5,6 +5,7 @@
+ export type NotificationsEmitterModuleEvents = {
+   onDidReceiveNotification: (notification: Notification) => void;
++  onDidPresentNotification: (notification: Notification) => void;
+   onNotificationsDeleted: () => void;
+   onDidReceiveNotificationResponse: (response: NotificationResponse) => void;
+   onDidClearNotificationResponse: () => void;
+ };
