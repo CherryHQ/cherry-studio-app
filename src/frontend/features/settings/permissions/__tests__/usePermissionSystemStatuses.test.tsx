@@ -80,8 +80,6 @@ describe('usePermissionSystemStatuses', () => {
       'reminders.write',
       ...HEALTH_PERMISSION_SCOPES,
       'camera.read',
-      'photos.read',
-      'photos.write',
     ]);
 
     await act(async () => appStateListener?.('background'));

@@ -8,14 +8,7 @@ import {
   summarizeDevicePermissions,
 } from '@/shared/contracts';
 
-export const permissionKinds = [
-  'location',
-  'calendar',
-  'reminders',
-  'health',
-  'camera',
-  'photos',
-] as const;
+export const permissionKinds = ['location', 'calendar', 'reminders', 'health', 'camera'] as const;
 export type PermissionKind = (typeof permissionKinds)[number];
 export type PermissionAction = 'open-settings' | 'request' | 'retry';
 
@@ -44,11 +37,6 @@ export const permissionConfig: Record<
     requestScopes: ['reminders.read'],
   },
   camera: { permission: 'camera', scopes: ['camera.read'], requestScopes: ['camera.read'] },
-  photos: {
-    permission: 'photos',
-    scopes: ['photos.read', 'photos.write'],
-    requestScopes: ['photos.read'],
-  },
 };
 
 export function getPermissionStatus(
@@ -68,7 +56,6 @@ export function getPermissionStatus(
     }
     return first;
   }
-  // Photo saving and browsing are separate: permission to save must not imply library access.
   if (kind !== 'health') return first;
   return summarizeDevicePermissions(permissionConfig[kind].scopes, statuses);
 }
@@ -93,8 +80,6 @@ export function getPermissionStatusKey(
   if (status.reason) return `settings.permissions.reason.${status.reason}`;
   if (kind === 'calendar' && status.state === 'limited')
     return 'settings.permissions.calendar.addOnly';
-  if (kind === 'photos' && status.state === 'limited')
-    return 'settings.permissions.photos.selected';
   if (kind === 'location' && status.state === 'granted' && status.accuracy)
     return `settings.permissions.location.${status.accuracy}`;
   return `settings.permissions.status.${status.state}`;

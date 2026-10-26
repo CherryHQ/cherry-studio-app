@@ -6,8 +6,6 @@ import type { ComponentType } from 'react';
 
 import type { PermissionKind } from '../../permissionConfig';
 
-// Android picks photos with the system picker and asks for legacy save access
-// only when saving, so there is no photo library permission to manage here.
 export const visiblePermissionKinds = [
   'location',
   'calendar',
@@ -17,7 +15,6 @@ export const visiblePermissionKinds = [
 const permissionIcons: Record<PermissionKind, ComponentType<LucideIconProps> | undefined> = {
   calendar: CalendarIcon,
   camera: CameraIcon,
-  photos: undefined,
   health: undefined,
   location: MapPinIcon,
   reminders: undefined,
