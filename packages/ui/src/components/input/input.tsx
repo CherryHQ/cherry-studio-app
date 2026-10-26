@@ -94,8 +94,8 @@ function NativeInput({
   );
   const inputClassName = cn(
     multiline
-      ? 'min-h-10 rounded-lg border border-border py-2 text-base shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
-      : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+      ? 'min-h-10 rounded-lg border border-border py-2 text-base shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-border'
+      : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-border',
     invalid &&
       'border-error ios:outline-error ios:focus:outline-error android:border-error android:focus:border-error',
     className,
