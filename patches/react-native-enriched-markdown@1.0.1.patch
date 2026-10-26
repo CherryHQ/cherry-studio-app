@@ -1319,3 +1319,120 @@ index 4281042795e71a20b0f3d89811505103c5cb2d28..0561f8cf27ae85b37376378f69c9a749
      importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
      updateAccessibilityLabel()
  
+diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
+index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..63968517f4cab2c91dc79181a05a714622a274ab 100644
+--- a/ios/input/ENRMInputTextView.mm
++++ b/ios/input/ENRMInputTextView.mm
+@@ -11,8 +11,62 @@
+ 
+ #if !TARGET_OS_OSX
+ 
++// Item providers load clipboard representations off the UI thread. Completion always
++// returns to the main queue, where selection, undo and Markdown insertion are owned.
++static void ENRMLoadPlainPasteText(NSArray<NSItemProvider *> *providers, void (^completion)(NSString *))
++{
++  for (NSItemProvider *provider in providers) {
++    if ([provider canLoadObjectOfClass:[NSString class]]) {
++      [provider loadObjectOfClass:[NSString class] completionHandler:^(id<NSItemProviderReading> value, NSError *error) {
++        NSString *text = [value isKindOfClass:[NSString class]] ? (NSString *)value : nil;
++        dispatch_async(dispatch_get_main_queue(), ^{ completion(text); });
++      }];
++      return;
++    }
++  }
++  dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
++}
++
++static void ENRMLoadPasteText(NSArray<NSItemProvider *> *providers, void (^completion)(NSString *))
++{
++  for (NSItemProvider *provider in providers) {
++    if ([provider hasItemConformingToTypeIdentifier:kENRMMarkdownPasteboardType]) {
++      [provider loadItemForTypeIdentifier:kENRMMarkdownPasteboardType
++                                 options:nil
++                       completionHandler:^(id value, NSError *error) {
++                         NSString *markdown = nil;
++                         if ([value isKindOfClass:[NSString class]]) {
++                           markdown = (NSString *)value;
++                         } else if ([value isKindOfClass:[NSData class]]) {
++                           markdown = [[NSString alloc] initWithData:(NSData *)value encoding:NSUTF8StringEncoding];
++                         }
++                         if (markdown.length > 0) {
++                           dispatch_async(dispatch_get_main_queue(), ^{ completion(markdown); });
++                         } else {
++                           ENRMLoadPlainPasteText(providers, completion);
++                         }
++                       }];
++      return;
++    }
++  }
++  ENRMLoadPlainPasteText(providers, completion);
++}
++
+ @implementation ENRMInputTextView {
+   CGFloat _lastLayoutWidth;
++  NSUInteger _pasteGeneration;
++  NSRange _pasteSelection;
++  BOOL _pasteLoading;
++}
++
++- (BOOL)resignFirstResponder
++{
++  BOOL resigned = [super resignFirstResponder];
++  if (resigned) {
++    _pasteGeneration++;
++    _pasteLoading = NO;
++  }
++  return resigned;
+ }
+ 
+ - (void)copy:(id)sender
+@@ -40,29 +94,26 @@ - (void)cut:(id)sender
+ 
+ - (void)paste:(id)sender
+ {
+-  UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+-
+-  NSString *markdown = nil;
+-  id markdownValue = [pasteboard valueForPasteboardType:kENRMMarkdownPasteboardType];
+-  if ([markdownValue isKindOfClass:[NSString class]]) {
+-    markdown = markdownValue;
+-  } else if ([markdownValue isKindOfClass:[NSData class]]) {
+-    markdown = [[NSString alloc] initWithData:markdownValue encoding:NSUTF8StringEncoding];
+-  }
+-
+-  if (markdown.length > 0 && self.markdownTextInput != nil) {
+-    [self.markdownTextInput pasteMarkdown:markdown];
+-    return;
+-  }
+-
+-  // External plain text is treated as markdown so pasted syntax ("- ", "#",
+-  // "**") formats instead of landing literal; syntax-free text is unchanged.
+-  NSString *plainText = pasteboard.string;
+-  if (plainText.length > 0 && self.markdownTextInput != nil) {
+-    [self.markdownTextInput pasteMarkdown:plainText];
+-  } else if (plainText.length > 0) {
+-    [self replaceRange:self.selectedTextRange withText:plainText];
+-  }
++  // A repeated tap while a slow source is still loading repeats the same paste.
++  if (_pasteLoading || !self.isFirstResponder) return;
++  _pasteLoading = YES;
++  _pasteSelection = self.selectedRange;
++  NSUInteger generation = ++_pasteGeneration;
++  __weak ENRMInputTextView *weakSelf = self;
++  // Capture providers only after the user's paste action, never during menu availability checks.
++  ENRMLoadPasteText([UIPasteboard generalPasteboard].itemProviders, ^(NSString *text) {
++    ENRMInputTextView *textView = weakSelf;
++    if (textView == nil || generation != textView->_pasteGeneration) return;
++    textView->_pasteLoading = NO;
++    // Moving the caret or editing while the clipboard loads makes the paste stale.
++    if (text.length == 0 || !NSEqualRanges(textView.selectedRange, textView->_pasteSelection)) return;
++    // External plain text is treated as markdown so pasted syntax formats instead of landing literal.
++    if (textView.markdownTextInput != nil) {
++      [textView.markdownTextInput pasteMarkdown:text];
++    } else {
++      [textView replaceRange:textView.selectedTextRange withText:text];
++    }
++  });
+ }
+ 
+ - (BOOL)canPerformAction:(SEL)action withSender:(id)sender
