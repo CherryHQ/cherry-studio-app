@@ -1516,7 +1516,7 @@ export class DurableAgentHost implements AgentProtocol {
       resolve = accept;
       reject = refuse;
     });
-    const view = toAgentApprovalView(approval, identity.sessionId, state.active.assistantMessageId);
+    const view = toAgentApprovalView(approval, identity.sessionId);
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });

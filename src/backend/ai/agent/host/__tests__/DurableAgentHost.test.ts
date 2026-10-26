@@ -1781,10 +1781,6 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     await state.reserve('completed');
     await state.host.initialize();
     try {
-      const events: AgentEvent[] = [];
-      const observation = await state.host.observeSession(state.sessionId, (event) =>
-        events.push(event),
-      );
       await askTwoModels(state);
       await settle();
       const other = runningTurns(state).find(
@@ -1808,17 +1804,11 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         )
         .catch((error: unknown) => error);
       await settle();
-      // The shared turn cannot tell the answers apart, so the approval names its own.
-      expect(events).toContainEqual({
-        type: 'approval.requested',
-        approval: expect.objectContaining({ id: approvalId, messageId: other.assistantMessageId }),
-      });
       const interaction = state.reply.setInteraction.mock.calls.at(-1)?.[0];
       expect(interaction).toMatchObject({ kind: 'approval', id: approvalId });
       await interaction.respond('approve');
       await expect(decision).resolves.toBe('approve');
       expect(state.reply.setInteraction).toHaveBeenLastCalledWith(undefined);
-      observation.unsubscribe();
     } finally {
       controller.abort();
       await decision;

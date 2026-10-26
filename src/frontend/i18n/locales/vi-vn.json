@@ -572,7 +572,6 @@
   "chat.tool.approval.deny": "Từ chối",
   "chat.tool.approval.failed": "Không thể lưu quyết định của bạn. Vui lòng thử lại.",
   "chat.tool.approval.pendingCount": "{{count}} phê duyệt đang chờ xử lý",
-  "chat.tool.approval.requester": "{{model}} yêu cầu dùng công cụ này",
   "chat.tool.approvalRequested": "Đã yêu cầu phê duyệt",
   "chat.tool.approved": "Đã được phê duyệt",
   "chat.tool.arguments": "Lập luận",

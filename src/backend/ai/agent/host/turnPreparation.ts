@@ -202,7 +202,7 @@ function createTurnUsageAttribution(
 /**
  * Where a turn sits in the message tree and what it may do. `through` is the
  * message the new question follows (null for a first question); omitted, the
- * Session's selected leaf. A multi-model answer limits its built-in tools to automatic reads.
+ * Session's selected leaf. A multi-model answer limits its tools to reads.
  */
 export type TurnScope = { through?: string | null; readOnlyTools?: boolean };
 
@@ -646,12 +646,13 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
-  // Parallel answers share one workspace, so built-in tools join them only as reads that need no
-  // approval. Connected MCP and plugin tools keep the Agent's own approval mode.
+  // Parallel answers run side by side, so they only read and never race on a write. Connected
+  // reads keep the Agent's approval mode; a built-in read that still asks after it is a consent,
+  // such as location or health data, and stays out.
   if (scope.readOnlyTools)
     tools = tools.filter(
       (tool) =>
-        tool.ref.source !== 'builtin' || (tool.effect === 'read' && tool.approval === 'auto'),
+        tool.effect === 'read' && (tool.ref.source !== 'builtin' || tool.approval === 'auto'),
     );
   let workflowInstructions: TurnPlan['workflowInstructions'] = [];
   if (pluginGuides.length > 0) {

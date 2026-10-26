@@ -61,6 +61,15 @@ describe('MCP Runtime adapter', () => {
     expect(result.value).toEqual(remote);
     expect(result.artifacts).toEqual([]);
   });
+  it.each([
+    ['a remote retry-safe tool', { effect: 'read' as const }, undefined],
+    ['a remote read-only tool', { effect: 'read' as const, readOnlyHint: true as const }, 'read'],
+    ['a plugin read', { effect: 'read' as const, pluginId: 'feishu' }, 'read'],
+    ['a plugin write', { effect: 'write' as const, pluginId: 'feishu' }, 'write'],
+  ])('exposes the effect parallel answers may rely on for %s', (_label, overrides, effect) => {
+    expect(createTool({ invoke: jest.fn() }, overrides).effect).toBe(effect);
+  });
+
   it('creates stable, provider-safe aliases from stable refs', () => {
     const firstRef = {
       source: 'mcp',
