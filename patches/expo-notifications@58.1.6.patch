@@ -1,9 +1,9 @@
 diff --git a/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt b/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
-index bda6f23..f88aa71 100644
+index bda6f23..12cfcc3 100644
 --- a/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
 +++ b/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
-@@ -80,6 +80,13 @@ object NotificationManager {
-     }
+@@ -25,6 +25,13 @@ object NotificationManager {
+     ExpoHandlingDelegate.addListener(this)
    }
  
 +  /** Presentation is a separate event: background delivery may skip onNotificationReceived. */
@@ -14,8 +14,8 @@ index bda6f23..f88aa71 100644
 +  }
 +
    /**
-    * Used by [expo.modules.notifications.service.delegates.ExpoSchedulingDelegate] to notify of new notification responses.
-    * Calls [NotificationListener.onNotificationResponseReceived] on all registered [listeners].
+    * Registers a [NotificationListener] by adding it to the [listeners] set.
+    *
 diff --git a/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt b/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
 index 3b904b1..7c660bf 100644
 --- a/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
