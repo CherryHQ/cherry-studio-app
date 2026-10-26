@@ -646,7 +646,7 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
-  // Parallel answers run side by side, so they only read and never race on a write. Connected
+  // Parallel answers run side by side, so they only use tools declared read-only. Connected
   // reads keep the Agent's approval mode; a built-in read that still asks after it is a consent,
   // such as location or health data, and stays out.
   if (scope.readOnlyTools)

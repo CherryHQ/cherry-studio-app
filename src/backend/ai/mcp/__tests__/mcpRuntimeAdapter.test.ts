@@ -134,9 +134,9 @@ describe('MCP Runtime adapter', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('carries the frozen endpoint generation into invocation', async () => {
+  it('carries the frozen connection and read-only constraint into invocation', async () => {
     const invoke = jest.fn(async () => null);
-    const tool = createTool({ invoke });
+    const tool = createTool({ invoke }, { readOnlyHint: true });
 
     await tool.execute({
       input: { query: 'cherry' },
@@ -149,8 +149,7 @@ describe('MCP Runtime adapter', () => {
       expect.objectContaining({ rawToolName: 'search', source: 'mcp' }),
       { query: 'cherry' },
       expect.any(AbortSignal),
-      'https://mcp.example/mcp',
-      7,
+      { endpointUrl: 'https://mcp.example/mcp', generation: 7, readOnlyHint: true },
       { sent: expect.any(Function), waiting: expect.any(Function) },
     );
   });
@@ -216,7 +215,7 @@ describe('MCP Runtime adapter', () => {
         const capability = {
           traces,
           invoke: jest.fn((...args: Parameters<McpToolInvocationCapability['invoke']>) => {
-            if (sent) args[5].sent();
+            if (sent) args[4].sent();
             return new Promise(() => undefined);
           }),
         } satisfies McpToolInvocationCapability;
@@ -249,7 +248,7 @@ describe('MCP Runtime adapter', () => {
   ] as const)('reports stopping a sent %s call as %s', async (effect, code) => {
     const controller = new AbortController();
     const invoke = jest.fn((...args: Parameters<McpToolInvocationCapability['invoke']>) => {
-      args[5].sent();
+      args[4].sent();
       controller.abort();
       return new Promise(() => undefined);
     });

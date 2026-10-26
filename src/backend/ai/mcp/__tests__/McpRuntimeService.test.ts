@@ -1137,6 +1137,63 @@ describe('catalog reuse', () => {
     expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).tools).toHaveLength(1);
   });
 
+  it.each([false, undefined])(
+    'refuses a cached read when the live catalog changes readOnlyHint to %s',
+    async (readOnlyHint) => {
+      const tools = makeRawTools(['search']).map((tool) => ({
+        ...tool,
+        annotations: { readOnlyHint: true },
+      }));
+      mockCreateMCPClient.mockResolvedValue(makeClient(tools));
+      const server = makeServer();
+      const { service: previousLaunch } = makeService([server]);
+      await previousLaunch.listExecutableToolDescriptors(server.id);
+      await previousLaunch._doStop();
+
+      const live = makeClient(
+        tools.map((tool) => ({
+          ...tool,
+          annotations: { readOnlyHint, idempotentHint: true },
+        })),
+      );
+      mockCreateMCPClient.mockResolvedValue(live);
+      const { service } = makeService([server]);
+      try {
+        const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+        expect(descriptor!.readOnlyHint).toBe(true);
+        await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+          code: 'mcp_tool_unavailable',
+        });
+        expect(live.callTool).not.toHaveBeenCalled();
+      } finally {
+        await service._doStop();
+      }
+    },
+  );
+
+  it('refuses a frozen read after its connected catalog revokes the read-only annotation', async () => {
+    const client = makeClient(
+      makeRawTools(['search']).map((tool) => ({
+        ...tool,
+        annotations: { readOnlyHint: true },
+      })),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    try {
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+      client.listTools.mockResolvedValue({ tools: makeRawTools(['search']) });
+      await service.listTools(server.id);
+      await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+        code: 'mcp_tool_unavailable',
+      });
+      expect(client.callTool).not.toHaveBeenCalled();
+    } finally {
+      await service._doStop();
+    }
+  });
+
   it('keeps a frozen tool callable after a transport reconnect for the same configuration', async () => {
     const stale = makeClient(makeRawTools(['search']));
     stale.callTool.mockRejectedValue(

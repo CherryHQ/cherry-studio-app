@@ -70,6 +70,7 @@ import {
   createMcpRuntimeTools,
   type McpExecutableToolDescriptor,
   type McpRuntimeToolSelection,
+  type McpToolInvocationSnapshot,
   McpRuntimeToolError,
   prepareMcpInputSchema,
   type McpInvocationProgress,
@@ -569,8 +570,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
             { source: 'mcp', serverId, rawToolName: name },
             args as RuntimeJsonValue,
             bound.signal,
-            server.endpointUrl,
-            state.catalogGeneration,
+            { endpointUrl: server.endpointUrl, generation: state.catalogGeneration },
             invocationProgress,
           ),
       });
@@ -707,8 +707,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return createMcpRuntimeTools(selections, {
       storeResult: storeMcpResultFiles,
       traces: this.traces,
-      invoke: (ref, input, signal, discoveredEndpointUrl, discoveredGeneration, progress) =>
-        this.invokeTool(ref, input, signal, discoveredEndpointUrl, discoveredGeneration, progress),
+      invoke: (ref, input, signal, discovered, progress) =>
+        this.invokeTool(ref, input, signal, discovered, progress),
     });
   }
 
@@ -1124,8 +1124,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
-    discoveredEndpointUrl: string | null,
-    discoveredGeneration: number,
+    discovered: McpToolInvocationSnapshot,
     progress: McpInvocationProgress,
   ): Promise<unknown> {
     if (input === null || Array.isArray(input) || typeof input !== 'object') {
@@ -1153,7 +1152,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
     // An endpoint edit retargets the server row, but never a frozen catalog:
     // the tool the user saw and approved fails unavailable instead.
-    if (server.endpointUrl !== discoveredEndpointUrl) {
+    if (server.endpointUrl !== discovered.endpointUrl) {
       throw unavailableToolError();
     }
 
@@ -1161,8 +1160,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (
       !state ||
       !isSameMcpConnectionConfig(state.connectionConfig, toMcpConnectionConfig(server)) ||
-      state.catalogGeneration !== discoveredGeneration ||
-      !state.catalog?.tools.some((tool) => tool.name === ref.rawToolName)
+      state.catalogGeneration !== discovered.generation
     ) {
       throw unavailableToolError();
     }
@@ -1181,14 +1179,17 @@ export class McpRuntimeService extends BaseService implements McpModule {
         // A fresh connection lists before its first call: composite plugin
         // clients route on that listing, and it confirms a catalog restored
         // from disk still names this tool.
-        const tools = await this.listAndRecord(server, state, client, invocationSignal);
+        await this.listAndRecord(server, state, client, invocationSignal);
         if (!this.isCurrentState(state, generation)) {
           throw unavailableToolError();
         }
-        if (!tools.some((tool) => tool.name === ref.rawToolName)) {
-          throw unavailableToolError();
-        }
       }
+
+      // Reconnection and live catalog refresh may revoke the read-only promise that admitted
+      // this frozen tool. Recheck the latest definition before any request leaves the device.
+      const tool = state.catalog?.tools.find((tool) => tool.name === ref.rawToolName);
+      if (!tool || (discovered.readOnlyHint && tool.annotations?.readOnlyHint !== true))
+        throw unavailableToolError();
 
       let result: unknown;
       state.calls.add(progress);

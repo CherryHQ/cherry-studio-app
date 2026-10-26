@@ -1531,17 +1531,20 @@ export class DurableAgentHost implements AgentProtocol {
     this.publish(identity.sessionId, { type: 'approval.requested', approval: view });
     this.publishCurrentStatus(identity.sessionId, state);
     this.updateBackgroundInteraction(identity.sessionId);
+    let status: AgentApprovalView['status'] = 'cancelled';
     try {
       const decision = await response;
-      this.publish(identity.sessionId, {
-        type: 'approval.resolved',
-        approval: { ...view, status: decision === 'approve' ? 'approved' : 'denied' },
-      });
+      status = decision === 'approve' ? 'approved' : 'denied';
       return decision;
     } finally {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);
       state.approvals.delete(approval.id);
+      // Every pending request leaves the client projection, even when another answer keeps running.
+      this.publish(identity.sessionId, {
+        type: 'approval.resolved',
+        approval: { ...view, status },
+      });
       this.updateBackgroundInteraction(identity.sessionId);
       this.publishCurrentStatus(identity.sessionId, state);
     }
