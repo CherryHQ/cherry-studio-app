@@ -498,6 +498,15 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51be
        overScrollMode = View.OVER_SCROLL_NEVER
        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
        addView(
+@@ -252,7 +253,7 @@ class TableContainerView(
+         isClickable = false
+         isLongClickable = false
+         isFocusable = true
+-        isScreenReaderFocusable = true
++        ViewCompat.setScreenReaderFocusable(this, true)
+         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+         contentDescription = description
+         if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
