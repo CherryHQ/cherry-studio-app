@@ -1,51 +1,27 @@
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import MicIcon from '@cherrystudio/app-icons/icons/mic';
-import { Composer } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
+import { Composer, Spinner } from '@cherrystudio/ui/components';
+import { easing } from '@cherrystudio/ui/motion';
 import * as Haptics from 'expo-haptics';
 import { type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Animated, {
-  type EntryExitAnimationFunction,
   LayoutAnimationConfig,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useResolveClassNames } from 'uniwind';
 
 import { useComposerState } from '@/frontend/components/Composer';
 import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
 
-import { useDictation } from './useDictation';
-import { useDictationAvailability } from './useDictationAvailability';
+import { slotEnter, slotExit } from './slotMotion';
+import type { useDictation } from './useDictation';
 
-const swapTiming = { duration: duration.fast, easing: easing.settle };
-
-// Motion: the slot's two actions cross-fade with a slight scale when the draft gains or loses
-// content, so the swap reads as one control changing role. Mount-time renders skip it and reduced
-// motion swaps instantly.
-const enter: EntryExitAnimationFunction = () => {
-  'worklet';
-  return {
-    initialValues: { opacity: 0, transform: [{ scale: 0.6 }] },
-    animations: {
-      opacity: withTiming(1, swapTiming),
-      transform: [{ scale: withTiming(1, swapTiming) }],
-    },
-  };
-};
-
-const exit: EntryExitAnimationFunction = () => {
-  'worklet';
-  return {
-    initialValues: { opacity: 1, transform: [{ scale: 1 }] },
-    animations: {
-      opacity: withTiming(0, swapTiming),
-      transform: [{ scale: withTiming(0.6, swapTiming) }],
-    },
-  };
-};
+type Dictation = ReturnType<typeof useDictation>;
 
 /**
  * The composer's one primary slot, as in mainstream chat apps: voice input while there is
@@ -53,20 +29,22 @@ const exit: EntryExitAnimationFunction = () => {
  * fills the draft; a streaming reply keeps the send button, which stops it.
  */
 export function ChatInputPrimaryAction({
+  canDictate,
+  dictation,
   send,
   streaming,
 }: {
+  canDictate: boolean;
+  dictation: Dictation;
   send: ReactNode;
   streaming: boolean;
 }) {
   const { attachments, draft } = useComposerState();
-  const dictation = useDictation();
-  const canDictate = useDictationAvailability();
   const reducedMotion = useReducedMotion();
   const showsDictation =
     dictation.state !== 'idle' ||
     (canDictate && !streaming && !hasComposerSendableContent(draft, attachments));
-  const motion = reducedMotion ? {} : { entering: enter, exiting: exit };
+  const motion = reducedMotion ? {} : { entering: slotEnter, exiting: slotExit };
 
   return (
     <LayoutAnimationConfig skipEntering>
@@ -89,11 +67,12 @@ const DISC_SIZE = 29;
 /** Listening rests a little smaller and speech grows it back; the editor clips anything larger. */
 const QUIET_SCALE = 0.86;
 
-function DictationButton({ state, level, start, stop }: ReturnType<typeof useDictation>) {
+function DictationButton({ state, level, start, stop }: Dictation) {
   const { t } = useTranslation();
   const isActive = state !== 'idle';
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
+  const glyphColor = useResolveClassNames('text-background').color;
 
   useEffect(() => {
     if (state === 'listening') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -101,7 +80,7 @@ function DictationButton({ state, level, start, stop }: ReturnType<typeof useDic
 
   // Motion: while listening, the disc breathes with the input level so speaking is visibly heard.
   // It follows each level sample and settles to full size when dictation ends; with reduced motion
-  // it stays still and the stop glyph alone marks listening.
+  // it stays still and the finish glyph alone marks listening.
   useEffect(() => {
     const target =
       state === 'listening' && !reducedMotion
@@ -131,8 +110,14 @@ function DictationButton({ state, level, start, stop }: ReturnType<typeof useDic
         className="items-center justify-center rounded-full bg-foreground"
         style={[{ height: DISC_SIZE, width: DISC_SIZE }, discStyle]}
       >
-        {isActive ? (
-          <View className="size-2.5 rounded-[3px] bg-background" />
+        {state === 'finishing' ? (
+          <Spinner
+            color={typeof glyphColor === 'string' ? glyphColor : undefined}
+            size="sm"
+            testID="chat-composer-dictation-transcribing"
+          />
+        ) : isActive ? (
+          <CheckIcon className="size-[17px] text-background" />
         ) : (
           <MicIcon className="size-[17px] text-background" />
         )}

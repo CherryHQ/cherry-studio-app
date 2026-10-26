@@ -42,6 +42,7 @@ jest.mock('../hooks/useConversationFeedbackHint', () => ({
 }));
 
 jest.mock('../../../voice/useMessageSpeech', () => ({
+  useEndReadingWithConversation: jest.fn(),
   useMessageSpeech: () => ({ isSpeaking: false, toggle: jest.fn() }),
 }));
 jest.mock('../translation/MessageTranslationProvider', () => ({
