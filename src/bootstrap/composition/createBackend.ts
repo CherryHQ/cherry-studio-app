@@ -33,6 +33,7 @@ import {
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
+import type { CherryAccountRuntime } from '@/backend/services/cherryAccount';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -108,6 +109,7 @@ export function createBackend(
     dbService: DbService;
     resourceScopes: ResourceScopeCoordinator;
     providerAccounts: ProviderAccountRuntime;
+    cherryAccount: CherryAccountRuntime;
     backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
@@ -347,6 +349,7 @@ export function createBackend(
       }
     },
     backend: {
+      cherryAccount: infrastructure.cherryAccount,
       appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,

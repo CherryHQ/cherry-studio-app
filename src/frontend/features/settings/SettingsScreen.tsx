@@ -45,6 +45,12 @@ export default function SettingsScreen() {
         <View className="gap-6 px-4 pt-2">
           <Section>
             <Section.Item
+              label={t('settings.cherryAccount.title')}
+              leading={<CloudIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/cherry-account')}
+              testID="settings-cherry-account"
+            />
+            <Section.Item
               label={t('settings.items.modelService')}
               leading={<CloudIcon className="size-4 text-foreground" />}
               onPress={openProviderList}

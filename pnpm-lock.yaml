@@ -218,6 +218,9 @@ importers:
       '@babel/runtime':
         specifier: ^7.29.2
         version: 7.29.7
+      '@cherryinternal/accounts-portal':
+        specifier: 0.1.0
+        version: 0.1.0
       '@cherrystudio/ai-core':
         specifier: 2.4.2
         version: 2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))
@@ -1728,6 +1731,9 @@ packages:
 
   '@chainsafe/netmask@2.0.0':
     resolution: {integrity: sha512-I3Z+6SWUoaljh3TBzCnCxjlUyN8tA+NAk5L6m9IxvCf1BENQTePzPMis97CoN/iMW1St3WN+AWCCRp+TTBRiDg==}
+
+  '@cherryinternal/accounts-portal@0.1.0':
+    resolution: {integrity: sha512-knR3Jl8RTEW6QUjeM5GfKVJUmw0llJkv3dsDlhMrTEH0+Z9mtq/xboqCvqyASFOxX7lg14aYPfi1O63WfeoUzA==}
 
   '@cherrystudio/ai-core@2.4.2':
     resolution: {integrity: sha512-6Hp9zOQGOos+RthLZmctPgHB9LtZ+YH3jTAyVgOHkIaN450MmIVTJJ+ImcbAKuCuzmOx7hqR2GW1z737bvJ0qw==}
@@ -11055,6 +11061,8 @@ snapshots:
   '@chainsafe/netmask@2.0.0':
     dependencies:
       '@chainsafe/is-ip': 2.1.0
+
+  '@cherryinternal/accounts-portal@0.1.0': {}
 
   '@cherrystudio/ai-core@2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(ai@6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3))':
     dependencies:

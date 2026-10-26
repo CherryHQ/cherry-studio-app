@@ -99,6 +99,9 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
   createBackend: (services: unknown, dependencies: unknown) =>
     mockCreateBackend(services, dependencies),
 }));
+jest.mock('@/backend/services/cherryAccount', () => ({
+  CherryAccountRuntime: class CherryAccountRuntime {},
+}));
 // The real registry imports device tools, but this suite only exercises runtime wiring.
 jest.mock('@/backend/services/permissions', () => ({
   devicePermissions: {
@@ -152,6 +155,7 @@ const createRuntime = () =>
     MobileAgentHost: mockAgent,
     PreferenceService: mockPreference,
     ProviderAccountRuntime: mockProviderAccounts,
+    CherryAccountRuntime: {},
     ProviderRegistryUpdaterService: mockProviderRegistryUpdater,
     WebSearchService: mockWebSearch,
   });
@@ -302,6 +306,7 @@ describe('createAppBootstrapRuntime', () => {
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,
+      cherryAccount: {},
       providerRegistryUpdater: mockProviderRegistryUpdater,
       trash: mockTrash,
     });

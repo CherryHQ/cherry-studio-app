@@ -14,6 +14,7 @@ import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActi
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { BackupRuntime } from '@/backend/services/backup';
+import { CherryAccountRuntime } from '@/backend/services/cherryAccount';
 import {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -58,6 +59,7 @@ export const services = {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
   ProviderAccountRuntime,
+  CherryAccountRuntime,
   RemoteAgentRuntime,
   DocumentExportRuntime,
   PreferenceService,

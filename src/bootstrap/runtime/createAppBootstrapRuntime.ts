@@ -29,6 +29,7 @@ import { createLiveActivityPresenter } from '@/backend/services/backgroundActivi
 import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
 import { type BackupRuntime, validateRestoringStorage } from '@/backend/services/backup';
+import type { CherryAccountRuntime } from '@/backend/services/cherryAccount';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -138,6 +139,7 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionRuntime',
   );
   const providerAccounts = host.container.get<ProviderAccountRuntime>('ProviderAccountRuntime');
+  const cherryAccount = host.container.get<CherryAccountRuntime>('CherryAccountRuntime');
   const desktopConnectionManager = host.container.get<DesktopConnectionManager>(
     'DesktopConnectionManager',
   );
@@ -182,6 +184,7 @@ export function createAppBootstrapRuntime(
     backup,
     dbService,
     providerAccounts,
+    cherryAccount,
     documentExport,
     desktopConnections,
     desktopConnectionManager,
