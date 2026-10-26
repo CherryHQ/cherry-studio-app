@@ -81,6 +81,8 @@ These resources cover both legacy and full-access calendar/reminders keys and th
 write-only calendar key. Other native permission descriptions currently remain in English.
 The native resources use Apple language identifiers, including `zh-Hans` and `zh-Hant`;
 iOS selects them using its app language, independently of Cherry's in-app language preference.
+The app's iOS `CFBundleLocalizations` is derived from the same `locales` keys; the location
+prompt ignores `.lproj` directories that list does not name.
 Keep the English defaults and localized values aligned, and add a native resource when adding
 a supported UI language. Changes require a new iOS binary; an OTA update cannot replace
 `InfoPlist.strings`.
