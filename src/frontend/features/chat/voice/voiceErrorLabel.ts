@@ -5,6 +5,7 @@ const VOICE_ERROR_KEYS = {
   'not-configured': 'voice.error.notConfigured',
   'permission-denied': 'voice.error.permissionDenied',
   'permission-blocked': 'voice.error.permissionDenied',
+  'invalid-voice': 'voice.error.invalidVoice',
   busy: 'voice.error.busy',
   'no-speech': 'voice.error.noSpeech',
   failed: 'voice.error.failed',

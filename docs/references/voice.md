@@ -32,7 +32,8 @@ While dictating, cancel replaces the leading attachment action and discards the 
 including while the final result is pending. Until text arrives, the placeholder shows listening
 with elapsed time, then transcription progress. Adding to a typed draft by voice goes through the
 keyboard's own voice input. Reading aloud sits beside copy on a settled assistant reply's toolbar
-and turns into stop while that reply is read. Switching or closing the conversation ends reading.
+and turns into stop while that reply is read. Switching, closing or navigating away from the
+conversation ends reading, including when another route covers a still-mounted chat screen.
 
 ## Module Boundaries
 
@@ -62,10 +63,11 @@ preferences. The module has no dependency on `AiService`, provider accounts or m
 The frontend uses `useBackendModule('voice')`. Chat owns the dictation and read-aloud hooks in
 `src/frontend/features/chat/voice`; settings owns `src/frontend/features/settings/voice`.
 
-Dictation owns only the text it appended to the draft. Typing or sending during dictation hands
-the draft back to the user and cancels the session. Only finishing keeps the dictated text.
-Cancelling, backgrounding and failure release the session and restore the earlier draft; failures
-other than caller cancellation are reported.
+Dictation owns only the text it appended to the draft. The composer announces explicit edits and
+accepted sends before changing the draft, so clearing it or returning to an earlier recognition
+result also cancels the session and hands the draft back. Only finishing keeps the dictated text.
+Cancelling, navigating away, backgrounding and failure release the session and restore the earlier
+draft unless the user has taken it over; failures other than caller cancellation are reported.
 
 ## System Engines
 
@@ -78,9 +80,13 @@ The config plugin declares the generic `android.speech.RecognitionService` query
 visibility. Recognition quality and support for languages, partial results and continuous mode
 depend on the device service.
 
-**System speech** reads through the platform engine, split to its input limit, with an optional
-installed voice for the app language. A speech error or an unexpected stop, such as an audio
-interruption, fails reading instead of waiting indefinitely for playback to resume.
+**System speech** reads through the platform engine, split to its input limit. Before speaking, it
+resolves an installed voice for the app language: the default prefers an exact locale match, then
+another voice in that language. A saved selection must still be installed and match the app
+language; otherwise reading reports an invalid voice so the user can select another. Passing the
+resolved ID also avoids `expo-speech` 58's Android language-tag parsing fallback to the device
+language. A speech error or an unexpected stop, such as an audio interruption, fails reading.
+Cancellation also settles when native stop completes, even if no utterance callback arrives.
 
 System voices are filtered by the app language and deduplicated by their native selection ID.
 Different IDs with the same display name remain selectable with language/ID details. The voice

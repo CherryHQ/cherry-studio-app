@@ -11,7 +11,23 @@ const mockSetDraft = jest.fn((next: string | ((current: string) => string)) => {
   mockDraft = typeof next === 'function' ? next(mockDraft) : next;
 });
 const mockStartDictation = jest.fn();
+const mockDraftEditListeners = new Set<() => void>();
+const mockSubscribeDraftEdits = (listener: () => void) => {
+  mockDraftEditListeners.add(listener);
+  return () => {
+    mockDraftEditListeners.delete(listener);
+  };
+};
 let mockDraft = '';
+let mockFocused = true;
+
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const focused = mockFocused;
+    useEffect(() => (focused ? effect() : undefined), [effect, focused]);
+  },
+}));
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { confirm: mockConfirm } }),
@@ -19,7 +35,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/components/Composer', () => ({
-  useComposerActions: () => ({ setDraft: mockSetDraft }),
+  useComposerActions: () => ({
+    setDraft: mockSetDraft,
+    subscribeDraftEdits: mockSubscribeDraftEdits,
+  }),
   useComposerState: () => ({ draft: mockDraft }),
 }));
 jest.mock('@/frontend/components/AiFailure', () => ({ aiFailureReasonTitleKey: () => undefined }));
@@ -49,8 +68,16 @@ describe('dictation into the composer draft', () => {
     return null;
   }
 
+  function editDraft(text: string) {
+    mockDraftEditListeners.forEach((listener) => listener());
+    mockDraft = text;
+    renderer.update(<Probe />);
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDraftEditListeners.clear();
+    mockFocused = true;
     mockDraft = 'Meeting notes:';
     result = deferred<string>();
     mockStartDictation.mockImplementation(async (start: DictationOptions) => {
@@ -63,7 +90,7 @@ describe('dictation into the composer draft', () => {
     });
   });
 
-  afterEach(() => act(() => renderer.unmount()));
+  afterEach(async () => act(async () => renderer.unmount()));
 
   test('live text follows what was typed and the final transcript replaces it', async () => {
     await act(async () => {
@@ -85,8 +112,7 @@ describe('dictation into the composer draft', () => {
       void dictation.start();
     });
     act(() => options.onText?.('first'));
-    mockDraft = edited;
-    act(() => renderer.update(<Probe />));
+    act(() => editDraft(edited));
     expect(options.signal?.aborted).toBe(true);
     await act(async () => undefined);
     expect(mockDraft).toBe(edited);
@@ -98,11 +124,68 @@ describe('dictation into the composer draft', () => {
     await act(async () => {
       void dictation.start();
     });
-    mockDraft = 'Meeting notes: typed instead';
-    act(() => renderer.update(<Probe />));
+    act(() => editDraft('Meeting notes: typed instead'));
     expect(options.signal?.aborted).toBe(true);
     await act(async () => undefined);
     expect(mockDraft).toBe('Meeting notes: typed instead');
+  });
+
+  test.each(['', 'first', 'first second'])(
+    'editing an initially empty draft back to %j cancels capture without restoring older text',
+    async (edited) => {
+      mockDraft = '';
+      act(() => renderer.update(<Probe />));
+      await act(async () => {
+        void dictation.start();
+      });
+      act(() => options.onText?.('first'));
+      act(() => options.onText?.('first second'));
+
+      // Empty text and earlier recognition results are still explicit user edits.
+      await act(async () => editDraft(edited));
+      act(() => options.onText?.('late recognition'));
+
+      expect(options.signal?.aborted).toBe(true);
+      expect(mockDraft).toBe(edited);
+      expect(dictation.state).toBe('idle');
+      expect(mockToast).not.toHaveBeenCalled();
+    },
+  );
+
+  test('leaving the route cancels capture even while the composer stays mounted', async () => {
+    await act(async () => {
+      void dictation.start();
+    });
+    act(() => options.onText?.('partial words'));
+
+    await act(async () => {
+      mockFocused = false;
+      renderer.update(<Probe />);
+    });
+    expect(options.signal?.aborted).toBe(true);
+    expect(mockDraft).toBe('Meeting notes:');
+    expect(dictation.state).toBe('idle');
+    expect(mockToast).not.toHaveBeenCalled();
+
+    act(() => {
+      mockFocused = true;
+      renderer.update(<Probe />);
+    });
+    expect(mockStartDictation).toHaveBeenCalledTimes(1);
+  });
+
+  test('cancelling before a queued final result is applied still discards dictation', async () => {
+    await act(async () => {
+      void dictation.start();
+    });
+    act(() => options.onText?.('partial words'));
+    await act(async () => {
+      result.resolve('final words');
+      dictation.cancel();
+    });
+    expect(mockDraft).toBe('Meeting notes:');
+    expect(dictation.state).toBe('idle');
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   test('cancelling restores the draft as it was, without an error', async () => {

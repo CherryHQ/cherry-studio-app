@@ -34,6 +34,10 @@ type ComposerStateContextValue = {
 type ComposerActionsContextValue = {
   beginSendAttempt: () => number | null;
   endSendAttempt: () => void;
+  /** User edits relinquish any caller-owned draft operation before changing the text. */
+  editDraft: (draft: string) => void;
+  /** Announces user edits and accepted send attempts, including changes to an empty draft. */
+  subscribeDraftEdits: (listener: () => void) => () => void;
   subscribeAttachmentChanges?: (
     listener: (attachments: readonly ComposerAttachmentDraft[]) => void,
   ) => () => void;
@@ -109,6 +113,17 @@ export function ComposerProvider({
   const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const draftEditListeners = useRef(new Set<() => void>());
+  const subscribeDraftEdits = useCallback((listener: () => void) => {
+    draftEditListeners.current.add(listener);
+    return () => {
+      draftEditListeners.current.delete(listener);
+    };
+  }, []);
+  const editDraft = useCallback((next: string) => {
+    draftEditListeners.current.forEach((listener) => listener());
+    setDraft(next);
+  }, []);
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
   // The surface may remount while file preparation or draft recovery is pending.
@@ -116,6 +131,7 @@ export function ComposerProvider({
     if (activeSendAttemptIdRef.current !== null) return null;
     const attemptId = ++nextSendAttemptIdRef.current;
     activeSendAttemptIdRef.current = attemptId;
+    draftEditListeners.current.forEach((listener) => listener());
     setIsSubmitting(true);
     return attemptId;
   }, []);
@@ -143,6 +159,8 @@ export function ComposerProvider({
     () => ({
       beginSendAttempt,
       endSendAttempt,
+      editDraft,
+      subscribeDraftEdits,
       addAttachments,
       clearAttachments,
       removeAttachment,
@@ -154,6 +172,8 @@ export function ComposerProvider({
     [
       beginSendAttempt,
       endSendAttempt,
+      editDraft,
+      subscribeDraftEdits,
       addAttachments,
       clearAttachments,
       removeAttachment,

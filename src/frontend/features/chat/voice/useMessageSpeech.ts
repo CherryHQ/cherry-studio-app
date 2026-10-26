@@ -1,5 +1,6 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
@@ -32,5 +33,11 @@ export function useMessageSpeech(messageId: string, text: string | undefined) {
 /** Reading aloud belongs to the conversation on screen: switching or closing it ends the reading. */
 export function useEndReadingWithConversation(conversationKey: string | undefined) {
   const voice = useBackendModule('voice');
-  useEffect(() => () => voice.stopSpeaking(), [conversationKey, voice]);
+  useFocusEffect(
+    useCallback(() => {
+      // An unresolved/new conversation has no settled reply to own a reading.
+      if (conversationKey === undefined) return;
+      return () => voice.stopSpeaking();
+    }, [conversationKey, voice]),
+  );
 }

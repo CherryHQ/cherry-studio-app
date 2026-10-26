@@ -47,6 +47,7 @@ export type VoiceErrorCode =
   | 'not-configured'
   | 'permission-denied'
   | 'permission-blocked'
+  | 'invalid-voice'
   | 'busy'
   | 'no-speech'
   | 'failed';

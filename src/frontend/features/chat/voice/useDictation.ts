@@ -1,5 +1,6 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
@@ -14,8 +15,8 @@ export type DictationState = 'idle' | 'starting' | 'listening' | 'finishing';
 type ActiveDictation = {
   controller: AbortController;
   session?: DictationSession;
-  /** Every draft this dictation produced; any other draft means the user took it back. */
-  owned: Set<string>;
+  /** User edits and sending hand the draft back even when its text matches an earlier result. */
+  ownsDraft: boolean;
 };
 
 /**
@@ -32,17 +33,25 @@ export function useDictation() {
   const voice = useBackendModule('voice');
   const permissions = useBackendModule('permissions');
   const { draft } = useComposerState();
-  const { setDraft } = useComposerActions();
+  const { setDraft, subscribeDraftEdits } = useComposerActions();
   const active = useRef<ActiveDictation | null>(null);
   const [state, setState] = useState<DictationState>('idle');
   const [level, setLevel] = useState(0);
 
-  useEffect(() => () => active.current?.controller.abort(), []);
-
-  useEffect(() => {
-    const owner = active.current;
-    if (owner && !owner.owned.has(draft)) owner.controller.abort();
-  }, [draft]);
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = subscribeDraftEdits(() => {
+        const owner = active.current;
+        if (!owner) return;
+        owner.ownsDraft = false;
+        owner.controller.abort();
+      });
+      return () => {
+        unsubscribe();
+        active.current?.controller.abort();
+      };
+    }, [subscribeDraftEdits]),
+  );
 
   const report = useCallback(
     (error: unknown) => {
@@ -67,24 +76,28 @@ export function useDictation() {
     if (active.current) return;
     const controller = new AbortController();
     const base = draft;
-    const owner: ActiveDictation = { controller, owned: new Set([base]) };
+    const owner: ActiveDictation = { controller, ownsDraft: true };
     active.current = owner;
     let written = base;
     const write = (next: string) => {
+      if (!owner.ownsDraft) return;
       const expected = written;
       written = next;
-      owner.owned.add(next);
-      setDraft((current) => (current === expected ? next : current));
+      setDraft((current) => (owner.ownsDraft && current === expected ? next : current));
     };
     setState('starting');
     try {
       owner.session = await voice.startDictation({
         signal: controller.signal,
-        onText: (text) => write(appendUtterance(base, text)),
+        onText: (text) => {
+          if (!controller.signal.aborted) write(appendUtterance(base, text));
+        },
         onLevel: setLevel,
       });
       setState('listening');
-      write(appendUtterance(base, await owner.session.result));
+      const text = await owner.session.result;
+      controller.signal.throwIfAborted();
+      write(appendUtterance(base, text));
     } catch (error) {
       // Any end other than stopping, including backgrounding, returns the draft to where it was.
       write(base);
