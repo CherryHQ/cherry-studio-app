@@ -24,7 +24,7 @@ test('reads prose and skips code, images and link targets', () => {
   );
 });
 
-test('packs sentences into requests without exceeding the limit', () => {
+test('packs sentences into utterances without exceeding the limit', () => {
   const text = 'First sentence. Second one! 第三句。第四句？\nNew line here.';
   const chunks = splitSpeechText(text, 30);
   expect(chunks.every((chunk) => chunk.length <= 30)).toBe(true);
@@ -35,9 +35,4 @@ test('packs sentences into requests without exceeding the limit', () => {
     'x'.repeat(10),
     'x'.repeat(5),
   ]);
-});
-
-test('keeps the first request short so speech starts before long text is generated', () => {
-  const text = 'One. Two. Three. Four. Five.';
-  expect(splitSpeechText(text, 100, 10)).toEqual(['One. Two.', 'Three. Four. Five.']);
 });

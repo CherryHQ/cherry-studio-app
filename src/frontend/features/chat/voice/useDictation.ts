@@ -23,7 +23,7 @@ type ActiveDictation = {
  * updated live. Cancelling or failing restores the draft as it was; nothing is sent automatically.
  *
  * Dictation owns only the text it appended. Typing or sending meanwhile hands the draft back to
- * the user and cancels the session, so nothing more is captured, uploaded or written.
+ * the user and cancels the session, so nothing more is captured or written.
  */
 export function useDictation() {
   const { t } = useTranslation();

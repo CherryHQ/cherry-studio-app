@@ -64,8 +64,6 @@ function setup({
       get: async (key) =>
         (key === 'feature.voice.dictation_engine' ? selected.dictation : selected.speech) ?? null,
     },
-    listProviders: async () => [],
-    getSpeechModelOptions: async () => ({ voices: [], acceptsCustomVoice: false }),
     language: () => 'zh-CN',
     dictationLanguage: () => 'en-US',
     onBackground: (listener) => {
@@ -89,38 +87,26 @@ describe('engine choice', () => {
     expect(system.engine.start).not.toHaveBeenCalled();
   });
 
-  test('without a choice, uses the first engine this device supports', async () => {
-    const system = speechEngine('unsupported');
-    const ai = speechEngine();
-    const { module } = setup({ speech: { system: system.engine, ai: ai.engine } });
-    await expect(module.getEffectiveEngine('speech')).resolves.toBe('ai');
-    void module.speak('hello');
+  test('without a choice, speech uses the available system engine', async () => {
+    const system = speechEngine();
+    const { module } = setup({ speech: { system: system.engine } });
+    await expect(module.getEffectiveEngine('speech')).resolves.toBe('system');
+    const reading = module.speak('hello');
     await flush();
-    expect(ai.spoken).toEqual(['hello']);
-    expect(system.engine.speak).not.toHaveBeenCalled();
+    expect(system.spoken).toEqual(['hello']);
+    module.stopSpeaking();
+    await reading;
   });
 
-  test('an AI engine without a model is reported as setup, never silently skipped', async () => {
-    const { module } = setup({
-      selected: { dictation: 'ai' },
-      dictation: {
-        system: dictationEngine('unsupported').engine,
-        ai: dictationEngine('needs-setup').engine,
-      },
-    });
-    await expect(module.startDictation()).rejects.toMatchObject({ code: 'not-configured' });
-    expect(module.getActivity()).toEqual({ kind: 'idle' });
-  });
-
-  test('an explicit choice is never replaced by another engine', async () => {
+  test('an unavailable system engine reports unsupported and releases the activity', async () => {
     const system = speechEngine('unsupported');
-    const ai = speechEngine();
     const { module } = setup({
-      speech: { system: system.engine, ai: ai.engine },
+      speech: { system: system.engine },
       selected: { speech: 'system' },
     });
     await expect(module.speak('hello')).rejects.toMatchObject({ code: 'unsupported' });
-    expect(ai.engine.speak).not.toHaveBeenCalled();
+    expect(system.engine.speak).not.toHaveBeenCalled();
+    expect(module.getActivity()).toEqual({ kind: 'idle' });
   });
 
   test('dictation uses its own language while reading follows the app', async () => {

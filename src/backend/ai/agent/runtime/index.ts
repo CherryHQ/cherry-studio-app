@@ -69,7 +69,7 @@ export {
   type RuntimeLane,
 } from './durableTypes';
 export { FakeRuntime } from './FakeRuntime';
-export { raceAbort } from '@/backend/utils/raceAbort';
+export { raceAbort } from './raceAbort';
 export { type MediaCapabilities, unsupportedMediaNote } from './unsupportedMedia';
 export {
   createDeniedToolResult,

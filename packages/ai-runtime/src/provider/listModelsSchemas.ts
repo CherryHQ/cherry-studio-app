@@ -237,7 +237,6 @@ export const AIHubMixModelsResponseSchema = z.object({
       types: z.string().optional(),
       features: z.string().optional(),
       input_modalities: z.string().optional(),
-      output_modalities: z.string().optional(),
       endpoints: z.string().optional(),
       max_output: z.number().optional(),
       context_length: z.number().optional(),

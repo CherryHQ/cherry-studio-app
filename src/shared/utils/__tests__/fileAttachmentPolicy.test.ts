@@ -30,7 +30,6 @@ describe('attachment source byte limits', () => {
       20 * 1024 * 1024,
     ],
     ['photo.png', 'image/png', 10 * 1024 * 1024],
-    ['meeting.m4a', 'audio/x-m4a', 25 * 1000 * 1000],
   ] as const)('admits %s at its ceiling and rejects one extra byte', (name, mediaType, limit) => {
     const file = { ...imageFact(0, limit), name, mediaType };
     expect(() => validateFileAttachments([file], MODEL)).not.toThrow();
@@ -43,17 +42,6 @@ describe('attachment source byte limits', () => {
       }),
     );
   });
-});
-
-test('audio is recognized by type or extension, after text and documents', () => {
-  const mode = (name: string, mediaType: string) => fileAttachmentMode({ name, mediaType });
-  expect(mode('voice.mp3', 'audio/mpeg')).toBe('audio');
-  // Pickers label audio generically or as video.
-  expect(mode('meeting.m4a', 'application/octet-stream')).toBe('audio');
-  expect(mode('call.mp4', 'video/mp4')).toBe('audio');
-  // Text that merely looks like an audio name stays text; unsupported audio is not admitted.
-  expect(mode('notes.mp3', 'text/plain')).toBe('text');
-  expect(mode('memo.amr', 'audio/amr')).toBeUndefined();
 });
 
 describe('image attachment limits', () => {

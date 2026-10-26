@@ -79,12 +79,6 @@ jest.mock('expo-media-library', () => {
 // Voice native libraries resolve their modules at import time. Voice engine suites replace them
 // with explicit fakes; unrelated suites only import them through backend composition.
 jest.mock('expo-audio', () => ({
-  AudioModule: { AudioRecorder: jest.fn() },
-  AudioQuality: { MEDIUM: 64 },
-  IOSOutputFormat: { MPEG4AAC: 'aac ' },
-  createAudioPlayer: jest.fn(),
-  getRecordingPermissionsAsync: jest.fn(),
-  requestRecordingPermissionsAsync: jest.fn(),
   setAudioModeAsync: jest.fn(),
 }));
 jest.mock('expo-speech', () => ({

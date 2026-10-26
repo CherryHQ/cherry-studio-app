@@ -94,7 +94,7 @@ describe('dictation into the composer draft', () => {
     expect(mockToast).not.toHaveBeenCalled();
   });
 
-  test('typing while a transcription-only engine records discards the recording', async () => {
+  test('typing before the first recognition result cancels dictation', async () => {
     await act(async () => {
       void dictation.start();
     });

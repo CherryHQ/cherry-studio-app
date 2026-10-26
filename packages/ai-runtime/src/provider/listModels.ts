@@ -12,12 +12,11 @@ import {
   withoutTrailingSlash,
   zodSchema,
 } from '@ai-sdk/provider-utils';
-import type { EndpointType, Modality, Model } from '@cherrystudio/universal/data/types/model';
+import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import {
   createUniqueModelId,
   ENDPOINT_TYPE,
   endpointImpliedCapability,
-  MODALITY,
   MODEL_CAPABILITY,
 } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -54,7 +53,6 @@ import {
   VertexPublisherModelsResponseSchema,
 } from './listModelsSchemas';
 import { isVertexMaasModelId } from './vertex';
-import { getAihubmixVoiceModelMetadata, getOpenAIVoiceModelMetadata } from './voiceModelMetadata';
 
 // ── Types ──
 
@@ -204,6 +202,27 @@ function toModel(apiModelId: string, provider: Provider, extra?: Partial<Model>)
     isHidden: false,
     ...extra,
   };
+}
+
+/** /models omits modalities. Keep known audio API families typed before catalog enrichment. */
+function getOpenAIVoiceModelMetadata(modelId: string): Partial<Model> | undefined {
+  const id = modelId.replace(/^openai\//, '');
+  // https://developers.openai.com/api/reference/typescript/resources/audio
+  if (/^(?:tts-1(?:-hd)?(?:-\d{4})?|gpt-4o-mini-tts(?:-\d{4}-\d{2}-\d{2})?)$/.test(id)) {
+    return {
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+      inputModalities: ['text'],
+      outputModalities: ['audio'],
+    };
+  }
+  if (/^(?:whisper-1|gpt-4o(?:-mini)?-transcribe(?:-\d{4}-\d{2}-\d{2})?)$/.test(id)) {
+    return {
+      capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+      inputModalities: ['audio'],
+      outputModalities: ['text'],
+    };
+  }
+  return undefined;
 }
 
 function dedup<T>(items: T[], getId: (item: T) => string | undefined): T[] {
@@ -704,46 +723,14 @@ const aiHubMixFetcher: ModelFetcher = {
       responseSchema: AIHubMixModelsResponseSchema,
       abortSignal: signal,
     });
-    return dedup(response.data, (m) => m.model_id).map((m) => {
-      const types = m.types?.split(',').map((type) => type.trim().toLowerCase()) ?? [];
-      const inputModalities = parseCatalogModalities(m.input_modalities) ?? [];
-      const outputModalities = parseCatalogModalities(m.output_modalities) ?? [];
-      // Only dedicated audio APIs are voice models. Models that converse in audio and text
-      // (gpt-audio, realtime) keep their chat identity instead of becoming unusable voice entries.
-      const speech =
-        types.includes('tts') && outputModalities.every((modality) => modality === MODALITY.AUDIO);
-      const transcription =
-        types.includes('stt') &&
-        inputModalities.includes(MODALITY.AUDIO) &&
-        outputModalities.every((modality) => modality === MODALITY.TEXT);
-      const voiceMetadata =
-        getAihubmixVoiceModelMetadata(m.model_id) ??
-        (speech
-          ? { capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION], inputModalities, outputModalities }
-          : transcription
-            ? {
-                capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
-                inputModalities,
-                outputModalities,
-              }
-            : undefined);
-      return toModel(m.model_id, provider, {
+    return dedup(response.data, (m) => m.model_id).map((m) =>
+      toModel(m.model_id, provider, {
         name: m.model_name || m.model_id,
         description: m.desc,
-        ...voiceMetadata,
-      });
-    });
+      }),
+    );
   },
 };
-
-function parseCatalogModalities(value: string | undefined): Modality[] | undefined {
-  return value
-    ?.split(',')
-    .map((modality) => modality.trim().toLowerCase())
-    .filter((value): value is Modality =>
-      Object.values(MODALITY).some((modality) => modality === value),
-    );
-}
 
 /** Vercel AI Gateway: hits /v3/ai/config directly with `ai-gateway-protocol-version` header
  *  instead of going through `@ai-sdk/gateway`'s `getAvailableModels()`. The SDK validates the

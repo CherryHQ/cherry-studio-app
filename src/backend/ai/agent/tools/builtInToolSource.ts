@@ -42,7 +42,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
-import type { ManagedFileResolver, TurnToolResources } from '../resources/managedFileResolver';
+import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
@@ -136,8 +136,6 @@ export type SystemCapabilityServices = {
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
-  /** The host's resolver, which can also read audio as a transcript. */
-  files?: ManagedFileResolver;
 };
 
 export function createSystemCapabilitySource(
@@ -168,7 +166,6 @@ export function createSystemCapabilitySource(
         : undefined;
       const catalog = createCatalog(
         deps,
-        services.files ?? managedFileResolver,
         scope,
         resources,
         documentParserMode,
@@ -260,7 +257,6 @@ function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string
  */
 function createCatalog(
   deps: SystemCapabilitySourceDependencies,
-  files: ManagedFileResolver,
   scope: BuiltInToolScope,
   resources: TurnToolResources,
   documentParserMode: DocumentParserMode,
@@ -284,9 +280,9 @@ function createCatalog(
       resources,
       fileAccess,
     ),
-    createReadFileTool(files, resources, documentParserMode, fileAccess),
+    createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
     createWriteFileTool(fileContent, fileAccess),
-    ...createFileLibraryTools(fileAccess, files, documentParserMode, workspaceName),
+    ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     // Office jobs read and write their files natively, which older clients cannot do.
     ...(deps.jsSandbox?.files ? createOfficeTools(deps.jsSandbox, officeFiles, fileAccess) : []),

@@ -51,8 +51,7 @@ cancellation, output import, and cleanup. See
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
 - `listModels()` for provider discovery;
-- `generateImage()` for painting jobs and the Agent image tool;
-- `generateSpeech()` and `transcribe()` for the voice module's AI engine and audio attachments.
+- `generateImage()` for painting jobs and the Agent image tool.
 
 It has no text-generation path; every language request goes through Pi.
 
@@ -60,27 +59,7 @@ Settings and onboarding chat checks use the bound AgentRuntime through `Backend.
 Translation and automatic session naming use its separate `RuntimeTextGenerator` capability,
 sharing chat's OAuth and protocol adapters without creating conversation history or tools.
 `AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
-`uniqueModelId`, or for voice a dedicated provider/model selection; `AiService` does not resolve an
-Assistant, Topic, or default-model fallback.
-
-### Invocation Usage And Context Occupancy
-
-Image generation captures an immutable usage context through ai-core's `onProviderCallStart` for
-each provider invocation, including each batch and retry. Its completion handler keeps that
-context paired with the ai-core-generated invocation ID, image count, usage, timing, and completion
-time. The invocation ID is generated locally as `ai-core:image:<UUID>` and is distinct from any
-provider-issued request ID.
-The credential receipt describes the key actually selected for the operation; observing a new
-invocation does not rotate credentials. Failed attempts have no successful usage event and do not
-produce invented billing records. `AiUsageRecordService` deduplicates successful records by request
-ID and contains persistence failures; ai-core isolates synchronous observer failures from results.
-
-Pi conversation occupancy and billed usage are separate. `projectPiTurn` keeps the latest measured
-input-token count as `contextTokens`, while summing each response's billed usage. An Anthropic
-`pause_turn` continuation therefore retains one context occupancy and both invocation receipts.
-The runtime continuation regression covers this distinction. ai-core's `getContextTokens` is not
-applied to Pi totals: Pi owns their semantics, and the current image path has no conversation
-context-occupancy display requiring that helper.
+`uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 
 ### Invocation Usage And Context Occupancy
 
@@ -272,9 +251,3 @@ semantics.
 - Pi provider coverage expands.
 - A new model-capability tool needs provider configuration, usage, or artifact semantics not covered
   by the application capability boundary.
-
-## Voice Operations
-
-[Voice Input And Speech](../voice.md) describes the transcription and speech model settings, the
-OpenAI-compatible audio protocol boundary, credential reuse, and audio attachment transcription.
-Voice always uses the local account selected in voice settings, including for remote conversations.

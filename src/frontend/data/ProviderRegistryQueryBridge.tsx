@@ -39,7 +39,6 @@ export function isRegistryProjectionPath(value: unknown): boolean {
   }
 
   return (
-    value === 'voice' ||
     value === 'onboarding-models' ||
     value === '/models' ||
     value.startsWith('/models/') ||

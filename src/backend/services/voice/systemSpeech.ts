@@ -8,7 +8,7 @@ import { splitSpeechText } from './speechText';
 
 const primaryLanguage = (tag: string) => tag.split(/[-_]/, 1)[0]!.toLowerCase();
 
-/** The platform text-to-speech engine through expo-speech; offline and free of charge. */
+/** The platform text-to-speech engine through expo-speech. */
 export function createSystemSpeechEngine({
   voice,
 }: {

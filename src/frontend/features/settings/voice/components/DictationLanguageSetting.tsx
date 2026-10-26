@@ -8,7 +8,7 @@ import { APP_LANGUAGES } from '@/shared/utils/languages';
 
 const FOLLOW_APP = 'app';
 
-/** The system recognizer needs a language; AI models detect it, so only the system engine shows this. */
+/** Selects the system recognizer's language, with the app language as the default. */
 export function DictationLanguageSetting() {
   const { t } = useTranslation();
   const { toast } = useToast();

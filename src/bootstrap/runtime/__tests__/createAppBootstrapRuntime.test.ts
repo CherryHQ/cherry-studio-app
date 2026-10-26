@@ -203,7 +203,7 @@ describe('createAppBootstrapRuntime', () => {
       uninstall.mockRestore();
     }
   });
-  test('drains voice requests and temporary audio before uninstalling its host', async () => {
+  test('drains voice activity before uninstalling its host', async () => {
     let finish!: () => void;
     mockDisposeVoice.mockImplementationOnce(
       () =>

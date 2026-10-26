@@ -18,7 +18,6 @@ it already exists.
 | Remote web-search provider protocols and metadata | `@cherrystudio/web-search`; mobile transport and policy adapters in `src/backend/services/webSearch` |
 | Identifying outbound headers | `defaultAppHeaders` in `src/backend/utils/defaultAppHeaders.ts` |
 | Combining abort signals | `linkAbortSignals` in `src/backend/utils/linkAbortSignals.ts` |
-| Releasing a wait when its caller cancels | `raceAbort` in `src/backend/utils/raceAbort.ts` |
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.runWithSystemPrompt` in `src/backend/services/permissions`; hold the queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
@@ -33,7 +32,6 @@ it already exists.
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Dictation, reading aloud, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
-| Audio file transcription for attachments and file tools | The `transcribeAudio` reader port, supplied by `createAudioAttachmentTranscriber` in `src/backend/services/voice` |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
 | Safe Markdown code fences | `createCodeBlockMarkdown` in `src/shared/utils/createCodeBlockMarkdown.ts` |

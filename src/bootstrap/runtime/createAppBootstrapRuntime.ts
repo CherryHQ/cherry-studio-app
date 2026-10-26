@@ -244,7 +244,7 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Drain system-entry consumers, Skill writes, and voice files before the host's resources.
+      // Drain system-entry consumers, Skill writes, and voice activity before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();

@@ -1,53 +1,27 @@
-import {
-  BottomSheet,
-  Button,
-  Input,
-  OptionPickerBottomSheet,
-  Section,
-  TextField,
-  useToast,
-} from '@cherrystudio/ui/components';
+import { OptionPickerBottomSheet, Section, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
-import type { SpeechModelOptions, VoiceEngineId } from '@/shared/contracts/voice';
+import type { VoiceEngineId } from '@/shared/contracts/voice';
 
 import { speechVoiceOptions } from './speechVoiceOptions';
 
-const VOICE_PREFERENCE = {
-  system: 'feature.voice.system_voice',
-  ai: 'feature.voice.ai_voice',
-} as const;
-
-/** Voices belong to an engine, so the list follows the engine that reads aloud. */
+/** Lists installed system voices for the app language. */
 export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
-  const [selected, setSelected] = usePreference(VOICE_PREFERENCE[engine]);
-  const [model] = usePreference('feature.voice.speech_model');
+  const [selected, setSelected] = usePreference('feature.voice.system_voice');
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const [customVoice, setCustomVoice] = useState('');
-  const voices = useQuery<SpeechModelOptions>({
-    queryKey: ['voice', 'voices', engine, engine === 'ai' ? model : null, i18n.resolvedLanguage],
-    enabled: engine === 'system' || model !== null,
-    queryFn: async ({ signal }) => {
-      if (engine === 'ai' && model) return voice.getSpeechModelOptions(model, { signal });
-      return { voices: await voice.listVoices(engine, { signal }), acceptsCustomVoice: false };
-    },
+  const voices = useQuery({
+    queryKey: ['voice', 'voices', engine, i18n.resolvedLanguage],
+    queryFn: ({ signal }) => voice.listVoices(engine, { signal }),
   });
-  const automaticLabel =
-    engine === 'system'
-      ? t('settings.voice.defaultVoice')
-      : voices.data?.defaultVoice
-        ? t('settings.voice.automaticVoice', { voice: voices.data.defaultVoice })
-        : undefined;
   const options = [
-    ...(automaticLabel ? [{ value: '', label: automaticLabel }] : []),
-    ...speechVoiceOptions(voices.data?.voices ?? []),
+    { value: '', label: t('settings.voice.defaultVoice') },
+    ...speechVoiceOptions(voices.data ?? []),
   ];
   const change = (value: string) => {
     void setSelected(value).catch(() => {
@@ -55,21 +29,8 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
     });
   };
   const invalid = Boolean(
-    selected &&
-    voices.data &&
-    !voices.data.acceptsCustomVoice &&
-    !options.some((option) => option.value === selected),
+    selected && voices.data && !options.some((option) => option.value === selected),
   );
-  const open = () => {
-    if (voices.isError) {
-      void voices.refetch();
-    } else if (voices.data?.acceptsCustomVoice) {
-      setCustomVoice(selected);
-      setIsPickerOpen(true);
-    } else {
-      setIsPickerOpen(true);
-    }
-  };
   return (
     <>
       <Section.SelectItem
@@ -79,66 +40,25 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
             ? t('settings.voice.loadVoicesFailed')
             : invalid
               ? t('voice.error.invalidVoice')
-              : voices.data?.acceptsCustomVoice
-                ? t('settings.voice.customVoiceDescription')
-                : undefined
+              : undefined
         }
-        disabled={(engine === 'ai' && !model) || voices.isLoading}
-        onPress={open}
+        disabled={voices.isLoading}
+        onPress={() => {
+          if (voices.isError) void voices.refetch();
+          else setIsPickerOpen(true);
+        }}
         testID="settings-voice-speech-voice"
-        value={
-          options.find((option) => option.value === selected)?.label ??
-          (selected || t('settings.voice.model.none'))
-        }
+        value={options.find((option) => option.value === selected)?.label ?? selected}
       />
-      {voices.data?.acceptsCustomVoice ? (
-        <BottomSheet
-          avoidKeyboard
-          footer={
-            <Button
-              disabled={!customVoice.trim()}
-              onPress={() => {
-                change(customVoice.trim());
-                setIsPickerOpen(false);
-              }}
-            >
-              {t('common.save')}
-            </Button>
-          }
-          onClose={() => setIsPickerOpen(false)}
-          open={isPickerOpen}
-          size="medium"
-          title={t('settings.voice.voice')}
-        >
-          <View className="px-4">
-            <TextField>
-              <TextField.Label>{t('settings.voice.voice')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('settings.voice.voice')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus
-                maxLength={256}
-                onChangeText={setCustomVoice}
-                value={customVoice}
-              />
-              <TextField.Description>
-                {t('settings.voice.customVoiceDescription')}
-              </TextField.Description>
-            </TextField>
-          </View>
-        </BottomSheet>
-      ) : (
-        <OptionPickerBottomSheet<string>
-          onClose={() => setIsPickerOpen(false)}
-          onValueChange={change}
-          open={isPickerOpen}
-          options={options}
-          selectedValue={selected}
-          size="medium"
-          title={t('settings.voice.voice')}
-        />
-      )}
+      <OptionPickerBottomSheet<string>
+        onClose={() => setIsPickerOpen(false)}
+        onValueChange={change}
+        open={isPickerOpen}
+        options={options}
+        selectedValue={selected}
+        size="medium"
+        title={t('settings.voice.voice')}
+      />
     </>
   );
 }

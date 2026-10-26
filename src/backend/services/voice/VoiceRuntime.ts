@@ -7,10 +7,7 @@ import {
   type VoiceCapability,
   type VoiceEngineId,
   type VoiceModule,
-  type VoiceProviderOption,
   type VoiceRequestOptions,
-  type VoiceModelSelection,
-  type SpeechModelOptions,
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
@@ -22,11 +19,6 @@ export type VoiceRuntimeDependencies = {
   preference: {
     get(key: (typeof VOICE_ENGINE_PREFERENCE)[VoiceCapability]): Promise<VoiceEngineId | null>;
   };
-  listProviders(signal: AbortSignal): Promise<VoiceProviderOption[]>;
-  getSpeechModelOptions(
-    model: VoiceModelSelection,
-    signal: AbortSignal,
-  ): Promise<SpeechModelOptions>;
   /** Reading aloud and its voices follow the app language. */
   language(): AppLanguage;
   dictationLanguage(): AppLanguage;
@@ -45,8 +37,6 @@ const IDLE: VoiceActivity = { kind: 'idle' };
 export function createVoiceRuntime({
   engines,
   preference,
-  listProviders,
-  getSpeechModelOptions,
   language,
   dictationLanguage,
   onBackground,
@@ -95,8 +85,9 @@ export function createVoiceRuntime({
 
   /** Dictation is opt-in; speech defaults to the first supported engine. */
   async function effectiveEngine(capability: VoiceCapability, signal: AbortSignal) {
-    const selected = await preference.get(VOICE_ENGINE_PREFERENCE[capability]);
+    const stored = await preference.get(VOICE_ENGINE_PREFERENCE[capability]);
     signal.throwIfAborted();
+    const selected = VOICE_ENGINES.find((engine) => engine === stored);
     if (capability === 'dictation' && !selected) return null;
     for (const id of selected ? [selected] : VOICE_ENGINES) {
       const status = (await registry(capability)[id]?.status(signal)) ?? 'unsupported';
@@ -114,11 +105,6 @@ export function createVoiceRuntime({
     if (!effective && capability === 'dictation')
       throw new VoiceError('not-configured', 'Select a dictation engine first.');
     if (effective?.status === 'ready') return registry(capability)[effective.id] as T;
-    if (effective?.status === 'needs-setup')
-      throw new VoiceError(
-        'not-configured',
-        `The ${effective.id} ${capability} engine needs setup.`,
-      );
     throw new VoiceError('unsupported', `No ${capability} engine is available on this device.`);
   }
 
@@ -147,9 +133,6 @@ export function createVoiceRuntime({
       ),
     getEffectiveEngine: (capability, options) =>
       run(options, async (signal) => (await effectiveEngine(capability, signal))?.id ?? null),
-    listProviders: (options) => run(options, listProviders),
-    getSpeechModelOptions: (model, options) =>
-      run(options, (signal) => getSpeechModelOptions(model, signal)),
     listVoices: (engine, options) =>
       run(options, async (signal) => {
         const speech = engines.speech[engine];

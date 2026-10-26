@@ -1,4 +1,3 @@
-import { Section } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -11,7 +10,6 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { DictationLanguageSetting } from './components/DictationLanguageSetting';
 import { SpeechVoiceSetting } from './components/SpeechVoiceSetting';
 import { VoiceEngineSection } from './components/VoiceEngineSection';
-import { VoiceModelSetting } from './components/VoiceModelSetting';
 
 function useEffectiveEngine(capability: VoiceCapability) {
   const voice = useBackendModule('voice');
@@ -24,12 +22,11 @@ function useEffectiveEngine(capability: VoiceCapability) {
   }).data;
 }
 
-/** Keep each engine's controls together; transcription also serves audio attachments. */
+/** Keep the system voice controls beside their corresponding capability. */
 export default function VoiceSettingsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  // Account and model settings live on other routes. Re-read their current voice capabilities
-  // when returning here, including changes that do not alter the saved model reference.
+  // Installed system services and voices can change while the user is in device settings.
   useFocusEffect(
     useCallback(() => {
       void queryClient.invalidateQueries({ queryKey: ['voice'] });
@@ -43,15 +40,8 @@ export default function VoiceSettingsScreen() {
         {dictationEngine === 'system' ? <DictationLanguageSetting /> : null}
       </VoiceEngineSection>
       <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
-        {speechEngine === 'ai' ? <VoiceModelSetting purpose="speech" /> : null}
         {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}
       </VoiceEngineSection>
-      <Section
-        footer={t('settings.voice.model.footer')}
-        title={t('settings.voice.model.transcription')}
-      >
-        <VoiceModelSetting purpose="transcription" />
-      </Section>
     </SettingsScrollPage>
   );
 }

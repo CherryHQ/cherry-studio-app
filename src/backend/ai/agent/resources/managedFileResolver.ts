@@ -69,8 +69,6 @@ export interface ManagedFileResolver {
     file: ManagedFileFact,
     signal: AbortSignal,
   ): Promise<ExtractedDocumentText | undefined>;
-  /** Speech-to-text for audio files; absent when the host has no transcriber. */
-  transcribeAudio?(file: ManagedFileFact, signal: AbortSignal): Promise<string>;
 }
 
 type AvailableFileEntries = {

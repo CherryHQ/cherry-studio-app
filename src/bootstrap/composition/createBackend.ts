@@ -334,9 +334,7 @@ export function createBackend(
       getLocales().map((locale) => locale.languageTag),
     );
   const voice = createVoice({
-    ai: services.ai,
     preference: services.preference,
-    providers: services.provider,
     permissions: services.devicePermissions,
     language: () => appLanguage(services.preference.readCached('app.language')),
     dictationLanguage: () =>

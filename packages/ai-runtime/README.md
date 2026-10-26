@@ -1,7 +1,7 @@
 # AI Runtime
 
-Provider adapters and AI SDK support for Cherry Mobile's image, voice, and model-list paths: provider
-connection facts, per-vendor request and transport shaping, image generation, explicit speech/transcription, model listing, and
+Provider adapters and AI SDK support for Cherry Mobile's image and model-list path: provider
+connection facts, per-vendor request and transport shaping, image generation, model listing, and
 usage capture. Language generation, including single-call text, runs through Pi.
 
 Despite the package name, this is not Cherry Mobile's Agent Runtime. Pi is the sole local
@@ -47,14 +47,3 @@ The `provider` subpath also exposes the account endpoint resolver for OpenAI-com
 models. Model discovery keeps known one-shot TTS/STT families and their input/output modalities;
 unsupported realtime/audio-chat/video routes stay filtered from official OpenAI discovery.
 Application model management owns admission, catalog enrichment and the visible TTS/STT labels.
-
-Voice model adaptation is exported through `provider`. `voiceCapabilities.ts` owns known model
-families, voice catalogs/defaults and request limits; discovery metadata, admission, settings and
-execution consume those same facts. Protocol compatibility does not imply an OpenAI voice catalog.
-Unknown compatible models accept explicit custom voice IDs without an invented default.
-Audio models reuse the existing provider factories (including AiHubMix's headers), the saved API
-model ID, resolved account URL, credential and injected platform fetch. Transcription preserves
-the caller's container type instead of the SDK's byte-sniffed guess. Mobile preboot owns Web
-Blob/File/FormData compatibility; no Expo code belongs here. The backend owns configuration
-snapshots, cancellation, playback and temporary files; see
-[Voice Input And Speech](../../docs/references/voice.md).

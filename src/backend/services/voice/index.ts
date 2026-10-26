@@ -1,1 +1,1 @@
-export { createAudioAttachmentTranscriber, createVoice } from './createVoice';
+export { createVoice } from './createVoice';

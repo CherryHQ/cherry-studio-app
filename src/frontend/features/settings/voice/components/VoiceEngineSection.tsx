@@ -27,12 +27,8 @@ export function VoiceEngineSection({
   const voice = useBackendModule('voice');
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [, setSelected] = usePreference(VOICE_ENGINE_PREFERENCE[capability]);
-  // The AI engine is ready once its model is set, so its status follows that preference.
-  const [model] = usePreference(
-    capability === 'dictation' ? 'feature.voice.transcription_model' : 'feature.voice.speech_model',
-  );
   const statuses = useQuery({
-    queryKey: ['voice', 'engine-status', capability, model],
+    queryKey: ['voice', 'engine-status', capability],
     queryFn: async ({ signal }) =>
       Object.fromEntries(
         await Promise.all(
@@ -47,7 +43,6 @@ export function VoiceEngineSection({
   const describe = (engine: VoiceEngineId) => {
     const status = statuses.data?.[engine];
     if (status === 'unsupported') return t(`settings.voice.${capability}.systemUnavailable`);
-    if (status === 'needs-setup') return t('settings.voice.needsModel');
     return t(`settings.voice.engine.${engine}Description`);
   };
   const select = (engine: VoiceEngineId | null) => {
