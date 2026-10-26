@@ -22,6 +22,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   host_error: 'internal',
   insufficient_credit: 'quota',
   insufficient_quota: 'quota',
+  insufficient_user_quota: 'quota',
   invalid_api_key: 'auth',
   invalid_json: 'parse',
   image_too_large: 'payload_too_large',

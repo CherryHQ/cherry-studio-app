@@ -251,6 +251,7 @@ describe('Pi durable request diagnostics', () => {
     { code: 'no_response', retryable: true, category: 'network' },
     { code: 'stream_idle_timeout', retryable: true, category: 'timeout' },
     { code: 'insufficient_quota', status: 429, retryable: false, category: 'quota' },
+    { code: 'insufficient_user_quota', status: 403, retryable: false, category: 'quota' },
     { code: 'rate_limit_exceeded', status: 429, retryable: true, category: 'rate_limit' },
     { code: 'runtime_error', status: 402, retryable: false, category: 'quota' },
     { code: 'runtime_error', status: 401, retryable: false, category: 'auth' },
