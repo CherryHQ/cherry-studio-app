@@ -6,7 +6,7 @@ export const CATALOG_ONLY_PROVIDER_ICONS = {
   'radeon-cloud': {
     provenance: {
       decodedRasterSha256: '535ddfbb99c5d3f8c47daf2d13344527c83b6dc61de510af82c31f99c1041364',
-      desktopCommit: '9320c74569bc3cc536d94220ab597d8de0298d0c',
+      desktopCommit: '68fb97a89f38f39f5424029333a15f2df8a5a657',
       desktopSourcePath: 'packages/ui/src/components/icons/providers/radeon-cloud/light.tsx',
       desktopSourceSha256: '26951c96bec97816b89d9175274b2438f4524925c690f88103f2602ea6d27249',
     },

@@ -1,9 +1,10 @@
 /**
- * Generated from desktop icon routing at commit 9320c74569bc3cc536d94220ab597d8de0298d0c.
+ * Generated from desktop icon routing at commit 68fb97a89f38f39f5424029333a15f2df8a5a657.
  * Do not edit directly. Run `pnpm design:sync --desktop-root <path>`.
  */
 
 export const MODEL_ICON_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/gpt-6-astra/i, 'gpt-6-astra'],
   // GPT 5.6 series (most specific first; APIs use both `5.6` and `5-6`)
   [/gpt-5[.-]6-luna/i, 'gpt-5-6-luna'],
   [/gpt-5[.-]6-sol/i, 'gpt-5-6-sol'],
@@ -287,5 +288,6 @@ export const PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = {
   dashscope: 'bailian',
   zai: 'z-ai',
   'minimax-global': 'minimax',
+  'moonshot-global': 'moonshot',
   cherryai: 'cherryin'
 };

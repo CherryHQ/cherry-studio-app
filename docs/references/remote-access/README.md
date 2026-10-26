@@ -66,8 +66,8 @@ native module ownership and the network-independent pairing migration.
 
 - `@cherrystudio/remote-protocol@0.7.0` comes from npm. Its published exports include the Agent,
   configuration, failure, connection, and v2/v3 pairing QR contracts; Mobile owns only its consumers and adapters.
-- `@cherrystudio/remote-transport@0.2.4` comes from npm and retains its own compatible protocol
-  dependency. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
+- `@cherrystudio/remote-transport@0.2.5` comes from npm and depends on the matching protocol
+  version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
   along with the service registry. Metro applies the libp2p legacy browser maps so native bundles
   use the pure-JS entries. Android pairing and configuration sync were verified against the former
   source-direct packages on 2026-09-22; the published artifacts, iOS interoperability, and Agent

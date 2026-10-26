@@ -78,6 +78,10 @@ attempt. The phone authenticates its existing device ID first: valid authorizati
 binding and automatically syncs addresses without claiming a new invitation. Only an explicit
 `UNAUTHENTICATED` response requests pairing again; network failures leave the binding intact.
 
+Version 2 invitations retain their IP list and shared port. Version 3 invitations carry full direct
+endpoints, so domain names, IPv6, custom ports and `wss` survive both pairing and subsequent location
+hints. These QR hints remain temporary; only authenticated address synchronization persists routes.
+
 Initial or renewed pairing shows the desktop verification code and waits for approval before saving.
 `DesktopSession` adopts authorization from the approved pairing response, so address synchronization
 uses the already authenticated channel without a second authentication or connection.

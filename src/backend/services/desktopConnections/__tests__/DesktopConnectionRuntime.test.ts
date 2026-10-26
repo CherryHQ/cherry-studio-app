@@ -350,6 +350,41 @@ describe('DesktopConnectionRuntime', () => {
     expect(session.isOpen).toBe(false);
   });
 
+  it('reconnects through ordered v3 endpoints and retains their security and ports', async () => {
+    const endpoints = [
+      { host: 'desktop.example.com', port: 443, security: 'wss' as const },
+      { host: '2001:db8::2', port: 24444, security: 'ws' as const },
+    ];
+    const session = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('Route unavailable'));
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair({ ...pairing, v: 3, endpoints }, signal())).resolves.toEqual(
+      connection,
+    );
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'wss://desktop.example.com:443/v1/remote/connect',
+      'ws://[2001:db8::2]:24444/v1/remote/connect',
+    ]);
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopIdentity: pairing.desktopIdentity }),
+    );
+
+    // QR routes remain temporary hints, but are usable by the next authorized connection.
+    const reconnect = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    connect.mockResolvedValueOnce(reconnect as never);
+    const lease = await manager.retain(id, 'configuration', signal());
+    await lease.ready(signal());
+    expect(jest.mocked(openWebSocketStream).mock.calls.at(-1)?.[0]).toBe(
+      'wss://desktop.example.com:443/v1/remote/connect',
+    );
+    expect((await store.getRow()).learnedEndpoints).toEqual([]);
+    lease.release();
+  });
+
   it('verifies exactly the selected address before saving, without exporting provider credentials', async () => {
     const endpoint = { host: '100.64.0.2', port: 24444, security: 'ws' as const };
     const session = createSession({

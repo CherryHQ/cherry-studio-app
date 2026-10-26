@@ -19,6 +19,20 @@ test('accepts complete desktop QR content with pasted whitespace', () => {
   expect(parseDesktopPairingCode(`\n ${JSON.stringify(invitation)} \n`)).toEqual(invitation);
 });
 
+test('accepts v3 pairing codes with a secure domain and a custom port', () => {
+  const code = {
+    t: invitation.t,
+    name: invitation.name,
+    desktopIdentity: invitation.desktopIdentity,
+    invitationId: invitation.invitationId,
+    invitationSecret: invitation.invitationSecret,
+    protocolVersions: invitation.protocolVersions,
+    v: 3,
+    endpoints: [{ host: 'desktop.example.com', port: 24444, security: 'wss' }],
+  };
+  expect(parseDesktopPairingCode(JSON.stringify(code))).toEqual(code);
+});
+
 test.each(['', '123456', 'not-json', 'null', '[]'])('rejects non-invitation input: %s', (value) => {
   expect(parseDesktopPairingCode(value)).toBeUndefined();
 });

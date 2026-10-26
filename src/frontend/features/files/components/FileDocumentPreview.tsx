@@ -81,7 +81,7 @@ export function FileDocumentPreview({
   const renderMessage: HostMessage = {
     type: 'render',
     captureSelection: Boolean(onSelection),
-    source: { id: entryId, name: filename, mediaType },
+    source: { id: entryId, name: filename, mediaType, revision: updatedAt },
     locale: i18n.language,
     isDark: theme === 'dark',
     style: {

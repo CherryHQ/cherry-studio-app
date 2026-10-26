@@ -52,6 +52,7 @@ const MOBILE_REMOTE_CAPABILITIES: Record<
   searxng: ['searchKeywords'],
   exa: ['searchKeywords'],
   'exa-mcp': ['searchKeywords', 'fetchUrls'],
+  yuanbao: ['searchKeywords'],
   bocha: ['searchKeywords'],
   querit: ['searchKeywords', 'fetchUrls'],
   deepseek: ['searchKeywords', 'fetchUrls'],
