@@ -109,6 +109,82 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  test.each(['provider_response_failure', 'pi_messages_response_failure'])(
+    'preserves the terminal %s facts in the displayed failure',
+    (type) => {
+      const response = {
+        message: '预扣费额度失败, 用户剩余额度: $1.032202, 需要预扣费额度: $1.299970',
+        code: 'insufficient_user_quota',
+        request_id: 'req-quota',
+      };
+      const responseBody = JSON.stringify(response);
+      const terminal: AssistantMessage = {
+        ...call('', 2000),
+        provider: 'cherryin',
+        model: 'openai/gpt-test',
+        content: [],
+        stopReason: 'error',
+        errorMessage: `cherryin API error (403): ${responseBody}`,
+        diagnostics: [
+          {
+            type: 'provider_response_failure',
+            timestamp: 1,
+            error: { name: 'EarlierError', code: 'server_error', message: 'Earlier failure' },
+            details: { status: 503, body: 'Earlier response', retryable: true },
+          },
+          {
+            type,
+            timestamp: 2,
+            error: { name: 'APIError', code: response.code, message: response.message },
+            details:
+              type === 'provider_response_failure'
+                ? { status: 403, body: responseBody, retryable: false }
+                : { statusCode: 403, body: response, retryable: false },
+          },
+          {
+            type: 'transport_fallback',
+            timestamp: 3,
+            error: { name: 'TransportError', message: 'Recovered transport failure' },
+          },
+        ],
+      };
+      const turn = projectPiTurn({
+        lane: { sessionId: 'session', slot: 0 },
+        metadata,
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          reason: 'model_error',
+          entry: 1,
+        } as unknown as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+        ] as unknown as EntryRecord[],
+      });
+
+      expect(turn.status).toBe('failed');
+      expect(toAgentErrorView(turn.error!)).toEqual({
+        code: 'EXECUTION_FAILED',
+        message: terminal.errorMessage,
+        // Manual retry stays available after the account limit is resolved.
+        retryable: true,
+        failure: {
+          version: 1,
+          reasonCode: 'quota',
+          source: { layer: 'provider', code: 'insufficient_user_quota', name: 'APIError' },
+          context: {
+            providerId: 'cherryin',
+            modelId: 'openai/gpt-test',
+            statusCode: 403,
+            finishReason: 'error',
+            responseBody,
+          },
+        },
+      });
+    },
+  );
+
   test.each([
     { api: 'cherry-image', statusCode: 403, retryable: false },
     { api: 'cherry-image', statusCode: 503, retryable: true },
