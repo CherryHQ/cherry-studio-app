@@ -38,8 +38,9 @@ module, `onLayout` supplies host dimensions at origin zero and the safe-area con
 insets. Neither path uses `measureInWindow`.
 
 `useIsFoldRegionLayoutCurrent` compares the snapshot's window dimensions with the current window.
-Until they agree, the pane stays transparent and availability changes cannot carry or return a
-preview using the previous screen's fold. This freshness check does not interpolate the split.
+Until they agree, the pane keeps whatever the last current snapshot showed: it cannot appear using
+the previous screen's geometry, a pane already on screen does not uncover the chat, and availability
+changes do not carry or return a preview. This freshness check does not interpolate the split.
 
 `PaneChromeProvider` marks a page rendered in a side pane rather than its own native-stack screen.
 Headers and bottom toolbars inside it render inline, and the provider supplies the pane's exit as

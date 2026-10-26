@@ -9,15 +9,23 @@ import {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-/** Only keyboard yielding fades. Space returns after the pane covers the full-height chat. */
+/**
+ * Only keyboard yielding fades. Space returns after the pane covers the full-height chat. A stale
+ * snapshot keeps whatever the last current one showed: a pane cannot appear from the previous
+ * screen's geometry, and a pane already on screen does not uncover the chat while a display
+ * switch settles.
+ */
 export function useFilePaneTransition(
-  isPresented: boolean,
+  isRequested: boolean,
   isYielding: boolean,
   isStacked: boolean,
   isLayoutCurrent: boolean,
 ) {
   const isReducedMotion = useReducedMotion();
-  const isVisible = isPresented && !isYielding && isLayoutCurrent;
+  const [settled, setSettled] = useState(isRequested);
+  if (isLayoutCurrent && settled !== isRequested) setSettled(isRequested);
+  const isPresented = isLayoutCurrent ? isRequested : settled;
+  const isVisible = isPresented && !isYielding;
   const opacity = useSharedValue(isVisible ? 1 : 0);
   const [transition, setTransition] = useState({
     isPresented,
@@ -88,6 +96,5 @@ export function useFilePaneTransition(
     // Open/close and availability changes are immediate even before the effect updates opacity.
     opacity: isAnimated ? opacity.get() : isVisible ? 1 : 0,
   }));
-  // A stale snapshot hides the pane without making a second, speculative chat layout.
   return { hasSpace: isPresented && !isYielding && !transition.isRestoring, isVisible, style };
 }

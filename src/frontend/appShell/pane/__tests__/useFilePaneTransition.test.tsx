@@ -141,9 +141,18 @@ it('finishes an in-flight restore immediately when motion is reduced', () => {
   expect(result).toMatchObject({ hasSpace: true, isVisible: true, style: { opacity: 1 } });
 });
 
-it('hides a stale pane without reflowing chat, and reveals a current snapshot immediately', () => {
-  update({ isLayoutCurrent: false });
-  expect(result).toMatchObject({ hasSpace: true, isVisible: false, style: { opacity: 0 } });
+it('keeps a shown pane over the chat while a snapshot is stale', () => {
+  update({ isLayoutCurrent: false, isPresented: false });
+  expect(result).toMatchObject({ hasSpace: true, isVisible: true, style: { opacity: 1 } });
+  update({ isLayoutCurrent: true });
+  expect(result).toMatchObject({ hasSpace: false, isVisible: false, style: { opacity: 0 } });
+  expect(mockWithTiming).not.toHaveBeenCalled();
+});
+
+it('does not reveal a pane from a stale snapshot', () => {
+  update({ isPresented: false });
+  update({ isLayoutCurrent: false, isPresented: true });
+  expect(result).toMatchObject({ hasSpace: false, isVisible: false, style: { opacity: 0 } });
   update({ isLayoutCurrent: true });
   expect(result).toMatchObject({ hasSpace: true, isVisible: true, style: { opacity: 1 } });
   expect(mockWithTiming).not.toHaveBeenCalled();

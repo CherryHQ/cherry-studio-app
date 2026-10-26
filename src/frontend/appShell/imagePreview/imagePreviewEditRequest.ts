@@ -12,7 +12,6 @@ type ImagePreviewEditRequest = {
   currentFileEntryId: FileEntryId;
   controller: AbortController;
   replace: ReplacePreviewImage;
-  viewerCount: number;
   timer?: ReturnType<typeof setTimeout>;
 };
 
@@ -29,7 +28,6 @@ export function createImagePreviewEditRequest(
     currentFileEntryId: fileEntryId,
     controller: new AbortController(),
     replace,
-    viewerCount: 0,
   };
   requests.set(request.id, request);
   // Release a request whose navigation never mounted a viewer.
@@ -48,7 +46,6 @@ export function getImagePreviewEditRequest(
 export function claimImagePreviewEditRequest(id: string) {
   const request = requests.get(id);
   if (request) {
-    request.viewerCount += 1;
     clearTimeout(request.timer);
     request.timer = undefined;
   }
@@ -71,12 +68,10 @@ export function finishImagePreviewEditRequest(id: string) {
   request.controller.abort();
 }
 
-/** Release one viewer; a retained pane or strict-effect remount keeps the request alive. */
+/** A strict-effect remount can reclaim the request before its deferred disposal. */
 export function scheduleImagePreviewEditFinish(id: string) {
   const request = requests.get(id);
   if (!request) return;
-  request.viewerCount = Math.max(0, request.viewerCount - 1);
-  if (request.viewerCount > 0) return;
   clearTimeout(request.timer);
   request.timer = setTimeout(() => finishImagePreviewEditRequest(id), 0);
 }

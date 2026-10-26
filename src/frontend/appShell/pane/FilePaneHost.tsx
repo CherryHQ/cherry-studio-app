@@ -30,7 +30,11 @@ export function FilePaneHost({ children, ...content }: FilePaneContent & { child
   const isTypingInChat = useIsTypingBelow(chatTop);
   // An expanded preview covers the chat; only assistive technologies need to be told.
   const isChatCovered = Boolean(
-    isLayoutCurrent && pane?.isAvailable && pane.isOpen && pane.file && pane.isExpanded,
+    isLayoutCurrent &&
+    (pane?.isAvailable || pane?.isCarried) &&
+    pane.isOpen &&
+    pane.file &&
+    pane.isExpanded,
   );
 
   return (
@@ -102,7 +106,12 @@ function FilePaneColumn({
     hasSpace,
     isVisible,
     style: transitionStyle,
-  } = useFilePaneTransition(pane.isAvailable && pane.isOpen, isYielding, !isRow, isLayoutCurrent);
+  } = useFilePaneTransition(
+    (pane.isAvailable && pane.isOpen) || pane.isCarried,
+    isYielding,
+    !isRow,
+    isLayoutCurrent,
+  );
   const [isMounted, setIsMounted] = useState(isVisible);
   if (isVisible && !isMounted) setIsMounted(true);
 
@@ -169,7 +178,8 @@ function FilePaneColumn({
   // the chat, including any fold between them.
   return (
     <>
-      {hasSpace ? (
+      {/* A carried preview covers the chat, which keeps the full width of the narrow window. */}
+      {hasSpace && !pane.isCarried ? (
         <View style={isRow ? { width: split.chatOffset } : { height: split.chatOffset }} />
       ) : null}
       <Animated.View

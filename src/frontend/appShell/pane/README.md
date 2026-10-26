@@ -22,6 +22,8 @@ and every file preview open in a pane beside the current chat instead of coverin
   preview or closing the pane always returns the chat beside it. Android back first returns an
   expanded preview, then leaves the preview, then the pane.
 - `useFilePane` lets openers choose the pane. `useOpenFileEntry` is the only file opener that does.
+  Callers outside the routes import it from `@/frontend/appShell/pane/state`, which leaves out the
+  host and its Reanimated dependency.
 
 ## Fold transitions
 
@@ -30,7 +32,7 @@ follow hinge angles. These transitions use the [motion contract](../../../../DES
 
 | Transition and purpose | Trigger and owner | Interruption | Reduced motion |
 | --- | --- | --- | --- |
-| Inner/outer display: keep the current content available | The system switches displays; the shell applies the latest complete snapshot without navigation or split animation | A newer snapshot replaces the old one; stale panes remain transparent | Unchanged; no custom animation |
+| Inner/outer display: keep the current content available | The system switches displays; the shell applies the latest complete snapshot without navigation or split animation | A newer snapshot replaces the old one; a stale snapshot keeps the pane as the last current one showed it | Unchanged; no custom animation |
 | Rotation: fit the pane and chat to the new window | The system rotates; the shell commits a row or column split | The latest snapshot wins | Unchanged |
 | Flat/partly folded: meet the reserved division region | The shell changes the split once when the active fold changes | Reversal commits the new split immediately | Unchanged |
 | Keyboard yielding: replace the upper pane with chat content | In a stacked split, typing below the fold removes the spacer immediately and fades the pane out with `duration.fast` (200 ms) and `easing.settle`; the pane owns opacity | Reverse from the current opacity; stale completion callbacks cannot restore space | Set final opacity and space immediately |
@@ -41,20 +43,17 @@ The chat's return below the fold is covered by the pane. Yielding disables point
 Closing, availability changes, rotation, and stale snapshots cancel fades and settle immediately.
 The pane remains mounted and laid out while hidden.
 
-When a current layout changes availability from true to false, an open preview is carried to
-`/files/[fileEntryId]` only if the last touch was in the pane. Touches are recorded in a ref, including
-document scrolling; they do not rerender the provider. The route retains `imageEditRequestId` and
-the source chat and carries `carriedFromPane=1`. Both entry and return use no navigation animation.
-The opaque viewer uses `transparentModal` presentation to keep the drawer and its native observer
-attached underneath; otherwise reopening the inner display cannot refresh the hidden host snapshot.
-A user's Expand reading action also selects the file pane.
-A list-only pane, a closed pane, a remote source, or a last touch in chat stays in chat.
+When a current layout changes availability from true to false, an open preview stays on screen
+only if the last touch was in the pane: the provider marks it carried and expands it over the chat,
+which keeps the narrow window's full width underneath. Nothing navigates, so the preview keeps its
+mounted viewer and reading position, and the outer display never shows the chat first. Touches are
+recorded per region, including document scrolling, without publishing a new pane state. A user's
+Expand reading action also selects the file pane. A list-only pane, a closed pane, a remote source,
+or a last touch in chat stays in chat.
 
-When the pane becomes available again, the provider returns only from the same carried route at
-the owning root stack's top (not the router's outer container). Leaving that page cancels automatic return, including a later revisit to the
-same file. The pane's preview is never cleared or reopened. A pending push that outlives a rapid
-resize reversal returns as soon as its route appears. Concurrent pane and page image viewers keep
-their shared edit request alive until both have released it.
+While carried, Back, Back to chat, and Android back all return to the chat without clearing the
+file. When the pane becomes available again, a still-carried preview returns beside the chat with
+the expanded state it had before narrowing.
 
 The message list owns reading continuity. Width changes restore its last observed message and
 row offset through the existing anchor mechanism; height-only keyboard changes keep the existing

@@ -6,11 +6,6 @@ import { FilePaneProvider, useFilePane } from '../FilePaneProvider';
 let mockWindowClass = 'expanded';
 let mockSource = 'local';
 let mockIsLayoutCurrent = true;
-const mockPush = jest.fn();
-const mockBack = jest.fn();
-const mockRouter = { push: mockPush, back: mockBack };
-let mockTop = { key: 'drawer', name: '(drawer)', params: {} as Record<string, string> };
-const mockChatParams = { sessionId: '00000000-0000-7000-8000-000000000002' };
 let mockFold: { x: number; y: number; width: number; height: number; isActive: boolean } | null =
   null;
 
@@ -23,14 +18,6 @@ jest.mock('@/frontend/appShell/layout', () => ({
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   ...jest.requireActual('@/frontend/appShell/navigation/chat/chatRoute'),
   useChatSource: () => ({ source: mockSource }),
-}));
-jest.mock('expo-router', () => ({
-  useRouter: () => mockRouter,
-  useGlobalSearchParams: () => mockChatParams,
-}));
-jest.mock('expo-router/react-navigation', () => ({
-  useNavigationState: (select: (state: { index: number; routes: (typeof mockTop)[] }) => unknown) =>
-    select({ index: 1, routes: [{ key: 'previous', name: 'onboarding', params: {} }, mockTop] }),
 }));
 
 let pane: ReturnType<typeof useFilePane>;
@@ -73,15 +60,6 @@ function expand() {
   update();
 }
 
-function showCarriedPage() {
-  mockTop = {
-    key: 'carried',
-    name: 'files/[fileEntryId]',
-    params: mockPush.mock.lastCall![0].params,
-  };
-  update();
-}
-
 const file = { entryId: '00000000-0000-7000-8000-000000000001' as never };
 
 beforeEach(() => {
@@ -89,8 +67,6 @@ beforeEach(() => {
   mockSource = 'local';
   mockIsLayoutCurrent = true;
   mockFold = null;
-  mockTop = { key: 'drawer', name: '(drawer)', params: {} };
-  jest.clearAllMocks();
 });
 afterEach(() => act(() => renderer.unmount()));
 
@@ -121,31 +97,41 @@ it.each([
   expect(pane!.isAvailable).toBe(isAvailable);
 });
 
-it('carries the touched preview without clearing pane state and returns only that page', () => {
+it('keeps the touched preview expanded over the chat while narrow and returns it beside the chat', () => {
   render();
-  const editable = { ...file, imageEditRequestId: 'edit-request' };
-  act(() => pane!.openFile(editable));
+  act(() => pane!.openFile(file));
   act(() => pane!.recordTouch('pane'));
   narrow();
-  expect(mockPush).toHaveBeenCalledWith({
-    pathname: '/files/[fileEntryId]',
-    params: {
-      fileEntryId: file.entryId,
-      imageEditRequestId: 'edit-request',
-      carriedFromPane: '1',
-      sourceChat: JSON.stringify(mockChatParams),
-    },
-  });
-  showCarriedPage();
-  expect(pane).toMatchObject({ file: editable, isOpen: true, isAvailable: false });
+  expect(pane).toMatchObject({ file, isAvailable: false, isCarried: true, isExpanded: true });
   expand();
-  expect(mockBack).toHaveBeenCalledTimes(1);
-  expect(pane).toMatchObject({ file: editable, isOpen: true, isAvailable: true });
-  update();
-  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(pane).toMatchObject({ file, isAvailable: true, isCarried: false, isExpanded: false });
 });
 
-it('waits for a current snapshot before deciding whether a narrow window needs a carried page', () => {
+it('restores an expanded preview as expanded when the window widens again', () => {
+  render();
+  act(() => pane!.openFile(file));
+  act(() => pane!.setExpanded(true));
+  narrow();
+  expect(pane).toMatchObject({ isCarried: true, isExpanded: true });
+  expand();
+  expect(pane).toMatchObject({ isCarried: false, isExpanded: true });
+});
+
+it.each(['setExpanded', 'closeFile'] as const)(
+  'returns to the chat with %s and keeps the file for the wider window',
+  (exit) => {
+    render();
+    act(() => pane!.openFile(file));
+    act(() => pane!.recordTouch('pane'));
+    narrow();
+    act(() => (exit === 'setExpanded' ? pane!.setExpanded(false) : pane!.closeFile()));
+    expect(pane).toMatchObject({ file, isCarried: false, isExpanded: false, isOpen: true });
+    expand();
+    expect(pane).toMatchObject({ file, isCarried: false, isExpanded: false, isOpen: true });
+  },
+);
+
+it('waits for a current snapshot before deciding whether a narrow window carries the preview', () => {
   render();
   act(() => {
     pane!.openFile(file);
@@ -153,27 +139,26 @@ it('waits for a current snapshot before deciding whether a narrow window needs a
   });
   mockIsLayoutCurrent = false;
   narrow();
-  expect(mockPush).not.toHaveBeenCalled();
+  expect(pane!.isCarried).toBe(false);
 
   // Portrait rotation still has room for a stacked pane when its fold arrives.
   mockFold = { x: 0, y: 455, width: 669, height: 40, isActive: true };
   mockIsLayoutCurrent = true;
   update();
-  expect(mockPush).not.toHaveBeenCalled();
+  expect(pane!.isCarried).toBe(false);
 
   mockFold = null;
   update();
-  expect(mockPush).toHaveBeenCalledTimes(1);
-  showCarriedPage();
+  expect(pane!.isCarried).toBe(true);
   mockIsLayoutCurrent = false;
   expand();
-  expect(mockBack).not.toHaveBeenCalled();
+  expect(pane!.isCarried).toBe(true);
   mockIsLayoutCurrent = true;
   update();
-  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(pane).toMatchObject({ isCarried: false, isExpanded: false });
 });
 
-it.each(['chat', 'list', 'closed', 'remote', 'covered'] as const)(
+it.each(['chat', 'list', 'closed', 'remote'] as const)(
   'does not carry a preview when the active state is %s',
   (state) => {
     render();
@@ -185,11 +170,8 @@ it.each(['chat', 'list', 'closed', 'remote', 'covered'] as const)(
       if (state === 'closed') pane!.close();
     });
     if (state === 'remote') mockSource = 'remote';
-    if (state === 'covered') mockTop = { key: 'settings', name: 'settings', params: {} };
     narrow();
-    expand();
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(mockBack).not.toHaveBeenCalled();
+    expect(pane!.isCarried).toBe(false);
   },
 );
 
@@ -198,37 +180,7 @@ it('counts expanded reading as the active file pane', () => {
   act(() => pane!.openFile(file));
   act(() => pane!.setExpanded(true));
   narrow();
-  expect(mockPush).toHaveBeenCalledTimes(1);
-});
-
-it('does not dismiss a different page or revive carry after the user has left it', () => {
-  render();
-  act(() => {
-    pane!.openFile(file);
-    pane!.recordTouch('pane');
-  });
-  narrow();
-  showCarriedPage();
-  const carriedPage = mockTop;
-  mockTop = { key: 'settings', name: 'settings', params: {} };
-  update();
-  mockTop = carriedPage;
-  update();
-  expand();
-  expect(mockBack).not.toHaveBeenCalled();
-});
-
-it('handles expanding before the carried page has finished being pushed', () => {
-  render();
-  act(() => {
-    pane!.openFile(file);
-    pane!.recordTouch('pane');
-  });
-  narrow();
-  expand();
-  expect(mockBack).not.toHaveBeenCalled();
-  showCarriedPage();
-  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(pane!.isCarried).toBe(true);
 });
 
 it('records touches without publishing another pane state', () => {

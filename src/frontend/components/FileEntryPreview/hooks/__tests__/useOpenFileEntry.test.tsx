@@ -14,7 +14,7 @@ let mockPathname = '/files';
 let mockParams: Record<string, string> = {};
 let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
 
-jest.mock('@/frontend/appShell/pane', () => ({ useFilePane: () => mockPane }));
+jest.mock('@/frontend/appShell/pane/state', () => ({ useFilePane: () => mockPane }));
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
