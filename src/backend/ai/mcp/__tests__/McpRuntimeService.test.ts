@@ -1137,6 +1137,63 @@ describe('catalog reuse', () => {
     expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).tools).toHaveLength(1);
   });
 
+  it.each([false, undefined])(
+    'refuses a cached read when the live catalog changes readOnlyHint to %s',
+    async (readOnlyHint) => {
+      const tools = makeRawTools(['search']).map((tool) => ({
+        ...tool,
+        annotations: { readOnlyHint: true },
+      }));
+      mockCreateMCPClient.mockResolvedValue(makeClient(tools));
+      const server = makeServer();
+      const { service: previousLaunch } = makeService([server]);
+      await previousLaunch.listExecutableToolDescriptors(server.id);
+      await previousLaunch._doStop();
+
+      const live = makeClient(
+        tools.map((tool) => ({
+          ...tool,
+          annotations: { readOnlyHint, idempotentHint: true },
+        })),
+      );
+      mockCreateMCPClient.mockResolvedValue(live);
+      const { service } = makeService([server]);
+      try {
+        const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+        expect(descriptor!.readOnlyHint).toBe(true);
+        await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+          code: 'mcp_tool_unavailable',
+        });
+        expect(live.callTool).not.toHaveBeenCalled();
+      } finally {
+        await service._doStop();
+      }
+    },
+  );
+
+  it('refuses a frozen read after its connected catalog revokes the read-only annotation', async () => {
+    const client = makeClient(
+      makeRawTools(['search']).map((tool) => ({
+        ...tool,
+        annotations: { readOnlyHint: true },
+      })),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    try {
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+      client.listTools.mockResolvedValue({ tools: makeRawTools(['search']) });
+      await service.listTools(server.id);
+      await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+        code: 'mcp_tool_unavailable',
+      });
+      expect(client.callTool).not.toHaveBeenCalled();
+    } finally {
+      await service._doStop();
+    }
+  });
+
   it('keeps a frozen tool callable after a transport reconnect for the same configuration', async () => {
     const stale = makeClient(makeRawTools(['search']));
     stale.callTool.mockRejectedValue(
@@ -1217,27 +1274,34 @@ describe('catalog reuse', () => {
   });
 
   it.each([
-    ['an undeclared tool', {}, { code: 'mcp_tool_outcome_unknown', retryable: false }],
+    ['an undeclared tool', {}, { code: 'mcp_tool_outcome_unknown', retryable: false }, undefined],
     [
       'a read-only tool',
       { annotations: { readOnlyHint: true } },
       { code: 'mcp_tool_call_failed', retryable: true },
+      true,
     ],
     [
       'an idempotent tool',
       { annotations: { idempotentHint: true } },
       { code: 'mcp_tool_call_failed', retryable: true },
+      undefined,
     ],
-  ])('classifies a transport failure after sending %s', async (_label, annotations, expected) => {
-    const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
-    client.callTool.mockRejectedValue(new Error('socket closed'));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const server = makeServer();
-    const { service } = makeService([server]);
-    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+  ])(
+    'classifies a transport failure after sending %s',
+    async (_label, annotations, expected, readOnlyHint) => {
+      const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
+      client.callTool.mockRejectedValue(new Error('socket closed'));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server = makeServer();
+      const { service } = makeService([server]);
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
 
-    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
-  });
+      // Idempotence makes a retry harmless but still allows a change, so it is no read.
+      expect(descriptor!.readOnlyHint).toBe(readOnlyHint);
+      await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
+    },
+  );
 
   it('reports a call that never left the device as a plain retryable failure', async () => {
     const client = makeClient(makeRawTools(['search']));

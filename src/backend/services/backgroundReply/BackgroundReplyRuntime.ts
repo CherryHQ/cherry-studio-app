@@ -141,12 +141,8 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     record.responding = true;
     try {
       const applied = await respondBackgroundReplyInteraction(record.interaction, response);
-      if (applied && this.isRecordCurrent(record) && record.actions?.token === response.token) {
-        record.interaction = undefined;
-        record.actions = undefined;
-        this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
-        record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
-      }
+      if (applied && this.isRecordCurrent(record) && record.actions?.token === response.token)
+        this.setInteraction(record, undefined);
       return applied;
     } finally {
       record.responding = false;
@@ -233,23 +229,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     return {
       setInteraction: (interaction) => {
         if (!this.isCurrent(record.key, generation)) return;
-        const key = interaction
-          ? JSON.stringify([
-              interaction.kind,
-              interaction.id,
-              interaction.kind === 'question' ? interaction.question : interaction.title,
-            ])
-          : undefined;
-        record.interaction = interaction;
-        if (key === record.interactionKey) return;
-        record.interactionKey = key;
-        record.actions = interaction
-          ? createBackgroundReplyActions(interaction, this.environment.translate)
-          : undefined;
-        if (!interaction) this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
-        record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
-        if (record.actions && record.content.attentionId === interaction?.id)
-          this.deliverAttention(record, false);
+        this.setInteraction(record, interaction);
       },
       updateContent: (content) =>
         this.runTurnCallback(record.key, 'update remote turn', () => {
@@ -371,6 +351,32 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
 
     this.clearUpdateTimer(record);
     this.refreshContent(record);
+  }
+
+  private setInteraction(
+    record: TurnRecord,
+    interaction: BackgroundReplyInteraction | undefined,
+  ): void {
+    const key = interaction
+      ? JSON.stringify([
+          interaction.kind,
+          interaction.id,
+          interaction.kind === 'question' ? interaction.question : interaction.title,
+        ])
+      : undefined;
+    record.interaction = interaction;
+    if (key === record.interactionKey) return;
+    record.interactionKey = key;
+    record.actions = interaction
+      ? createBackgroundReplyActions(interaction, this.environment.translate)
+      : undefined;
+    if (!interaction) this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
+    // A different answer may have owned the decision. Restore the local reply's latest content
+    // now, without waiting for its owner to stream another update. Remote sources supply content.
+    if (!interaction && record.latestMessage) this.refreshContent(record);
+    else record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
+    if (record.actions && record.content.attentionId === interaction?.id)
+      this.deliverAttention(record, false);
   }
 
   private refreshContent(record: TurnRecord): void {

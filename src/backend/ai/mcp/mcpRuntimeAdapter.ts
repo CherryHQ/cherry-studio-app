@@ -42,6 +42,8 @@ export type McpExecutableToolDescriptor = {
    * Absent: the remote server declared nothing, so the outcome is unknown.
    */
   effect?: 'read' | 'write';
+  /** A remote server's read-only annotation, the only remote hint parallel answers rely on. */
+  readOnlyHint?: true;
   /**
    * The endpoint this catalog was discovered against. Execution is pinned to
    * it: editing the server row must fail the frozen tool as unavailable, never
@@ -73,6 +75,12 @@ export type McpInvocationProgress = {
   waiting(active: boolean): void;
 };
 
+/** Frozen connection identity and tool constraint rechecked immediately before sending a call. */
+export type McpToolInvocationSnapshot = Pick<
+  McpExecutableToolDescriptor,
+  'endpointUrl' | 'generation' | 'readOnlyHint'
+>;
+
 export type McpToolInvocationCapability = {
   traces?: TraceRecorder;
   storeResult?(
@@ -90,8 +98,7 @@ export type McpToolInvocationCapability = {
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
-    discoveredEndpointUrl: string | null,
-    discoveredGeneration: number,
+    discovered: McpToolInvocationSnapshot,
     progress: McpInvocationProgress,
   ): Promise<unknown>;
 };
@@ -221,8 +228,14 @@ export function createMcpRuntimeTools(
 
     const { inputSchema, inputValidator } = compileMcpInputSchema(descriptor.inputSchema);
     const effect = descriptor.effect;
-    const endpointUrl = descriptor.endpointUrl;
-    const generation = descriptor.generation;
+    // A bundled plugin's policy declares reads and writes. A remote server can only hint a
+    // read, which lets parallel answers run the tool under the Agent's own approval mode.
+    const toolEffect = descriptor.pluginId ? effect : descriptor.readOnlyHint && 'read';
+    const discovered: McpToolInvocationSnapshot = {
+      endpointUrl: descriptor.endpointUrl,
+      generation: descriptor.generation,
+      ...(descriptor.readOnlyHint ? { readOnlyHint: true } : {}),
+    };
 
     return {
       approval,
@@ -236,8 +249,7 @@ export function createMcpRuntimeTools(
           connectionKey: descriptor.connectionKey,
           pluginId: descriptor.pluginId,
           effect,
-          endpointUrl,
-          generation,
+          discovered,
           inputValidator,
           invoke,
           storeResult: capability.storeResult,
@@ -247,8 +259,7 @@ export function createMcpRuntimeTools(
       inputSchema,
       providerName,
       ref,
-      // Only a bundled plugin's own policy is trusted to declare a read.
-      ...(descriptor.pluginId && effect ? { effect } : {}),
+      ...(toolEffect ? { effect: toolEffect } : {}),
     };
   });
 }
@@ -260,8 +271,7 @@ async function executeMcpRuntimeTool(input: {
   app?: McpExecutableToolDescriptor['app'];
   pluginId?: string;
   effect: McpExecutableToolDescriptor['effect'];
-  endpointUrl: string | null;
-  generation: number;
+  discovered: McpToolInvocationSnapshot;
   inputValidator: z.ZodType;
   invoke: McpToolInvocationCapability['invoke'];
   storeResult?: McpToolInvocationCapability['storeResult'];
@@ -272,7 +282,7 @@ async function executeMcpRuntimeTool(input: {
   const trace = input.traces?.startTrace('mcp.call_tool', undefined, {
     'mcp.server.id': input.ref.serverId,
     'plugin.id': input.pluginId,
-    'mcp.connection.generation': input.generation,
+    'mcp.connection.generation': input.discovered.generation,
     'tool.name': input.ref.rawToolName,
     'tool.call.id': call.toolCallId,
   });
@@ -296,7 +306,7 @@ async function executeMcpRuntimeTool(input: {
     }
     bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
     const remoteResult = await raceAbort(
-      input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation, {
+      input.invoke(input.ref, call.input, bound.signal, input.discovered, {
         sent: () => {
           sent = true;
         },
