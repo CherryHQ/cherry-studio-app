@@ -1,4 +1,4 @@
-import { requireNativeView } from 'expo';
+import { requireNativeView, requireOptionalNativeModule } from 'expo';
 import { createElement, type ComponentType } from 'react';
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from 'react-native';
 
@@ -23,16 +23,13 @@ type NativeFoldRegionObserverProps = {
 };
 
 /**
- * Null where the native view is missing (Android, Expo Go, clients built before this module):
- * those windows have no fold to report. The wrapper hands callers the bare region.
+ * Null where the native module is missing (Android, Expo Go, clients built before this module):
+ * those windows have no fold to report. `requireNativeView` would still return a component there,
+ * so the module's presence decides. The wrapper hands callers the bare region.
  */
 export const FoldRegionObserver: ComponentType<FoldRegionObserverProps> | null = (() => {
-  let NativeView: ComponentType<NativeFoldRegionObserverProps>;
-  try {
-    NativeView = requireNativeView<NativeFoldRegionObserverProps>('FoldRegion');
-  } catch {
-    return null;
-  }
+  if (!requireOptionalNativeModule('FoldRegion')) return null;
+  const NativeView = requireNativeView<NativeFoldRegionObserverProps>('FoldRegion');
   return function FoldRegionObserver({ onFoldChange, style }: FoldRegionObserverProps) {
     return createElement(NativeView, {
       onFoldChange: (event: NativeSyntheticEvent<{ fold: FoldRegion | null }>) =>

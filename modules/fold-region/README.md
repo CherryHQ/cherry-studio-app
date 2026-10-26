@@ -1,8 +1,9 @@
 # Fold Region
 
 Reports where a foldable display divides the window, discovered by Expo under `modules/`. Requires
-a new native build; clients without the module export `null` and the shell treats the window as
-unfolded.
+a new native build. Clients without the module (Android, older builds) export `null`, checked with
+`requireOptionalNativeModule` because `requireNativeView` returns a placeholder there, and the shell
+treats the window as unfolded.
 
 `FoldRegionObserver` is an invisible view. It reads iOS 27.1's division reserved region
 (`reservedRegions(kind: .division, options: .includeInactive)`) and reports it in window points

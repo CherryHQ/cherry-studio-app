@@ -111,9 +111,10 @@ function useIsTypingBelow(top: number | null) {
   const { input } = useReanimatedFocusedInput();
   const [typing, setTyping] = useState({ isKeyboardVisible, isBelow: false });
   if (typing.isKeyboardVisible !== isKeyboardVisible) {
-    const inputY = input.get()?.layout.absoluteY;
+    // Only a stacked split needs the input's position, read once as the keyboard opens.
+    const inputY = isKeyboardVisible && top !== null ? input.get()?.layout.absoluteY : undefined;
     setTyping({
-      isBelow: isKeyboardVisible && top !== null && inputY !== undefined && inputY >= top,
+      isBelow: inputY !== undefined && top !== null && inputY >= top,
       isKeyboardVisible,
     });
   }

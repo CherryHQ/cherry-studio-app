@@ -8,6 +8,7 @@ let mockNativeProps: {
 };
 
 jest.mock('expo', () => ({
+  requireOptionalNativeModule: () => ({}),
   requireNativeView: () =>
     function MockNativeFoldRegion(props: typeof mockNativeProps) {
       mockNativeProps = props;
