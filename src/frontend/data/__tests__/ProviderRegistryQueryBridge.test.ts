@@ -2,6 +2,7 @@ import { isRegistryProjectionPath } from '../ProviderRegistryQueryBridge';
 
 test.each([
   '/models',
+  'voice',
   '/models/provider::model',
   '/providers/openai/models:resolve',
   'onboarding-models',

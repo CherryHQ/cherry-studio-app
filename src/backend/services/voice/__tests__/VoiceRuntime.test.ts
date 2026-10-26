@@ -65,6 +65,7 @@ function setup({
         (key === 'feature.voice.dictation_engine' ? selected.dictation : selected.speech) ?? null,
     },
     listProviders: async () => [],
+    getSpeechModelOptions: async () => ({ voices: [], acceptsCustomVoice: false }),
     language: () => 'zh-CN',
     dictationLanguage: () => 'en-US',
     onBackground: (listener) => {

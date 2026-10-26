@@ -4,6 +4,8 @@ import { MockSpeechModelV3, MockTranscriptionModelV3 } from 'ai/test';
 
 import { AiService } from '@/backend/ai/AiService';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { installLogWriter, type LogRecord } from '@/shared/core/logger/LoggerService';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { createContractFixture } from '../_harness/services';
 
@@ -21,6 +23,82 @@ const speechResult = {
 };
 
 beforeEach(() => jest.clearAllMocks());
+
+test('rejects an incompatible explicit voice before constructing a request', async () => {
+  const f = createContractFixture({
+    modelId: 'tts-1',
+    capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+  });
+  await expect(
+    new AiService(f.services).generateSpeech(
+      { providerId: f.provider.id, modelId: f.model.modelId, text: 'Hello', voice: 'Kore' },
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'invalid-voice' });
+  expect(mockResolve).not.toHaveBeenCalled();
+});
+
+test('a deleted voice account needs setup rather than failing status with a data error', async () => {
+  const f = createContractFixture();
+  jest
+    .mocked(f.services.provider.getByProviderId)
+    .mockRejectedValue(new DataApiError(ErrorCode.NOT_FOUND, 'Deleted account'));
+  await expect(
+    new AiService(f.services).getVoiceModelStatus(
+      { providerId: f.provider.id, modelId: 'whisper-1' },
+      'transcription',
+      new AbortController().signal,
+    ),
+  ).resolves.toBe('needs-setup');
+  expect(f.spies.resolveApiKey).not.toHaveBeenCalled();
+});
+
+test('records upload encoding failure without logging the audio, credentials or provider body', async () => {
+  const f = createContractFixture({
+    modelId: 'whisper-1',
+    capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+    modelOverrides: { inputModalities: [MODALITY.AUDIO], outputModalities: [MODALITY.TEXT] },
+  });
+  const records: LogRecord[] = [];
+  const uninstall = installLogWriter((record) => records.push(record));
+  mockResolve.mockReturnValue(
+    new MockTranscriptionModelV3({
+      doGenerate: async () => {
+        throw Object.assign(new Error('Unsupported FormDataPart implementation'), {
+          responseBody: 'private-audio-response contract-key',
+        });
+      },
+    }),
+  );
+  try {
+    await expect(
+      new AiService(f.services).transcribe(
+        {
+          providerId: f.provider.id,
+          modelId: f.model.modelId,
+          audio: new Uint8Array([1, 2, 3]),
+          mediaType: 'audio/mp4',
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'upload-failed' });
+    const failures = records.filter((record) => record.message === 'Voice request failed');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      module: 'AiService',
+      operation: 'transcription',
+      phase: 'request',
+      providerId: f.provider.id,
+      modelId: f.model.modelId,
+      code: 'upload-failed',
+    });
+    expect(failures[0]).not.toHaveProperty('audio');
+    expect(JSON.stringify(failures)).not.toContain('contract-key');
+    expect(JSON.stringify(failures)).not.toContain('private-audio-response');
+  } finally {
+    uninstall();
+  }
+});
 
 test('serves an AiHubMix Gemini speech alias through its audio URL instead of its Gemini chat URL', async () => {
   const f = createContractFixture({
@@ -45,14 +123,16 @@ test('serves an AiHubMix Gemini speech alias through its audio URL instead of it
       },
     },
   });
-  mockResolve.mockReturnValue(new MockSpeechModelV3({ doGenerate: async () => speechResult }));
+  const generate = jest.fn(async (_options: SpeechModelV3CallOptions) => speechResult);
+  mockResolve.mockReturnValue(new MockSpeechModelV3({ doGenerate: generate }));
   await new AiService(f.services).generateSpeech(
-    { providerId: f.provider.id, modelId: f.model.modelId, text: '你好', voice: 'alloy' },
+    { providerId: f.provider.id, modelId: f.model.modelId, text: '你好' },
     new AbortController().signal,
   );
   expect(mockResolve).toHaveBeenCalledWith(
     expect.objectContaining({
       modelId: 'gemini-2.5-flash-preview-tts',
+      adapterFamily: 'aihubmix',
       settings: expect.objectContaining({
         baseURL: 'https://aihubmix.com/v1',
         apiKey: 'contract-key',
@@ -60,6 +140,14 @@ test('serves an AiHubMix Gemini speech alias through its audio URL instead of it
     }),
     'speech',
   );
+  expect(generate.mock.calls[0][0].voice).toBe('Kore');
+  const choices = await new AiService(f.services).getSpeechModelOptions(
+    { providerId: f.provider.id, modelId: f.model.modelId },
+    new AbortController().signal,
+  );
+  expect(choices.defaultVoice).toBe('Kore');
+  expect(choices.voices.some(({ id }) => id === 'Kore')).toBe(true);
+  expect(choices.voices.some(({ id }) => id === 'alloy')).toBe(false);
 
   f.model.apiModelId = 'unimplemented-tts';
   mockResolve.mockClear();
@@ -87,11 +175,12 @@ test('uses the saved speech model API ID and selected account without inventing 
   expect(f.spies.resolveApiKey).toHaveBeenCalledWith(f.provider.id, undefined);
   expect(mockResolve).toHaveBeenCalledWith(
     {
+      adapterFamily: 'openai-compatible',
       modelId: 'tts-1',
       settings: expect.objectContaining({
         apiKey: 'contract-key',
         baseURL: 'https://contract.invalid/v1',
-        fetch: jest.requireMock('expo/fetch').fetch,
+        fetch: expect.any(Function),
       }),
     },
     'speech',
@@ -127,7 +216,8 @@ test('transcribes original bytes with their stated container type, using the aud
     new AbortController().signal,
   );
   expect(result.text).toBe('你好');
-  expect(generate.mock.calls[0][0]).toMatchObject({ audio, mediaType: 'audio/mp4' });
+  expect(generate.mock.calls[0][0].audio).toEqual(audio);
+  expect(mockResolve.mock.calls[0][2]).toBe('audio/mp4');
   expect(mockResolve.mock.calls[0][1]).toBe('transcription');
 });
 

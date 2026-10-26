@@ -18,6 +18,7 @@ import {
   OpenAIChatLanguageModel,
   OpenAIResponsesLanguageModel,
   OpenAISpeechModel,
+  OpenAITranscriptionModel,
 } from '@ai-sdk/openai/internal';
 import type {
   EmbeddingModelV3,
@@ -25,6 +26,8 @@ import type {
   LanguageModelV3,
   ProviderV3,
   RerankingModelV3,
+  SpeechModelV3,
+  TranscriptionModelV3,
 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
@@ -51,6 +54,8 @@ export interface AihubmixProvider extends ProviderV3 {
   embeddingModel(modelId: string): EmbeddingModelV3;
   imageModel(modelId: string): ImageModelV3;
   rerankingModel(modelId: string): RerankingModelV3;
+  speechModel(modelId: string): SpeechModelV3;
+  transcriptionModel(modelId: string): TranscriptionModelV3;
 }
 
 export function createAihubmix(options: AihubmixProviderSettings = {}): AihubmixProvider {
@@ -180,6 +185,14 @@ export function createAihubmix(options: AihubmixProviderSettings = {}): Aihubmix
   provider.speechModel = (modelId: string) =>
     new OpenAISpeechModel(modelId, {
       provider: `${AIHUBMIX_PROVIDER_NAME}.speech`,
+      url: chatUrl,
+      headers: authHeaders,
+      fetch: customFetch,
+    });
+
+  provider.transcriptionModel = (modelId: string) =>
+    new OpenAITranscriptionModel(modelId, {
+      provider: `${AIHUBMIX_PROVIDER_NAME}.transcription`,
       url: chatUrl,
       headers: authHeaders,
       fetch: customFetch,

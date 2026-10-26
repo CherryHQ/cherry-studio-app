@@ -1,5 +1,7 @@
 import { Section } from '@cherrystudio/ui/components';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
@@ -23,6 +25,14 @@ function useEffectiveEngine(capability: VoiceCapability) {
 /** Keep each engine's controls together; transcription also serves audio attachments. */
 export default function VoiceSettingsScreen() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  // Account and model settings live on other routes. Re-read their current voice capabilities
+  // when returning here, including changes that do not alter the saved model reference.
+  useFocusEffect(
+    useCallback(() => {
+      void queryClient.invalidateQueries({ queryKey: ['voice'] });
+    }, [queryClient]),
+  );
   const dictationEngine = useEffectiveEngine('dictation');
   const speechEngine = useEffectiveEngine('speech');
   return (

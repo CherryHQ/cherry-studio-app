@@ -9,6 +9,8 @@ import {
   type VoiceModule,
   type VoiceProviderOption,
   type VoiceRequestOptions,
+  type VoiceModelSelection,
+  type SpeechModelOptions,
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
@@ -21,6 +23,10 @@ export type VoiceRuntimeDependencies = {
     get(key: (typeof VOICE_ENGINE_PREFERENCE)[VoiceCapability]): Promise<VoiceEngineId | null>;
   };
   listProviders(signal: AbortSignal): Promise<VoiceProviderOption[]>;
+  getSpeechModelOptions(
+    model: VoiceModelSelection,
+    signal: AbortSignal,
+  ): Promise<SpeechModelOptions>;
   /** Reading aloud and its voices follow the app language. */
   language(): AppLanguage;
   dictationLanguage(): AppLanguage;
@@ -40,6 +46,7 @@ export function createVoiceRuntime({
   engines,
   preference,
   listProviders,
+  getSpeechModelOptions,
   language,
   dictationLanguage,
   onBackground,
@@ -141,6 +148,8 @@ export function createVoiceRuntime({
     getEffectiveEngine: (capability, options) =>
       run(options, async (signal) => (await effectiveEngine(capability, signal))?.id ?? null),
     listProviders: (options) => run(options, listProviders),
+    getSpeechModelOptions: (model, options) =>
+      run(options, (signal) => getSpeechModelOptions(model, signal)),
     listVoices: (engine, options) =>
       run(options, async (signal) => {
         const speech = engines.speech[engine];

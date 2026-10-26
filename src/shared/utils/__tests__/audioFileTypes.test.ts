@@ -1,4 +1,4 @@
-import { transcriptionMediaType } from '../audioFileTypes';
+import { generatedAudioExtension, transcriptionMediaType } from '../audioFileTypes';
 
 test('uploads use the type whose name the transcription protocol recognizes', () => {
   // The extension decides first, since pickers label audio generically or as video.
@@ -15,4 +15,11 @@ test('uploads use the type whose name the transcription protocol recognizes', ()
   expect(
     transcriptionMediaType({ name: 'notes.constructor', mediaType: 'text/plain' }),
   ).toBeUndefined();
+});
+
+test('generated files retain their actual container and unknown formats are not labeled WAV', () => {
+  expect(generatedAudioExtension('audio/wav')).toBe('wav');
+  expect(generatedAudioExtension('audio/mpeg')).toBe('mp3');
+  expect(generatedAudioExtension('audio/mp4')).toBe('m4a');
+  expect(generatedAudioExtension('application/octet-stream')).toBeUndefined();
 });

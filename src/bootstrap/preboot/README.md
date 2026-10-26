@@ -22,7 +22,10 @@ here merely because they run early.
 
 - `abortSignal.ts` preserves cancellation reasons for interruption settlement and supplies
   `AbortSignal.throwIfAborted()` for MCP tool execution on React Native's legacy controller.
-- `blob.ts` installs Expo's Blob implementation on the Hermes global.
+- `blob.ts` installs Expo's Blob and the compatible Web `File` from `File.ts` on the Hermes
+  global. Its FormData adapter preserves each entry's filename without mutating the source Blob;
+  Expo fetch can then serialize the original bytes. This File is distinct from Expo FileSystem's
+  URI-based File.
 - `promise.ts` supplies `Promise.withResolvers()`, which Pi Durable calls directly, when Hermes lacks
   it.
 - `webCrypto.ts` installs `crypto.getRandomValues`/`crypto.randomUUID` from expo-crypto; the `uuid`

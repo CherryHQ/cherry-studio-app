@@ -29,7 +29,10 @@ function setup(selection: VoiceModelSelection | null = model) {
   );
   const readBytes = jest.fn(async () => new Uint8Array([1, 2, 3]));
   const preference = { get: jest.fn(async () => selection) };
-  const transcriber = createAiTranscriber({ ai: { transcribe }, preference });
+  const transcriber = createAiTranscriber({
+    ai: { transcribe, getVoiceModelStatus: async () => 'ready' },
+    preference,
+  });
   const cache = {
     read: async (fact: FileAttachmentFact) => entries.get(key(fact)),
     write: async (fact: FileAttachmentFact, text: string) => void entries.set(key(fact), text),

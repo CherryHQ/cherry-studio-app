@@ -48,7 +48,7 @@ export function createAiDictationEngine({
   transcriber: AiTranscriber;
 }): DictationEngine {
   return {
-    status: () => transcriber.status(),
+    status: (signal) => transcriber.status(signal),
 
     async start({ signal, onText, onLevel }) {
       await requireAccess(

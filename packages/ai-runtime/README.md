@@ -48,7 +48,13 @@ models. Model discovery keeps known one-shot TTS/STT families and their input/ou
 unsupported realtime/audio-chat/video routes stay filtered from official OpenAI discovery.
 Application model management owns admission, catalog enrichment and the visible TTS/STT labels.
 
-Voice model adaptation is exported through `provider`. It uses OpenAI's audio protocol with the
-saved model's API ID and the account's resolved URL, credential, headers, and injected platform
-fetch. The backend owns cancellation and temporary files; see
+Voice model adaptation is exported through `provider`. `voiceCapabilities.ts` owns known model
+families, voice catalogs/defaults and request limits; discovery metadata, admission, settings and
+execution consume those same facts. Protocol compatibility does not imply an OpenAI voice catalog.
+Unknown compatible models accept explicit custom voice IDs without an invented default.
+Audio models reuse the existing provider factories (including AiHubMix's headers), the saved API
+model ID, resolved account URL, credential and injected platform fetch. Transcription preserves
+the caller's container type instead of the SDK's byte-sniffed guess. Mobile preboot owns Web
+Blob/File/FormData compatibility; no Expo code belongs here. The backend owns configuration
+snapshots, cancellation, playback and temporary files; see
 [Voice Input And Speech](../../docs/references/voice.md).

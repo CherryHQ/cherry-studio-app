@@ -1,4 +1,5 @@
 import { generateSpeech, transcribe } from '@cherrystudio/ai-core';
+import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import { describe, expect, it, vi } from 'vitest';
 
 import { resolveVoiceModel } from '../voiceModels';
@@ -13,6 +14,7 @@ describe('voice model adaptation', () => {
     const result = await generateSpeech(
       resolveVoiceModel(
         {
+          adapterFamily: 'openai-compatible',
           modelId: 'custom-tts',
           settings: {
             apiKey: 'selected-key',
@@ -51,6 +53,7 @@ describe('voice model adaptation', () => {
     const result = await transcribe(
       resolveVoiceModel(
         {
+          adapterFamily: 'openai',
           modelId: 'whisper-1',
           settings: { apiKey: 'selected-key', baseURL: 'https://voice.invalid/v1', fetch },
         },
@@ -77,7 +80,11 @@ describe('voice model adaptation', () => {
           headers: { 'content-type': 'application/json' },
         }),
       );
-      const config = { modelId: 'unsupported', settings: { apiKey: 'key', fetch } };
+      const config = {
+        adapterFamily: 'openai' as const,
+        modelId: 'unsupported',
+        settings: { apiKey: 'key', fetch },
+      };
       const result =
         operation === 'speech'
           ? generateSpeech(
@@ -94,6 +101,60 @@ describe('voice model adaptation', () => {
             );
       await expect(result).rejects.toThrow();
       expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('reuses AiHubMix audio headers and preserves the resolved audio URL and Gemini voice', async () => {
+    const audio = new Uint8Array([82, 73, 70, 70, 0, 0, 0, 0, 87, 65, 86, 69]);
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(audio));
+    const settings = {
+      apiKey: 'key',
+      baseURL: 'https://audio.invalid/v1',
+      fetch,
+      endpointBaseURLs: { [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'https://chat.invalid/v1' },
+    };
+    await generateSpeech(
+      resolveVoiceModel(
+        { adapterFamily: 'aihubmix', modelId: 'gemini-2.5-flash-preview-tts', settings },
+        'speech',
+      ),
+      'Hello',
+      { voice: 'Kore' },
+      new AbortController().signal,
+    );
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('https://audio.invalid/v1/audio/speech');
+    expect(new Headers(init?.headers).get('APP-Code')).toBe('MLTG2087');
+    expect(JSON.parse(init?.body as string)).toMatchObject({
+      voice: 'Kore',
+      response_format: 'wav',
+    });
+  });
+
+  it.each(['openai', 'aihubmix'] as const)(
+    'keeps M4A bytes, MIME and multipart filename through %s transcription',
+    async (adapterFamily) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response(JSON.stringify({ text: 'hello' }), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+      const audio = new Uint8Array([0, 0, 0, 32, 102, 116, 121, 112, 77, 52, 65, 32]);
+      await transcribe(
+        resolveVoiceModel(
+          { adapterFamily, modelId: 'whisper-1', settings: { apiKey: 'key', fetch } },
+          'transcription',
+          'audio/mp4',
+        ),
+        audio,
+        {},
+        new AbortController().signal,
+      );
+      const body = fetch.mock.calls[0][1]?.body as FormData;
+      const file = body.get('file') as File;
+      expect(file.name).toBe('audio.mp4');
+      expect(file.type).toBe('audio/mp4');
+      expect(new Uint8Array(await file.arrayBuffer())).toEqual(audio);
     },
   );
 });

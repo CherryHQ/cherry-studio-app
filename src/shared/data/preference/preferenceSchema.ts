@@ -68,6 +68,7 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  /** Empty chooses the configured model's default; nonempty is an exact voice identity. */
   'feature.voice.ai_voice': string;
   /** Null disables voice input and keeps the composer's send action. */
   'feature.voice.dictation_engine': VoiceEngineId | null;
@@ -124,7 +125,7 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
-  'feature.voice.ai_voice': 'alloy',
+  'feature.voice.ai_voice': '',
   'feature.voice.dictation_engine': null,
   'feature.voice.dictation_language': null,
   'feature.voice.speech_engine': null,

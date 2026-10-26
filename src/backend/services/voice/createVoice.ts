@@ -16,7 +16,7 @@ import { createSystemSpeechEngine } from './systemSpeech';
 import { createVoiceRuntime } from './VoiceRuntime';
 import { createVoiceScratch } from './voiceStorage';
 
-type VoicePreferences = {
+type VoicePreferences = AiSpeechDependencies['preference'] & {
   get(
     key: 'feature.voice.dictation_engine' | 'feature.voice.speech_engine',
   ): Promise<VoiceEngineId | null>;
@@ -62,6 +62,7 @@ export function createVoice({
       },
     },
     preference,
+    getSpeechModelOptions: (model, signal) => ai.getSpeechModelOptions(model, signal),
     async listProviders(signal) {
       const configured = await providers.list({ enabled: true });
       signal.throwIfAborted();

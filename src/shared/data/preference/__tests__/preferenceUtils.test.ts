@@ -45,6 +45,7 @@ test('voice engines default to the device and AI models need explicit selection'
   expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();
   expect(getDefaultValue('feature.voice.transcription_model')).toBeNull();
   expect(getDefaultValue('feature.voice.speech_model')).toBeNull();
+  expect(getDefaultValue('feature.voice.ai_voice')).toBe('');
   // Engine support and system voices are facts of this device, not of a restored backup.
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toEqual(
     expect.arrayContaining([

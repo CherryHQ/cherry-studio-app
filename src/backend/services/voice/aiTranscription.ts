@@ -16,6 +16,11 @@ export type TranscriptionResult = {
 
 export type AiTranscriptionDependencies = {
   ai: {
+    getVoiceModelStatus(
+      model: VoiceModelSelection,
+      operation: 'transcription',
+      signal: AbortSignal,
+    ): Promise<VoiceEngineStatus>;
     transcribe(
       input: VoiceModelSelection & TranscriptionAudio,
       signal: AbortSignal,
@@ -34,8 +39,9 @@ export function createAiTranscriber({ ai, preference }: AiTranscriptionDependenc
   };
   return {
     selection,
-    async status(): Promise<VoiceEngineStatus> {
-      return (await selection()) ? 'ready' : 'needs-setup';
+    async status(signal: AbortSignal): Promise<VoiceEngineStatus> {
+      const model = await selection();
+      return model ? ai.getVoiceModelStatus(model, 'transcription', signal) : 'needs-setup';
     },
     async transcribe(
       audio: TranscriptionAudio,

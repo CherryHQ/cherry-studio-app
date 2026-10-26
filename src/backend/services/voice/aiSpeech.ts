@@ -1,41 +1,49 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
-import { VoiceError, type VoiceModelSelection } from '@/shared/contracts/voice';
+import {
+  VoiceError,
+  type SpeechModelOptions,
+  type VoiceEngineStatus,
+  type VoiceModelSelection,
+} from '@/shared/contracts/voice';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+import { generatedAudioExtension } from '@/shared/utils/audioFileTypes';
 
 import type { SpeechEngine } from './engines';
 import { splitSpeechText } from './speechText';
 import { deleteFile, type VoiceScratch } from './voiceStorage';
 
-/** OpenAI's per-request input limit. */
-const MAX_REQUEST_CHARACTERS = 4096;
-
-/** OpenAI's speech voices; a compatible gateway rejects the ones it lacks. */
-export const AI_SPEECH_VOICES = [
-  'alloy',
-  'ash',
-  'ballad',
-  'cedar',
-  'coral',
-  'echo',
-  'fable',
-  'marin',
-  'nova',
-  'onyx',
-  'sage',
-  'shimmer',
-  'verse',
-] as const;
+const SPEECH_PREFERENCES = ['feature.voice.speech_model', 'feature.voice.ai_voice'] as const;
 
 export type AiSpeechDependencies = {
   ai: {
+    getVoiceModelStatus(
+      model: VoiceModelSelection,
+      operation: 'speech',
+      signal: AbortSignal,
+    ): Promise<VoiceEngineStatus>;
+    getSpeechModelOptions(
+      model: VoiceModelSelection,
+      signal: AbortSignal,
+    ): Promise<SpeechModelOptions>;
+    resolveSpeechConfiguration(
+      input: VoiceModelSelection & { voice?: string },
+      signal: AbortSignal,
+    ): Promise<{
+      voice: string;
+      maxInputCharacters: number;
+      mediaType: string;
+    }>;
     generateSpeech(
       input: VoiceModelSelection & { text: string; voice: string },
       signal: AbortSignal,
-    ): Promise<{ audio: Uint8Array }>;
+    ): Promise<{ audio: Uint8Array; mediaType: string }>;
   };
   preference: {
-    get(key: 'feature.voice.speech_model'): Promise<VoiceModelSelection | null>;
-    get(key: 'feature.voice.ai_voice'): Promise<string>;
+    getMultipleRaw(keys: typeof SPEECH_PREFERENCES): Promise<{
+      'feature.voice.speech_model': VoiceModelSelection | null;
+      'feature.voice.ai_voice': string;
+    }>;
   };
   scratch: VoiceScratch;
 };
@@ -84,7 +92,7 @@ function play(uri: string, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Generates WAV with the configured speech model. Long text is split into requests; the next
+ * Generates audio with the configured speech model. Long text is split into requests; the next
  * part is generated while the current one plays.
  */
 export function createAiSpeechEngine({
@@ -92,27 +100,35 @@ export function createAiSpeechEngine({
   preference,
   scratch,
 }: AiSpeechDependencies): SpeechEngine {
-  const configuredModel = async () => {
-    const model = await preference.get('feature.voice.speech_model');
-    return model?.providerId && model.modelId.trim() ? model : null;
-  };
+  const readConfiguration = () => preference.getMultipleRaw(SPEECH_PREFERENCES);
   return {
-    async status() {
-      return (await configuredModel()) ? 'ready' : 'needs-setup';
+    async status(signal) {
+      const model = (await readConfiguration())['feature.voice.speech_model'];
+      return model ? ai.getVoiceModelStatus(model, 'speech', signal) : 'needs-setup';
     },
-    async listVoices() {
-      return AI_SPEECH_VOICES.map((id) => ({ id, name: id }));
+    async listVoices(_language, signal) {
+      const model = (await readConfiguration())['feature.voice.speech_model'];
+      return model ? (await ai.getSpeechModelOptions(model, signal)).voices : [];
     },
     async speak({ text, signal }) {
-      const [model, voice] = await Promise.all([
-        configuredModel(),
-        preference.get('feature.voice.ai_voice'),
-      ]);
+      const snapshot = await readConfiguration();
+      const model = snapshot['feature.voice.speech_model'];
       if (!model) throw new VoiceError('not-configured', 'No speech model is configured.');
+      const configuration = await ai.resolveSpeechConfiguration(
+        { ...model, voice: snapshot['feature.voice.ai_voice'] },
+        signal,
+      );
+      signal.throwIfAborted();
       const generate = async (chunk: string) => {
-        const { audio } = await ai.generateSpeech({ ...model, text: chunk, voice }, signal);
+        const { audio, mediaType } = await ai.generateSpeech(
+          { ...model, text: chunk, voice: configuration.voice },
+          signal,
+        );
         if (!audio.length) throw new VoiceError('failed', 'The speech model returned no audio.');
-        const file = scratch.writeAudio(audio, 'wav');
+        const extension = generatedAudioExtension(mediaType);
+        if (mediaType !== configuration.mediaType || !extension)
+          throw new VoiceError('failed', 'The speech model returned an unsupported audio format.');
+        const file = scratch.writeAudio(audio, extension);
         if (signal.aborted) {
           deleteFile(file.uri);
           signal.throwIfAborted();
@@ -126,7 +142,7 @@ export function createAiSpeechEngine({
           (uri) => ({ uri }),
           (error: unknown) => ({ error }),
         );
-      const chunks = splitSpeechText(text, MAX_REQUEST_CHARACTERS);
+      const chunks = splitSpeechText(text, configuration.maxInputCharacters);
       let next = chunks.length ? prepare(chunks[0]!) : undefined;
       try {
         for (let index = 0; next; index += 1) {
@@ -141,6 +157,14 @@ export function createAiSpeechEngine({
               shouldPlayInBackground: false,
             });
             await play(uri, signal);
+          } catch (error) {
+            signal.throwIfAborted();
+            loggerService
+              .withContext('VoiceSpeech')
+              .error('Speech playback failed', { code: 'playback-failed' });
+            throw new VoiceError('playback-failed', 'The generated audio could not be played.', {
+              cause: error,
+            });
           } finally {
             deleteFile(uri);
           }

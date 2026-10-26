@@ -10,6 +10,9 @@ const VOICE_ERROR_KEYS = {
   busy: 'voice.error.busy',
   'no-speech': 'voice.error.noSpeech',
   'audio-too-large': 'voice.error.audioTooLarge',
+  'invalid-voice': 'voice.error.invalidVoice',
+  'upload-failed': 'voice.error.uploadFailed',
+  'playback-failed': 'voice.error.playbackFailed',
   failed: 'voice.error.failed',
 } satisfies Record<VoiceErrorCode, string>;
 

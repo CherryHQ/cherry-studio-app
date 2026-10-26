@@ -22,6 +22,13 @@ audio attachments use it. Both model rows reuse the shared model picker, filtere
 synthesis (TTS) or transcription (STT). Selecting the current model again clears the selection.
 Add voice models in the existing provider model settings; account credentials are reused.
 
+Cloud speech defaults to **Automatic**, resolved by the selected model's adapter (for example,
+`alloy` for OpenAI and `Kore` for AiHubMix Gemini). A user can override it with one of that model's
+voices. Custom compatible models without a declared voice catalog require an explicit voice ID.
+Changing the speech model saves the model and voice together: a supported explicit voice survives;
+otherwise the choice returns to automatic. Settings refresh their voice options when the model,
+language or provider registry changes, and when returning from account/model settings.
+
 The chat composer has one primary action slot: voice input while the draft and attachments are
 empty and a configured dictation engine is available, send once there is content, and stop while a
 reply streams. With dictation off, no system recognizer, or no available selected AI transcription
@@ -75,7 +82,10 @@ to the transcription model and deletes it. It has no live text: the transcript a
 
 Each transcription request states the audio's container type. The SDK's own byte sniffing reads
 MP4/M4A as WAV and would name the upload `audio.wav`; attachments take their type from
-`transcriptionMediaType`.
+`transcriptionMediaType`. The platform-neutral audio adapter preserves that type. Mobile preboot
+installs a coherent Expo-backed `Blob`, Web `File` and FormData entry adapter, so the SDK's file
+construction and multipart filename override preserve the original bytes. The URI-based
+`expo-file-system` File is a separate API and is not installed as the Web File constructor.
 
 **System speech** reads through the platform engine, split to Android's input limit, with an
 optional system voice for the app language.
@@ -84,11 +94,14 @@ System voices are filtered by the app language and deduplicated by their native 
 Different IDs with the same display name remain selectable with language/ID details. The voice list
 refreshes when the app language changes.
 
-**AI speech** splits prose into requests of at most 4,096 characters at sentence boundaries,
-generates the next part while the current one plays, and deletes each WAV after playback. A part
+**AI speech** reads the model and voice as one configuration snapshot, resolves the effective voice
+and request limit once, splits prose at sentence boundaries, generates the next part while the
+current one plays, and deletes each audio file after playback. The adapter currently uses a
+4,096-character request budget and the upstream one-shot API's WAV output. The player validates
+the returned media type before choosing a file extension. A part
 that cannot play fails the reading. A pause or stop the reading did not request, such as an audio
 interruption, also fails it in both speech engines, instead of waiting for playback to resume. The
-voice list is OpenAI's; a compatible gateway rejects the voices it lacks.
+engine owns playback and cleanup; provider voice catalogs and defaults belong to `ai-runtime`.
 
 System speech uses the resolved app language. System dictation uses
 `feature.voice.dictation_language`, which follows the app language when null; settings show it only
@@ -119,17 +132,30 @@ transcribes.
 `feature.voice.transcription_model` serves AI dictation and audio attachments;
 `feature.voice.speech_model` serves AI speech. Each identifies a saved model by provider and model
 ID. `AiService` loads the current model, checks its availability and voice purpose, resolves its API
-model ID and account at request time, and uses the OpenAI audio adapter with the account URL,
+model ID and account at request time, and uses the provider's audio adapter with the account URL,
 headers and credential
 (`resolveVoiceEndpoint`); API-key accounts with an OpenAI, OpenAI-compatible or AiHubMix endpoint
 qualify. AiHubMix uses its compatible audio URL even when Gemini is the default chat endpoint.
 Its audio admission is limited to the supported OpenAI speech/transcription families, Gemini 2.5
-Flash/Pro preview TTS and Whisper variants declared in `voiceModelMetadata.ts`; catalog audio tags
+Flash/Pro preview TTS and Whisper variants declared in `voiceCapabilities.ts`; catalog audio tags
 alone do not establish protocol compatibility. AiHubMix discovery preserves its voice types and
 modalities, with canonical metadata correcting known catalog errors for the supported families.
 Realtime and multimodal audio chat models are not TTS choices. Previously entered model IDs
 must exist in the model catalog with the correct voice type. Each action makes one attempt. Remote
 conversations also use the local voice settings.
+
+Discovery metadata, model admission, settings choices and execution share the same capability
+resolver, keyed by adapter family and the canonical API model ID. OpenAI protocol compatibility
+alone does not imply OpenAI voices. The local workspace `ai-runtime` owns these rules and reuses
+the existing AiHubMix provider factory; the published `ai-core` dependency remains unchanged.
+An empty saved voice means automatic at the application boundary. Before calling `ai-core`, the
+adapter's default becomes an explicit protocol voice because the upstream API requires one.
+Invalid explicit voices fail before the request instead of being silently replaced or retried.
+
+Request failures record operation, stage, account/model IDs, elapsed time and status/error code
+through the application logger, without request text, audio, credentials or response bodies.
+Cancellation is not logged as failure. Closed error codes distinguish configuration, upload
+encoding and playback failures; the UI translates those codes rather than exposing provider text.
 
 The upstream audio APIs report no token counts or prices, so voice requests create no usage
 records; settings states that audio usage is not in the statistics.
@@ -148,7 +174,9 @@ Android development builds; a JavaScript update cannot add the native modules.
 Focused tests cover engine choice, the single-activity rule, backgrounding and disposal, Markdown
 to prose, request splitting, utterance joining, Android recognizer detection, audio classification
 and limits, attachment transcription, caching and failures, transcript paging in `read_file`, and
-the composed native configuration. They use native fakes and do not establish device behavior.
+the composed native configuration. Cloud regressions also cover model-specific defaults, explicit
+voice validation, configuration snapshots, multipart bytes/filenames and safe failure logs.
+They use native fakes and do not establish device behavior.
 
 Device acceptance on iOS and on Android with Google and vendor recognition services:
 
@@ -157,4 +185,8 @@ Device acceptance on iOS and on Android with Google and vendor recognition servi
 - Composer send fallback with dictation off or its AI model/account missing or unavailable.
 - System voice deduplication and same-name voice labels.
 - AI dictation and speech with a real OpenAI-compatible account, including long replies.
+- AiHubMix Gemini speech with automatic `Kore`, switching between OpenAI/Gemini models, and an
+  explicit incompatible saved voice. Verify actual playback, not only successful generation.
+- WAV/M4A multipart bytes, media type and filename on both native platforms, plus existing binary
+  uploads affected by the shared Blob/File/FormData setup.
 - Audio attachments in chat and `read_file`, with and without a transcription model.

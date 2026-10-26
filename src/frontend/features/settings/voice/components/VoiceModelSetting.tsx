@@ -8,11 +8,16 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
-import { usePreference } from '@/frontend/data';
+import { useBackendModule, useMultiplePreferences } from '@/frontend/data';
 
-const MODEL_PREFERENCE = {
-  transcription: 'feature.voice.transcription_model',
-  speech: 'feature.voice.speech_model',
+import { voiceAfterModelChange } from './speechModelSelection';
+
+const MODEL_PREFERENCES = {
+  transcription: {
+    selection: 'feature.voice.transcription_model',
+    voice: 'feature.voice.ai_voice',
+  },
+  speech: { selection: 'feature.voice.speech_model', voice: 'feature.voice.ai_voice' },
 } as const;
 const EMPTY_MODEL_KEYS = {
   transcription: 'settings.voice.model.emptyTranscription',
@@ -23,7 +28,10 @@ const EMPTY_MODEL_KEYS = {
 export function VoiceModelSetting({ purpose }: { purpose: 'transcription' | 'speech' }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [selection, setSelection] = usePreference(MODEL_PREFERENCE[purpose]);
+  const voice = useBackendModule('voice');
+  const [{ selection, voice: selectedVoice }, setConfiguration] = useMultiplePreferences(
+    MODEL_PREFERENCES[purpose],
+  );
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { getModelItem, isLoading, modelItems } = useModelPickerData({ modelType: purpose });
@@ -33,11 +41,18 @@ export function VoiceModelSetting({ purpose }: { purpose: 'transcription' | 'spe
     if (isSaving) return;
     setIsSaving(true);
     setIsPickerOpen(false);
-    void setSelection(
+    const next =
       item.modelId === selectedModelId
         ? null
-        : { providerId: item.provider.id, modelId: item.model.modelId },
-    )
+        : { providerId: item.provider.id, modelId: item.model.modelId };
+    const save = async () => {
+      if (purpose === 'transcription') return setConfiguration({ selection: next });
+      const nextVoice = next
+        ? voiceAfterModelChange(selectedVoice, await voice.getSpeechModelOptions(next))
+        : '';
+      await setConfiguration({ selection: next, voice: nextVoice });
+    };
+    void save()
       .catch(() => {
         toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
       })

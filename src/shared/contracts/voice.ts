@@ -18,6 +18,12 @@ export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'unsupported';
 export type VoiceModelSelection = { providerId: string; modelId: string };
 export type VoiceProviderOption = { id: string; name: string };
 export type SpeechVoice = { id: string; name: string; language?: string };
+export type SpeechModelOptions = {
+  voices: SpeechVoice[];
+  /** Omitted when the model has no declared default and needs an explicit voice ID. */
+  defaultVoice?: string;
+  acceptsCustomVoice: boolean;
+};
 
 export type VoiceRequestOptions = { signal?: AbortSignal };
 
@@ -53,6 +59,9 @@ export type VoiceErrorCode =
   | 'busy'
   | 'no-speech'
   | 'audio-too-large'
+  | 'invalid-voice'
+  | 'upload-failed'
+  | 'playback-failed'
   | 'failed';
 
 export class VoiceError extends Error {
@@ -84,6 +93,11 @@ export interface VoiceModule {
   /** Locally configured accounts that can serve the AI engine's audio requests. */
   listProviders(options?: VoiceRequestOptions): Promise<VoiceProviderOption[]>;
   listVoices(engine: VoiceEngineId, options?: VoiceRequestOptions): Promise<SpeechVoice[]>;
+  /** Options for an explicit model selection, without selecting credentials or making a request. */
+  getSpeechModelOptions(
+    model: VoiceModelSelection,
+    options?: VoiceRequestOptions,
+  ): Promise<SpeechModelOptions>;
   /** Resolves once capture has started; a running speech stops first. Rejects `busy` when dictating. */
   startDictation(options?: DictationOptions): Promise<DictationSession>;
   /**

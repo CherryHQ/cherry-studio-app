@@ -48,3 +48,10 @@ export function transcriptionMediaType(file: { mediaType: string; name: string }
 export function isTranscribableAudio(file: { mediaType: string; name: string }): boolean {
   return transcriptionMediaType(file) !== undefined;
 }
+
+/** A generated container keeps its declared format; an unknown type must not be named WAV. */
+export function generatedAudioExtension(mediaType: string): string | undefined {
+  const canonical = CANONICAL_MEDIA_TYPES.get(mediaType.toLowerCase());
+  if (!canonical) return undefined;
+  return [...EXTENSION_MEDIA_TYPES].find(([, type]) => type === canonical)?.[0];
+}
