@@ -1,9 +1,9 @@
 import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import Maximize2Icon from '@cherrystudio/app-icons/icons/maximize-2';
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useKeyboardState, useReanimatedFocusedInput } from 'react-native-keyboard-controller';
 import Animated from 'react-native-reanimated';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { FoldRegionReporter, PaneChromeProvider, type PaneSplit } from '@/frontend/appShell/layout';
 
 import { type FilePane, type FilePaneFile, useFilePane } from './FilePaneProvider';
+import { useFilePaneBackPress } from './useFilePaneBackPress';
 import { useFilePaneTransition } from './useFilePaneTransition';
 import { usePaneSplit } from './usePaneSplit';
 
@@ -165,17 +166,7 @@ function FilePaneColumn({
     [isExpanded, setExpanded, t],
   );
 
-  // Android back returns an expanded preview beside the chat, then leaves the preview, then the pane.
-  useEffect(() => {
-    if (!isVisible) return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (file && isExpanded) setExpanded(false);
-      else if (file) closeFile();
-      else close();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [close, closeFile, file, isExpanded, isVisible, setExpanded]);
+  useFilePaneBackPress(pane, isVisible);
 
   if (!isMounted) return null;
 
