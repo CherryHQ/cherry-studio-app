@@ -66,6 +66,8 @@ export function useSavedProviderConfiguration(providerId: string) {
   const [isAccountBusy, setIsAccountBusy] = useState(false);
   // Keys the user just changed, shown until the saved list catches up so a switch never flickers.
   const [optimisticApiKeys, setOptimisticApiKeys] = useState<ApiKeyEntry[] | null>(null);
+  const queuedApiKeys = useRef<ApiKeyEntry[] | null>(null);
+  const apiKeyWrite = useRef<Promise<boolean> | null>(null);
   const savedApiKeys = queries.apiKeys;
   const apiKeys = optimisticApiKeys ?? savedApiKeys ?? [];
   const isLoading =
@@ -105,15 +107,31 @@ export function useSavedProviderConfiguration(providerId: string) {
     }
   }
 
-  async function saveApiKeys(next: ApiKeyEntry[]): Promise<boolean> {
-    if (next.some((entry) => getApiKeyValidationError(entry, next))) return false;
+  // Each change derives from the optimistic list, so a change made while a write is in flight
+  // only replaces the queued list. One failure drops the queue and shows the saved list again.
+  function saveApiKeys(next: ApiKeyEntry[]): Promise<boolean> {
+    if (next.some((entry) => getApiKeyValidationError(entry, next))) {
+      return Promise.resolve(false);
+    }
     const normalized = normalizeApiKeyEntries(next);
     setOptimisticApiKeys(normalized);
-    try {
-      return await save({ apiKeys: normalized });
-    } finally {
-      setOptimisticApiKeys(null);
-    }
+    queuedApiKeys.current = normalized;
+    apiKeyWrite.current ??= (async () => {
+      try {
+        let saved = true;
+        while (saved && queuedApiKeys.current) {
+          const apiKeys = queuedApiKeys.current;
+          queuedApiKeys.current = null;
+          saved = await save({ apiKeys });
+        }
+        return saved;
+      } finally {
+        queuedApiKeys.current = null;
+        apiKeyWrite.current = null;
+        setOptimisticApiKeys(null);
+      }
+    })();
+    return apiKeyWrite.current;
   }
 
   function showAddressError(error: unknown) {
@@ -241,6 +259,7 @@ export function useSavedProviderConfiguration(providerId: string) {
         actions: {
           addApiKey: (entry) => saveApiKeys([...apiKeys, entry]),
           removeApiKey: (id) => saveApiKeys(apiKeys.filter((entry) => entry.id !== id)),
+          reorderApiKeys: (next) => saveApiKeys(next),
           rename: async (name) => {
             const trimmed = name.trim();
             if (!trimmed || trimmed === provider.name) return Boolean(trimmed);
@@ -317,7 +336,7 @@ export function useSavedProviderConfiguration(providerId: string) {
             : undefined;
 
   return {
-    canContinue: Boolean(value) && !isLoading && !isError && continueHint === undefined,
+    canContinue: Boolean(provider) && !isLoading && !isError && continueHint === undefined,
     continueHint,
     isError,
     isLoading,

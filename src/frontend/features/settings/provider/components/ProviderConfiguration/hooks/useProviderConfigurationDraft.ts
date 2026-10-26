@@ -113,6 +113,9 @@ export function useProviderConfigurationDraft({
     },
     [],
   );
+  const reorderApiKeys = useCallback<ProviderDraftActions['reorderApiKeys']>((apiKeys) => {
+    setValues((current) => ({ ...current, apiKeys }));
+  }, []);
   const setAvatarUri = useCallback(
     (avatarUri: string | null) => setValues((current) => ({ ...current, avatarUri })),
     [],
@@ -164,6 +167,7 @@ export function useProviderConfigurationDraft({
       addApiKey,
       updateApiKey,
       removeApiKey,
+      reorderApiKeys,
       setAvatarUri,
       setDefaultChatEndpoint,
       setEndpointUrl,
@@ -176,6 +180,7 @@ export function useProviderConfigurationDraft({
       addApiKey,
       updateApiKey,
       removeApiKey,
+      reorderApiKeys,
       setAvatarUri,
       setDefaultChatEndpoint,
       setEndpointUrl,

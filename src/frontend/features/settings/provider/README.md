@@ -95,6 +95,12 @@ written once on Save, and Delete removes it. Empty, duplicate or multi-key input
 the sheet and blocks saving it. Short keys are fully masked; longer keys expose only their last
 four characters.
 
+Multiple keys expose an ordering sheet with CherryUI `ReorderList`. Moves save immediately (or
+update the creation draft), preserve each entry's identity and metadata, and roll back on failure.
+Moves made while a write is in flight show at once and queue only the latest list for the next write.
+Labels and masked suffixes appear in management, ordering and connection-test selection; unnamed
+keys use a stable fallback rather than a position-based name.
+
 ## Connectivity And Models
 
 Provider model synchronization admits speech synthesis (TTS) and transcription (STT) for API-key
@@ -109,8 +115,10 @@ Manual model settings expose TTS/STT types without chat endpoints, token limits 
 These catalog settings do not start playback or transcription; the voice feature consumes the
 saved models separately. Connectivity checks continue to select chat models only.
 
-The connectivity check selects one provider-scoped model and uses the first enabled API key;
-neither choice is stored. Checks and ordinary synchronization never change provider activation.
+The connectivity check selects one provider-scoped model and one enabled API key, defaulting to
+the first enabled key; the key row appears only when more than one key is enabled. Neither choice is stored. The explicit probe key disables failover and does
+not advance the runtime's rotation cursor. Changing the selected model or key hides the previous
+result. Checks and ordinary synchronization never change provider activation.
 
 `useProviderSetup` owns the explicit activation path: inspect persisted configuration, repair missing
 credentials or endpoints with the shared creation form, and enable directly when a supported enabled

@@ -97,6 +97,11 @@ instructions and source text, without creating a conversation or exposing tools.
 completion is required before saving a translation or summary title; cancellation, provider failures,
 and invocation usage remain part of the text-generation contract.
 
+`ProviderService` rotates enabled keys in their saved array order. The cursor stores the last used
+key ID, so a reorder applies to the next request, which takes the key after it in the new order;
+when that key is gone, rotation restarts at the first enabled key. Probe overrides never move the
+cursor. Already materialized credentials remain with their active request.
+
 Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. When a
 request fails before substantive content or a tool-call event is emitted, Pi tries every other
 enabled key at most once within the request's shared 30-minute waiting budget, in cyclic order
