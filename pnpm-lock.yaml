@@ -358,8 +358,8 @@ importers:
         specifier: ~58.0.18
         version: 58.0.18(expo@58.0.19)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1)(typescript@6.0.3)
       expo-blob:
-        specifier: ^57.0.1
-        version: 57.0.1(expo@58.0.19)
+        specifier: ^58.0.3
+        version: 58.0.3(expo@58.0.19)
       expo-blur:
         specifier: ~58.0.5
         version: 58.0.5(expo@58.0.19)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -6620,8 +6620,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  expo-blob@57.0.1:
-    resolution: {integrity: sha512-wBcXcmLdEv0VF+E4ogWGGUAUdVuMJLXZ7Zfc4lFHLahMkcw5Bu7wDFAc1m1x8qlwnmjda0Xd/2jI/sYJw5Y9pg==}
+  expo-blob@58.0.3:
+    resolution: {integrity: sha512-CMLFRpaw+YKu5fRY1FpawiLYcp2iClzNw40mowswEBVPZvYIHzQkE3rI1B5NQlxpyDPL9kEJlbnnVlbRC9Nmsw==}
     peerDependencies:
       expo: '*'
 
@@ -16503,7 +16503,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-blob@57.0.1(expo@58.0.19):
+  expo-blob@58.0.3(expo@58.0.19):
     dependencies:
       expo: 58.0.19(0759ea6daf750214db55cfb5a5e5c6b6)
 
