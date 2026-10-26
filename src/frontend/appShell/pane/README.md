@@ -19,8 +19,9 @@ and every file preview open in a pane beside the current chat instead of coverin
   and lead with the pane's close or back action.
 - A preview's header also offers Expand reading. The preview then fills the chat's space while the
   chat stays mounted behind it, and Back to chat takes the expand button's place. Leaving the
-  preview or closing the pane always returns the chat beside it. Android back first returns an
-  expanded preview, then leaves the preview, then the pane.
+  preview or closing the pane always returns the chat beside it. While the chat is focused, Android
+  back first returns an expanded preview, then leaves the preview, then the pane; a route pushed
+  over the chat, such as the trash, keeps back for itself.
 - `useFilePane` lets openers choose the pane. `useOpenFileEntry` is the only file opener that does.
   Callers outside the routes import it from `@/frontend/appShell/pane/state`, which leaves out the
   host and its Reanimated dependency.
