@@ -15,11 +15,23 @@ describe('iOS asynchronous editor paste patch', () => {
   test('loads Markdown and plain text from item providers instead of synchronous pasteboard getters', () => {
     expect(inputPatch).toContain('-  id markdownValue = [pasteboard valueForPasteboardType:');
     expect(inputPatch).toContain('-  NSString *plainText = pasteboard.string;');
-    expect(additions).toContain('loadItemForTypeIdentifier:kENRMMarkdownPasteboardType');
+    expect(additions).toContain(
+      'loadDataRepresentationForTypeIdentifier:kENRMMarkdownPasteboardType',
+    );
     expect(additions).toContain('loadObjectOfClass:[NSString class]');
     expect(additions).toContain('dispatch_async(dispatch_get_main_queue()');
     expect(additions).not.toContain('valueForPasteboardType:');
     expect(additions).not.toContain('pasteboard.string');
+  });
+
+  // App-owned Markdown is stored as UTF-8 bytes; generic item loading can lose this representation.
+  test('decodes custom Markdown data before falling back to plain text', () => {
+    expect(additions).toContain('completionHandler:^(NSData *data, NSError *error)');
+    expect(additions).toContain('initWithData:data encoding:NSUTF8StringEncoding');
+    expect(additions).toMatch(
+      /if \(markdown\.length > 0\)[\s\S]*completion\(markdown\)[\s\S]*else[\s\S]*ENRMLoadPlainPasteText\(providers, completion\)/,
+    );
+    expect(additions).not.toContain('loadItemForTypeIdentifier:');
   });
 
   test('ignores repeated taps while loading and drops reads made stale by caret moves or focus loss', () => {
