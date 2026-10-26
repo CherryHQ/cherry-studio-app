@@ -152,7 +152,7 @@ describe('voice model adaptation', () => {
       );
       const body = fetch.mock.calls[0][1]?.body as FormData;
       const file = body.get('file') as File;
-      expect(file.name).toBe('audio.mp4');
+      expect(file.name).toBe('audio.m4a');
       expect(file.type).toBe('audio/mp4');
       expect(new Uint8Array(await file.arrayBuffer())).toEqual(audio);
     },

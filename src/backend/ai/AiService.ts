@@ -23,6 +23,7 @@ import {
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import { NoTranscriptGeneratedError } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
@@ -389,14 +390,18 @@ export class AiService extends BaseService {
     input: VoiceModelSelection & { audio: Uint8Array; mediaType: string },
     signal: AbortSignal,
   ) {
-    return this.executeVoice(input, 'transcription', signal, (config) => {
-      return aiCoreTranscribe(
+    return this.executeVoice(input, 'transcription', signal, (config) =>
+      aiCoreTranscribe(
         resolveVoiceModel(config, 'transcription', input.mediaType),
         input.audio,
         {},
         signal,
-      );
-    });
+      ).catch((error: unknown) => {
+        // The SDK rejects an empty transcript; for recorded silence that is the answer itself.
+        if (NoTranscriptGeneratedError.isInstance(error)) return { text: '', segments: [] };
+        throw error;
+      }),
+    );
   }
 
   private async resolveVoiceSelection(

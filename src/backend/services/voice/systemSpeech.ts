@@ -2,6 +2,7 @@ import * as Speech from 'expo-speech';
 
 import { VoiceError } from '@/shared/contracts/voice';
 
+import { voiceAudioSession } from './audioSession';
 import type { SpeechEngine } from './engines';
 import { splitSpeechText } from './speechText';
 
@@ -54,6 +55,7 @@ export function createSystemSpeechEngine({
     },
     async speak({ text, language, signal }) {
       const voiceId = await voice();
+      await voiceAudioSession.playback();
       for (const chunk of splitSpeechText(text, Speech.maxSpeechInputLength)) {
         signal.throwIfAborted();
         await utter(chunk, language, voiceId, signal);

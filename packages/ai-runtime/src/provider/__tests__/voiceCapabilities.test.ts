@@ -31,6 +31,17 @@ describe('speech capabilities', () => {
     expect(resolveSpeechVoice(capabilities, 'ash')).toBe(supportsAsh ? 'ash' : undefined);
   });
 
+  it.each([
+    ['openai', 'tts-1', 4096],
+    ['openai', 'gpt-4o-mini-tts', 1000],
+    ['aihubmix', 'gemini-2.5-flash-preview-tts', 1500],
+    ['openai-compatible', 'my-voice-model', 1000],
+  ])('keeps %s %s requests within its input limit', (family, modelId, budget) => {
+    const capabilities = resolveVoiceCapabilities(family, modelId, 'speech');
+    if (capabilities?.operation !== 'speech') throw new Error('Expected speech capabilities');
+    expect(capabilities.maxInputCharacters).toBe(budget);
+  });
+
   it('does not invent a default or a voice catalog for a custom compatible model', () => {
     const capabilities = resolveVoiceCapabilities('openai-compatible', 'my-voice-model', 'speech');
     if (capabilities?.operation !== 'speech') throw new Error('Expected speech capabilities');

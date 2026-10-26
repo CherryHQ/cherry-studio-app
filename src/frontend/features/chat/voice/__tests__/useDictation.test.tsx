@@ -77,15 +77,32 @@ describe('dictation into the composer draft', () => {
     expect(dictation.state).toBe('idle');
   });
 
-  test('sending or typing during dictation hands the draft back to the user', async () => {
+  test.each([
+    ['sending', ''],
+    ['typing', 'Meeting notes: first, edited'],
+  ])('%s during dictation cancels it and hands the draft back', async (_action, edited) => {
     await act(async () => {
       void dictation.start();
     });
     act(() => options.onText?.('first'));
-    mockDraft = '';
-    act(() => options.onText?.('first words'));
-    await act(async () => result.resolve('first words.'));
-    expect(mockDraft).toBe('');
+    mockDraft = edited;
+    act(() => renderer.update(<Probe />));
+    expect(options.signal?.aborted).toBe(true);
+    await act(async () => undefined);
+    expect(mockDraft).toBe(edited);
+    expect(dictation.state).toBe('idle');
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  test('typing while a transcription-only engine records discards the recording', async () => {
+    await act(async () => {
+      void dictation.start();
+    });
+    mockDraft = 'Meeting notes: typed instead';
+    act(() => renderer.update(<Probe />));
+    expect(options.signal?.aborted).toBe(true);
+    await act(async () => undefined);
+    expect(mockDraft).toBe('Meeting notes: typed instead');
   });
 
   test('cancelling restores the draft as it was, without an error', async () => {

@@ -4,6 +4,8 @@ type Permission = { granted: boolean; canAskAgain: boolean };
 
 export type SystemPromptQueue = {
   runWithSystemPrompt<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T>;
+  /** Android reports the app as backgrounded while a permission dialog covers it. */
+  isPresentingSystemPrompt(): boolean;
 };
 
 /** Asks only when the system still allows it, through the shared system-prompt queue. */

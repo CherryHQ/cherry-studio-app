@@ -11,12 +11,19 @@ import { voiceErrorLabelKey } from './voiceErrorLabel';
 
 export type DictationState = 'idle' | 'starting' | 'listening' | 'finishing';
 
+type ActiveDictation = {
+  controller: AbortController;
+  session?: DictationSession;
+  /** Every draft this dictation produced; any other draft means the user took it back. */
+  owned: Set<string>;
+};
+
 /**
  * Dictates into the composer draft: recognized text follows what was already typed and is
  * updated live. Cancelling or failing restores the draft as it was; nothing is sent automatically.
  *
- * Dictation owns only the text it appended. Each write applies when the draft is still exactly
- * what dictation last wrote, so typing or sending meanwhile hands the draft back to the user.
+ * Dictation owns only the text it appended. Typing or sending meanwhile hands the draft back to
+ * the user and cancels the session, so nothing more is captured, uploaded or written.
  */
 export function useDictation() {
   const { t } = useTranslation();
@@ -26,11 +33,16 @@ export function useDictation() {
   const permissions = useBackendModule('permissions');
   const { draft } = useComposerState();
   const { setDraft } = useComposerActions();
-  const active = useRef<{ controller: AbortController; session?: DictationSession } | null>(null);
+  const active = useRef<ActiveDictation | null>(null);
   const [state, setState] = useState<DictationState>('idle');
   const [level, setLevel] = useState(0);
 
   useEffect(() => () => active.current?.controller.abort(), []);
+
+  useEffect(() => {
+    const owner = active.current;
+    if (owner && !owner.owned.has(draft)) owner.controller.abort();
+  }, [draft]);
 
   const report = useCallback(
     (error: unknown) => {
@@ -54,13 +66,14 @@ export function useDictation() {
   const start = useCallback(async () => {
     if (active.current) return;
     const controller = new AbortController();
-    const owner: { controller: AbortController; session?: DictationSession } = { controller };
-    active.current = owner;
     const base = draft;
+    const owner: ActiveDictation = { controller, owned: new Set([base]) };
+    active.current = owner;
     let written = base;
     const write = (next: string) => {
       const expected = written;
       written = next;
+      owner.owned.add(next);
       setDraft((current) => (current === expected ? next : current));
     };
     setState('starting');

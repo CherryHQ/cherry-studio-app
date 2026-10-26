@@ -21,6 +21,7 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'parser-unavailable',
     'parser-unsupported',
     'transcription-unconfigured',
+    'transcription-empty',
     'transcription-failed',
   ]),
   fileEntryId: FileEntryIdSchema.optional(),
@@ -147,6 +148,8 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
       return `${name} is not supported by the selected document parser.`;
     case 'transcription-unconfigured':
       return `${name} is audio. Configure a transcription model in voice settings to attach it.`;
+    case 'transcription-empty':
+      return `${name} contains no recognizable speech.`;
     case 'transcription-failed':
       return `${name} could not be transcribed.`;
     default:

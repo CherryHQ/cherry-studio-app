@@ -4,13 +4,13 @@ import {
   getRecordingPermissionsAsync,
   IOSOutputFormat,
   requestRecordingPermissionsAsync,
-  setAudioModeAsync,
 } from 'expo-audio';
 
 import { VoiceError, type DictationSession } from '@/shared/contracts/voice';
 import { MAX_AUDIO_ATTACHMENT_BYTES } from '@/shared/utils/audioFileTypes';
 
 import type { AiTranscriber } from './aiTranscription';
+import { voiceAudioSession } from './audioSession';
 import type { DictationEngine } from './engines';
 import { requireAccess, type SystemPromptQueue } from './microphoneAccess';
 import { deleteFile, takeRecording } from './voiceStorage';
@@ -56,12 +56,7 @@ export function createAiDictationEngine({
         { get: getRecordingPermissionsAsync, request: requestRecordingPermissionsAsync },
         signal,
       );
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-        shouldPlayInBackground: false,
-        allowsBackgroundRecording: false,
-      });
+      await voiceAudioSession.recording();
       const recorder = new nativeAudio.AudioRecorder({
         ...COMMON_OPTIONS,
         ...PLATFORM_OPTIONS[platform],
@@ -77,7 +72,7 @@ export function createAiDictationEngine({
             return recorder.uri;
           } finally {
             recorder.release();
-            await setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+            await voiceAudioSession.playback().catch(() => undefined);
           }
         })());
 

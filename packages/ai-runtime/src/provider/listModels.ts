@@ -706,26 +706,27 @@ const aiHubMixFetcher: ModelFetcher = {
     });
     return dedup(response.data, (m) => m.model_id).map((m) => {
       const types = m.types?.split(',').map((type) => type.trim().toLowerCase()) ?? [];
-      const speech = types.includes('tts');
-      const transcription = types.includes('stt');
+      const inputModalities = parseCatalogModalities(m.input_modalities) ?? [];
+      const outputModalities = parseCatalogModalities(m.output_modalities) ?? [];
+      // Only dedicated audio APIs are voice models. Models that converse in audio and text
+      // (gpt-audio, realtime) keep their chat identity instead of becoming unusable voice entries.
+      const speech =
+        types.includes('tts') && outputModalities.every((modality) => modality === MODALITY.AUDIO);
+      const transcription =
+        types.includes('stt') &&
+        inputModalities.includes(MODALITY.AUDIO) &&
+        outputModalities.every((modality) => modality === MODALITY.TEXT);
       const voiceMetadata =
         getAihubmixVoiceModelMetadata(m.model_id) ??
-        (speech || transcription
-          ? {
-              capabilities: [
-                ...(speech ? [MODEL_CAPABILITY.AUDIO_GENERATION] : []),
-                ...(transcription
-                  ? [
-                      speech
-                        ? MODEL_CAPABILITY.AUDIO_RECOGNITION
-                        : MODEL_CAPABILITY.AUDIO_TRANSCRIPT,
-                    ]
-                  : []),
-              ],
-              inputModalities: parseCatalogModalities(m.input_modalities),
-              outputModalities: parseCatalogModalities(m.output_modalities),
-            }
-          : undefined);
+        (speech
+          ? { capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION], inputModalities, outputModalities }
+          : transcription
+            ? {
+                capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+                inputModalities,
+                outputModalities,
+              }
+            : undefined);
       return toModel(m.model_id, provider, {
         name: m.model_name || m.model_id,
         description: m.desc,

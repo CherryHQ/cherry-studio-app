@@ -10,6 +10,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
 import type { SpeechModelOptions, VoiceEngineId } from '@/shared/contracts/voice';
@@ -109,21 +110,23 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
           size="medium"
           title={t('settings.voice.voice')}
         >
-          <TextField className="px-4">
-            <TextField.Label>{t('settings.voice.voice')}</TextField.Label>
-            <Input
-              accessibilityLabel={t('settings.voice.voice')}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-              maxLength={256}
-              onChangeText={setCustomVoice}
-              value={customVoice}
-            />
-            <TextField.Description>
-              {t('settings.voice.customVoiceDescription')}
-            </TextField.Description>
-          </TextField>
+          <View className="px-4">
+            <TextField>
+              <TextField.Label>{t('settings.voice.voice')}</TextField.Label>
+              <Input
+                accessibilityLabel={t('settings.voice.voice')}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+                maxLength={256}
+                onChangeText={setCustomVoice}
+                value={customVoice}
+              />
+              <TextField.Description>
+                {t('settings.voice.customVoiceDescription')}
+              </TextField.Description>
+            </TextField>
+          </View>
         </BottomSheet>
       ) : (
         <OptionPickerBottomSheet<string>

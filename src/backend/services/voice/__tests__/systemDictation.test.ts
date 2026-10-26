@@ -12,7 +12,10 @@ function emit(event: string, payload: unknown = null) {
 const result = (transcript: string, isFinal: boolean) =>
   emit('result', { isFinal, results: [{ transcript, confidence: 1, segments: [] }] });
 
-const queue = { runWithSystemPrompt: <T>(operation: () => Promise<T>) => operation() };
+const queue = {
+  runWithSystemPrompt: <T>(operation: () => Promise<T>) => operation(),
+  isPresentingSystemPrompt: () => false,
+};
 
 beforeEach(() => {
   jest.clearAllMocks();

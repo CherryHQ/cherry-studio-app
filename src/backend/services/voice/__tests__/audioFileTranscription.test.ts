@@ -17,7 +17,7 @@ function setup(selection: VoiceModelSelection | null = model) {
   const entries = new Map<string, string>();
   const key = (fact: FileAttachmentFact) => `${fact.fileEntryId}/${fact.revision}`;
   const transcribe = jest.fn(
-    async (): Promise<TranscriptionResult> => ({
+    async (_input?: unknown, _signal?: AbortSignal): Promise<TranscriptionResult> => ({
       text: 'hello world',
       segments: [
         { text: ' hello', startSecond: 0, endSecond: 1 },
@@ -37,12 +37,13 @@ function setup(selection: VoiceModelSelection | null = model) {
     read: async (fact: FileAttachmentFact) => entries.get(key(fact)),
     write: async (fact: FileAttachmentFact, text: string) => void entries.set(key(fact), text),
   };
+  const transcribeFile = createAudioFileTranscriber(transcriber, cache);
   return {
     preference,
     transcribe,
     readBytes,
-    run: (fact = file) =>
-      createAudioFileTranscriber(transcriber, cache)(fact, readBytes, new AbortController().signal),
+    run: (fact = file, signal = new AbortController().signal) =>
+      transcribeFile(fact, readBytes, signal),
   };
 }
 
@@ -105,5 +106,42 @@ test('reports a missing model or a failed request as attachment issues', async (
 
   const silent = setup();
   silent.transcribe.mockResolvedValueOnce({ text: '', segments: [] });
-  await expect(silent.run()).rejects.toMatchObject({ issue: { code: 'document-empty' } });
+  await expect(silent.run()).rejects.toMatchObject({ issue: { code: 'transcription-empty' } });
+});
+
+test('parallel readers of one revision share a single request', async () => {
+  const { run, transcribe } = setup();
+  const [a, b] = await Promise.all([run(), run()]);
+  expect(a).toBe(b);
+  expect(transcribe).toHaveBeenCalledTimes(1);
+});
+
+test('a shared request is cancelled only after every waiting reader cancels', async () => {
+  const { run, transcribe } = setup();
+  let request: AbortSignal | undefined;
+  let answer!: (result: TranscriptionResult) => void;
+  transcribe.mockImplementation(
+    (_input, signal) =>
+      new Promise<TranscriptionResult>((resolve) => {
+        request = signal;
+        answer = resolve;
+      }),
+  );
+  const first = new AbortController();
+  const second = new AbortController();
+  const firstRead = run(file, first.signal);
+  const secondRead = run(file, second.signal);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  first.abort(new Error('first answer failed'));
+  await expect(firstRead).rejects.toThrow('first answer failed');
+  expect(request?.aborted).toBe(false);
+  answer({ text: 'kept', segments: [] });
+  await expect(secondRead).resolves.toBe('[Audio transcript]\nkept');
+
+  const third = new AbortController();
+  const thirdRead = run({ ...file, revision: 3 }, third.signal);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  third.abort(new Error('stopped'));
+  await expect(thirdRead).rejects.toThrow('stopped');
+  expect(request?.aborted).toBe(true);
 });

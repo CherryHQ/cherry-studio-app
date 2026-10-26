@@ -36,3 +36,8 @@ test('packs sentences into requests without exceeding the limit', () => {
     'x'.repeat(5),
   ]);
 });
+
+test('keeps the first request short so speech starts before long text is generated', () => {
+  const text = 'One. Two. Three. Four. Five.';
+  expect(splitSpeechText(text, 100, 10)).toEqual(['One. Two.', 'Three. Four. Five.']);
+});

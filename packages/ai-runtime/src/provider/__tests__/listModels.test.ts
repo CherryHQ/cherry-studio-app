@@ -862,11 +862,12 @@ describe('listModels — aiHubMixFetcher (configured base URL)', () => {
         inputModalities: ['audio', 'text'],
         outputModalities: ['text'],
       },
+      // Audio conversation models are not dedicated voice APIs and keep their chat identity.
       {
         apiModelId: 'gpt-realtime-2.1',
-        capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION, MODEL_CAPABILITY.AUDIO_RECOGNITION],
-        inputModalities: ['text', 'audio', 'image'],
-        outputModalities: ['audio', 'text'],
+        capabilities: [],
+        inputModalities: undefined,
+        outputModalities: undefined,
       },
       {
         apiModelId: 'chat-model',

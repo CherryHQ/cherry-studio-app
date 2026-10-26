@@ -26,7 +26,10 @@ function fixture() {
   const dependencies = {
     ai: {
       generateSpeech: jest.fn(
-        async (_input: Parameters<AiSpeechDependencies['ai']['generateSpeech']>[0]) => ({
+        async (
+          _input: Parameters<AiSpeechDependencies['ai']['generateSpeech']>[0],
+          _signal?: AbortSignal,
+        ) => ({
           audio: new Uint8Array([1, 2, 3]),
           mediaType: 'audio/wav',
         }),
@@ -112,6 +115,24 @@ test('observes a prefetch failure while playback continues, then reports it and 
   expect(createAudioPlayer).toHaveBeenCalledTimes(1);
   expect(f.player.release).toHaveBeenCalledTimes(1);
   expect(deleteFile).toHaveBeenCalledWith('file:///voice.wav');
+});
+
+test('a failed part cancels the request generating the next one', async () => {
+  const f = fixture();
+  let nextRequest: AbortSignal | undefined;
+  f.ai.generateSpeech
+    .mockResolvedValueOnce({ audio: new Uint8Array([1]), mediaType: 'audio/wav' })
+    .mockImplementationOnce((_input, signal) => {
+      nextRequest = signal;
+      return new Promise(() => undefined);
+    });
+  f.player.play.mockImplementationOnce(() => {
+    throw new Error('cannot play');
+  });
+  await expect(f.speak(`${'a'.repeat(300)}. Next part.`)).rejects.toMatchObject({
+    code: 'playback-failed',
+  });
+  expect(nextRequest?.aborted).toBe(true);
 });
 
 test('releases playback resources when starting the native player throws', async () => {

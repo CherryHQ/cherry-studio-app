@@ -1,5 +1,5 @@
 import { Section } from '@cherrystudio/ui/components';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,8 @@ function useEffectiveEngine(capability: VoiceCapability) {
   return useQuery({
     queryKey: ['voice', 'effective-engine', capability, selected],
     queryFn: ({ signal }) => voice.getEffectiveEngine(capability, { signal }),
+    // Keep the current engine's controls until the new choice resolves instead of blanking them.
+    placeholderData: keepPreviousData,
   }).data;
 }
 

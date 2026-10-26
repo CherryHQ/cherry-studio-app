@@ -2,8 +2,9 @@ import { Blob as ExpoBlob, type BlobPart } from 'expo-blob';
 
 /** Web File backed by the same bytes as Expo Blob, rather than React Native's legacy Blob. */
 export class File extends ExpoBlob {
-  declare readonly name: string;
-  declare readonly lastModified: number;
+  // Type-only: Metro's Babel rejects `declare` fields, and these are defined read-only below.
+  readonly name!: string;
+  readonly lastModified!: number;
   readonly webkitRelativePath = '';
 
   constructor(parts: Iterable<BlobPart>, name: string, options: FilePropertyBag = {}) {

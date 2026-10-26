@@ -74,7 +74,8 @@ export function createVoice({
     dictationLanguage,
     onBackground(listener) {
       const subscription = AppState.addEventListener('change', (state) => {
-        if (state === 'background') listener();
+        // A permission dialog the voice action itself opened is not leaving the app.
+        if (state === 'background' && !permissions.isPresentingSystemPrompt()) listener();
       });
       return () => subscription.remove();
     },

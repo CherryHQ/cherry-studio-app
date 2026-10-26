@@ -1,5 +1,6 @@
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { createAudioPlayer } from 'expo-audio';
 
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import {
   VoiceError,
   type SpeechModelOptions,
@@ -9,6 +10,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { generatedAudioExtension } from '@/shared/utils/audioFileTypes';
 
+import { voiceAudioSession } from './audioSession';
 import type { SpeechEngine } from './engines';
 import { splitSpeechText } from './speechText';
 import { deleteFile, type VoiceScratch } from './voiceStorage';
@@ -49,6 +51,8 @@ export type AiSpeechDependencies = {
 };
 
 const END_TOLERANCE_SECONDS = 0.5;
+/** About one or two sentences: the first part only has to cover generating the next one. */
+const FIRST_PART_CHARACTERS = 200;
 
 function play(uri: string, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -119,19 +123,22 @@ export function createAiSpeechEngine({
         signal,
       );
       signal.throwIfAborted();
+      // Requests end with the reading, including a part generated ahead of a failed one.
+      const requestController = new AbortController();
+      const requests = linkAbortSignals([signal, requestController.signal]);
       const generate = async (chunk: string) => {
         const { audio, mediaType } = await ai.generateSpeech(
           { ...model, text: chunk, voice: configuration.voice },
-          signal,
+          requests.signal,
         );
         if (!audio.length) throw new VoiceError('failed', 'The speech model returned no audio.');
         const extension = generatedAudioExtension(mediaType);
         if (mediaType !== configuration.mediaType || !extension)
           throw new VoiceError('failed', 'The speech model returned an unsupported audio format.');
         const file = scratch.writeAudio(audio, extension);
-        if (signal.aborted) {
+        if (requests.signal.aborted) {
           deleteFile(file.uri);
-          signal.throwIfAborted();
+          requests.signal.throwIfAborted();
         }
         return file.uri;
       };
@@ -142,7 +149,7 @@ export function createAiSpeechEngine({
           (uri) => ({ uri }),
           (error: unknown) => ({ error }),
         );
-      const chunks = splitSpeechText(text, configuration.maxInputCharacters);
+      const chunks = splitSpeechText(text, configuration.maxInputCharacters, FIRST_PART_CHARACTERS);
       let next = chunks.length ? prepare(chunks[0]!) : undefined;
       try {
         for (let index = 0; next; index += 1) {
@@ -151,11 +158,7 @@ export function createAiSpeechEngine({
           const { uri } = part;
           next = index + 1 < chunks.length ? prepare(chunks[index + 1]!) : undefined;
           try {
-            await setAudioModeAsync({
-              allowsRecording: false,
-              playsInSilentMode: true,
-              shouldPlayInBackground: false,
-            });
+            await voiceAudioSession.playback();
             await play(uri, signal);
           } catch (error) {
             signal.throwIfAborted();
@@ -170,6 +173,8 @@ export function createAiSpeechEngine({
           }
         }
       } finally {
+        requestController.abort();
+        requests.dispose();
         // A part generated ahead of a stop is never played.
         void next?.then((part) => {
           if ('uri' in part) deleteFile(part.uri);

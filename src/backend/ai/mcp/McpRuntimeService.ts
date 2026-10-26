@@ -4,7 +4,6 @@ import { AppState } from 'react-native';
 import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
-import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 import {
   AppStatePolicy,
   BaseService,
@@ -24,6 +23,7 @@ import {
   type PluginToolCatalog,
 } from '@/backend/services/builtInMcp';
 import { McpOAuthRuntime } from '@/backend/services/mcp';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type {
   McpConnectionConfig,
   McpModule,

@@ -1,3 +1,4 @@
+import { raceAbort } from '@/backend/utils/raceAbort';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import { VoiceError } from '@/shared/contracts/voice';
 import { transcriptionMediaType } from '@/shared/utils/audioFileTypes';
@@ -35,20 +36,25 @@ export function formatTranscript(result: TranscriptionResult): string {
   return [`[Audio transcript${facts.length ? `; ${facts.join('; ')}` : ''}]`, ...body].join('\n');
 }
 
+type Flight = { promise: Promise<string>; controller: AbortController; waiters: number };
+
 /**
  * Adapts the transcription model to the attachment reader port. Failures become attachment
  * issues so chat and file tools report them like any other unreadable file.
+ *
+ * Readers of one file revision share a single request: parallel answers and tool calls would
+ * otherwise each upload and pay for the same audio. The request is cancelled only when every
+ * reader waiting for it has cancelled.
  */
 export function createAudioFileTranscriber(transcriber: AiTranscriber, cache: TranscriptCache) {
-  return async function transcribeAudioFile(
+  const flights = new Map<string, Flight>();
+
+  async function transcribeOnce(
     file: FileAttachmentFact,
     readBytes: (signal: AbortSignal) => Promise<Uint8Array | undefined>,
     signal: AbortSignal,
   ): Promise<string> {
     const issue = { fileEntryId: file.fileEntryId, name: file.name };
-    const cached = await cache.read(file).catch(() => undefined);
-    signal.throwIfAborted();
-    if (cached) return cached;
     const model = await transcriber.selection();
     signal.throwIfAborted();
     if (!model) throw new FileAttachmentError({ ...issue, code: 'transcription-unconfigured' });
@@ -77,8 +83,37 @@ export function createAudioFileTranscriber(transcriber: AiTranscriber, cache: Tr
         { cause: error },
       );
     }
-    if (!text) throw new FileAttachmentError({ ...issue, code: 'document-empty' });
+    if (!text) throw new FileAttachmentError({ ...issue, code: 'transcription-empty' });
     await cache.write(file, text).catch(() => undefined);
     return text;
+  }
+
+  return async function transcribeAudioFile(
+    file: FileAttachmentFact,
+    readBytes: (signal: AbortSignal) => Promise<Uint8Array | undefined>,
+    signal: AbortSignal,
+  ): Promise<string> {
+    const cached = await cache.read(file).catch(() => undefined);
+    signal.throwIfAborted();
+    if (cached) return cached;
+    const key = `${file.fileEntryId}/${file.revision ?? 0}/${file.size}`;
+    let flight = flights.get(key);
+    if (!flight) {
+      const controller = new AbortController();
+      const promise = transcribeOnce(file, readBytes, controller.signal).finally(() =>
+        flights.delete(key),
+      );
+      promise.catch(() => undefined);
+      flight = { promise, controller, waiters: 0 };
+      flights.set(key, flight);
+    }
+    const joined = flight;
+    joined.waiters += 1;
+    try {
+      return await raceAbort(joined.promise, signal);
+    } finally {
+      joined.waiters -= 1;
+      if (joined.waiters === 0 && signal.aborted) joined.controller.abort(signal.reason);
+    }
   };
 }

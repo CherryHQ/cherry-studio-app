@@ -63,13 +63,32 @@ const GEMINI_VOICES = [
   'Sulafat',
 ] as const;
 
-function speech(voices: readonly string[], defaultVoice?: string): SpeechCapabilities {
+/**
+ * Characters per request. Limits are stated in characters or tokens; CJK text can take more than
+ * one token per character, so token-limited models get a character budget below their token limit.
+ */
+const INPUT_BUDGET = {
+  /** tts-1 and tts-1-hd accept 4,096 characters. */
+  openaiTts: 4096,
+  /** gpt-4o-mini-tts accepts 2,000 input tokens. */
+  openaiMiniTts: 1000,
+  /** Gemini TTS output is capped near 11 minutes of audio; this keeps a CJK part well below it. */
+  gemini: 1500,
+  /** Compatible models declare no limit; stay within what common speech APIs accept. */
+  unknown: 1000,
+} as const;
+
+function speech(
+  voices: readonly string[],
+  maxInputCharacters: number,
+  defaultVoice?: string,
+): SpeechCapabilities {
   return {
     operation: 'speech',
     voices,
     defaultVoice,
     acceptsCustomVoice: voices.length === 0,
-    maxInputCharacters: 4096,
+    maxInputCharacters,
     outputMediaType: 'audio/wav',
   };
 }
@@ -77,9 +96,10 @@ function speech(voices: readonly string[], defaultVoice?: string): SpeechCapabil
 /** Known model facts are shared by discovery, settings, admission and request execution. */
 export function getOpenAIVoiceCapabilities(modelId: string): VoiceCapabilities | undefined {
   const id = modelId.replace(/^openai\//, '');
-  if (/^tts-1(?:-hd)?(?:-\d{4})?$/.test(id)) return speech(OPENAI_TTS_VOICES, 'alloy');
+  if (/^tts-1(?:-hd)?(?:-\d{4})?$/.test(id))
+    return speech(OPENAI_TTS_VOICES, INPUT_BUDGET.openaiTts, 'alloy');
   if (/^gpt-4o-mini-tts(?:-\d{4}-\d{2}-\d{2})?$/.test(id))
-    return speech(OPENAI_MINI_TTS_VOICES, 'alloy');
+    return speech(OPENAI_MINI_TTS_VOICES, INPUT_BUDGET.openaiMiniTts, 'alloy');
   if (/^(?:whisper-1|gpt-4o(?:-mini)?-transcribe(?:-\d{4}-\d{2}-\d{2})?)$/.test(id))
     return { operation: 'transcription' };
   return undefined;
@@ -90,7 +110,8 @@ export function getAihubmixVoiceCapabilities(modelId: string): VoiceCapabilities
   if (openai) return openai;
   // https://docs.aihubmix.com/cn/api/TTS — native Gemini IDs are case-sensitive. Do not rely
   // on the gateway's OpenAI voice aliases; some routes reject them instead of mapping them.
-  if (/^gemini-2\.5-(?:flash|pro)-preview-tts$/.test(modelId)) return speech(GEMINI_VOICES, 'Kore');
+  if (/^gemini-2\.5-(?:flash|pro)-preview-tts$/.test(modelId))
+    return speech(GEMINI_VOICES, INPUT_BUDGET.gemini, 'Kore');
   if (/^(?:whisper-large-v3(?:-turbo)?|distil-whisper-large-v3-en)$/.test(modelId))
     return { operation: 'transcription' };
   return undefined;
@@ -110,7 +131,7 @@ export function resolveVoiceCapabilities(
         : undefined;
   if (known) return known.operation === operation ? known : undefined;
   if (family === 'openai' || family === 'openai-compatible')
-    return operation === 'speech' ? speech([]) : { operation };
+    return operation === 'speech' ? speech([], INPUT_BUDGET.unknown) : { operation };
   return undefined;
 }
 

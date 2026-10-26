@@ -40,23 +40,32 @@ export function speakableText(markdown: string): string {
 // Up to and including sentence-ending punctuation; a period counts only before whitespace.
 const SENTENCES = /.+?(?:[。！？!?；;…]+|\.(?=\s)|$)/gu;
 
-/** Packs text into requests of at most `maxLength`, breaking at sentences where possible. */
-export function splitSpeechText(text: string, maxLength: number): string[] {
+/**
+ * Packs text into requests of at most `maxLength`, breaking at sentences where possible. The first
+ * request may be limited further so output can start before long text has been generated.
+ */
+export function splitSpeechText(
+  text: string,
+  maxLength: number,
+  firstMaxLength = maxLength,
+): string[] {
   const chunks: string[] = [];
   let chunk = '';
+  const limit = () => (chunks.length ? maxLength : Math.min(firstMaxLength, maxLength));
   for (const line of text.split('\n')) {
     let separator = chunk ? '\n' : '';
     for (const sentence of line.match(SENTENCES) ?? []) {
-      const piece = sentence.trim();
-      for (let start = 0; start < piece.length; start += maxLength) {
-        const part = piece.slice(start, start + maxLength);
-        if (chunk && chunk.length + separator.length + part.length > maxLength) {
+      let piece = sentence.trim();
+      while (piece) {
+        if (chunk && chunk.length + separator.length + piece.length > limit()) {
           chunks.push(chunk);
           chunk = '';
           separator = '';
         }
+        const part = piece.slice(0, limit() - chunk.length - separator.length);
         chunk += separator + part;
         separator = ' ';
+        piece = piece.slice(part.length);
       }
     }
   }

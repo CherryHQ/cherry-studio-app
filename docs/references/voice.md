@@ -29,13 +29,18 @@ Changing the speech model saves the model and voice together: a supported explic
 otherwise the choice returns to automatic. Settings refresh their voice options when the model,
 language or provider registry changes, and when returning from account/model settings.
 
-The chat composer has one primary action slot: voice input while the draft and attachments are
-empty and a configured dictation engine is available, send once there is content, and stop while a
-reply streams. With dictation off, no system recognizer, or no available selected AI transcription
-model/account, it keeps the send action. Dictation can be turned off again in voice settings.
-Dictation keeps the slot until it ends even as its text fills the draft. Adding to a typed draft by
-voice goes through the keyboard's own voice input. Reading aloud sits beside copy on a settled
-assistant reply's toolbar and turns into stop while that reply is read.
+The chat composer, local and remote, has one primary action slot: voice input while the draft
+and attachments are empty and a configured dictation engine is available, send once there is
+content, and stop while a reply streams. With dictation off, no system recognizer, or no available
+selected AI transcription model/account, it keeps the send action. Dictation can be turned off
+again in voice settings. Dictation keeps the slot until it ends even as its text fills the draft;
+there it finishes dictation (a check mark) and shows progress while a recording is transcribed.
+While dictating, cancel replaces the leading attachment action and discards the dictation at any
+point, including during transcription. Until text arrives, the placeholder shows that it is
+listening with the recording time, then that it is transcribing. Adding to a typed draft by voice
+goes through the keyboard's own voice input. Reading aloud sits beside copy on a settled assistant
+reply's toolbar and turns into stop while that reply is read; switching or closing the
+conversation ends the reading.
 
 ## Module Boundaries
 
@@ -49,21 +54,24 @@ Callers never pick an engine: they start dictation, read text, and observe the c
 - `VoiceRuntime.ts` is the only place that chooses an engine. An explicit preference is used as is;
   with none (`null`), dictation is off and speech uses the first supported `VOICE_ENGINES` entry. The runtime
   allows one activity at a time: dictation stops reading, reading replaces reading, and reading
-  cannot start during dictation. Backgrounding the app and host disposal abort the activity. It
-  turns Markdown into prose (`speechText.ts`) before any engine sees it.
+  cannot start during dictation. Backgrounding the app and host disposal abort the activity. A
+  permission dialog opened through the system prompt queue is not backgrounding, although Android
+  reports the app as `background` behind it. It turns Markdown into prose (`speechText.ts`) before
+  any engine sees it.
 - Each native library appears in exactly one adapter: `systemDictation.ts`
   (`expo-speech-recognition`), `systemSpeech.ts` (`expo-speech`), `aiDictation.ts` (`expo-audio`
   recording) and `aiSpeech.ts` (`expo-audio` playback). Adapters own their permissions, native
-  resources and cleanup.
+  resources and cleanup. `audioSession.ts` alone configures the shared iOS audio session: reading
+  aloud in either engine plays in silent mode, and ending a recording returns to playback.
 - `createVoice.ts` assembles the engines for the host. Adding an engine means one adapter, one
   `VOICE_ENGINES` entry and one registration there; callers and the runtime do not change.
 
 The frontend uses `useBackendModule('voice')` only. Chat owns the dictation and read-aloud hooks in
 `src/frontend/features/chat/voice`; settings owns `src/frontend/features/settings/voice`.
 
-Dictation owns only the text it appended to the draft. A write applies only while the draft is
-still what dictation last wrote, so typing or sending during dictation hands the draft back to the
-user. Only stopping keeps the dictated text. Cancelling, backgrounding and any failure release the
+Dictation owns only the text it appended to the draft. Typing or sending during dictation hands
+the draft back to the user and cancels the session, so nothing more is captured, uploaded or
+written. Only stopping keeps the dictated text. Cancelling, backgrounding and any failure release the
 session and restore the earlier draft; failures other than cancelling are reported.
 
 ## Engines
@@ -96,8 +104,10 @@ refreshes when the app language changes.
 
 **AI speech** reads the model and voice as one configuration snapshot, resolves the effective voice
 and request limit once, splits prose at sentence boundaries, generates the next part while the
-current one plays, and deletes each audio file after playback. The adapter currently uses a
-4,096-character request budget and the upstream one-shot API's WAV output. The player validates
+current one plays, and deletes each audio file after playback. Each model's request budget comes from
+`voiceCapabilities.ts` and stays below its documented character or token limit; the first part is
+at most about two sentences so playback starts before long text is generated. A part that fails
+cancels the request generating the next one. Output is the upstream one-shot API's WAV. The player validates
 the returned media type before choosing a file extension. A part
 that cannot play fails the reading. A pause or stop the reading did not request, such as an audio
 interruption, also fails it in both speech engines, instead of waiting for playback to resume. The
@@ -119,13 +129,17 @@ file service never depends on voice or AI. `AgentHostDependencies` supplies the 
 `library_read_file`. The transcript reaches the model as a text attachment with an
 `[Audio transcript]` header and timed segments when the model returns them; the attachment report
 mode is `audio-transcript`. Without a transcription model, sending fails with the
-`transcription-unconfigured` attachment issue; a failed request reports `transcription-failed`.
+`transcription-unconfigured` attachment issue; a failed request reports `transcription-failed`,
+and audio without recognizable speech reports `transcription-empty`. An empty transcript is
+recognized silence, not a request failure, so AI dictation reports it as no speech.
 
 Transcripts are cached in the system cache directory by `audioTranscriptCache` in the file service,
 keyed by file id, revision and size, and removed with their entry. A transcript describes the
 recording, so later turns, paged reads and model changes do not transcribe again, and a cached
-transcript needs no configured model. Losing the cache only costs another transcription. Audio is transcribed only when a turn or tool actually reads it; importing never
-transcribes.
+transcript needs no configured model. Losing the cache only costs another transcription. Audio is
+transcribed only when a turn or tool actually reads it; importing never transcribes. Concurrent
+readers of one revision, such as parallel answers, share a single request, which is cancelled only
+when every waiting reader has cancelled.
 
 ## AI Models And Accounts
 
@@ -139,7 +153,9 @@ qualify. AiHubMix uses its compatible audio URL even when Gemini is the default 
 Its audio admission is limited to the supported OpenAI speech/transcription families, Gemini 2.5
 Flash/Pro preview TTS and Whisper variants declared in `voiceCapabilities.ts`; catalog audio tags
 alone do not establish protocol compatibility. AiHubMix discovery preserves its voice types and
-modalities, with canonical metadata correcting known catalog errors for the supported families.
+modalities for dedicated audio APIs only, with canonical metadata correcting known catalog errors
+for the supported families. Models whose catalog entry converses in both audio and text, such as
+gpt-audio and realtime models, keep their chat identity.
 Realtime and multimodal audio chat models are not TTS choices. Previously entered model IDs
 must exist in the model catalog with the correct voice type. Each action makes one attempt. Remote
 conversations also use the local voice settings.

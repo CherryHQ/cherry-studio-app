@@ -221,6 +221,33 @@ test('transcribes original bytes with their stated container type, using the aud
   expect(mockResolve.mock.calls[0][1]).toBe('transcription');
 });
 
+test('treats an empty transcript as recognized silence rather than a request failure', async () => {
+  const f = createContractFixture({
+    modelId: 'whisper-1',
+    capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+    modelOverrides: { inputModalities: [MODALITY.AUDIO], outputModalities: [MODALITY.TEXT] },
+  });
+  const generate = jest.fn(async () => ({
+    text: '',
+    segments: [],
+    language: undefined,
+    durationInSeconds: undefined,
+    warnings: [],
+    response: { timestamp: new Date(), modelId: 'whisper-1' },
+  }));
+  mockResolve.mockReturnValue(new MockTranscriptionModelV3({ doGenerate: generate }));
+  const result = await new AiService(f.services).transcribe(
+    {
+      providerId: f.provider.id,
+      modelId: 'whisper-1',
+      audio: new Uint8Array([1]),
+      mediaType: 'audio/mp4',
+    },
+    new AbortController().signal,
+  );
+  expect(result.text).toBe('');
+});
+
 test.each([401, 404, 503])(
   'normalizes HTTP %i failure once and redacts the serving credential',
   async (statusCode) => {
