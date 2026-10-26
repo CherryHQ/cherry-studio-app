@@ -2,9 +2,11 @@ import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
 import { AppState } from 'react-native';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
+import type { DiscoveryEvent } from '../DesktopEndpointResolver';
 import {
   DesktopSession,
   DesktopUnreachableError,
@@ -14,10 +16,15 @@ import {
 import { WebSocketOpeningError } from '../remoteErrors';
 import { openWebSocketStream } from '../remoteSocket';
 
+let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
+
 jest.mock('@cherrystudio/remote-transport', () => ({}));
 jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
 jest.mock('../DesktopDiscovery', () => ({
   DesktopDiscovery: class {
+    constructor(receive: (event: DiscoveryEvent) => void) {
+      mockDiscoveryReceive = receive;
+    }
     setActive() {}
     browse() {
       return () => {};
@@ -583,6 +590,32 @@ describe('DesktopConnectionRuntime', () => {
       details: { reason: 'unreachable', connectionFailures: [failure] },
     });
   });
+
+  it.each([
+    {
+      kind: 'websocket',
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '403 Forbidden'",
+    },
+    {
+      kind: 'websocket',
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '503 Service Unavailable'",
+    },
+    { kind: 'timeout', address: 'ws://192.168.1.2:23333/v1/remote/connect' },
+  ] satisfies DesktopConnectionFailure[])(
+    'preserves opening failure details through configuration preview: $kind $message',
+    async (failure) => {
+      mockDiscoveryReceive({ type: 'unavailable' });
+      jest.mocked(openWebSocketStream).mockRejectedValueOnce(new WebSocketOpeningError(failure));
+      await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+        details: { reason: 'unreachable', connectionFailures: [failure] },
+      });
+      expect(store.preview).not.toHaveBeenCalled();
+    },
+  );
 
   it('maps an invalid invitation and an unreachable desktop to the settings error reasons', async () => {
     const session = createSession({

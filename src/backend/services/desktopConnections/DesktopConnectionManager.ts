@@ -49,6 +49,7 @@ type ConnectionEntry = {
   row: DesktopConnectionRow;
   leases: Set<LeaseEntry>;
   session?: DesktopSession;
+  connectionFailures?: DesktopConnectionFailure[];
   pending?: Promise<void>;
   dial?: AbortController;
   idleTimer?: ReturnType<typeof setTimeout>;
@@ -331,6 +332,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
                 state.reason === 'unsupported-version'
                 ? state.reason
                 : 'unreachable',
+              retained.connectionFailures,
             ),
           );
         if (retained.session?.isOpen && state.status === 'ready')
@@ -360,6 +362,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
                         lease.state.reason === 'unsupported-version'
                         ? lease.state.reason
                         : 'unreachable',
+                      retained.connectionFailures,
                     ),
               );
           };
@@ -668,6 +671,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           );
           controller.signal.throwIfAborted();
           entry.session = session;
+          entry.connectionFailures = undefined;
           entry.retry = 0;
           session.onAuthorization((next) => {
             this.updateAuthorization(entry, () =>
@@ -705,6 +709,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
                 entry.row,
               );
             } else {
+              entry.connectionFailures =
+                error instanceof DesktopUnreachableError ? error.connectionFailures : undefined;
               logger.debug('Desktop connection unavailable', {
                 connectionId: id,
                 reason: error instanceof DesktopUnreachableError ? error.reason : 'unreachable',
@@ -808,6 +814,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     entry.dial?.abort();
     entry.session?.close();
     entry.session = undefined;
+    entry.connectionFailures = undefined;
   }
   seedLocation(id: string, desktopIdentity: string, endpoints: DirectEndpoint[]) {
     this.resolver.seed(id, desktopIdentity, endpoints);
