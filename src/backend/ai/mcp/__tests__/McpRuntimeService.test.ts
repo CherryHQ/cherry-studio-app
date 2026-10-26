@@ -1217,27 +1217,34 @@ describe('catalog reuse', () => {
   });
 
   it.each([
-    ['an undeclared tool', {}, { code: 'mcp_tool_outcome_unknown', retryable: false }],
+    ['an undeclared tool', {}, { code: 'mcp_tool_outcome_unknown', retryable: false }, undefined],
     [
       'a read-only tool',
       { annotations: { readOnlyHint: true } },
       { code: 'mcp_tool_call_failed', retryable: true },
+      true,
     ],
     [
       'an idempotent tool',
       { annotations: { idempotentHint: true } },
       { code: 'mcp_tool_call_failed', retryable: true },
+      undefined,
     ],
-  ])('classifies a transport failure after sending %s', async (_label, annotations, expected) => {
-    const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
-    client.callTool.mockRejectedValue(new Error('socket closed'));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const server = makeServer();
-    const { service } = makeService([server]);
-    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+  ])(
+    'classifies a transport failure after sending %s',
+    async (_label, annotations, expected, readOnlyHint) => {
+      const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
+      client.callTool.mockRejectedValue(new Error('socket closed'));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server = makeServer();
+      const { service } = makeService([server]);
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
 
-    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
-  });
+      // Idempotence makes a retry harmless but still allows a change, so it is no read.
+      expect(descriptor!.readOnlyHint).toBe(readOnlyHint);
+      await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
+    },
+  );
 
   it('reports a call that never left the device as a plain retryable failure', async () => {
     const client = makeClient(makeRawTools(['search']));

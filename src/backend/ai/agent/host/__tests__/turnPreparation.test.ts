@@ -297,6 +297,44 @@ describe('turn preparation', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  test.each(['auto', 'default'] as const)(
+    'parallel replies keep MCP tools not known to write and ask for unknown ones under %s approval',
+    async (toolApprovalMode) => {
+      const harness = createHarness();
+      harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
+      const mcp = (name: string, effect?: RuntimeTool['effect']): RuntimeTool => ({
+        ...tool(name, 'ask'),
+        ref: { source: 'mcp', serverId: 'server-1', rawToolName: name },
+        ...(effect ? { effect } : {}),
+      });
+      harness.getSystemTools.mockResolvedValueOnce([
+        { ...tool('builtin_read', 'auto'), effect: 'read' },
+        { ...tool('builtin_gated_read', 'ask'), effect: 'read', autoApprovalEligible: false },
+        { ...tool('builtin_write', 'auto'), effect: 'write' },
+      ]);
+      harness.resolveRuntimeTools.mockResolvedValueOnce({
+        tools: [mcp('search', 'read'), mcp('lookup'), mcp('plugin_write', 'write')],
+        pluginGuides: [],
+      });
+
+      const plan = await prepareDurableTurn(
+        harness.dependencies,
+        textInput(),
+        [],
+        new AbortController().signal,
+        { readOnlyTools: true },
+      );
+
+      // A read keeps its single-answer approval; an unknown effect never runs unseen.
+      const readApproval = toolApprovalMode === 'auto' ? 'auto' : 'ask';
+      expect(plan.tools.map((entry) => [entry.providerName, entry.approval])).toEqual([
+        ['builtin_read', 'auto'],
+        ['search', readApproval],
+        ['lookup', 'ask'],
+      ]);
+    },
+  );
+
   test.each(['existing', 'initial'] as const)(
     'freezes the parser before %s preparation yields and shares it with read_file',
     async (kind) => {

@@ -1774,6 +1774,58 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('an answer without the background reply still surfaces its approval there', async () => {
+    const state = fixture();
+    const controller = new AbortController();
+    let decision: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      await askTwoModels(state);
+      await settle();
+      const other = runningTurns(state).find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id !== turn.assistantMessageId,
+      )!;
+      const approvalId = uuid();
+      decision = state
+        .execution()!
+        .requestApproval(
+          other.identity,
+          {
+            id: approvalId,
+            turnId: other.identity.turnId,
+            toolCallId: 'pending-tool',
+            toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+            displayName: 'Search',
+            input: {},
+            status: 'pending',
+          },
+          controller.signal,
+        )
+        .catch((error: unknown) => error);
+      await settle();
+      // The shared turn cannot tell the answers apart, so the approval names its own.
+      expect(events).toContainEqual({
+        type: 'approval.requested',
+        approval: expect.objectContaining({ id: approvalId, messageId: other.assistantMessageId }),
+      });
+      const interaction = state.reply.setInteraction.mock.calls.at(-1)?.[0];
+      expect(interaction).toMatchObject({ kind: 'approval', id: approvalId });
+      await interaction.respond('approve');
+      await expect(decision).resolves.toBe('approve');
+      expect(state.reply.setInteraction).toHaveBeenLastCalledWith(undefined);
+      observation.unsubscribe();
+    } finally {
+      controller.abort();
+      await decision;
+      await state.host.close();
+    }
+  });
+
   test('background handoff binds the remaining answer approval to its system card', async () => {
     const state = fixture();
     const controller = new AbortController();

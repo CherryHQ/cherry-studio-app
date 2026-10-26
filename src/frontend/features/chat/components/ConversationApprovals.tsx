@@ -44,6 +44,7 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
               {
                 approvalId: interaction.id,
                 displayName: interaction.title,
+                requester: interaction.requester,
                 input: input.data?.kind === 'json' ? input.data.value : undefined,
               },
             ]

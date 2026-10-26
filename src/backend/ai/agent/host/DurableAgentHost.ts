@@ -1516,7 +1516,7 @@ export class DurableAgentHost implements AgentProtocol {
       resolve = accept;
       reject = refuse;
     });
-    const view = toAgentApprovalView(approval, identity.sessionId);
+    const view = toAgentApprovalView(approval, identity.sessionId, state.active.assistantMessageId);
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });
@@ -1530,7 +1530,7 @@ export class DurableAgentHost implements AgentProtocol {
     this.approvalWaits.set(key, [...(this.approvalWaits.get(key) ?? []), wait]);
     this.publish(identity.sessionId, { type: 'approval.requested', approval: view });
     this.publishCurrentStatus(identity.sessionId, state);
-    this.updateBackgroundInteraction(identity.sessionId, state);
+    this.updateBackgroundInteraction(identity.sessionId);
     try {
       const decision = await response;
       this.publish(identity.sessionId, {
@@ -1542,36 +1542,51 @@ export class DurableAgentHost implements AgentProtocol {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);
       state.approvals.delete(approval.id);
-      this.updateBackgroundInteraction(identity.sessionId, state);
+      this.updateBackgroundInteraction(identity.sessionId);
       this.publishCurrentStatus(identity.sessionId, state);
     }
   }
 
-  private updateBackgroundInteraction(sessionId: string, state: LiveSession): void {
-    const turnId = state.active?.identity.turnId;
-    if (!turnId || !state.background) return;
-    const approval = state.approvals.values().next().value?.view;
+  /**
+   * One background reply represents the Session, so it surfaces the first pending decision of any
+   * of its running answers, not only those of the copy that holds it.
+   */
+  private updateBackgroundInteraction(sessionId: string): void {
+    const states = this.liveStates(sessionId).filter((candidate) => candidate.active);
+    const background = states.find((candidate) => candidate.background)?.background;
+    if (!background) return;
+    const approval = states.flatMap((candidate) => [...candidate.approvals.values()]).at(0)?.view;
+    const pending = states.find((candidate) => candidate.question)?.question;
     if (approval) {
-      state.background.setInteraction({
+      background.setInteraction({
         kind: 'approval',
         id: approval.id,
         title: approval.displayName,
         requiresApp: isHealthToolRef(approval.toolRef),
         respond: (decision) =>
-          this.respondApproval({ sessionId, turnId, approvalId: approval.id, decision }),
+          this.respondApproval({
+            sessionId,
+            turnId: approval.turnId,
+            approvalId: approval.id,
+            decision,
+          }),
       });
-      state.background.awaitApproval(undefined, undefined, approval.id);
-    } else if (state.question) {
-      const pending = state.question;
-      state.background.setInteraction({
+      background.awaitApproval(undefined, undefined, approval.id);
+    } else if (pending) {
+      background.setInteraction({
         kind: 'question',
         id: pending.toolCallId,
         question: pending.question,
         respond: (answer) =>
-          this.respondQuestion({ sessionId, turnId, toolCallId: pending.toolCallId, answer }),
+          this.respondQuestion({
+            sessionId,
+            turnId: pending.turnId,
+            toolCallId: pending.toolCallId,
+            answer,
+          }),
       });
-      state.background.awaitApproval(undefined, 'question', pending.toolCallId);
-    } else state.background.setInteraction(undefined);
+      background.awaitApproval(undefined, 'question', pending.toolCallId);
+    } else background.setInteraction(undefined);
   }
 
   private async askUser(
@@ -1587,12 +1602,12 @@ export class DurableAgentHost implements AgentProtocol {
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
     this.publish(sessionId, { type: 'question.updated', question: state.question });
     this.publishCurrentStatus(sessionId, state);
-    this.updateBackgroundInteraction(sessionId, state);
+    this.updateBackgroundInteraction(sessionId);
     try {
       return await response;
     } finally {
       state.question = null;
-      this.updateBackgroundInteraction(sessionId, state);
+      this.updateBackgroundInteraction(sessionId);
       this.publish(sessionId, { type: 'question.updated', question: null });
       this.publishCurrentStatus(sessionId, state);
     }
@@ -2032,7 +2047,7 @@ export class DurableAgentHost implements AgentProtocol {
       background.setInteraction(undefined);
       const assistant = projectDurableHostTurn(heir.active).assistant ?? undefined;
       if (assistant) background.update(assistant);
-      this.updateBackgroundInteraction(state.lane.sessionId, heir);
+      this.updateBackgroundInteraction(state.lane.sessionId);
       return;
     }
     background.finish(

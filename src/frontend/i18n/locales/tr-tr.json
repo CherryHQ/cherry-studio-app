@@ -578,6 +578,7 @@
   "chat.tool.approval.deny": "Reddet",
   "chat.tool.approval.failed": "Kararınız kaydedilemedi. Lütfen tekrar deneyin.",
   "chat.tool.approval.pendingCount": "{{count}} onayları bekleniyor",
+  "chat.tool.approval.requester": "İsteyen",
   "chat.tool.approvalRequested": "Onay istendi",
   "chat.tool.approved": "Onaylandı",
   "chat.tool.arguments": "Argümanlar",

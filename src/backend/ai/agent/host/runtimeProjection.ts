@@ -103,11 +103,13 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
 export function toAgentApprovalView(
   approval: RuntimeApproval,
   sessionId: string,
+  messageId: string,
 ): AgentApprovalView {
   return AgentApprovalViewSchema.parse({
     id: approval.id,
     sessionId,
     turnId: approval.turnId,
+    messageId,
     toolCallId: approval.toolCallId,
     toolRef: approval.toolRef,
     displayName: approval.displayName,

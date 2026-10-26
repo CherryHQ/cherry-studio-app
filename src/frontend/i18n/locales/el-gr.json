@@ -578,6 +578,7 @@
   "chat.tool.approval.deny": "Αρνούμαι",
   "chat.tool.approval.failed": "Δεν ήταν δυνατή η αποθήκευση της απόφασής σας. Δοκιμάστε ξανά.",
   "chat.tool.approval.pendingCount": "{{count}} εγκρίσεις σε εκκρεμότητα",
+  "chat.tool.approval.requester": "Αίτημα από",
   "chat.tool.approvalRequested": "Ζητήθηκε έγκριση",
   "chat.tool.approved": "Εγκρίθηκε",
   "chat.tool.arguments": "Επιχειρήματα",

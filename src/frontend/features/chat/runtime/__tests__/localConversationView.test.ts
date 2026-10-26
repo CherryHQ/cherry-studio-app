@@ -162,6 +162,34 @@ test('health sharing identifies the executing turn model and never matches an MC
   ).toBeUndefined();
 });
 
+test('an approval names its model only when parallel answers share the turn', () => {
+  const answer = (id: string, name: string): AgentMessageView => ({
+    ...message(id),
+    inferenceSnapshot: {
+      status: 'supported',
+      snapshot: {
+        version: 1,
+        model: {
+          uniqueModelId: createUniqueModelId('provider', id),
+          providerId: 'provider',
+          modelId: id,
+          name,
+        },
+        parameters: {},
+        tools: [],
+      },
+    },
+  });
+  const asked = { ...approval, messageId: 'second' };
+  const f = fixture({
+    liveMessages: [answer('first', 'First Model'), answer('second', 'Second Model')],
+    pendingApprovals: [asked],
+  });
+  expect(f.projector.snapshot(f.state, undefined).interactions[0].requester).toBe('Second Model');
+  f.set({ liveMessages: [answer('second', 'Second Model')] });
+  expect(f.projector.snapshot(f.state, undefined).interactions[0].requester).toBeUndefined();
+});
+
 test.each(
   [
     { selectedOptionIds: ['a'], text: 'more context', skipped: false },

@@ -387,6 +387,8 @@ type AgentApprovalView = {
   id: string
   sessionId: string
   turnId: string
+  /** The answer that asked; parallel answers of one question share its turn. */
+  messageId?: string
   toolCallId: string
   toolRef: AgentToolRef
   displayName: string
@@ -818,13 +820,17 @@ question has, and the questions an answer has, are alternatives the client can s
 
 - **Parallel answers.** A submission with `additionalReplies` asks several models the same question.
   The question gets one answer per model in one sibling group, sharing the turn id; the first is
-  selected. Each runs separately, can be stopped alone with `cancelTurn({ messageId })`, and may use
-  only tools that are read-only and automatically approved, so parallel answers neither change the
-  outside world nor stop to ask the user. Read-only means a declared `effect: 'read'`: built-in web,
+  selected. Each runs separately and can be stopped alone with `cancelTurn({ messageId })`. Built-in
+  tools join parallel answers only when they declare `effect: 'read'` and need no approval: web,
   calendar, reminder and location reads, workspace listing, search and file reads, Office file
-  inspection and content reads, and file-library search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
-  read. Approval-gated tools stay out even when the Agent approves automatically, as do
-  `ask_user_question`, `run_js` and Code Mode. Skills and image generation are refused. The Session
+  inspection and content reads, and file-library search, reads and listings. Approval-gated
+  built-in tools stay out even when the Agent approves automatically, as do `ask_user_question`,
+  `run_js` and Code Mode. A connected MCP tool stays available unless a bundled plugin's policy
+  declares it a write. A read, declared by that policy or by the server's `readOnlyHint`, keeps
+  its single-answer approval; any other tool asks on every call, even when the Agent approves
+  automatically, so no answer repeats a side effect the user did not see. Each approval names its
+  answer through `messageId`, and the Session's one background reply surfaces the first pending
+  decision of any answer. Skills and image generation are refused. The Session
   stays busy until every answer settles; a selected completed answer's send control is disabled
   while another answer runs. Observation includes the completed siblings of active answers because
   settled history omits their shared turn until all answers finish. Every parallel submission
@@ -866,8 +872,8 @@ Rules:
    when they ran. Copied messages keep their original `createdAt` for the same reason.
 
 Branches present alternatives in one conversation even though tool side effects were real in each
-of them; parallel answers are limited to reads for that reason, and the transcript never claims a
-switch reverted anything.
+of them; parallel answers are limited to reads or approved calls for that reason, and the
+transcript never claims a switch reverted anything.
 
 ### User-question responses
 

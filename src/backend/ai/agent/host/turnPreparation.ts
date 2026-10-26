@@ -204,6 +204,7 @@ function createTurnUsageAttribution(
  * message the new question follows (null for a first question); omitted, the
  * Session's selected leaf. A multi-model answer limits its tools to automatic reads.
  */
+/** `readOnlyTools` marks one of several parallel answers; see `toParallelAnswerTool`. */
 export type TurnScope = { through?: string | null; readOnlyTools?: boolean };
 
 export async function prepareTurn(
@@ -646,10 +647,7 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
-  // Parallel answers share one real world: only reads that need no approval
-  // (so no answer stops to ask the user) run beside each other.
-  if (scope.readOnlyTools)
-    tools = tools.filter((tool) => tool.effect === 'read' && tool.approval === 'auto');
+  if (scope.readOnlyTools) tools = tools.flatMap(toParallelAnswerTool);
   let workflowInstructions: TurnPlan['workflowInstructions'] = [];
   if (pluginGuides.length > 0) {
     const workflows = getPluginWorkflows(pluginGuides);
@@ -860,6 +858,18 @@ function applyAgentToolApprovalMode(
     const approval = applyToolApprovalMode(tool.approval, mode, tool.autoApprovalEligible ?? true);
     return [approval === tool.approval ? tool : { ...tool, approval }];
   });
+}
+
+/**
+ * Parallel answers share one real world. Built-in tools join them only as reads that need no
+ * approval. A connected MCP tool stays unless it is known to write; one whose effect is unknown
+ * asks on every call, so no answer repeats a side effect the user did not see.
+ */
+function toParallelAnswerTool(tool: RuntimeTool): RuntimeTool[] {
+  if (tool.ref.source === 'builtin')
+    return tool.effect === 'read' && tool.approval === 'auto' ? [tool] : [];
+  if (tool.effect === 'write') return [];
+  return [tool.effect === 'read' || tool.approval !== 'auto' ? tool : { ...tool, approval: 'ask' }];
 }
 
 function isAskUserQuestionTool({ ref }: RuntimeTool): boolean {

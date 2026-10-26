@@ -584,6 +584,7 @@
   "chat.tool.approval.deny": "Negar",
   "chat.tool.approval.failed": "No se pudo guardar tu decisión. Por favor inténtalo de nuevo.",
   "chat.tool.approval.pendingCount": "{{count}} aprobaciones pendientes",
+  "chat.tool.approval.requester": "Solicitado por",
   "chat.tool.approvalRequested": "Aprobación solicitada",
   "chat.tool.approved": "Aprobado",
   "chat.tool.arguments": "Argumentos",

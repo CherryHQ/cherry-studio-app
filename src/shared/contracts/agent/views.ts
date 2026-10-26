@@ -481,6 +481,8 @@ export const AgentApprovalViewSchema = z.strictObject({
   id: z.string().min(1),
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+  /** The answer that asked; parallel answers of one question share its turn. */
+  messageId: z.string().min(1).optional(),
   toolCallId: z.string(),
   toolRef: AgentToolRefSchema,
   displayName: z.string(),

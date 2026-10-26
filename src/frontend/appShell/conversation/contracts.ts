@@ -116,6 +116,8 @@ export type ConversationInteraction = {
   id: string;
   kind: 'decision' | 'question';
   title: string;
+  /** The model that asked, named only when several answers share the execution. */
+  requester?: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };

@@ -572,6 +572,7 @@
   "chat.tool.approval.deny": "拒绝",
   "chat.tool.approval.failed": "未能保存你的决定，请重试。",
   "chat.tool.approval.pendingCount": "还有 {{count}} 个待审批",
+  "chat.tool.approval.requester": "请求来自",
   "chat.tool.approvalRequested": "请求审批",
   "chat.tool.approved": "已批准",
   "chat.tool.arguments": "参数",

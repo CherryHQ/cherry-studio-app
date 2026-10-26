@@ -16,6 +16,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import {
   type AgentMessageListProjectionCache,
   createAgentMessageListProjectionCache,
+  resolveMessageModel,
   toAgentMessageListItem,
 } from './agentMessageProjection';
 import {
@@ -179,16 +180,22 @@ export function createLocalConversationProjector(input: {
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
         const isHealth = isHealthToolRef(approval.toolRef);
-        const inference = isHealth
-          ? state.liveMessages.find(
-              (message) => message.role === 'assistant' && message.turnId === approval.turnId,
-            )?.inferenceSnapshot
-          : undefined;
+        const answers = state.liveMessages.filter(
+          (message) => message.role === 'assistant' && message.turnId === approval.turnId,
+        );
+        const inference = isHealth ? answers[0]?.inferenceSnapshot : undefined;
+        // Parallel answers share the turn, so the decision names the model that asked.
+        const asker =
+          answers.length > 1
+            ? answers.find((message) => message.id === approval.messageId)
+            : undefined;
+        const requester = asker && resolveMessageModel(asker)?.name;
         return {
           id: approval.id,
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
+          ...(requester ? { requester } : {}),
           state: 'pending',
           ...(isHealth
             ? {

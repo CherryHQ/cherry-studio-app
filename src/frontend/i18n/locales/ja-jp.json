@@ -572,6 +572,7 @@
   "chat.tool.approval.deny": "拒否",
   "chat.tool.approval.failed": "決定を保存できませんでした。もう一度試してください。",
   "chat.tool.approval.pendingCount": "{{count}} 承認保留中",
+  "chat.tool.approval.requester": "リクエスト元",
   "chat.tool.approvalRequested": "承認が要求されました",
   "chat.tool.approved": "承認済み",
   "chat.tool.arguments": "引数",

@@ -11,6 +11,8 @@ export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
   displayName: string;
+  /** The model that asked, when several answer at once. */
+  requester?: string;
 };
 
 export type ToolApprovalRespondInput = {
@@ -105,6 +107,7 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <MessageDetailValue title={t('chat.tool.approval.requester')} value={approval.requester} />
         <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         {children}
       </ScrollView>
