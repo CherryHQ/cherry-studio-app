@@ -115,6 +115,57 @@ describe('Pi model resolver', () => {
     resolver = createPiModelResolver();
   });
 
+  test('resolves Vertex credentials at each invocation without selecting keys or persisting the token in its model', async () => {
+    const provider = makeProvider(ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, '', 'google-vertex');
+    provider.authType = 'iam-gcp';
+    provider.settings.extraHeaders = {
+      Authorization: 'wrong-auth',
+      'X-Goog-Api-Key': 'wrong-key',
+      'X-Custom': 'kept',
+    };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, { apiModelId: 'gemini-2.5-pro' }),
+    );
+    mockGetAuthConfig.mockResolvedValue({
+      type: 'iam-gcp',
+      project: 'project-id',
+      location: 'global',
+      credentials: {
+        client_email: 'svc@example.com',
+        private_key: '-----BEGIN PRIVATE KEY-----\nYWJjZA==\n-----END PRIVATE KEY-----',
+      },
+    });
+    const getAuthorizationHeaders = jest
+      .fn()
+      .mockResolvedValueOnce({ Authorization: 'Bearer token-one' })
+      .mockResolvedValueOnce({ Authorization: 'Bearer token-two' });
+    const vertexResolver = createPiModelResolver(undefined, { getAuthorizationHeaders });
+    const first = await resolve(vertexResolver);
+    const second = await resolve(vertexResolver);
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+    expect(mockListApiKeys).not.toHaveBeenCalled();
+    expect(getAuthorizationHeaders).toHaveBeenCalledTimes(2);
+    expect(first.model).toMatchObject({
+      api: 'google-vertex',
+      baseUrl: 'https://aiplatform.googleapis.com/v1/projects/project-id/locations/global',
+      id: 'gemini-2.5-pro',
+      headers: { 'X-Custom': 'kept' },
+    });
+    expect(first.model.headers).not.toHaveProperty('Authorization');
+    expect(first.model.headers).not.toHaveProperty('X-Goog-Api-Key');
+    expect(JSON.stringify(first.model)).not.toContain('token-one');
+    expect(first.usageContext?.credentialReceipt).toEqual({
+      attribution: 'auth',
+      method: 'iam-gcp',
+    });
+    expect(second.redactionValues).toContain('token-two');
+    expect(mockBindPiStream).toHaveBeenLastCalledWith(
+      expect.objectContaining({ api: 'google-vertex', supportsCustomFetch: true }),
+      expect.objectContaining({ apiKey: undefined, accessToken: 'token-two', maxRetries: 0 }),
+    );
+  });
+
   test('translates with the OpenAI OAuth account and Codex transport when no API key exists', async () => {
     const oauthModel = Object.values(OPENAI_CODEX_MODELS)[0];
     jest.spyOn(piOAuthModels, 'resolveOAuthPiModel').mockResolvedValueOnce(oauthModel);

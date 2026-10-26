@@ -14,7 +14,8 @@ import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { application } from '@/backend/core/application/Application';
+import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import {
   aiUsageRecordService,
   type AiUsageCaptureContext,
@@ -26,6 +27,7 @@ import {
   type ProviderRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
+import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
@@ -35,7 +37,6 @@ import { createAiFailure } from '@/shared/utils/createAiFailure';
 
 import { listModels as listProviderModels } from './generation/listModels';
 import { resolveAiSdkServing } from './generation/providerConfig';
-import { VertexAuthClient } from './generation/VertexAuthClient';
 import { normalizeAiError } from './normalizeAiError';
 
 // ── Request types ──────────────────────────────────────────────────
@@ -154,14 +155,12 @@ function createProviderCallHandler(
  * Mobile keeps the desktop service name but does not register IPC handlers
  * or depend on Electron main-process lifecycle services.
  *
- * It declares no `@DependsOn`: its data collaborators are module singletons,
- * and this service initializes and stops no runtime of its own.
+ * Data collaborators are module singletons; Vertex authentication is shared with pi-durable.
  */
 @Injectable('AiService')
+@DependsOn(['VertexAuthClient'])
 @ServicePhase(Phase.PostReady)
 export class AiService extends BaseService {
-  private vertexAuthClient: VertexAuthClient | undefined;
-
   /** Every entry is optional so the container can construct this with no arguments. */
   constructor(private readonly overrides: Partial<AiServiceDependencies> = {}) {
     super();
@@ -179,14 +178,8 @@ export class AiService extends BaseService {
       model: overrides.model ?? modelService,
       provider: overrides.provider ?? providerService,
       providerRegistry: overrides.providerRegistry ?? providerRegistryService,
-      vertexAuth: overrides.vertexAuth ?? this.getVertexAuth(),
+      vertexAuth: overrides.vertexAuth ?? application.get('VertexAuthClient'),
     };
-  }
-
-  /** Caches minted service-account tokens, so it outlives a single request. */
-  private getVertexAuth(): VertexAuthClient {
-    this.vertexAuthClient ??= new VertexAuthClient({ fetch: expoFetch as typeof globalThis.fetch });
-    return this.vertexAuthClient;
   }
 
   // ── Model listing ──
@@ -207,7 +200,11 @@ export class AiService extends BaseService {
         getAuthConfig: async (providerId) =>
           (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
         getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
-        getVertexAuthHeaders: (input) => this.services.vertexAuth.getAuthorizationHeaders(input),
+        getVertexAuthHeaders: (input, signal) =>
+          this.services.vertexAuth.getAuthorizationHeaders(
+            { ...input, providerId: provider.id },
+            signal,
+          ),
       },
       request.requestOptions?.signal,
       { throwOnError: request.throwOnError },

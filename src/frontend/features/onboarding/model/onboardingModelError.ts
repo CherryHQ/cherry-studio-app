@@ -39,6 +39,7 @@ const PULL_FAILURE_REASONS: Record<ModelPullError['reason'], ModelListFailureRea
 const SETUP_FAILURE_REASONS: Record<ProviderSetupError['reason'], ModelListFailureReason> = {
   'disabled-api-keys': 'authentication',
   'invalid-endpoint': 'endpoint',
+  'invalid-service-account': 'authentication',
   'missing-api-key': 'authentication',
   'missing-oauth': 'authentication',
   'no-models': 'unknown',

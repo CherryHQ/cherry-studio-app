@@ -52,7 +52,11 @@ export function ProviderAddressSection({ value }: { value: ProviderConfiguration
     closeEdit();
   };
   const requestPreview =
-    edit && !issue && edit.text.trim() && isCustomProviderTextEndpointType(edit.endpoint)
+    value.provider?.authType !== 'iam-gcp' &&
+    edit &&
+    !issue &&
+    edit.text.trim() &&
+    isCustomProviderTextEndpointType(edit.endpoint)
       ? getCustomProviderEndpointRequestPreview(edit.endpoint, edit.text.trim(), value.provider)
       : null;
   const sheet = edit ? (
@@ -122,7 +126,15 @@ export function ProviderAddressSection({ value }: { value: ProviderConfiguration
               })
             }
             testID="provider-base-url"
-            trailing={<AddressValue text={displayHost(address.baseUrl)} />}
+            trailing={
+              <AddressValue
+                text={
+                  value.provider?.authType === 'iam-gcp' && !address.baseUrl.trim()
+                    ? t('settings.provider.vertex.defaultAddress')
+                    : displayHost(address.baseUrl)
+                }
+              />
+            }
             showChevron
           />
           <Section.Item

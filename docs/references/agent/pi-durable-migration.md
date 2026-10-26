@@ -362,6 +362,7 @@ storage-lifetime concern. Mobile's manual whole-file clearing
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
 | Pi AI incremental JSON preview | Performance adaptation: avoid quadratic partial parsing while final tool arguments still require a complete valid object | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts); require final-argument parity plus measurement before removing the optimization |
 | Pi AI native OAuth; Pi Durable declarations import ([upstream #11254](https://github.com/earendil-works/pi/issues/11254)); Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
+| Pi AI Vertex bearer token and Google GenAI Web auth/fetch injection | Platform compatibility: pi-durable resolves host-owned service-account tokens for each invocation; the Web SDK uses the injected stream transport without API-key placeholders, global fetch replacement or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts); retained until upstream provides equivalent explicit Web auth and instance fetch, followed by native acceptance. Google GenAI is separately pinned by [its 2.21.0 patch](../../../patches/@google__genai@2.21.0.patch) |
 | Chord numeric array keys | Hermes compatibility: JSON changes to array indexes are interpreted consistently | [piChordPatch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piChordPatch.test.ts); require the behavior on Hermes, not only Node |
 
 Three platform hunks were retired after checking the pristine 1.4.0 packages:
@@ -396,6 +397,10 @@ are not evidence that a candidate dependency or a device has passed. The 1.4.0 d
 and patch retirements above have not received runtime acceptance; nothing was published upstream.
 
 ## Validation Status
+
+Vertex Gemini's token, resolver, URL, UI credential-gating and published SDK contract regressions
+are authored but unrun. Native signing and real Google service acceptance remain pending; the
+versioned patches and static lint results alone do not establish runtime compatibility.
 
 Regression sources cover reservation ordering, recovery before reclamation, failed settlement,
 independent forks, revision invalidation, normalized history import, queued inputs and backup

@@ -1,0 +1,49 @@
+diff --git a/dist/web/index.mjs b/dist/web/index.mjs
+index 821133ea0dea05b85d6c875fc32e991367055d45..e856b12bd27663a325fa399d8c587ee8624247fb 100644
+--- a/dist/web/index.mjs
++++ b/dist/web/index.mjs
+@@ -13866,7 +13866,7 @@ class ApiClient {
+             const attempt = createAttemptSignal(timeout, abortSignal);
+             let response;
+             try {
+-                response = await fetch(url, Object.assign(Object.assign({}, requestInit), { signal: attempt.signal }));
++                response = await (this.clientOptions.fetch ?? globalThis.fetch)(url, Object.assign(Object.assign({}, requestInit), { signal: attempt.signal }));
+             }
+             catch (e) {
+                 attempt.dispose();
+@@ -25840,7 +25840,7 @@ class GoogleGenAI {
+     }
+     constructor(options = {}) {
+         var _a;
+-        if (options.apiKey == null) {
++        if (options.apiKey == null && !options.auth) {
+             throw new Error('An API Key must be set when running in a browser');
+         }
+         // Web client only supports API key mode for Vertex AI.
+@@ -25862,9 +25862,10 @@ class GoogleGenAI {
+         }
+         this.apiVersion = options.apiVersion;
+         this.httpOptions = options.httpOptions;
+-        const auth = new WebAuth(this.apiKey);
++        const auth = options.auth ?? new WebAuth(this.apiKey);
+         this.apiClient = new ApiClient({
+             auth: auth,
++            fetch: options.fetch,
+             apiVersion: this.apiVersion,
+             apiKey: this.apiKey,
+             vertexai: this.vertexai,
+diff --git a/dist/web/web.d.ts b/dist/web/web.d.ts
+index 172cdb55b27935911ff56f731b667bf612683cb2..efe1c0f151541e3cac66c9f9fc509ac7bed966bd 100644
+--- a/dist/web/web.d.ts
++++ b/dist/web/web.d.ts
+@@ -6783,6 +6783,10 @@ declare type GoogleGenAIInteractionSSEEvent = interactions.InteractionSSEEvent;
+  * See {@link GoogleGenAI} for usage samples.
+  */
+ export declare interface GoogleGenAIOptions {
++    /** Mobile host-owned authentication, without API keys or Node ADC. */
++    auth?: Auth;
++    /** Instance-scoped transport for REST model requests, including streaming. */
++    fetch?: typeof globalThis.fetch;
+     /**
+      * Optional. Determines whether to use the Vertex AI or the Gemini API.
+      *

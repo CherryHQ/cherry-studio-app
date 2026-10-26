@@ -14,16 +14,37 @@ the currently implemented runtime paths until each migration phase lands.
 Agent conversation requests use one path:
 
 ```text
-MobileAgentHost -> PiRuntime -> piModelResolver -> provider/model services
+MobileAgentHost -> PiDurableAgentRuntime (pi-durable) -> piModelResolver -> provider/model services
 ```
 
-Pi is the only local Agent Runtime. It receives a normalized Agent transcript and resolves the
+`pi-durable` is the local conversation engine. Its `pi-ai` adapters implement provider protocols;
+they do not own another conversation loop. The engine receives a normalized Agent transcript and resolves the
 selected Agent model through the Host-owned provider adapter. The current Pi binding supports
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
 Providers declaring optional API-key authentication can use these endpoints without a saved key.
 The Pi adapter supplies the SDK-only placeholder and suppresses generated credentials while
 preserving explicitly configured authentication headers.
+
+Vertex AI Gemini uses the same model resolver with `iam-gcp` service-account credentials. The
+configuration form imports a Google Cloud JSON key, edits project/location, and can override the
+derived service URL. `VertexAuthClient` owns native RS256 signing, bounded token exchange over the
+shared HTTP client, and a memory-only cache per provider and credential fingerprint. Model discovery
+shares that client. Replacing credentials invalidates cache identity; deleting a provider or stopping
+the application aborts its token requests. Concurrent callers cancel independently.
+
+Every model invocation, including recovery and compaction, resolves a current token. Tokens stay
+outside Pi's serialized model and working-copy input; the stream binding owns them and registers
+them for error redaction. Service-account invocations have `iam-gcp` usage attribution and do not
+select or rotate API keys. Their authoritative bearer credential replaces conflicting configured
+auth headers. The pinned Pi AI and Google GenAI Web patches expose instance-scoped token/auth and
+fetch injection, preserving upstream Google conversion and streaming. Ordinary API-key and Node
+ADC paths keep their existing behavior.
+
+This first Vertex implementation admits Gemini text models only. Claude, MaaS, image, audio and
+embedding models remain unavailable through the system capability gate. Provider-native web tools
+are not enabled for Vertex; application and MCP function tools retain the pi-durable loop. Adding
+other Vertex protocols requires explicit protocol adapters, not just opening the catalog filter.
 
 Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
 Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,

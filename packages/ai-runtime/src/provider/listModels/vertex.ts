@@ -1,10 +1,8 @@
-import { withoutTrailingSlash } from '@ai-sdk/provider-utils';
-import type { AuthConfig } from '@cherrystudio/universal/data/types/provider';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import type { AuthConfig, Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { getBaseUrl } from '../../utils/provider';
 import { emitProviderRuntimeDiagnostic, type ProviderRuntimeDiagnostics } from '../diagnostics';
-import { normalizeVertexCredentials } from '../vertex';
+import { normalizeVertexCredentials, resolveVertexUrls } from '../vertex';
 
 export const DEFAULT_VERTEX_MODEL_PUBLISHERS = [
   'google',
@@ -25,29 +23,13 @@ export interface VertexModelListContext {
   appHeaders?: Readonly<Record<string, string>>;
   diagnostics?: ProviderRuntimeDiagnostics;
   getAuthConfig?: (providerId: string) => AuthConfig | Promise<AuthConfig | undefined> | undefined;
-  getVertexAuthHeaders?: (input: {
-    projectId: string;
-    serviceAccount: { clientEmail: string; privateKey: string };
-  }) => Promise<Record<string, string>>;
-}
-
-function getVertexServiceEndpoint(provider: Provider, location: string): string {
-  const apiHost = withoutTrailingSlash(getBaseUrl(provider));
-  const defaultHost =
-    location === 'global'
-      ? 'https://aiplatform.googleapis.com'
-      : `https://${location}-aiplatform.googleapis.com`;
-
-  if (!apiHost || apiHost.endsWith('aiplatform.googleapis.com')) {
-    return defaultHost;
-  }
-
-  const vertexResourcePath = /\/v1(?:beta1)?\/projects\/[^/]+\/locations\/[^/]+$/;
-  if (vertexResourcePath.test(apiHost)) {
-    return apiHost.replace(vertexResourcePath, '');
-  }
-
-  return apiHost.replace(/\/v1(?:beta1)?$/, '');
+  getVertexAuthHeaders?: (
+    input: {
+      projectId: string;
+      serviceAccount: { clientEmail: string; privateKey: string };
+    },
+    signal?: AbortSignal,
+  ) => Promise<Record<string, string>>;
 }
 
 const EXCLUDED_VERTEX_PUBLISHER_MODEL_KEYWORDS = ['tts', 'audio'] as const;
@@ -68,7 +50,7 @@ const SUPPORTED_VERTEX_PUBLISHER_MODEL_PATTERNS = [
 export async function createVertexModelListRequest(
   provider: Provider,
   context: VertexModelListContext,
-  options?: { throwOnError?: boolean },
+  options?: { throwOnError?: boolean; signal?: AbortSignal },
 ): Promise<VertexModelListRequest | undefined> {
   const failOrSkip = (reason: string): undefined => {
     if (options?.throwOnError) {
@@ -91,7 +73,9 @@ export async function createVertexModelListRequest(
     return failOrSkip('provider is not configured with iam-gcp auth');
   }
 
-  const { project, location, credentials } = authConfig;
+  const project = authConfig.project.trim();
+  const location = authConfig.location.trim();
+  const { credentials } = authConfig;
   const { privateKey, clientEmail } = normalizeVertexCredentials(credentials);
 
   const missing: string[] = [];
@@ -104,14 +88,24 @@ export async function createVertexModelListRequest(
     return failOrSkip(`missing required service-account fields: ${missing.join(', ')}`);
   }
 
+  let baseUrl: string;
+  try {
+    baseUrl = resolveVertexUrls(getBaseUrl(provider), project, location).serviceUrl;
+  } catch {
+    return failOrSkip('project, location or base URL is invalid');
+  }
+
   let authHeaders: Record<string, string>;
   try {
-    authHeaders = await context.getVertexAuthHeaders({
-      projectId: project,
-      serviceAccount: { privateKey: privateKey!, clientEmail: clientEmail! },
-    });
+    authHeaders = await context.getVertexAuthHeaders(
+      {
+        projectId: project,
+        serviceAccount: { privateKey: privateKey!, clientEmail: clientEmail! },
+      },
+      options?.signal,
+    );
   } catch (error) {
-    if (options?.throwOnError) {
+    if (options?.throwOnError || options?.signal?.aborted) {
       throw error;
     }
     emitProviderRuntimeDiagnostic(context.diagnostics, {
@@ -122,12 +116,19 @@ export async function createVertexModelListRequest(
     return undefined;
   }
 
+  const headers: Record<string, string> = {
+    ...context.appHeaders,
+    ...provider.settings?.extraHeaders,
+  };
+  for (const name of Object.keys(headers)) {
+    if (['authorization', 'x-goog-api-key', 'x-api-key', 'api-key'].includes(name.toLowerCase()))
+      delete headers[name];
+  }
   return {
-    baseUrl: getVertexServiceEndpoint(provider, location),
+    baseUrl,
     headers: {
-      ...context.appHeaders,
+      ...headers,
       ...authHeaders,
-      ...provider.settings?.extraHeaders,
     },
   };
 }

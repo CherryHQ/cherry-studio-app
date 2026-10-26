@@ -46,10 +46,14 @@ describe('AiService.listModels', () => {
 
     await new AiService(services).listModels({ providerId: provider.id, throwOnError: true });
 
-    expect(services.vertexAuth.getAuthorizationHeaders).toHaveBeenCalledWith({
-      projectId: 'project-id',
-      serviceAccount: { clientEmail: 'svc@example.com', privateKey },
-    });
+    expect(services.vertexAuth.getAuthorizationHeaders).toHaveBeenCalledWith(
+      {
+        providerId: provider.id,
+        projectId: 'project-id',
+        serviceAccount: { clientEmail: 'svc@example.com', privateKey },
+      },
+      undefined,
+    );
   });
 
   it('returns the registry catalog without requesting the upstream API', async () => {

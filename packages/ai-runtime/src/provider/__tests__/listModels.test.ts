@@ -970,6 +970,34 @@ describe('listModels — vertexFetcher (per-publisher pagination)', () => {
     expect(models[0].ownedBy).toBe('google');
   });
 
+  it('rejects an invalid project URL before exchanging credentials', async () => {
+    const provider = makeVertexProvider();
+    provider.endpointConfigs = {
+      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
+        baseUrl: 'https://gateway.example/v1/projects/another-project/locations/us-central1',
+      },
+    };
+
+    await expect(listModels(provider, undefined, { throwOnError: true })).rejects.toThrow(
+      'project, location or base URL is invalid',
+    );
+    expect(getAuthHeadersMock).not.toHaveBeenCalled();
+    expect(aiSdkGetFromApiMock).not.toHaveBeenCalled();
+  });
+
+  it('passes cancellation to the shared token exchange', async () => {
+    const controller = new AbortController();
+    const cancelled = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    getAuthHeadersMock.mockRejectedValue(cancelled);
+    controller.abort();
+
+    await expect(
+      listModels(makeVertexProvider(), controller.signal, { throwOnError: true }),
+    ).rejects.toBe(cancelled);
+    expect(getAuthHeadersMock).toHaveBeenCalledWith(expect.any(Object), controller.signal);
+    expect(aiSdkGetFromApiMock).not.toHaveBeenCalled();
+  });
+
   it('bakes the publisher prefix into MaaS (non-google) model ids so the OpenAI-compatible endpoint gets the right model', async () => {
     aiSdkGetFromApiMock.mockResolvedValue({
       value: {

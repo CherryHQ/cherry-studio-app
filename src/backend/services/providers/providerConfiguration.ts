@@ -1,4 +1,8 @@
-import { getProviderBaseUrlIssue } from '@cherrystudio/ai-runtime/provider';
+import {
+  getProviderBaseUrlIssue,
+  normalizeVertexCredentials,
+  resolveVertexUrls,
+} from '@cherrystudio/ai-runtime/provider';
 
 import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
 import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
@@ -19,7 +23,12 @@ export function getProviderConfigurationIssue(
     !provider.authMethods.includes('api-key')
   )
     return 'missing-oauth';
-  if (!supportsOAuth && provider.authMethods?.length && !provider.authMethods.includes('api-key'))
+  if (
+    provider.authType === 'api-key' &&
+    !supportsOAuth &&
+    provider.authMethods?.length &&
+    !provider.authMethods.includes('api-key')
+  )
     return 'unsupported-auth';
   switch (provider.authType) {
     case 'iam-aws':
@@ -29,14 +38,34 @@ export function getProviderConfigurationIssue(
         auth.secretAccessKey?.trim()
         ? null
         : 'unsupported-auth';
-    case 'iam-gcp':
-      return auth?.type === 'iam-gcp' &&
-        auth.project.trim() &&
-        auth.location.trim() &&
-        auth.credentials &&
-        Object.keys(auth.credentials).length > 0
-        ? null
-        : 'unsupported-auth';
+    case 'iam-gcp': {
+      if (auth?.type !== 'iam-gcp') return 'invalid-service-account';
+      if (
+        !/^[a-zA-Z0-9][a-zA-Z0-9:.-]*$/.test(auth.project.trim()) ||
+        !/^[a-z][a-z0-9-]*$/.test(auth.location.trim())
+      )
+        return 'invalid-service-account';
+      const { clientEmail, privateKey } = normalizeVertexCredentials(auth.credentials);
+      if (
+        !clientEmail ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail) ||
+        !privateKey ||
+        !/^-----BEGIN PRIVATE KEY-----\s+[A-Za-z0-9+/=\s]+\s+-----END PRIVATE KEY-----$/.test(
+          privateKey,
+        )
+      ) {
+        return 'invalid-service-account';
+      }
+      try {
+        for (const endpoint of Object.values(provider.endpointConfigs ?? {})) {
+          resolveVertexUrls(endpoint?.baseUrl ?? '', auth.project.trim(), auth.location.trim());
+        }
+        resolveVertexUrls('', auth.project.trim(), auth.location.trim());
+        return null;
+      } catch {
+        return 'invalid-endpoint';
+      }
+    }
     case 'api-key-aws':
       if (auth?.type !== 'api-key-aws' || !auth.region.trim()) return 'unsupported-auth';
       break;

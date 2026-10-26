@@ -12,6 +12,30 @@ import {
 } from '../piLanguageBinding';
 
 describe('resolvePiLanguageBinding', () => {
+  it('admits Gemini service accounts with a derived address but keeps unimplemented Vertex protocols closed', () => {
+    const provider = createProvider({
+      authType: 'iam-gcp',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: { adapterFamily: 'google-vertex' },
+      },
+    });
+    const connection = {
+      adapterFamily: 'google-vertex',
+      baseUrl: '',
+      endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      headers: {},
+      wireModelId: 'gemini-2.5-flash',
+    };
+    expect(resolvePiLanguageBinding(provider, connection)).toEqual({
+      endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      status: 'supported',
+    });
+    for (const wireModelId of ['claude-sonnet-4', 'meta/llama-4-maas', 'text-embedding-005']) {
+      expect(resolvePiLanguageBinding(provider, { ...connection, wireModelId }).status).toBe(
+        'unsupported',
+      );
+    }
+  });
   it('accepts Azure Responses with Azure IAM credentials', () => {
     const provider = createProvider({
       authMethods: undefined,

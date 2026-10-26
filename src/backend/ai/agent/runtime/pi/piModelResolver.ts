@@ -1,4 +1,8 @@
-import { shouldAppendProviderApiVersion } from '@cherrystudio/ai-runtime/provider';
+import {
+  normalizeVertexCredentials,
+  resolveVertexUrls,
+  shouldAppendProviderApiVersion,
+} from '@cherrystudio/ai-runtime/provider';
 import {
   createAiUsageCaptureContext,
   resolveReasoningInvocation,
@@ -12,12 +16,15 @@ import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earen
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
+import { application } from '@/backend/core/application/Application';
 import { modelService } from '@/backend/data/services/ModelService';
 import {
   projectRuntimeReasoning,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
+import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { resolveEndpointDialect } from '@/shared/data/types/provider';
@@ -55,9 +62,12 @@ class PiModelResolutionError extends Error {
   }
 }
 
-export function createPiModelResolver(accounts?: {
-  resolveAuth(provider: Provider, signal?: AbortSignal): Promise<ResolvedPiOAuth | undefined>;
-}): PiRuntimeDependencies {
+export function createPiModelResolver(
+  accounts?: {
+    resolveAuth(provider: Provider, signal?: AbortSignal): Promise<ResolvedPiOAuth | undefined>;
+  },
+  vertexAuth?: Pick<VertexAuthClient, 'getAuthorizationHeaders'>,
+): PiRuntimeDependencies {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
@@ -91,13 +101,49 @@ export function createPiModelResolver(accounts?: {
         provider,
       } = await resolveConfiguredPiModel(runtimeModel);
 
+      let vertex: { accessToken: string; baseUrl: string } | undefined;
+      if (provider.authType === 'iam-gcp') {
+        if (apiKeyOverride !== undefined) {
+          throw new PiModelResolutionError(
+            'invalid_credentials',
+            'Vertex uses a service account, not an API-key override.',
+          );
+        }
+        const auth = await providerService.getAuthConfig(provider.id);
+        if (auth?.type !== 'iam-gcp' || getProviderConfigurationIssue(provider, [], auth)) {
+          throw new PiModelResolutionError(
+            'invalid_credentials',
+            'Vertex service-account configuration is incomplete or invalid.',
+          );
+        }
+        const { privateKey, clientEmail } = normalizeVertexCredentials(auth.credentials);
+        const baseUrl = resolveVertexUrls(
+          connection.baseUrl,
+          auth.project.trim(),
+          auth.location.trim(),
+        ).resourceUrl;
+        const authHeaders = await (
+          vertexAuth ?? application.get('VertexAuthClient')
+        ).getAuthorizationHeaders(
+          {
+            providerId: provider.id,
+            projectId: auth.project.trim(),
+            serviceAccount: { privateKey: privateKey!, clientEmail: clientEmail! },
+          },
+          signal,
+        );
+        vertex = { accessToken: authHeaders.Authorization.slice('Bearer '.length), baseUrl };
+      }
       const oauth =
-        apiKeyOverride === undefined ? await accounts?.resolveAuth(provider, signal) : undefined;
+        !vertex && apiKeyOverride === undefined
+          ? await accounts?.resolveAuth(provider, signal)
+          : undefined;
       if (oauth) requireOAuthEndpoint(provider, oauth.id, connection.baseUrl);
       const oauthModel = oauth
         ? await resolveOAuthPiModel(oauth, connection.wireModelId)
         : undefined;
       if (
+        !vertex &&
         !oauth &&
         provider.authMethods?.includes('oauth') &&
         !provider.authMethods.includes('api-key')
@@ -111,10 +157,15 @@ export function createPiModelResolver(accounts?: {
           )
         : configuredAdapter;
 
-      const selectedApiKey = oauth
-        ? { value: oauth.auth.apiKey ?? '', apiKeySelection: { attribution: 'unknown' as const } }
-        : await providerService.resolveApiKey(provider.id, apiKeyOverride);
-      if (!oauth && !provider.authOptional && !selectedApiKey.value.trim()) {
+      const selectedApiKey = vertex
+        ? {
+            value: '',
+            apiKeySelection: { attribution: 'auth' as const, method: 'iam-gcp' as const },
+          }
+        : oauth
+          ? { value: oauth.auth.apiKey ?? '', apiKeySelection: { attribution: 'unknown' as const } }
+          : await providerService.resolveApiKey(provider.id, apiKeyOverride);
+      if (!vertex && !oauth && !provider.authOptional && !selectedApiKey.value.trim()) {
         throw new PiModelResolutionError(
           'invalid_api_key',
           'Pi Runtime requires an API key from the selected provider.',
@@ -135,6 +186,11 @@ export function createPiModelResolver(accounts?: {
         provider.presetProviderId === 'openrouter' ||
         isProviderHost(connection.baseUrl, 'openrouter.ai');
       const headers = { ...connection.headers };
+      if (vertex) {
+        for (const name of Object.keys(headers)) {
+          if (adapter.authHeaderNames.includes(name.toLowerCase())) delete headers[name];
+        }
+      }
       if (oauth) {
         for (const name of Object.keys(headers)) {
           if (['authorization', 'x-api-key', 'api-key'].includes(name.toLowerCase()))
@@ -170,7 +226,7 @@ export function createPiModelResolver(accounts?: {
       const configuredPiModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(
-          connection.baseUrl.trim(),
+          vertex?.baseUrl ?? connection.baseUrl.trim(),
           shouldAppendProviderApiVersion(provider),
         ),
         ...(adapter.api === 'openai-completions' || adapter.api === 'openai-responses'
@@ -209,7 +265,7 @@ export function createPiModelResolver(accounts?: {
         contextWindow: preflight.contextWindow,
         cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
         headers,
-        id: modelId,
+        id: vertex ? modelId.replace(/^google\//, '') : modelId,
         input: preflight.inputModalities,
         maxTokens: preflight.maxOutputTokens,
         name: model.name,
@@ -237,7 +293,14 @@ export function createPiModelResolver(accounts?: {
         runtimeOptions.maxOutputTokens,
       );
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
-        apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value.trim() ? selectedApiKey.value : '',
+        apiKey: vertex
+          ? undefined
+          : oauth
+            ? oauth.auth.apiKey
+            : selectedApiKey.value.trim()
+              ? selectedApiKey.value
+              : '',
+        accessToken: vertex?.accessToken,
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
         fetch: expoFetch as unknown as FetchFunction,
@@ -264,9 +327,8 @@ export function createPiModelResolver(accounts?: {
         adapter.authHeaderNames.includes(name.toLowerCase()),
       );
       const capturedContext = createAiUsageCaptureContext({
-        credentialReceipt: hasAuthHeader
-          ? { attribution: 'unknown' }
-          : selectedApiKey.apiKeySelection,
+        credentialReceipt:
+          !vertex && hasAuthHeader ? { attribution: 'unknown' } : selectedApiKey.apiKeySelection,
         messageRef: null,
         modelId,
         modelName: model.name,
@@ -327,6 +389,7 @@ export function createPiModelResolver(accounts?: {
         maxInputTokens: model.maxInputTokens,
         model: piModel,
         redactionValues: [
+          ...(vertex ? [vertex.accessToken, `Bearer ${vertex.accessToken}`] : []),
           ...collectRedactionValues(selectedApiKey.value, headers),
           ...(oauth
             ? Object.values(oauth.auth.headers ?? {}).flatMap((value) => {

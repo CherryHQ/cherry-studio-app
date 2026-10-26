@@ -8,6 +8,7 @@ import { useProviderAvatar, useProviderAvatarActions } from '@/frontend/hooks/us
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { useProviderApiServiceQueries } from '../../../apiService/hooks/useProviderApiServiceQueries';
 import {
@@ -35,6 +36,7 @@ import {
   providerDefaultEndpointNeedsRepair,
   resolveProviderConfigurationEndpointTypes,
 } from '../utils/providerConfigurationValues';
+import { isVertexAuthConfigured } from '../utils/providerVertexAuth';
 
 /**
  * A saved provider, edited one change at a time. Each action writes straight to the
@@ -87,6 +89,8 @@ export function useSavedProviderConfiguration(providerId: string) {
     !oauthSignedIn &&
     shouldShowApiKeys(getEffectiveAuthConfig(queries.authConfig, provider).type, provider);
   const requiresApiKey = showApiKeys && !provider?.authOptional;
+  const effectiveAuth = getEffectiveAuthConfig(queries.authConfig, provider);
+  const vertexConfig = effectiveAuth.type === 'iam-gcp' ? effectiveAuth : undefined;
 
   async function track<T>(work: () => Promise<T>): Promise<T> {
     setPendingCount((count) => count + 1);
@@ -246,6 +250,19 @@ export function useSavedProviderConfiguration(providerId: string) {
 
   const value: ProviderConfigurationValue | undefined = provider
     ? {
+        connectionKey: sha256HexOfText(
+          JSON.stringify([
+            provider.defaultChatEndpoint,
+            provider.endpointConfigs,
+            provider.settings.extraHeaders,
+            effectiveAuth,
+            apiKeys,
+            oauthSignedIn,
+          ]),
+        ),
+        vertexAuth: vertexConfig
+          ? { config: vertexConfig, save: (authConfig) => save({ authConfig }) }
+          : undefined,
         account: capabilities?.signIn
           ? {
               capabilities,
@@ -317,23 +334,26 @@ export function useSavedProviderConfiguration(providerId: string) {
     : undefined;
 
   const hasUsableKey = apiKeys.some((entry) => entry.isEnabled && entry.key.trim());
-  const hasAddress =
-    address.kind === 'custom'
+  const hasAddress = vertexConfig
+    ? true
+    : address.kind === 'custom'
       ? hasConfiguredCustomProviderTextEndpoint(address.endpointUrls)
       : address.kind === 'primary'
         ? address.baseUrl.trim().length > 0
         : true;
   const allKeysDisabled = apiKeys.length > 0 && !apiKeys.some((entry) => entry.isEnabled);
   const continueHint =
-    capabilities?.flow === 'interactive' && !oauthSignedIn && !showApiKeys
-      ? t('settings.provider.setup.issues.missing-oauth')
-      : requiresApiKey && allKeysDisabled
-        ? t('settings.provider.setup.issues.disabled-api-keys')
-        : requiresApiKey && !hasUsableKey
-          ? t('settings.provider.setup.issues.missing-api-key')
-          : !hasAddress
-            ? t('settings.provider.setup.issues.invalid-endpoint')
-            : undefined;
+    vertexConfig && !isVertexAuthConfigured(vertexConfig)
+      ? t('settings.provider.setup.issues.invalid-service-account')
+      : capabilities?.flow === 'interactive' && !oauthSignedIn && !showApiKeys
+        ? t('settings.provider.setup.issues.missing-oauth')
+        : requiresApiKey && allKeysDisabled
+          ? t('settings.provider.setup.issues.disabled-api-keys')
+          : requiresApiKey && !hasUsableKey
+            ? t('settings.provider.setup.issues.missing-api-key')
+            : !hasAddress
+              ? t('settings.provider.setup.issues.invalid-endpoint')
+              : undefined;
 
   return {
     canContinue: Boolean(provider) && !isLoading && !isError && continueHint === undefined,

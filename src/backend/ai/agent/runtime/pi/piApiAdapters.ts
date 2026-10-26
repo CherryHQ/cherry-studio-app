@@ -10,6 +10,7 @@ import { applyPiRequestParameters, type PiRequestParameters } from './piRequestP
 export type SupportedPiApi =
   | 'anthropic-messages'
   | 'google-generative-ai'
+  | 'google-vertex'
   | 'openai-completions'
   | 'openai-responses'
   | 'openai-codex-responses'
@@ -85,6 +86,17 @@ export function resolvePiApiAdapter(
   endpointType: PiLanguageEndpointType,
   adapterFamily?: string,
 ): PiApiAdapter {
+  if (endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT && adapterFamily === 'google-vertex') {
+    return {
+      api: 'google-vertex',
+      authHeaderNames: ['authorization', 'x-goog-api-key', 'x-api-key', 'api-key'],
+      formatBaseUrl: (baseUrl) => baseUrl,
+      loadStreamSimple: async () =>
+        (await import('@earendil-works/pi-ai/api/google-vertex'))
+          .streamSimple as unknown as PiStreamFn,
+      supportsCustomFetch: true,
+    };
+  }
   if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'openai-codex') {
     return {
       api: 'openai-codex-responses',
@@ -103,6 +115,7 @@ export function resolvePiApiAdapter(
 }
 
 type PiStreamBinding = {
+  accessToken?: string;
   apiKey?: string;
   fetch: FetchFunction;
   headers: Record<string, string>;
@@ -190,6 +203,7 @@ export async function bindPiStream(
     const streamOptions = {
       ...providerOptions,
       apiKey: binding.apiKey === '' ? 'unused' : binding.apiKey,
+      ...(binding.accessToken ? { accessToken: binding.accessToken } : {}),
       cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
       sessionId: binding.sessionId ?? options?.sessionId,
       ...(adapter.api === 'openai-codex-responses' ? { transport: 'sse' } : {}),
