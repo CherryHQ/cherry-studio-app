@@ -247,7 +247,7 @@ concurrently and reads each attached image once.
 A new copy takes a free slot, or replaces the least recently used idle copy. Copies are disposable:
 Pi stores no Cherry identity mapping, and an empty or deleted Pi database only means every branch is
 rebuilt from Cherry messages on its next use. A multi-model question gives every further answer its
-own copy, runs them in parallel with only automatically approved read tools, and keeps the Session
+own copy, runs them in parallel with only classified read tools, pausing for per-call approval when required, and keeps the Session
 busy until all of them settle; meanwhile further input is rejected rather than queued (Pi queues
 input but not per-input configuration, and Cherry keeps no queue of its own; see
 [Agent Protocol](./agent-protocol.md)). Rebuilds

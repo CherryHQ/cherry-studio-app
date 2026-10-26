@@ -1309,3 +1309,55 @@ describe('AgentSessionChatClient', () => {
     });
   });
 });
+
+test('1470: cancellation removes only its approval while a sibling remains running', async () => {
+  let listener!: (event: AgentEvent) => void;
+  const protocol = protocolWithObservation(
+    jest.fn(async (_id, next) => {
+      listener = next;
+      return { snapshot: snapshot(), unsubscribe() {} };
+    }),
+  );
+  const client = new AgentSessionChatClient(protocol);
+  const unsubscribe = client.subscribe('session-1', () => {});
+  try {
+    await client.observe('session-1');
+    const a = {
+      id: 'a',
+      sessionId: 'session-1',
+      turnId: 'turn',
+      toolCallId: 'call',
+      toolRef: { source: 'mcp' as const, serverId: 'server', rawToolName: 'read' },
+      displayName: 'Read',
+      input: {},
+      status: 'pending' as const,
+      requester: { assistantMessageId: 'answer-a', modelId: 'a', modelName: 'Model' },
+    };
+    const b = {
+      ...a,
+      id: 'b',
+      requester: { ...a.requester, assistantMessageId: 'answer-b', modelId: 'b' },
+    };
+    listener({ type: 'approval.requested', approval: a });
+    listener({ type: 'approval.requested', approval: b });
+    listener({ type: 'approval.resolved', approval: { ...a, status: 'cancelled' } });
+    listener({
+      type: 'turn.updated',
+      turn: {
+        id: 'turn',
+        sessionId: 'session-1',
+        assistantMessageId: 'answer-b',
+        status: 'running',
+        startedAt: '',
+        endedAt: null,
+        error: null,
+      },
+    });
+    expect(client.getState('session-1').pendingApprovals).toEqual([b]);
+    listener({ type: 'approval.resolved', approval: { ...a, status: 'approved' } });
+    expect(client.getState('session-1').pendingApprovals).toEqual([b]);
+  } finally {
+    unsubscribe();
+    client.dispose();
+  }
+});

@@ -73,7 +73,7 @@ function descriptor(serverId: string, rawToolName: string): McpExecutableToolDes
 }
 
 describe('Agent Runtime MCP tool resolution', () => {
-  test('discovers only enabled allowed tools and applies effective per-tool policy', async () => {
+  test('1470: discovers only enabled allowed tools and applies effective per-tool policy', async () => {
     const listExecutableToolDescriptors = jest.fn(async (serverId: string) =>
       serverId === SERVER_A
         ? [descriptor(SERVER_A, 'search'), descriptor(SERVER_A, 'delete')]
@@ -107,7 +107,8 @@ describe('Agent Runtime MCP tool resolution', () => {
       getMcpRuntime: () => ({ createRuntimeTools, listExecutableToolDescriptors }),
     });
 
-    await resolver.resolve(AGENT_ID);
+    const result = await resolver.resolve(AGENT_ID);
+    expect(result.restricted).toEqual({ deniedCount: 1 });
 
     expect(listExecutableToolDescriptors).toHaveBeenCalledTimes(2);
     expect(createRuntimeTools).toHaveBeenCalledWith([
@@ -153,7 +154,11 @@ describe('Agent Runtime MCP tool resolution', () => {
       getMcpRuntime,
     });
 
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      restricted: { deniedCount: 0 },
+    });
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
@@ -195,6 +200,7 @@ describe('Agent Runtime MCP tool resolution', () => {
     const expected = {
       tools: pluginDescriptors.map((descriptor) => ({ descriptor, approval: 'ask' })),
       pluginGuides: [],
+      restricted: { deniedCount: 0 },
     };
     await expect(resolver.resolve(AGENT_ID, onUnavailable)).resolves.toEqual(expected);
     await expect(resolver.resolve(AGENT_ID)).resolves.toEqual(expected);
@@ -213,7 +219,11 @@ describe('Agent Runtime MCP tool resolution', () => {
       },
       getMcpRuntime,
     });
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      restricted: { deniedCount: 0 },
+    });
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
@@ -261,13 +271,18 @@ describe('Agent Runtime MCP tool resolution', () => {
     const { tools: first } = await resolver.resolve(AGENT_ID);
     expect(first).toHaveLength(1);
     connected = [];
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      restricted: { deniedCount: 0 },
+    });
     connected = [pluginServer(SERVER_B)];
     await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
       tools: [
         { descriptor: { ...descriptor(SERVER_B, 'search'), endpointUrl: null }, approval: 'ask' },
       ],
       pluginGuides: [],
+      restricted: { deniedCount: 0 },
     });
     expect(first).toEqual([
       { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
@@ -313,7 +328,11 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
 
     isConnected = false;
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      restricted: { deniedCount: 0 },
+    });
     expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
   });
 

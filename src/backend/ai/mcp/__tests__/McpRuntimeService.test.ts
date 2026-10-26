@@ -1226,18 +1226,21 @@ describe('catalog reuse', () => {
     [
       'an idempotent tool',
       { annotations: { idempotentHint: true } },
-      { code: 'mcp_tool_call_failed', retryable: true },
+      { code: 'mcp_tool_outcome_unknown', retryable: false },
     ],
-  ])('classifies a transport failure after sending %s', async (_label, annotations, expected) => {
-    const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
-    client.callTool.mockRejectedValue(new Error('socket closed'));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const server = makeServer();
-    const { service } = makeService([server]);
-    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+  ])(
+    '1470: classifies a transport failure after sending %s',
+    async (_label, annotations, expected) => {
+      const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
+      client.callTool.mockRejectedValue(new Error('socket closed'));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server = makeServer();
+      const { service } = makeService([server]);
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
 
-    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
-  });
+      await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
+    },
+  );
 
   it('reports a call that never left the device as a plain retryable failure', async () => {
     const client = makeClient(makeRawTools(['search']));
@@ -1794,3 +1797,50 @@ describe('cached MCP prompts', () => {
     expect(client.getPrompt).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('1470: strict annotation classification through the runtime adapter', () => {
+  test.each(
+    [true, false, undefined].flatMap((readOnlyHint) =>
+      [true, false, undefined].map((idempotentHint) => ({ readOnlyHint, idempotentHint })),
+    ),
+  )('readOnly=$readOnlyHint idempotent=$idempotentHint', async (annotations) => {
+    const client = makeClient([{ ...makeRawTools(['search'])[0]!, annotations }]);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const expected = annotations.readOnlyHint === true ? 'read' : undefined;
+    expect(descriptor!.effect).toBe(expected);
+    expect(
+      service.createRuntimeTools([{ descriptor: descriptor!, approval: 'ask' }])[0]!.effect,
+    ).toBe(expected);
+  });
+});
+
+test.each([
+  ['calendar_get_primary', false, 'read'],
+  ['calendar_create_event', true, 'write'],
+] as const)(
+  '1470: bundled policy for %s overrides remote readOnlyHint=%s (existing behavior)',
+  async (name, readOnlyHint, effect) => {
+    const client = makeClient([
+      {
+        ...makeRawTools([name])[0]!,
+        annotations: { readOnlyHint, idempotentHint: false },
+      },
+    ]);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'feishu',
+      authorizationId: 'grant',
+      name: 'Feishu',
+    };
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    expect(descriptor).toMatchObject({ pluginId: 'feishu', effect });
+  },
+);

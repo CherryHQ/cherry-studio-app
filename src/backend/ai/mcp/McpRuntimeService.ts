@@ -685,9 +685,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
                   pluginId: server.builtinId,
                   effect: getBuiltInMcpToolEffect(server.builtinId, tool.name),
                 }
-              : // A wrong hint costs one repeated call on a server the user chose to connect;
-                // approval still gates every call, so this never widens what a tool may do.
-                tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true
+              : // readOnlyHint is a server declaration, not authorization; approval still gates calls.
+                // idempotentHint only means repeating a call does not further change its final
+                // state, which may still be a write, so it is not evidence of a read.
+                tool.annotations?.readOnlyHint === true
                 ? { effect: 'read' as const }
                 : {}),
             generation: state.catalogGeneration,

@@ -78,7 +78,6 @@ import {
   DurableTurnMetadataSchema,
   projectDurableHostTurn,
 } from './durableHostProjection';
-import { toAgentApprovalView } from './runtimeProjection';
 import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -1516,10 +1515,43 @@ export class DurableAgentHost implements AgentProtocol {
       resolve = accept;
       reject = refuse;
     });
-    const view = toAgentApprovalView(approval, identity.sessionId);
-    const abort = () => reject(signal.reason);
+    const model = DurableTurnMetadataSchema.parse(state.active.metadata).inferenceSnapshot.model;
+    const view: AgentApprovalView = {
+      id: approval.id,
+      sessionId: identity.sessionId,
+      turnId: approval.turnId,
+      toolCallId: approval.toolCallId,
+      toolRef: approval.toolRef,
+      displayName: approval.displayName,
+      input: approval.input,
+      status: approval.status,
+      requester: {
+        assistantMessageId: state.active.assistantMessageId,
+        modelId: model.uniqueModelId,
+        modelName: model.name,
+      },
+    };
+    let settled = false;
+    const finish = (status: 'approved' | 'denied' | 'cancelled') => {
+      if (settled) return false;
+      settled = true;
+      state.approvals.delete(approval.id);
+      this.publish(identity.sessionId, {
+        type: 'approval.resolved',
+        approval: { ...view, status },
+      });
+      return true;
+    };
+    const abort = () => {
+      if (finish('cancelled')) reject(signal.reason);
+    };
     signal.addEventListener('abort', abort, { once: true });
-    state.approvals.set(approval.id, { view, resolve });
+    state.approvals.set(approval.id, {
+      view,
+      resolve: (decision) => {
+        if (finish(decision === 'approve' ? 'approved' : 'denied')) resolve(decision);
+      },
+    });
     const key = executionKey(identity, identity.requestId);
     const wait: NonNullable<RuntimeTurnTiming['approvals']>[number] = {
       approvalId: approval.id,
@@ -1532,12 +1564,7 @@ export class DurableAgentHost implements AgentProtocol {
     this.publishCurrentStatus(identity.sessionId, state);
     this.updateBackgroundInteraction(identity.sessionId, state);
     try {
-      const decision = await response;
-      this.publish(identity.sessionId, {
-        type: 'approval.resolved',
-        approval: { ...view, status: decision === 'approve' ? 'approved' : 'denied' },
-      });
-      return decision;
+      return await response;
     } finally {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);

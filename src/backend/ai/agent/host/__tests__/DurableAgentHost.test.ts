@@ -2261,3 +2261,117 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 });
+
+test.each(['both-approve', 'abort-first', 'approve-first'] as const)(
+  '1470: parallel approvals isolate requester and settle exactly once (%s)',
+  async (order) => {
+    const state = fixture();
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const controllers = [new AbortController(), new AbortController()];
+    const waits: Promise<unknown>[] = [];
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        additionalReplies: [
+          { modelId: createUniqueModelId('provider', 'second'), assistantMessageId: uuid() },
+        ],
+        parts: [{ type: 'text', text: 'Compare' }],
+      });
+      await settle();
+      const turns = [...state.copies.values()]
+        .flatMap((copy) => copy.turns)
+        .filter((turn) => turn.status === 'running');
+      expect(turns).toHaveLength(2);
+      await state.host.observeSession(state.sessionId, (event) => events.push(event));
+      const ids = [uuid(), uuid()];
+      for (const [i, turn] of turns.entries()) {
+        waits.push(
+          state
+            .execution()!
+            .requestApproval(
+              turn.identity,
+              {
+                id: ids[i]!,
+                turnId: turn.identity.turnId,
+                toolCallId: 'same-call',
+                toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'read' },
+                displayName: 'Read',
+                input: { same: true },
+                status: 'pending',
+              },
+              controllers[i]!.signal,
+            )
+            .catch(() => 'aborted'),
+        );
+      }
+      await settle();
+      const pending = () => events.filter((e) => e.type === 'approval.requested');
+      expect(pending()).toHaveLength(2);
+      const respond = (i: number, overrides = {}) =>
+        state.host.respondApproval({
+          sessionId: state.sessionId,
+          turnId: turns[i]!.identity.turnId,
+          approvalId: ids[i]!,
+          decision: 'approve',
+          ...overrides,
+        });
+      for (const overrides of [{ sessionId: uuid() }, { turnId: uuid() }, { approvalId: uuid() }])
+        await expect(respond(0, overrides)).rejects.toMatchObject({
+          view: { code: 'APPROVAL_NOT_FOUND' },
+        });
+      if (order === 'abort-first') {
+        controllers[0]!.abort();
+        await expect(waits[0]).resolves.toBe('aborted');
+        await expect(respond(0)).rejects.toMatchObject({ view: { code: 'APPROVAL_NOT_FOUND' } });
+      } else {
+        await respond(0);
+        if (order === 'approve-first') controllers[0]!.abort();
+        await expect(waits[0]).resolves.toBe('approve');
+      }
+      expect(
+        (await state.host.observeSession(state.sessionId, () => {})).snapshot.pendingApprovals.map(
+          (a) => a.id,
+        ),
+      ).toEqual([ids[1]]);
+      await respond(1);
+      await expect(waits[1]).resolves.toBe('approve');
+      for (const [i, id] of ids.entries()) {
+        const terminal = events.filter(
+          (e) => e.type === 'approval.resolved' && e.approval.id === id,
+        );
+        expect(terminal).toHaveLength(1);
+        expect(terminal[0]).toMatchObject({
+          approval: {
+            status: i === 0 && order === 'abort-first' ? 'cancelled' : 'approved',
+            requester: expect.any(Object),
+          },
+        });
+      }
+      for (const [i, turn] of turns.entries()) {
+        const model = (turn.metadata as { inferenceSnapshot: AgentInferenceSnapshotV1 })
+          .inferenceSnapshot.model;
+        expect(pending()[i]).toMatchObject({
+          approval: {
+            requester: {
+              assistantMessageId: turn.assistantMessageId,
+              modelId: model.uniqueModelId,
+              modelName: model.name,
+            },
+          },
+        });
+      }
+      expect(
+        (await state.host.observeSession(state.sessionId, () => {})).snapshot.pendingApprovals,
+      ).toEqual([]);
+    } finally {
+      controllers.forEach((c) => c.abort());
+      await Promise.all(waits);
+      await state.host.close();
+    }
+  },
+);

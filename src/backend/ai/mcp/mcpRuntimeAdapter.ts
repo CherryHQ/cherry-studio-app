@@ -38,8 +38,9 @@ export type McpExecutableToolDescriptor = {
   inputSchema: RuntimeJsonValue;
   /**
    * What a failure after transmission means. `read`: repeating the call is harmless, from
-   * bundled policy or a remote read-only or idempotent annotation. `write`: a bundled write.
-   * Absent: the remote server declared nothing, so the outcome is unknown.
+   * bundled policy or application classification using strict readOnlyHint. This server
+   * declaration is not authorization. `write`: a bundled write.
+   * Absent: the tool has no read-only classification, so the outcome is unknown.
    */
   effect?: 'read' | 'write';
   /**
@@ -247,8 +248,8 @@ export function createMcpRuntimeTools(
       inputSchema,
       providerName,
       ref,
-      // Only a bundled plugin's own policy is trusted to declare a read.
-      ...(descriptor.pluginId && effect ? { effect } : {}),
+      // Preserve application-classified effects; authorization still gates each call.
+      ...(effect ? { effect } : {}),
     };
   });
 }

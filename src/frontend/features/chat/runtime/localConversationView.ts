@@ -178,10 +178,11 @@ export function createLocalConversationProjector(input: {
       const turn = state.activeTurn;
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
+        const requesterKey = JSON.stringify(approval.requester);
         const isHealth = isHealthToolRef(approval.toolRef);
         const inference = isHealth
           ? state.liveMessages.find(
-              (message) => message.role === 'assistant' && message.turnId === approval.turnId,
+              (message) => message.id === approval.requester.assistantMessageId,
             )?.inferenceSnapshot
           : undefined;
         return {
@@ -189,6 +190,7 @@ export function createLocalConversationProjector(input: {
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
+          requester: approval.requester,
           state: 'pending',
           ...(isHealth
             ? {
@@ -212,7 +214,8 @@ export function createLocalConversationProjector(input: {
             if (
               !current ||
               current.turnId !== approval.turnId ||
-              JSON.stringify(current.input) !== inputKey
+              JSON.stringify(current.input) !== inputKey ||
+              JSON.stringify(current.requester) !== requesterKey
             )
               throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
             await client.respondApproval(sessionId, approval.id, decision.kind);

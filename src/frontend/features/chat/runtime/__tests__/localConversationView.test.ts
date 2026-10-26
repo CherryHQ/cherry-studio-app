@@ -26,6 +26,7 @@ const approval = {
   displayName: 'Write',
   input: { path: 'first' },
   status: 'pending' as const,
+  requester: { assistantMessageId: 'answer', modelId: 'provider::model', modelName: 'Model' },
 };
 const question = {
   turnId: 'turn',
@@ -96,12 +97,13 @@ test('a queued-only session blocks history edits while leaving its queue outside
   expect(f.projector.snapshot(f.state, undefined).executions).toEqual([]);
 });
 
-test('a changed approval payload under the same id rejects the earlier decision', async () => {
+test('1470: a changed approval payload under the same id rejects the earlier decision', async () => {
   const f = fixture({ pendingApprovals: [approval] });
   const previous = f.projector.snapshot(f.state, undefined).interactions[0];
   expect(previous).toMatchObject({
     id: 'approval',
     execution: 'turn',
+    requester: approval.requester,
     kind: 'decision',
     input: { kind: 'inline', value: { kind: 'json', value: { path: 'first' } } },
   });
@@ -313,4 +315,26 @@ test('cancellation targets the observed turn and the snapshot reports freshness 
     freshness: { state: 'unavailable', failure: { code: 'internal' } },
     executions: [],
   });
+});
+
+test('1470: same-turn actions preserve requester and reject a settled sibling action', async () => {
+  const other = {
+    ...approval,
+    id: 'b',
+    requester: { ...approval.requester, assistantMessageId: 'b', modelId: 'other' },
+  };
+  const f = fixture({ pendingApprovals: [approval, other] });
+  const actions = f.projector.snapshot(f.state, undefined).interactions;
+  expect(actions).toMatchObject([
+    { requester: approval.requester },
+    { requester: other.requester },
+  ]);
+  f.set({ pendingApprovals: [other] });
+  expect(await actions[0]!.respond!.execute({ kind: 'approve' })).toMatchObject({
+    state: 'rejected',
+  });
+  expect(await actions[1]!.respond!.execute({ kind: 'approve' })).toMatchObject({
+    state: 'applied',
+  });
+  expect(f.client.respondApproval).toHaveBeenCalledWith('session', 'b', 'approve');
 });

@@ -1962,3 +1962,107 @@ describe('Native web tools', () => {
     }
   });
 });
+
+test('1470: real lanes with identical raw call ids request distinct approvals and retain lane results', async () => {
+  const state = fixture();
+  const pending: {
+    identity: Parameters<RuntimeExecutionPorts['requestApproval']>[0];
+    approval: Parameters<RuntimeExecutionPorts['requestApproval']>[1];
+    release: (v: 'approve' | 'deny') => void;
+  }[] = [];
+  const asked = deferred<void>();
+  state.ports.requestApproval = async (identity, approval) => {
+    const gate = deferred<'approve' | 'deny'>();
+    pending.push({ identity, approval, release: gate.resolve });
+    if (pending.length === 2) asked.resolve();
+    return gate.promise;
+  };
+  const executed: string[] = [];
+  const tool: RuntimeTool = {
+    ref: { source: 'builtin', capabilityId: 'read_file' },
+    providerName: 'read_file',
+    displayName: 'Read',
+    description: 'Read',
+    inputSchema: { type: 'object', properties: {} },
+    approval: 'ask',
+    effect: 'read',
+    execute: async ({ turnId }) => {
+      executed.push(turnId);
+      return { value: turnId, artifacts: [] };
+    },
+  };
+  state.ports.resolveTool = async () => tool;
+  const resolveModel = state.dependencies.resolveModel;
+  state.dependencies.resolveModel = async (...args) => ({
+    ...(await resolveModel(...args)),
+    streamFn: (_model, context) => {
+      const isResult = context.messages.some((m) => m.role === 'toolResult');
+      const reason = isResult ? 'stop' : 'toolUse';
+      const stream = new AssistantMessageEventStream();
+      stream.push({
+        type: 'done',
+        reason,
+        message: {
+          ...emptyAssistantMessage(wire),
+          stopReason: reason,
+          content: isResult
+            ? [{ type: 'text', text: 'Done' }]
+            : [{ type: 'toolCall', id: 'same-raw-id', name: 'read_file', arguments: {} }],
+        },
+      });
+      stream.end();
+      return stream;
+    },
+  });
+  const runtime = state.create();
+  await runtime.initialize(state.database, state.ports);
+  const lanes = [runtimeLane('session', 0), runtimeLane('session', 1)];
+  try {
+    for (const [i, target] of lanes.entries()) {
+      await runtime.ensureConversation({
+        ...seed,
+        lane: target,
+        configuration: { ...seed.configuration, tools: [tool] },
+      });
+      await runtime.submit(target, input(`lane-${i}`));
+    }
+    await asked.promise;
+    expect(pending.map((p) => p.approval.toolCallId)).toEqual(['same-raw-id', 'same-raw-id']);
+    expect(new Set(pending.map((p) => p.approval.id)).size).toBe(2);
+    expect(new Set(pending.map((p) => p.identity.slot)).size).toBe(2);
+    expect(executed).toEqual([]);
+    pending[0]!.release('approve');
+    const waitFor = async (target: (typeof lanes)[number], requestId: string) => {
+      const done = deferred<void>();
+      const observation = await runtime.observe(target, (e) => {
+        if (
+          e.type === 'turn.updated' &&
+          e.turn.identity.requestId === requestId &&
+          e.turn.status === 'completed'
+        )
+          done.resolve();
+      });
+      if ((await runtime.message(target, `answer-${requestId}`))?.turn.status !== 'completed')
+        await done.promise;
+      await observation.unsubscribe();
+    };
+    await waitFor(pending[0]!.identity, pending[0]!.identity.requestId);
+    expect(executed).toEqual([pending[0]!.identity.turnId]);
+    pending[1]!.release('approve');
+    await waitFor(pending[1]!.identity, pending[1]!.identity.requestId);
+    expect(executed).toEqual(pending.map((p) => p.identity.turnId));
+    for (const p of pending) {
+      const answer = await runtime.message(p.identity, `answer-${p.identity.requestId}`);
+      expect(answer?.turn.parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: 'same-raw-id',
+          output: expect.objectContaining({ value: p.identity.turnId }),
+        }),
+      );
+    }
+  } finally {
+    pending.forEach((p) => p.release('deny'));
+    await runtime.close();
+  }
+});

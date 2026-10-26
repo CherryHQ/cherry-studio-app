@@ -656,6 +656,7 @@ describe('Agent tool and managed-file contracts', () => {
       displayName: 'Search',
       input: { query: 'Cherry Studio' },
       status: 'pending',
+      requester: { assistantMessageId: 'answer', modelId: 'model', modelName: 'Model' },
     } as const;
 
     expect(AgentApprovalViewSchema.parse(roundTrip(approval))).toEqual(approval);
@@ -724,4 +725,22 @@ describe('user question protocol', () => {
       }).success,
     ).toBe(false);
   });
+});
+
+test('1470: cancelled approval events round-trip requester identity', () => {
+  const event = {
+    type: 'approval.resolved',
+    approval: {
+      id: 'a',
+      sessionId: 's',
+      turnId: 't',
+      toolCallId: 'call',
+      toolRef: MCP_TOOL_REF,
+      displayName: 'Search',
+      input: {},
+      status: 'cancelled',
+      requester: { assistantMessageId: 'answer-b', modelId: 'provider::b', modelName: 'Same name' },
+    },
+  };
+  expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
 });

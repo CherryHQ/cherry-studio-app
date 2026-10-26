@@ -501,3 +501,13 @@ describe('MCP active request timeout', () => {
     }
   });
 });
+
+test.each(['read', 'write', undefined] as const)(
+  '1470: propagates remote classified effect %s without plugin identity',
+  (effect) => {
+    const tool = createTool({ invoke: jest.fn() }, { effect });
+    expect(tool.ref.source).toBe('mcp');
+    expect(tool.effect).toBe(effect);
+    expect(tool.approval).toBe('ask');
+  },
+);

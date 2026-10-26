@@ -177,8 +177,7 @@ export class McpAppAccess {
       return await raceAbort(
         this.withSource(reference, bound.signal, async (connection, tools) => {
           const tool = await inspect(connection, tools);
-          if (tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true)
-            effect = 'read';
+          if (tool.annotations?.readOnlyHint === true) effect = 'read';
           connection.signal.throwIfAborted();
           const result = await connection.invoke(name, args, {
             sent: () => {

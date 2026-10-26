@@ -533,6 +533,7 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
+  let deniedMcpCount = 0;
   // A multi-model answer runs beside others, so it never loads Skills or plugin workflows.
   const canUseSkills = canUseTools && !scope.readOnlyTools;
   let receipts: ReturnType<typeof latestSkillActivations> = [];
@@ -578,6 +579,7 @@ export async function prepareResolvedTurn(
         signal,
       );
       configuredTools = configured.tools;
+      deniedMcpCount = configured.restricted?.deniedCount ?? 0;
       if (canUseSkills) pluginGuides = configured.pluginGuides;
     } catch {
       signal.throwIfAborted();
@@ -646,10 +648,32 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
-  // Parallel answers share one real world: only reads that need no approval
-  // (so no answer stops to ask the user) run beside each other.
-  if (scope.readOnlyTools)
-    tools = tools.filter((tool) => tool.effect === 'read' && tool.approval === 'auto');
+  // Parallel answers share one real world: they may use read-only tools and must
+  // not mutate anything, but a read that requires approval may still stop and ask
+  // the user for that call.
+  if (scope.readOnlyTools) {
+    let writeCount = 0;
+    let unclassifiedCount = 0;
+    let deniedCount = deniedMcpCount;
+    for (const tool of tools) {
+      if (tool.ref.source !== 'mcp') continue;
+      if (tool.approval === 'deny') deniedCount++;
+      else if (tool.effect === 'write') writeCount++;
+      else if (tool.effect !== 'read') unclassifiedCount++;
+    }
+    if (writeCount || unclassifiedCount || deniedCount) {
+      // Saturated counts are lower bounds. Keep a prompt slot without disclosing tool identities.
+      toolDiscoveryWarnings.unshift(
+        JSON.stringify({
+          code: 'parallel-read-only-required',
+          writeCount: Math.min(999999, writeCount),
+          unclassifiedCount: Math.min(999999, unclassifiedCount),
+          deniedCount: Math.min(999999, deniedCount),
+        }),
+      );
+    }
+    tools = tools.filter((tool) => tool.effect === 'read' && tool.approval !== 'deny');
+  }
   let workflowInstructions: TurnPlan['workflowInstructions'] = [];
   if (pluginGuides.length > 0) {
     const workflows = getPluginWorkflows(pluginGuides);

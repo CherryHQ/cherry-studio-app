@@ -1135,7 +1135,7 @@ describe('durable capability boundary', () => {
     }
   });
 
-  test('native MCP discovery preserves approval, artifact admission and untrusted result boundaries', async () => {
+  test('1470: native MCP discovery preserves approval, artifact admission and untrusted result boundaries', async () => {
     const result = {
       value: 'Created',
       artifacts: [
@@ -1274,47 +1274,54 @@ describe('durable capability boundary', () => {
     }
   });
 
-  test('waits for approval before persisting intent or performing an effect', async () => {
-    const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
-    let release!: (approved: boolean) => void;
-    let entered!: () => void;
-    const asked = new Promise<void>((resolve) => {
-      entered = resolve;
-    });
-    const decision = new Promise<boolean>((resolve) => {
-      release = resolve;
-    });
-    const extension = capabilityExtension({
-      name: 'cherry',
-      tools: [capability({ execute })],
-      approve: async () => {
-        entered();
-        return decision;
-      },
-    });
-    const harness = await open(new MemoryStorage(), extension);
-    try {
-      const conversation = await harness.createConversation(
-        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
-        BACKGROUND_CONTEXT,
-      );
-      const id = await toolTask(conversation);
-      harness.resume();
-      await asked;
-      expect(execute).not.toHaveBeenCalled();
-      expect((await harness.getTask(id, BACKGROUND_CONTEXT))?.state).toMatchObject({
-        checkpoint: { phase: 'call' },
+  test.each([true, false])(
+    '1470: waits for approval before intent and executes only when approved=%s',
+    async (approved) => {
+      const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
+      let release!: (approved: boolean) => void;
+      let entered!: () => void;
+      const asked = new Promise<void>((resolve) => {
+        entered = resolve;
       });
-      release(false);
-      await harness.waitForTask(id, BACKGROUND_CONTEXT);
-      expect(execute).not.toHaveBeenCalled();
-      const history = await conversation.context(BACKGROUND_CONTEXT);
-      expect(history.messages.at(-1)).toMatchObject({ role: 'toolResult', isError: true });
-    } finally {
-      release(false);
-      await harness.close(BACKGROUND_CONTEXT);
-    }
-  });
+      const decision = new Promise<boolean>((resolve) => {
+        release = resolve;
+      });
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [capability({ execute })],
+        approve: async () => {
+          entered();
+          return decision;
+        },
+      });
+      const harness = await open(new MemoryStorage(), extension);
+      try {
+        const conversation = await harness.createConversation(
+          { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+          BACKGROUND_CONTEXT,
+        );
+        const id = await toolTask(conversation);
+        harness.resume();
+        await asked;
+        expect(execute).not.toHaveBeenCalled();
+        expect((await harness.getTask(id, BACKGROUND_CONTEXT))?.state).toMatchObject({
+          checkpoint: { phase: 'call' },
+        });
+        release(approved);
+        await harness.waitForTask(id, BACKGROUND_CONTEXT);
+        expect(execute).toHaveBeenCalledTimes(approved ? 1 : 0);
+        const history = await conversation.context(BACKGROUND_CONTEXT);
+        expect(history.messages.at(-1)).toMatchObject({ role: 'toolResult', isError: !approved });
+        if (approved)
+          expect(history.messages.at(-1)).toMatchObject({
+            content: [{ type: 'text', text: JSON.stringify({ value: 'Created', artifacts: [] }) }],
+          });
+      } finally {
+        release(false);
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
 
   test('does not repeat a side effect whose execution intent survived a process restart', async () => {
     const storage = new ReopenableMemoryStorage();

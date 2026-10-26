@@ -23,7 +23,7 @@ export const DurableTurnMetadataSchema = z.object({
   workspaceFolderId: z.string().min(1).nullable().default(null),
   referencedFileEntryIds: z.array(z.string()),
   hasHistoryBeforeActiveTurn: z.boolean(),
-  /** One answer of a multi-model question: its tools are limited to automatic reads. */
+  /** One answer of a multi-model question: its tools are limited to classified reads, with per-call approval. */
   readOnlyTools: z.boolean().optional(),
   /** The question's parent in the message tree, so live rows can be placed on a branch. */
   parentMessageId: z.string().nullable().optional(),

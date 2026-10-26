@@ -1,3 +1,6 @@
+import { createMcpRuntimeTools } from '@/backend/ai/mcp/mcpRuntimeAdapter';
+import { McpRuntimeService } from '@/backend/ai/mcp/McpRuntimeService';
+import { mcpServerService } from '@/backend/data/services/McpServerService';
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
 import type {
@@ -1087,3 +1090,155 @@ function textMessage(id: string, turnId: string): AgentMessageView {
     updatedAt: NOW,
   };
 }
+
+describe('1470: parallel MCP catalog', () => {
+  test.each(
+    ['existing', 'initial', 'durable'].flatMap((kind) =>
+      ['default', 'auto'].map((mode) => ({ kind, mode })),
+    ),
+  )(
+    '$kind / $mode retains real remote reads and explains exclusions once per plan',
+    async ({ kind, mode }) => {
+      const h = createHarness();
+      h.getAgent.mockResolvedValue({ ...AGENT, toolApprovalMode: mode as 'default' | 'auto' });
+      // Replace transport/catalog storage only; execute the real descriptor classifier and adapter.
+      const getServer = jest.spyOn(mcpServerService, 'getById').mockResolvedValue({
+        id: 'remote',
+        name: 'Remote',
+        endpointUrl: 'https://example.com/mcp',
+        isEnabled: true,
+        disabledTools: [],
+        createdAt: NOW,
+        updatedAt: NOW,
+      });
+      const service: McpRuntimeService = Object.assign(Object.create(McpRuntimeService.prototype), {
+        getRuntimeState: () => ({ catalogGeneration: 1 }),
+        getTurnCatalog: async () => ({
+          discoveryWarnings: [],
+          tools: [
+            {
+              name: 'read',
+              inputSchema: { type: 'object' },
+              annotations: { readOnlyHint: true },
+            },
+            {
+              name: 'idempotent',
+              inputSchema: { type: 'object' },
+              annotations: { idempotentHint: true },
+            },
+            { name: 'unknown', inputSchema: { type: 'object' } },
+            {
+              name: 'denied',
+              inputSchema: { type: 'object' },
+              annotations: { readOnlyHint: true },
+            },
+          ],
+        }),
+        isCurrentState: () => true,
+        getConnectionKey: async () => 'remote-connection',
+      });
+      const descriptors = await service.listExecutableToolDescriptors('remote');
+      getServer.mockRestore();
+      const tools = createMcpRuntimeTools(
+        descriptors.map((descriptor, i) => ({
+          descriptor,
+          approval: i === 3 ? ('deny' as const) : ('ask' as const),
+        })),
+        { invoke: jest.fn() },
+      );
+      const write = createMcpRuntimeTools(
+        [
+          {
+            descriptor: {
+              ...descriptors[0]!,
+              rawToolName: 'bundled-write',
+              pluginId: 'github',
+              effect: 'write',
+            },
+            approval: 'ask',
+          },
+        ],
+        { invoke: jest.fn() },
+      );
+      tools.push(...write);
+      h.getSystemTools.mockResolvedValue([tool('ask_user_question', 'ask')]);
+      const warnings = Array.from({ length: 25 }, (_, i) => `loading-${i}`);
+      h.dependencies.runtimeTools.resolve = async (_id, warn) => {
+        warnings.forEach((w) => warn?.(w));
+        return { tools, pluginGuides: [], restricted: { deniedCount: 2 } };
+      };
+      const prepare = () =>
+        kind === 'initial'
+          ? prepareInitialTurn(
+              h.dependencies,
+              { ...textInput(), agentId: AGENT_ID },
+              new AbortController().signal,
+              { readOnlyTools: true },
+            )
+          : kind === 'durable'
+            ? prepareDurableTurn(h.dependencies, textInput(), [], new AbortController().signal, {
+                readOnlyTools: true,
+              })
+            : prepareTurn(h.dependencies, textInput(), new AbortController().signal, undefined, {
+                readOnlyTools: true,
+              });
+      for (let turn = 0; turn < 2; turn++) {
+        const plan = await prepare();
+        expect(plan.tools).toEqual([
+          expect.objectContaining({
+            ref: tools[0]!.ref,
+            approval: mode === 'auto' ? 'auto' : 'ask',
+            effect: 'read',
+          }),
+        ]);
+        const record = plan.toolDiscoveryWarnings[0]!;
+        expect(JSON.parse(record)).toEqual({
+          code: 'parallel-read-only-required',
+          writeCount: 1,
+          unclassifiedCount: 2,
+          deniedCount: 3,
+        });
+        expect(record.length).toBeLessThan(160);
+        expect(
+          plan.toolDiscoveryWarnings.filter((w) => w.includes('parallel-read-only-required')),
+        ).toHaveLength(1);
+        expect(plan.toolDiscoveryWarnings.slice(0, 20)).toEqual([record, ...warnings.slice(0, 19)]);
+      }
+      h.dependencies.runtimeTools.resolve = async () => ({ tools: [tools[0]!], pluginGuides: [] });
+      expect((await prepare()).toolDiscoveryWarnings).toEqual([]);
+    },
+  );
+});
+
+test('1470: restriction counts saturate without cutting JSON and reset with an empty catalog', async () => {
+  const h = createHarness();
+  h.getSystemTools.mockResolvedValue([]);
+  h.dependencies.runtimeTools.resolve = async () => ({
+    tools: [],
+    pluginGuides: [],
+    restricted: { deniedCount: 1000001 },
+  });
+  const plan = await prepareDurableTurn(
+    h.dependencies,
+    textInput(),
+    [],
+    new AbortController().signal,
+    { readOnlyTools: true },
+  );
+  expect(plan.toolDiscoveryWarnings).toEqual([
+    '{"code":"parallel-read-only-required","writeCount":0,"unclassifiedCount":0,"deniedCount":999999}',
+  ]);
+  h.dependencies.runtimeTools.resolve = async () => ({
+    tools: [],
+    pluginGuides: [],
+    restricted: { deniedCount: 0 },
+  });
+  const next = await prepareDurableTurn(
+    h.dependencies,
+    textInput(),
+    [],
+    new AbortController().signal,
+    { readOnlyTools: true },
+  );
+  expect(next.toolDiscoveryWarnings).toEqual([]);
+});

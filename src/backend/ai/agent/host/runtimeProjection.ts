@@ -5,15 +5,13 @@
  */
 
 import {
-  AgentApprovalViewSchema,
   AgentMessagePartSchema,
-  type AgentApprovalView,
   type AgentErrorView,
   type AgentMessagePart,
 } from '@/shared/contracts/agent';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
-import type { RuntimeApproval, RuntimeError, RuntimeOutputPart } from '../runtime';
+import type { RuntimeError, RuntimeOutputPart } from '../runtime';
 
 export function toAgentErrorView(error: RuntimeError): AgentErrorView {
   return { code: 'EXECUTION_FAILED', ...createAiFailure(error) };
@@ -97,21 +95,5 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
     type: part.type,
     text: part.text,
     state: part.state,
-  });
-}
-
-export function toAgentApprovalView(
-  approval: RuntimeApproval,
-  sessionId: string,
-): AgentApprovalView {
-  return AgentApprovalViewSchema.parse({
-    id: approval.id,
-    sessionId,
-    turnId: approval.turnId,
-    toolCallId: approval.toolCallId,
-    toolRef: approval.toolRef,
-    displayName: approval.displayName,
-    input: approval.input,
-    status: approval.status,
   });
 }

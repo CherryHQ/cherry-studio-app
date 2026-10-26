@@ -175,3 +175,38 @@ describe('MCP App authorization and invocation', () => {
     expect(state.connection.invoke).not.toHaveBeenCalled();
   });
 });
+
+test.each([true, false])(
+  '1470: sent App failures use strict readOnlyHint=%s despite idempotence',
+  async (readOnlyHint) => {
+    const state = fixture();
+    state.tools[1]!.annotations = { idempotentHint: true, readOnlyHint };
+    state.connection.invoke = async (_name, _args, progress) => {
+      progress.sent();
+      throw new Error('socket closed');
+    };
+    await expect(state.call()).rejects.toMatchObject({
+      code: readOnlyHint ? 'mcp_tool_call_failed' : 'mcp_tool_outcome_unknown',
+      retryable: readOnlyHint,
+    });
+  },
+);
+
+test.each([true, false])(
+  '1470: sent App cancellation readOnlyHint=%s keeps conservative outcome',
+  async (readOnlyHint) => {
+    const state = fixture();
+    const controller = new AbortController();
+    state.tools[1]!.annotations = { idempotentHint: true, readOnlyHint };
+    state.connection.invoke = async (_name, _args, progress) => {
+      progress.sent();
+      controller.abort();
+      throw new Error('cancelled');
+    };
+    await expect(
+      state.access.call(state.reference, 'write', { title: 'Title' }, controller.signal),
+    ).rejects.toMatchObject({
+      code: readOnlyHint ? 'mcp_tool_cancelled' : 'mcp_tool_outcome_unknown',
+    });
+  },
+);

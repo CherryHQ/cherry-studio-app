@@ -294,8 +294,8 @@ export type RuntimeTool = {
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
   /**
-   * `read` only for application-owned tools known not to change anything outside
-   * the conversation. Absent means unknown and is treated as a write.
+   * `read` for application-classified reads: owned policy or third-party MCP readOnlyHint.
+   * Classification is not authorization. Absent means unknown; parallel answers exclude it.
    */
   effect?: 'read' | 'write';
   /** Tools in the same group stop together after a tool-scoped failure. */
@@ -406,7 +406,7 @@ export type RuntimeApproval = {
   toolRef: RuntimeToolRef;
   displayName: string;
   input: RuntimeJsonValue;
-  status: 'pending' | 'approved' | 'denied';
+  status: 'pending' | 'approved' | 'denied' | 'cancelled';
 };
 
 export type RuntimeUsage = {

@@ -11,6 +11,7 @@ export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
   displayName: string;
+  requester?: { assistantMessageId: string; modelId: string; modelName: string };
 };
 
 export type ToolApprovalRespondInput = {
@@ -105,6 +106,11 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {approval.requester ? (
+          <Text className="text-sm text-muted-foreground">
+            {approval.requester.modelName} · {approval.requester.modelId}
+          </Text>
+        ) : null}
         <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         {children}
       </ScrollView>

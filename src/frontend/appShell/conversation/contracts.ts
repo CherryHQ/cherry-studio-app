@@ -1,5 +1,6 @@
 import type { MessageListItem } from '@/frontend/components/Message';
 import type {
+  AgentApprovalView,
   AgentMessageView,
   AgentUserQuestions,
   AgentUserAnswers,
@@ -113,6 +114,8 @@ export type ConversationInteractionResponse =
   | { kind: 'user-answer'; answer: AgentUserAnswers };
 export type ConversationInteraction = {
   execution?: string;
+  /** Parallel answers share one turn; identifies which answer is requesting approval. */
+  requester?: AgentApprovalView['requester'];
   id: string;
   kind: 'decision' | 'question';
   title: string;

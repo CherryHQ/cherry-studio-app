@@ -485,7 +485,12 @@ export const AgentApprovalViewSchema = z.strictObject({
   toolRef: AgentToolRefSchema,
   displayName: z.string(),
   input: JsonValueSchema,
-  status: z.enum(['pending', 'approved', 'denied']),
+  status: z.enum(['pending', 'approved', 'denied', 'cancelled']),
+  requester: z.strictObject({
+    assistantMessageId: z.string(),
+    modelId: z.string(),
+    modelName: z.string(),
+  }),
 });
 export type AgentApprovalView = z.infer<typeof AgentApprovalViewSchema>;
 

@@ -35,6 +35,7 @@ export type AgentRuntimeToolResolver = {
   ): Promise<{
     tools: RuntimeTool[];
     pluginGuides: readonly PluginGuideSnapshot[];
+    restricted?: { deniedCount: number };
   }>;
 };
 
@@ -62,7 +63,7 @@ export function createAgentRuntimeToolResolver(input: {
           server.isEnabled && (server.origin === 'builtin' || boundServerIds.has(server.id)),
       );
       if (servers.length === 0) {
-        return { tools: [], pluginGuides: [] };
+        return { tools: [], pluginGuides: [], restricted: { deniedCount: 0 } };
       }
       const pluginIds = new Set(
         servers.filter((server) => server.origin === 'builtin').map((server) => server.id),
@@ -105,6 +106,7 @@ export function createAgentRuntimeToolResolver(input: {
               }),
         })),
       );
+      let deniedCount = 0;
       const selections: McpRuntimeToolSelection[] = resolutions.flatMap(
         ({ descriptor, resolved }) => {
           if (!resolved.enabled || resolved.approval === null) {
@@ -112,6 +114,7 @@ export function createAgentRuntimeToolResolver(input: {
           }
           const approval = clampMcpToolApproval(resolved.approval);
           if (approval === 'deny') {
+            deniedCount = Math.min(999999, deniedCount + 1);
             // Denied bindings remain durable configuration but are not part of
             // the executable turn snapshot or the model-visible catalog.
             return [];
@@ -141,6 +144,7 @@ export function createAgentRuntimeToolResolver(input: {
             },
           })),
         ),
+        restricted: { deniedCount },
         pluginGuides: resolveBuiltInPluginGuides(selections.map(({ descriptor }) => descriptor)),
       };
     },
