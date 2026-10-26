@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import { useKeyboardState, useReanimatedFocusedInput } from 'react-native-keyboard-controller';
 import Animated from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { FoldRegionReporter, PaneChromeProvider, type PaneSplit } from '@/frontend/appShell/layout';
@@ -103,6 +103,9 @@ function FilePaneColumn({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  // The pane pads its own edges, so pages inside it must not pad for the window's sides again: a
+  // status bar down the far side of an iPhone Duo would otherwise narrow every page in the pane.
+  const contentInsets = useMemo(() => ({ ...insets, left: 0, right: 0 }), [insets]);
   const { close, closeFile, file, isExpanded, setExpanded } = pane;
   const isRow = split.direction === 'row';
   const {
@@ -212,18 +215,20 @@ function FilePaneColumn({
         ]}
         testID="file-pane"
       >
-        <PaneChromeProvider leadingAction={closeAction}>{library}</PaneChromeProvider>
-        {file ? (
-          <View className="bg-background" style={[StyleSheet.absoluteFill, edges]}>
-            {/* Carried over the chat, Back already returns there, as on a phone's file page. */}
-            <PaneChromeProvider
-              headerAction={pane.isCarried ? undefined : readingAction}
-              leadingAction={backAction}
-            >
-              {renderFile(file)}
-            </PaneChromeProvider>
-          </View>
-        ) : null}
+        <SafeAreaInsetsContext value={contentInsets}>
+          <PaneChromeProvider leadingAction={closeAction}>{library}</PaneChromeProvider>
+          {file ? (
+            <View className="bg-background" style={[StyleSheet.absoluteFill, edges]}>
+              {/* Carried over the chat, Back already returns there, as on a phone's file page. */}
+              <PaneChromeProvider
+                headerAction={pane.isCarried ? undefined : readingAction}
+                leadingAction={backAction}
+              >
+                {renderFile(file)}
+              </PaneChromeProvider>
+            </View>
+          ) : null}
+        </SafeAreaInsetsContext>
       </Animated.View>
     </>
   );

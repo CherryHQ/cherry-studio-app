@@ -52,8 +52,9 @@ Expand reading action also selects the file pane. A list-only pane, a closed pan
 or a last touch in chat stays in chat.
 
 While carried, the header keeps only Back, which returns to the chat like a phone's file page, as
-does Android back; neither clears the file. A pane that reaches the host's trailing edge, stacked or
-covering the chat, also pads for that edge's safe area, such as an outer display's status bar. When
+does Android back; neither clears the file. The pane pads its own edges for the host's safe areas,
+including the trailing one when stacked or covering the chat, such as an outer display's status bar,
+and gives the pages inside it no side insets to pad again. When
 the pane becomes available again, a still-carried preview returns beside the chat with the expanded
 state it had before narrowing.
 
