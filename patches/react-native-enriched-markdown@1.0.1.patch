@@ -1290,10 +1290,10 @@ index 92a4fbe06893243c3768d88b65ee9f65ec108dbb..51c80a4a7879e3d27f6657257d4d2bcc
        mergedEnd = MAX(mergedEnd, existingEnd);
        [mergeIndexes addIndex:idx];
 diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
+index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..63968517f4cab2c91dc79181a05a714622a274ab 100644
 --- a/ios/input/ENRMInputTextView.mm
 +++ b/ios/input/ENRMInputTextView.mm
-@@ -10,10 +10,140 @@
- NSString *const kENRMMarkdownPasteboardType = @"com.swmansion.enriched-markdown.markdown";
+@@ -11,8 +11,62 @@
  
  #if !TARGET_OS_OSX
  
@@ -1319,7 +1319,7 @@ diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
 +    if ([provider hasItemConformingToTypeIdentifier:kENRMMarkdownPasteboardType]) {
 +      [provider loadItemForTypeIdentifier:kENRMMarkdownPasteboardType
 +                                 options:nil
-+                       completionHandler:^(id<NSSecureCoding> value, NSError *error) {
++                       completionHandler:^(id value, NSError *error) {
 +                         NSString *markdown = nil;
 +                         if ([value isKindOfClass:[NSString class]]) {
 +                           markdown = (NSString *)value;
@@ -1340,101 +1340,23 @@ diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
 +
  @implementation ENRMInputTextView {
    CGFloat _lastLayoutWidth;
-+  NSMutableArray<NSArray<NSItemProvider *> *> *_pendingPastes;
 +  NSUInteger _pasteGeneration;
 +  NSRange _pasteSelection;
-+  __weak EnrichedMarkdownTextInput *_pasteOwner;
-+  BOOL _pasteHadOwner;
-+  BOOL _applyingPaste;
-+}
-+
-+- (instancetype)initWithFrame:(CGRect)frame textContainer:(NSTextContainer *)textContainer
-+{
-+  self = [super initWithFrame:frame textContainer:textContainer];
-+  if (self) {
-+    [[NSNotificationCenter defaultCenter] addObserver:self
-+                                             selector:@selector(pasteTextStorageDidChange:)
-+                                                 name:NSTextStorageDidProcessEditingNotification
-+                                               object:self.textStorage];
-+  }
-+  return self;
-+}
-+
-+- (void)dealloc
-+{
-+  [[NSNotificationCenter defaultCenter] removeObserver:self];
-+}
-+
-+- (void)cancelPendingPastes
-+{
-+  _pasteGeneration++;
-+  [_pendingPastes removeAllObjects];
-+  _pasteOwner = nil;
-+}
-+
-+- (void)pasteTextStorageDidChange:(NSNotification *)notification
-+{
-+  if (!_applyingPaste && (self.textStorage.editedMask & NSTextStorageEditedCharacters)) {
-+    [self cancelPendingPastes];
-+  }
++  BOOL _pasteLoading;
 +}
 +
 +- (BOOL)resignFirstResponder
 +{
 +  BOOL resigned = [super resignFirstResponder];
-+  if (resigned) [self cancelPendingPastes];
++  if (resigned) {
++    _pasteGeneration++;
++    _pasteLoading = NO;
++  }
 +  return resigned;
-+}
-+
-+- (void)didMoveToWindow
-+{
-+  [super didMoveToWindow];
-+  if (self.window == nil) [self cancelPendingPastes];
-+}
-+
-+- (BOOL)isPasteContextCurrent
-+{
-+  return self.window != nil && self.isFirstResponder && self.markedTextRange == nil &&
-+      (!_pasteHadOwner || _pasteOwner != nil) && self.markdownTextInput == _pasteOwner &&
-+      NSEqualRanges(self.selectedRange, _pasteSelection);
-+}
-+
-+- (void)loadNextPaste
-+{
-+  NSUInteger generation = _pasteGeneration;
-+  __weak ENRMInputTextView *weakSelf = self;
-+  ENRMLoadPasteText(_pendingPastes.firstObject, ^(NSString *text) {
-+    ENRMInputTextView *textView = weakSelf;
-+    if (textView == nil || generation != textView->_pasteGeneration) return;
-+    if (![textView isPasteContextCurrent]) {
-+      [textView cancelPendingPastes];
-+      return;
-+    }
-+    [textView->_pendingPastes removeObjectAtIndex:0];
-+    textView->_applyingPaste = YES;
-+    if (text.length > 0) {
-+      if (textView.markdownTextInput != nil) {
-+        [textView.markdownTextInput pasteMarkdown:text];
-+      } else {
-+        [textView replaceRange:textView.selectedTextRange withText:text];
-+      }
-+    }
-+    textView->_applyingPaste = NO;
-+    if (generation != textView->_pasteGeneration) return;
-+    if (textView->_pendingPastes.count > 0) {
-+      // Consecutive paste actions insert in order, using the selection left by the previous paste.
-+      textView->_pasteSelection = textView.selectedRange;
-+      [textView loadNextPaste];
-+    } else {
-+      textView->_pasteOwner = nil;
-+    }
-+  });
  }
  
  - (void)copy:(id)sender
- {
-@@ -39,30 +169,18 @@
- }
+@@ -40,29 +94,26 @@ - (void)cut:(id)sender
  
  - (void)paste:(id)sender
  {
@@ -1460,17 +1382,27 @@ diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
 -    [self.markdownTextInput pasteMarkdown:plainText];
 -  } else if (plainText.length > 0) {
 -    [self replaceRange:self.selectedTextRange withText:plainText];
-+  if (self.window == nil || !self.isFirstResponder || self.markedTextRange != nil) return;
-+  if (_pendingPastes.count > 0 && ![self isPasteContextCurrent]) [self cancelPendingPastes];
-+  if (_pendingPastes == nil) _pendingPastes = [NSMutableArray array];
+-  }
++  // A repeated tap while a slow source is still loading repeats the same paste.
++  if (_pasteLoading || !self.isFirstResponder) return;
++  _pasteLoading = YES;
++  _pasteSelection = self.selectedRange;
++  NSUInteger generation = ++_pasteGeneration;
++  __weak ENRMInputTextView *weakSelf = self;
 +  // Capture providers only after the user's paste action, never during menu availability checks.
-+  [_pendingPastes addObject:[UIPasteboard generalPasteboard].itemProviders];
-+  if (_pendingPastes.count == 1) {
-+    _pasteOwner = self.markdownTextInput;
-+    _pasteHadOwner = _pasteOwner != nil;
-+    _pasteSelection = self.selectedRange;
-+    [self loadNextPaste];
-   }
++  ENRMLoadPasteText([UIPasteboard generalPasteboard].itemProviders, ^(NSString *text) {
++    ENRMInputTextView *textView = weakSelf;
++    if (textView == nil || generation != textView->_pasteGeneration) return;
++    textView->_pasteLoading = NO;
++    // Moving the caret or editing while the clipboard loads makes the paste stale.
++    if (text.length == 0 || !NSEqualRanges(textView.selectedRange, textView->_pasteSelection)) return;
++    // External plain text is treated as markdown so pasted syntax formats instead of landing literal.
++    if (textView.markdownTextInput != nil) {
++      [textView.markdownTextInput pasteMarkdown:text];
++    } else {
++      [textView replaceRange:textView.selectedTextRange withText:text];
++    }
++  });
  }
  
  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender

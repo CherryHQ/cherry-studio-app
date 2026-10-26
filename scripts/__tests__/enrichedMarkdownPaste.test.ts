@@ -1,9 +1,6 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-const dependency = 'react-native-enriched-markdown@1.0.1';
-const patchPath = `patches/${dependency}.patch`;
-const patch = readFileSync(patchPath, 'utf8');
+const patch = readFileSync('patches/react-native-enriched-markdown@1.0.1.patch', 'utf8');
 const inputPatch = patch
   .split('+++ b/ios/input/ENRMInputTextView.mm\n')[1]
   ?.split('diff --git ')[0];
@@ -12,14 +9,9 @@ const additions = inputPatch
   .filter((line) => line.startsWith('+'))
   .join('\n');
 
-// Source guards cover the maintained patch; paste ordering, undo and selection need iOS acceptance.
+// Source guards cover the maintained patch; paste timing, undo and selection need iOS acceptance.
+// enrichedMarkdownAtomicLinks.test.ts pins the shared patch hash.
 describe('iOS asynchronous editor paste patch', () => {
-  test('registers the patch with its current lockfile hash', () => {
-    const hash = createHash('sha256').update(patch).digest('hex');
-    expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(`${dependency}: ${patchPath}`);
-    expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(`  ${dependency}: ${hash}\n`);
-  });
-
   test('loads Markdown and plain text from item providers instead of synchronous pasteboard getters', () => {
     expect(inputPatch).toContain('-  id markdownValue = [pasteboard valueForPasteboardType:');
     expect(inputPatch).toContain('-  NSString *plainText = pasteboard.string;');
@@ -30,21 +22,16 @@ describe('iOS asynchronous editor paste patch', () => {
     expect(additions).not.toContain('pasteboard.string');
   });
 
-  test('queues paste actions and keeps the existing Markdown insertion path', () => {
-    expect(additions).toContain('ENRMLoadPasteText(_pendingPastes.firstObject');
-    expect(additions).toContain('[textView->_pendingPastes removeObjectAtIndex:0]');
+  test('ignores repeated taps while loading and drops reads made stale by caret moves or focus loss', () => {
+    expect(additions).toContain('if (_pasteLoading || !self.isFirstResponder) return;');
+    expect(additions).toContain('generation != textView->_pasteGeneration');
+    expect(additions).toContain('NSEqualRanges(textView.selectedRange, textView->_pasteSelection)');
+    expect(additions).toMatch(/resignFirstResponder[\s\S]*_pasteGeneration\+\+/);
     expect(additions).toContain('[textView.markdownTextInput pasteMarkdown:text]');
-    expect(additions).toContain('[textView loadNextPaste]');
-    expect(additions).toContain('ENRMLoadPlainPasteText(providers, completion)');
   });
 
-  test('rejects stale reads after edits, focus loss, detachment or selection changes', () => {
-    expect(additions).toContain('__weak ENRMInputTextView *weakSelf = self');
-    expect(additions).toContain('generation != textView->_pasteGeneration');
-    expect(additions).toContain('NSTextStorageDidProcessEditingNotification');
-    expect(additions).toContain('if (resigned) [self cancelPendingPastes]');
-    expect(additions).toContain('if (self.window == nil) [self cancelPendingPastes]');
-    expect(additions).toContain('self.markdownTextInput == _pasteOwner');
-    expect(additions).toContain('NSEqualRanges(self.selectedRange, _pasteSelection)');
+  // Pasting during IME composition worked before the asynchronous load and must keep working.
+  test('does not skip paste while text is being composed', () => {
+    expect(additions).not.toContain('markedTextRange');
   });
 });
