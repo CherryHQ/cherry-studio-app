@@ -1124,7 +1124,13 @@ export function healthAuthorizationTypes(type: HealthDataType): HealthDataType[]
   const selectionType = healthRecordSelectionType(type);
   if (selectionType) return [selectionType];
   if (type === 'audioExposureEvent') return ['environmentalAudioExposureEvent'];
-  if (type === 'bloodPressure') return ['bloodPressureSystolic', 'bloodPressureDiastolic'];
+  // HealthKit validates the pair even when only one blood pressure quantity is queried.
+  if (
+    type === 'bloodPressure' ||
+    type === 'bloodPressureSystolic' ||
+    type === 'bloodPressureDiastolic'
+  )
+    return ['bloodPressureSystolic', 'bloodPressureDiastolic'];
   if (type === 'food') return HEALTH_DATA_TYPES.filter((name) => name.startsWith('dietary'));
   // HealthKit raises an uncatchable exception when a series is checked without its parent type.
   if (type === 'workoutRoute') return ['workouts', type];

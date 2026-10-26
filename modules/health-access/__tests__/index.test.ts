@@ -4,6 +4,44 @@ import { getHealthAccess } from '../index';
 
 jest.mock('expo', () => ({ requireOptionalNativeModule: jest.fn() }));
 
+describe.each(['bloodPressure', 'bloodPressureSystolic', 'bloodPressureDiastolic'] as const)(
+  '%s authorization',
+  (name) => {
+    test.each(['getStatuses', 'request'] as const)(
+      '%s includes both blood pressure quantities for a single selected type',
+      async (method) => {
+        const native = {
+          getStatuses: jest.fn().mockResolvedValue({}),
+          request: jest.fn().mockResolvedValue({}),
+        };
+        jest.mocked(requireOptionalNativeModule).mockReturnValue(native as never);
+
+        await getHealthAccess()![method]([name, 'steps']);
+
+        expect(native[method]).toHaveBeenCalledWith([
+          expect.objectContaining({
+            name,
+            authorization: [
+              expect.objectContaining({
+                identifier: 'HKQuantityTypeIdentifierBloodPressureSystolic',
+              }),
+              expect.objectContaining({
+                identifier: 'HKQuantityTypeIdentifierBloodPressureDiastolic',
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            name: 'steps',
+            authorization: [
+              expect.objectContaining({ identifier: 'HKQuantityTypeIdentifierStepCount' }),
+            ],
+          }),
+        ]);
+      },
+    );
+  },
+);
+
 test.each(['getStatuses', 'request'] as const)(
   '%s resolves medication dose authorization to the medication selection type at the native boundary',
   async (method) => {
