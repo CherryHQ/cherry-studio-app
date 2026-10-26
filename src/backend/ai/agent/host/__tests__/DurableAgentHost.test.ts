@@ -22,6 +22,7 @@ import {
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
   type RuntimeError,
+  type RuntimeSqlDatabase,
   type RuntimeTool,
   type RuntimeToolResult,
 } from '../../runtime';
@@ -758,6 +759,106 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('closes a database that opens after startup cancellation without opening the runtime', async () => {
+    const close = jest.fn(async () => {});
+    let finishOpen!: (database: RuntimeSqlDatabase) => void;
+    const database = new Promise<RuntimeSqlDatabase>((resolve) => {
+      finishOpen = resolve;
+    });
+    const state = fixture({
+      durableStorage: {
+        open: () => database,
+        size: () => 0,
+        discard: () => {},
+        notifyTranscript: jest.fn(),
+      },
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    controller.abort(new Error('Host replaced'));
+    finishOpen({ close } as unknown as RuntimeSqlDatabase);
+
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(state.conversations.initialize).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
+  test('does not settle recovered reservations when their startup read finishes after cancellation', async () => {
+    const notifyTranscript = jest.fn();
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as RuntimeSqlDatabase,
+        size: () => 0,
+        discard: () => {},
+        notifyTranscript,
+      },
+    });
+    const turn = await state.reserve('completed');
+    let finishRead!: () => void;
+    let markReading!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      markReading = resolve;
+    });
+    const readGate = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const listUnsettled = state.store.listUnsettledAssistantMessages.bind(state.store);
+    jest.spyOn(state.store, 'listUnsettledAssistantMessages').mockImplementationOnce(async () => {
+      const rows = await listUnsettled();
+      markReading();
+      await readGate;
+      return rows;
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    await reading;
+    controller.abort(new Error('Host replaced'));
+    finishRead();
+
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+
+    expect((await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status).toBe(
+      'pending',
+    );
+    expect(notifyTranscript).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
+  test('releases a late startup work subscription without resuming or acquiring a lease', async () => {
+    const executionLease = jest.fn(() => ({ release: jest.fn() }));
+    const state = fixture({ executionLease });
+    const unsubscribe = jest.fn(async () => {});
+    let finishWatch!: () => void;
+    let markWatching!: () => void;
+    const watching = new Promise<void>((resolve) => {
+      markWatching = resolve;
+    });
+    const watchGate = new Promise<void>((resolve) => {
+      finishWatch = resolve;
+    });
+    jest.spyOn(state.conversations, 'watchWork').mockImplementationOnce(async () => {
+      markWatching();
+      await watchGate;
+      return { active: true, unsubscribe };
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    await watching;
+    controller.abort(new Error('Host replaced'));
+    finishWatch();
+
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(executionLease).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
   test('storage failure preserves pending turns and concurrent retries share one reopen', async () => {
     const release = jest.fn();
     const state = fixture({ executionLease: () => ({ release }) });
@@ -1669,6 +1770,117 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(state.reply.finish).toHaveBeenCalledTimes(1);
       expect(state.reply.finish).toHaveBeenCalledWith('completed');
     } finally {
+      await state.host.close();
+    }
+  });
+
+  test('an answer without the background reply still surfaces its approval there', async () => {
+    const state = fixture();
+    const controller = new AbortController();
+    let decision: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const other = runningTurns(state).find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id !== turn.assistantMessageId,
+      )!;
+      const approvalId = uuid();
+      decision = state
+        .execution()!
+        .requestApproval(
+          other.identity,
+          {
+            id: approvalId,
+            turnId: other.identity.turnId,
+            toolCallId: 'pending-tool',
+            toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+            displayName: 'Search',
+            input: {},
+            status: 'pending',
+          },
+          controller.signal,
+        )
+        .catch((error: unknown) => error);
+      await settle();
+      const interaction = state.reply.setInteraction.mock.calls.at(-1)?.[0];
+      expect(interaction).toMatchObject({ kind: 'approval', id: approvalId });
+      await interaction.respond('approve');
+      await expect(decision).resolves.toBe('approve');
+      expect(state.reply.setInteraction).toHaveBeenLastCalledWith(undefined);
+    } finally {
+      controller.abort();
+      await decision;
+      await state.host.close();
+    }
+  });
+
+  test('cancelling one parallel answer withdraws its approval while its sibling still waits', async () => {
+    const state = fixture();
+    const controllers = [new AbortController(), new AbortController()];
+    const decisions: Promise<unknown>[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await askTwoModels(state);
+      const running = runningTurns(state);
+      const approvalIds = running.map(() => uuid());
+      for (const [index, turn] of running.entries())
+        decisions.push(
+          state
+            .execution()!
+            .requestApproval(
+              turn.identity,
+              {
+                id: approvalIds[index]!,
+                turnId: turn.identity.turnId,
+                toolCallId: `search-${index}`,
+                toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+                displayName: 'Search',
+                input: {},
+                status: 'pending',
+              },
+              controllers[index]!.signal,
+            )
+            .catch((error: unknown) => error),
+        );
+      await settle();
+      const cancelled = running[0]!;
+      await state.host.cancelTurn({
+        sessionId: state.sessionId,
+        turnId: cancelled.identity.turnId,
+        messageId: cancelled.assistantMessageId,
+      });
+      // The fixture's engine emits the terminal turn; its task signal is controlled here.
+      const reason = new Error('The answer was cancelled.');
+      controllers[0]!.abort(reason);
+      await expect(decisions[0]).resolves.toBe(reason);
+      await settle();
+
+      expect(events).toContainEqual({
+        type: 'approval.resolved',
+        approval: expect.objectContaining({ id: approvalIds[0], status: 'cancelled' }),
+      });
+      expect(events.findLast((event) => event.type === 'turn.updated')).toMatchObject({
+        type: 'turn.updated',
+        turn: { status: 'awaiting-approval', assistantMessageId: running[1]!.assistantMessageId },
+      });
+      await state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: running[1]!.identity.turnId,
+        approvalId: approvalIds[1]!,
+        decision: 'approve',
+      });
+      await expect(decisions[1]).resolves.toBe('approve');
+    } finally {
+      for (const controller of controllers) controller.abort();
+      await Promise.all(decisions);
+      observation.unsubscribe();
       await state.host.close();
     }
   });

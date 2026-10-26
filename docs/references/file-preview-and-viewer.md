@@ -31,8 +31,8 @@ CherryUI's renderer vocabulary remains an open string so plugin registration rem
 | `markdown` | `text/markdown` | In-app Markdown reader |
 | `html` | `text/html` | In-app rendered HTML page |
 | `text` | Remaining `text/*`, JSON, XML, YAML | In-app text reader |
-| `document` | PDF, DOCX, PPTX, XLSX | In-app document viewer |
-| `document` | Remaining types, including legacy Office, ODF and RTF | Platform viewer |
+| `document` | PDF, DOCX, PPTX, XLSX, RTF (`application/rtf` or `text/rtf`) | In-app document viewer |
+| `document` | Remaining types, including legacy Office and ODF | Platform viewer |
 
 `canPreviewDocument` selects the in-app document types by the same normalized media type; the kind
 vocabulary does not change. `useOpenFileEntry` owns the decision. The composer, user-message attachments, assistant outputs,
@@ -116,7 +116,9 @@ Selection mode is explicit; browsing does not capture references. The package ow
 scrolling, zoom and cancelled gestures. The app holds the selected anchor/excerpt and supplies a
 footer action to reference the selection with the original attachment. A preview opened from a chat
 returns to that chat and appends the reference after the draft, preserving draft text,
-attachments, Agent and workspace; the workspace sheet the preview came from stays closed. A preview
+attachments, Agent and workspace; the workspace sheet the preview came from stays closed. Such a
+preview, including one opened from a library reached from that chat, also offers **Add to current
+chat**, which attaches the whole file to the same composer once without changing its text. A preview
 opened from the file library, or from a chat whose Agent is minimal, offers an `AgentMenu` of
 standard Agents and opens a new editable draft with the chosen one. Assistant deliverables whose
 files are unavailable are hidden from the message without leaving a gap.
@@ -126,7 +128,7 @@ workflow.
 This is an Agent handoff, not an in-preview Office editor, and requires authorized rebuild/device
 acceptance before its source implementation is treated as verified.
 
-PDF and Office Open XML documents render with `@cherrystudio/file-preview` inside a WebView. The
+PDF, RTF and Office Open XML documents render with `@cherrystudio/file-preview` inside a WebView. The
 package owns rendering, toolbars, zoom, selection and touch gestures inside the document; the app
 owns file access, the WebView container, theme, locale, logging and system opening. Behavior the
 app needs changed inside a document is requested from the package as an option, never patched or
@@ -141,7 +143,14 @@ the package's module workers from blob URLs.
 Bytes cross a minimal bridge. Each page `open` holds its own read-only `FileHandle`; `size` comes
 from that handle and `revision` is the entry's `updatedAt`. Reads return exactly the requested
 range as base64 chunks of at most 1 MiB and fail on short reads, size changes, cancellation and
-closed documents. DOCX, PPTX, XLSX and images request the whole file; PDF requests ranges.
+closed documents. DOCX, PPTX, XLSX, RTF and images request the whole file; PDF requests ranges.
+RTF is read-only, has a 10 MiB source limit, and does not expose structural selection references.
+DOCX supports native text selection and copying inside the WebView.
+
+Updates to the same entry keep the document viewer mounted and pass `updatedAt` as the package's
+`refreshKey`; the package replaces the source session while retaining valid reading state. Mobile
+clears any held selection. Bridge document IDs derive from the page's monotonic open-request IDs,
+so late reads and closes from an earlier revision cannot access the replacement document.
 
 This page is application code, not uncontrolled content, so its container contract differs from
 HTML's:

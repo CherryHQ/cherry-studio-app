@@ -5,6 +5,7 @@ import {
   Pressable,
   Text,
   View,
+  type ViewInstance,
 } from 'react-native';
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 
@@ -37,7 +38,7 @@ export function MenuRow({
 }) {
   const { close, isOpen, registerItem, shouldUseNativePresses } = useMenuInteraction();
   const register = useCallback(
-    (item: View | null) => (item ? registerItem?.(item) : undefined),
+    (item: ViewInstance | null) => (item ? registerItem?.(item) : undefined),
     [registerItem],
   );
 

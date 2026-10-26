@@ -1,13 +1,10 @@
 import type { FilePreviewSelection } from '@cherrystudio/file-preview-webview/protocol';
 import { Button, ContentState } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  chatHref,
   createChatComposerHandoff,
   createChatSelectionHandoff,
   type ChatTarget,
@@ -22,11 +19,14 @@ import {
   isBuiltinOfficeFileType,
 } from '@/shared/utils/documentFileTypes';
 
+import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
-import { acceptsSelection, useSelectionSourceChat } from '../hooks/useSelectionSourceChat';
+import { useReturnToChat } from '../hooks/useReturnToChat';
+import { acceptsSelection } from '../hooks/useSelectionSourceChat';
 import { officeSelectionReference } from '../utils/officeSelection';
 import { FileDocumentPreview } from './FileDocumentPreview';
 import { FileMenuGuide } from './FileMenuGuide';
+import { FileViewerFooter } from './FileViewerFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileDocumentViewer({
@@ -45,17 +45,20 @@ export function FileDocumentViewer({
   const [attempt, setAttempt] = useState(0);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState<FilePreviewSelection | null>(null);
-  const router = useRouter();
-  const { isResolving: isResolvingSourceChat, returnsToSourceChat } =
-    useSelectionSourceChat(sourceChat);
-  const { bottom } = useSafeAreaInsets();
+  const [revision, setRevision] = useState(file.entry.updatedAt);
+  const returnToChat = useReturnToChat();
+  const addToChat = useAddFileToChat(file, sourceChat);
+  const { isResolving: isResolvingSourceChat, returnsToSourceChat } = addToChat;
+  if (revision !== file.entry.updatedAt) {
+    setRevision(file.entry.updatedAt);
+    setStatus(canPreviewDocument(file.entry) ? 'preview' : 'system');
+    setSelection(null);
+    setIsSelecting(false);
+  }
   const documentType = documentFileTypeFromMediaType(file.entry.mediaType);
+  const isPreviewing = status === 'preview' && !page.isError && Boolean(page.data);
   const canSelect =
-    status === 'preview' &&
-    !page.isError &&
-    Boolean(page.data) &&
-    documentType !== undefined &&
-    isBuiltinOfficeFileType(documentType);
+    isPreviewing && documentType !== undefined && isBuiltinOfficeFileType(documentType);
   const toggleSelection = () => {
     setSelection(null);
     setIsSelecting((value) => !value);
@@ -74,8 +77,7 @@ export function FileDocumentViewer({
   const referenceInSourceChat = () => {
     const handoff = createSelectionHandoff();
     if (!handoff || !sourceChat) return;
-    const selectionHandoff = createChatSelectionHandoff(handoff);
-    router.dismissTo(chatHref({ ...sourceChat, selectionHandoff }));
+    returnToChat({ ...sourceChat, selectionHandoff: createChatSelectionHandoff(handoff) });
   };
   const referenceInNewChat = (agent: Agent) => {
     const handoff = createSelectionHandoff();
@@ -85,8 +87,9 @@ export function FileDocumentViewer({
       draft: '',
       selection: handoff.selection,
     });
-    router.dismissTo(chatHref({ kind: 'draft', agentId: agent.id, composerHandoff }));
+    returnToChat({ kind: 'draft', agentId: agent.id, composerHandoff });
   };
+  const hasAddFooter = isPreviewing && returnsToSourceChat;
   const openWithSystem = () => void openFileEntryWithSystem(file);
   const openWithAction = { children: t('filePreview.openWith'), onPress: openWithSystem };
 
@@ -142,7 +145,7 @@ export function FileDocumentViewer({
         </View>
       ) : (
         <FileDocumentPreview
-          bottomInset={isSelecting ? 0 : undefined}
+          bottomInset={(isSelecting && canSelect) || hasAddFooter ? 0 : undefined}
           file={file}
           key={attempt}
           // The app, not the package, offers system opening for documents it cannot preview.
@@ -155,10 +158,7 @@ export function FileDocumentViewer({
         />
       )}
       {isSelecting && canSelect ? (
-        <View
-          className="gap-3 bg-background px-4 pt-3"
-          style={{ paddingBottom: Math.max(bottom, 16) }}
-        >
+        <FileViewerFooter>
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
             {selection?.excerpt ?? t('fileViewer.selection.hint')}
           </Text>
@@ -171,7 +171,13 @@ export function FileDocumentViewer({
               <Button disabled={!selection}>{t('fileViewer.selection.openChat')}</Button>
             </AgentMenu>
           )}
-        </View>
+        </FileViewerFooter>
+      ) : hasAddFooter ? (
+        <FileViewerFooter>
+          <Button disabled={isResolvingSourceChat} onPress={addToChat.add}>
+            {t('fileViewer.addToChat')}
+          </Button>
+        </FileViewerFooter>
       ) : null}
     </>
   );

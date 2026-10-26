@@ -152,6 +152,31 @@ const retiredImports = [
 const aliasRoots = (roots) =>
   roots.flatMap((root) => [`@/${root}`, `@/${root}/*`, `@/${root}/*/**`]);
 
+// Protect these deliberate public entries without banning all deep imports.
+// Provider injection stays available to bootstrap, data internals, and test files.
+const frontendPublicSurfaceZones = [
+  {
+    target: ['src/app', 'src/frontend/!(data)/**/!(*.test).{ts,tsx}'],
+    from: 'src/frontend/data/DataApiProvider.tsx',
+    message:
+      'Use useApiClient from @/frontend/data for imperative resource work; DataApiProvider is the private injection boundary.',
+  },
+  {
+    target: [
+      'src/app',
+      'src/frontend/!(components)/**/*',
+      'src/frontend/components/!(ModelPicker)/**/*',
+    ],
+    from: [
+      'src/frontend/components/ModelPicker/components',
+      'src/frontend/components/ModelPicker/hooks',
+      'src/frontend/components/ModelPicker/utils',
+    ],
+    message:
+      'Import ModelPicker UI from @/frontend/components/ModelPicker or capability badges from its /badges entry.',
+  },
+];
+
 // Reuse the same layer declarations for resolved paths, so relative imports,
 // @src aliases, re-exports, require(), and dynamic imports cannot bypass them.
 const restrictedImportRules = (patterns, zones = []) => ({
@@ -181,6 +206,7 @@ const restrictedImportRules = (patterns, zones = []) => ({
     {
       basePath: projectRoot,
       zones: [
+        ...frontendPublicSurfaceZones,
         ...patterns.flatMap((pattern) =>
           (pattern.group ?? [])
             .filter((entry) => entry.startsWith('@/') && !entry.includes('*'))

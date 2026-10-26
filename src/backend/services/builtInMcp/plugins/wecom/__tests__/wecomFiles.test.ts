@@ -59,7 +59,7 @@ jest.mock('expo-file-system', () => {
     get modificationTime() {
       return modified.get(this.uri) ?? null;
     }
-    write(data: string | Uint8Array, options?: unknown) {
+    writeSync(data: string | Uint8Array, options?: unknown) {
       if (data === 'unwritable') throw new Error('disk full');
       writes.push({ uri: this.uri, data, options });
       files.set(this.uri, typeof data === 'string' ? data.length : data.byteLength);

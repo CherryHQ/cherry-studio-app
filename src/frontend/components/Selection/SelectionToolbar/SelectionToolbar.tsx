@@ -1,1 +1,1 @@
-export { SelectionToolbar } from './SelectionToolbar.android';
+export { InlineSelectionToolbar as SelectionToolbar } from './InlineSelectionToolbar';

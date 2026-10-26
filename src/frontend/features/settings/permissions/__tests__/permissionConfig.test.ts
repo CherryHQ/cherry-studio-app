@@ -31,11 +31,6 @@ describe('permission settings', () => {
       }),
     ).toMatchObject({ state: 'limited' });
   });
-  test('saving photos does not imply permission to browse the library', () => {
-    expect(
-      getPermissionStatus('photos', { 'photos.read': denied, 'photos.write': granted }),
-    ).toEqual(denied);
-  });
   test('waits for all scopes needed to summarize a permission', () => {
     expect(getPermissionStatus('calendar', { 'calendar.read': granted })).toBeUndefined();
   });

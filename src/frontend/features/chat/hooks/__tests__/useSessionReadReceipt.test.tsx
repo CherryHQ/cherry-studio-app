@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useSessionReadReceipt } from '../useSessionReadReceipt';
 
 let mockFocused = true;
-let mockDrawerStatus = 'closed';
+let mockSidebarPresence = 'closed';
 let mockMarkSeen = jest.fn();
 const appStateListeners = new Set<(state: AppStateStatus) => void>();
 let renderer: ReactTestRenderer | undefined;
@@ -17,7 +17,7 @@ jest.mock('expo-router', () => ({
   },
 }));
 
-jest.mock('expo-router/drawer', () => ({ useDrawerStatus: () => mockDrawerStatus }));
+jest.mock('@/frontend/appShell/sidebar', () => ({ useSidebarPresence: () => mockSidebarPresence }));
 jest.mock('@/frontend/appShell/backgroundActivity', () => ({
   useBackgroundTaskNotifications: jest.fn(),
 }));
@@ -37,7 +37,7 @@ function changeAppState(state: AppStateStatus) {
 
 beforeEach(() => {
   mockFocused = true;
-  mockDrawerStatus = 'closed';
+  mockSidebarPresence = 'closed';
   mockMarkSeen = jest.fn();
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
@@ -84,19 +84,27 @@ test('keeps background completions unread until the app returns and releases the
 });
 
 test('does not acknowledge behind the drawer or another route, then acknowledges on returning to the chat', () => {
-  mockDrawerStatus = 'open';
+  mockSidebarPresence = 'open';
   act(() => {
     renderer = create(<Probe />);
   });
   expect(mockMarkSeen).not.toHaveBeenCalled();
   expect(appStateListeners.size).toBe(0);
 
-  mockDrawerStatus = 'closed';
+  mockSidebarPresence = 'closed';
   mockFocused = false;
   act(() => renderer?.update(<Probe />));
   expect(mockMarkSeen).not.toHaveBeenCalled();
 
   mockFocused = true;
   act(() => renderer?.update(<Probe />));
+  expect(mockMarkSeen).toHaveBeenCalledTimes(1);
+});
+
+test('acknowledges beside a permanent sidebar, which does not cover the chat', () => {
+  mockSidebarPresence = 'persistent';
+  act(() => {
+    renderer = create(<Probe />);
+  });
   expect(mockMarkSeen).toHaveBeenCalledTimes(1);
 });

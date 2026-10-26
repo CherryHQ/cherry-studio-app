@@ -1,4 +1,4 @@
-import { ModelPickerBadge } from '@/frontend/components/ModelPicker/components/ModelPickerBadge';
+import { ModelPickerBadge } from '@/frontend/components/ModelPicker/badges';
 
 import type { ProviderModelBadge as ProviderModelBadgeValue } from '../utils/providerModelBadges';
 

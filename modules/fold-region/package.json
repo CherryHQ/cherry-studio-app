@@ -1,0 +1,13 @@
+{
+  "name": "@cherrystudio/fold-region",
+  "version": "1.0.0",
+  "description": "Reports where a foldable display divides the window (Expo Module)",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "private": true,
+  "expo-module": {
+    "ios": {
+      "podspecPath": "ios/FoldRegion.podspec"
+    }
+  }
+}

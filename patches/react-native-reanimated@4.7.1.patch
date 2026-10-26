@@ -1,0 +1,140 @@
+diff --git a/lib/module/css/component/AnimatedComponent.js b/lib/module/css/component/AnimatedComponent.js
+index 146766f..508664e 100644
+--- a/lib/module/css/component/AnimatedComponent.js
++++ b/lib/module/css/component/AnimatedComponent.js
+@@ -13,6 +13,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
+ export default class AnimatedComponent extends Component {
+   _cssStyle = {}; // RN style object with Reanimated CSS properties
+   _componentRef = null;
++  _hasAnimatedRef = false;
+   _componentDOMRef = null;
+   _willUnmount = false;
+   constructor(ChildComponent, props) {
+@@ -73,6 +74,7 @@ export default class AnimatedComponent extends Component {
+     // Component can specify ref which should be animated when animated version of the component is created.
+     // Otherwise, we animate the component itself.
+     if (componentRef && componentRef.getAnimatableRef) {
++      this._hasAnimatedRef = true;
+       return componentRef.getAnimatableRef();
+     }
+     // Case for SVG components on Web
+diff --git a/lib/module/css/component/AnimatedComponent.native.js b/lib/module/css/component/AnimatedComponent.native.js
+index 4da0c65..c4cdad8 100644
+--- a/lib/module/css/component/AnimatedComponent.native.js
++++ b/lib/module/css/component/AnimatedComponent.native.js
+@@ -16,6 +16,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
+ export default class AnimatedComponent extends Component {
+   _cssStyle = {}; // RN style object with Reanimated CSS properties
+   _componentRef = null;
++  _hasAnimatedRef = false;
+   _componentDOMRef = null;
+   _willUnmount = false;
+   constructor(ChildComponent, props) {
+@@ -78,6 +79,7 @@ export default class AnimatedComponent extends Component {
+     // Component can specify ref which should be animated when animated version of the component is created.
+     // Otherwise, we animate the component itself.
+     if (componentRef && componentRef.getAnimatableRef) {
++      this._hasAnimatedRef = true;
+       return componentRef.getAnimatableRef();
+     }
+     return componentRef;
+diff --git a/lib/module/platform-specific/findHostInstance.native.js b/lib/module/platform-specific/findHostInstance.native.js
+index b2de044..d58ebbb 100644
+--- a/lib/module/platform-specific/findHostInstance.native.js
++++ b/lib/module/platform-specific/findHostInstance.native.js
+@@ -62,10 +62,11 @@ export function findHostInstance(ref) {
+   resolveFindHostInstance_DEPRECATED();
+   /*
+     The Fabric implementation of `findHostInstance_DEPRECATED` requires a React ref as an argument
+-    rather than a native ref. Prefer the resolved component ref when available so components can
+-    forward their ref to the host view that should be animated. Components that expose an animatable
+-    ref via `getAnimatableRef` already have it resolved into `_componentRef`.
++    rather than a native ref. Only use the resolved component ref when the wrapped component
++    explicitly opted in via `getAnimatableRef` (`_hasAnimatedRef`) — otherwise `_componentRef` can be
++    an arbitrary imperative-handle object (e.g. a scroll-list ref exposing `scrollToIndex` etc.) that
++    isn't a valid React component, and `findHostInstance_DEPRECATED` would throw on it.
+   */
+-  return findHostInstance_DEPRECATED(componentRef ?? ref);
++  return findHostInstance_DEPRECATED(ref._hasAnimatedRef ? componentRef : ref);
+ }
+ //# sourceMappingURL=findHostInstance.native.js.map
+\ No newline at end of file
+diff --git a/src/createAnimatedComponent/commonTypes.ts b/src/createAnimatedComponent/commonTypes.ts
+index 6871c00..8ea8c0b 100644
+--- a/src/createAnimatedComponent/commonTypes.ts
++++ b/src/createAnimatedComponent/commonTypes.ts
+@@ -128,6 +128,7 @@ export interface AnimatedComponentRef extends Component {
+ export interface IAnimatedComponentInternalBase {
+   ChildComponent: AnyComponent;
+   _componentRef: AnimatedComponentRef | HTMLElement | null;
++  _hasAnimatedRef: boolean;
+   _viewInfo?: ViewInfo;
+ 
+   /**
+diff --git a/src/css/component/AnimatedComponent.native.tsx b/src/css/component/AnimatedComponent.native.tsx
+index cab95ce..091625f 100644
+--- a/src/css/component/AnimatedComponent.native.tsx
++++ b/src/css/component/AnimatedComponent.native.tsx
+@@ -43,6 +43,10 @@ export default class AnimatedComponent<
+   _viewInfo?: ViewInfo;
+   _cssStyle: CSSStyle = {}; // RN style object with Reanimated CSS properties
+   _componentRef: AnimatedComponentRef | HTMLElement | null = null;
++  // Set when the wrapped component opts in via `getAnimatableRef`; gates the
++  // findHostInstance fallback so components with a non-host imperative ref
++  // (e.g. custom useImperativeHandle objects) don't get passed to it directly.
++  _hasAnimatedRef = false;
+   _componentDOMRef: HTMLElement | null = null;
+   _willUnmount: boolean = false;
+   _forwardedRefCleanup?: () => void;
+@@ -121,6 +125,7 @@ export default class AnimatedComponent<
+     // Component can specify ref which should be animated when animated version of the component is created.
+     // Otherwise, we animate the component itself.
+     if (componentRef && componentRef.getAnimatableRef) {
++      this._hasAnimatedRef = true;
+       return componentRef.getAnimatableRef();
+     }
+     return componentRef;
+diff --git a/src/css/component/AnimatedComponent.tsx b/src/css/component/AnimatedComponent.tsx
+index 76be513..fe3ca1b 100644
+--- a/src/css/component/AnimatedComponent.tsx
++++ b/src/css/component/AnimatedComponent.tsx
+@@ -40,6 +40,10 @@ export default class AnimatedComponent<
+   _viewInfo?: ViewInfo;
+   _cssStyle: CSSStyle = {}; // RN style object with Reanimated CSS properties
+   _componentRef: AnimatedComponentRef | HTMLElement | null = null;
++  // Set when the wrapped component opts in via `getAnimatableRef`; gates the
++  // findHostInstance fallback so components with a non-host imperative ref
++  // (e.g. custom useImperativeHandle objects) don't get passed to it directly.
++  _hasAnimatedRef = false;
+   _componentDOMRef: HTMLElement | null = null;
+   _willUnmount: boolean = false;
+   _forwardedRefCleanup?: () => void;
+@@ -110,6 +114,7 @@ export default class AnimatedComponent<
+     // Component can specify ref which should be animated when animated version of the component is created.
+     // Otherwise, we animate the component itself.
+     if (componentRef && componentRef.getAnimatableRef) {
++      this._hasAnimatedRef = true;
+       return componentRef.getAnimatableRef();
+     }
+     // Case for SVG components on Web
+diff --git a/src/platform-specific/findHostInstance.native.ts b/src/platform-specific/findHostInstance.native.ts
+index fe0db1a..c91f229 100644
+--- a/src/platform-specific/findHostInstance.native.ts
++++ b/src/platform-specific/findHostInstance.native.ts
+@@ -92,9 +92,12 @@ export function findHostInstance(
+   resolveFindHostInstance_DEPRECATED();
+   /*
+     The Fabric implementation of `findHostInstance_DEPRECATED` requires a React ref as an argument
+-    rather than a native ref. Prefer the resolved component ref when available so components can
+-    forward their ref to the host view that should be animated. Components that expose an animatable
+-    ref via `getAnimatableRef` already have it resolved into `_componentRef`.
++    rather than a native ref. Only use the resolved component ref when the wrapped component
++    explicitly opted in via `getAnimatableRef` (`_hasAnimatedRef`) — otherwise `_componentRef` can be
++    an arbitrary imperative-handle object (e.g. a scroll-list ref exposing `scrollToIndex` etc.) that
++    isn't a valid React component, and `findHostInstance_DEPRECATED` would throw on it.
+   */
+-  return findHostInstance_DEPRECATED(componentRef ?? ref);
++  return findHostInstance_DEPRECATED(
++    (ref as IAnimatedComponentInternalBase)._hasAnimatedRef ? componentRef : ref
++  );
+ }

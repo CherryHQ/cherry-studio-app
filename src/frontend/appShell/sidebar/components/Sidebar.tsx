@@ -1,14 +1,17 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 
+import { useIsSidebarPersistent } from '@/frontend/appShell/layout';
 import {
+  chatRouteParams,
   useStartNewChat,
   useChatSource,
   parseChatRoute,
   type ChatRouteParamsInput,
 } from '@/frontend/appShell/navigation/chat';
+import { useFilePane } from '@/frontend/appShell/pane';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
@@ -21,7 +24,7 @@ type SidebarProps = {
   navigation: DrawerContentComponentProps['navigation'];
 };
 
-/** Drawer sidebar whose root owns the drawer-scoped actions. */
+/** Sidebar whose root owns the drawer-scoped actions, whether it overlays the chat or sits beside it. */
 export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
   const { source, remoteTarget, viewMode, startRemoteChat } = useChatSource();
@@ -35,8 +38,21 @@ export function Sidebar({ navigation }: SidebarProps) {
     source === 'local' && chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
       ? chatRoute.target.sessionId
       : undefined;
+  // Serialized so the actions below change only when the chat does.
+  const sourceChat =
+    source === 'local' && chatRoute.status === 'ready'
+      ? JSON.stringify(chatRouteParams(chatRoute.target))
+      : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
+  const isPersistent = useIsSidebarPersistent();
+  const pane = useFilePane();
+
+  // A permanent drawer has nothing to close, but an overlay left open before the window widened
+  // would otherwise reappear over the chat once the window narrows again.
+  useEffect(() => {
+    if (isPersistent) navigation.closeDrawer();
+  }, [isPersistent, navigation]);
 
   const actions = useMemo<SidebarActions>(
     () => ({
@@ -54,7 +70,10 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
       openLibrary: () => {
         navigation.closeDrawer();
-        router.push('/library');
+        // Files open beside the current chat when the window has room for both. A library page
+        // remembers that chat, so a file can still be added to it.
+        if (pane?.isAvailable) pane.open();
+        else router.push({ pathname: '/library', params: sourceChat ? { sourceChat } : {} });
       },
       openPaintings: () => {
         navigation.closeDrawer();
@@ -84,8 +103,10 @@ export function Sidebar({ navigation }: SidebarProps) {
     [
       agentId,
       sessionId,
+      sourceChat,
       navigation,
       openSessionSearch,
+      pane,
       router,
       source,
       startRemoteChat,

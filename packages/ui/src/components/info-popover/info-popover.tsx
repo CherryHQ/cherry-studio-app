@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useRef, useState } from 'react';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,7 +22,7 @@ export type InfoPopoverProps = {
 
 /** Tap a presentation-only trigger to read text without changing the underlying layout. */
 export function InfoPopover({ children, ...props }: InfoPopoverProps) {
-  const triggerRef = useRef<View>(null);
+  const triggerRef = useRef<ViewInstance>(null);
   const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
 
   return (
@@ -115,7 +115,7 @@ function InfoPopoverPanel({
 function InfoPopoverText({ text }: { text: string }) {
   const { registerItem } = useMenuInteraction();
   const register = useCallback(
-    (target: View | null) => (target ? registerItem?.(target) : undefined),
+    (target: ViewInstance | null) => (target ? registerItem?.(target) : undefined),
     [registerItem],
   );
   return (

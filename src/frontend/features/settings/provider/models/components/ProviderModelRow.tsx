@@ -1,7 +1,7 @@
 import { SelectionIndicator } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View, type AccessibilityProps } from 'react-native';
+import { Pressable, Text, View, type AccessibilityProps, type ViewProps } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import type { Model } from '@/shared/data/types/model';
@@ -56,7 +56,7 @@ export function ProviderModelRow({
   disabled?: boolean;
   statusLabel?: string;
   accessibilityActions?: AccessibilityProps['accessibilityActions'];
-  onAccessibilityAction?: AccessibilityProps['onAccessibilityAction'];
+  onAccessibilityAction?: ViewProps['onAccessibilityAction'];
   provider: Provider | undefined;
   /**
    * Given only while the list is selecting. The row then draws a checkbox and

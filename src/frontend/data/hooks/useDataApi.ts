@@ -9,7 +9,6 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
-import { useApiClient } from '@/frontend/data/DataApiProvider';
 import type {
   ApiPath,
   BodyForPath,
@@ -24,6 +23,8 @@ import type {
   CursorPaginationResponse,
   InferPaginationMode,
 } from '@/shared/data/api/types';
+
+import { useApiClient } from '../DataApiProvider';
 
 type DataApiQueryKey = readonly [string] | readonly [string, unknown];
 type MutationMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';

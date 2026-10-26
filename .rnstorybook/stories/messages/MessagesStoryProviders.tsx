@@ -59,7 +59,7 @@ const storyFileEntries = new Map(
   ].map((entry) => [entry.id, FileEntrySchema.parse(entry)]),
 );
 // All entries resolve to the same asset: a card renders from the row, not the bytes.
-const storyFileUri = Image.resolveAssetSource(require('../../../assets/icon.png')).uri;
+const storyFileUri = Image.resolveAssetSource(require('../../../assets/icon.png'))?.uri ?? '';
 const storyQueryClient = new QueryClient({
   defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: Infinity } },
 });

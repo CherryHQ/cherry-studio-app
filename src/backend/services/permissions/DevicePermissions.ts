@@ -39,7 +39,6 @@ type ExpoPermission = {
   granted: boolean;
   status: string;
   canAskAgain: boolean;
-  accessPrivileges?: 'all' | 'limited' | 'none';
 };
 
 export class DevicePermissions implements PermissionsModule {
@@ -185,12 +184,6 @@ export class DevicePermissions implements PermissionsModule {
           : unsupported;
       case 'camera.read':
         return toPermissionStatus(await ImagePicker.getCameraPermissionsAsync());
-      case 'photos.read':
-        // Android selection uses the system picker, which grants access to selected URIs.
-        // The app does not browse the library or declare its read permissions.
-        return Platform.OS === 'android'
-          ? unsupported
-          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
       case 'photos.write':
         // Expo's modern MediaStore writer starts at Android 11; its older writer
         // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.
@@ -245,9 +238,6 @@ export class DevicePermissions implements PermissionsModule {
         case 'camera.read':
           await ImagePicker.requestCameraPermissionsAsync();
           break;
-        case 'photos.read':
-          await MediaLibrary.requestPermissionsAsync(false, ['photo']);
-          break;
         case 'photos.write':
           await MediaLibrary.requestPermissionsAsync(true, ['photo']);
           break;
@@ -289,14 +279,11 @@ function healthTypesForScopes(scopes: readonly DevicePermissionScope[]): HealthD
 
 function toPermissionStatus(response: ExpoPermission): DevicePermissionStatus {
   return {
-    state:
-      response.accessPrivileges === 'limited'
-        ? 'limited'
-        : response.granted
-          ? 'granted'
-          : response.status === 'undetermined'
-            ? 'undetermined'
-            : 'denied',
+    state: response.granted
+      ? 'granted'
+      : response.status === 'undetermined'
+        ? 'undetermined'
+        : 'denied',
     canAskAgain: response.canAskAgain,
   };
 }

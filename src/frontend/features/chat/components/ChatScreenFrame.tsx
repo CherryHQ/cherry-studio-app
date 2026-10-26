@@ -1,7 +1,7 @@
 import { Composer, useComposerExpansion } from '@cherrystudio/ui/components';
 import { BlurTargetView } from 'expo-blur';
 import { type ComponentType, type PropsWithChildren, type RefObject, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
 import { ReadingContentFrame } from '@/frontend/appShell/layout';
@@ -19,7 +19,7 @@ export function ChatScreenFrame({
   children,
   header: Header,
 }: PropsWithChildren<{
-  header: ComponentType<{ blurTarget: RefObject<View | null>; hidden?: boolean }>;
+  header: ComponentType<{ blurTarget: RefObject<ViewInstance | null>; hidden?: boolean }>;
 }>) {
   return (
     <Composer.Expansion>
@@ -34,9 +34,9 @@ function ChatScreenContent({
   children,
   header: Header,
 }: PropsWithChildren<{
-  header: ComponentType<{ blurTarget: RefObject<View | null>; hidden?: boolean }>;
+  header: ComponentType<{ blurTarget: RefObject<ViewInstance | null>; hidden?: boolean }>;
 }>) {
-  const blurTarget = useRef<View>(null);
+  const blurTarget = useRef<ViewInstance>(null);
   const expansion = useComposerExpansion();
   const isLayerPresented = useIsFullScreenLayerPresented();
   const layerProgress = useFullScreenLayerProgress();

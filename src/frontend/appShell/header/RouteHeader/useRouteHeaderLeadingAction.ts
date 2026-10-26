@@ -5,19 +5,30 @@ import { useNavigationState } from 'expo-router/react-navigation';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
+
 import SidebarExpandIcon from '../../icons/SidebarExpandIcon';
 import type { HeaderToolbarAction } from '../components/HeaderAction';
+import type { RouteHeaderRootAction } from './RouteHeader.types';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
 
 /** Resolves drawer child screens to back and route roots to their declared action. */
+export function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
+  const rootAction = useRouteHeaderRootAction();
+  const isStackChild = useNavigationState((state) => state.index > 0);
+
+  return rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
+}
+
 export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarAction {
   const { t } = useTranslation();
   const router = useRouter();
   const openDrawer = useOpenDrawer();
-  const rootAction = useRouteHeaderRootAction();
-  const isStackChild = useNavigationState((state) => state.index > 0);
-  const action = rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
+  const pane = usePaneChrome();
+  const routeKind = useRouteHeaderLeadingKind();
+  // A pane is not a stack screen: it leads with its own exit unless the page declares a back step.
+  const action = pane ? 'back' : routeKind;
   const goBack = useCallback(() => {
     if (onBack) {
       onBack();
@@ -32,7 +43,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
     router.replace('/');
   }, [onBack, router]);
 
-  return useMemo<HeaderToolbarAction>(
+  const routeAction = useMemo<HeaderToolbarAction>(
     () =>
       action === 'drawer'
         ? {
@@ -62,4 +73,6 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
             },
     [action, goBack, openDrawer, t],
   );
+
+  return pane && !onBack ? pane.leadingAction : routeAction;
 }

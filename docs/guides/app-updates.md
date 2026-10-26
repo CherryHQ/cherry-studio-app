@@ -146,13 +146,13 @@ there is no runtime check or source-map upload. Do not republish a preview bundl
 
 ## Download Size
 
-SDK 57 supports bundle diffing, explicitly enabled here. EAS serves a patch when available and
+SDK 58 supports bundle diffing, explicitly enabled here. EAS serves a patch when available and
 sufficiently smaller than the new bundle, and unchanged assets are reused. Patches are not
 guaranteed for every update pair or immediately after publication.
 
 The first OTA from an embedded build normally downloads a full JavaScript bundle and missing
 assets, **not a full APK or IPA**. Uploading the embedded bundle can enable first-update patches,
-but `EAS_UPDATE_EXPERIMENTAL_UPLOAD_EMBEDDED_BUNDLE=1` is experimental on SDK 57 and is not enabled
+but `EAS_UPDATE_EXPERIMENTAL_UPLOAD_EMBEDDED_BUNDLE=1` is experimental and is not enabled
 here. Evaluate it separately; do not claim a fixed reduction percentage.
 
 ## Acceptance

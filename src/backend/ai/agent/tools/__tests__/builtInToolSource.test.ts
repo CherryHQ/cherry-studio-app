@@ -808,8 +808,7 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
         ),
       },
       models: {
-        getById: async () =>
-          scenario.paintingModel ? { imageGeneration: scenario.paintingModel.support } : null,
+        getById: async () => scenario.paintingModel?.model ?? null,
       },
     } as unknown as SystemCapabilitySourceDependencies['painting'],
     preference: {
@@ -830,9 +829,20 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
 }
 
 function paintingModel(): ConfiguredPaintingModel {
+  const uniqueModelId = createUniqueModelId('openai', 'gpt-image-1');
   return {
-    support: { modes: { generate: { supports: {} } } } as ConfiguredPaintingModel['support'],
-    uniqueModelId: createUniqueModelId('openai', 'gpt-image-1'),
+    uniqueModelId,
+    model: {
+      id: uniqueModelId,
+      providerId: 'openai',
+      modelId: 'gpt-image-1',
+      name: 'Image',
+      capabilities: ['image-generation'],
+      imageGeneration: { modes: { generate: { supports: {} } } },
+      supportsStreaming: false,
+      isEnabled: true,
+      isHidden: false,
+    },
   };
 }
 

@@ -1,5 +1,5 @@
 import { type ReactElement, useRef } from 'react';
-import type { View, ViewProps } from 'react-native';
+import type { ViewInstance, ViewProps } from 'react-native';
 
 import { AnchoredTrigger } from '../anchored-trigger';
 import { MenuContent } from '../menu-content';
@@ -16,7 +16,7 @@ export function ActionMenu({ children, items }: ActionMenuProps) {
 }
 
 function ActionMenuTrigger({ children, items }: ActionMenuProps) {
-  const triggerRef = useRef<View>(null);
+  const triggerRef = useRef<ViewInstance>(null);
   const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
   const child = children as ReactElement<ViewProps & { disabled?: boolean }>;
   const isDisabled = Boolean(

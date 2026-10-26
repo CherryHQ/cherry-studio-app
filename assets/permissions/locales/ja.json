@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "NSCalendarsFullAccessUsageDescription": "Cherry Studio はチャットでのリクエストに応じてカレンダーの予定を読み取り、管理します。今日の予定の確認や会議の日時変更などのために、関連する予定の詳細を選択した AI サービスに送信します。",
+    "NSCalendarsUsageDescription": "Cherry Studio はチャットでのリクエストに応じてカレンダーの予定を読み取り、管理します。今日の予定の確認や会議の日時変更などのために、関連する予定の詳細を選択した AI サービスに送信します。",
+    "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio は、選択した AI サービスからの詳細情報を使い、明日の午前 10 時の会議など、チャットで作成を依頼した予定をカレンダーに追加します。",
+    "NSLocationWhenInUseUsageDescription": "Cherry Studio はアプリの使用中のみ、現在地と必要に応じて取得した住所を選択した AI サービスに送信し、近くのレストランを探すといったリクエストに応えます。",
+    "NSRemindersFullAccessUsageDescription": "Cherry Studio はチャットでのリクエストに応じてリマインダーを読み取り、管理します。今日のタスクの一覧表示や買い物のリマインダーの追加などのために、関連する詳細を選択した AI サービスに送信します。",
+    "NSRemindersUsageDescription": "Cherry Studio はチャットでのリクエストに応じてリマインダーを読み取り、管理します。今日のタスクの一覧表示や買い物のリマインダーの追加などのために、関連する詳細を選択した AI サービスに送信します。"
+  }
+}

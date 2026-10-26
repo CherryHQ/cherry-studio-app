@@ -28,7 +28,7 @@ jest.mock('expo-file-system', () => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockCapture.mockResolvedValue('file:///native.png');
-  mockOpen.mockReturnValue({ readBytes: mockReadBytes, close: mockClose });
+  mockOpen.mockReturnValue({ readBytesSync: mockReadBytes, close: mockClose });
   mockReadBytes.mockReturnValue(pngHeader(plan.width, plan.height));
 });
 

@@ -331,11 +331,11 @@ is resolved.
 
 ### Android Edge-To-Edge Compatibility
 
-The Screens 4.26.2 patch raises its Material dependency to
+The Screens 4.30.0 patch raises its Material dependency to
 [1.14.0](https://github.com/material-components/material-components-android/releases/tag/1.14.0).
 That release routes `BottomSheetDialog`, `SheetDialog`, and `EdgeToEdgeUtils` through helpers which
 only read/write legacy system-bar colors below Android 15. Its minimum SDK 23 and AGP 8.11.1 baseline
-fit this project's minimum SDK 26 and React Native's AGP 8.12.0. Existing screen-transition and iOS
+fit this project's minimum SDK 26 and React Native's AGP 9.2.1. Existing screen-transition and iOS
 patches remain required. This native dependency change requires a new installation package.
 
 Android continues to use the precompiled React Native artifact. The reported React Native
@@ -352,34 +352,49 @@ three-button navigation, and exercise embedded QR pairing on rotated/resized tab
 new AAB's version code and expanded Play findings. The original report is for 0.1.0, before R8 was
 enabled; use comparable build settings when attributing changes to the dependency update.
 
-## Expo 57 Dependency Baseline
+## Expo 58 Dependency Baseline
 
-The project uses Expo 57.0.24 and React Native 0.86.3, which includes Hermes V1
-250829098.0.17. This contains the upstream fixes for the Worklets/Reanimated memory regression
-and slow development startup. See the [Expo SDK 57 release notes](https://expo.dev/changelog/sdk-57#known-regressions).
-Existing development clients must be rebuilt to receive the engine update.
+The project uses Expo 58.0.19 and React Native 0.88.0 with Hermes V1 260318099.0.4. SDK 58 builds
+against the iOS 27 SDK and its iOS template adopts the UIKit scene lifecycle, so
+`expo-build-properties` no longer needs `enableSceneSupport`. See the
+[Expo SDK 58 release notes](https://expo.dev/changelog/sdk-58). Existing development clients must
+be rebuilt for the new native runtime.
 
-`expo-build-properties` enables iOS scene support for Xcode 27 builds. Expo 57.0.23 and newer
-provide the scene runtime, and a new native build is required to avoid the iOS 27 launch assertion.
-See [Expo's SDK 57 scene migration guide](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md#staying-on-sdk-57-with-xcode-27).
-
-Keep the version-specific patches for Expo Router, Calendar, Notifications, Image Picker, App Metrics,
-Observe, Widgets, React Native, Screens, Reanimated, Metro, and Metro Runtime when updating dependencies.
-The upgraded patched direct dependencies use exact versions so an unrelated install cannot select
-a newer unpatched release.
-Metro 0.84.5 is selected by Expo's Metro dependency; its patches support the existing Worklets Bundle
-Mode integration.
+Keep the version-specific patches for Expo Router, Calendar, Notifications, App Metrics, Observe,
+Widgets, React Native, Screens, Reanimated, Drawer Layout, Keyboard Controller, Masked View, Metro,
+and Metro Runtime when updating dependencies. The upgraded patched direct dependencies use exact
+versions so an unrelated install cannot select a newer unpatched release.
+Metro 0.87.1 is selected by Expo's Metro dependency. Worklets publishes Bundle Mode patches only up to
+Metro 0.84, so the Metro and Metro Runtime patches are ports of those to 0.87.1.
 
 `react-native-streamdown` requires Bundle Mode and the `remend` import forwarding configured in
-Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within Reanimated 4.5's
-supported 0.10.x range; removing the experimental mode requires a separate change to streaming
-Markdown processing.
+Babel. Keep those settings when updating Hermes. Worklets 0.13.0 is the range Reanimated 4.7
+supports; removing the experimental mode requires a separate change to streaming Markdown
+processing.
 
-Android builds compile `expo-image-picker`, `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
+Android builds compile `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+
+### iOS 17 Nitro Exception Compatibility Patch
+
+Build 46 (`0.4.0`) terminates at launch on iOS 17 with `DYLD 4 Symbol missing` for
+`std::exception_ptr::__from_native_exception_pointer(void*)`
+([#1442](https://github.com/CherryHQ/cherry-studio-app/issues/1442)). Nitro Modules 0.36.4's patch
+backports [Nitro #1824](https://github.com/margelo/nitro/pull/1824): `makeException()` and the inline
+pending `Promise<T>` destructor create exceptions through throw/catch and `std::current_exception()`.
+This avoids Xcode 27's Swift/C++ interop emitting references to iOS 18-only libc++ symbols while
+preserving the existing error messages and rejection behavior. Keep the iOS deployment target at
+17.0 and retain this patch until the installed Nitro version includes the upstream fix.
+
+`scripts/__tests__/nitroIosCompatibility.test.ts` guards the pinned version, patch registration/hash,
+and installed Swift-visible source paths in PR CI. These source guards do not establish binary or
+runtime compatibility. Before release, inspect a new iOS build for strong imports of
+`__ZNSt13exception_ptr31__from_native_exception_pointerEPv` and `___cxa_init_primary_exception`,
+then confirm startup on iOS 17 and a current iOS version, exception-message conversion, and pending
+promise rejection. A new native build is required; an OTA update cannot deliver this patch.
 
 ### iOS Text Measurement Cache Patch
 
@@ -388,7 +403,7 @@ including text-input measurement. A concurrent JS-thread measurement may wait fo
 delivery while creating `NSTextStorage`. Holding the measurement-cache mutex across that native
 work can block the main thread and create a circular wait if delivery needs it.
 
-React Native 0.86.3's iOS text and line measurement caches use
+React Native 0.88.0's iOS text and line measurement caches use
 `SimpleThreadSafeCache::getWithGeneratorOutsideLock` to compute misses outside the mutex, so native
 text notifications cannot hold the measurement cache lock while waiting for another thread
 ([#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182)). Lookup, insertion, LRU
@@ -421,14 +436,14 @@ clang++ -std=c++20 -fsanitize=thread -I"$GTEST/include" -I"$GTEST" -I"$RN/ReactC
 
 ### iOS Build 26 Crash Patches
 
-- Screens 4.26.2 iterates over a copy of the header subviews. Synchronous shadow-state updates
+- Screens 4.30.0 iterates over a copy of the header subviews. Synchronous shadow-state updates
   can mount or unmount children during this loop, invalidating an enumeration of the live array.
-- React Native 0.86.3 enables the existing scheduler delegate invalidation guard for the stable
-  release level. Pending render/command callbacks skip delegates invalidated during teardown or
-  replacement. This is the mitigation from [React Native #56680](https://github.com/facebook/react-native/pull/56680),
-  not a guarantee against every concurrent delegate lifetime race. iOS already uses
-  `buildReactNativeFromSource`, which is required for this native header patch to take effect.
-- Widgets 57.0.19 reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
+- React Native 0.88.0 no longer needs a patch for pending render/command callbacks reaching a torn-down
+  scheduler delegate. 0.86.3 needed the `enableSchedulerDelegateInvalidation` flag from
+  [React Native #56680](https://github.com/facebook/react-native/pull/56680); 0.88 removed that flag
+  and instead clears pending rendering updates in `RuntimeScheduler_Modern::handleTaskError` before
+  the host's fatal handler drops the delegate, covered by its `SchedulerDelegateInvalidationTest`.
+- Widgets 58.0.23 reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
   systems. Build 26's five iOS 17.6.1 widget samples all return to binary offset `0x24bf98` after
   calling this missing weak-linked WidgetKit getter. Although the SDK declares it available earlier,
   [Apple's developer forum](https://developer.apple.com/forums/thread/763594) also reports the missing

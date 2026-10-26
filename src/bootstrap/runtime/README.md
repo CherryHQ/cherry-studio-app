@@ -45,4 +45,5 @@ creation, and upload still run only on an explicit feedback submission.
 - Disposal is idempotent and asynchronous. Host dependency order first drains Agent turns and jobs,
   then closes MCP, web search, cache, and SQLite infrastructure.
 - Runtime must not import app route modules or trigger preboot side effects.
-- Mobile uses one startup gate, not Desktop lifecycle phases.
+- Mobile uses `Gate` and `PostReady` lifecycle phases around its first-render boundary; Electron
+  readiness phases do not apply.

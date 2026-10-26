@@ -14,7 +14,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@/frontend/components/FileEntryPreview', () => ({
   useOpenFileEntry: () => ({ openFileEntry: mockOpenFileEntry }),
 }));
-jest.mock('@/frontend/data/DataApiProvider', () => ({ useApiClient: () => ({ get: mockGet }) }));
+jest.mock('@/frontend/data', () => ({ useApiClient: () => ({ get: mockGet }) }));
 
 function file(provenance: 'generated' | 'imported', mediaType = 'image/png'): ResolvedFile {
   return {

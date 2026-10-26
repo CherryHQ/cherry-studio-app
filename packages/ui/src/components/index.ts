@@ -19,6 +19,7 @@ export * from './menu';
 export * from './message-part';
 export * from './option-picker-bottom-sheet';
 export * from './portal';
+export { ReorderList, type ReorderListProps } from './reorder-list';
 export * from './surface';
 export * from './search-field';
 export * from './scroll-interaction';

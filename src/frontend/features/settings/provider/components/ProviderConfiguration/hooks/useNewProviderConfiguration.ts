@@ -59,6 +59,10 @@ export function useNewProviderConfiguration() {
         actions.removeApiKey(id);
         return true;
       },
+      reorderApiKeys: async (apiKeys) => {
+        actions.reorderApiKeys(apiKeys);
+        return true;
+      },
       rename: async (name) => {
         actions.setName(name.trim());
         return true;

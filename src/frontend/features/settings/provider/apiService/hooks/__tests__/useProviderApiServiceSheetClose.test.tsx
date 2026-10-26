@@ -8,17 +8,17 @@ type HookResult = ReturnType<typeof useProviderApiServiceSheetClose>;
 const mockGoBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 const mockReplace = jest.fn();
-const mockDispatch = jest.fn();
-const mockAddListener = jest.fn(() => jest.fn());
 const mockAlertConfirm = jest.fn();
+const mockDisablePrevention = jest.fn();
+const mockUsePreventRemove = jest.fn(
+  (_prevent: boolean, _callback: (options: { repeat: () => void }) => void) =>
+    mockDisablePrevention,
+);
 
 jest.mock('expo-router', () => ({
-  useNavigation: () => ({
-    addListener: mockAddListener,
-    canGoBack: mockCanGoBack,
-    dispatch: mockDispatch,
-    goBack: mockGoBack,
-  }),
+  useNavigation: () => ({ canGoBack: mockCanGoBack, goBack: mockGoBack }),
+  usePreventRemove: (prevent: boolean, callback: (options: { repeat: () => void }) => void) =>
+    mockUsePreventRemove(prevent, callback),
   useRouter: () => ({ replace: mockReplace }),
 }));
 
@@ -99,6 +99,28 @@ describe('useProviderApiServiceSheetClose', () => {
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockAlertConfirm).not.toHaveBeenCalled();
+  });
+
+  test('confirms before a blocked back gesture and repeats it after discard', () => {
+    renderHook();
+    const [prevent, onPrevented] = mockUsePreventRemove.mock.lastCall!;
+    const repeat = jest.fn();
+
+    expect(prevent).toBe(true);
+    act(() => onPrevented({ repeat }));
+    act(() => mockAlertConfirm.mock.calls[0][0].onConfirm());
+
+    expect(repeat).toHaveBeenCalledTimes(1);
+    expect(mockUsePreventRemove.mock.lastCall![0]).toBe(false);
+  });
+
+  test('stops blocking once a programmatic close is allowed', () => {
+    renderHook();
+
+    act(() => hookResultRef.current?.allowNavigation());
+
+    expect(mockDisablePrevention).toHaveBeenCalledTimes(1);
+    expect(mockUsePreventRemove.mock.lastCall![0]).toBe(false);
   });
 
   test('returns home when the edit screen was opened without a previous screen', () => {

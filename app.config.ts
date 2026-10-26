@@ -84,7 +84,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           return [plugin, { addGeneratedScheme: profile === 'development' }];
         }
         if (plugin === 'expo-localization') {
-          return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
+          return [
+            plugin,
+            {
+              supportedLocales: {
+                // iOS resolves some system prompts, such as location, through this list, so it
+                // must name the `.lproj` directories generated from `locales`.
+                ios: Object.keys(config.locales!),
+                android: APP_LANGUAGES.map(({ value }) => value),
+              },
+            },
+          ];
         }
         if (Array.isArray(plugin) && plugin[0] === 'expo-build-properties') {
           return [

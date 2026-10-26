@@ -1,7 +1,7 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
-import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
+import { trackNativeAbortSignals } from '../../../authorization/__tests__/_nativeAbortSignal';
 import type { PluginCredential } from '../../../authorization/pluginCredential';
 import { enrichDingtalkAccount } from '../dingtalkAccount';
 import { DingtalkAuthorizationRuntime } from '../DingtalkAuthorizationRuntime';
@@ -118,7 +118,7 @@ it('consumes one code even when observers poll concurrently', async () => {
 
 it('releases the expiry timer and attempt listeners after every pending poll', async () => {
   const state = await begin();
-  const { listeners, timers } = trackExpoAbortSignals();
+  const { listeners, timers } = trackNativeAbortSignals();
   jest.mocked(dingtalkOauth.poll).mockResolvedValue({ status: 'pending' });
   for (const now of [6000, 11000, 16000]) {
     jest.mocked(Date.now).mockReturnValue(now);

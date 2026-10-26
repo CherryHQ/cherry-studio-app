@@ -1,7 +1,6 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import { useNavigation, useRouter } from 'expo-router';
-import type { NavigationAction } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useRef } from 'react';
+import { useNavigation, usePreventRemove, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
@@ -19,25 +18,9 @@ export function useProviderApiServiceSheetClose({
   const router = useRouter();
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const isConfirmedCloseRef = useRef(false);
-
-  const allowNavigation = useCallback(() => {
-    isConfirmedCloseRef.current = true;
-  }, []);
-
-  const closeWithoutPrompt = useCallback(() => {
-    allowNavigation();
-    if (onClose) {
-      onClose();
-      return;
-    }
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-
-    router.replace('/');
-  }, [allowNavigation, navigation, onClose, router]);
+  // Once leaving is confirmed, later input or saving state must not block it again.
+  const [isCloseConfirmed, setIsCloseConfirmed] = useState(false);
+  const preventRemove = !isCloseConfirmed && (isSaving || hasUnsavedChanges);
 
   const confirmDiscard = useCallback(
     (onConfirm: () => void) => {
@@ -53,6 +36,33 @@ export function useProviderApiServiceSheetClose({
     [alert, t],
   );
 
+  const disablePrevention = usePreventRemove(preventRemove, ({ repeat }) => {
+    if (isSaving) return;
+    confirmDiscard(() => {
+      setIsCloseConfirmed(true);
+      repeat();
+    });
+  });
+
+  const allowNavigation = useCallback(() => {
+    setIsCloseConfirmed(true);
+    disablePrevention();
+  }, [disablePrevention]);
+
+  const closeWithoutPrompt = useCallback(() => {
+    allowNavigation();
+    if (onClose) {
+      onClose();
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    router.replace('/');
+  }, [allowNavigation, navigation, onClose, router]);
+
   const requestClose = useCallback(() => {
     if (isSaving) {
       return;
@@ -65,31 +75,6 @@ export function useProviderApiServiceSheetClose({
 
     confirmDiscard(closeWithoutPrompt);
   }, [closeWithoutPrompt, confirmDiscard, hasUnsavedChanges, isSaving]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
-      if (isConfirmedCloseRef.current) {
-        return;
-      }
-
-      if (isSaving) {
-        event.preventDefault();
-        return;
-      }
-
-      if (!hasUnsavedChanges) {
-        return;
-      }
-
-      event.preventDefault();
-      confirmDiscard(() => {
-        isConfirmedCloseRef.current = true;
-        navigation.dispatch(event.data.action as NavigationAction);
-      });
-    });
-
-    return unsubscribe;
-  }, [confirmDiscard, hasUnsavedChanges, isSaving, navigation]);
 
   return { allowNavigation, closeWithoutPrompt, requestClose };
 }

@@ -20,7 +20,10 @@ jest.mock('@cherrystudio/ui/motion', () => ({
   duration: { fast: 1 },
   easing: { settle: undefined },
 }));
-jest.mock('expo-router/drawer', () => ({ useDrawerStatus: () => 'open' }));
+let mockSidebarPresence = 'open';
+jest.mock('../hooks/useSidebarPresence', () => ({
+  useSidebarPresence: () => mockSidebarPresence,
+}));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -84,14 +87,19 @@ function register() {
   return { remove, confirm: mockConfirm.mock.calls.at(-1)![0].onConfirm as () => void };
 }
 
+function renderProvider() {
+  return (
+    <SidebarSelectionProvider scope="local">
+      <Probe />
+    </SidebarSelectionProvider>
+  );
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSidebarPresence = 'open';
   act(() => {
-    renderer = create(
-      <SidebarSelectionProvider scope="local">
-        <Probe />
-      </SidebarSelectionProvider>,
-    );
+    renderer = create(renderProvider());
   });
 });
 afterEach(() => act(() => renderer.unmount()));
@@ -131,4 +139,16 @@ test('keeps failed deletions selected for retry', async () => {
     label: 'session.selection.deleteFailed',
     variant: 'danger',
   });
+});
+
+test('keeps a selection beside a permanent sidebar and ends it once the sidebar is hidden', () => {
+  act(() => selection.enter());
+
+  mockSidebarPresence = 'persistent';
+  act(() => renderer.update(renderProvider()));
+  expect(selection.getSnapshot().isSelecting).toBe(true);
+
+  mockSidebarPresence = 'closed';
+  act(() => renderer.update(renderProvider()));
+  expect(selection.getSnapshot().isSelecting).toBe(false);
 });

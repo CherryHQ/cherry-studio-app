@@ -199,6 +199,145 @@ describe('ApplicationHost construction', () => {
     }
   });
 
+  it.each(['resolve', 'reject'] as const)(
+    'cleans up a late post-ready %s after replacement without advancing startup',
+    async (outcome) => {
+      jest.useFakeTimers();
+      try {
+        let finishInitialization!: () => void;
+        let markInitializationStarted!: () => void;
+        let markPeerReady!: () => void;
+        let markDestroyed!: () => void;
+        const initializationGate = new Promise<void>((resolve) => {
+          finishInitialization = resolve;
+        });
+        const initializationStarted = new Promise<void>((resolve) => {
+          markInitializationStarted = resolve;
+        });
+        const peerReady = new Promise<void>((resolve) => {
+          markPeerReady = resolve;
+        });
+        const destroyed = new Promise<void>((resolve) => {
+          markDestroyed = resolve;
+        });
+        const releaseRawResource = jest.fn();
+        const releaseEarlyDisposable = jest.fn();
+        const releaseLateDisposable = jest.fn();
+
+        @Injectable('LatePostReady')
+        @ServicePhase(Phase.PostReady)
+        @DependsOn(['Connection'])
+        class LatePostReady extends BaseService {
+          constructor(_connection: Connection) {
+            super();
+          }
+
+          protected async onInit(): Promise<void> {
+            this.registerDisposable(releaseEarlyDisposable);
+            journal.push('LatePostReady:init-started');
+            markInitializationStarted();
+            await initializationGate;
+            this.registerDisposable(releaseLateDisposable);
+            if (outcome === 'reject') throw new Error('late initialization failed');
+          }
+
+          protected onReady(): void {
+            journal.push('LatePostReady:ready');
+          }
+
+          protected onAllReady(): void {
+            journal.push('LatePostReady:all-ready');
+          }
+
+          protected onStop(): void {
+            journal.push('LatePostReady:stop');
+            releaseRawResource();
+          }
+
+          protected onDestroy(): void {
+            journal.push('LatePostReady:destroy');
+            markDestroyed();
+          }
+        }
+
+        @Injectable('CompletedPeer')
+        @ServicePhase(Phase.PostReady)
+        @DependsOn(['Connection'])
+        class CompletedPeer extends BaseService {
+          constructor(private readonly connection: Connection) {
+            super();
+          }
+
+          protected onReady(): void {
+            markPeerReady();
+          }
+
+          protected onAllReady(): void {
+            journal.push('CompletedPeer:all-ready');
+          }
+
+          protected onStop(): void {
+            journal.push(`CompletedPeer:stop:${this.connection.open}`);
+          }
+        }
+
+        @Injectable('LaterLayer')
+        @ServicePhase(Phase.PostReady)
+        @DependsOn(['LatePostReady', 'CompletedPeer'])
+        class LaterLayer extends BaseService {
+          constructor(_late: LatePostReady, _peer: CompletedPeer) {
+            super();
+          }
+
+          protected onInit(): void {
+            journal.push('LaterLayer:init');
+          }
+        }
+
+        const outgoing = new ApplicationHost({
+          services: [Connection, LatePostReady, CompletedPeer, LaterLayer],
+        });
+        await application.install(outgoing);
+        outgoing.runPostReady();
+        await Promise.all([initializationStarted, peerReady]);
+
+        const incoming = new ApplicationHost({ services: [Connection] });
+        const replacing = application.install(incoming);
+        await Promise.resolve();
+        await jest.advanceTimersByTimeAsync(SERVICE_TEARDOWN_TIMEOUT_MS);
+        await replacing;
+
+        expect(outgoing.state).toBe('disposed');
+        expect(incoming.state).toBe('ready');
+        expect(await outgoing.dispose()).toEqual({ failed: [], timedOut: ['LatePostReady'] });
+        expect(journal).toEqual([
+          'Connection:open',
+          'LatePostReady:init-started',
+          'CompletedPeer:stop:true',
+          'Connection:close',
+          'Connection:open',
+        ]);
+        expect(releaseRawResource).not.toHaveBeenCalled();
+        expect(releaseEarlyDisposable).not.toHaveBeenCalled();
+
+        finishInitialization();
+        await destroyed;
+        await outgoing.dispose();
+        outgoing.runPostReady();
+
+        expect(journal.slice(5)).toEqual(['LatePostReady:stop', 'LatePostReady:destroy']);
+        expect(releaseRawResource).toHaveBeenCalledTimes(1);
+        expect(releaseEarlyDisposable).toHaveBeenCalledTimes(1);
+        expect(releaseLateDisposable).toHaveBeenCalledTimes(1);
+        expect(outgoing.container.peek('LaterLayer')).toBeUndefined();
+        expect(application.current).toBe(incoming);
+        expect(incoming.container.get<Connection>('Connection').open).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
+
   it('shares one promise across repeated disposals', async () => {
     const host = new ApplicationHost({ services: [Connection] });
     await host.start();

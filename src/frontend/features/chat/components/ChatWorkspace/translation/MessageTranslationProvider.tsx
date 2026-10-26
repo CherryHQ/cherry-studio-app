@@ -12,8 +12,7 @@ import {
 
 import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import type { MessageListItem } from '@/frontend/components/Message';
-import { useBackendModule } from '@/frontend/data';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useApiClient, useBackendModule } from '@/frontend/data';
 
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
 import { messageTranslationSource } from './messageTranslationSource';

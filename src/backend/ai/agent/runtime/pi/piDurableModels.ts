@@ -27,6 +27,7 @@ import {
   type PiModelFailureStage,
 } from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import { resolvePiOutputReservation } from './piOutputReservation';
 import { providerErrorEvent } from './piStreamEvents';
 import { applyPiWebReplay, PiWebResponse } from './PiWebResponse';
 import { applyPiWebTools, type PiWebToolRoutes } from './piWebTools';
@@ -173,10 +174,15 @@ export function createPiDurableModels(
               : undefined;
           const createStream = async (continuedContent?: JsonObject[]) => {
             const requestStartedAt = Date.now();
+            const ceiling = resolved.model.maxTokens;
+            // Preserve explicit budget intersections; the registered input cap is not the wire window.
+            const explicitMaxTokens =
+              options?.maxTokens === undefined && selected.maxOutputTokens === undefined
+                ? undefined
+                : Math.min(options?.maxTokens ?? ceiling, selected.maxOutputTokens ?? ceiling);
             const maxTokens = Math.min(
-              resolved.model.maxTokens,
-              options?.maxTokens ?? resolved.model.maxTokens,
-              selected.maxOutputTokens ?? resolved.model.maxTokens,
+              ceiling,
+              resolvePiOutputReservation(ceiling, resolved.model.contextWindow, explicitMaxTokens),
             );
             trace?.setAttributes(piModelRequestAttributes(resolved, context, maxTokens));
             const stream = await resolved.streamFn(resolved.model, context, {

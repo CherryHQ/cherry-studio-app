@@ -27,6 +27,7 @@ const logger = loggerService.withContext('Lifecycle');
  */
 export abstract class BaseService {
   private lifecycleState: LifecycleState = LifecycleState.Created;
+  protected initializationSignal: AbortSignal | undefined;
 
   /** Ensures `onAllReady` runs at most once per instance, even across restarts. */
   private allReadyCalled = false;
@@ -86,7 +87,16 @@ export abstract class BaseService {
   ): T | Disposable {
     const disposable =
       typeof disposableOrFn === 'function' ? toDisposable(disposableOrFn) : disposableOrFn;
-    this.disposables.push(disposable);
+    if (
+      this.initializationSignal?.aborted ||
+      this.lifecycleState === LifecycleState.Stopping ||
+      this.lifecycleState === LifecycleState.Stopped ||
+      this.lifecycleState === LifecycleState.Destroyed
+    ) {
+      disposable.dispose();
+    } else {
+      this.disposables.push(disposable);
+    }
     return disposable;
   }
 
@@ -141,10 +151,10 @@ export abstract class BaseService {
   }
 
   /** Dependencies are `Ready` by the time this runs. */
-  protected onInit(): Promise<void> | void {}
+  protected onInit(_signal?: AbortSignal): Promise<void> | void {}
 
   /** This service finished initializing. */
-  protected onReady(): Promise<void> | void {}
+  protected onReady(_signal?: AbortSignal): Promise<void> | void {}
 
   /**
    * Every service in every phase finished initializing, so any service may be
@@ -163,16 +173,19 @@ export abstract class BaseService {
   protected onDestroy(): Promise<void> | void {}
 
   /** Framework entry point. Runs `onInit` then `onReady`. */
-  async _doInit(): Promise<void> {
+  async _doInit(signal?: AbortSignal): Promise<void> {
+    this.initializationSignal = signal;
+    if (signal?.aborted) return;
     this.lifecycleState = LifecycleState.Initializing;
-    await this.onInit();
+    await this.onInit(signal);
+    if (signal?.aborted) return;
     this.lifecycleState = LifecycleState.Ready;
-    await this.onReady();
+    await this.onReady(signal);
   }
 
   /** Framework entry point. At most once per instance. */
   async _doAllReady(): Promise<void> {
-    if (this.allReadyCalled) return;
+    if (this.allReadyCalled || this.initializationSignal?.aborted) return;
     this.allReadyCalled = true;
     await this.onAllReady();
   }
@@ -248,7 +261,8 @@ export abstract class BaseService {
   async _doActivate(): Promise<boolean> {
     if (!isActivatable(this)) return false;
     return this.enqueueActivationTransition(async () => {
-      if (this.lifecycleState !== LifecycleState.Ready) return false;
+      if (this.lifecycleState !== LifecycleState.Ready || this.initializationSignal?.aborted)
+        return false;
       if (this.activated) return true;
       await this.onActivate();
       this.activated = true;

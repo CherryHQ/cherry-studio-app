@@ -1,5 +1,10 @@
 import { cloneElement, type ReactElement, useCallback, useMemo, useRef, useState } from 'react';
-import { type AccessibilityActionEvent, type AccessibilityActionInfo, View } from 'react-native';
+import {
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
+  View,
+  type ViewInstance,
+} from 'react-native';
 import {
   Gesture,
   GestureDetector,
@@ -38,7 +43,7 @@ const IGNORE_NATIVE_ACTION = callback(() => {});
  * accessibility custom actions so the operations do not depend on long press.
  */
 export function ContextMenu({ children, items }: ContextMenuProps) {
-  const anchorRef = useRef<View>(null);
+  const anchorRef = useRef<ViewInstance>(null);
   const { anchor, close, finishClose, isOpen, open } = useMenuState(anchorRef);
   const interaction = useScrollInteraction();
   const touch = useContextMenuTouch();

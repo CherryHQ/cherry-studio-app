@@ -22,7 +22,10 @@ This module owns Expo Router header adapters used by the app screens.
   actions with the selected count and one leading exit action. Commit actions for forms and
   pickers remain feature-owned.
 - `components/HeaderChrome` is the single native placement boundary. Android mounts actions through
-  native-stack options, while iOS mounts the same actions through `Stack.Toolbar`.
+  native-stack options, while iOS mounts the same actions through `Stack.Toolbar`. A page rendered in
+  a side pane (see `PaneChromeProvider` in `appShell/layout`) has no native-stack screen, so the same
+  props render as an inline row instead, and the route leading action yields to the pane's exit
+  unless the page declares its own back step.
 - `components/HeaderAction` owns the explicit `icon`, `label`, `menu`, and `custom` action contract
   plus all standard top-action visuals and interaction states.
 - `components/HeaderActionGroup` is the platform gateway for adjacent top actions. Callers declare

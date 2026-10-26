@@ -1,5 +1,5 @@
 import { createContext, use } from 'react';
-import type { View } from 'react-native';
+import type { ViewInstance } from 'react-native';
 
 export type AnswerFrame = Readonly<{ height: number; left: number; top: number; width: number }>;
 
@@ -17,7 +17,9 @@ const ExpandAnswerContext = createContext<((request: ExpandAnswerRequest) => voi
 export const ExpandAnswerContextProvider = ExpandAnswerContext.Provider;
 
 /** A mounted view's frame in the window; absent once it is gone or has no size. */
-export function measureFrame(view: View | null | undefined): Promise<AnswerFrame | undefined> {
+export function measureFrame(
+  view: ViewInstance | null | undefined,
+): Promise<AnswerFrame | undefined> {
   return new Promise((resolve) => {
     if (!view) resolve(undefined);
     else

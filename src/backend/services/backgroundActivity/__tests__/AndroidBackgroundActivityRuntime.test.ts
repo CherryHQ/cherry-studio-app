@@ -131,6 +131,59 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
+test('retires cancelled startup registrations without stopping or clearing a replacement', async () => {
+  await runtime._doStop();
+  runtime = new AndroidBackgroundActivityRuntime(environment);
+  let finishRead!: (presented: notifications.Notification[]) => void;
+  let markReading!: () => void;
+  const reading = new Promise<void>((resolve) => {
+    markReading = resolve;
+  });
+  const presented = new Promise<notifications.Notification[]>((resolve) => {
+    finishRead = resolve;
+  });
+  notices.getPresentedNotificationsAsync.mockImplementationOnce(() => {
+    markReading();
+    return presented;
+  });
+  const controller = new AbortController();
+  const initializing = runtime._doInit(controller.signal);
+  await reading;
+  controller.abort(new Error('Host replaced'));
+  expect(listeners.size).toBe(0);
+  expect(serviceStoppedListeners.size).toBe(0);
+  expect(notices.setNotificationHandler).toHaveBeenLastCalledWith(null);
+
+  const replacement = new AndroidBackgroundActivityRuntime(environment);
+  try {
+    await replacement._doInit();
+    replacement.acquire('replacement');
+    await flush();
+    expect(running).toBe(true);
+    const stopCalls = native.stop.mock.calls.length;
+    const handlerCalls = notices.setNotificationHandler.mock.calls.length;
+    finishRead([
+      {
+        request: {
+          identifier: 'old-notification',
+          content: { data: { owner: BACKGROUND_NOTIFICATION_OWNER } },
+        },
+      } as unknown as notifications.Notification,
+    ]);
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await runtime._doStop();
+
+    expect(notices.dismissNotificationAsync).not.toHaveBeenCalled();
+    expect(native.stop).toHaveBeenCalledTimes(stopCalls);
+    expect(notices.setNotificationHandler).toHaveBeenCalledTimes(handlerCalls);
+    expect(running).toBe(true);
+  } finally {
+    finishRead([]);
+    await initializing.catch(() => {});
+    await replacement._doStop();
+  }
+});
+
 test('a failed service start leaves work running unprotected and retries after the next foreground entry', async () => {
   native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
   const interrupted = jest.fn();
@@ -395,6 +448,31 @@ test('unexpected native destruction interrupts every protected task without rest
   runtime.acquire('new-task');
   await flush();
   expect(native.start).toHaveBeenCalledTimes(2);
+});
+
+test('a hidden admission stays local while a failed service start is reported', async () => {
+  const reporter = jest.fn();
+  const removeReporter = loggerService.setErrorReporter(reporter);
+  try {
+    setAppState('background');
+    const hidden = runtime.acquire('chat');
+    await flush();
+    expect(reporter).not.toHaveBeenCalled();
+    hidden.release();
+    await flush();
+    setAppState('active');
+    native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
+    runtime.acquire('next-task');
+    await flush();
+
+    expect(reporter).toHaveBeenCalledTimes(1);
+    expect(reporter).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ operation: 'background.start' }),
+    );
+  } finally {
+    removeReporter();
+  }
 });
 
 test('expected native interruption does not enter error reporting', async () => {

@@ -42,6 +42,29 @@ test('keeps Exa MCP available for both keyword search and page reading', () => {
   }
 });
 
+test('offers Yuanbao for keyword search and persists its service credentials', () => {
+  expect(getWebSearchProviderPresetsByCapability('searchKeywords')).toContainEqual({
+    id: 'yuanbao',
+    name: 'Yuanbao',
+    type: 'api',
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.wsa.cloud.tencent.com',
+      },
+    ],
+  });
+  expect(
+    getWebSearchProviderPresetsByCapability('fetchUrls').some((item) => item.id === 'yuanbao'),
+  ).toBe(false);
+  const overrides = { yuanbao: { apiKeys: ['service-key'] }, jina: { apiKeys: ['existing-key'] } };
+  expect(WebSearchProviderOverridesSchema.parse(JSON.parse(JSON.stringify(overrides)))).toEqual(
+    overrides,
+  );
+});
+
 test('requires a user-supplied SearXNG address instead of a desktop localhost default', () => {
   expect(WEB_SEARCH_PROVIDER_PRESET_MAP.searxng.capabilities).toEqual([
     {

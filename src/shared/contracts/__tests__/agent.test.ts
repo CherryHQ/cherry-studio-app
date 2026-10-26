@@ -646,20 +646,23 @@ describe('Agent tool and managed-file contracts', () => {
     },
   );
 
-  test('approval round-trips a stable ref and display snapshot without a provider alias', () => {
-    const approval = {
-      id: 'approval-1',
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      toolCallId: 'call-1',
-      toolRef: MCP_TOOL_REF,
-      displayName: 'Search',
-      input: { query: 'Cherry Studio' },
-      status: 'pending',
-    } as const;
+  test.each(['pending', 'approved', 'denied', 'cancelled'] as const)(
+    'a %s approval round-trips a stable ref and display snapshot without a provider alias',
+    (status) => {
+      const approval = {
+        id: 'approval-1',
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        toolCallId: 'call-1',
+        toolRef: MCP_TOOL_REF,
+        displayName: 'Search',
+        input: { query: 'Cherry Studio' },
+        status,
+      } as const;
 
-    expect(AgentApprovalViewSchema.parse(roundTrip(approval))).toEqual(approval);
-  });
+      expect(AgentApprovalViewSchema.parse(roundTrip(approval))).toEqual(approval);
+    },
+  );
 });
 
 describe('user question protocol', () => {

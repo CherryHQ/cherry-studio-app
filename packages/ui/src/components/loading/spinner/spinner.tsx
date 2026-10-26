@@ -1,5 +1,5 @@
 import type { Ref } from 'react';
-import type { View, ViewProps } from 'react-native';
+import type { ViewInstance, ViewProps } from 'react-native';
 
 import { SpinnerControl } from './spinner-control/spinner-control';
 
@@ -10,7 +10,7 @@ export type SpinnerProps = Omit<ViewProps, 'children'> & {
   className?: string;
   color?: SpinnerColor;
   size?: SpinnerSize;
-  ref?: Ref<View>;
+  ref?: Ref<ViewInstance>;
 };
 
 export function Spinner(props: SpinnerProps) {

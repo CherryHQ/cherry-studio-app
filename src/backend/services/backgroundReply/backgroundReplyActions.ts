@@ -14,12 +14,13 @@ export function createBackgroundReplyActions(
   interaction: BackgroundReplyInteraction,
   t: BackgroundReplyTranslate,
 ): BackgroundActivityActions | undefined {
+  if (interaction.kind === 'approval' && interaction.requiresApp) return undefined;
   if (interaction.kind === 'approval')
     return {
       token: uuidv7(),
       prompt: interaction.title,
       buttons: [
-        { id: 'approve', label: t('chat.tool.approval.allow'), role: 'primary' },
+        { id: 'approve', label: t('chat.tool.approval.continue'), role: 'primary' },
         { id: 'deny', label: t('chat.tool.approval.deny') },
       ],
     };

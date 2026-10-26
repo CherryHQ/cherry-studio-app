@@ -1,7 +1,7 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Fragment, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 
 import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
@@ -17,7 +17,7 @@ export function FileFolderBreadcrumbs({
   onNavigate: (folderId: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
   const ancestors = fileFolderAncestors(folderId, byId);
   const segments = [{ id: null, name: t('library.title') }, ...ancestors];

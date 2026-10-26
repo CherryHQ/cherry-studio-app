@@ -1,6 +1,6 @@
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
-import { trackExpoAbortSignals } from '../../authorization/__tests__/_expoAbortSignal';
+import { trackNativeAbortSignals } from '../../authorization/__tests__/_nativeAbortSignal';
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../../plugins/feishu/feishuTools';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
@@ -157,7 +157,7 @@ const userCredential = {
 it.each([false, true])(
   'releases real SDK request listeners while reusing the Feishu connection (caller: %s)',
   async (withCaller) => {
-    const tracked = trackExpoAbortSignals();
+    const tracked = trackNativeAbortSignals();
     mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
     const caller = new AbortController();
     const client = await createBuiltInMcpClient('feishu', 'grant-feishu', caller.signal);
@@ -204,7 +204,7 @@ it.each([false, true])(
 it.each(['complete', 'cancel'] as const)(
   'keeps an overlapping response stream alive until its own request ends (%s)',
   async (ending) => {
-    const tracked = trackExpoAbortSignals();
+    const tracked = trackNativeAbortSignals();
     mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
     const client = await createBuiltInMcpClient(
       'feishu',

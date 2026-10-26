@@ -15,6 +15,12 @@ import {
 
 const logger = loggerService.withContext('Lifecycle');
 
+type ServiceInitialization = {
+  name: string;
+  pending: boolean;
+  deferredCleanup: boolean;
+};
+
 /** Ceiling for one service's `onStop` or `onDestroy`. Matches desktop. */
 export const SERVICE_TEARDOWN_TIMEOUT_MS = 5000;
 
@@ -77,11 +83,17 @@ function logTeardownSummary(
  */
 export class LifecycleManager {
   private readonly resolver = new DependencyResolver();
-  private readonly initializationOrder: string[] = [];
+  private readonly initializationOrder: ServiceInitialization[] = [];
+  private readonly initialization = new AbortController();
   private readonly serviceTiming = new Map<string, number>();
   private phasesValidated = false;
 
   constructor(private readonly container: ServiceContainer) {}
+
+  /** Fence subsequent hooks while allowing the current hook to release its own resources. */
+  closeInitialization(): void {
+    this.initialization.abort(new Error('The application host is closing.'));
+  }
 
   /**
    * Promote `PostReady` services that a `Gate` service depends on.
@@ -117,19 +129,17 @@ export class LifecycleManager {
 
     try {
       for (const layer of layers) {
+        if (this.initialization.signal.aborted) break;
         const results = await Promise.allSettled(
           layer.map((serviceName) => this.initializeService(serviceName)),
         );
-        // Failed initialization can already own resources. Include every settled
-        // peer before propagating a failure so rollback visits the entire layer.
-        this.initializationOrder.push(...layer);
         for (const result of results) {
           if (result.status === 'rejected') {
             throw result.reason;
           }
         }
       }
-      finish();
+      finish(this.initialization.signal.aborted ? 'cancelled' : 'completed');
     } catch (error) {
       finish('failed');
       throw error;
@@ -143,14 +153,18 @@ export class LifecycleManager {
    * scheduling mistake must not take down the others.
    */
   async runAllReady(): Promise<void> {
-    for (const serviceName of this.initializationOrder) {
-      const instance = this.container.peek<BaseService>(serviceName);
+    for (const entry of this.initializationOrder) {
+      if (this.initialization.signal.aborted) break;
+      const instance = this.container.peek<BaseService>(entry.name);
       if (!instance) continue;
 
+      entry.pending = true;
       try {
         await instance._doAllReady();
       } catch (error) {
-        logger.error(`Service '${serviceName}' failed in onAllReady`, error as Error);
+        logger.error(`Service '${entry.name}' failed in onAllReady`, error as Error);
+      } finally {
+        await this.finishInitialization(entry);
       }
     }
   }
@@ -166,10 +180,19 @@ export class LifecycleManager {
    * cannot be preempted by a timer).
    */
   async stopAll(): Promise<TeardownSummary> {
+    this.closeInitialization();
     const summary: TeardownSummary = { failed: [], timedOut: [] };
     const startedAt = performance.now();
 
-    for (const serviceName of [...this.initializationOrder].reverse()) {
+    for (const entry of this.initializationOrder.toReversed()) {
+      const serviceName = entry.name;
+      if (entry.pending) {
+        // Never run stop concurrently with initialization. The initialization
+        // continuation owns cleanup when an uncooperative hook eventually settles.
+        entry.deferredCleanup = true;
+        summary.timedOut.push(serviceName);
+        continue;
+      }
       const outcome = await this.stopService(serviceName);
       if (outcome === 'timed_out') summary.timedOut.push(serviceName);
       else if (outcome === 'failed') summary.failed.push(serviceName);
@@ -184,7 +207,12 @@ export class LifecycleManager {
     const summary: TeardownSummary = { failed: [], timedOut: [] };
     const startedAt = performance.now();
 
-    for (const serviceName of [...this.initializationOrder].reverse()) {
+    for (const entry of this.initializationOrder.toReversed()) {
+      if (entry.deferredCleanup) {
+        summary.timedOut.push(entry.name);
+        continue;
+      }
+      const serviceName = entry.name;
       const outcome = await this.destroyService(serviceName);
       if (outcome === 'timed_out') summary.timedOut.push(serviceName);
       else if (outcome === 'failed') summary.failed.push(serviceName);
@@ -201,9 +229,14 @@ export class LifecycleManager {
   }
 
   private async initializeService(serviceName: string): Promise<void> {
+    if (this.initialization.signal.aborted) return;
     const metadata = this.container.getMetadata(serviceName);
     if (!metadata) return;
 
+    // Record started peers independently; one hanging peer must not hide the
+    // resources already acquired by the rest of its layer from teardown.
+    const entry = { name: serviceName, pending: true, deferredCleanup: false };
+    this.initializationOrder.push(entry);
     const finish = startStartupStage('startup.service', { serviceName, phase: metadata.phase });
     try {
       const instance = this.container.get<BaseService>(serviceName);
@@ -211,17 +244,32 @@ export class LifecycleManager {
 
       this.container.beginInitWindow(serviceName);
       try {
-        await instance._doInit();
+        await instance._doInit(this.initialization.signal);
       } finally {
         this.container.endInitWindow();
       }
 
       const duration = performance.now() - startedAt;
       this.serviceTiming.set(serviceName, duration);
-      finish();
+      finish(this.initialization.signal.aborted ? 'cancelled' : 'completed');
     } catch (error) {
-      finish('failed');
-      this.handleInitError(serviceName, error as Error);
+      finish(this.initialization.signal.aborted ? 'cancelled' : 'failed');
+      if (!this.initialization.signal.aborted) this.handleInitError(serviceName, error as Error);
+    } finally {
+      await this.finishInitialization(entry);
+    }
+  }
+
+  private async finishInitialization(entry: ServiceInitialization): Promise<void> {
+    entry.pending = false;
+    if (!entry.deferredCleanup) return;
+    const stopped = await this.stopService(entry.name);
+    const destroyed = await this.destroyService(entry.name);
+    if (stopped !== 'completed' || destroyed !== 'completed') {
+      logger.warn(`Late initialization cleanup did not complete for '${entry.name}'`, {
+        stopped,
+        destroyed,
+      });
     }
   }
 

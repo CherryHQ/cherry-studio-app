@@ -139,7 +139,7 @@ function ToolApprovalSheetActions({
           onPress={() => onRespond(true)}
           variant="default"
         >
-          <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+          <Button.Label>{t('chat.tool.approval.continue')}</Button.Label>
         </Button>
       </View>
     </View>

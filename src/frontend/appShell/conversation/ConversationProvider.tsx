@@ -1,9 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type PropsWithChildren, use, useEffect, useRef, useState } from 'react';
 
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { queryKeys, useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
 
 import { subscribeCatalogDirectoryChanges } from './conversationCatalogCache';
 import { createConversationSources } from './createConversationSources';

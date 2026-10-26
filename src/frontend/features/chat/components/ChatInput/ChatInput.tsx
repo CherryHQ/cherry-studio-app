@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View } from 'react-native';
+import { useWindowDimensions, View, type ViewInstance } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
@@ -253,7 +253,7 @@ function TextChatInput({
     pluginCatalog.isError || pluginConnections.isError
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
-  const pluginMenuRef = useRef<View>(null);
+  const pluginMenuRef = useRef<ViewInstance>(null);
   const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
   const closeSkillPicker = useCallback(() => setIsSkillPickerOpen(false), []);
   const closePromptPicker = useCallback(() => setIsPromptPickerOpen(false), []);

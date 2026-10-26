@@ -2,6 +2,8 @@ import type { ReactElement } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { PaneChromeProvider } from '@/frontend/appShell/layout';
+
 import { RouteHeader } from './RouteHeader';
 import { RouteHeaderProvider } from './RouteHeaderProvider';
 
@@ -159,6 +161,61 @@ describe('RouteHeader.android', () => {
     expect(getOptions().headerTitle).toEqual(expect.any(Function));
     expect(getOptions().headerRight).toEqual(expect.any(Function));
   });
+
+  it('renders inline in a pane, leading with the pane exit unless the page declares a back step', async () => {
+    const paneExit = {
+      accessibilityLabel: 'common.close',
+      icon: () => null,
+      key: 'pane-exit',
+      onPress: jest.fn(),
+      type: 'icon' as const,
+    };
+    const folderUp = jest.fn();
+    const inPane = (element: ReactElement) => (
+      <PaneChromeProvider leadingAction={paneExit}>{element}</PaneChromeProvider>
+    );
+
+    await renderRouteHeader(inPane(<RouteHeader title="Files" />), 'drawer');
+
+    expect(renderer!.root.findAllByType('StackScreen')).toHaveLength(0);
+    expect(getInlineActions()[0]).toBe(paneExit);
+
+    await renderRouteHeader(inPane(<RouteHeader onBack={folderUp} title="Folder" />), 'drawer');
+
+    const back = getInlineActions()[0]!;
+    expect(back.accessibilityLabel).toBe('navigation.back');
+    back.onPress();
+    expect(folderUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('places the pane control before the page actions', async () => {
+    const paneExit = {
+      key: 'pane-exit',
+      label: 'Back',
+      onPress: jest.fn(),
+      type: 'label' as const,
+    };
+    const expand = { key: 'expand', label: 'Expand', onPress: jest.fn(), type: 'label' as const };
+    const share = { key: 'share', label: 'Share', onPress: jest.fn(), type: 'label' as const };
+
+    await renderRouteHeader(
+      <PaneChromeProvider headerAction={expand} leadingAction={paneExit}>
+        <RouteHeader rightActions={[share]} title="Report.pdf" />
+      </PaneChromeProvider>,
+      'close',
+    );
+
+    expect(getInlineActions()).toEqual([paneExit, expand, share]);
+  });
+
+  function getInlineActions() {
+    return renderer!.root
+      .findAllByType('HeaderAction' as never)
+      .map(
+        (node) =>
+          (node.props as { action: { accessibilityLabel?: string; onPress: () => void } }).action,
+      );
+  }
 
   async function renderRouteHeader(
     element: ReactElement,

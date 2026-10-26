@@ -2,7 +2,7 @@ import { ContentState, Image, Spinner } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
 import { usePaintingTemplates } from '../hooks/usePaintingTemplates';
 import { setPaintingTemplateOrigin } from '../utils/paintingTemplateOrigin';
@@ -71,7 +71,7 @@ function TemplateCard({
   template: PaintingTemplate;
 }) {
   const { t } = useTranslation();
-  const imageRef = useRef<View>(null);
+  const imageRef = useRef<ViewInstance>(null);
   const open = () => {
     const image = imageRef.current;
     if (!image) {

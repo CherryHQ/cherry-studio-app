@@ -83,21 +83,30 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private stopped = false;
   private cacheInFlight: Promise<void> | undefined;
 
-  protected async onReady(): Promise<void> {
+  protected async onReady(signal?: AbortSignal): Promise<void> {
     this.stopped = false;
-    await this.restoreSnapshot();
-    if (
-      this.stopped ||
-      (providerRegistryService.isReady() &&
-        this.activeManifest?.schemaVersion === REGISTRY_SCHEMA_VERSION)
-    ) {
-      return;
-    }
-    void this.applyUpdate().catch((error: unknown) => {
-      if (!this.stopped) {
-        logger.warn('Could not download the model registry; model use will retry', toError(error));
+    const cancel = () => this.stopRequests();
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      await this.restoreSnapshot();
+      if (
+        this.stopped ||
+        (providerRegistryService.isReady() &&
+          this.activeManifest?.schemaVersion === REGISTRY_SCHEMA_VERSION)
+      ) {
+        return;
       }
-    });
+      void this.applyUpdate().catch((error: unknown) => {
+        if (!this.stopped) {
+          logger.warn(
+            'Could not download the model registry; model use will retry',
+            toError(error),
+          );
+        }
+      });
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+    }
   }
 
   /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
@@ -137,14 +146,21 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   protected async onStop(): Promise<void> {
-    this.stopped = true;
-    for (const controller of this.requestControllers) {
-      controller.abort();
-    }
+    this.stopRequests();
     await Promise.allSettled([this.cacheInFlight, this.applyInFlight]);
     this.cacheInFlight = undefined;
     this.activeManifest = undefined;
     this.activeSlot = undefined;
+  }
+
+  private stopRequests(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    for (const controller of this.requestControllers) {
+      controller.abort();
+    }
+    // These process-wide projections must retire while this generation is
+    // still installed, never when a timed-out restore eventually finishes.
     providerRegistryService.clearRemoteSnapshot();
     providerRegistryUpdates.clear();
   }

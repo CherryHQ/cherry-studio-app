@@ -186,3 +186,14 @@ export function sanitizeSentryEvent(event: Event, originalException?: unknown): 
     debug_meta: debugImages ? { images: debugImages } : undefined,
   };
 }
+
+/** Identify repeats of one error by its operation, exception types, and stack positions. */
+export function sentryEventKey(event: ErrorEvent): string {
+  return JSON.stringify([
+    event.tags?.operation,
+    event.exception?.values?.map((error) => [
+      error.type,
+      error.stacktrace?.frames?.map(({ filename, lineno, colno }) => [filename, lineno, colno]),
+    ]),
+  ]);
+}

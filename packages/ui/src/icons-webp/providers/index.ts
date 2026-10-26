@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 159
+ * Total icons: 164
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -134,6 +134,10 @@ export const PROVIDER_ICONS = {
   cohere: {
     light: require('./light/cohere.webp'),
     dark: require('./light/cohere.webp'),
+  },
+  comfyui: {
+    light: require('./light/comfyui.webp'),
+    dark: require('./light/comfyui.webp'),
   },
   composio: {
     light: require('./light/composio.webp'),
@@ -335,6 +339,10 @@ export const PROVIDER_ICONS = {
     light: require('./light/liquid.webp'),
     dark: require('./dark/liquid.webp'),
   },
+  litellm: {
+    light: require('./light/litellm.webp'),
+    dark: require('./dark/litellm.webp'),
+  },
   lmstudio: {
     light: require('./light/lmstudio.webp'),
     dark: require('./light/lmstudio.webp'),
@@ -435,6 +443,10 @@ export const PROVIDER_ICONS = {
     light: require('./light/ollama.webp'),
     dark: require('./dark/ollama.webp'),
   },
+  omlx: {
+    light: require('./light/omlx.webp'),
+    dark: require('./light/omlx.webp'),
+  },
   openai: {
     light: require('./light/openai.webp'),
     dark: require('./dark/openai.webp'),
@@ -519,6 +531,10 @@ export const PROVIDER_ICONS = {
     light: require('./light/sensetime.webp'),
     dark: require('./light/sensetime.webp'),
   },
+  serply: {
+    light: require('./light/serply.webp'),
+    dark: require('./light/serply.webp'),
+  },
   silicon: {
     light: require('./light/silicon.webp'),
     dark: require('./light/silicon.webp'),
@@ -574,6 +590,10 @@ export const PROVIDER_ICONS = {
   together: {
     light: require('./light/together.webp'),
     dark: require('./light/together.webp'),
+  },
+  tokendance: {
+    light: require('./light/tokendance.webp'),
+    dark: require('./light/tokendance.webp'),
   },
   twitter: {
     light: require('./light/twitter.webp'),

@@ -65,7 +65,6 @@ export function encodeBase64(bytes: Uint8Array): string {
 export class FilePreviewBridge {
   private readonly documents = new Map<number, OpenDocument>();
   private readonly activeRequests = new Set<number>();
-  private nextDocumentId = 0;
   private resourceHandle: FileHandle | null = null;
   private isDisposed = false;
   private readonly openFile: (uri: string) => FileHandle;
@@ -112,7 +111,8 @@ export class FilePreviewBridge {
         closeQuietly(handle);
         throw new Error('File size is unavailable');
       }
-      const documentId = this.nextDocumentId++;
+      // Page request IDs survive bridge replacement, so an old close cannot close the new file.
+      const documentId = requestId;
       this.documents.set(documentId, { handle, size });
       this.options.send({
         type: 'opened',
@@ -191,7 +191,7 @@ export class FilePreviewBridge {
         const handle = acquire();
         const count = Math.min(FILE_PREVIEW_CHUNK_BYTES, end - position);
         handle.offset = position;
-        const bytes = handle.readBytes(count);
+        const bytes = handle.readBytesSync(count);
         if (bytes.byteLength !== count) {
           throw new BridgeReadError(
             'short_read',

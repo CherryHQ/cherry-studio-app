@@ -13,6 +13,7 @@ import {
   type PiModelFailureStage,
 } from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import { resolvePiOutputReservation } from './piOutputReservation';
 
 const logger = loggerService.withContext('PiTextGeneration');
 
@@ -64,8 +65,13 @@ export async function generatePiText(
           signal,
           sessionId: requestId,
           reasoning,
+          // This per-request option overrides the binding default, so apply the same reservation policy.
           maxTokens: Math.min(
-            request.options.maxOutputTokens ?? resolved.model.maxTokens,
+            resolvePiOutputReservation(
+              resolved.model.maxTokens,
+              resolved.model.contextWindow,
+              request.options.maxOutputTokens,
+            ),
             resolved.model.maxTokens,
           ),
           temperature: request.options.temperature,

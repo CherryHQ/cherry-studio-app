@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { useWindowDimensions, View, type ViewInstance } from 'react-native';
 import { type SharedValue, useSharedValue } from 'react-native-reanimated';
 
 type FullScreenLayers = Readonly<{
@@ -63,7 +63,7 @@ export function useFullScreenLayer(active: boolean) {
 export function FullScreenLayerHost({ children }: PropsWithChildren) {
   const isPresented = useIsFullScreenLayerPresented();
   const { height: windowHeight } = useWindowDimensions();
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   const [restingBottom, setRestingBottom] = useState<number>();
   const measure = () => {
     if (!isPresented)

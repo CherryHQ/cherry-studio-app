@@ -1,6 +1,6 @@
 import { easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, type View } from 'react-native';
+import { AccessibilityInfo, type ViewInstance } from 'react-native';
 import {
   cancelAnimation,
   ReduceMotion,
@@ -37,8 +37,8 @@ function useRiseStyle(progress: SharedValue<number>, rise: number) {
 }
 
 export function useWelcomeIntro() {
-  const rootRef = useRef<View>(null);
-  const logoFrameRef = useRef<View>(null);
+  const rootRef = useRef<ViewInstance>(null);
+  const logoFrameRef = useRef<ViewInstance>(null);
   const logoRef = useRef<LogoDrawAnimationRef>(null);
   const didMeasure = useRef(false);
   const [measured, setMeasured] = useState(false);
