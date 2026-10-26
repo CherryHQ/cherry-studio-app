@@ -203,15 +203,30 @@ export function FileDocumentPreview({
       incognito
       javaScriptCanOpenWindowsAutomatically={false}
       mixedContentMode="never"
-      onContentProcessDidTerminate={handleFailure}
-      onError={handleFailure}
+      onContentProcessDidTerminate={() => {
+        logger.warn('Document preview process terminated', { code: 'content_process_terminated' });
+        handleFailure();
+      }}
+      onError={({ nativeEvent }) => {
+        logger.warn('Document preview page failed', {
+          code: 'webview_load_error',
+          statusCode: nativeEvent.code,
+          description: nativeEvent.description,
+        });
+        handleFailure();
+      }}
       onMessage={handleMessage}
       onOpenWindow={({ nativeEvent }) => {
         if (documentPreviewNavigationAction(nativeEvent.targetUrl) === 'external') {
           void openExternalUrl(nativeEvent.targetUrl);
         }
       }}
-      onRenderProcessGone={handleFailure}
+      onRenderProcessGone={({ nativeEvent }) => {
+        logger.warn('Document preview process terminated', {
+          code: nativeEvent.didCrash ? 'render_process_crashed' : 'render_process_terminated',
+        });
+        handleFailure();
+      }}
       onShouldStartLoadWithRequest={({ url, isTopFrame }) => {
         const action = documentPreviewNavigationAction(url, isTopFrame);
         if (action === 'external') void openExternalUrl(url);

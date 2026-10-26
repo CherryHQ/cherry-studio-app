@@ -24,3 +24,19 @@ index 999ab2a76df0da112212936f24218767eb1da8da..951e9b3da8f1e3d4b99cf75cb566141b
    const isReactNativeAnimated = context.originModulePath.includes(`${sep}Animated${sep}components${sep}`);
    if (isInternal || resolution.type !== "sourceFile" || isFromReactNative && isFromNodeModules && !isReactNativeAnimated) {
      return resolution;
+diff --git a/src/components/index.ts b/src/components/index.ts
+index 6fcad21b91dae2d029671aca1a6588a031831236..4a134c5da358e93411bcc0d977c22ce02211ab9a 100644
+--- a/src/components/index.ts
++++ b/src/components/index.ts
+@@ -66,7 +66,10 @@ module.exports = {
+         return require('./native/VirtualizedList').VirtualizedList
+     },
+ 
+-    // Unsupported
++    // Native exports without styling wrappers. Expo 58 resolves bundled assets here.
++    get AssetRegistry() {
++        return require('react-native').AssetRegistry
++    },
+     get DrawerLayoutAndroid() {
+         return require('react-native').DrawerLayoutAndroid
+     },

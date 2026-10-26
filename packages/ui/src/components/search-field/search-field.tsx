@@ -52,7 +52,7 @@ export function SearchField({
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={autoFocus}
-            className="min-h-0 border-0 bg-transparent py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-0 android:shadow-none android:focus:border-0"
+            className="min-h-0 border-0 bg-transparent py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-0 android:shadow-none android:[elevation:0] android:focus:border-0"
             onBlur={onBlur}
             onFocus={onFocus}
             onSubmitEditing={onSubmitEditing}

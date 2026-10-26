@@ -23,16 +23,14 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 jest.mock('@cherrystudio/ui/utils', () => ({ cn: (...names: unknown[]) => names.join(' ') }));
 
-jest.mock('@react-native-masked-view/masked-view', () => ({
-  __esModule: true,
-  default: ({ children }: { children: ReactNode }) => children,
-}));
-
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 
 jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => false }));
 
 jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => 'black' }));
+jest.mock('uniwind', () => ({
+  useResolveClassNames: () => ({ backgroundColor: 'rgba(0, 0, 0, 0)' }),
+}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

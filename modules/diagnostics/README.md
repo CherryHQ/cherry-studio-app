@@ -17,3 +17,7 @@ Rebuild the development client after adding or changing this module. Configure t
 credential through `CHERRYAI_CLIENT_SECRET` (or Desktop's `MAIN_VITE_CHERRYAI_CLIENT_SECRET`) in
 the native build environment. Missing credentials affect upload only. Do not put the credential
 in JavaScript or Expo `extra` configuration.
+
+The diagnostics config plugin also retains Android's `cherry_ai_client_secret` string during
+resource shrinking. The library resolves this app-owned resource by name, so production builds
+need the explicit keep rule even when the build environment supplies the credential.
