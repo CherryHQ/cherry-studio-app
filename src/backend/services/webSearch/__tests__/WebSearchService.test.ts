@@ -166,7 +166,7 @@ describe('WebSearchService', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  test('reports a missing self-hosted address as a configuration failure', async () => {
+  test('reports a missing Crawl4AI Cloud key as a configuration failure', async () => {
     const service = new WebSearchService(
       createPreferenceService({
         'chat.web_search.default_fetch_urls_provider': 'crawl4ai',
@@ -174,7 +174,7 @@ describe('WebSearchService', () => {
     );
     await expect(service.fetchUrls({ urls: ['https://example.com'] })).resolves.toMatchObject({
       results: [],
-      failures: [{ kind: 'configuration', code: 'api_host_missing' }],
+      failures: [{ kind: 'configuration', code: 'api_key_missing' }],
     });
     expect(request).not.toHaveBeenCalled();
   });
