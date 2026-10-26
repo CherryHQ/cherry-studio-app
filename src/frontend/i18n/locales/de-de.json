@@ -1573,6 +1573,7 @@
   "settings.desktopConnection.error.auth-revoked": "Dieser PC hat den Gerätezugriff widerrufen. Koppeln Sie es erneut.",
   "settings.desktopConnection.error.configuration-not-granted": "Dieser PC hat die Anbieter-Synchronisierung für dieses Gerät nicht zugelassen. Koppeln Sie erneut und lassen Sie sie auf dem PC zu.",
   "settings.desktopConnection.error.connection-detail": "Systemmeldung: {{message}}",
+  "settings.desktopConnection.error.connection-not-found": "Diese gespeicherte Verbindung ist nicht mehr verfügbar. Scanne einen neuen Kopplungscode, um die Verbindung erneut herzustellen.",
   "settings.desktopConnection.error.connection-timeout": "Zeitüberschreitung beim Verbinden. Prüfe Adresse, Netzwerk oder VPN und versuche es erneut.",
   "settings.desktopConnection.error.desktop-failure": "Der PC hat einen Fehler gemeldet. Versuchen Sie es erneut.",
   "settings.desktopConnection.error.discovery-unavailable": "Keine Desktop-Adresse verfügbar. Scanne den QR-Code dieses Computers erneut, um die Verbindung wiederherzustellen.",

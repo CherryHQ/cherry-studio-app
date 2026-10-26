@@ -1556,6 +1556,7 @@
   "settings.desktopConnection.error.auth-revoked": "桌面端已撤销设备授权，请重新配对。",
   "settings.desktopConnection.error.configuration-not-granted": "桌面端未允许此设备同步服务商。请重新配对并在桌面端允许。",
   "settings.desktopConnection.error.connection-detail": "系统返回：{{message}}",
+  "settings.desktopConnection.error.connection-not-found": "此保存的连接已不可用。请扫描新的配对码重新连接。",
   "settings.desktopConnection.error.connection-timeout": "连接超时。请检查地址、网络或 VPN，然后重试。",
   "settings.desktopConnection.error.desktop-failure": "桌面端返回了错误，请重试。",
   "settings.desktopConnection.error.discovery-unavailable": "没有可用的桌面连接地址，请重新扫描这台桌面端的二维码以恢复连接。",
