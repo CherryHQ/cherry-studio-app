@@ -4,15 +4,20 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend, DesktopPairingProgress } from '@/shared/contracts';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type { PairDesktopConnectionDto } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 import { DesktopPairingProvider, useDesktopPairingInput } from '../DesktopPairingProvider';
+import { pairingCancelDestination } from '../pairingCancelDestination';
 import { useDesktopPairing } from '../useDesktopPairing';
+
+let mockFocusEffect: EffectCallback;
 
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: EffectCallback) => {
     const { useEffect } = jest.requireActual('react');
+    mockFocusEffect = effect;
     useEffect(effect, [effect]);
   },
 }));
@@ -112,6 +117,35 @@ describe('desktop pairing workflow', () => {
     expect(latest.error).toBe(failure);
     expect(latest.progress).toEqual([{ stage: 'connecting' }]);
     expect(latest.connection).toBeUndefined();
+  });
+
+  it('drops the missing re-pair ID so retry scans and back navigation start from the connection list', async () => {
+    await mount({ ...input, connectionId: 'missing-connection' });
+    expect(latest.repairConnectionId).toBe('missing-connection');
+    await act(async () =>
+      reject(new DataApiError(ErrorCode.NOT_FOUND, 'missing', { reason: 'connection-not-found' })),
+    );
+
+    expect(latest.repairConnectionId).toBeUndefined();
+    expect(pairingCancelDestination(undefined, latest.repairConnectionId)).toBe(
+      '/settings/device-connections',
+    );
+    expect(pairingCancelDestination('chat', latest.repairConnectionId)).toBe('/onboarding');
+    expect(latest.connection).toBeUndefined();
+    expect(pair).toHaveBeenCalledTimes(1);
+    // A focus change must not restart the same stale invitation or create a new pairing implicitly.
+    await act(async () => {
+      mockFocusEffect();
+    });
+    expect(pair).toHaveBeenCalledTimes(1);
+    expect(latest.error).toBeDefined();
+  });
+
+  it('keeps the re-pair context for failures that do not identify a missing connection', async () => {
+    await mount({ ...input, connectionId: 'existing-connection' });
+    await act(async () => reject(new DataApiError(ErrorCode.NOT_FOUND, 'other resource')));
+
+    expect(latest.repairConnectionId).toBe('existing-connection');
   });
 
   it('cancels on leaving and ignores late progress and completion', async () => {

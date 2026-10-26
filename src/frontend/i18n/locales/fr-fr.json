@@ -1590,6 +1590,7 @@
   "settings.desktopConnection.error.auth-revoked": "Ce PC a révoqué l'accès au périphérique. Associez-le à nouveau.",
   "settings.desktopConnection.error.configuration-not-granted": "Ce PC n’a pas autorisé la synchronisation des fournisseurs pour cet appareil. Associez-le à nouveau et autorisez-la sur le PC.",
   "settings.desktopConnection.error.connection-detail": "Message du système : {{message}}",
+  "settings.desktopConnection.error.connection-not-found": "Cette connexion enregistrée n’est plus disponible. Scannez un nouveau code d’association pour vous reconnecter.",
   "settings.desktopConnection.error.connection-timeout": "La connexion a expiré. Vérifiez l’adresse, le réseau ou le VPN, puis réessayez.",
   "settings.desktopConnection.error.desktop-failure": "Le PC a signalé une erreur. Réessayez.",
   "settings.desktopConnection.error.discovery-unavailable": "Aucune adresse de l’ordinateur n’est disponible. Scannez à nouveau le code QR de cet ordinateur pour vous reconnecter.",

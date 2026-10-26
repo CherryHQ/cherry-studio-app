@@ -1590,6 +1590,7 @@
   "settings.desktopConnection.error.auth-revoked": "Este PC revogou o acesso ao dispositivo. Emparelhe novamente.",
   "settings.desktopConnection.error.configuration-not-granted": "Este PC não permitiu a sincronização de fornecedores para este dispositivo. Emparelhe novamente e permita-a no PC.",
   "settings.desktopConnection.error.connection-detail": "Mensagem do sistema: {{message}}",
+  "settings.desktopConnection.error.connection-not-found": "Esta ligação guardada já não está disponível. Leia um novo código de emparelhamento para voltar a ligar.",
   "settings.desktopConnection.error.connection-timeout": "O tempo de ligação expirou. Verifique o endereço, a rede ou a VPN e tente novamente.",
   "settings.desktopConnection.error.desktop-failure": "O PC comunicou um erro. Tente novamente.",
   "settings.desktopConnection.error.discovery-unavailable": "Não há nenhum endereço do computador disponível. Leia novamente o código QR deste computador para voltar a ligar.",

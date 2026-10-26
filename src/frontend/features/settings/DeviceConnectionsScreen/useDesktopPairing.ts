@@ -1,11 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
 import type { DesktopPairingProgress } from '@/shared/contracts';
 import type { PairDesktopConnectionDto } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
+
+import { isMissingPairingConnection } from '../desktopConnectionError';
 
 export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
   const connections = useBackendModule('desktopConnections');
@@ -13,10 +15,11 @@ export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
   const [progress, setProgress] = useState<DesktopPairingProgress[]>([]);
   const [connection, setConnection] = useState<DesktopConnection>();
   const [error, setError] = useState<unknown>();
+  const invalidInput = useRef<PairDesktopConnectionDto | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      if (!input) return;
+      if (!input || invalidInput.current === input) return;
       const controller = new AbortController();
       setProgress([]);
       setConnection(undefined);
@@ -28,7 +31,10 @@ export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
           });
           if (!controller.signal.aborted) setConnection(result);
         } catch (failure) {
-          if (!controller.signal.aborted) setError(failure);
+          if (!controller.signal.aborted) {
+            if (isMissingPairingConnection(failure)) invalidInput.current = input;
+            setError(failure);
+          }
         } finally {
           await queryClient.invalidateQueries({
             predicate: ({ queryKey }) =>
@@ -42,5 +48,6 @@ export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
     }, [connections, input, queryClient]),
   );
 
-  return { connection, error, progress };
+  const repairConnectionId = isMissingPairingConnection(error) ? undefined : input?.connectionId;
+  return { connection, error, progress, repairConnectionId };
 }

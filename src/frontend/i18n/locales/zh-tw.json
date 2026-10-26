@@ -1556,6 +1556,7 @@
   "settings.desktopConnection.error.auth-revoked": "桌面端已撤銷設備授權，請重新配對。",
   "settings.desktopConnection.error.configuration-not-granted": "桌面端未允許此裝置同步供應商。請重新配對並在桌面端允許。",
   "settings.desktopConnection.error.connection-detail": "系統回傳：{{message}}",
+  "settings.desktopConnection.error.connection-not-found": "此儲存的連線已無法使用。請掃描新的配對碼重新連線。",
   "settings.desktopConnection.error.connection-timeout": "連線逾時。請檢查位址、網路或 VPN，然後重試。",
   "settings.desktopConnection.error.desktop-failure": "桌面端回傳了錯誤，請再試一次。",
   "settings.desktopConnection.error.discovery-unavailable": "沒有可用的桌面連線位址，請重新掃描這台桌面端的 QR 碼以恢復連線。",
