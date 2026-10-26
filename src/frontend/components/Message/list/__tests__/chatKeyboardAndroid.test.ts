@@ -44,7 +44,8 @@ const { useChatKeyboard: createKeyboardHarness } = jest.requireActual<{
 
 describe('Android chat keyboard final range', () => {
   let options: Options;
-  const ref = {};
+  // Reanimated 4.7 UI refs expose the attached view on `value`; scrolls need one.
+  const ref = { value: {} };
 
   beforeEach(() => {
     mockScrollTo.mockClear();

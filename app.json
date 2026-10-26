@@ -262,8 +262,7 @@
           },
           "ios": {
             "deploymentTarget": "17.0",
-            "buildReactNativeFromSource": true,
-            "enableSceneSupport": true
+            "buildReactNativeFromSource": true
           }
         }
       ],

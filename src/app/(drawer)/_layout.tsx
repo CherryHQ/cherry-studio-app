@@ -1,6 +1,6 @@
 import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
 import { StyleSheet, useWindowDimensions } from 'react-native';
-import type { PanGesture } from 'react-native-gesture-handler';
+import type { LegacyPanGesture } from 'react-native-gesture-handler';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeaderProvider } from '@/frontend/appShell/header';
@@ -27,7 +27,7 @@ function renderSidebar(props: DrawerContentComponentProps) {
 // vertical fail distance scales with it so the accepted swipe angle stays the
 // same as the library default; vertical intent is already claimed earlier by
 // the message list.
-function configureDrawerGesture(gesture: PanGesture) {
+function configureDrawerGesture(gesture: LegacyPanGesture) {
   const distance = appSidebar.swipeActivationDistance;
   return gesture.activeOffsetX([-distance, distance]).failOffsetY([-distance, distance]);
 }

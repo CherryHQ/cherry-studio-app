@@ -9,7 +9,7 @@ const nativeSource = (packageName: string, file: string) =>
 // Android runtime behavior and Play Console results require separate native acceptance.
 describe('Android Material compatibility patch', () => {
   test('retains the Screens patch registration and current lockfile hash', () => {
-    const dependency = 'react-native-screens@4.26.2';
+    const dependency = 'react-native-screens@4.30.0';
     const patchPath = `patches/${dependency}.patch`;
     const hash = createHash('sha256').update(readFileSync(patchPath)).digest('hex');
     expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(`${dependency}: ${patchPath}`);
