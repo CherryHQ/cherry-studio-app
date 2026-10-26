@@ -195,6 +195,36 @@ describe('saved provider configuration writes each change', () => {
     expect(mockSave).not.toHaveBeenCalled();
   });
 
+  it('restores the saved order after a rejected reorder without losing key metadata', async () => {
+    mockApiKeys = [
+      { id: 'a', isEnabled: true, key: 'sk-a', label: 'Work' },
+      { id: 'b', isEnabled: false, key: 'sk-b', label: 'Personal' },
+    ];
+    act(() => renderer.update(<Probe />));
+    let rejectSave!: (error: Error) => void;
+    mockSave.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject;
+        }),
+    );
+    let pending!: Promise<boolean>;
+    await act(async () => {
+      pending = actions().reorderApiKeys([mockApiKeys[1], mockApiKeys[0]]);
+    });
+    expect(configuration.value?.apiKeys?.map((entry) => entry.id)).toEqual(['b', 'a']);
+    expect(configuration.value?.isBusy).toBe(true);
+    expect(mockSave).toHaveBeenCalledWith({ apiKeys: [mockApiKeys[1], mockApiKeys[0]] });
+
+    await act(async () => {
+      rejectSave(new Error('write failed'));
+      expect(await pending).toBe(false);
+    });
+    expect(configuration.value?.apiKeys).toEqual(mockApiKeys);
+    expect(configuration.value?.isBusy).toBe(false);
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'danger' }));
+  });
+
   it('reports a failed write and resolves false', async () => {
     mockSave.mockRejectedValue(new Error('write failed'));
     let saved = true;

@@ -20,6 +20,7 @@ export type ProviderAddress =
 export type ProviderConfigurationActions = {
   addApiKey: (entry: ApiKeyEntry) => Promise<boolean>;
   removeApiKey: (id: string) => Promise<boolean>;
+  reorderApiKeys: (apiKeys: ApiKeyEntry[]) => Promise<boolean>;
   rename: (name: string) => Promise<boolean>;
   setAvatar: (uri: string | null) => Promise<boolean>;
   setBaseUrl: (baseUrl: string) => Promise<boolean>;

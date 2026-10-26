@@ -1,8 +1,15 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { Button, Input, Section, Switch } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  Button,
+  Input,
+  ReorderList,
+  Section,
+  Switch,
+} from '@cherrystudio/ui/components';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
@@ -11,6 +18,7 @@ import {
   API_KEY_ERROR_LABELS,
   createApiKeyEntry,
   getApiKeyValidationError,
+  getProviderApiKeyLabel,
   maskProviderApiKey,
 } from '../../../apiService/utils/providerApiServiceApiKeys';
 import { useProviderApiKeySheet } from '../hooks/useProviderApiKeySheet';
@@ -30,34 +38,51 @@ export function ProviderApiKeysSection({
 }) {
   const { t } = useTranslation();
   const sheet = useProviderApiKeySheet(apiKeys, value.actions);
+  const [isReordering, setIsReordering] = useState(false);
   const enabledCount = apiKeys.filter((entry) => entry.isEnabled).length;
+  const unnamedLabel = t('settings.provider.apiService.keys.rowTitle');
 
   return (
     <>
       <Section
         footer={
           apiKeys.length > 0
-            ? t('settings.provider.apiService.keys.summary', {
-                enabled: enabledCount,
-                total: apiKeys.length,
-              })
+            ? t(
+                apiKeys.length > 1
+                  ? 'settings.provider.apiService.keys.rotationSummary'
+                  : 'settings.provider.apiService.keys.summary',
+                { enabled: enabledCount, total: apiKeys.length },
+              )
             : undefined
         }
-        title={t('settings.provider.apiService.keys.title')}
       >
+        <Section.Header title={t('settings.provider.apiService.keys.title')}>
+          {apiKeys.length > 1 ? (
+            <Button
+              disabled={value.isBusy}
+              onPress={() => setIsReordering(true)}
+              size="sm"
+              testID="provider-api-key-reorder"
+              variant="ghost"
+            >
+              {t('common.reorder')}
+            </Button>
+          ) : null}
+        </Section.Header>
         {apiKeys.length === 0 ? (
           <Section.Item>
             <FirstApiKeyField disabled={value.isBusy} onAdd={value.actions.addApiKey} />
           </Section.Item>
         ) : null}
-        {apiKeys.map((entry, index) => {
-          const name =
-            entry.label?.trim() ||
-            t('settings.provider.apiService.keys.rowTitle', { index: index + 1 });
+        {apiKeys.map((entry) => {
+          const name = getProviderApiKeyLabel(entry, unnamedLabel);
           const error = getApiKeyValidationError(entry, apiKeys);
           return (
             <Section.Item
-              accessibilityLabel={name}
+              accessibilityLabel={t('settings.provider.apiService.keys.accessibleLabel', {
+                name,
+                key: maskProviderApiKey(entry.key),
+              })}
               description={
                 <Text
                   className={
@@ -67,6 +92,7 @@ export function ProviderApiKeysSection({
                   {error ? t(API_KEY_ERROR_LABELS[error]) : maskProviderApiKey(entry.key)}
                 </Text>
               }
+              disabled={value.isBusy}
               key={entry.id}
               label={name}
               onPress={() => sheet.startEdit(entry)}
@@ -111,6 +137,55 @@ export function ProviderApiKeysSection({
           />
         ) : null}
       </Section>
+      <BottomSheet
+        footer={<Button onPress={() => setIsReordering(false)}>{t('common.done')}</Button>}
+        onClose={() => setIsReordering(false)}
+        open={isReordering}
+        size="medium"
+        testID="provider-api-key-order"
+        title={t('settings.provider.apiService.keys.orderTitle')}
+      >
+        <ScrollView contentContainerClassName="gap-2 pt-2" showsVerticalScrollIndicator={false}>
+          <Text className="px-4 text-muted-foreground text-sm">
+            {t('settings.provider.apiService.keys.rotationHelp')}
+          </Text>
+          <ReorderList
+            disabled={value.isBusy}
+            renderItemDescription={(entry) => (
+              <View className="gap-1">
+                <Text className="font-mono text-muted-foreground text-sm">
+                  {maskProviderApiKey(entry.key)}
+                </Text>
+                {!entry.isEnabled ? (
+                  <Text className="text-muted-foreground text-sm">
+                    {t('settings.provider.apiService.keys.disabled')}
+                  </Text>
+                ) : null}
+              </View>
+            )}
+            getItemKey={(entry) => entry.id}
+            getItemLabel={(entry) => getProviderApiKeyLabel(entry, unnamedLabel)}
+            items={apiKeys}
+            labels={{
+              moveDown: (entry) =>
+                t('common.moveDown', {
+                  name: t('settings.provider.apiService.keys.accessibleLabel', {
+                    name: getProviderApiKeyLabel(entry, unnamedLabel),
+                    key: maskProviderApiKey(entry.key),
+                  }),
+                }),
+              moveUp: (entry) =>
+                t('common.moveUp', {
+                  name: t('settings.provider.apiService.keys.accessibleLabel', {
+                    name: getProviderApiKeyLabel(entry, unnamedLabel),
+                    key: maskProviderApiKey(entry.key),
+                  }),
+                }),
+            }}
+            onReorder={(next) => void value.actions.reorderApiKeys(next)}
+          />
+        </ScrollView>
+      </BottomSheet>
       <ProviderApiKeySheet
         disabled={value.isBusy}
         error={sheet.error}

@@ -66,6 +66,7 @@ export function useSavedProviderConfiguration(providerId: string) {
   const [isAccountBusy, setIsAccountBusy] = useState(false);
   // Keys the user just changed, shown until the saved list catches up so a switch never flickers.
   const [optimisticApiKeys, setOptimisticApiKeys] = useState<ApiKeyEntry[] | null>(null);
+  const savingApiKeys = useRef(false);
   const savedApiKeys = queries.apiKeys;
   const apiKeys = optimisticApiKeys ?? savedApiKeys ?? [];
   const isLoading =
@@ -106,13 +107,17 @@ export function useSavedProviderConfiguration(providerId: string) {
   }
 
   async function saveApiKeys(next: ApiKeyEntry[]): Promise<boolean> {
-    if (next.some((entry) => getApiKeyValidationError(entry, next))) return false;
+    if (savingApiKeys.current || next.some((entry) => getApiKeyValidationError(entry, next))) {
+      return false;
+    }
+    savingApiKeys.current = true;
     const normalized = normalizeApiKeyEntries(next);
     setOptimisticApiKeys(normalized);
     try {
       return await save({ apiKeys: normalized });
     } finally {
       setOptimisticApiKeys(null);
+      savingApiKeys.current = false;
     }
   }
 
@@ -241,6 +246,7 @@ export function useSavedProviderConfiguration(providerId: string) {
         actions: {
           addApiKey: (entry) => saveApiKeys([...apiKeys, entry]),
           removeApiKey: (id) => saveApiKeys(apiKeys.filter((entry) => entry.id !== id)),
+          reorderApiKeys: (next) => saveApiKeys(next),
           rename: async (name) => {
             const trimmed = name.trim();
             if (!trimmed || trimmed === provider.name) return Boolean(trimmed);
@@ -317,7 +323,7 @@ export function useSavedProviderConfiguration(providerId: string) {
             : undefined;
 
   return {
-    canContinue: Boolean(value) && !isLoading && !isError && continueHint === undefined,
+    canContinue: Boolean(provider) && !isLoading && !isError && continueHint === undefined,
     continueHint,
     isError,
     isLoading,

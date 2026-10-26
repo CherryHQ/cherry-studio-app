@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { eq } from 'drizzle-orm';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
@@ -22,7 +23,10 @@ describe('custom provider model endpoint integrity', () => {
   beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     db = createTestDb(sqlite);
+    const cacheService = new CacheService(createInMemoryBackendCacheStorage());
+    await cacheService._doInit();
     await installTestHost({
+      CacheService: cacheService,
       DbService: db.dbService,
       PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
     });

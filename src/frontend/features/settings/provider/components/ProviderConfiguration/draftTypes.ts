@@ -9,6 +9,7 @@ export type ProviderDraftActions = {
   addApiKey: (entry: ApiKeyEntry) => void;
   updateApiKey: (id: string, updates: Partial<Omit<ApiKeyEntry, 'id'>>) => void;
   removeApiKey: (id: string) => void;
+  reorderApiKeys: (apiKeys: ApiKeyEntry[]) => void;
   setAvatarUri: (uri: string | null) => void;
   setDefaultChatEndpoint: (endpoint: EndpointType) => void;
   replaceTextEndpoint: (endpoint: EndpointType) => void;

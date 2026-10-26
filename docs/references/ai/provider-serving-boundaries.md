@@ -97,6 +97,10 @@ instructions and source text, without creating a conversation or exposing tools.
 completion is required before saving a translation or summary title; cancellation, provider failures,
 and invocation usage remain part of the text-generation contract.
 
+`ProviderService` rotates enabled keys in their saved array order. Changing key membership or order
+through provider updates resets the cursor after persistence succeeds; label-only edits and probe
+overrides leave it unchanged. Already materialized credentials remain with their active request.
+
 Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. When a
 request fails before substantive content or a tool-call event is emitted, Pi tries every other
 enabled key at most once within the request's shared 30-minute waiting budget, in cyclic order

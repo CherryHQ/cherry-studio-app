@@ -69,4 +69,29 @@ describe('new provider creation', () => {
     });
     expect(configuration.isCreating).toBe(false);
   });
+
+  it('creates a provider with its draft key order and original labels and enabled states', async () => {
+    await fillDraft();
+    await act(async () => {
+      await configuration.value.actions.addApiKey({
+        id: 'backup',
+        isEnabled: false,
+        key: 'sk-backup',
+        label: 'Personal',
+      });
+    });
+    const keys = configuration.value.apiKeys!;
+    await act(async () => {
+      await configuration.value.actions.reorderApiKeys([keys[1], keys[0]]);
+    });
+    expect(configuration.isDirty).toBe(true);
+    await act(async () => {
+      await configuration.create();
+    });
+    expect(mockCreateProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ apiKeys: [keys[1], keys[0]] }),
+      }),
+    );
+  });
 });

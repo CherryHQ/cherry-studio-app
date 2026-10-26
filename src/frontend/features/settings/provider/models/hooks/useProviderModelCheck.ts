@@ -17,6 +17,7 @@ type UseProviderModelCheckOptions = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   models: readonly Model[];
   providerId: string;
+  selectedApiKeyId?: string;
   selectedModelId?: string;
 };
 
@@ -32,6 +33,7 @@ export function useProviderModelCheck({
   apiKeys,
   models,
   providerId,
+  selectedApiKeyId,
   selectedModelId,
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
@@ -46,7 +48,12 @@ export function useProviderModelCheck({
     () => resolveProviderModelCheckModel(models, selectedModelId),
     [models, selectedModelId],
   );
-  const selectedApiKey = useMemo(() => apiKeys?.find((apiKey) => apiKey.isEnabled), [apiKeys]);
+  const selectedApiKey = useMemo(
+    () =>
+      apiKeys?.find((apiKey) => apiKey.id === selectedApiKeyId && apiKey.isEnabled) ??
+      apiKeys?.find((apiKey) => apiKey.isEnabled),
+    [apiKeys, selectedApiKeyId],
+  );
   const selectionKey = createProviderModelCheckSelectionKey({ selectedApiKey, selectedModel });
   const isChecking = checkState.providerId === providerId && checkState.isChecking;
   // A result belongs to the model and key it ran with. Changing either means
