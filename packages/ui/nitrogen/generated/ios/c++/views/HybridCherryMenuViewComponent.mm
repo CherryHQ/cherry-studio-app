@@ -50,6 +50,7 @@ using namespace margelo::nitro::cherrystudio::ui::views;
 
 - (instancetype) init {
   if (self = [super init]) {
+    _props = HybridCherryMenuViewShadowNode::defaultSharedProps();
     std::shared_ptr<HybridCherryMenuViewSpec> hybridView = CherryStudioUI::CherryStudioUIAutolinking::createCherryMenuView();
     _hybridView = std::dynamic_pointer_cast<HybridCherryMenuViewSpecSwift>(hybridView);
     [self updateView];

@@ -50,6 +50,7 @@ using namespace margelo::nitro::cherrystudio::ui::views;
 
 - (instancetype) init {
   if (self = [super init]) {
+    _props = HybridCherryBackgroundPressViewShadowNode::defaultSharedProps();
     std::shared_ptr<HybridCherryBackgroundPressViewSpec> hybridView = CherryStudioUI::CherryStudioUIAutolinking::createCherryBackgroundPressView();
     _hybridView = std::dynamic_pointer_cast<HybridCherryBackgroundPressViewSpecSwift>(hybridView);
     [self updateView];

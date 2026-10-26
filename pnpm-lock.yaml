@@ -149,6 +149,7 @@ patchedDependencies:
   expo-widgets@58.0.23: f984ac56cb512521721df5c8e1813225e4c8236e21c39002a99bf486dac3a810
   metro-runtime@0.87.1: 10abafc23b3b3af2c75c76928beef85aa5d423e613b2cd215c8797bc17ed0689
   metro@0.87.1: 6d548bc1d09f7051d99fc34ed0f6c637e136cc48ed7ba78e60e0f0f693f00d8a
+  nitrogen@0.36.4: 726c542231c318e0436836729e464a13bbfbbd4215340f589af09ea40eef42be
   ollama-ai-provider-v2@3.3.1: 4cb5921e69158814eeeed8d71c80621bd261f33d769b6afabba0db40931155eb
   react-native-anydoc@0.4.1: 2cfc6ca60d6e0a51a169135e3ea1cd8d43ec9be6b773248ccc443ea9ee364b36
   react-native-background-actions@4.1.0: 6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970
@@ -954,7 +955,7 @@ importers:
     devDependencies:
       nitrogen:
         specifier: 0.36.4
-        version: 0.36.4(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+        version: 0.36.4(patch_hash=726c542231c318e0436836729e464a13bbfbbd4215340f589af09ea40eef42be)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
 
   packages/universal:
     dependencies:
@@ -18824,7 +18825,7 @@ snapshots:
 
   netmask@2.1.1: {}
 
-  nitrogen@0.36.4(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
+  nitrogen@0.36.4(patch_hash=726c542231c318e0436836729e464a13bbfbbd4215340f589af09ea40eef42be)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
     dependencies:
       chalk: 5.6.2
       react-native-nitro-modules: 0.36.4(patch_hash=1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)

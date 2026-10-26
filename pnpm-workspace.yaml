@@ -97,6 +97,7 @@ patchedDependencies:
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
+  nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
 
 minimumReleaseAgeExclude:
   # Pi 1.4.0 is upgraded as one release, including its internal dependencies.
