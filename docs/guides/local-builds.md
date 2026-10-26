@@ -372,6 +372,11 @@ Babel. Keep those settings when updating Hermes. Worklets 0.13.0 is the range Re
 supports; removing the experimental mode requires a separate change to streaming Markdown
 processing.
 
+The Uniwind 1.6.5 patch also forwards React Native's `AssetRegistry` through its native styling
+entry. Expo Asset 58 resolves bundled resources through that public export; without it, Office
+preview fails before loading its HTML page. Keep the forwarding until Uniwind includes it upstream.
+`scripts/__tests__/uniwindAssetRegistry.test.ts` guards the installed entry and patch registration.
+
 Android builds compile `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be

@@ -162,7 +162,7 @@ patchedDependencies:
   react-native-screens@4.30.0: 48847e93400db50be49d89ff317468368d36e0d533b8de58d89930aea910bbdf
   react-native-streamdown@0.2.0: fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3
   react-native@0.88.0: d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4
-  uniwind@1.6.5: 791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb
+  uniwind@1.6.5: 213f8447857f3cff31d055e780bf91ad29321417598c5170ea882503b728f9c0
 
 importers:
 
@@ -599,7 +599,7 @@ importers:
         version: 1.0.3
       uniwind:
         specifier: ^1.6.4
-        version: 1.6.5(patch_hash=791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0)
+        version: 1.6.5(patch_hash=213f8447857f3cff31d055e780bf91ad29321417598c5170ea882503b728f9c0)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0)
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
@@ -826,7 +826,7 @@ importers:
         version: 15.16.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       uniwind:
         specifier: '*'
-        version: 1.6.5(patch_hash=791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0)
+        version: 1.6.5(patch_hash=213f8447857f3cff31d055e780bf91ad29321417598c5170ea882503b728f9c0)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0)
 
   packages/design-tokens: {}
 
@@ -951,7 +951,7 @@ importers:
         version: 0.13.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1)
       uniwind:
         specifier: '*'
-        version: 1.6.5(patch_hash=791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0)
+        version: 1.6.5(patch_hash=213f8447857f3cff31d055e780bf91ad29321417598c5170ea882503b728f9c0)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0)
     devDependencies:
       nitrogen:
         specifier: 0.36.4
@@ -20548,7 +20548,7 @@ snapshots:
   universalify@0.2.0:
     optional: true
 
-  uniwind@1.6.5(patch_hash=791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0):
+  uniwind@1.6.5(patch_hash=213f8447857f3cff31d055e780bf91ad29321417598c5170ea882503b728f9c0)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(tailwindcss@4.3.0):
     dependencies:
       '@tailwindcss/node': 4.2.1
       '@tailwindcss/oxide': 4.2.1
