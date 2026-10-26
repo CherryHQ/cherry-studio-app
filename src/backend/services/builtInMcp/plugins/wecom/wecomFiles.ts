@@ -235,7 +235,7 @@ export function saveWecomFile(bytes: Uint8Array | string, name = 'download', enc
   directory.create({ intermediates: true, idempotent: true });
   const file = new File(directory, `${randomUUID()}-${safeName}`);
   try {
-    file.write(bytes, encoding ? { encoding } : undefined);
+    file.writeSync(bytes, encoding ? { encoding } : undefined);
     return { file_path: file.uri, name: safeName, size: file.size };
   } catch {
     if (file.exists) file.delete();

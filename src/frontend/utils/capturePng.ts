@@ -40,7 +40,7 @@ export async function capturePng(
 export function readPngDimensions(uri: string) {
   const handle = new File(uri).open(FileMode.ReadOnly);
   try {
-    const bytes = handle.readBytes(24);
+    const bytes = handle.readBytesSync(24);
     const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (
       bytes.length < 24 ||

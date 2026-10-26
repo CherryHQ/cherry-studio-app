@@ -37,7 +37,7 @@ export async function* readRawLines(
   try {
     while (remaining > 0) {
       signal?.throwIfAborted();
-      const chunk = handle.readBytes(Math.min(64 * 1024, remaining));
+      const chunk = handle.readBytesSync(Math.min(64 * 1024, remaining));
       if (chunk.length === 0) throw new SourceChangedError();
       remaining -= chunk.length;
       let offset = 0;
@@ -213,7 +213,7 @@ export async function stageSourceCandidate(
       }
       if (!projected) continue;
       if (bytes + projected.data.length > candidate.eligibleBytes) throw new SourceChangedError();
-      writer.writeBytes(projected.data);
+      writer.writeBytesSync(projected.data);
       bytes += projected.data.length;
     }
     const finalIdentity = getNativeDiagnostics().identifyFile(source.uri);

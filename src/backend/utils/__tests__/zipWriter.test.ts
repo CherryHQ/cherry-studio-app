@@ -21,7 +21,7 @@ jest.mock('expo-file-system', () => {
       files.set(this.uri, new Uint8Array());
     }
 
-    write(bytes: Uint8Array) {
+    writeSync(bytes: Uint8Array) {
       files.set(this.uri, bytes);
     }
 
@@ -33,12 +33,12 @@ jest.mock('expo-file-system', () => {
       const fileUri = this.uri;
       let offset = 0;
       return {
-        readBytes(length: number) {
+        readBytesSync(length: number) {
           const bytes = files.get(fileUri)!.slice(offset, offset + length);
           offset += bytes.length;
           return bytes;
         },
-        writeBytes(bytes: Uint8Array) {
+        writeBytesSync(bytes: Uint8Array) {
           if (mode !== 'write') throw new Error('Read-only handle');
           const next = new Uint8Array(files.get(fileUri)!.length + bytes.length);
           next.set(files.get(fileUri)!);
@@ -55,7 +55,7 @@ jest.mock('expo-file-system', () => {
 let fileNumber = 0;
 function source(bytes: Uint8Array) {
   const file = new File(`file:///source-${++fileNumber}`);
-  file.write(bytes);
+  file.writeSync(bytes);
   return file;
 }
 const destination = () => new File(`file:///archive-${++fileNumber}.zip`);

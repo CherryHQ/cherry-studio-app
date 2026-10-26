@@ -140,7 +140,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           throw new BackupError('too-large');
         const manifestFile = archiveFile(work, 'manifest.json');
         manifestFile.create();
-        manifestFile.write(json);
+        manifestFile.writeSync(json);
         requireDiskSpace(entries.reduce((sum, entry) => sum + entry.size, 0));
         const filename = `cherry-mobile-${manifest.createdAt.replace(/[:.]/g, '-')}-${manifest.id.slice(0, 8)}.zip`;
         const output = new File(work, filename);
@@ -252,7 +252,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
         };
         const manifestFile = new File(target, 'restore-manifest.json');
         manifestFile.create();
-        manifestFile.write(JSON.stringify(validateManifest(restoredManifest)));
+        manifestFile.writeSync(JSON.stringify(validateManifest(restoredManifest)));
         await backupStorageNative().sealDirectory(target.uri);
         signal.throwIfAborted();
         // From this durable marker onwards, the live process stays read-only until a real restart.

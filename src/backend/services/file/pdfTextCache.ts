@@ -53,7 +53,7 @@ export function writePdfTextCache(file: File, result: ExtractResult): void {
     folder.create({ intermediates: true, idempotent: true });
     const data = JSON.stringify(resultSchema.parse(result));
     if (new TextEncoder().encode(data).byteLength > MAX_ENTRY_BYTES) return;
-    file.write(data);
+    file.writeSync(data);
     // Bound disk retention. No OCR results or bitmaps accumulate in a JS memory cache.
     const entries = folder
       .list()

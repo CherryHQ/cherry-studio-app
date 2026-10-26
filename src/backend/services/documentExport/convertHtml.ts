@@ -44,7 +44,7 @@ export async function convertHtml(
         signal.throwIfAborted();
         outputBytes += chunk.length;
         if (outputBytes > MAX_OUTPUT_BYTES) throw new DocumentExportError('size-limit');
-        output!.writeBytes(chunk);
+        output!.writeBytesSync(chunk);
       });
     }
     await input.capture({
@@ -79,7 +79,7 @@ export async function convertHtml(
             let remaining = image.size;
             while (remaining > 0) {
               signal.throwIfAborted();
-              const bytes = reader.readBytes(Math.min(CHUNK_BYTES, remaining));
+              const bytes = reader.readBytesSync(Math.min(CHUNK_BYTES, remaining));
               if (!bytes.length) throw new DocumentExportError('storage-failed');
               remaining -= bytes.length;
               entry.push(bytes, remaining === 0);

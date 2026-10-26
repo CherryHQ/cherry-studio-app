@@ -20,7 +20,7 @@ export function appendBytes(file: File, bytes: Uint8Array): void {
     const size = handle.size;
     if (size === null) throw new Error('Diagnostic file is not writable');
     handle.offset = size;
-    handle.writeBytes(bytes);
+    handle.writeBytesSync(bytes);
   } finally {
     handle.close();
   }
