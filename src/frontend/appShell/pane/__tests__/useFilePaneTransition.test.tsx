@@ -141,9 +141,9 @@ it('finishes an in-flight restore immediately when motion is reduced', () => {
   expect(result).toMatchObject({ hasSpace: true, isVisible: true, style: { opacity: 1 } });
 });
 
-it('keeps a shown pane over the chat while a snapshot is stale', () => {
+it('keeps a shown pane over a full-width chat while a snapshot is stale', () => {
   update({ isLayoutCurrent: false, isPresented: false });
-  expect(result).toMatchObject({ hasSpace: true, isVisible: true, style: { opacity: 1 } });
+  expect(result).toMatchObject({ hasSpace: false, isVisible: true, style: { opacity: 1 } });
   update({ isLayoutCurrent: true });
   expect(result).toMatchObject({ hasSpace: false, isVisible: false, style: { opacity: 0 } });
   expect(mockWithTiming).not.toHaveBeenCalled();

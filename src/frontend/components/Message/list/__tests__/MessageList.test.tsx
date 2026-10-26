@@ -30,6 +30,7 @@ type MockLegendListProps = {
   getItemType?: (item: MessageListItem) => string;
   initialScrollAtEnd?: boolean;
   keyboardDismissMode?: string;
+  style?: unknown;
   keyboardShouldPersistTaps?: string;
   keyboardLiftBehavior?: string;
   keyboardOffset?: number;
@@ -1247,6 +1248,8 @@ describe('MessageList scroll-controller ownership', () => {
         paddingTop: 12,
       });
       expect(mockLatestListProps?.showsVerticalScrollIndicator).toBe(false);
+      // An explicit width overrides LegendList's pinned width after a near-zero measurement.
+      expect(mockLatestListProps?.style).toEqual({ width: '100%' });
       expect(onLoadOlder).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });

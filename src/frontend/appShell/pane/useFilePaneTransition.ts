@@ -11,9 +11,9 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 /**
  * Only keyboard yielding fades. Space returns after the pane covers the full-height chat. A stale
- * snapshot keeps whatever the last current one showed: a pane cannot appear from the previous
- * screen's geometry, and a pane already on screen does not uncover the chat while a display
- * switch settles.
+ * snapshot keeps the pane as the last current one showed it, over a full-width chat: a pane cannot
+ * appear from the previous screen's geometry, and a pane already on screen does not uncover the
+ * chat while a display switch settles.
  */
 export function useFilePaneTransition(
   isRequested: boolean,
@@ -96,5 +96,11 @@ export function useFilePaneTransition(
     // Open/close and availability changes are immediate even before the effect updates opacity.
     opacity: isAnimated ? opacity.get() : isVisible ? 1 : 0,
   }));
-  return { hasSpace: isPresented && !isYielding && !transition.isRestoring, isVisible, style };
+  // Space is reserved only from a current snapshot. The previous screen's split can be wider than
+  // the new window, and a chat squeezed by it during a display switch keeps that width natively.
+  return {
+    hasSpace: isLayoutCurrent && isPresented && !isYielding && !transition.isRestoring,
+    isVisible,
+    style,
+  };
 }
