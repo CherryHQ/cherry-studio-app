@@ -430,7 +430,7 @@ describe('MorphMenu', () => {
     const panel = renderer!.root.find(
       (node) => node.props.testID === 'menu-panel' && typeof node.props.onLayout === 'function',
     );
-    expect(StyleSheet.flatten(panel.props.contentStyle as StyleProp<ViewStyle>).minWidth).toBe(
+    expect(StyleSheet.flatten(panel.props.contentStyle as StyleProp<ViewStyle>)?.minWidth).toBe(
       floor,
     );
     mockWindowWidth = 402;
