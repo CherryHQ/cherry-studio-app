@@ -236,17 +236,23 @@ describe('DesktopConnectionRuntime', () => {
   });
 
   it('rejects a missing re-pair target before contacting the desktop or creating a record', async () => {
-    store.getRow.mockRejectedValueOnce(DataApiErrorFactory.notFound('DesktopConnection', id));
+    const failure = DataApiErrorFactory.notFound('DesktopConnection', id);
+    store.getRow.mockRejectedValueOnce(failure);
     const report = jest.fn();
     const removeReporter = loggerService.setErrorReporter(report);
     try {
       await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
         code: ErrorCode.NOT_FOUND,
-        details: { reason: 'connection-not-found', stage: 'load-existing' },
+        details: { reason: 'connection-not-found' },
       });
       expect(connect).not.toHaveBeenCalled();
       expect(store.savePair).not.toHaveBeenCalled();
-      expect(report).not.toHaveBeenCalled();
+      // The stale ID's origin is unknown, so the classified failure is still reported once.
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(report).toHaveBeenCalledWith(failure, {
+        module: 'DesktopConnection',
+        operation: 'desktop.pair.load-existing',
+      });
     } finally {
       removeReporter();
     }
@@ -257,80 +263,6 @@ describe('DesktopConnectionRuntime', () => {
     store.getRow.mockRejectedValueOnce(failure);
     await expect(runtime.pair(pairing, signal())).rejects.toBe(failure);
     expect(connect).not.toHaveBeenCalled();
-  });
-
-  it.each(['save-existing', 'sync-endpoints', 'read-result'] as const)(
-    'retains the %s stage when an authenticated connection disappears',
-    async (stage) => {
-      const failure = DataApiErrorFactory.notFound('DesktopConnection', id);
-      const session = createSession({
-        'connection.authenticate': () => ({ authorization: { grants } }),
-      });
-      connect.mockResolvedValueOnce(session as never);
-      if (stage === 'save-existing') {
-        store.updateStatus.mockRejectedValueOnce(failure);
-        store.getRow.mockResolvedValueOnce(row).mockRejectedValueOnce(failure);
-      } else if (stage === 'sync-endpoints')
-        store.getRow.mockResolvedValueOnce(row).mockRejectedValueOnce(failure);
-      else store.getById.mockRejectedValueOnce(failure);
-      const report = jest.fn();
-      const removeReporter = loggerService.setErrorReporter(report);
-      try {
-        await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
-          code: ErrorCode.NOT_FOUND,
-          details: { reason: 'connection-not-found', stage },
-        });
-        expect(session.close).toHaveBeenCalledTimes(1);
-        expect(store.savePair).not.toHaveBeenCalled();
-        expect(report).toHaveBeenCalledTimes(1);
-        expect(report).toHaveBeenCalledWith(failure, {
-          module: 'DesktopConnection',
-          operation: `desktop.pair.${stage}`,
-        });
-      } finally {
-        removeReporter();
-      }
-    },
-  );
-
-  it('keeps a connection that still exists after an optimistic update loses its comparison', async () => {
-    const session = createSession({
-      'connection.authenticate': () => ({ authorization: { grants } }),
-    });
-    connect.mockResolvedValueOnce(session as never);
-    store.updateStatus.mockRejectedValueOnce(DataApiErrorFactory.notFound('DesktopConnection', id));
-
-    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
-      code: ErrorCode.INVALID_OPERATION,
-      details: { reason: 'auth-revoked', stage: 'save-existing' },
-    });
-    expect(store.getRow).toHaveBeenCalledTimes(2);
-    expect(store.savePair).not.toHaveBeenCalled();
-    expect(session.close).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not recreate a re-pair target removed before saving an approved claim', async () => {
-    const session = createSession({
-      'pairing.claim': () => ({ claimId: 'claim', verificationCode: '123456', expiresAt: 'later' }),
-      'pairing.get': () => ({
-        status: 'approved',
-        deviceId: row.deviceId,
-        authorization: { grants },
-      }),
-    });
-    connect.mockResolvedValueOnce(session as never);
-    store.savePair.mockRejectedValueOnce(DataApiErrorFactory.notFound('DesktopConnection', id));
-
-    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
-      details: { reason: 'connection-not-found', stage: 'save-pair' },
-    });
-    expect(store.savePair).toHaveBeenCalledTimes(1);
-    expect(store.savePair).toHaveBeenCalledWith(
-      expect.objectContaining({ id }),
-      true,
-      expect.anything(),
-    );
-    expect(session.close).toHaveBeenCalledTimes(1);
   });
 
   it.each([undefined, id])(

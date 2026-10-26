@@ -12,12 +12,9 @@ import { DesktopPairingProvider, useDesktopPairingInput } from '../DesktopPairin
 import { pairingCancelDestination } from '../pairingCancelDestination';
 import { useDesktopPairing } from '../useDesktopPairing';
 
-let mockFocusEffect: EffectCallback;
-
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: EffectCallback) => {
     const { useEffect } = jest.requireActual('react');
-    mockFocusEffect = effect;
     useEffect(effect, [effect]);
   },
 }));
@@ -132,13 +129,6 @@ describe('desktop pairing workflow', () => {
     );
     expect(pairingCancelDestination('chat', latest.repairConnectionId)).toBe('/onboarding');
     expect(latest.connection).toBeUndefined();
-    expect(pair).toHaveBeenCalledTimes(1);
-    // A focus change must not restart the same stale invitation or create a new pairing implicitly.
-    await act(async () => {
-      mockFocusEffect();
-    });
-    expect(pair).toHaveBeenCalledTimes(1);
-    expect(latest.error).toBeDefined();
   });
 
   it('keeps the re-pair context for failures that do not identify a missing connection', async () => {

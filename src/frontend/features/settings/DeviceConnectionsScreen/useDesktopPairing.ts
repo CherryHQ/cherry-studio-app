@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
 import type { DesktopPairingProgress } from '@/shared/contracts';
@@ -15,11 +15,10 @@ export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
   const [progress, setProgress] = useState<DesktopPairingProgress[]>([]);
   const [connection, setConnection] = useState<DesktopConnection>();
   const [error, setError] = useState<unknown>();
-  const invalidInput = useRef<PairDesktopConnectionDto | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      if (!input || invalidInput.current === input) return;
+      if (!input) return;
       const controller = new AbortController();
       setProgress([]);
       setConnection(undefined);
@@ -31,10 +30,7 @@ export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
           });
           if (!controller.signal.aborted) setConnection(result);
         } catch (failure) {
-          if (!controller.signal.aborted) {
-            if (isMissingPairingConnection(failure)) invalidInput.current = input;
-            setError(failure);
-          }
+          if (!controller.signal.aborted) setError(failure);
         } finally {
           await queryClient.invalidateQueries({
             predicate: ({ queryKey }) =>

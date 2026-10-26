@@ -45,15 +45,26 @@ const EXCLUDED_PROVIDER_IDS = new Set(['cherryai', 'local-embedding']);
 const CLAIM_POLL_MS = 2_000;
 const EXPORT_PAGE_BYTES = 24_576;
 const logger = loggerService.withContext('DesktopConnection');
-type PairingStorageStage =
-  | 'load-existing'
-  | 'save-existing'
-  | 'save-pair'
-  | 'sync-endpoints'
-  | 'read-result';
 
 export function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
+}
+
+// A deleted re-pair target can only be paired from scratch. How a stale ID reaches pairing is
+// still unknown, so the failure stays reported.
+function missingRepairTarget(error: unknown): unknown {
+  if (
+    !(error instanceof DataApiError) ||
+    error.code !== ErrorCode.NOT_FOUND ||
+    error.details?.resource !== 'DesktopConnection'
+  )
+    return error;
+  logger.error('Desktop connection re-pair target is missing', error, {
+    operation: 'desktop.pair.load-existing',
+  });
+  return new DataApiError(ErrorCode.NOT_FOUND, 'The pairing connection no longer exists', {
+    reason: 'connection-not-found',
+  });
 }
 
 const toHex = (bytes: Uint8Array) =>
@@ -108,8 +119,8 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' as const }));
       const id = qr.connectionId ?? Crypto.randomUUID();
       const existing = qr.connectionId
-        ? await store.getRow(id).catch(async (error: unknown) => {
-            throw await this.pairingStorageError(error, 'load-existing', store, id);
+        ? await store.getRow(id).catch((error: unknown) => {
+            throw missingRepairTarget(error);
           })
         : undefined;
       if (existing && existing.desktopIdentity !== qr.desktopIdentity)
@@ -121,7 +132,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       ).catch((error: unknown) => {
         throw translate(error);
       });
-      let storageStage: PairingStorageStage = 'save-existing';
       try {
         if (existing) {
           const authorization = await session
@@ -143,11 +153,9 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
             this.connections!.invalidate(id);
             this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
-            storageStage = 'sync-endpoints';
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             signal.throwIfAborted();
-            storageStage = 'read-result';
-            return await store.getById(id);
+            return store.getById(id);
           }
           await store.updateStatus(id, { status: 'needs-repair' }, signal, existing);
           this.connections!.invalidate(id);
@@ -172,7 +180,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           const decision = await session.request('pairing.get', { claimId: claim.claimId }, signal);
           if (decision.status === 'approved') {
             onProgress?.({ stage: 'saving' });
-            storageStage = 'save-pair';
             const connection = await store.savePair(
               {
                 desktopIdentity: qr.desktopIdentity,
@@ -187,7 +194,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
             this.connections!.invalidate(id);
             this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
-            storageStage = 'sync-endpoints';
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             return connection;
           }
@@ -203,7 +209,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           await sleep(CLAIM_POLL_MS, signal);
         }
       } catch (error) {
-        throw translate(await this.pairingStorageError(error, storageStage, store, id));
+        throw translate(error);
       } finally {
         session.close();
       }
@@ -333,50 +339,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     if (error instanceof DataApiError && typeof error.details?.reason === 'string') return;
     logger.error(`Desktop connection ${operation} failed`, error, {
       operation: `desktop.${operation}`,
-    });
-  }
-
-  private async pairingStorageError(
-    error: unknown,
-    stage: PairingStorageStage,
-    store: ConnectionStore,
-    id: string,
-  ): Promise<unknown> {
-    if (
-      !(error instanceof DataApiError) ||
-      error.code !== ErrorCode.NOT_FOUND ||
-      error.details?.resource !== 'DesktopConnection'
-    )
-      return error;
-
-    // An already missing re-pair target is recoverable. A disappearance after pairing
-    // starts still needs investigation; use a fixed operation so reporting retains the stage.
-    if (stage !== 'load-existing') {
-      logger.error('Desktop connection lookup or update failed during pairing', error, {
-        operation: `desktop.pair.${stage}`,
-      });
-    }
-    if (stage === 'save-existing') {
-      // updateStatus also returns NOT_FOUND when its identity/grant comparison no
-      // longer matches. Keep the repair target unless a fresh read confirms its loss.
-      try {
-        await store.getRow(id);
-        return new DataApiError(ErrorCode.INVALID_OPERATION, 'Pairing changed while saving', {
-          reason: 'auth-revoked',
-          stage,
-        });
-      } catch (readError) {
-        if (
-          !(readError instanceof DataApiError) ||
-          readError.code !== ErrorCode.NOT_FOUND ||
-          readError.details?.resource !== 'DesktopConnection'
-        )
-          throw readError;
-      }
-    }
-    return new DataApiError(ErrorCode.NOT_FOUND, 'The pairing connection no longer exists', {
-      reason: 'connection-not-found',
-      stage,
     });
   }
 
