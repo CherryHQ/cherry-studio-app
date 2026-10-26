@@ -4,7 +4,6 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useDrawerStatus } from 'expo-router/drawer';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -31,6 +30,7 @@ import {
   type RemoteChatRouteParams,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
+import { useSidebarPresence } from '@/frontend/appShell/sidebar';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -137,7 +137,7 @@ function RemoteHeader({
 }
 const ignorePending = () => {};
 function RemoteChatSession() {
-  const drawerStatus = useDrawerStatus();
+  const sidebarPresence = useSidebarPresence();
   const source = useRemoteConversationSource();
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
@@ -156,7 +156,7 @@ function RemoteChatSession() {
     connectionId && target.sessionId
       ? { kind: 'remote-chat', connectionId, sessionId: target.sessionId }
       : undefined,
-    drawerStatus !== 'open',
+    sidebarPresence !== 'open',
   );
   const snapshot = useConversationSnapshot(opened.session);
   const history = useConversationHistory(opened.session, snapshot.historyVersion);

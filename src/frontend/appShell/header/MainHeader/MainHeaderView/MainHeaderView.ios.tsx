@@ -54,12 +54,15 @@ export function MainHeaderView({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.View>
-          <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
-            <HeaderAction action={leadingAction} />
-          </View>
-        </Stack.Toolbar.View>
-        <Stack.Toolbar.Spacer hidden={!agent} width={4} />
+        {/* A permanent sidebar has no button that opens it. */}
+        {leadingAction ? (
+          <Stack.Toolbar.View>
+            <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
+              <HeaderAction action={leadingAction} />
+            </View>
+          </Stack.Toolbar.View>
+        ) : null}
+        <Stack.Toolbar.Spacer hidden={!leadingAction || !agent} width={4} />
         {agent ? (
           <Stack.Toolbar.View>
             <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>

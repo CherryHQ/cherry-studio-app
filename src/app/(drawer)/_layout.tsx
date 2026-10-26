@@ -4,7 +4,11 @@ import type { PanGesture } from 'react-native-gesture-handler';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeaderProvider } from '@/frontend/appShell/header';
-import { ChatDockLayoutProvider } from '@/frontend/appShell/layout';
+import {
+  ChatDockLayoutProvider,
+  useIsSidebarPersistent,
+  windowRegionWidths,
+} from '@/frontend/appShell/layout';
 import { ChatSourceProvider } from '@/frontend/appShell/navigation/chat';
 import { Sidebar } from '@/frontend/appShell/sidebar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -30,6 +34,7 @@ function configureDrawerGesture(gesture: PanGesture) {
 export default function DrawerLayout() {
   const { width } = useWindowDimensions();
   const { theme } = useUniwind();
+  const isPersistent = useIsSidebarPersistent();
   const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
     'background',
     'sidebar',
@@ -45,18 +50,21 @@ export default function DrawerLayout() {
             drawerContent={renderSidebar}
             screenOptions={{
               configureGestureHandler: configureDrawerGesture,
-              // The sidebar stops short of the right edge so a dimmed strip of chat
-              // stays visible: it tells the user where they came from and closes the
-              // drawer on tap.
+              // An overlay stops short of the right edge so a dimmed strip of chat stays
+              // visible: it tells the user where they came from and closes the drawer on
+              // tap. A permanent sidebar is a column of its own, separated by a hairline.
               drawerStyle: {
                 backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
                 borderEndColor: sidebarBorderColor,
-                borderEndWidth: theme === 'dark' ? StyleSheet.hairlineWidth : 0,
-                width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+                borderEndWidth: isPersistent || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
+                width: isPersistent
+                  ? windowRegionWidths.sidebar
+                  : Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
               },
-              // The chat surface is stable context; the sidebar is a temporary
-              // surface that slides over it as the only moving plane.
-              drawerType: 'front',
+              // The chat surface is stable context. In narrower windows the sidebar is
+              // a temporary surface sliding over it; expanded windows keep it beside the
+              // chat. Switching keeps the same chat tree mounted.
+              drawerType: isPersistent ? 'permanent' : 'front',
               headerShown: false,
               // Dim the exposed scene while preserving the drawer's native progress
               // animation and tap-to-close interaction.
@@ -72,6 +80,7 @@ export default function DrawerLayout() {
               // Only chat belongs to this navigator, so the full-width gesture can
               // never expose the sidebar over another product screen.
               swipeEdgeWidth: width,
+              swipeEnabled: !isPersistent,
             }}
           >
             <Drawer.Screen name="(chat)" />
