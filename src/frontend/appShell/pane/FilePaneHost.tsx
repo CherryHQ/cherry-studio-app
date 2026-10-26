@@ -1,4 +1,5 @@
 import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
+import Maximize2Icon from '@cherrystudio/app-icons/icons/maximize-2';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,11 +24,19 @@ type FilePaneContent = {
 /** Lays the file pane out beside the chat stack whenever the drawer group provides one. */
 export function FilePaneHost({ children, ...content }: FilePaneContent & { children: ReactNode }) {
   const pane = useFilePane();
+  // An expanded preview covers the chat; only assistive technologies need to be told.
+  const isChatCovered = Boolean(pane?.isAvailable && pane.isOpen && pane.file && pane.isExpanded);
 
   return (
     <View className="flex-1 flex-row">
       {pane ? <FilePaneColumn pane={pane} {...content} /> : null}
-      <View className="flex-1">{children}</View>
+      <View
+        accessibilityElementsHidden={isChatCovered}
+        className="flex-1"
+        importantForAccessibility={isChatCovered ? 'no-hide-descendants' : 'auto'}
+      >
+        {children}
+      </View>
     </View>
   );
 }
@@ -41,7 +50,7 @@ function FilePaneColumn({ library, pane, renderFile }: FilePaneContent & { pane:
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isSidebarPersistent = useIsSidebarPersistent();
-  const { close, closeFile, file } = pane;
+  const { close, closeFile, file, isExpanded, setExpanded } = pane;
   const isVisible = pane.isAvailable && pane.isOpen;
   const [isMounted, setIsMounted] = useState(isVisible);
   if (isVisible && !isMounted) setIsMounted(true);
@@ -71,16 +80,38 @@ function FilePaneColumn({ library, pane, renderFile }: FilePaneContent & { pane:
     [closeFile, t],
   );
 
-  // Android back leaves the preview first, then the pane.
+  const readingAction = useMemo<HeaderToolbarAction>(
+    () =>
+      isExpanded
+        ? {
+            key: 'file-pane-return',
+            label: t('filePane.returnToChat'),
+            onPress: () => setExpanded(false),
+            testID: 'file-pane-return',
+            type: 'label',
+          }
+        : {
+            accessibilityLabel: t('filePane.expand'),
+            icon: Maximize2Icon,
+            key: 'file-pane-expand',
+            onPress: () => setExpanded(true),
+            testID: 'file-pane-expand',
+            type: 'icon',
+          },
+    [isExpanded, setExpanded, t],
+  );
+
+  // Android back returns an expanded preview beside the chat, then leaves the preview, then the pane.
   useEffect(() => {
     if (!isVisible) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (file) closeFile();
+      if (file && isExpanded) setExpanded(false);
+      else if (file) closeFile();
       else close();
       return true;
     });
     return () => subscription.remove();
-  }, [close, closeFile, file, isVisible]);
+  }, [close, closeFile, file, isExpanded, isVisible, setExpanded]);
 
   if (!isMounted) return null;
 
@@ -95,7 +126,8 @@ function FilePaneColumn({ library, pane, renderFile }: FilePaneContent & { pane:
         importantForAccessibility={isVisible ? 'auto' : 'no-hide-descendants'}
         style={[
           styles.pane,
-          { paddingTop: insets.top, width: paneWidth },
+          { paddingTop: insets.top },
+          file && isExpanded ? styles.expanded : { width: paneWidth },
           !isVisible && styles.hidden,
         ]}
         testID="file-pane"
@@ -106,7 +138,9 @@ function FilePaneColumn({ library, pane, renderFile }: FilePaneContent & { pane:
             className="bg-background"
             style={[StyleSheet.absoluteFill, { paddingTop: insets.top }]}
           >
-            <PaneChromeProvider leadingAction={backAction}>{renderFile(file)}</PaneChromeProvider>
+            <PaneChromeProvider headerAction={readingAction} leadingAction={backAction}>
+              {renderFile(file)}
+            </PaneChromeProvider>
           </View>
         ) : null}
       </View>
@@ -115,6 +149,8 @@ function FilePaneColumn({ library, pane, renderFile }: FilePaneContent & { pane:
 }
 
 const styles = StyleSheet.create({
+  // Covers the chat, which keeps its width, draft, and scroll position underneath.
+  expanded: { borderEndWidth: 0, end: 0, zIndex: 1 },
   hidden: { opacity: 0, pointerEvents: 'none' },
   pane: {
     borderEndWidth: StyleSheet.hairlineWidth,

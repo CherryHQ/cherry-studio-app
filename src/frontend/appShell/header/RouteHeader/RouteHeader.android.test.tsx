@@ -188,6 +188,26 @@ describe('RouteHeader.android', () => {
     expect(folderUp).toHaveBeenCalledTimes(1);
   });
 
+  it('places the pane control before the page actions', async () => {
+    const paneExit = {
+      key: 'pane-exit',
+      label: 'Back',
+      onPress: jest.fn(),
+      type: 'label' as const,
+    };
+    const expand = { key: 'expand', label: 'Expand', onPress: jest.fn(), type: 'label' as const };
+    const share = { key: 'share', label: 'Share', onPress: jest.fn(), type: 'label' as const };
+
+    await renderRouteHeader(
+      <PaneChromeProvider headerAction={expand} leadingAction={paneExit}>
+        <RouteHeader rightActions={[share]} title="Report.pdf" />
+      </PaneChromeProvider>,
+      'close',
+    );
+
+    expect(getInlineActions()).toEqual([paneExit, expand, share]);
+  });
+
   function getInlineActions() {
     return renderer!.root
       .findAllByType('HeaderAction' as never)

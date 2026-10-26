@@ -5,6 +5,7 @@ import { View } from 'react-native';
 
 import { useIsSidebarPersistent } from '@/frontend/appShell/layout';
 import {
+  chatRouteParams,
   useStartNewChat,
   useChatSource,
   parseChatRoute,
@@ -37,6 +38,11 @@ export function Sidebar({ navigation }: SidebarProps) {
     source === 'local' && chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
       ? chatRoute.target.sessionId
       : undefined;
+  // Serialized so the actions below change only when the chat does.
+  const sourceChat =
+    source === 'local' && chatRoute.status === 'ready'
+      ? JSON.stringify(chatRouteParams(chatRoute.target))
+      : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
   const isPersistent = useIsSidebarPersistent();
@@ -64,9 +70,10 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
       openLibrary: () => {
         navigation.closeDrawer();
-        // Files open beside the current chat when the window has room for both.
+        // Files open beside the current chat when the window has room for both. A library page
+        // remembers that chat, so a file can still be added to it.
         if (pane?.isAvailable) pane.open();
-        else router.push('/library');
+        else router.push({ pathname: '/library', params: sourceChat ? { sourceChat } : {} });
       },
       openPaintings: () => {
         navigation.closeDrawer();
@@ -96,6 +103,7 @@ export function Sidebar({ navigation }: SidebarProps) {
     [
       agentId,
       sessionId,
+      sourceChat,
       navigation,
       openSessionSearch,
       pane,
