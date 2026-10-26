@@ -5,6 +5,8 @@ import { useNavigationState } from 'expo-router/react-navigation';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
+
 import SidebarExpandIcon from '../../icons/SidebarExpandIcon';
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import type { RouteHeaderRootAction } from './RouteHeader.types';
@@ -23,7 +25,10 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
   const { t } = useTranslation();
   const router = useRouter();
   const openDrawer = useOpenDrawer();
-  const action = useRouteHeaderLeadingKind();
+  const pane = usePaneChrome();
+  const routeKind = useRouteHeaderLeadingKind();
+  // A pane is not a stack screen: it leads with its own exit unless the page declares a back step.
+  const action = pane ? 'back' : routeKind;
   const goBack = useCallback(() => {
     if (onBack) {
       onBack();
@@ -38,7 +43,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
     router.replace('/');
   }, [onBack, router]);
 
-  return useMemo<HeaderToolbarAction>(
+  const routeAction = useMemo<HeaderToolbarAction>(
     () =>
       action === 'drawer'
         ? {
@@ -68,4 +73,6 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
             },
     [action, goBack, openDrawer, t],
   );
+
+  return pane && !onBack ? pane.leadingAction : routeAction;
 }

@@ -9,7 +9,8 @@ logical points and at least 64 points of chat left visible. Expanded windows (se
 the chat header then drops its sidebar and new-chat buttons. Navigation state reports a permanent
 drawer as closed, so visibility comes from `useSidebarPresence`: `persistent`, `open`, or `closed`.
 Selection mode, the title marquee, and read receipts use it instead of the raw drawer status.
-Destinations and back navigation do not change.
+In medium and expanded windows, Files opens the [file pane](../pane/README.md) beside chat and
+stays selected while the pane is open; other destinations and back navigation do not change.
 
 The circular search button beside the sidebar title opens the shared `/search` page for local
 conversations. Before a query is entered, it shows the ten most recently active conversations.

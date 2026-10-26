@@ -12,6 +12,9 @@ const mockToast = jest.fn();
 const mockPrepareFileExport = jest.fn();
 let mockPathname = '/files';
 let mockParams: Record<string, string> = {};
+let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
+
+jest.mock('@/frontend/appShell/pane', () => ({ useFilePane: () => mockPane }));
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
@@ -57,6 +60,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPathname = '/files';
   mockParams = {};
+  mockPane = null;
   mockOpen.mockResolvedValue(undefined);
   mockPrepareFileExport.mockImplementation(async ({ entry, uri }) => ({
     uri,
@@ -85,6 +89,26 @@ it.each([
     params: { fileEntryId: entry.id },
   });
   expect(mockOpen).not.toHaveBeenCalled();
+});
+
+it('opens a preview beside chat when the window has a file pane', () => {
+  mockPane = { isAvailable: true, openFile: jest.fn() };
+  act(() => renderer.update(<Probe />));
+  let target: string | undefined;
+  act(() => {
+    target = actions.openFileEntry(file);
+  });
+  expect(target).toBe('pane');
+  expect(mockPane.openFile).toHaveBeenCalledWith({ entryId: entry.id });
+  expect(mockPush).not.toHaveBeenCalled();
+});
+
+it('keeps opening the viewer page when the pane has no room beside chat', () => {
+  mockPane = { isAvailable: false, openFile: jest.fn() };
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file));
+  expect(mockPane.openFile).not.toHaveBeenCalled();
+  expect(mockPush).toHaveBeenCalledTimes(1);
 });
 
 it('retains the source conversation and message destination when opening a preview', () => {
