@@ -56,24 +56,10 @@ export function ProviderConnectionTestSection({
   }, []);
   const enabledKeys = apiKeys.filter((entry) => entry.isEnabled);
   const unnamedLabel = t('settings.provider.apiService.keys.rowTitle');
-  const selectedKeyName = selectedApiKey
-    ? getProviderApiKeyLabel(selectedApiKey, unnamedLabel)
-    : undefined;
-  const selectedKeyValue = selectedApiKey ? (
-    <View className="min-w-0 shrink items-end gap-1">
-      <Text className="text-foreground text-base" numberOfLines={1}>
-        {selectedKeyName}
-      </Text>
-      <Text className="font-mono text-muted-foreground text-sm">
-        {maskProviderApiKey(selectedApiKey.key)}
-      </Text>
-    </View>
-  ) : null;
-  const selectedKeyAccessibilityLabel = selectedApiKey
-    ? t('settings.provider.apiService.keys.accessibleLabel', {
-        name: selectedKeyName,
-        key: maskProviderApiKey(selectedApiKey.key),
-      })
+  // A single enabled key leaves nothing to choose, so the section keeps its original two rows.
+  const selectableApiKey = enabledKeys.length > 1 ? selectedApiKey : undefined;
+  const selectedKeyName = selectableApiKey
+    ? getProviderApiKeyLabel(selectableApiKey, unnamedLabel)
     : undefined;
 
   if (!selectedModel || (!signedIn && !authOptional && !apiKeys.some((entry) => entry.isEnabled))) {
@@ -102,28 +88,33 @@ export function ProviderConnectionTestSection({
 
   return (
     <>
-      <Section footer={selectedApiKey ? t('settings.provider.config.testKeyHelp') : undefined}>
+      <Section footer={selectableApiKey ? t('settings.provider.config.testKeyHelp') : undefined}>
         <Section.SelectItem
           disabled={disabled || isChecking}
           label={t('settings.provider.config.testModel')}
           onPress={() => setIsModelPickerOpen(true)}
           value={selectedModel.name}
         />
-        {enabledKeys.length > 1 ? (
+        {selectableApiKey ? (
           <Section.SelectItem
-            accessibilityLabel={selectedKeyAccessibilityLabel}
+            accessibilityLabel={t('settings.provider.apiService.keys.accessibleLabel', {
+              name: selectedKeyName,
+              key: maskProviderApiKey(selectableApiKey.key),
+            })}
             disabled={disabled || isChecking}
             label={t('settings.provider.config.testKey')}
             onPress={() => setIsKeyPickerOpen(true)}
             testID="provider-connection-test-key"
-            value={selectedKeyValue}
-          />
-        ) : selectedApiKey ? (
-          <Section.Item
-            accessibilityLabel={selectedKeyAccessibilityLabel}
-            label={t('settings.provider.config.testKey')}
-            testID="provider-connection-test-key"
-            trailing={selectedKeyValue}
+            value={
+              <View className="min-w-0 shrink items-end gap-1">
+                <Text className="text-foreground text-base" numberOfLines={1}>
+                  {selectedKeyName}
+                </Text>
+                <Text className="font-mono text-muted-foreground text-sm">
+                  {maskProviderApiKey(selectableApiKey.key)}
+                </Text>
+              </View>
+            }
           />
         ) : null}
         <Section.Item
@@ -135,7 +126,7 @@ export function ProviderConnectionTestSection({
           trailing={result}
         />
       </Section>
-      {selectedApiKey ? (
+      {selectableApiKey ? (
         <OptionPickerBottomSheet
           onClose={() => setIsKeyPickerOpen(false)}
           onValueChange={setSelectedApiKeyId}
@@ -156,7 +147,7 @@ export function ProviderConnectionTestSection({
               value: entry.id,
             };
           })}
-          selectedValue={selectedApiKey.id}
+          selectedValue={selectableApiKey.id}
           size="medium"
           testID="provider-connection-test-key-picker"
           title={t('settings.provider.config.testKey')}

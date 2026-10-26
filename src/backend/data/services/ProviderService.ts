@@ -607,7 +607,6 @@ export class ProviderService {
 
   async update(providerId: string, input: UpdateProviderInput): Promise<Provider> {
     const updates: Partial<InsertUserProviderRow> = {};
-    let apiKeyOrderChanged = false;
 
     if (input.apiKeys !== undefined) {
       updates.apiKeys = normalizeApiKeys(input.apiKeys);
@@ -641,13 +640,6 @@ export class ProviderService {
 
       if (!current) {
         throw DataApiErrorFactory.notFound('Provider', providerId);
-      }
-
-      if (updates.apiKeys) {
-        const previousKeys = current.apiKeys ?? [];
-        apiKeyOrderChanged =
-          previousKeys.length !== updates.apiKeys.length ||
-          updates.apiKeys.some((entry, index) => entry.id !== previousKeys[index]?.id);
       }
 
       if (
@@ -720,12 +712,24 @@ export class ProviderService {
       throw DataApiErrorFactory.notFound('Provider', providerId);
     }
 
-    if (apiKeyOrderChanged) this.cacheService.delete(apiKeyRotationCacheKey(providerId));
     return rowToProvider(row);
   }
 
   async replaceApiKeys(providerId: string, apiKeys: ApiKeyEntry[]): Promise<Provider> {
-    return this.update(providerId, { apiKeys });
+    const normalizedApiKeys = normalizeApiKeys(apiKeys);
+    const [row] = await this.dbService.withWriteTx((tx) =>
+      tx
+        .update(userProviderTable)
+        .set({ apiKeys: normalizedApiKeys })
+        .where(eq(userProviderTable.providerId, providerId))
+        .returning(),
+    );
+
+    if (!row) {
+      throw DataApiErrorFactory.notFound('Provider', providerId);
+    }
+
+    return rowToProvider(row);
   }
 
   async updateApiKey(

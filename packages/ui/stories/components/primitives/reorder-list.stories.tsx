@@ -48,4 +48,3 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = { render: (args) => <ReorderPreview {...args} /> };
-export const Disabled: Story = { args: { disabled: true }, render: Playground.render };

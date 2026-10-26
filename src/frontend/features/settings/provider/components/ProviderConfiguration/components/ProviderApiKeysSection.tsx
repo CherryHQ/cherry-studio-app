@@ -150,7 +150,6 @@ export function ProviderApiKeysSection({
             {t('settings.provider.apiService.keys.rotationHelp')}
           </Text>
           <ReorderList
-            disabled={value.isBusy}
             renderItemDescription={(entry) => (
               <View className="gap-1">
                 <Text className="font-mono text-muted-foreground text-sm">

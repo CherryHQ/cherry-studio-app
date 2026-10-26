@@ -8,9 +8,9 @@ components and the mobile WebP runtime for the desktop UI icon set.
 `ReorderList` is a controlled ordering list for small collections. It renders the shared Section
 rows with labeled up/down buttons, disables moves at the first and last positions, and returns
 a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
-optional descriptions, translated action labels, and `onReorder`; `disabled` locks moves while
-saving. The component owns neither scrolling nor persistence, so it can sit in a screen or a
-bottom sheet. No drag gesture or animation is required to reorder items.
+optional descriptions, translated action labels, and `onReorder`. The component owns neither
+scrolling nor persistence, so it can sit in a screen or a bottom sheet. No drag gesture or
+animation is required to reorder items.
 
 `OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
 read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:

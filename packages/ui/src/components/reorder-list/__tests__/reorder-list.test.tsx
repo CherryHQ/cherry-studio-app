@@ -27,10 +27,9 @@ const items = [
 describe('ReorderList', () => {
   let renderer: ReactTestRenderer;
   const onReorder = jest.fn();
-  function render(disabled = false) {
+  function render() {
     return (
       <ReorderList
-        disabled={disabled}
         getItemKey={(item) => item.id}
         getItemLabel={(item) => item.name}
         items={items}
@@ -69,18 +68,13 @@ describe('ReorderList', () => {
     ]);
   });
 
-  it('disables boundary moves and prevents any move while persistence is pending', () => {
+  it('disables moves past the first and last positions', () => {
     expect(button('Up Work').props.disabled).toBe(true);
     expect(button('Down Backup').props.disabled).toBe(true);
     act(() => {
       button('Up Work').props.onPress();
       button('Down Backup').props.onPress();
     });
-    expect(onReorder).not.toHaveBeenCalled();
-
-    act(() => renderer.update(render(true)));
-    expect(renderer.root.findAllByType(Button).every((node) => node.props.disabled)).toBe(true);
-    act(() => button('Down Work').props.onPress());
     expect(onReorder).not.toHaveBeenCalled();
   });
 });

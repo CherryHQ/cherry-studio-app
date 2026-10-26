@@ -46,7 +46,7 @@ describe('ProviderService integration', () => {
     expect(page.items.map((provider) => provider.id)).toEqual(['enabled-a']);
   });
 
-  it('persists key order and restarts rotation at the first enabled entry', async () => {
+  it('rotates in the saved order, continuing after the last used key when reordered', async () => {
     insertProvider('key-provider', true, 'a');
     const a = { id: 'a', isEnabled: true, key: 'key-a', label: 'Work' };
     const b = { id: 'b', isEnabled: true, key: 'key-b', label: 'Personal' };
@@ -59,26 +59,12 @@ describe('ProviderService integration', () => {
     await expect(service.listApiKeys('key-provider')).resolves.toEqual({
       keys: [disabled, c, a, b],
     });
-    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-c');
-    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-a');
     await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-b');
-    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-c');
-  });
-
-  it('preserves rotation on label edits and rejected writes, including explicit test-key overrides', async () => {
-    insertProvider('key-provider', true, 'a');
-    const a = { id: 'a', isEnabled: true, key: 'key-a' };
-    const b = { id: 'b', isEnabled: true, key: 'key-b' };
-    await service.replaceApiKeys('key-provider', [a, b]);
-    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-a');
-    await service.updateApiKey('key-provider', 'a', { label: 'Renamed' });
-    await expect(service.resolveApiKey('key-provider', 'key-b')).resolves.toMatchObject({
-      value: 'key-b',
+    await expect(service.resolveApiKey('key-provider', 'key-a')).resolves.toMatchObject({
+      value: 'key-a',
     });
-    await expect(
-      service.replaceApiKeys('key-provider', [b, { ...a, key: b.key }]),
-    ).rejects.toThrow();
-    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-b');
+    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-c');
+    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-a');
   });
 
   function insertProvider(

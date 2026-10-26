@@ -97,6 +97,7 @@ four characters.
 
 Multiple keys expose an ordering sheet with CherryUI `ReorderList`. Moves save immediately (or
 update the creation draft), preserve each entry's identity and metadata, and roll back on failure.
+Moves made while a write is in flight show at once and queue only the latest list for the next write.
 Labels and masked suffixes appear in management, ordering and connection-test selection; unnamed
 keys use a stable fallback rather than a position-based name.
 
@@ -115,7 +116,7 @@ These catalog settings do not start playback or transcription; the voice feature
 saved models separately. Connectivity checks continue to select chat models only.
 
 The connectivity check selects one provider-scoped model and one enabled API key, defaulting to
-the first enabled key. Neither choice is stored. The explicit probe key disables failover and does
+the first enabled key; the key row appears only when more than one key is enabled. Neither choice is stored. The explicit probe key disables failover and does
 not advance the runtime's rotation cursor. Changing the selected model or key hides the previous
 result. Checks and ordinary synchronization never change provider activation.
 

@@ -225,6 +225,45 @@ describe('saved provider configuration writes each change', () => {
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'danger' }));
   });
 
+  it('shows moves made during a write at once and writes only the latest order next', async () => {
+    mockApiKeys = [
+      { id: 'a', isEnabled: true, key: 'sk-a' },
+      { id: 'b', isEnabled: true, key: 'sk-b' },
+      { id: 'c', isEnabled: true, key: 'sk-c' },
+    ];
+    act(() => renderer.update(<Probe />));
+    const resolveSaves: (() => void)[] = [];
+    mockSave.mockImplementation(
+      () => new Promise((resolve) => resolveSaves.push(() => resolve(mockProvider))),
+    );
+    const order = () => configuration.value?.apiKeys?.map((entry) => entry.id);
+    const move = (ids: string[]) =>
+      actions().reorderApiKeys(ids.map((id) => mockApiKeys.find((entry) => entry.id === id)!));
+    const pending: Promise<boolean>[] = [];
+    await act(async () => {
+      pending.push(move(['b', 'a', 'c']));
+    });
+    await act(async () => {
+      pending.push(move(['b', 'c', 'a']));
+    });
+    await act(async () => {
+      pending.push(move(['c', 'b', 'a']));
+    });
+    expect(order()).toEqual(['c', 'b', 'a']);
+    expect(mockSave).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveSaves[0]());
+    expect(order()).toEqual(['c', 'b', 'a']);
+    expect(mockSave).toHaveBeenCalledTimes(2);
+    expect(mockSave).toHaveBeenLastCalledWith({
+      apiKeys: [mockApiKeys[2], mockApiKeys[1], mockApiKeys[0]],
+    });
+
+    await act(async () => resolveSaves[1]());
+    await expect(Promise.all(pending)).resolves.toEqual([true, true, true]);
+    expect(configuration.value?.isBusy).toBe(false);
+  });
+
   it('reports a failed write and resolves false', async () => {
     mockSave.mockRejectedValue(new Error('write failed'));
     let saved = true;
