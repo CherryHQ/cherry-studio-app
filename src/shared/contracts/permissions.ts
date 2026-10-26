@@ -20,7 +20,6 @@ export type DevicePermissionScope =
   | 'camera.read'
   | HealthPermissionScope
   | 'location.read'
-  | 'photos.read'
   | 'photos.write'
   | 'reminders.read'
   | 'reminders.write';
@@ -61,9 +60,7 @@ export function canUseDevicePermission(
   status: DevicePermissionStatus | undefined,
 ): boolean {
   return (
-    status?.state === 'granted' ||
-    (scope === 'photos.read' && status?.state === 'limited') ||
-    (scope.startsWith('health.') && status?.state === 'requested')
+    status?.state === 'granted' || (scope.startsWith('health.') && status?.state === 'requested')
   );
 }
 

@@ -2,21 +2,29 @@ import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
 import { AppState } from 'react-native';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
+import type { DiscoveryEvent } from '../DesktopEndpointResolver';
 import {
   DesktopSession,
   DesktopUnreachableError,
   RemoteFailureError,
   RemoteTransportError,
 } from '../DesktopSession';
+import { WebSocketOpeningError } from '../remoteErrors';
 import { openWebSocketStream } from '../remoteSocket';
+
+let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
 jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
 jest.mock('../DesktopDiscovery', () => ({
   DesktopDiscovery: class {
+    constructor(receive: (event: DiscoveryEvent) => void) {
+      mockDiscoveryReceive = receive;
+    }
     setActive() {}
     browse() {
       return () => {};
@@ -223,6 +231,64 @@ describe('DesktopConnectionRuntime', () => {
     await runtime._doDestroy();
     await manager._doStop();
     await manager._doDestroy();
+  });
+
+  it.each([undefined, id])(
+    'pairs v3 over WSS and learns its endpoint (existing: %s)',
+    async (connectionId) => {
+      const endpoint = { host: 'desktop.example.com', port: 24443, security: 'wss' as const };
+      const session = Object.assign(
+        createSession({
+          'connection.authenticate': () => ({ authorization: { grants } }),
+          'pairing.claim': () => ({
+            claimId: 'claim',
+            verificationCode: '123456',
+            expiresAt: 'later',
+          }),
+          'pairing.get': () => ({
+            status: 'approved',
+            deviceId: row.deviceId,
+            authorization: { grants },
+          }),
+          'connection.endpoints': () => ({
+            desktopIdentity: row.desktopIdentity,
+            endpoints: [endpoint],
+          }),
+        }),
+        { connectionEndpointsVersion: 1 },
+      );
+      connect.mockResolvedValueOnce(session as never);
+      await expect(
+        runtime.pair({ ...pairing, connectionId, v: 3, endpoints: [endpoint] }, signal()),
+      ).resolves.toMatchObject({ status: 'paired' });
+      expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+        'wss://desktop.example.com:24443/v1/remote/connect',
+      ]);
+      expect((await store.getRow()).learnedEndpoints).toEqual([endpoint]);
+      expect((await store.getRow()).grants).toEqual(grants);
+      expect(session.isOpen).toBe(false);
+    },
+  );
+
+  it('retains v3 QR routes for reconnect when the desktop cannot sync addresses', async () => {
+    const endpoint = { host: 'desktop.example.com', port: 443, security: 'wss' as const };
+    const first = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    const next = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    connect.mockResolvedValueOnce(first as never).mockResolvedValueOnce(next as never);
+    await runtime.pair({ ...pairing, v: 3, endpoints: [endpoint] }, signal());
+    const lease = await manager.retain(id, 'configuration', signal());
+    await expect(lease.ready(signal())).resolves.toBe(next);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'wss://desktop.example.com:443/v1/remote/connect',
+      'wss://desktop.example.com:443/v1/remote/connect',
+    ]);
+    expect((await store.getRow()).learnedEndpoints).toEqual([]);
+    expect((await store.getRow()).configuredEndpoints).toEqual(row.configuredEndpoints);
+    lease.release();
   });
 
   it('saves authenticated desktop addresses before initial pairing completes', async () => {
@@ -546,6 +612,45 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.savePair).not.toHaveBeenCalled();
     expect(session.close).toHaveBeenCalled();
   });
+
+  it('preserves per-address opening failures through pairing for actionable UI errors', async () => {
+    const failure = {
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      kind: 'websocket' as const,
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '403 Forbidden'",
+    };
+    jest.mocked(openWebSocketStream).mockRejectedValue(new WebSocketOpeningError(failure));
+    await expect(runtime.pair(pairing, new AbortController().signal)).rejects.toMatchObject({
+      details: { reason: 'unreachable', connectionFailures: [failure] },
+    });
+  });
+
+  it.each([
+    {
+      kind: 'websocket',
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '403 Forbidden'",
+    },
+    {
+      kind: 'websocket',
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '503 Service Unavailable'",
+    },
+    { kind: 'timeout', address: 'ws://192.168.1.2:23333/v1/remote/connect' },
+  ] satisfies DesktopConnectionFailure[])(
+    'preserves opening failure details through configuration preview: $kind $message',
+    async (failure) => {
+      mockDiscoveryReceive({ type: 'unavailable' });
+      jest.mocked(openWebSocketStream).mockRejectedValueOnce(new WebSocketOpeningError(failure));
+      await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+        details: { reason: 'unreachable', connectionFailures: [failure] },
+      });
+      expect(store.preview).not.toHaveBeenCalled();
+    },
+  );
 
   it('maps an invalid invitation and an unreachable desktop to the settings error reasons', async () => {
     const session = createSession({

@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "NSCalendarsFullAccessUsageDescription": "Cherry Studio lee y gestiona eventos del calendario cuando lo pides en el chat, por ejemplo para consultar la agenda de hoy o cambiar la hora de una reunión, y envía los detalles pertinentes al servicio de IA que elijas.",
+    "NSCalendarsUsageDescription": "Cherry Studio lee y gestiona eventos del calendario cuando lo pides en el chat, por ejemplo para consultar la agenda de hoy o cambiar la hora de una reunión, y envía los detalles pertinentes al servicio de IA que elijas.",
+    "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio añade los eventos del calendario que pides en el chat, como una reunión mañana a las 10, utilizando los detalles del servicio de IA que elijas.",
+    "NSLocationWhenInUseUsageDescription": "Cherry Studio envía tu ubicación actual y, si se solicita, tu dirección al servicio de IA que elijas para responder a peticiones como buscar restaurantes cercanos, solo mientras usas la app.",
+    "NSRemindersFullAccessUsageDescription": "Cherry Studio lee y gestiona recordatorios cuando lo pides en el chat, por ejemplo para listar las tareas de hoy o añadir un recordatorio de compra, y envía los detalles pertinentes al servicio de IA que elijas.",
+    "NSRemindersUsageDescription": "Cherry Studio lee y gestiona recordatorios cuando lo pides en el chat, por ejemplo para listar las tareas de hoy o añadir un recordatorio de compra, y envía los detalles pertinentes al servicio de IA que elijas."
+  }
+}

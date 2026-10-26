@@ -96,12 +96,14 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   ) {
     return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
+      const endpoints =
+        qr.v === 3
+          ? qr.endpoints
+          : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' as const }));
       const id = qr.connectionId ?? Crypto.randomUUID();
       const existing = qr.connectionId ? await store.getRow(id) : undefined;
       if (existing && existing.desktopIdentity !== qr.desktopIdentity)
         throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
-      const endpoints: DirectEndpoint[] =
-        qr.v === 3 ? qr.endpoints : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' }));
       onProgress?.({ stage: 'connecting' });
       const session = await this.connections!.connectTemporary(
         { desktopIdentity: qr.desktopIdentity, endpoints },
@@ -420,7 +422,10 @@ function deviceName(): string {
 function translate(error: unknown): unknown {
   if (error instanceof DesktopUnreachableError) {
     logger.warn('Desktop unreachable', { attempts: error.attempts });
-    return desktopError(error.reason, 'Could not connect to the desktop');
+    return new DataApiError(ErrorCode.INVALID_OPERATION, 'Could not connect to the desktop', {
+      reason: error.reason,
+      connectionFailures: error.connectionFailures,
+    });
   }
   if (error instanceof RemoteTransportError) {
     logger.warn('Desktop request lost', { kind: error.kind });

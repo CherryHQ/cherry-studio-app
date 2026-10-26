@@ -143,7 +143,7 @@ describe('DevicePermissions', () => {
     const controller = new AbortController();
     const cancelled = service.request(['calendar.read'], controller.signal);
     const cancelledResult = expect(cancelled).rejects.toThrow();
-    const last = service.request(['photos.read']);
+    const last = service.request(['photos.write']);
     controller.abort();
     expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
 
@@ -184,7 +184,7 @@ describe('DevicePermissions', () => {
     const cancelledResult = expect(cancelled).rejects.toThrow();
     await started.promise;
     controller.abort();
-    const next = service.request(['photos.read']);
+    const next = service.request(['photos.write']);
     expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
 
     finishHealth.resolve();
@@ -287,27 +287,6 @@ describe('DevicePermissions', () => {
     });
     await service.request(['location.read']);
     expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
-  });
-
-  test('keeps selected-photo access usable without claiming access to the whole library', async () => {
-    jest
-      .mocked(MediaLibrary.getPermissionsAsync)
-      .mockResolvedValue({ ...allowed, accessPrivileges: 'limited' } as never);
-    await expect(service.getStatuses(['photos.read'])).resolves.toEqual({
-      'photos.read': { state: 'limited', canAskAgain: false },
-    });
-  });
-
-  test('does not query or request Android library access for system photo selection', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    Object.defineProperty(Platform, 'Version', { configurable: true, value: 34 });
-    const unsupported = { state: 'unavailable', canAskAgain: false, reason: 'unsupported' };
-    await expect(service.getStatuses(['photos.read'])).resolves.toEqual({
-      'photos.read': unsupported,
-    });
-    await expect(service.request(['photos.read'])).resolves.toEqual({ 'photos.read': unsupported });
-    expect(MediaLibrary.getPermissionsAsync).not.toHaveBeenCalled();
-    expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
   });
 
   test('requests only write access to save photos on Android 10 and earlier', async () => {

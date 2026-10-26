@@ -43,6 +43,7 @@ import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
 
@@ -1555,6 +1556,7 @@ export class DurableAgentHost implements AgentProtocol {
         kind: 'approval',
         id: approval.id,
         title: approval.displayName,
+        requiresApp: isHealthToolRef(approval.toolRef),
         respond: (decision) =>
           this.respondApproval({ sessionId, turnId, approvalId: approval.id, decision }),
       });

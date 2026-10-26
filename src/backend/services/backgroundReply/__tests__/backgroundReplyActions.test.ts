@@ -53,6 +53,17 @@ test.each(['approve', 'deny'] as const)(
   },
 );
 
+test('a health approval offers no notification decision, so sharing is confirmed in the app', async () => {
+  const test = await fixture();
+  const turn = test.start();
+  const respond = jest.fn(async () => {});
+  turn.setInteraction({ kind: 'approval', id: 'a1', title: 'Health', requiresApp: true, respond });
+  turn.awaitApproval(undefined, undefined, 'a1');
+  expect(test.props().actions).toBeUndefined();
+  expect(respond).not.toHaveBeenCalled();
+  await test.runtime._doStop();
+});
+
 test('a repeated tap while responding cannot start a second decision', async () => {
   const test = await fixture();
   let release!: () => void;

@@ -88,6 +88,38 @@ describe('desktop connection api schemas', () => {
     }
   });
 
+  test('bounds v3 endpoints and retains only local pairing options supplied by the caller', () => {
+    const endpoints = Array.from({ length: 32 }, (_, i) => ({
+      host: `desktop-${i}.example.com`,
+      port: 443,
+      security: 'wss',
+    }));
+    const input = {
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
+      name: 'Desktop',
+      protocolVersions: [1],
+      t: 'cherry-studio-pair',
+      v: 3,
+      endpoints,
+      capabilities: ['configuration', 'agent'],
+      connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',
+    };
+    expect(PairDesktopConnectionSchema.parse(input)).toEqual(input);
+    expect(DesktopPairingQrSchema.parse(input)).not.toHaveProperty('connectionId');
+    expect(
+      DesktopPairingQrSchema.safeParse({ ...input, endpoints: [...endpoints, endpoints[0]] })
+        .success,
+    ).toBe(false);
+    expect(
+      PairDesktopConnectionSchema.safeParse({ ...input, capabilities: ['agent', 'agent'] }).success,
+    ).toBe(false);
+    expect(PairDesktopConnectionSchema.safeParse({ ...input, capabilities: [] }).success).toBe(
+      false,
+    );
+  });
+
   test('preserves desktop provider and model registry metadata', () => {
     const snapshot = DesktopProvidersSnapshotSchema.parse({
       providers: [

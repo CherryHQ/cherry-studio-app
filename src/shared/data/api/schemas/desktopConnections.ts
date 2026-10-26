@@ -1,7 +1,7 @@
 import {
+  type DirectEndpoint,
   pairingQrSchema,
   remoteCapabilitiesSchema,
-  type DirectEndpoint,
 } from '@cherrystudio/remote-protocol';
 import * as z from 'zod';
 
@@ -15,6 +15,14 @@ import {
   RuntimeModelPricingSchema,
 } from '@/shared/data/types/model';
 
+export const DesktopConnectionFailureSchema = z.object({
+  address: z.string().max(512),
+  kind: z.enum(['timeout', 'websocket']),
+  closeCode: z.number().int().min(1000).max(4999).optional(),
+  message: z.string().max(400).optional(),
+});
+export type DesktopConnectionFailure = z.infer<typeof DesktopConnectionFailureSchema>;
+
 export const DesktopRemoteAgentSchema = z.object({
   protocolVersion: z.number().int().positive(),
   instanceId: z.string().uuid(),
@@ -27,7 +35,6 @@ export type DesktopRemoteAgent = z.infer<typeof DesktopRemoteAgentSchema>;
 export const DesktopPairingQrSchema = pairingQrSchema;
 export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 
-/** Local pairing choices are added after parsing the scanned or pasted invitation. */
 export const PairDesktopConnectionSchema = DesktopPairingQrSchema.and(
   z.object({
     capabilities: remoteCapabilitiesSchema,

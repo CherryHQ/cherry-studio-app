@@ -19,6 +19,12 @@ participate in the binding fingerprint or Agent scope. The location implementati
   interface scope. Configured WSS uses normal system certificate validation. All routes use the
   fixed `/v1/remote/connect` path; credentials, arbitrary paths, queries and fragments are rejected.
 
+QR v2 IP lists become WS endpoints using their shared port. QR v3 endpoints preserve each
+hostname, port, and WS/WSS scheme through initial pairing, re-pairing, and temporary reconnect
+hints. Multiple endpoints are tried in order; a failed WSS route is not rewritten to WS.
+The QR parser and workflow validation consume the published protocol schema. QR endpoint
+hints stay in memory until an authenticated desktop supplies a durable address snapshot.
+
 ## Connection lifetime
 
 Recovery is serial: one socket attempt per desktop, four seconds to open and six more for
@@ -45,6 +51,20 @@ reconnect backoff. All pending tasks drain on stop.
 Only an `UNAUTHENTICATED` reply to authentication from the pinned desktop retires the binding for
 repair. Wrong peers, unavailable addresses and discovery failures leave grants and Agent state intact.
 The current channel and lease scope are independent of candidate expiry.
+
+## Connection failure feedback
+
+Pairing and configuration errors retain each attempted address's WebSocket opening failure.
+The socket adapter waits through React Native's `error` event for the following `close` reason,
+with a microtask fallback when no close event follows. Opening timeouts remain distinct from
+cancellation. Failed attempts do not change pairing, grants, candidate order or retry policy.
+
+Settings show localized guidance for explicit HTTP rejection statuses exposed by OkHttp or
+SocketRocket, including access denial and server/gateway failure. Other failures retain the network
+hint, the available WebSocket close code, and a bounded native message. Code `1006` alone does not
+identify DNS, TLS, routing or WebSocket support; no HTTP status or certificate verdict is inferred
+from it. Multiple failed addresses keep separate details. This is failure feedback from the phone's
+actual connection attempt, not a desktop-side reachability probe.
 
 ## Settings and migration
 
@@ -119,6 +139,6 @@ opens a manager-owned channel against exactly the selected endpoint, authenticat
 pairing, and saves the manual route only after a successful capability-scoped query. It does not
 fall back to a different address or claim that other networks have been tested.
 
-Mobile consumes the published `@cherrystudio/remote-protocol@0.4.0` and
-`@cherrystudio/remote-transport@0.2.0` packages. Physical-device, light/dark UI, and real VPN
+Mobile consumes the published `@cherrystudio/remote-protocol@0.7.0` and
+`@cherrystudio/remote-transport@0.2.4` packages. Physical-device, light/dark UI, and real VPN
 switching acceptance of this Mobile build remain pending.

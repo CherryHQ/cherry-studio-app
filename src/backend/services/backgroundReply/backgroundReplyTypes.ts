@@ -14,6 +14,8 @@ export type BackgroundReplyInteraction =
       kind: 'approval';
       id: string;
       title: string;
+      /** Health sharing must be confirmed in the app, where its recipient is disclosed. */
+      requiresApp?: boolean;
       respond(decision: 'approve' | 'deny'): Promise<void>;
     }
   | {
