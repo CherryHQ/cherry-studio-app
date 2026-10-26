@@ -1,7 +1,8 @@
 import { Image } from '@cherrystudio/ui/components';
+import { useImage } from 'expo-image';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -52,9 +53,21 @@ export function PaintingFocusCanvas({
 }) {
   const { t } = useTranslation();
   const [size, setSize] = useState<CanvasSize>({ height: 0, width: 0 });
-  const [sourceRatio, setSourceRatio] = useState<number | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const [failedUri, setFailedUri] = useState<string | null>(null);
+  // Decode once at screen resolution. Keyboard-driven layout changes only resize the same bitmap.
+  const screen = Dimensions.get('screen');
+  const decodeSize = Math.ceil(Math.max(screen.width, screen.height) * screen.scale);
+  const imageSource = useImage(
+    uri,
+    {
+      maxHeight: decodeSize,
+      maxWidth: decodeSize,
+      onError: () => setFailedUri(uri),
+    },
+    [decodeSize],
+  );
+  const sourceRatio = imageSource ? imageSource.width / imageSource.height : null;
   const image = sourceRatio
     ? fitPaintingImage(size.width, size.height, sourceRatio)
     : { height: size.height, left: 0, top: 0, width: size.width };
@@ -229,18 +242,13 @@ export function PaintingFocusCanvas({
               </View>
             ) : (
               <Image
-                allowDownscaling
+                allowDownscaling={false}
                 cachePolicy="memory-disk"
                 contentFit="contain"
                 onError={() => setFailedUri(uri)}
-                onLoad={({ source }) => {
-                  if (source.width > 0 && source.height > 0) {
-                    setSourceRatio(source.width / source.height);
-                  }
-                }}
-                source={uri}
+                source={imageSource}
                 style={StyleSheet.absoluteFill}
-                transition={120}
+                transition={0}
               />
             )}
             {sourceRatio && !isZoomed
