@@ -4,6 +4,7 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { streamSimple as streamOpenaiCompletions } from '@earendil-works/pi-ai/api/openai-completions';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { GITHUB_COPILOT_MODELS } from '@earendil-works/pi-ai/providers/github-copilot.models';
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
@@ -907,6 +908,75 @@ describe('Pi model resolver', () => {
     expect(resolution.model.maxTokens).toBe(32_000);
   });
 
+  test.each([
+    [1_048_576, 1_048_576, undefined, 65_536],
+    [1_048_576, 1_048_576, 131_072, 131_072],
+    [64_000, 1_048_576, undefined, 64_000],
+    [32_000, 128_000, undefined, 32_000],
+  ])(
+    'serializes pinned SDK output reservation %i/%i with explicit %s',
+    async (ceiling, window, explicit, expected) => {
+      const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+      mockGetProviderById.mockResolvedValue(
+        makeProvider(endpoint, 'https://openrouter.ai/api/v1', 'openai-compatible'),
+      );
+      mockGetModelById.mockResolvedValue(
+        makeModel(endpoint, {
+          apiModelId: 'gemini-4-argon',
+          contextWindow: window,
+          maxOutputTokens: ceiling,
+        }),
+      );
+      const resolution = await resolve(resolver, { maxOutputTokens: explicit });
+      const binding = mockBindPiStream.mock.calls.at(-1)![1];
+      const model = {
+        ...resolution.model,
+        api: 'openai-completions' as const,
+        reasoning: false,
+        compat: { maxTokensField: 'max_tokens' as const },
+      };
+      const context = normalizeContext({
+        messages: [
+          {
+            role: 'user' as const,
+            content: ceiling >= window ? 'x'.repeat(397_190) : 'Hello',
+            timestamp: 1,
+          },
+        ],
+      });
+      const capture = async (maxTokens: number | undefined) => {
+        let body = '';
+        const result = await streamOpenaiCompletions(model, context, {
+          apiKey: 'fixture',
+          maxTokens,
+          maxRetries: 0,
+          fetch: async (_url, init) => {
+            body = String(init?.body);
+            const event = {
+              id: 'fixture',
+              object: 'chat.completion.chunk',
+              created: 1,
+              model: model.id,
+              choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }],
+            };
+            return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, {
+              headers: { 'content-type': 'text/event-stream' },
+            });
+          },
+        }).result();
+        expect(result.stopReason).toBe('stop');
+        return body;
+      };
+      const body = await capture(binding.maxTokens);
+      expect(JSON.parse(body)).toHaveProperty('max_tokens', expected);
+      expect(resolution.model.maxTokens).toBe(ceiling);
+      if (ceiling < window) {
+        // The old resolver supplied the capability directly; compare the entire serialized request.
+        expect(body).toBe(await capture(ceiling));
+      }
+    },
+  );
+
   test('preserves input capacity and the output capability when both span the full context', async () => {
     const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
     const model = makeModel(endpoint, {
@@ -933,23 +1003,25 @@ describe('Pi model resolver', () => {
     expect(resolution.model.maxTokens).toBe(500_000);
     expect(mockBindPiStream).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ maxTokens: 500_000 }),
+      expect.objectContaining({ maxTokens: 65_536 }),
     );
+    const binding = mockBindPiStream.mock.calls.at(-1)![1];
     const shortRequest = buildBaseOptions(
       resolution.model,
       normalizeContext({
         messages: [{ role: 'user', content: '测试', timestamp: 1 }],
       }),
+      { maxTokens: binding.maxTokens },
     );
     const longerRequest = buildBaseOptions(
       resolution.model,
       normalizeContext({
         messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
       }),
+      { maxTokens: binding.maxTokens },
     );
-    expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
-    expect(shortRequest.maxTokens).toBeLessThan(500_000);
-    expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);
+    expect(shortRequest.maxTokens).toBe(65_536);
+    expect(longerRequest.maxTokens).toBe(65_536);
   });
 
   test.each([{ id: 'perplexity' }, { id: 'copied-perplexity', presetProviderId: 'perplexity' }])(

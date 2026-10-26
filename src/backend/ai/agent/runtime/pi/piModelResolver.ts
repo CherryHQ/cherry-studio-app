@@ -39,6 +39,7 @@ import {
   resolveOAuthPiModel,
   type ResolvedPiOAuth,
 } from './piOAuthModels';
+import { resolvePiOutputReservation } from './piOutputReservation';
 import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 import type { PiNativeWebTools, PiWebDialect } from './piWebTools';
 
@@ -229,6 +230,12 @@ export function createPiModelResolver(accounts?: {
             maxTokens: Math.min(preflight.maxOutputTokens, oauthModel.maxTokens),
           }
         : configuredPiModel;
+      // Keep capability metadata intact while bounding the default request reservation.
+      const outputReservation = resolvePiOutputReservation(
+        piModel.maxTokens,
+        piModel.contextWindow,
+        runtimeOptions.maxOutputTokens,
+      );
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
         apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value.trim() ? selectedApiKey.value : '',
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
@@ -236,9 +243,7 @@ export function createPiModelResolver(accounts?: {
         fetch: expoFetch as unknown as FetchFunction,
         headers,
         maxRetries: 0,
-        maxTokens: oauth
-          ? Math.min(runtimeOptions.maxOutputTokens ?? piModel.maxTokens, piModel.maxTokens)
-          : (runtimeOptions.maxOutputTokens ?? piModel.maxTokens),
+        maxTokens: oauth ? Math.min(outputReservation, piModel.maxTokens) : outputReservation,
         requestParameters: oauth
           ? undefined
           : {
