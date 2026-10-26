@@ -317,6 +317,12 @@ export function projectPiTurn(options: {
           entry.type === 'provider_response_failure' ||
           entry.type === 'pi_messages_response_failure',
       );
+      // Stored diagnostics are normalized before commit, which fills a missing code with
+      // `runtime_error`; that placeholder does not describe a provider failure.
+      const code =
+        diagnostic?.error?.code === undefined || diagnostic.error.code === 'runtime_error'
+          ? 'provider_error'
+          : String(diagnostic.error.code);
       const body = diagnostic?.details?.body;
       const imageTool =
         message.api === 'cherry-image'
@@ -330,10 +336,7 @@ export function projectPiTurn(options: {
         (imageTool?.type === 'tool' ? imageTool.error : undefined) ??
         normalizeAiError(
           {
-            code:
-              diagnostic?.error?.code !== undefined
-                ? String(diagnostic.error.code)
-                : 'provider_error',
+            code,
             name: diagnostic?.error?.name,
             message:
               message.errorMessage ?? diagnostic?.error?.message ?? 'The provider request failed.',

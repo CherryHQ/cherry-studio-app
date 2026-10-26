@@ -1,4 +1,4 @@
-import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
@@ -6,6 +6,7 @@ import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProje
 import type { RuntimeError } from '../../types';
 import { PI_IMAGE_TOOL_NAME } from '../piDurableImageModel';
 import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
+import { piDurableSetupError } from '../piDurableStream';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -184,6 +185,48 @@ describe('Pi turn projection', () => {
       });
     },
   );
+
+  test('keeps the provider source code when the stored diagnostic has no provider code', async () => {
+    const failure = Object.assign(new Error('provider API error (503): upstream unavailable'), {
+      status: 503,
+    });
+    const model: Model<Api> = {
+      api: 'openai-responses',
+      provider: 'provider',
+      id: 'model',
+      name: 'Model',
+      baseUrl: '',
+      contextWindow: 32768,
+      maxTokens: 4096,
+      input: ['text'],
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    // Setup failures receive the same normalized diagnostic shape that Pi persists.
+    let terminal: AssistantMessage | undefined;
+    for await (const event of piDurableSetupError(model, failure, []))
+      if (event.type === 'error') terminal = event.error;
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'unanswered',
+        reason: 'model_error',
+        entry: 1,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+
+    expect(toAgentErrorView(turn.error!).failure).toMatchObject({
+      reasonCode: 'provider_unavailable',
+      source: { layer: 'provider', code: 'provider_error', name: 'Error' },
+      context: { statusCode: 503 },
+    });
+  });
 
   test.each([
     { api: 'cherry-image', statusCode: 403, retryable: false },
