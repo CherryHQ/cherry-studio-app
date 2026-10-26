@@ -643,11 +643,102 @@ index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83
    if (linkColor != nil) {
      [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
    }
+diff --git a/ios/attachments/ENRMMathInlineAttachment.m b/ios/attachments/ENRMMathInlineAttachment.m
+index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a4f34ed10ab407058a54784c600f62473ca742ef 100644
+--- a/ios/attachments/ENRMMathInlineAttachment.m
++++ b/ios/attachments/ENRMMathInlineAttachment.m
+@@ -52,7 +52,25 @@
+                             characterIndex:(NSUInteger)characterIndex
+ {
+   [self prepareIfNeeded];
+-  return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
++  // Cherry Mobile: nested math must fit both the remaining fragment and the indented column.
++  CGFloat padding = textContainer ? textContainer.lineFragmentPadding : 0;
++  CGFloat fragmentBudget = lineFragment.size.width - MAX(position.x, 0) - padding;
++  CGFloat availableWidth = fragmentBudget;
++  if (textContainer) {
++    NSTextStorage *storage = textContainer.layoutManager.textStorage;
++    NSParagraphStyle *style = storage && characterIndex < storage.length
++        ? [storage attribute:NSParagraphStyleAttributeName atIndex:characterIndex effectiveRange:NULL]
++        : nil;
++    CGFloat glyphX = lineFragment.origin.x + position.x;
++    CGFloat indent = MAX(style.firstLineHeadIndent, style.headIndent);
++    // UIKit measures a positive tail indent from the leading edge; zero/negative from the trailing edge.
++    CGFloat right = style.tailIndent > 0 ? style.tailIndent : textContainer.size.width + style.tailIndent;
++    CGFloat containerBudget = right - MAX(glyphX, indent) - padding;
++    availableWidth = MIN(fragmentBudget, containerBudget);
++  }
++  availableWidth = MAX(0, availableWidth);
++  CGFloat scale = _cachedSize.width > 0 ? MIN(1, availableWidth / _cachedSize.width) : 1;
++  return CGRectMake(0, -_mathDescent * scale, _cachedSize.width * scale, _cachedSize.height * scale);
+ }
+ 
+ - (UIImage *)imageForBounds:(CGRect)imageBounds
+@@ -63,22 +81,31 @@
+   if (!_renderResult && !_fallbackSource)
+     return nil;
+ 
++  // Cherry Mobile: rasterize at the negotiated size without changing intrinsic math metrics.
++  if (imageBounds.size.width <= 0 || imageBounds.size.height <= 0 ||
++      _cachedSize.width <= 0 || _cachedSize.height <= 0)
++    return nil;
++  CGFloat scale = MIN(1, MIN(imageBounds.size.width / _cachedSize.width,
++                            imageBounds.size.height / _cachedSize.height));
++  CGSize drawSize = CGSizeMake(_cachedSize.width * scale, _cachedSize.height * scale);
++
+   UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+   format.opaque = NO;
+ 
+-  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:_cachedSize format:format];
++  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:drawSize format:format];
+ 
+   return [renderer imageWithActions:^(UIGraphicsImageRendererContext *rendererContext) {
++    CGContextRef ctx = rendererContext.CGContext;
++    CGContextSaveGState(ctx);
++    CGContextScaleCTM(ctx, scale, scale);
+     if (_renderResult) {
+-      CGContextRef ctx = rendererContext.CGContext;
+-      CGContextSaveGState(ctx);
+       [_renderResult drawIn:ctx];
+-      CGContextRestoreGState(ctx);
+     } else {
+       [_fallbackSource drawWithRect:CGRectMake(0, 0, _cachedSize.width, _cachedSize.height)
+                             options:NSStringDrawingUsesLineFragmentOrigin
+                             context:nil];
+     }
++    CGContextRestoreGState(ctx);
+   }];
+ }
+ 
 diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
-index 204fc18510d3de0b79c3d3741b1599659a53d4d9..c880049600007ec76f8e533408246f9280aa5599 100644
+index 204fc18510d3de0b79c3d3741b1599659a53d4d9..0c34c0637f57f8ba97ce83d83a70ae3341cd1fd4 100644
 --- a/ios/renderer/ListItemRenderer.m
 +++ b/ios/renderer/ListItemRenderer.m
-@@ -173,10 +173,16 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
+@@ -130,13 +130,19 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
+     NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+     style.firstLineHeadIndent = totalIndent;
+     style.headIndent = totalIndent;
+-    if (lineHeightConfig > 0) {
+-      style.minimumLineHeight = lineHeightConfig;
+-      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
+-    }
++#if TARGET_OS_OSX
++    if (lineHeightConfig > 0) {
++      style.minimumLineHeight = lineHeightConfig;
++      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
++    }
++#endif
+     NSMutableDictionary *attributesToApply = [metadata mutableCopy];
+     attributesToApply[NSParagraphStyleAttributeName] = style;
+     [output addAttributes:attributesToApply range:range];
++#if !TARGET_OS_OSX
++    // Cherry Mobile: reuse the scoped math/block-image height exception while keeping the prose minimum.
++    applyLineHeight(output, range, lineHeightConfig);
++#endif
+   };
+ 
+   NSUInteger pos = itemRange.location;
+@@ -173,10 +179,16 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
      }
    }
  
