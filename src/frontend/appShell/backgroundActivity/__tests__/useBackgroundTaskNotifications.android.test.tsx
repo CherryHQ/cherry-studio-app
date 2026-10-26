@@ -182,6 +182,7 @@ function notice(
         subtitle: null,
         body: null,
         categoryIdentifier: null,
+        threadIdentifier: null,
         sound: null,
         data: { owner, url, terminal },
       },

@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { Dimensions, View } from 'react-native';
+import { Dimensions, View, type ViewInstance } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { focusMenuTarget } from '../menu-focus';
@@ -8,7 +8,7 @@ import { useMenuState } from '../use-menu-state';
 jest.mock('../menu-focus', () => ({ focusMenuTarget: jest.fn() }));
 
 const anchor = { height: 44, pageX: 16, pageY: 120, width: 44 };
-const triggerRef = createRef<View>();
+const triggerRef = createRef<ViewInstance>();
 
 function Harness() {
   return <View {...useMenuState(triggerRef)} testID="menu-state" />;

@@ -1,6 +1,6 @@
 import { SearchField as HeroSearchField } from 'heroui-native/search-field';
 import { useRef } from 'react';
-import { Pressable, StyleSheet, type TextInput } from 'react-native';
+import { Pressable, StyleSheet, type TextInputInstance } from 'react-native';
 
 import { useFieldText } from '../input/use-field-text';
 import type { SearchFieldProps } from './search-field.types';
@@ -22,7 +22,7 @@ export function SearchField({
   variant = 'default',
 }: SearchFieldProps) {
   const [text, changeText] = useFieldText(value, onChangeText);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   return (
     <HeroSearchField

@@ -313,7 +313,7 @@ describe('MorphMenu', () => {
   it('ignores an older opening measurement delivered after the latest press', () => {
     const pending: ((x: number, y: number, width: number, height: number) => void)[] = [];
     jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((callback) => {
-      pending.push(callback);
+      pending.push(callback as (typeof pending)[number]);
     });
     const tree = render();
     press(tree, 'menu-trigger');
@@ -411,7 +411,7 @@ describe('MorphMenu', () => {
       return style?.height === 420;
     });
 
-    expect(StyleSheet.flatten(container.props.style as StyleProp<ViewStyle>).width).toBe(340);
+    expect(StyleSheet.flatten(container.props.style as StyleProp<ViewStyle>)?.width).toBe(340);
   });
 
   it.each([

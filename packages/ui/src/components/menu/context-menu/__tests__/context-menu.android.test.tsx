@@ -122,7 +122,7 @@ function longPressEvent(absoluteX = 120, absoluteY = 240): LongPressGestureHandl
 function touchEvent(touchCount = 1): GestureResponderEvent {
   return {
     nativeEvent: { touches: Array.from({ length: touchCount }, () => ({})) },
-  } as GestureResponderEvent;
+  } as unknown as GestureResponderEvent;
 }
 
 describe('ContextMenu.android', () => {

@@ -1,5 +1,5 @@
 import { createRef, type ReactElement } from 'react';
-import { type TextInput, type TextInputProps } from 'react-native';
+import { type TextInputProps, type TextInputInstance } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Input } from '../input';
@@ -294,7 +294,7 @@ describe('Input', () => {
   });
 
   test('forwards a password ref to the native input', () => {
-    const ref = createRef<TextInput>();
+    const ref = createRef<TextInputInstance>();
 
     renderInput(
       <Input

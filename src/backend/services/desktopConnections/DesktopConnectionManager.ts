@@ -185,7 +185,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   protected onInit() {
     // iOS reports `inactive` for Control Center, system alerts and Face ID; only `background` hides the app.
-    const onAppState = (state: string | null) => {
+    const onAppState = (state: typeof AppState.currentState) => {
       if (state === 'active' || state === 'background') this.setForeground(state === 'active');
     };
     this.registerAppStateListener(onAppState);

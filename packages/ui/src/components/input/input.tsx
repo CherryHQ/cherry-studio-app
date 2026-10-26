@@ -6,10 +6,10 @@ import { useCallback, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
-  type TextInput,
   type TextInputProps,
   useWindowDimensions,
   View,
+  type TextInputInstance,
 } from 'react-native';
 import Animated, {
   ReduceMotion,
@@ -179,7 +179,7 @@ function PasswordInput({
 }: InputPasswordProps) {
   const isOnSurface = useIsOnSurface();
   const textField = useTextFieldState();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const visibilityProgress = useSharedValue(0);
@@ -187,7 +187,7 @@ function PasswordInput({
   const isInvalid = invalid ?? textField?.invalid ?? false;
   const { onBlur, onFocus, ...restInputProps } = inputProps;
   const handleInputRef = useCallback(
-    (node: TextInput | null) => {
+    (node: TextInputInstance | null) => {
       inputRef.current = node;
 
       if (typeof ref === 'function') {
