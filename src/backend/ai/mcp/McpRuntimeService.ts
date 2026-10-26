@@ -668,7 +668,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
           return [];
         }
         const resourceUri = connectionKey ? mcpToolAppUri(tool) : undefined;
-        const readOnly = tool.annotations?.readOnlyHint === true;
         return [
           {
             ...(connectionKey ? { connectionKey } : {}),
@@ -686,13 +685,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
                   pluginId: server.builtinId,
                   effect: getBuiltInMcpToolEffect(server.builtinId, tool.name),
                 }
-              : {
-                  // A wrong retry hint costs one repeated call on a server the user chose to connect.
-                  ...(readOnly || tool.annotations?.idempotentHint === true
-                    ? { effect: 'read' as const }
-                    : {}),
-                  ...(readOnly ? { readOnlyHint: true as const } : {}),
-                }),
+              : // A wrong hint costs one repeated call on a server the user chose to connect;
+                // approval still gates every call, so this never widens what a tool may do.
+                tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true
+                ? { effect: 'read' as const }
+                : {}),
             generation: state.catalogGeneration,
             inputSchema,
             rawToolName: tool.name,

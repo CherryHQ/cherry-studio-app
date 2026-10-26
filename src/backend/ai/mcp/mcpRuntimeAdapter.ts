@@ -42,8 +42,6 @@ export type McpExecutableToolDescriptor = {
    * Absent: the remote server declared nothing, so the outcome is unknown.
    */
   effect?: 'read' | 'write';
-  /** A remote server's read-only annotation, the only remote hint parallel answers rely on. */
-  readOnlyHint?: true;
   /**
    * The endpoint this catalog was discovered against. Execution is pinned to
    * it: editing the server row must fail the frozen tool as unavailable, never
@@ -223,9 +221,6 @@ export function createMcpRuntimeTools(
 
     const { inputSchema, inputValidator } = compileMcpInputSchema(descriptor.inputSchema);
     const effect = descriptor.effect;
-    // A bundled plugin's policy declares reads and writes. A remote server can only hint a
-    // read, which lets parallel answers run the tool under the Agent's own approval mode.
-    const toolEffect = descriptor.pluginId ? effect : descriptor.readOnlyHint && 'read';
     const endpointUrl = descriptor.endpointUrl;
     const generation = descriptor.generation;
 
@@ -252,7 +247,8 @@ export function createMcpRuntimeTools(
       inputSchema,
       providerName,
       ref,
-      ...(toolEffect ? { effect: toolEffect } : {}),
+      // Only a bundled plugin's own policy is trusted to declare a read.
+      ...(descriptor.pluginId && effect ? { effect } : {}),
     };
   });
 }

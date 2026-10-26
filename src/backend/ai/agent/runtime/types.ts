@@ -294,9 +294,8 @@ export type RuntimeTool = {
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
   /**
-   * `read` for application-owned tools known not to change anything outside the
-   * conversation, or a remote MCP tool its server annotates as read-only. `write`
-   * is a known change. Absent means unknown.
+   * `read` only for application-owned tools known not to change anything outside
+   * the conversation. Absent means unknown and is treated as a write.
    */
   effect?: 'read' | 'write';
   /** Tools in the same group stop together after a tool-scoped failure. */

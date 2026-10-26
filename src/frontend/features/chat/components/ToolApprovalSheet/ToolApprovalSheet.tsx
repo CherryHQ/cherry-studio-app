@@ -107,7 +107,11 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <MessageDetailValue title={t('chat.tool.approval.requester')} value={approval.requester} />
+        {approval.requester ? (
+          <Text className="text-foreground-tertiary text-sm">
+            {t('chat.tool.approval.requester', { model: approval.requester })}
+          </Text>
+        ) : null}
         <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         {children}
       </ScrollView>

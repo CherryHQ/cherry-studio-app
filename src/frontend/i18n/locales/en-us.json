@@ -578,7 +578,7 @@
   "chat.tool.approval.deny": "Deny",
   "chat.tool.approval.failed": "Couldn't save your decision. Please try again.",
   "chat.tool.approval.pendingCount": "{{count}} approvals pending",
-  "chat.tool.approval.requester": "Requested by",
+  "chat.tool.approval.requester": "Requested by {{model}}",
   "chat.tool.approvalRequested": "Approval requested",
   "chat.tool.approved": "Approved",
   "chat.tool.arguments": "Arguments",

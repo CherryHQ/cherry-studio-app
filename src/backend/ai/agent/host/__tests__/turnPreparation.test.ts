@@ -298,7 +298,7 @@ describe('turn preparation', () => {
   });
 
   test.each(['auto', 'default'] as const)(
-    'parallel replies keep MCP tools not known to write and ask for unknown ones under %s approval',
+    'parallel replies keep MCP tools under the %s approval mode and only built-in automatic reads',
     async (toolApprovalMode) => {
       const harness = createHarness();
       harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
@@ -313,7 +313,7 @@ describe('turn preparation', () => {
         { ...tool('builtin_write', 'auto'), effect: 'write' },
       ]);
       harness.resolveRuntimeTools.mockResolvedValueOnce({
-        tools: [mcp('search', 'read'), mcp('lookup'), mcp('plugin_write', 'write')],
+        tools: [mcp('search'), mcp('plugin_write', 'write')],
         pluginGuides: [],
       });
 
@@ -325,12 +325,12 @@ describe('turn preparation', () => {
         { readOnlyTools: true },
       );
 
-      // A read keeps its single-answer approval; an unknown effect never runs unseen.
-      const readApproval = toolApprovalMode === 'auto' ? 'auto' : 'ask';
+      // The user's approval mode governs connected tools exactly as in a single answer.
+      const approval = toolApprovalMode === 'auto' ? 'auto' : 'ask';
       expect(plan.tools.map((entry) => [entry.providerName, entry.approval])).toEqual([
         ['builtin_read', 'auto'],
-        ['search', readApproval],
-        ['lookup', 'ask'],
+        ['search', approval],
+        ['plugin_write', approval],
       ]);
     },
   );

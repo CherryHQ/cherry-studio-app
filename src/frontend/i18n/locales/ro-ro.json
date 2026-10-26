@@ -584,7 +584,7 @@
   "chat.tool.approval.deny": "Negați",
   "chat.tool.approval.failed": "Nu s-a putut salva decizia dvs. Vă rugăm să încercați din nou.",
   "chat.tool.approval.pendingCount": "{{count}} aprobări în așteptare",
-  "chat.tool.approval.requester": "Solicitat de",
+  "chat.tool.approval.requester": "Solicitat de {{model}}",
   "chat.tool.approvalRequested": "Aprobare solicitată",
   "chat.tool.approved": "Aprobat",
   "chat.tool.arguments": "Argumente",

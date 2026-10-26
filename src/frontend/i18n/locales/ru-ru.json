@@ -590,7 +590,7 @@
   "chat.tool.approval.deny": "Отказать",
   "chat.tool.approval.failed": "Не удалось сохранить ваше решение. Пожалуйста, попробуйте еще раз.",
   "chat.tool.approval.pendingCount": "{{count}} ожидает одобрения",
-  "chat.tool.approval.requester": "Запрос от",
+  "chat.tool.approval.requester": "Запрос от {{model}}",
   "chat.tool.approvalRequested": "Запрошено одобрение",
   "chat.tool.approved": "Одобрено",
   "chat.tool.arguments": "Аргументы",

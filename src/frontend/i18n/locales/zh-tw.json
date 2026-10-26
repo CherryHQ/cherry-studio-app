@@ -572,7 +572,7 @@
   "chat.tool.approval.deny": "拒絕",
   "chat.tool.approval.failed": "未能儲存你的決定，請重試。",
   "chat.tool.approval.pendingCount": "還有 {{count}} 個待審批",
-  "chat.tool.approval.requester": "請求來自",
+  "chat.tool.approval.requester": "{{model}} 請求呼叫此工具",
   "chat.tool.approvalRequested": "請求審批",
   "chat.tool.approved": "已批准",
   "chat.tool.arguments": "參數",

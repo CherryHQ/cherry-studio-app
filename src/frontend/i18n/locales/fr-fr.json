@@ -584,7 +584,7 @@
   "chat.tool.approval.deny": "Refuser",
   "chat.tool.approval.failed": "Impossible d'enregistrer votre décision. Veuillez réessayer.",
   "chat.tool.approval.pendingCount": "{{count}} approbations en attente",
-  "chat.tool.approval.requester": "Demandé par",
+  "chat.tool.approval.requester": "Demandé par {{model}}",
   "chat.tool.approvalRequested": "Approbation demandée",
   "chat.tool.approved": "Approuvé",
   "chat.tool.arguments": "Arguments",
