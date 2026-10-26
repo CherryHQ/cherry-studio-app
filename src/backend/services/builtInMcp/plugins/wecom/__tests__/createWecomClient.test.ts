@@ -1,4 +1,4 @@
-import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
+import { trackNativeAbortSignals } from '../../../authorization/__tests__/_nativeAbortSignal';
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createWecomClient } from '../createWecomClient';
 import { getWecomToolEffect } from '../wecomTools';
@@ -124,7 +124,7 @@ it.each([false, true])(
   'releases settled discovery/call listeners and timers while the client remains open (caller: %s)',
   async (withCaller) => {
     jest.useFakeTimers();
-    const tracked = trackExpoAbortSignals();
+    const tracked = trackNativeAbortSignals();
     try {
       client = await createWecomClient(context);
       await client.listTools({ options: { signal: new AbortController().signal } });

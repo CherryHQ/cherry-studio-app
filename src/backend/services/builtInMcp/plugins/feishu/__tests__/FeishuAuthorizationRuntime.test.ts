@@ -1,7 +1,7 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
-import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
+import { trackNativeAbortSignals } from '../../../authorization/__tests__/_nativeAbortSignal';
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
 import { feishuOauth } from '../feishuOauth';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../feishuTools';
@@ -311,7 +311,7 @@ function pendingRefresh() {
 it('leaves no abort listeners behind on long-lived signals after credential lookups', async () => {
   const runtime = createRuntime();
   const grant = await connected(runtime);
-  const { listeners } = trackExpoAbortSignals();
+  const { listeners } = trackNativeAbortSignals();
 
   for (let index = 0; index < 3; index += 1) {
     await runtime.resolveCredential(grant.id, new AbortController().signal);
