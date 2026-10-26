@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-const patch = readFileSync('patches/react-native@0.86.3.patch', 'utf8');
+const patch = readFileSync('patches/react-native@0.88.0.patch', 'utf8');
 const cachePatch = patch
   .split('+++ b/ReactCommon/react/utils/SimpleThreadSafeCache.h\n')[1]
   ?.split('diff --git ')[0];
@@ -22,7 +22,7 @@ describe('React Native text measurement cache patch', () => {
     const patchPath = `patches/react-native@${version}.patch`;
     const hash = createHash('sha256').update(patch).digest('hex');
 
-    expect(version).toBe('0.86.3');
+    expect(version).toBe('0.88.0');
     expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(
       `react-native@${version}: ${patchPath}`,
     );

@@ -156,7 +156,7 @@ export async function stitchCapturedPngPages(
         const chunkSize = 256 * 1024;
         for (let offset = 0; offset < bytes.length; offset += chunkSize) {
           operationSignal.throwIfAborted();
-          handle.writeBytes(bytes.subarray(offset, offset + chunkSize));
+          handle.writeBytesSync(bytes.subarray(offset, offset + chunkSize));
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
         }
       } finally {

@@ -1,6 +1,11 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { useEffect, useMemo, useRef } from 'react';
-import { type LayoutChangeEvent, Pressable, useWindowDimensions, type View } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  useWindowDimensions,
+  type ViewInstance,
+} from 'react-native';
 import Animated, {
   interpolate,
   measure,
@@ -83,14 +88,14 @@ function MorphMenuRoot({
     width ?? Math.round(Math.min(windowWidth, panelWidthReferenceMax) * defaultPanelWidthRatio),
     maxPanelWidth,
   );
-  const fallbackTriggerRef = useRef<View>(null);
+  const fallbackTriggerRef = useRef<ViewInstance>(null);
   const triggerRef = providedTriggerRef ?? fallbackTriggerRef;
   const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
   const { progress, isVisible } = useMenuMotion(isOpen);
   const cornerRadius = useMenuPanelRadius();
   const panelHeight = useSharedValue(fallbackPanelHeight);
   const panelWidth = useSharedValue(minPanelWidth);
-  const footprintRef = useAnimatedRef<View>();
+  const footprintRef = useAnimatedRef<ViewInstance>();
   const liveAnchor = useSharedValue<MenuAnchor | null>(null);
   const openRequest = useRef(0);
   const isPresented = Boolean(anchor);

@@ -24,7 +24,7 @@ export async function addMcpContentToDraft(
       signal.throwIfAborted();
       const temporary = new File(Paths.cache, `mcp-${randomUUID()}`);
       try {
-        temporary.write(content.data, { encoding: 'base64' });
+        temporary.writeSync(content.data, { encoding: 'base64' });
         const resolved = await files.createInternalEntry({
           uri: temporary.uri,
           mediaType: content.mimeType,

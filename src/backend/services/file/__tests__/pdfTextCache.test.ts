@@ -37,7 +37,7 @@ jest.mock('expo-file-system', () => {
     text() {
       return Promise.resolve(mockFiles.get(this.uri)!.content);
     }
-    write(content: string) {
+    writeSync(content: string) {
       mockFiles.set(this.uri, {
         content,
         size: new TextEncoder().encode(content).length,
@@ -89,7 +89,7 @@ beforeEach(() => {
 });
 
 test('persists the complete extraction result across reader instances without device paths', async () => {
-  source().write('pdf bytes');
+  source().writeSync('pdf bytes');
   const cache = pdfTextCacheFile(source(), 'zh-CN');
   writePdfTextCache(cache, result);
   await expect(readPdfTextCache(new File(cache.uri))).resolves.toEqual(result);
@@ -100,15 +100,15 @@ test('persists the complete extraction result across reader instances without de
 });
 
 test('invalidates a replaced source and rejects truncated cache writes', async () => {
-  source().write('pdf bytes');
+  source().writeSync('pdf bytes');
   const original = pdfTextCacheFile(source(), 'zh-CN');
   writePdfTextCache(original, result);
-  source().write('replacement');
+  source().writeSync('replacement');
   expect(pdfTextCacheFile(source(), 'zh-CN').uri).not.toBe(original.uri);
   // Recognition languages follow the app language.
   expect(pdfTextCacheFile(source(), 'ru-RU').uri).not.toBe(pdfTextCacheFile(source(), 'zh-CN').uri);
   await expect(readPdfTextCache(pdfTextCacheFile(source(), 'zh-CN'))).resolves.toBeUndefined();
-  original.write('{"text":');
+  original.writeSync('{"text":');
   await expect(readPdfTextCache(original)).resolves.toBeUndefined();
 });
 

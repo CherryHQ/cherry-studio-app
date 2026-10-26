@@ -60,7 +60,7 @@ jest.mock('expo-file-system', () => {
     create() {
       files.set(this.uri, '');
     }
-    write(content: string | Uint8Array) {
+    writeSync(content: string | Uint8Array) {
       files.set(
         this.uri,
         typeof content === 'string' ? content : new TextDecoder().decode(content),
@@ -73,14 +73,14 @@ jest.mock('expo-file-system', () => {
         get size() {
           return new TextEncoder().encode(files.get(uri) ?? '').byteLength;
         },
-        readBytes(length: number) {
+        readBytesSync(length: number) {
           const bytes = new TextEncoder()
             .encode(files.get(uri) ?? '')
             .slice(this.offset, this.offset + length);
           this.offset += bytes.length;
           return bytes;
         },
-        writeBytes(bytes: Uint8Array) {
+        writeBytesSync(bytes: Uint8Array) {
           const previous = new TextEncoder().encode(files.get(uri) ?? '');
           const next = new Uint8Array(Math.max(previous.length, this.offset + bytes.length));
           next.set(previous);

@@ -50,7 +50,7 @@ jest.mock('expo-file-system', () => {
       files.set(this.uri, new Uint8Array());
     }
 
-    write(data: Uint8Array) {
+    writeSync(data: Uint8Array) {
       files.set(this.uri, data);
     }
 
@@ -62,13 +62,13 @@ jest.mock('expo-file-system', () => {
       const fileUri = this.uri;
       return {
         offset: 0,
-        readBytes(length: number) {
+        readBytesSync(length: number) {
           const bytes = files.get(fileUri)!;
           const result = bytes.slice(this.offset, this.offset + length);
           this.offset += result.length;
           return result;
         },
-        writeBytes(bytes: Uint8Array) {
+        writeBytesSync(bytes: Uint8Array) {
           if (mode !== 'write') throw new Error('Read-only handle');
           const old = files.get(fileUri)!;
           const next = new Uint8Array(this.offset + bytes.length);
@@ -141,7 +141,7 @@ test('extracts stored Office files without interpreting their inner ZIP entries 
     offset += chunk.length;
   }
   const source = new File('file:///cache/source.zip');
-  source.write(archive);
+  source.writeSync(archive);
 
   await expect(
     unpackBackup(
@@ -193,7 +193,7 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
     ['database/cherry.db', database],
     [filePath, image],
   ] as const)
-    new File(root, path).write(bytes);
+    new File(root, path).writeSync(bytes);
   const output = new File('file:///cache/export.zip');
   const progress: [number, number][] = [];
   await packBackup(root, manifest, output, new AbortController().signal, (done, total) =>

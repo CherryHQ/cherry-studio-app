@@ -191,7 +191,7 @@ export class FilePreviewBridge {
         const handle = acquire();
         const count = Math.min(FILE_PREVIEW_CHUNK_BYTES, end - position);
         handle.offset = position;
-        const bytes = handle.readBytes(count);
+        const bytes = handle.readBytesSync(count);
         if (bytes.byteLength !== count) {
           throw new BridgeReadError(
             'short_read',

@@ -15,7 +15,7 @@ const mockDelete = jest.fn();
 const mockConfirm = jest.fn();
 const mockToast = jest.fn();
 const mockPush = jest.fn();
-const mockNavigation = { addListener: jest.fn(() => () => undefined) };
+const mockUsePreventRemove = jest.fn();
 const mockQueryClient = {};
 let mockDefaultModelId: UniqueModelId | null = null;
 
@@ -26,7 +26,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => mockQueryClient }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
-  useNavigation: () => mockNavigation,
+  usePreventRemove: (...args: unknown[]) => mockUsePreventRemove(...args),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/components/Selection', () =>

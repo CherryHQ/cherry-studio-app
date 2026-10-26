@@ -31,7 +31,7 @@ jest.mock('expo-file-system', () => {
       mockFiles.delete(this.uri);
       mockContents.delete(this.uri);
     }
-    write(content: string) {
+    writeSync(content: string) {
       mockFiles.add(this.uri);
       mockContents.set(this.uri, content);
     }

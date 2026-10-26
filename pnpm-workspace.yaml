@@ -36,8 +36,8 @@ overrides:
   '@ai-sdk/provider-utils': 4.0.58
   '@ai-sdk/xai': 3.0.126
   ai: 6.0.185
-  expo-app-metrics: 57.0.17
-  react-native-svg: 15.15.4
+  expo-app-metrics: 58.0.14
+  react-native-svg: 15.16.0
 
 allowBuilds:
   esbuild: true
@@ -54,6 +54,8 @@ allowBuilds:
   react-native-enriched-markdown: true
   # Downloads the published iOS AnyDoc XCFramework; Android downloads at native build time.
   react-native-anydoc: true
+  # Jest's watcher ships prebuilt binaries; its install script only builds from source on request.
+  '@parcel/watcher': false
   '@google/genai': false
   protobufjs: false
 
@@ -63,10 +65,10 @@ patchedDependencies:
   '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
-  metro@0.84.5: patches/metro@0.84.5.patch
-  metro-runtime@0.84.5: patches/metro-runtime@0.84.5.patch
+  metro@0.87.1: patches/metro@0.87.1.patch
+  metro-runtime@0.87.1: patches/metro-runtime@0.87.1.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
-  react-native-reanimated@4.5.5: patches/react-native-reanimated@4.5.5.patch
+  react-native-reanimated@4.7.1: patches/react-native-reanimated@4.7.1.patch
   '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
   '@ai-sdk/google@3.0.132': patches/@ai-sdk__google@3.0.132.patch
   '@ai-sdk/openai@3.0.109': patches/@ai-sdk__openai@3.0.109.patch
@@ -75,26 +77,27 @@ patchedDependencies:
   ollama-ai-provider-v2@3.3.1: patches/ollama-ai-provider-v2@3.3.1.patch
   ai@6.0.185: patches/ai@6.0.185.patch
   react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
-  react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
-  expo-router@57.0.20: patches/expo-router@57.0.20.patch
+  react-native-keyboard-controller@1.22.7: patches/react-native-keyboard-controller@1.22.7.patch
+  expo-router@58.0.26: patches/expo-router@58.0.26.patch
   react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
-  react-native-drawer-layout@4.2.4: patches/react-native-drawer-layout@4.2.4.patch
-  expo-calendar@57.0.3: patches/expo-calendar@57.0.3.patch
+  react-native-drawer-layout@4.2.12: patches/react-native-drawer-layout@4.2.12.patch
+  expo-calendar@58.0.6: patches/expo-calendar@58.0.6.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
-  expo-notifications@57.0.17: patches/expo-notifications@57.0.17.patch
-  expo-image-picker@57.0.16: patches/expo-image-picker@57.0.16.patch
-  expo-app-metrics@57.0.17: patches/expo-app-metrics@57.0.17.patch
-  react-native-screens@4.26.2: patches/react-native-screens@4.26.2.patch
-  react-native@0.86.3: patches/react-native@0.86.3.patch
-  expo-widgets@57.0.19: patches/expo-widgets@57.0.19.patch
+  expo-notifications@58.1.6: patches/expo-notifications@58.1.6.patch
+  expo-app-metrics@58.0.14: patches/expo-app-metrics@58.0.14.patch
+  react-native-screens@4.30.0: patches/react-native-screens@4.30.0.patch
+  react-native@0.88.0: patches/react-native@0.88.0.patch
+  expo-widgets@58.0.23: patches/expo-widgets@58.0.23.patch
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
-  expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
+  expo-observe@58.0.16: patches/expo-observe@58.0.16.patch
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
   '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
+  '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
+  nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
 
 minimumReleaseAgeExclude:
   # Pi 1.4.0 is upgraded as one release, including its internal dependencies.
@@ -105,31 +108,8 @@ minimumReleaseAgeExclude:
   - '@earendil-works/pi-telemetry@1.4.0'
   - '@cherrystudio/ai-core@2.4.2'
   - '@cherrystudio/ai-sdk-provider@0.1.9'
-  - '@expo/cli@57.0.3'
   - '@expo/fingerprint@0.20.1'
   - '@expo/inline-modules@0.1.1'
-  - '@expo/local-build-cache-provider@57.0.1'
-  - '@expo/metro-config@57.0.2'
-  - '@expo/prebuild-config@57.0.3'
-  - '@expo/router-server@57.0.1'
-  - babel-preset-expo@57.0.1
-  - expo-asset@57.0.2
-  - expo-constants@57.0.2
-  - expo-modules-autolinking@57.0.3
-  - expo-modules-core@57.0.1
-  - expo@57.0.1
-  - expo-router@57.0.2
-  - '@expo/metro-runtime@57.0.2'
-  - '@expo/ui@57.0.2'
-  - expo-auth-session@57.0.1
-  - expo-build-properties@57.0.2
-  - expo-dev-client@57.0.4
-  - expo-dev-launcher@57.0.4
-  - expo-dev-menu@57.0.4
-  - expo-linking@57.0.1
-  - expo-splash-screen@57.0.1
-  - heroui-native@1.0.5
   - react-native-enriched-markdown@1.0.1
-  - expo-camera@57.0.3
   - '@legendapp/list@3.3.3'
   - '@cherrystudio/analytics-client@1.4.0'

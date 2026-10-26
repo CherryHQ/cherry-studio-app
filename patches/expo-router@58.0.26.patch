@@ -1,0 +1,26 @@
+diff --git a/build/react-navigation/drawer/types.d.ts b/build/react-navigation/drawer/types.d.ts
+index 2a75e28..eb47bd2 100644
+--- a/build/react-navigation/drawer/types.d.ts
++++ b/build/react-navigation/drawer/types.d.ts
+@@ -1,5 +1,6 @@
+ import type { ColorValue, StyleProp, TextStyle, ViewStyle } from 'react-native';
+-import type { PanGesture } from 'react-native-gesture-handler';
++// Gesture Handler 3 renamed the builder-based pan type that the drawer still creates.
++import type { LegacyPanGesture as PanGesture } from 'react-native-gesture-handler';
+ import type { HeaderOptions } from '../elements';
+ import type { Descriptor, DescriptorRouteProp, DrawerActionHelpers, DrawerNavigationState, NavigationHelpers, NavigationProp, ParamListBase, Route, RouteProp, Theme } from '../native';
+ export type Scene = {
+diff --git a/build/react-navigation/native-stack/views/useHeaderConfigProps.js b/build/react-navigation/native-stack/views/useHeaderConfigProps.js
+index 65358d6..b11ce20 100644
+--- a/build/react-navigation/native-stack/views/useHeaderConfigProps.js
++++ b/build/react-navigation/native-stack/views/useHeaderConfigProps.js
+@@ -52,7 +52,8 @@ const processBarButtonItems = (items, colors, fonts)=>{
+             if (item.spacing == null) {
+                 throw new Error(`Spacing item must have a 'spacing' property defined: ${JSON.stringify(item)}`);
+             }
+-            return item;
++            // Native screens inserts spacers among custom views using this index.
++            return { ...item, index };
+         }
+         if (item.type === 'button' || item.type === 'menu') {
+             if (item.type === 'menu' && item.menu == null) {

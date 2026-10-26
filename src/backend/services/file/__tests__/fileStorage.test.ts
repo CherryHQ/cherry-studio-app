@@ -102,7 +102,7 @@ jest.mock('expo-file-system', () => {
       files.delete(this.uri);
     }
 
-    write(content: string | Uint8Array, options?: unknown) {
+    writeSync(content: string | Uint8Array, options?: unknown) {
       writes.push({ content, options, uri: this.uri });
       files.set(this.uri, content.length);
       if (writeFailures.has(this.uri)) {

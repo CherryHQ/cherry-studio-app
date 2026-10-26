@@ -68,7 +68,7 @@ export async function unpackBackup(
       size: inputSize,
       read(offset: number, length: number) {
         handle.offset = offset;
-        return handle.readBytes(length);
+        return handle.readBytesSync(length);
       },
     };
     const names = new Set<string>();
@@ -110,7 +110,7 @@ export async function unpackBackup(
               throw new BackupError('too-large');
             if (Paths.availableDiskSpace < chunk.byteLength + 32 * 1024 * 1024)
               throw new BackupError('disk-space');
-            output.writeBytes(chunk);
+            output.writeBytesSync(chunk);
           },
           close: () => output.close(),
         };

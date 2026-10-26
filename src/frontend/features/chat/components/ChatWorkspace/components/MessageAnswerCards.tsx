@@ -22,6 +22,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ScrollViewInstance,
+  type ViewInstance,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -101,7 +103,7 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
   const { t } = useTranslation();
   const { selectBranch } = useAssistantMessageActions();
   const expand = useExpandAnswer();
-  const cardRefs = useRef(new Map<string, View>());
+  const cardRefs = useRef(new Map<string, ViewInstance>());
   const measure = useCallback((id: string) => measureFrame(cardRefs.current.get(id)), []);
   const sessionId = useChatSessionId();
   const branchSiblings = message.branch?.siblings;
@@ -112,7 +114,7 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
   const { height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Once horizontal scrolling wins, the drawer must not take over the same touch.
   const scrollGesture = useMemo(() => Gesture.Native().disallowInterruption(true), []);
   const placement = useRef<{ id: string; offset: number }>(undefined);
@@ -271,7 +273,7 @@ const AnswerCard = memo(function AnswerCard({
   model: Answers['models'][number];
   name: string;
   onPress: () => void;
-  ref: Ref<View>;
+  ref: Ref<ViewInstance>;
   status: MessageListItem['status'];
   testID: string;
   width: number;

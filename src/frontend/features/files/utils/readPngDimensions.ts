@@ -4,7 +4,7 @@ import { File, FileMode } from 'expo-file-system';
 export function readPngDimensions(uri: string): { width: number; height: number } | undefined {
   const handle = new File(uri).open(FileMode.ReadOnly);
   try {
-    const bytes = handle.readBytes(24);
+    const bytes = handle.readBytesSync(24);
     if (bytes.length !== 24) return undefined;
     const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (

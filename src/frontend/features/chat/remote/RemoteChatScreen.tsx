@@ -6,7 +6,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View } from 'react-native';
+import { Keyboard, Text, View, type ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
@@ -94,7 +94,7 @@ function RemoteChatUnavailable({ state }: { state: 'loading' | 'error' | 'unpair
     </ChatScreenFrame>
   );
 }
-function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInstance | null> }) {
   const { startRemoteChat } = useChatSource();
   return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
 }
@@ -107,7 +107,7 @@ function RemoteHeader({
   blurTarget,
   hidden,
 }: {
-  blurTarget: RefObject<View | null>;
+  blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
 }) {
   const header = use(HeaderContext)!;

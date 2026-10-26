@@ -1,10 +1,10 @@
 import { createContext, use } from 'react';
-import type { View } from 'react-native';
+import type { ViewInstance } from 'react-native';
 
 export type MenuInteractionValue = {
   isOpen: boolean;
   close: (afterClose?: () => void) => void;
-  registerItem?: (item: View) => () => void;
+  registerItem?: (item: ViewInstance) => () => void;
   /** Android over-keyboard windows need press recognition in native view coordinates. */
   shouldUseNativePresses?: boolean;
 };

@@ -1,7 +1,7 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePreventRemove, useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -27,7 +27,6 @@ export function useProviderModelManagement(
   const { alert } = useAlert();
   const { toast } = useToast();
   const router = useRouter();
-  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { selections } = useModelSettingSelections();
   const deletion = useMutation('DELETE', '/models');
@@ -68,16 +67,8 @@ export function useProviderModelManagement(
     setSelection(allSelected ? new Set() : new Set(visibleIds));
   };
 
-  useEffect(
-    () =>
-      navigation.addListener('beforeRemove', (event) => {
-        if (deleting.current || isSelecting) {
-          event.preventDefault();
-          finishSelection();
-        }
-      }),
-    [finishSelection, isSelecting, navigation],
-  );
+  // Back leaves selection first; a running deletion keeps the screen.
+  usePreventRemove(isSelecting || isDeleting, finishSelection);
 
   const requestDelete = (targetModels?: readonly Model[]) => {
     const targets = targetModels ?? models.filter((model) => selectedIds.has(model.id));

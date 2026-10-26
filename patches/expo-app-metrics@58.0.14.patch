@@ -1,4 +1,5 @@
 diff --git a/src/module.ts b/src/module.ts
+index 9f994b2..378dfa4 100644
 --- a/src/module.ts
 +++ b/src/module.ts
 @@ -1,5 +1,14 @@

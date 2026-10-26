@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { View } from 'react-native';
+import type { ViewInstance } from 'react-native';
 
 import type { Agent } from '@/shared/data/types/agent';
 
@@ -7,7 +7,7 @@ import type { HeaderToolbarAction } from '../../components/HeaderAction';
 
 export type MainHeaderViewProps = {
   agent?: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string };
-  blurTarget: RefObject<View | null>;
+  blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
   onNewChat: () => void;
   onAgentPress?: () => void;

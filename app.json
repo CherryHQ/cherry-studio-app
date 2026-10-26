@@ -254,16 +254,15 @@
         {
           "android": {
             "minSdkVersion": 26,
-            "compileSdkVersion": 36,
+            "compileSdkVersion": 37,
             "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0",
+            "buildToolsVersion": "37.0.0",
             "usesCleartextTraffic": true,
             "extraProguardRules": "-keepattributes SourceFile,LineNumberTable\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keep @interface expo.modules.kotlin.records.Required"
           },
           "ios": {
             "deploymentTarget": "17.0",
-            "buildReactNativeFromSource": true,
-            "enableSceneSupport": true
+            "buildReactNativeFromSource": true
           }
         }
       ],

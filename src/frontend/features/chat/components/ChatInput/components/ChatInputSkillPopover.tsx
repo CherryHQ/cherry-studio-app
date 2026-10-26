@@ -4,7 +4,7 @@ import { Button, Composer } from '@cherrystudio/ui/components';
 import { useFocusEffect } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
 import { useComposerMeta, useComposerState } from '@/frontend/components/Composer';
 import { useSkillsApi } from '@/frontend/hooks/skill';
@@ -25,13 +25,13 @@ export function ChatInputSkillPopover({
   children: ReactNode;
   onClose(): void;
   open: boolean;
-  returnFocusRef?: RefObject<View | null>;
+  returnFocusRef?: RefObject<ViewInstance | null>;
 }) {
   const { t } = useTranslation();
   const { inputRef } = useComposerMeta();
   const { draft } = useComposerState();
   const selected = readSkillMentions(draft).skills;
-  const initialFocusRef = useRef<View>(null);
+  const initialFocusRef = useRef<ViewInstance>(null);
   const selectionAccepted = useRef(false);
   const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);
   // Keep the list subscribed so installations refresh it before the menu opens.

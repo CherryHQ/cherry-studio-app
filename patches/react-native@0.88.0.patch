@@ -1,50 +1,37 @@
-diff --git a/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h b/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h
-index fdabd7bab1f03966dc04ba9a462465daeccf8ae3..ef70011ee5c270fb2cac52f3a7408d1e87334145 100644
---- a/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h
-+++ b/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h
-@@ -21,6 +21,10 @@ class ReactNativeFeatureFlagsOverridesOSSStable : public ReactNativeFeatureFlags
-   {
-     return true;
-   }
-+  bool enableSchedulerDelegateInvalidation() override
-+  {
-+    return true;
-+  }
-   bool useTurboModules() override
-   {
-     return true;
 diff --git a/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm b/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm
+index 82cad8f..74f8e14 100644
 --- a/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm
 +++ b/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm
 @@ -40,7 +40,7 @@
        auto originalAtributedString = attributedStringBox.getValue();
        auto attributedString = ensurePlaceholderIfEmpty_DO_NOT_USE(originalAtributedString);
-
+ 
 -      measurement = textMeasureCache_.get(
 +      measurement = textMeasureCache_.getWithGeneratorOutsideLock(
            {.attributedString = attributedString,
             .paragraphAttributes = paragraphAttributes,
-            .layoutConstraints = layoutConstraints},
-@@ -109,7 +109,7 @@
-
+            .layoutConstraints = layoutConstraints,
+@@ -110,7 +110,7 @@
+ 
    RCTTextLayoutManager *textLayoutManager = (RCTTextLayoutManager *)unwrapManagedObject(nativeTextLayoutManager_);
-
+ 
 -  auto measurement = lineMeasureCache_.get(
 +  auto measurement = lineMeasureCache_.getWithGeneratorOutsideLock(
        {.attributedString = attributedString, .paragraphAttributes = paragraphAttributes, .size = size}, [&]() {
          auto measurement = [textLayoutManager getLinesForAttributedString:attributedString
                                                        paragraphAttributes:paragraphAttributes
 diff --git a/ReactCommon/react/utils/SimpleThreadSafeCache.h b/ReactCommon/react/utils/SimpleThreadSafeCache.h
+index e5c8994..0486a9e 100644
 --- a/ReactCommon/react/utils/SimpleThreadSafeCache.h
 +++ b/ReactCommon/react/utils/SimpleThreadSafeCache.h
-@@ -37,7 +37,34 @@
+@@ -37,9 +37,36 @@ class SimpleThreadSafeCache {
     */
    ValueT get(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator) const
    {
 +    std::lock_guard<std::mutex> lock(mutex_);
      return getMapIterator(key, std::move(generator))->second->second;
-+  }
-+
+   }
+ 
 +  /*
 +   * Returns a cached value or computes a miss without holding the cache lock.
 +   * The generator must allow concurrent execution, including for the same key.
@@ -69,10 +56,12 @@ diff --git a/ReactCommon/react/utils/SimpleThreadSafeCache.h b/ReactCommon/react
 +    // Recheck after generation and copy the result before unlocking, so another
 +    // thread cannot evict the entry while it is being read.
 +    return getMapIterator(key, [&value]() { return std::move(value); })->second->second;
-   }
-
++  }
++
    /*
-@@ -49,6 +76,7 @@
+    * Returns pointers to both the key and value from the map with a given key.
+    * If the value wasn't found in the cache, constructs the value using given
+@@ -49,6 +76,7 @@ class SimpleThreadSafeCache {
    std::pair<const KeyT *, const ValueT *> getWithKey(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator)
        const
    {
@@ -80,10 +69,10 @@ diff --git a/ReactCommon/react/utils/SimpleThreadSafeCache.h b/ReactCommon/react
      auto it = getMapIterator(key, std::move(generator));
      return std::make_pair(&it->first, &it->second->second);
    }
-@@ -75,10 +103,9 @@
+@@ -75,10 +103,9 @@ class SimpleThreadSafeCache {
    using EntryT = std::pair<KeyT, ValueT>;
    using iterator = typename std::list<EntryT>::iterator;
-
+ 
 +  // The caller must hold mutex_ through lookup and use of the returned iterator.
    auto getMapIterator(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator) const
    {
@@ -93,22 +82,23 @@ diff --git a/ReactCommon/react/utils/SimpleThreadSafeCache.h b/ReactCommon/react
        // Move accessed item to front of list
        list_.splice(list_.begin(), list_, it->second);
 diff --git a/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp b/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp
+index 1fc5812..7c47622 100644
 --- a/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp
 +++ b/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp
 @@ -6,6 +6,9 @@
   */
-
+ 
  #include <gtest/gtest.h>
 +#include <chrono>
 +#include <future>
 +#include <memory>
  #include <react/utils/SimpleThreadSafeCache.h>
-
+ 
  namespace facebook::react {
-@@ -37,4 +40,107 @@
+@@ -37,4 +40,107 @@ TEST(EvictingCacheMapTest, Eviction) {
    EXPECT_EQ(cache.get(3), "three");
  }
-
+ 
 +TEST(EvictingCacheMapTest, GeneratorCanWaitForAnotherThreadUsingTheCache) {
 +  SimpleThreadSafeCache<int, std::string, 3> cache;
 +  cache.getWithGeneratorOutsideLock(0, []() { return std::string("zero"); });

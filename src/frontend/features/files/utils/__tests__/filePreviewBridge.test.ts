@@ -20,18 +20,18 @@ function fakeFile(content: Uint8Array) {
       get size() {
         return state.size;
       },
-      readBytes(length: number) {
+      readBytesSync(length: number) {
         const bytes = content.slice(offset, offset + Math.min(length, state.truncateReadsTo));
         offset += bytes.length;
         return bytes;
       },
-      writeBytes() {
+      writeBytesSync() {
         throw new Error('read-only');
       },
       close() {
         state.closeCount++;
       },
-    } as FileHandle;
+    } as unknown as FileHandle;
   };
   return { state, open };
 }

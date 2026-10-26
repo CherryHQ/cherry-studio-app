@@ -26,6 +26,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ScrollViewInstance,
+  type ViewInstance,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -187,8 +189,8 @@ function ExpandedAnswer({
   const width = size?.width ?? 0;
   const height = size?.height ?? 0;
   const isClosing = useRef(false);
-  const rootRef = useRef<View>(null);
-  const pagerRef = useRef<ScrollView>(null);
+  const rootRef = useRef<ViewInstance>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
   const [isCovering, setIsCovering] = useState(COVERS_FROM_START);
   const [isClosed, setIsClosed] = useState(false);
   useFullScreenLayer(isCovering && !isClosed);
@@ -466,7 +468,7 @@ function AnswerPage({
   onPullClose: () => void;
 }) {
   const row = useChatMessageRow(answer?.id ?? '');
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const isAtEnd = useRef(true);
   const isRunning = answer?.status === 'pending';
 

@@ -110,7 +110,7 @@ type BackgroundActivityEnvironmentPort = {
 @DependsOn(['KeepAliveCoordinator', 'BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
 export class BackgroundActivityManager extends BaseService {
-  private appState: AppStateStatus = AppState.currentState;
+  private appState: typeof AppState.currentState = AppState.currentState;
   private disposed = false;
   private logoUris: BackgroundActivityNativePresentation['logoUris'];
   private operationTail: Promise<void> = Promise.resolve();

@@ -2,7 +2,14 @@ import { Portal, TextAnimation, type TextAnimationDirection } from '@cherrystudi
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewInstance,
+} from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, {
@@ -64,7 +71,7 @@ export function ChatInputEffortOverlay({
   }));
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
-  const rootRef = useRef<View>(null);
+  const rootRef = useRef<ViewInstance>(null);
   const openingRef = useRef(false);
   const revealPendingRef = useRef(false);
   const [layout, setLayout] = useState<ActiveEffortLayout | null>(null);

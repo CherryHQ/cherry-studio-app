@@ -73,7 +73,7 @@ export async function renderEditedImage(
     const directory = new Directory(Paths.cache, 'ImageEdits');
     directory.create({ idempotent: true, intermediates: true });
     output = new File(directory, `${randomUUID()}.${generatedImageExtension(mediaType)}`);
-    output.write(bytes);
+    output.writeSync(bytes);
     const completed = output;
     return {
       uri: completed.uri,

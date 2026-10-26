@@ -1,8 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { type LayoutChangeEvent, View } from 'react-native';
+import { type LayoutChangeEvent, type ViewInstance } from 'react-native';
 
 export function useMeasuredWidth(enabled = true) {
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   const [width, setWidth] = useState(0);
 
   const updateWidth = useCallback((nextWidth: number) => {

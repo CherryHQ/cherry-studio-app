@@ -61,7 +61,7 @@ jest.mock('expo-file-system', () => {
       const fd = fs.openSync(this.uri, 'r+');
       return {
         offset: 0,
-        readBytes(size: number) {
+        readBytesSync(size: number) {
           mockNativeReads.push(size);
           if (size > 1024 * 1024) throw new Error('Unbounded native read');
           const bytes = Buffer.alloc(size);
@@ -69,7 +69,7 @@ jest.mock('expo-file-system', () => {
           this.offset += count;
           return bytes.subarray(0, count);
         },
-        writeBytes(bytes: Uint8Array) {
+        writeBytesSync(bytes: Uint8Array) {
           this.offset += fs.writeSync(fd, bytes, 0, bytes.length, this.offset);
         },
         close() {

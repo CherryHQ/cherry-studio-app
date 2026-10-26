@@ -76,8 +76,19 @@ export function createReplyCompletionNotifier(
   // Lazy native-module load matches the other native services so CommonJS test
   // environments keep their mocks and unsupported platforms never load it.
   const loadNotifications = (): Notifications => {
+    if (notifications) return notifications;
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
-    notifications ??= require('expo-notifications') as Notifications;
+    notifications = require('expo-notifications') as Notifications;
+    // Every notice is for a hidden app. Expo presents foreground arrivals unless a handler
+    // declines, so a notice that lands as the user returns stays out of the open app.
+    notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      }),
+    });
     return notifications;
   };
 

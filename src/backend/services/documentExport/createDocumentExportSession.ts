@@ -111,7 +111,7 @@ export function createDocumentExportSession(
         });
         const file = new File(outputDirectory, filename);
         progress('writing');
-        file.write(markdownText);
+        file.writeSync(markdownText);
         artifact = {
           id,
           format: 'markdown',
@@ -138,7 +138,7 @@ export function createDocumentExportSession(
           });
           const file = new File(outputDirectory, filename);
           progress('writing');
-          file.write(result.html);
+          file.writeSync(result.html);
           artifact = {
             id,
             format: 'html',

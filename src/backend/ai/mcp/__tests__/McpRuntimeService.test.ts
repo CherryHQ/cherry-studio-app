@@ -94,7 +94,7 @@ jest.mock('expo-file-system', () => {
     create() {
       files.set(this.uri, '');
     }
-    write(body: string) {
+    writeSync(body: string) {
       files.set(this.uri, body);
     }
     delete() {

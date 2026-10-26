@@ -1,5 +1,5 @@
 diff --git a/ios/Requesters/CalendarPermissionsRequester.swift b/ios/Requesters/CalendarPermissionsRequester.swift
-index 5cba4627b..c03e01884 100644
+index 5cba462..c03e018 100644
 --- a/ios/Requesters/CalendarPermissionsRequester.swift
 +++ b/ios/Requesters/CalendarPermissionsRequester.swift
 @@ -4,6 +4,7 @@ internal import React
