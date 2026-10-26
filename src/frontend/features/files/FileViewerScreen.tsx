@@ -13,7 +13,7 @@ import {
   type ChatRouteParamsInput,
   type ChatTarget,
 } from '@/frontend/appShell/navigation/chat';
-import type { FilePaneFile } from '@/frontend/appShell/pane';
+import type { FilePaneFile } from '@/frontend/appShell/pane/state';
 import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';

@@ -1,14 +1,13 @@
 import ExpoModulesCore
 import UIKit
 
-/// Reports the display's division region in window coordinates. UIKit posts no notification when
+/// Reports the host and display's division region together in window coordinates. UIKit posts no notification when
 /// reserved regions change, so the view re-reads them after every layout pass, when it joins a
 /// window, and when the hinge moves.
 public final class FoldRegionObserverView: ExpoView {
-  private let onFoldChange = EventDispatcher()
+  private let onLayoutChange = EventDispatcher()
   private var hingeObservation: Any?
   private var reported: NSDictionary?
-  private var hasReported = false
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -30,11 +29,18 @@ public final class FoldRegionObserverView: ExpoView {
   }
 
   private func report() {
-    guard window != nil else { return }
+    guard let window else { return }
+    let host = convert(bounds, to: nil)
     let fold = FoldRegionReader.divisionRegion(in: self) as NSDictionary?
-    if hasReported && fold == reported { return }
-    hasReported = true
-    reported = fold
-    onFoldChange(["fold": fold ?? NSNull()])
+    let layout: [String: Any] = [
+      "host": ["x": host.origin.x, "y": host.origin.y, "width": host.width, "height": host.height],
+      "insets": ["left": safeAreaInsets.left, "right": safeAreaInsets.right],
+      "window": ["width": window.bounds.width, "height": window.bounds.height],
+      "fold": fold ?? NSNull()
+    ]
+    let snapshot = layout as NSDictionary
+    if snapshot == reported { return }
+    reported = snapshot
+    onLayoutChange(layout)
   }
 }

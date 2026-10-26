@@ -11,7 +11,7 @@ import {
   parseChatRoute,
   type ChatRouteParamsInput,
 } from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane';
+import { useFilePane } from '@/frontend/appShell/pane/state';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';

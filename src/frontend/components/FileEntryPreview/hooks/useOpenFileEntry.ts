@@ -15,7 +15,7 @@ import {
   type ChatRouteParamsInput,
   type ChatTarget,
 } from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane';
+import { useFilePane } from '@/frontend/appShell/pane/state';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';

@@ -5,15 +5,18 @@ import { FilePaneProvider, useFilePane } from '../FilePaneProvider';
 
 let mockWindowClass = 'expanded';
 let mockSource = 'local';
+let mockIsLayoutCurrent = true;
 let mockFold: { x: number; y: number; width: number; height: number; isActive: boolean } | null =
   null;
 
 jest.mock('@/frontend/appShell/layout', () => ({
   isAcross: jest.requireActual('@/frontend/appShell/layout/paneSplit').isAcross,
   useFoldRegion: () => mockFold,
+  useIsFoldRegionLayoutCurrent: () => mockIsLayoutCurrent,
   useWindowClass: () => mockWindowClass,
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
+  ...jest.requireActual('@/frontend/appShell/navigation/chat/chatRoute'),
   useChatSource: () => ({ source: mockSource }),
 }));
 
@@ -37,11 +40,32 @@ function render() {
   });
 }
 
+function update() {
+  act(() =>
+    renderer.update(
+      <FilePaneProvider>
+        <Probe />
+      </FilePaneProvider>,
+    ),
+  );
+}
+
+function narrow() {
+  mockWindowClass = 'compact';
+  update();
+}
+
+function expand() {
+  mockWindowClass = 'expanded';
+  update();
+}
+
 const file = { entryId: '00000000-0000-7000-8000-000000000001' as never };
 
 beforeEach(() => {
   mockWindowClass = 'expanded';
   mockSource = 'local';
+  mockIsLayoutCurrent = true;
   mockFold = null;
 });
 afterEach(() => act(() => renderer.unmount()));
@@ -71,6 +95,99 @@ it.each([
   mockSource = source;
   render();
   expect(pane!.isAvailable).toBe(isAvailable);
+});
+
+it('keeps the touched preview expanded over the chat while narrow and returns it beside the chat', () => {
+  render();
+  act(() => pane!.openFile(file));
+  act(() => pane!.recordTouch('pane'));
+  narrow();
+  expect(pane).toMatchObject({ file, isAvailable: false, isCarried: true, isExpanded: true });
+  expand();
+  expect(pane).toMatchObject({ file, isAvailable: true, isCarried: false, isExpanded: false });
+});
+
+it('restores an expanded preview as expanded when the window widens again', () => {
+  render();
+  act(() => pane!.openFile(file));
+  act(() => pane!.setExpanded(true));
+  narrow();
+  expect(pane).toMatchObject({ isCarried: true, isExpanded: true });
+  expand();
+  expect(pane).toMatchObject({ isCarried: false, isExpanded: true });
+});
+
+it.each(['setExpanded', 'closeFile'] as const)(
+  'returns to the chat with %s and keeps the file for the wider window',
+  (exit) => {
+    render();
+    act(() => pane!.openFile(file));
+    act(() => pane!.recordTouch('pane'));
+    narrow();
+    act(() => (exit === 'setExpanded' ? pane!.setExpanded(false) : pane!.closeFile()));
+    expect(pane).toMatchObject({ file, isCarried: false, isExpanded: false, isOpen: true });
+    expand();
+    expect(pane).toMatchObject({ file, isCarried: false, isExpanded: false, isOpen: true });
+  },
+);
+
+it('waits for a current snapshot before deciding whether a narrow window carries the preview', () => {
+  render();
+  act(() => {
+    pane!.openFile(file);
+    pane!.recordTouch('pane');
+  });
+  mockIsLayoutCurrent = false;
+  narrow();
+  expect(pane!.isCarried).toBe(false);
+
+  // Portrait rotation still has room for a stacked pane when its fold arrives.
+  mockFold = { x: 0, y: 455, width: 669, height: 40, isActive: true };
+  mockIsLayoutCurrent = true;
+  update();
+  expect(pane!.isCarried).toBe(false);
+
+  mockFold = null;
+  update();
+  expect(pane!.isCarried).toBe(true);
+  mockIsLayoutCurrent = false;
+  expand();
+  expect(pane!.isCarried).toBe(true);
+  mockIsLayoutCurrent = true;
+  update();
+  expect(pane).toMatchObject({ isCarried: false, isExpanded: false });
+});
+
+it.each(['chat', 'list', 'closed', 'remote'] as const)(
+  'does not carry a preview when the active state is %s',
+  (state) => {
+    render();
+    act(() => {
+      pane!.openFile(file);
+      pane!.recordTouch('pane');
+      if (state === 'chat') pane!.recordTouch('chat');
+      if (state === 'list') pane!.closeFile();
+      if (state === 'closed') pane!.close();
+    });
+    if (state === 'remote') mockSource = 'remote';
+    narrow();
+    expect(pane!.isCarried).toBe(false);
+  },
+);
+
+it('counts expanded reading as the active file pane', () => {
+  render();
+  act(() => pane!.openFile(file));
+  act(() => pane!.setExpanded(true));
+  narrow();
+  expect(pane!.isCarried).toBe(true);
+});
+
+it('records touches without publishing another pane state', () => {
+  render();
+  const previous = pane;
+  act(() => pane!.recordTouch('pane'));
+  expect(pane).toBe(previous);
 });
 
 it.each([

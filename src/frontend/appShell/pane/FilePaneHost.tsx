@@ -1,39 +1,19 @@
 import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import Maximize2Icon from '@cherrystudio/app-icons/icons/maximize-2';
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import {
-  type ReactNode,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  BackHandler,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-  type ViewInstance,
-} from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { useKeyboardState, useReanimatedFocusedInput } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated from 'react-native-reanimated';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
-import {
-  FoldRegionReporter,
-  PaneChromeProvider,
-  type PaneSplit,
-  resolveFilePaneWidth,
-  resolvePaneSplit,
-  useFoldRegion,
-  useIsSidebarPersistent,
-  windowRegionWidths,
-} from '@/frontend/appShell/layout';
+import { FoldRegionReporter, PaneChromeProvider, type PaneSplit } from '@/frontend/appShell/layout';
 
 import { type FilePane, type FilePaneFile, useFilePane } from './FilePaneProvider';
+import { useFilePaneTransition } from './useFilePaneTransition';
+import { usePaneSplit } from './usePaneSplit';
 
 type FilePaneContent = {
   library: ReactNode;
@@ -46,59 +26,40 @@ type FilePaneContent = {
  */
 export function FilePaneHost({ children, ...content }: FilePaneContent & { children: ReactNode }) {
   const pane = useFilePane();
-  const ref = useRef<ViewInstance>(null);
-  const { chatTop, measure, split } = usePaneSplit(ref);
+  const { chatTop, insets, isLayoutCurrent, measure, split } = usePaneSplit();
   const isTypingInChat = useIsTypingBelow(chatTop);
   // An expanded preview covers the chat; only assistive technologies need to be told.
-  const isChatCovered = Boolean(pane?.isAvailable && pane.isOpen && pane.file && pane.isExpanded);
+  const isChatCovered = Boolean(
+    isLayoutCurrent &&
+    (pane?.isAvailable || pane?.isCarried) &&
+    pane.isOpen &&
+    pane.file &&
+    pane.isExpanded,
+  );
 
   return (
-    <View
-      className={split.direction === 'row' ? 'flex-1 flex-row' : 'flex-1'}
-      onLayout={measure}
-      ref={ref}
-    >
+    <View className={split.direction === 'row' ? 'flex-1 flex-row' : 'flex-1'} onLayout={measure}>
       <FoldRegionReporter />
       {pane ? (
-        <FilePaneColumn isYielding={isTypingInChat} pane={pane} split={split} {...content} />
+        <FilePaneColumn
+          hostInsets={insets}
+          isLayoutCurrent={isLayoutCurrent}
+          isYielding={isTypingInChat}
+          pane={pane}
+          split={split}
+          {...content}
+        />
       ) : null}
       <View
         accessibilityElementsHidden={isChatCovered}
         className="flex-1"
         importantForAccessibility={isChatCovered ? 'no-hide-descendants' : 'auto'}
+        onTouchStart={() => pane?.recordTouch('chat')}
       >
         {children}
       </View>
     </View>
   );
-}
-
-/** The pane's share of the host, measured in window points so it can meet the fold. */
-function usePaneSplit(ref: RefObject<ViewInstance | null>) {
-  const fold = useFoldRegion();
-  const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const isSidebarPersistent = useIsSidebarPersistent();
-  const [host, setHost] = useState({ height: 0, width: 0, x: 0, y: 0 });
-  const measure = useCallback(() => {
-    ref.current?.measureInWindow((x, y, measuredWidth, height) =>
-      setHost((current) =>
-        current.x === x &&
-        current.y === y &&
-        current.width === measuredWidth &&
-        current.height === height
-          ? current
-          : { height, width: measuredWidth, x, y },
-      ),
-    );
-  }, [ref]);
-
-  const sidebarWidth = isSidebarPersistent ? windowRegionWidths.sidebar : 0;
-  const paneWidth = resolveFilePaneWidth(width - insets.left - insets.right - sidebarWidth);
-  const split = resolvePaneSplit({ fold, host, paneWidth });
-  // Stacked, the chat starts below the pane; side by side it shares the pane's rows.
-  const chatTop = split.direction === 'column' ? host.y + split.chatOffset : null;
-  return { chatTop, measure, split };
 }
 
 /**
@@ -126,20 +87,40 @@ function useIsTypingBelow(top: number | null) {
  * lose the list's mode, folder, or scroll position.
  */
 function FilePaneColumn({
+  hostInsets,
+  isLayoutCurrent,
   isYielding,
   library,
   pane,
   renderFile,
   split,
-}: FilePaneContent & { isYielding: boolean; pane: FilePane; split: PaneSplit }) {
+}: FilePaneContent & {
+  hostInsets: { left: number; right: number };
+  isLayoutCurrent: boolean;
+  isYielding: boolean;
+  pane: FilePane;
+  split: PaneSplit;
+}) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  // The pane pads its own edges, so pages inside it must not pad for the window's sides again: a
+  // status bar down the far side of an iPhone Duo would otherwise narrow every page in the pane.
+  const contentInsets = useMemo(() => ({ ...insets, left: 0, right: 0 }), [insets]);
   const { close, closeFile, file, isExpanded, setExpanded } = pane;
-  const isVisible = pane.isAvailable && pane.isOpen && !isYielding;
+  const isRow = split.direction === 'row';
+  const {
+    hasSpace,
+    isVisible,
+    style: transitionStyle,
+  } = useFilePaneTransition(
+    (pane.isAvailable && pane.isOpen) || pane.isCarried,
+    isYielding,
+    !isRow,
+    isLayoutCurrent,
+  );
   const [isMounted, setIsMounted] = useState(isVisible);
   if (isVisible && !isMounted) setIsMounted(true);
 
-  const isRow = split.direction === 'row';
   const closeAction = useMemo<HeaderToolbarAction>(
     () => ({
       accessibilityLabel: t('common.close'),
@@ -198,42 +179,57 @@ function FilePaneColumn({
 
   if (!isMounted) return null;
 
+  // The pane starts at the host's leading edge; it reaches the trailing edge when stacked or when
+  // a preview covers the chat, as on an outer display whose status bar runs down that side.
+  const reachesEnd = Boolean(file && isExpanded) || !isRow;
+  const edges = {
+    paddingLeft: hostInsets.left,
+    paddingRight: reachesEnd ? hostInsets.right : 0,
+    paddingTop: insets.top,
+  };
+
   // `display: none` would discard the pane's native views and with them its scroll and document
   // state, so a hidden pane stays laid out but transparent, and a spacer holds its place before
   // the chat, including any fold between them.
   return (
     <>
-      {isVisible ? (
+      {/* A carried preview covers the chat, which keeps the full width of the narrow window. */}
+      {hasSpace && !pane.isCarried ? (
         <View style={isRow ? { width: split.chatOffset } : { height: split.chatOffset }} />
       ) : null}
-      <View
+      <Animated.View
         accessibilityElementsHidden={!isVisible}
         className="border-border bg-background"
         importantForAccessibility={isVisible ? 'auto' : 'no-hide-descendants'}
+        onTouchStart={() => pane.recordTouch('pane')}
+        pointerEvents={isVisible ? 'auto' : 'none'}
         style={[
           styles.pane,
-          { paddingTop: insets.top },
+          edges,
           file && isExpanded
             ? styles.expanded
             : isRow
               ? [styles.row, { width: split.paneSize }]
               : [styles.column, { height: split.paneSize }],
-          !isVisible && styles.hidden,
+          transitionStyle,
         ]}
         testID="file-pane"
       >
-        <PaneChromeProvider leadingAction={closeAction}>{library}</PaneChromeProvider>
-        {file ? (
-          <View
-            className="bg-background"
-            style={[StyleSheet.absoluteFill, { paddingTop: insets.top }]}
-          >
-            <PaneChromeProvider headerAction={readingAction} leadingAction={backAction}>
-              {renderFile(file)}
-            </PaneChromeProvider>
-          </View>
-        ) : null}
-      </View>
+        <SafeAreaInsetsContext value={contentInsets}>
+          <PaneChromeProvider leadingAction={closeAction}>{library}</PaneChromeProvider>
+          {file ? (
+            <View className="bg-background" style={[StyleSheet.absoluteFill, edges]}>
+              {/* Carried over the chat, Back already returns there, as on a phone's file page. */}
+              <PaneChromeProvider
+                headerAction={pane.isCarried ? undefined : readingAction}
+                leadingAction={backAction}
+              >
+                {renderFile(file)}
+              </PaneChromeProvider>
+            </View>
+          ) : null}
+        </SafeAreaInsetsContext>
+      </Animated.View>
     </>
   );
 }
@@ -241,8 +237,7 @@ function FilePaneColumn({
 const styles = StyleSheet.create({
   column: { borderBottomWidth: StyleSheet.hairlineWidth, end: 0 },
   // Covers the chat, which keeps its size, draft, and scroll position underneath.
-  expanded: { bottom: 0, end: 0, zIndex: 1 },
-  hidden: { opacity: 0, pointerEvents: 'none' },
-  pane: { position: 'absolute', start: 0, top: 0 },
+  expanded: { bottom: 0, end: 0 },
+  pane: { position: 'absolute', start: 0, top: 0, zIndex: 1 },
   row: { borderEndWidth: StyleSheet.hairlineWidth, bottom: 0 },
 });
