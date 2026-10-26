@@ -1320,10 +1320,10 @@ index 4281042795e71a20b0f3d89811505103c5cb2d28..0561f8cf27ae85b37376378f69c9a749
      updateAccessibilityLabel()
  
 diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
-index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..63968517f4cab2c91dc79181a05a714622a274ab 100644
+index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b0319ab4dee 100644
 --- a/ios/input/ENRMInputTextView.mm
 +++ b/ios/input/ENRMInputTextView.mm
-@@ -11,8 +11,62 @@
+@@ -11,8 +11,60 @@
  
  #if !TARGET_OS_OSX
  
@@ -1347,21 +1347,19 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..63968517f4cab2c91dc79181a05a7146
 +{
 +  for (NSItemProvider *provider in providers) {
 +    if ([provider hasItemConformingToTypeIdentifier:kENRMMarkdownPasteboardType]) {
-+      [provider loadItemForTypeIdentifier:kENRMMarkdownPasteboardType
-+                                 options:nil
-+                       completionHandler:^(id value, NSError *error) {
-+                         NSString *markdown = nil;
-+                         if ([value isKindOfClass:[NSString class]]) {
-+                           markdown = (NSString *)value;
-+                         } else if ([value isKindOfClass:[NSData class]]) {
-+                           markdown = [[NSString alloc] initWithData:(NSData *)value encoding:NSUTF8StringEncoding];
-+                         }
-+                         if (markdown.length > 0) {
-+                           dispatch_async(dispatch_get_main_queue(), ^{ completion(markdown); });
-+                         } else {
-+                           ENRMLoadPlainPasteText(providers, completion);
-+                         }
-+                       }];
++      // Read the serialized UTF-8 representation without item-provider object coercion.
++      [provider loadDataRepresentationForTypeIdentifier:kENRMMarkdownPasteboardType
++                                     completionHandler:^(NSData *data, NSError *error) {
++                                       NSString *markdown = nil;
++                                       if (data.length > 0) {
++                                         markdown = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
++                                       }
++                                       if (markdown.length > 0) {
++                                         dispatch_async(dispatch_get_main_queue(), ^{ completion(markdown); });
++                                       } else {
++                                         ENRMLoadPlainPasteText(providers, completion);
++                                       }
++                                     }];
 +      return;
 +    }
 +  }
@@ -1386,7 +1384,7 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..63968517f4cab2c91dc79181a05a7146
  }
  
  - (void)copy:(id)sender
-@@ -40,29 +94,26 @@ - (void)cut:(id)sender
+@@ -40,29 +92,26 @@ - (void)cut:(id)sender
  
  - (void)paste:(id)sender
  {
