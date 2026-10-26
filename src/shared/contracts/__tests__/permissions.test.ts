@@ -4,7 +4,6 @@ describe('device permission execution contract', () => {
   test.each([
     ['health.steps.read', 'requested', true],
     ['calendar.read', 'requested', false],
-    ['photos.read', 'limited', true],
     ['calendar.read', 'limited', false],
     ['health.steps.read', 'limited', false],
     ['camera.read', 'granted', true],

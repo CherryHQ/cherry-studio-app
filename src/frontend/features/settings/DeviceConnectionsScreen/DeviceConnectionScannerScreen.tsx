@@ -117,7 +117,7 @@ export function DeviceConnectionScannerScreen({
               primaryAction={
                 canRequestDevicePermission(camera) || camera?.state === 'error'
                   ? {
-                      children: t('settings.deviceConnections.scan.allowCamera'),
+                      children: t('settings.permissions.action.request'),
                       onPress: () => void prepare(true),
                     }
                   : camera?.state === 'denied'
