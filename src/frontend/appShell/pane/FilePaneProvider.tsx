@@ -1,6 +1,6 @@
 import { createContext, type PropsWithChildren, use, useMemo, useState } from 'react';
 
-import { useWindowClass } from '@/frontend/appShell/layout';
+import { isAcross, useFoldRegion, useWindowClass } from '@/frontend/appShell/layout';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import type { FileEntryId } from '@/shared/data/types/file';
 
@@ -30,12 +30,14 @@ const FilePaneContext = createContext<FilePane | null>(null);
  */
 export function FilePaneProvider({ children }: PropsWithChildren) {
   const windowClass = useWindowClass();
+  const fold = useFoldRegion();
   // The library manages this phone's files; a desktop source has none to show.
   const isLocal = useChatSource().source === 'local';
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<FilePaneFile | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const isAvailable = windowClass !== 'compact' && isLocal;
+  // An upright foldable is narrow but tall enough to stack the pane above the chat.
+  const isAvailable = isLocal && (windowClass !== 'compact' || (fold !== null && isAcross(fold)));
 
   const value = useMemo<FilePane>(
     () => ({

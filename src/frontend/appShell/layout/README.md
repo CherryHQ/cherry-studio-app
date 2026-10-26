@@ -23,6 +23,13 @@ beside both needs 1080. Layout owners read the class; pages and components never
 names. `useIsSidebarPersistent` is the shell's single rule for keeping the sidebar beside chat.
 `resolveFilePaneWidth` gives a pane 43% of the content width, kept between 360 and 520 points.
 
+On a foldable, `FoldRegionProvider` shares the fold reported by
+[`fold-region`](../../../../modules/fold-region/README.md) through `useFoldRegion`, and
+`resolvePaneSplit` lets a fold inside the host decide where a pane meets the chat. A fold running
+down the window places the pane on its leading side while the device is partly folded; flat, the
+regular widths apply. A fold running across the window stacks the pane above the chat whether or not
+the device is folded. The fold itself stays empty, and a fold at the host's edge is ignored.
+
 `PaneChromeProvider` marks a page rendered in a side pane rather than its own native-stack screen.
 Headers and bottom toolbars inside it render inline, and the provider supplies the pane's exit as
 the header's leading action and, optionally, one pane control placed before the page's trailing
