@@ -42,8 +42,3 @@ not desktop's structure.
   `custom/wire/`: its vendor option mappings are covered by boundary tests that pin our request
   shaping against the upstream AI SDK packages, and they guard the image path that routes through
   those vendors.
-
-The `provider` subpath also exposes the account endpoint resolver for OpenAI-compatible voice
-models. Model discovery keeps known one-shot TTS/STT families and their input/output modalities;
-unsupported realtime/audio-chat/video routes stay filtered from official OpenAI discovery.
-Application model management owns admission, catalog enrichment and the visible TTS/STT labels.

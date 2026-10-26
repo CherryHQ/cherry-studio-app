@@ -11,8 +11,7 @@
 | Reading an assistant reply aloud | Enabled | System text-to-speech |
 
 Voice uses the device's system services and needs no Cherry provider account or model selection.
-Cloud voice adapters and audio attachment transcription are outside this implementation. Model
-management retains the TTS/STT catalog foundation independently of the voice module.
+Cloud voice adapters and audio attachment transcription are outside this implementation.
 
 System engines do not guarantee offline execution: the configured recognition service, installed
 voices and language support determine whether the platform uses a network. The current adapters do

@@ -97,18 +97,6 @@ four characters.
 
 ## Connectivity And Models
 
-Provider model synchronization admits speech synthesis (TTS) and transcription (STT) for API-key
-accounts with a configured OpenAI-compatible audio route. Known OpenAI audio families retain their
-type even when `/models` only returns IDs; other models use the catalog's capabilities and
-modalities, or a manually selected model type. Realtime and multimodal audio chat are separate
-protocols, not TTS choices. Native Gemini, Vertex and Copilot voice protocols remain unsupported.
-
-The model list and pull preview offer TTS/STT purpose filters and visible type badges. Grouped
-lists retain voice rows, and purpose tabs only show categories present in the current collection.
-Manual model settings expose TTS/STT types without chat endpoints, token limits or input switches.
-These catalog settings do not start playback or transcription; the voice feature consumes the
-saved models separately. Connectivity checks continue to select chat models only.
-
 The connectivity check selects one provider-scoped model and uses the first enabled API key;
 neither choice is stored. Checks and ordinary synchronization never change provider activation.
 
