@@ -29,6 +29,9 @@ jest.mock('expo-router', () => ({
   useNavigation: () => mockNavigation,
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@/frontend/components/Selection', () =>
+  jest.requireActual('@/frontend/components/Selection/selection'),
+);
 jest.mock('@/frontend/data', () => ({ useMutation: () => ({ trigger: mockDelete }) }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
   MODEL_SETTING_KINDS: ['default', 'fast', 'translate', 'painting'],
