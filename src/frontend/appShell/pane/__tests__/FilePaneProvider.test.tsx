@@ -5,8 +5,14 @@ import { FilePaneProvider, useFilePane } from '../FilePaneProvider';
 
 let mockWindowClass = 'expanded';
 let mockSource = 'local';
+let mockFold: { x: number; y: number; width: number; height: number; isActive: boolean } | null =
+  null;
 
-jest.mock('@/frontend/appShell/layout', () => ({ useWindowClass: () => mockWindowClass }));
+jest.mock('@/frontend/appShell/layout', () => ({
+  isAcross: jest.requireActual('@/frontend/appShell/layout/paneSplit').isAcross,
+  useFoldRegion: () => mockFold,
+  useWindowClass: () => mockWindowClass,
+}));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   useChatSource: () => ({ source: mockSource }),
 }));
@@ -36,6 +42,7 @@ const file = { entryId: '00000000-0000-7000-8000-000000000001' as never };
 beforeEach(() => {
   mockWindowClass = 'expanded';
   mockSource = 'local';
+  mockFold = null;
 });
 afterEach(() => act(() => renderer.unmount()));
 
@@ -62,6 +69,16 @@ it.each([
 ])('offers a pane in a %s window with a %s source: %s', (windowClass, source, isAvailable) => {
   mockWindowClass = windowClass;
   mockSource = source;
+  render();
+  expect(pane!.isAvailable).toBe(isAvailable);
+});
+
+it.each([
+  ['across the window', { height: 0, isActive: false, width: 669, x: 0, y: 475 }, true],
+  ['down the window', { height: 669, isActive: true, width: 40, x: 455, y: 0 }, false],
+])('stacks a pane in a compact window with a fold %s: %s', (_, fold, isAvailable) => {
+  mockWindowClass = 'compact';
+  mockFold = fold;
   render();
   expect(pane!.isAvailable).toBe(isAvailable);
 });

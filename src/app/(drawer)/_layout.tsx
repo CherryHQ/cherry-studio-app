@@ -6,6 +6,7 @@ import { useUniwind } from 'uniwind';
 import { RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   ChatDockLayoutProvider,
+  FoldRegionProvider,
   useIsSidebarPersistent,
   windowRegionWidths,
 } from '@/frontend/appShell/layout';
@@ -46,49 +47,51 @@ export default function DrawerLayout() {
   return (
     <RouteHeaderProvider rootAction="drawer">
       <ChatSourceProvider>
-        <FilePaneProvider>
-          <ChatDockLayoutProvider>
-            <Drawer
-              drawerContent={renderSidebar}
-              screenOptions={{
-                configureGestureHandler: configureDrawerGesture,
-                // An overlay stops short of the right edge so a dimmed strip of chat stays
-                // visible: it tells the user where they came from and closes the drawer on
-                // tap. A permanent sidebar is a column of its own, separated by a hairline.
-                drawerStyle: {
-                  backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
-                  borderEndColor: sidebarBorderColor,
-                  borderEndWidth: isPersistent || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
-                  width: isPersistent
-                    ? windowRegionWidths.sidebar
-                    : Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
-                },
-                // The chat surface is stable context. In narrower windows the sidebar is
-                // a temporary surface sliding over it; expanded windows keep it beside the
-                // chat. Switching keeps the same chat tree mounted.
-                drawerType: isPersistent ? 'permanent' : 'front',
-                headerShown: false,
-                // Dim the exposed scene while preserving the drawer's native progress
-                // animation and tap-to-close interaction.
-                overlayColor,
-                sceneStyle: {
-                  // Keep the scene opaque where a screen leaves its own content style
-                  // transparent, including beneath the overlaid sidebar.
-                  backgroundColor,
-                  // The full-screen scene reaches every window edge. Let the display
-                  // handle physical corners without clipping the header's blur.
-                  overflow: 'hidden',
-                },
-                // Only chat belongs to this navigator, so the full-width gesture can
-                // never expose the sidebar over another product screen.
-                swipeEdgeWidth: width,
-                swipeEnabled: !isPersistent,
-              }}
-            >
-              <Drawer.Screen name="(chat)" />
-            </Drawer>
-          </ChatDockLayoutProvider>
-        </FilePaneProvider>
+        <FoldRegionProvider>
+          <FilePaneProvider>
+            <ChatDockLayoutProvider>
+              <Drawer
+                drawerContent={renderSidebar}
+                screenOptions={{
+                  configureGestureHandler: configureDrawerGesture,
+                  // An overlay stops short of the right edge so a dimmed strip of chat stays
+                  // visible: it tells the user where they came from and closes the drawer on
+                  // tap. A permanent sidebar is a column of its own, separated by a hairline.
+                  drawerStyle: {
+                    backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
+                    borderEndColor: sidebarBorderColor,
+                    borderEndWidth: isPersistent || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
+                    width: isPersistent
+                      ? windowRegionWidths.sidebar
+                      : Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+                  },
+                  // The chat surface is stable context. In narrower windows the sidebar is
+                  // a temporary surface sliding over it; expanded windows keep it beside the
+                  // chat. Switching keeps the same chat tree mounted.
+                  drawerType: isPersistent ? 'permanent' : 'front',
+                  headerShown: false,
+                  // Dim the exposed scene while preserving the drawer's native progress
+                  // animation and tap-to-close interaction.
+                  overlayColor,
+                  sceneStyle: {
+                    // Keep the scene opaque where a screen leaves its own content style
+                    // transparent, including beneath the overlaid sidebar.
+                    backgroundColor,
+                    // The full-screen scene reaches every window edge. Let the display
+                    // handle physical corners without clipping the header's blur.
+                    overflow: 'hidden',
+                  },
+                  // Only chat belongs to this navigator, so the full-width gesture can
+                  // never expose the sidebar over another product screen.
+                  swipeEdgeWidth: width,
+                  swipeEnabled: !isPersistent,
+                }}
+              >
+                <Drawer.Screen name="(chat)" />
+              </Drawer>
+            </ChatDockLayoutProvider>
+          </FilePaneProvider>
+        </FoldRegionProvider>
       </ChatSourceProvider>
     </RouteHeaderProvider>
   );
