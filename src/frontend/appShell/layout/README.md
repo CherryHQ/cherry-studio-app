@@ -30,6 +30,17 @@ down the window places the pane on its leading side while the device is partly f
 regular widths apply. A fold running across the window stacks the pane above the chat whether or not
 the device is folded. The fold itself stays empty, and a fold at the host's edge is ignored.
 
+`useFoldRegionLayout` exposes the complete native snapshot: host bounds, horizontal safe areas,
+window dimensions, and fold. `FilePaneHost` supplies `resolvePaneSplit` with that host and fold,
+and calculates the regular pane width from the host width minus its own safe areas. The host is
+already beside the persistent sidebar, so its width is not subtracted again. Without the native
+module, `onLayout` supplies host dimensions at origin zero and the safe-area context supplies
+insets. Neither path uses `measureInWindow`.
+
+`useIsFoldRegionLayoutCurrent` compares the snapshot's window dimensions with the current window.
+Until they agree, the pane stays transparent and availability changes cannot carry or return a
+preview using the previous screen's fold. This freshness check does not interpolate the split.
+
 `PaneChromeProvider` marks a page rendered in a side pane rather than its own native-stack screen.
 Headers and bottom toolbars inside it render inline, and the provider supplies the pane's exit as
 the header's leading action and, optionally, one pane control placed before the page's trailing

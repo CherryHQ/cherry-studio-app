@@ -247,9 +247,9 @@ function listProps(
   };
 }
 
-function layoutEvent(height: number): LayoutChangeEvent {
+function layoutEvent(height: number, width = 390): LayoutChangeEvent {
   return {
-    nativeEvent: { layout: { height, width: 390, x: 0, y: 0 } },
+    nativeEvent: { layout: { height, width, x: 0, y: 0 } },
   } as LayoutChangeEvent;
 }
 
@@ -578,6 +578,100 @@ describe('MessageList scroll-controller ownership', () => {
     act(flushAnimationFrames);
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
     expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+  });
+
+  test('restores the observed reading row and offset after width reflow, but ignores height-only changes', async () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const onReady = jest.fn();
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages, { onReady })} />);
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockListState = { ...mockListState, start: 1, scroll: 224, isAtEnd: false };
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onLayout?.(layoutEvent(300));
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockLatestListProps?.onLayout?.(layoutEvent(600, 800));
+      // Native reflow updates must not replace the anchor captured before the resize.
+      mockListState = { ...mockListState, start: 0, scroll: 0 };
+      mockLatestListProps?.onScroll?.({} as never);
+      flushAnimationFrames();
+      await Promise.resolve();
+    });
+    act(flushAnimationFrames);
+    expect(mockListScrollToIndex).toHaveBeenCalledWith({
+      animated: false,
+      index: 1,
+      viewOffset: -24,
+      viewPosition: 0,
+    });
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+  });
+
+  test.each(['drag', 'dataset', 'return to latest'] as const)(
+    'cancels a queued width restoration when a %s takes ownership',
+    async (interruption) => {
+      const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+      act(() => {
+        renderer = create(<MessageList {...listProps(messages)} />);
+      });
+      await loadList();
+      act(() => {
+        mockLatestListProps?.onLayout?.(layoutEvent(400));
+        mockLatestListProps?.onScrollBeginDrag?.();
+        mockListState = { ...mockListState, start: 1, scroll: 224, isAtEnd: false };
+        mockLatestListProps?.onScrollEndDrag?.();
+        mockLatestListProps?.onLayout?.(layoutEvent(600, 800));
+      });
+      act(() => {
+        if (interruption === 'drag') mockLatestListProps?.onScrollBeginDrag?.();
+        else if (interruption === 'return to latest') mockScrollButtonProps?.onPress();
+        else
+          renderer?.update(
+            <MessageList
+              {...listProps([createMessage('next', 'user')], { dataKey: 'next-session' })}
+            />,
+          );
+      });
+      act(flushAnimationFrames);
+      expect(mockListScrollToIndex).not.toHaveBeenCalled();
+    },
+  );
+
+  test('coalesces rapid width reversals around the same observed anchor', async () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} />);
+    });
+    await loadList();
+    await act(async () => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockListState = { ...mockListState, start: 1, scroll: 224, isAtEnd: false };
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onLayout?.(layoutEvent(600, 800));
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      flushAnimationFrames();
+      await Promise.resolve();
+    });
+    act(flushAnimationFrames);
+    expect(mockListScrollToIndex).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToIndex).toHaveBeenCalledWith({
+      animated: false,
+      index: 1,
+      viewOffset: -24,
+      viewPosition: 0,
+    });
   });
 
   test('defers queued and ongoing layout corrections until the keyboard animation finishes', async () => {

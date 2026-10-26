@@ -65,3 +65,18 @@ test('a remount can reclaim the request, while an abandoned navigation expires',
   jest.advanceTimersByTime(30_000);
   expect(getImagePreviewEditRequest(abandoned, SOURCE)).toBeUndefined();
 });
+
+test('returning a carried viewer leaves the retained pane request alive until its own release', () => {
+  const id = createImagePreviewEditRequest(SOURCE, () => true);
+  const signal = getImagePreviewEditRequest(id, SOURCE)!.controller.signal;
+  claimImagePreviewEditRequest(id);
+  claimImagePreviewEditRequest(id);
+  scheduleImagePreviewEditFinish(id);
+  jest.runOnlyPendingTimers();
+  expect(signal.aborted).toBe(false);
+  expect(replacePreviewImage(id, SOURCE, replacement)).toBe(true);
+  scheduleImagePreviewEditFinish(id);
+  jest.runOnlyPendingTimers();
+  expect(signal.aborted).toBe(true);
+  expect(getImagePreviewEditRequest(id, SOURCE)).toBeUndefined();
+});

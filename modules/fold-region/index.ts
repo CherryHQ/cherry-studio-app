@@ -12,28 +12,36 @@ export type FoldRegion = {
   isActive: boolean;
 };
 
+/** Geometry from one native observation; host and fold share the window coordinate space. */
+export type FoldRegionLayout = {
+  host: { x: number; y: number; width: number; height: number };
+  insets: { left: number; right: number };
+  window: { width: number; height: number };
+  fold: FoldRegion | null;
+};
+
 export type FoldRegionObserverProps = {
-  onFoldChange: (fold: FoldRegion | null) => void;
+  onLayoutChange: (layout: FoldRegionLayout) => void;
   style?: StyleProp<ViewStyle>;
 };
 
 type NativeFoldRegionObserverProps = {
-  onFoldChange: (event: NativeSyntheticEvent<{ fold: FoldRegion | null }>) => void;
+  onLayoutChange: (event: NativeSyntheticEvent<FoldRegionLayout>) => void;
   style?: StyleProp<ViewStyle>;
 };
 
 /**
  * Null where the native module is missing (Android, Expo Go, clients built before this module):
  * those windows have no fold to report. `requireNativeView` would still return a component there,
- * so the module's presence decides. The wrapper hands callers the bare region.
+ * so the module's presence decides. The wrapper hands callers the complete layout snapshot.
  */
 export const FoldRegionObserver: ComponentType<FoldRegionObserverProps> | null = (() => {
   if (!requireOptionalNativeModule('FoldRegion')) return null;
   const NativeView = requireNativeView<NativeFoldRegionObserverProps>('FoldRegion');
-  return function FoldRegionObserver({ onFoldChange, style }: FoldRegionObserverProps) {
+  return function FoldRegionObserver({ onLayoutChange, style }: FoldRegionObserverProps) {
     return createElement(NativeView, {
-      onFoldChange: (event: NativeSyntheticEvent<{ fold: FoldRegion | null }>) =>
-        onFoldChange(event.nativeEvent.fold ?? null),
+      onLayoutChange: (event: NativeSyntheticEvent<FoldRegionLayout>) =>
+        onLayoutChange(event.nativeEvent),
       style,
     });
   };

@@ -178,7 +178,16 @@ function RootStack() {
           return imageEditRequestId ? `${fileEntryId}:${imageEditRequestId}` : fileEntryId;
         }}
         name="files/[fileEntryId]"
-        options={{ headerTransparent: false }}
+        options={({ route }) => {
+          const params = route.params as { carriedFromPane?: string | string[] } | undefined;
+          return {
+            headerTransparent: false,
+            // Keep the drawer's observer attached so reopening reports a fresh native layout.
+            ...(getSingleRouteParam(params?.carriedFromPane) === '1'
+              ? { animation: 'none', presentation: 'transparentModal' }
+              : {}),
+          };
+        }}
       />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen

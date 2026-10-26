@@ -4,7 +4,13 @@ export {
   ReadingContentFrame,
   useIsFormContentConstrained,
 } from './ScreenContentFrame';
-export { FoldRegionProvider, FoldRegionReporter, useFoldRegion } from './FoldRegion';
+export {
+  FoldRegionProvider,
+  FoldRegionReporter,
+  useFoldRegion,
+  useFoldRegionLayout,
+  useIsFoldRegionLayoutCurrent,
+} from './FoldRegion';
 export { PaneChromeProvider, usePaneChrome } from './PaneChrome';
 export { isAcross, resolvePaneSplit, type PaneSplit } from './paneSplit';
 export { useIsSidebarPersistent, useWindowClass } from './useWindowClass';
