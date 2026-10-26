@@ -50,6 +50,23 @@ export function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
 }
 
+// A deleted re-pair target can only be paired from scratch. How a stale ID reaches pairing is
+// still unknown, so the failure stays reported.
+function missingRepairTarget(error: unknown): unknown {
+  if (
+    !(error instanceof DataApiError) ||
+    error.code !== ErrorCode.NOT_FOUND ||
+    error.details?.resource !== 'DesktopConnection'
+  )
+    return error;
+  logger.error('Desktop connection re-pair target is missing', error, {
+    operation: 'desktop.pair.load-existing',
+  });
+  return new DataApiError(ErrorCode.NOT_FOUND, 'The pairing connection no longer exists', {
+    reason: 'connection-not-found',
+  });
+}
+
 const toHex = (bytes: Uint8Array) =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 const fromBase64 = (value: string) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
@@ -101,7 +118,11 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           ? qr.endpoints
           : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' as const }));
       const id = qr.connectionId ?? Crypto.randomUUID();
-      const existing = qr.connectionId ? await store.getRow(id) : undefined;
+      const existing = qr.connectionId
+        ? await store.getRow(id).catch((error: unknown) => {
+            throw missingRepairTarget(error);
+          })
+        : undefined;
       if (existing && existing.desktopIdentity !== qr.desktopIdentity)
         throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
       onProgress?.({ stage: 'connecting' });

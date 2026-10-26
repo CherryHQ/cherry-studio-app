@@ -3,7 +3,10 @@ import { createInstance, type TFunction } from 'i18next';
 import en from '@/frontend/i18n/locales/en-us.json';
 import { ErrorCode, DataApiError } from '@/shared/data/api/errors';
 
-import { desktopConnectionErrorMessage } from '../desktopConnectionError';
+import {
+  desktopConnectionErrorMessage,
+  isMissingPairingConnection,
+} from '../desktopConnectionError';
 
 const mockPlatformState = { os: 'ios' };
 
@@ -19,6 +22,8 @@ const TRANSLATIONS: Record<string, string> = {
   'settings.desktopConnection.error.pairing-rejected':
     'The pairing code is invalid, expired, or already used.',
   'settings.desktopConnection.error.unknown': 'The operation failed. Try again.',
+  'settings.desktopConnection.error.connection-not-found':
+    'This saved connection is no longer available. Scan a new pairing code to connect again.',
   'settings.desktopConnection.error.unreachable':
     'Could not connect to the PC. Make sure both devices are on the same local network.',
   'settings.desktopConnection.error.unreachable.ios':
@@ -32,6 +37,19 @@ const unreachable = () =>
 describe('desktopConnectionErrorMessage', () => {
   afterEach(() => {
     mockPlatformState.os = 'ios';
+  });
+
+  it('offers a new pairing for a missing saved connection', () => {
+    const error = new DataApiError(ErrorCode.NOT_FOUND, 'missing', {
+      reason: 'connection-not-found',
+    });
+    expect(isMissingPairingConnection(error)).toBe(true);
+    expect(desktopConnectionErrorMessage(error, t)).toBe(
+      TRANSLATIONS['settings.desktopConnection.error.connection-not-found'],
+    );
+    expect(isMissingPairingConnection(new DataApiError(ErrorCode.NOT_FOUND, 'unrelated'))).toBe(
+      false,
+    );
   });
 
   it('points iOS users at the Local Network permission for unreachable errors', () => {

@@ -1573,6 +1573,7 @@
   "settings.desktopConnection.error.auth-revoked": "Bu bilgisayar cihaz erişimini iptal etti. Tekrar eşleştirin.",
   "settings.desktopConnection.error.configuration-not-granted": "Bu PC, bu cihaz için sağlayıcı eşitlemeye izin vermedi. Yeniden eşleştirin ve PC’de izin verin.",
   "settings.desktopConnection.error.connection-detail": "Sistem mesajı: {{message}}",
+  "settings.desktopConnection.error.connection-not-found": "Bu kayıtlı bağlantı artık kullanılamıyor. Yeniden bağlanmak için yeni bir eşleştirme kodunu tarayın.",
   "settings.desktopConnection.error.connection-timeout": "Bağlantı zaman aşımına uğradı. Adresi, ağı veya VPN’i kontrol edip tekrar deneyin.",
   "settings.desktopConnection.error.desktop-failure": "PC bir hata bildirdi. Yeniden deneyin.",
   "settings.desktopConnection.error.discovery-unavailable": "Kullanılabilir bilgisayar adresi yok. Yeniden bağlanmak için bu bilgisayarın QR kodunu tekrar tarayın.",

@@ -1590,6 +1590,7 @@
   "settings.desktopConnection.error.auth-revoked": "Acest computer a revocat accesul la dispozitiv. Asociați-l din nou.",
   "settings.desktopConnection.error.configuration-not-granted": "Acest PC nu a permis sincronizarea furnizorilor pentru acest dispozitiv. Asociază din nou și permite-o pe PC.",
   "settings.desktopConnection.error.connection-detail": "Mesaj de sistem: {{message}}",
+  "settings.desktopConnection.error.connection-not-found": "Această conexiune salvată nu mai este disponibilă. Scanează un nou cod de asociere pentru a te conecta din nou.",
   "settings.desktopConnection.error.connection-timeout": "Conexiunea a expirat. Verifică adresa, rețeaua sau VPN-ul și încearcă din nou.",
   "settings.desktopConnection.error.desktop-failure": "PC-ul a raportat o eroare. Încearcă din nou.",
   "settings.desktopConnection.error.discovery-unavailable": "Nu este disponibilă nicio adresă a computerului. Scanează din nou codul QR al acestui computer pentru reconectare.",

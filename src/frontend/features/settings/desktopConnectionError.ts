@@ -1,8 +1,16 @@
 import type { TFunction } from 'i18next';
 import { Platform } from 'react-native';
 
-import { DataApiError } from '@/shared/data/api/errors';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { DesktopConnectionFailureSchema } from '@/shared/data/api/schemas/desktopConnections';
+
+export function isMissingPairingConnection(error: unknown): boolean {
+  return (
+    error instanceof DataApiError &&
+    error.code === ErrorCode.NOT_FOUND &&
+    error.details?.reason === 'connection-not-found'
+  );
+}
 
 export function desktopConnectionErrorMessage(error: unknown, t: TFunction): string {
   const reason = error instanceof DataApiError ? error.details?.reason : undefined;

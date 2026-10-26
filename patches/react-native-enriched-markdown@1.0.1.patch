@@ -498,6 +498,15 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51be
        overScrollMode = View.OVER_SCROLL_NEVER
        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
        addView(
+@@ -252,7 +253,7 @@ class TableContainerView(
+         isClickable = false
+         isLongClickable = false
+         isFocusable = true
+-        isScreenReaderFocusable = true
++        ViewCompat.setScreenReaderFocusable(this, true)
+         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+         contentDescription = description
+         if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
@@ -1289,6 +1298,27 @@ index 92a4fbe06893243c3768d88b65ee9f65ec108dbb..51c80a4a7879e3d27f6657257d4d2bcc
        mergedStart = MIN(mergedStart, existing.range.location);
        mergedEnd = MAX(mergedEnd, existingEnd);
        [mergeIndexes addIndex:idx];
+diff --git a/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt b/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
+index 4281042795e71a20b0f3d89811505103c5cb2d28..0561f8cf27ae85b37376378f69c9a7493374f8bf 100644
+--- a/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
++++ b/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
+@@ -11,6 +11,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+ import android.widget.FrameLayout
+ import android.widget.HorizontalScrollView
++import androidx.core.view.ViewCompat
+ import com.swmansion.enriched.markdown.accessibility.AccessibilityLabels
+ import com.swmansion.enriched.markdown.spans.MathMeasureHelper
+ import com.swmansion.enriched.markdown.spans.MathMeasureRequest
+@@ -82,7 +83,7 @@ class MathContainerView(
+     addView(scrollView, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+ 
+     isFocusable = true
+-    isScreenReaderFocusable = true
++    ViewCompat.setScreenReaderFocusable(this, true)
+     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+     updateAccessibilityLabel()
+ 
 diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
 index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..63968517f4cab2c91dc79181a05a714622a274ab 100644
 --- a/ios/input/ENRMInputTextView.mm

@@ -1607,6 +1607,7 @@
   "settings.desktopConnection.error.auth-revoked": "Этот компьютер отменил доступ к устройству. Подключите его еще раз.",
   "settings.desktopConnection.error.configuration-not-granted": "Этот ПК не разрешил синхронизацию провайдеров для этого устройства. Выполните сопряжение заново и разрешите её на ПК.",
   "settings.desktopConnection.error.connection-detail": "Сообщение системы: {{message}}",
+  "settings.desktopConnection.error.connection-not-found": "Это сохранённое подключение больше недоступно. Отсканируйте новый код сопряжения, чтобы подключиться снова.",
   "settings.desktopConnection.error.connection-timeout": "Время ожидания подключения истекло. Проверьте адрес, сеть или VPN и повторите попытку.",
   "settings.desktopConnection.error.desktop-failure": "ПК сообщил об ошибке. Повторите попытку.",
   "settings.desktopConnection.error.discovery-unavailable": "Адрес компьютера недоступен. Снова отсканируйте QR-код этого компьютера, чтобы подключиться.",

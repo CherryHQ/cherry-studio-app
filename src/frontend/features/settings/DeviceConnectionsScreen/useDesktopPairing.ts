@@ -7,6 +7,8 @@ import type { DesktopPairingProgress } from '@/shared/contracts';
 import type { PairDesktopConnectionDto } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
+import { isMissingPairingConnection } from '../desktopConnectionError';
+
 export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
   const connections = useBackendModule('desktopConnections');
   const queryClient = useQueryClient();
@@ -42,5 +44,6 @@ export function useDesktopPairing(input: PairDesktopConnectionDto | null) {
     }, [connections, input, queryClient]),
   );
 
-  return { connection, error, progress };
+  const repairConnectionId = isMissingPairingConnection(error) ? undefined : input?.connectionId;
+  return { connection, error, progress, repairConnectionId };
 }
