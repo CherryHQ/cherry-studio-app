@@ -26,7 +26,7 @@ type FilePaneContent = {
  */
 export function FilePaneHost({ children, ...content }: FilePaneContent & { children: ReactNode }) {
   const pane = useFilePane();
-  const { chatTop, isLayoutCurrent, measure, split } = usePaneSplit();
+  const { chatTop, insets, isLayoutCurrent, measure, split } = usePaneSplit();
   const isTypingInChat = useIsTypingBelow(chatTop);
   // An expanded preview covers the chat; only assistive technologies need to be told.
   const isChatCovered = Boolean(
@@ -42,6 +42,7 @@ export function FilePaneHost({ children, ...content }: FilePaneContent & { child
       <FoldRegionReporter />
       {pane ? (
         <FilePaneColumn
+          hostInsets={insets}
           isLayoutCurrent={isLayoutCurrent}
           isYielding={isTypingInChat}
           pane={pane}
@@ -86,6 +87,7 @@ function useIsTypingBelow(top: number | null) {
  * lose the list's mode, folder, or scroll position.
  */
 function FilePaneColumn({
+  hostInsets,
   isLayoutCurrent,
   isYielding,
   library,
@@ -93,6 +95,7 @@ function FilePaneColumn({
   renderFile,
   split,
 }: FilePaneContent & {
+  hostInsets: { left: number; right: number };
   isLayoutCurrent: boolean;
   isYielding: boolean;
   pane: FilePane;
@@ -173,6 +176,15 @@ function FilePaneColumn({
 
   if (!isMounted) return null;
 
+  // The pane starts at the host's leading edge; it reaches the trailing edge when stacked or when
+  // a preview covers the chat, as on an outer display whose status bar runs down that side.
+  const reachesEnd = Boolean(file && isExpanded) || !isRow;
+  const edges = {
+    paddingLeft: hostInsets.left,
+    paddingRight: reachesEnd ? hostInsets.right : 0,
+    paddingTop: insets.top,
+  };
+
   // `display: none` would discard the pane's native views and with them its scroll and document
   // state, so a hidden pane stays laid out but transparent, and a spacer holds its place before
   // the chat, including any fold between them.
@@ -190,7 +202,7 @@ function FilePaneColumn({
         pointerEvents={isVisible ? 'auto' : 'none'}
         style={[
           styles.pane,
-          { paddingTop: insets.top },
+          edges,
           file && isExpanded
             ? styles.expanded
             : isRow
@@ -202,11 +214,12 @@ function FilePaneColumn({
       >
         <PaneChromeProvider leadingAction={closeAction}>{library}</PaneChromeProvider>
         {file ? (
-          <View
-            className="bg-background"
-            style={[StyleSheet.absoluteFill, { paddingTop: insets.top }]}
-          >
-            <PaneChromeProvider headerAction={readingAction} leadingAction={backAction}>
+          <View className="bg-background" style={[StyleSheet.absoluteFill, edges]}>
+            {/* Carried over the chat, Back already returns there, as on a phone's file page. */}
+            <PaneChromeProvider
+              headerAction={pane.isCarried ? undefined : readingAction}
+              leadingAction={backAction}
+            >
               {renderFile(file)}
             </PaneChromeProvider>
           </View>

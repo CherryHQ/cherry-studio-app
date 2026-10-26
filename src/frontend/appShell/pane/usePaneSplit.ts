@@ -31,5 +31,5 @@ export function usePaneSplit() {
   const split = resolvePaneSplit({ fold: layout?.fold ?? null, host, paneWidth });
   const chatTop = split.direction === 'column' ? host.y + split.chatOffset : null;
 
-  return { chatTop, isLayoutCurrent, measure: layout ? undefined : measure, split };
+  return { chatTop, insets, isLayoutCurrent, measure: layout ? undefined : measure, split };
 }
