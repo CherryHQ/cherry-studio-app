@@ -25,7 +25,6 @@ import {
 
 import type { DesktopConnectionManager } from './DesktopConnectionManager';
 import {
-  DesktopSession,
   DesktopUnreachableError,
   RemoteFailureError,
   RemoteTransportError,
@@ -101,8 +100,13 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       const existing = qr.connectionId ? await store.getRow(id) : undefined;
       if (existing && existing.desktopIdentity !== qr.desktopIdentity)
         throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
+      const endpoints: DirectEndpoint[] =
+        qr.v === 3 ? qr.endpoints : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' }));
       onProgress?.({ stage: 'connecting' });
-      const session = await this.connect(qr, signal).catch((error: unknown) => {
+      const session = await this.connections!.connectTemporary(
+        { desktopIdentity: qr.desktopIdentity, endpoints },
+        signal,
+      ).catch((error: unknown) => {
         throw translate(error);
       });
       try {
@@ -124,11 +128,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               existing,
             );
             this.connections!.invalidate(id);
-            this.connections!.seedLocation(
-              id,
-              qr.desktopIdentity,
-              qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
-            );
+            this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             signal.throwIfAborted();
@@ -169,11 +169,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               signal,
             );
             this.connections!.invalidate(id);
-            this.connections!.seedLocation(
-              id,
-              qr.desktopIdentity,
-              qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
-            );
+            this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             return connection;
@@ -287,16 +283,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     this.stopped = true;
     for (const controller of this.controllers) controller.abort();
     await this.tail;
-  }
-
-  private connect(
-    target: { ips: string[]; desktopIdentity: string; port: number },
-    signal: AbortSignal,
-  ): Promise<DesktopSession> {
-    return this.connections!.connectTemporary(
-      { addresses: target.ips, desktopIdentity: target.desktopIdentity, port: target.port },
-      signal,
-    );
   }
 
   private run<T>(

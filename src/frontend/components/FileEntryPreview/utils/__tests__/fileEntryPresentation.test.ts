@@ -4,6 +4,8 @@ describe('fileEntryPreviewKind', () => {
   it.each([
     ['image/png', 'image'],
     ['application/pdf', 'document'],
+    ['application/rtf', 'document'],
+    ['Text/Rtf; charset=utf-8', 'document'],
     ['text/markdown', 'markdown'],
     ['application/zip', 'document'],
     ['text/html', 'html'],
@@ -33,6 +35,8 @@ describe('fileEntryPreviewKind', () => {
 describe('canPreviewDocument', () => {
   it.each([
     'application/pdf',
+    'application/rtf',
+    'TEXT/RTF; charset=utf-8',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'APPLICATION/VND.OPENXMLFORMATS-OFFICEDOCUMENT.SPREADSHEETML.SHEET; charset=binary',

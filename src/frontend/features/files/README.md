@@ -1,7 +1,7 @@
 # File Viewer
 
 `/files/[fileEntryId]` is the shared page for managed images, Markdown, text, HTML, PDF, and Office
-Open XML documents.
+Open XML documents, and RTF.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.
@@ -33,7 +33,7 @@ for format behavior, limits, selection evidence and pending acceptance.
 - `FileHtmlBody` loads strings through `react-native-webview`, with local file access and cookie
   sharing disabled, and no app message bridge. Web links leave through `openExternalUrl`; other
   navigations are blocked. Load/process failures show the source, and the user can switch manually.
-- `FileDocumentViewer` renders PDF, DOCX, PPTX and XLSX through `FileDocumentPreview`, the trusted
+- `FileDocumentViewer` renders PDF, DOCX, PPTX, XLSX and RTF through `FileDocumentPreview`, the trusted
   WebView page from [`@cherrystudio/file-preview-webview`](../../../../packages/file-preview-webview/README.md).
   `useDocumentPreviewPage` loads the bundled page; `FilePreviewBridge` serves exact byte ranges and
   bundled PDF resources over the page's message bridge. Other document types keep the system-open
@@ -46,12 +46,16 @@ for format behavior, limits, selection evidence and pending acceptance.
   `FileDocumentPreview` validates source id/revision; the reference carries the structural anchor and excerpt for the Agent to read and compare.
   Selecting or opening a draft does not send a message. The footer owns the bottom safe area while
   selection is active, so the preview disables its own bottom inset.
+  Refreshes of the same entry keep the viewer mounted and pass `updatedAt` as the package's
+  `refreshKey`, preserving valid reading state while clearing the app's held selection. RTF is
+  read-only, limited to 10 MiB, and does not expose Office selection references.
 - The shared `FileEntryPreview` sharing helpers copy into an OS-managed cache directory using the
   display filename. The copy survives closing the share sheet because Android recipients may read
   it later.
 
-Whole-text copying is explicit. Native partial selection is disabled on this scroll surface until
-its cancellation behavior is accepted on both platforms. The image viewer uses the existing
+Whole-text copying in the native text reader is explicit; its native partial selection remains disabled.
+DOCX text selection and copying inside the document WebView are owned by the preview package.
+The image viewer uses the existing
 pinch/pan/double-tap interaction; native navigation owns back, and image zoom disables the iOS pop
 gesture as in the painting viewer. The new page uses ordinary stack transitions.
 

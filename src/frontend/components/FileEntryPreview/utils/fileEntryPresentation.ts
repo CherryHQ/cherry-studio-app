@@ -19,6 +19,7 @@ const kindByMediaType = new Map<string, FileEntryKind>([
   ['application/xml', 'text'],
   ['application/yaml', 'text'],
   ['application/x-yaml', 'text'],
+  ['text/rtf', 'document'],
 ]);
 
 /** One product vocabulary for file surfaces and their opening policy. */
@@ -37,12 +38,14 @@ export function fileEntryPreviewKind(entry: Pick<FileEntry, 'mediaType'>): FileE
 
 const inAppDocumentMediaTypes = new Set([
   'application/pdf',
+  'application/rtf',
+  'text/rtf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
-/** PDF and Office Open XML documents open in the app's document viewer; other documents open with the system. */
+/** PDF, RTF and Office Open XML documents open in the app; other documents open with the system. */
 export function canPreviewDocument(entry: Pick<FileEntry, 'mediaType'>): boolean {
   return inAppDocumentMediaTypes.has(entry.mediaType.split(';')[0]?.trim().toLowerCase() ?? '');
 }

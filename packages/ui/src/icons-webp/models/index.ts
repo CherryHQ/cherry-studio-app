@@ -2,7 +2,7 @@
  * Auto-generated model icon registry
  * Do not edit manually.
  *
- * Total icons: 168
+ * Total icons: 169
  */
 
 import { MODEL_ID_ALIASES } from '../model-aliases';
@@ -365,6 +365,10 @@ export const MODEL_ICONS = {
   'gpt-5': {
     light: require('./light/gpt-5.webp'),
     dark: require('./light/gpt-5.webp'),
+  },
+  'gpt-6-astra': {
+    light: require('./light/gpt-6-astra.webp'),
+    dark: require('./light/gpt-6-astra.webp'),
   },
   'gpt-audio-1-5': {
     light: require('./light/gpt-audio-1-5.webp'),

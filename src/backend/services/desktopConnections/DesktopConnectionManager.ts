@@ -379,11 +379,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   /** Pairing channels are also registered with app lifetime, including a dial still in flight. */
   connectTemporary(target: DesktopConnectionTarget, signal: AbortSignal): Promise<DesktopSession> {
-    return this.openTemporary(
-      target.addresses.map((host) => ({ host, port: target.port, security: 'ws' })),
-      target.desktopIdentity,
-      signal,
-    );
+    return this.openTemporary(target.endpoints, target.desktopIdentity, signal);
   }
 
   /** Checks only the requested route, without reusing or replacing a retained channel. */

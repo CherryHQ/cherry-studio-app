@@ -50,10 +50,16 @@ export function assertProviderReady(
       `Web search provider ${provider.id} does not support capability ${capability}`,
     );
   }
+  let requiresApiKey = providerCapability.requiresApiKey;
   if (providerCapability.requiresApiHost) {
-    resolveProviderApiHost(provider, capability);
+    const apiHost = resolveProviderApiHost(provider, capability);
+    if (provider.id === 'crawl4ai') {
+      const { hostname } = new URL(apiHost);
+      // Cloud requires a key; self-hosted Crawl4AI keeps optional authentication.
+      requiresApiKey ||= hostname === 'crawl4ai.com' || hostname.endsWith('.crawl4ai.com');
+    }
   }
-  if (providerCapability.requiresApiKey && !provider.apiKeys.some((key) => key.trim())) {
+  if (requiresApiKey && !provider.apiKeys.some((key) => key.trim())) {
     throw new WebSearchConfigError(
       'api_key_missing',
       `API key is required for provider ${provider.id}`,

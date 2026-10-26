@@ -1,6 +1,7 @@
 import {
   DesktopPairingQrSchema,
   DesktopProvidersSnapshotSchema,
+  PairDesktopConnectionSchema,
   parseSupportedAuthConfig,
 } from '../desktopConnections';
 
@@ -35,10 +36,56 @@ describe('desktop connection api schemas', () => {
       t: 'cherry-studio-pair',
       v: 2,
     };
-    expect(DesktopPairingQrSchema.parse(input).ips).toEqual(ips);
+    expect(DesktopPairingQrSchema.parse(input)).toMatchObject({ v: 2, ips });
     expect(DesktopPairingQrSchema.safeParse({ ...input, ips: [...ips, '10.0.0.33'] }).success).toBe(
       false,
     );
+  });
+
+  test('accepts v3 endpoint invitations while keeping local pairing choices out of the QR', () => {
+    const endpoints = [
+      { host: 'Desktop.Example.com', port: 443, security: 'wss' },
+      { host: '2001:db8::2', port: 24444, security: 'ws' },
+    ];
+    const input = {
+      t: 'cherry-studio-pair',
+      v: 3,
+      name: 'Desktop',
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
+      protocolVersions: [1],
+      endpoints,
+      connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',
+      capabilities: ['agent'],
+    };
+    const qr = DesktopPairingQrSchema.parse(input);
+    expect(qr).toMatchObject({
+      v: 3,
+      endpoints: [{ ...endpoints[0], host: 'desktop.example.com' }, endpoints[1]],
+    });
+    expect(qr).not.toHaveProperty('connectionId');
+    expect(qr).not.toHaveProperty('capabilities');
+    expect(
+      PairDesktopConnectionSchema.parse({ ...qr, capabilities: ['configuration'] }),
+    ).toMatchObject({
+      v: 3,
+      capabilities: ['configuration'],
+    });
+    expect(
+      PairDesktopConnectionSchema.safeParse({ ...qr, capabilities: ['agent', 'agent'] }).success,
+    ).toBe(false);
+    for (const invalid of [
+      [],
+      Array.from({ length: 33 }, () => endpoints[0]),
+      [{ ...endpoints[0], port: 65536 }],
+      [{ ...endpoints[0], security: 'https' }],
+      [{ ...endpoints[0], host: 'desktop.example.com/path' }],
+    ]) {
+      expect(DesktopPairingQrSchema.safeParse({ ...input, endpoints: invalid }).success).toBe(
+        false,
+      );
+    }
   });
 
   test('preserves desktop provider and model registry metadata', () => {

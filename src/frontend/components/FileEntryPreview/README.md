@@ -17,10 +17,12 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `FileEntryImage`: the same inline image for callers that already hold a resolved entry and URI.
 - `FileEntrySkeleton` and `FileEntryAttachmentSkeleton`: loading placeholders owned by the adapter.
 - `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
-  `document`. JSON, XML, and YAML belong to `text`; PDF and unsupported types belong to `document`.
+  `document`. JSON, XML, and YAML belong to `text`; PDF, Office, RTF and unsupported types belong
+  to `document`.
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
 - `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
-  `document` to the platform. Previews opened from a chat retain that chat's route identity so
+  unsupported documents to the platform; PDF, Office Open XML and RTF open in the app. Previews
+  opened from a chat retain that chat's route identity so
   Office selections return to its existing composer. `openFileEntryWithSystem` is the viewer's
   explicit escape hatch.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by

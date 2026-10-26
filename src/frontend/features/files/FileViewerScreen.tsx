@@ -98,11 +98,7 @@ function FileViewerRoute({
           key={`${file.entry.updatedAt}:${file.uri}`}
         />
       ) : kind === 'document' ? (
-        <FileDocumentViewer
-          file={file}
-          sourceChat={sourceChat}
-          key={`${file.entry.updatedAt}:${file.uri}`}
-        />
+        <FileDocumentViewer file={file} sourceChat={sourceChat} key={file.entry.id} />
       ) : (
         <FileTextViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} kind={kind} />
       )}

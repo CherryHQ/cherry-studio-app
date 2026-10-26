@@ -149,7 +149,97 @@ test('preserves a DeepSeek authentication failure without retrying the request',
   expect(request).toHaveBeenCalledTimes(1);
 });
 
-function providerConfig(id: 'exa-mcp' | 'searxng' | 'deepseek'): WebSearchProvider {
+test('uses the Yuanbao service key and result limit through the mobile provider', async () => {
+  const configuration = providerConfig('yuanbao');
+  configuration.apiKeys = ['yuanbao-service-key'];
+  request.mockResolvedValue({
+    status: 200,
+    headers: {},
+    bodyText: JSON.stringify({
+      Response: {
+        Pages: [
+          JSON.stringify({
+            title: 'Result',
+            url: 'https://example.com',
+            passage: 'Search passage',
+          }),
+        ],
+      },
+    }),
+  });
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  await expect(provider.searchKeywords!('元宝搜索', config)).resolves.toMatchObject({
+    providerId: 'yuanbao',
+    capability: 'searchKeywords',
+    results: [{ title: 'Result', url: 'https://example.com', content: 'Search passage' }],
+  });
+  const call = request.mock.calls[0][0];
+  expect(call).toMatchObject({
+    url: 'https://api.wsa.cloud.tencent.com/SearchPro',
+    method: 'POST',
+    headers: { Authorization: 'Bearer yuanbao-service-key' },
+  });
+  expect(JSON.parse(call.body!)).toEqual({ Query: '元宝搜索', Cnt: 10 });
+});
+
+test('requires Yuanbao credentials and preserves provider errors', async () => {
+  const configuration = providerConfig('yuanbao');
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  await expect(provider.searchKeywords!('query', config)).rejects.toMatchObject({
+    code: 'api_key_missing',
+  });
+  expect(request).not.toHaveBeenCalled();
+
+  configuration.apiKeys = ['rejected-key'];
+  request.mockResolvedValue({
+    status: 200,
+    headers: {},
+    bodyText: JSON.stringify({
+      Response: {
+        Error: { Code: 'AuthFailure', Message: 'Invalid service key' },
+        RequestId: 'request-1',
+      },
+    }),
+  });
+  await expect(provider.searchKeywords!('query', config)).rejects.toMatchObject({
+    kind: 'provider',
+    code: 'provider_error',
+  });
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  [
+    'https://api.crawl4ai.com',
+    '/scrape',
+    { ok: true, markdown: 'Cloud content' },
+    { url: 'https://example.com', format: 'md' },
+  ],
+  [
+    'https://crawl.example.com',
+    '/md',
+    { success: true, url: 'https://example.com', markdown: 'Self-hosted content' },
+    { url: 'https://example.com', f: 'fit' },
+  ],
+] as const)(
+  'reads pages through the configured Crawl4AI host: %s',
+  async (apiHost, path, response, body) => {
+    const configuration = providerConfig('crawl4ai');
+    configuration.apiKeys = ['crawl-key'];
+    configuration.capabilities[0].apiHost = apiHost;
+    request.mockResolvedValue({ status: 200, headers: {}, bodyText: JSON.stringify(response) });
+    const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+    await expect(provider.fetchUrls!('https://example.com', config)).resolves.toMatchObject({
+      results: [{ content: response.markdown, url: 'https://example.com' }],
+    });
+    expect(request.mock.calls[0][0].url).toBe(`${apiHost}${path}`);
+    expect(JSON.parse(request.mock.calls[0][0].body!)).toEqual(body);
+  },
+);
+
+function providerConfig(
+  id: 'exa-mcp' | 'searxng' | 'deepseek' | 'yuanbao' | 'crawl4ai',
+): WebSearchProvider {
   const preset = WEB_SEARCH_PROVIDER_PRESET_MAP[id];
   return {
     id,

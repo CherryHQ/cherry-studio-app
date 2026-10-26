@@ -843,7 +843,7 @@ describe('DesktopConnectionManager ownership', () => {
     connect.mockReturnValueOnce(dial.promise);
     const caller = new AbortController();
     const opening = manager.connectTemporary(
-      { ...original, addresses: ['192.168.1.2'], port: 23333 },
+      { ...original, endpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' }] },
       caller.signal,
     );
     const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' });

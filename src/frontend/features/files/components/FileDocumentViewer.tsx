@@ -45,10 +45,17 @@ export function FileDocumentViewer({
   const [attempt, setAttempt] = useState(0);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState<FilePreviewSelection | null>(null);
+  const [revision, setRevision] = useState(file.entry.updatedAt);
   const router = useRouter();
   const { isResolving: isResolvingSourceChat, returnsToSourceChat } =
     useSelectionSourceChat(sourceChat);
   const { bottom } = useSafeAreaInsets();
+  if (revision !== file.entry.updatedAt) {
+    setRevision(file.entry.updatedAt);
+    setStatus(canPreviewDocument(file.entry) ? 'preview' : 'system');
+    setSelection(null);
+    setIsSelecting(false);
+  }
   const documentType = documentFileTypeFromMediaType(file.entry.mediaType);
   const canSelect =
     status === 'preview' &&

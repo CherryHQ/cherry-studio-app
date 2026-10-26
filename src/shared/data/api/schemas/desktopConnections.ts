@@ -1,4 +1,8 @@
-import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
+import {
+  pairingQrSchema,
+  remoteCapabilitiesSchema,
+  type DirectEndpoint,
+} from '@cherrystudio/remote-protocol';
 import * as z from 'zod';
 
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -11,21 +15,6 @@ import {
   RuntimeModelPricingSchema,
 } from '@/shared/data/types/model';
 
-function isIpAddress(value: string): boolean {
-  if (value.includes(':')) {
-    try {
-      return new URL(`http://[${value}]`).hostname.startsWith('[');
-    } catch {
-      return false;
-    }
-  }
-
-  const octets = value.split('.');
-  return (
-    octets.length === 4 && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
-  );
-}
-
 export const DesktopRemoteAgentSchema = z.object({
   protocolVersion: z.number().int().positive(),
   instanceId: z.string().uuid(),
@@ -35,28 +24,16 @@ export const DesktopRemoteAgentSchema = z.object({
 });
 export type DesktopRemoteAgent = z.infer<typeof DesktopRemoteAgentSchema>;
 
-export const DesktopPairingQrSchema = z.object({
-  desktopIdentity: z.string().min(1).max(256),
-  invitationId: z.string().min(1).max(256),
-  invitationSecret: z.string().min(1).max(256),
-  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1).max(32),
-  name: z.string().min(1).max(128),
-  port: z.number().int().min(1).max(65_535),
-  protocolVersions: z.array(z.number().int().positive()).min(1).max(16),
-  t: z.literal('cherry-studio-pair'),
-  v: z.literal(2),
-});
+export const DesktopPairingQrSchema = pairingQrSchema;
 export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 
-/** Mirrors `remoteCapabilitiesSchema`; the protocol package stays off the app's startup path. */
-export const PairDesktopConnectionSchema = DesktopPairingQrSchema.extend({
-  capabilities: z
-    .array(z.enum(['configuration', 'agent']))
-    .min(1)
-    .max(2)
-    .refine((values) => new Set(values).size === values.length, 'Capabilities must be unique'),
-  connectionId: z.string().uuid().optional(),
-});
+/** Local pairing choices are added after parsing the scanned or pasted invitation. */
+export const PairDesktopConnectionSchema = DesktopPairingQrSchema.and(
+  z.object({
+    capabilities: remoteCapabilitiesSchema,
+    connectionId: z.string().uuid().optional(),
+  }),
+);
 export type PairDesktopConnectionDto = z.infer<typeof PairDesktopConnectionSchema>;
 
 /** Shown while the desktop user approves the claim; the code must match the desktop's. */

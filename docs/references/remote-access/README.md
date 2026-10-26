@@ -35,9 +35,11 @@ native module ownership and the network-independent pairing migration.
 
 ## Desktop contract
 
-- **Invitation QR** (`v: 2`, `t: 'cherry-studio-pair'`): `name`, `port`, `ips`, `invitationId`,
-  `invitationSecret`, `desktopIdentity` (Ed25519 peer id), `protocolVersions`. Valid two minutes.
-- **Endpoint**: `ws://<ip>:<port>/v1/remote/connect`, binary frames; native clients may include an `Origin` header. Every other
+- **Invitation QR** (`t: 'cherry-studio-pair'`): `name`, `invitationId`, `invitationSecret`,
+  `desktopIdentity` (Ed25519 peer id), `protocolVersions`. Version 2 carries `ips` and one `port`;
+  version 3 carries ordered `endpoints` with individual `host`, `port` and `security` (`ws`/`wss`).
+  Mobile parses both through the published `pairingQrSchema`. Valid two minutes.
+- **Endpoint**: `ws[s]://<host>:<port>/v1/remote/connect`, binary frames; native clients may include an `Origin` header. Every other
   HTTP route on that listener answers `403` to a LAN peer.
 - **Handshake**: length-prefixed plaintext prelude (`{ protocolVersions }` → `{ protocolVersion }`),
   then Noise XX (`@libp2p/noise`, pure-JS crypto) with the negotiated version bound into the
@@ -60,9 +62,9 @@ native module ownership and the network-independent pairing migration.
 
 ## Shared packages
 
-- `@cherrystudio/remote-protocol@0.6.0` comes from npm. Its published exports include the Agent,
+- `@cherrystudio/remote-protocol@0.7.0` comes from npm. Its published exports include the Agent,
   configuration, failure, and connection contracts; Mobile owns only its consumers and adapters.
-- `@cherrystudio/remote-transport@0.2.4` comes from npm and depends on the matching protocol
+- `@cherrystudio/remote-transport@0.2.5` comes from npm and depends on the matching protocol
   version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
   along with the service registry. Metro applies the libp2p legacy browser maps so native bundles
   use the pure-JS entries. Android pairing and configuration sync were verified against the former

@@ -243,14 +243,14 @@ importers:
         specifier: workspace:*
         version: link:packages/mcp-app-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.2.3
-        version: 0.2.3(zod@4.4.3)
+        specifier: 0.2.5
+        version: 0.2.5(zod@4.4.3)
       '@cherrystudio/remote-protocol':
-        specifier: 0.6.0
-        version: 0.6.0(zod@4.4.3)
+        specifier: 0.7.0
+        version: 0.7.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: 0.2.4
-        version: 0.2.4(zod@4.4.3)
+        specifier: 0.2.5
+        version: 0.2.5(zod@4.4.3)
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -258,8 +258,8 @@ importers:
         specifier: workspace:*
         version: link:packages/universal
       '@cherrystudio/web-search':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.3.0
+        version: 0.3.0
       '@e965/xlsx':
         specifier: 0.20.3
         version: 0.20.3
@@ -769,8 +769,8 @@ importers:
         specifier: 0.1.9
         version: 0.1.9(@ai-sdk/anthropic@3.0.103(patch_hash=b2bc7d39b24cc63ee2638efcb8543eb64d7f3b86c71234b809418b6097768a46)(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2423513a443860e240fb1c10554f616ce6dcaf553eebfb044ba266aab075cc4d)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.2.3
-        version: 0.2.3(zod@4.4.3)
+        specifier: 0.2.5
+        version: 0.2.5(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -833,8 +833,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@cherrystudio/file-preview':
-        specifier: 0.1.3
-        version: 0.1.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: 0.2.3
+        version: 0.2.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@types/node':
         specifier: ^25.7.0
         version: 25.9.5
@@ -956,8 +956,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.2.3
-        version: 0.2.3(zod@4.4.3)
+        specifier: 0.2.5
+        version: 0.2.5(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711)(zod@4.4.3)
@@ -1755,27 +1755,27 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/file-preview@0.1.3':
-    resolution: {integrity: sha512-x4TZOWvsrpisZ2WLoQ6MOUZ8zM6At+ZcpfpFJrRGtf5dzvn6Mw4/fbDetRi1FSgTZbdLpZxhUGc0AfzmZs0MBA==}
+  '@cherrystudio/file-preview@0.2.3':
+    resolution: {integrity: sha512-+rTBG1tlGmsmu+WYTqYHnmAX1tpFoA3v+0q+sq/9vdxSGMld5mDtD0unhASICwsGXoM2T4H/ztNSKdhSaf0VyQ==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.2.3':
-    resolution: {integrity: sha512-2pfKUB+Vn9IzIPBFLHbvi8FqxU347ozRyuAfm5sEwDSLukgRMhTTxa+jkQLy86ezq58sUx5LZmf8QdooTXWxgg==}
+  '@cherrystudio/provider-registry@0.2.5':
+    resolution: {integrity: sha512-KX8RQCRA5GMQbri/ebPZ7fTaW3MWXyztzTVMtddDklZb51sGGip1YaHbXbILxf60q/7ZXCfrjto3eGFQRoz53A==}
     peerDependencies:
       zod: ^4.4.3
 
-  '@cherrystudio/remote-protocol@0.6.0':
-    resolution: {integrity: sha512-sKy0EpK9C4ILmyh1XQKtUJecrQRSvQQLn5H0MTJEIQru5GxTV/JVj7K5Z96nm5vZKuOEsWVQdOoN8BjckuV3rQ==}
+  '@cherrystudio/remote-protocol@0.7.0':
+    resolution: {integrity: sha512-N/ELVCuwLaSAt+FOfrnkDbRoRdzcQtCfk9x//BlnmbWG7O7FeoQfTY4rHIOcOZzA4FL8qq2JzwKyu5+xrVnC4Q==}
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@0.2.4':
-    resolution: {integrity: sha512-76eytxIsRAFHbvMnyBuRX4qu0XpDZ6AQdZcSi5VhwFxf57dAfNWlIDqbRxbw5VT6Ts8oJT2O+pa9jH3Vl6hlgg==}
+  '@cherrystudio/remote-transport@0.2.5':
+    resolution: {integrity: sha512-5V1gxwUM2JG5s66Z2zSCSquxVUpxPGZIAav/oIyZMiXCStC+w7ARbuED/m0vdwp17A+fUO1uSefMOD9puHBrOQ==}
 
-  '@cherrystudio/web-search@0.2.0':
-    resolution: {integrity: sha512-31bLFiAFsXgcEDiT8Du/GLR3cPBLFG7QtcZRj2WVPKFAL3moKYB55h8ciHMdMpowEBp81nQWyb1eKFerC8ycrQ==}
+  '@cherrystudio/web-search@0.3.0':
+    resolution: {integrity: sha512-LhCWxxYEo5ONSNhOkh0Wpqf7/M4Z3O+easvYjPXT7amax2jjVlYxg/gtgnpQqnFARcz9Coxz/js9gBM51/bgFA==}
 
   '@craftzdog/react-native-buffer@6.1.2':
     resolution: {integrity: sha512-KV1HitN05FHLLDG7Zb/yftDsa+mKBYBzFMQ0PMldvUicq6vWOtAvz9mDavt7Fzozh+WNqORE+yFDkkdWysZ/SA==}
@@ -11088,25 +11088,25 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/file-preview@0.1.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@cherrystudio/file-preview@0.2.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.2.3(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.2.5(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
 
-  '@cherrystudio/remote-protocol@0.6.0(zod@4.4.3)':
+  '@cherrystudio/remote-protocol@0.7.0(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@0.2.4(zod@4.4.3)':
+  '@cherrystudio/remote-transport@0.2.5(zod@4.4.3)':
     dependencies:
-      '@cherrystudio/remote-protocol': 0.6.0(zod@4.4.3)
+      '@cherrystudio/remote-protocol': 0.7.0(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2
@@ -11116,7 +11116,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@cherrystudio/web-search@0.2.0':
+  '@cherrystudio/web-search@0.3.0':
     dependencies:
       eventsource-parser: 3.1.1
       js-base64: 3.7.7
