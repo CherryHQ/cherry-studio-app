@@ -53,6 +53,14 @@ registry and reload JavaScript with `reloadAppAsync`. Nothing swaps stores
 in place. Backup generations stay inside a profile root; credentials and stores are scoped by
 profile only, never by generation, so a restore keeps them.
 
+Before opening a different profile, startup clears disposable content caches (PDF text, image
+previews, MCP catalogs, remote attachments, export/staging files and picker copies). A persisted
+cache-owner marker preserves caches for ordinary restarts of the same profile. Missing ownership
+also clears legacy caches; cleanup failure leaves the old marker and stops startup before readers
+open, so a retry cannot silently reuse another profile's cached content. Documents, databases and
+the installation's diagnostic log history are retained. Unreadable profile registries are preserved
+and refuse writes until a retry can read the original identity mapping.
+
 Native MCP OAuth and built-in plugin credentials also use profile-scoped keys. Local keys retain
 their released names. Importing data never grants access to another profile's device credentials;
 restore replaces authorization references before the imported database opens.
@@ -89,15 +97,19 @@ profile, only a community session counts as signed in.
   sign in from Settings → Account.
 - **Enterprise sign-in:** reads `/configurations` once with the product token to learn the server
   id, resolves the profile and reloads into it.
-- **Cold start:** the last profile opens without the network. `verify()` then checks that the
-  restored session still matches it. Private sessions validate `/users/me` and `/configurations`
-  against the stored user and server ids; an offline start keeps the cached session and data.
+- **Cold start:** enterprise UI waits until stored credentials match the last profile, without
+  requiring the network. Missing, mismatched or unreadable private credentials keep the sign-in
+  gate closed. Private sessions then validate `/users/me` and `/configurations` against the stored
+  user and server ids; an offline start with matching local credentials keeps its data available.
 - **Cloud identity changes:** the account gate waits for stored cloud credentials to finish
   restoring before showing enterprise data. Session notifications and product-token reads compare
   issuer, subject, product and organization against the active profile; token reads check again
   after awaiting the SDK. Browser completion fences the old cloud profile before the SDK can replace
   its credentials. A failed switch remains behind sign-in until a profile reload; dismissing the
   browser leaves the current session usable. Private sessions are independent of cloud notifications.
+  Reauthentication of the same cloud identity preserves an already admitted session only on a
+  network error or timeout. A refusal, invalid admission response or previously rejected session
+  never reopens its data through this offline fallback.
 - **Session refusal:** the enterprise API client (`enterpriseApi.ts`) attaches the product token and
   its HTTP error interceptor decides whether the server refused the session. Only a 401, or a 403 on
   `/configurations`, refuses it. A 403 on any other path denies one resource, such as an Agent setup

@@ -49,7 +49,7 @@ export interface ProfileRegistryStorage {
  * which profile the next launch opens. It holds no credentials and is not a login authority.
  */
 export class ProfileRegistry {
-  private data: Registry;
+  private data: Registry | undefined;
 
   constructor(
     private readonly storage: ProfileRegistryStorage,
@@ -60,7 +60,7 @@ export class ProfileRegistry {
 
   /** The profile this launch serves. An unknown active id falls back to local data. */
   getActive(): ActiveProfile {
-    const { active, profiles } = this.data;
+    const { active, profiles } = this.data ?? EMPTY;
     if (active === 'local') return LOCAL_PROFILE;
     const profile = profiles.find((candidate) => candidate.id === active);
     return profile ? Object.freeze({ ...profile }) : LOCAL_PROFILE;
@@ -72,8 +72,9 @@ export class ProfileRegistry {
    * profile is never adopted by a login.
    */
   resolve(identity: EnterpriseIdentity, address: string, displayName?: string): ActiveProfile {
+    const data = this.writableRegistry();
     const parsed = EnterpriseIdentitySchema.parse(identity);
-    const existing = this.data.profiles.find((profile) =>
+    const existing = data.profiles.find((profile) =>
       isSameEnterpriseIdentity(profile.identity, parsed),
     );
     const name = displayName?.trim() || existing?.displayName;
@@ -84,27 +85,33 @@ export class ProfileRegistry {
       ...(name && { displayName: name }),
     };
     this.write({
-      ...this.data,
-      profiles: [...this.data.profiles.filter((candidate) => candidate !== existing), profile],
+      ...data,
+      profiles: [...data.profiles.filter((candidate) => candidate !== existing), profile],
     });
     return Object.freeze(profile);
   }
 
   /** Selects the profile for the next launch. */
   setActive(profile: ActiveProfile): void {
-    this.write({ ...this.data, active: profile.id });
+    this.write({ ...this.writableRegistry(), active: profile.id });
   }
 
-  private load(): Registry {
+  private load(): Registry | undefined {
     try {
       const raw = this.storage.read();
-      return raw ? RegistrySchema.parse(JSON.parse(raw)) : EMPTY;
+      return raw === undefined ? EMPTY : RegistrySchema.parse(JSON.parse(raw));
     } catch (error) {
-      // Profile data stays on disk under its id; only the directory is lost.
-      logger.error('Discarding an unreadable profile registry', error as Error);
-      this.write(EMPTY);
-      return EMPTY;
+      // Keep the original mapping available for a retry or repair. Falling back to local
+      // data must never replace a temporarily unreadable or damaged registry with an empty one.
+      logger.error('Could not read the profile registry; preserving its contents', error as Error);
+      return undefined;
     }
+  }
+
+  private writableRegistry(): Registry {
+    this.data ??= this.load();
+    if (!this.data) throw new Error('The profile registry is unavailable');
+    return this.data;
   }
 
   private write(data: Registry): void {

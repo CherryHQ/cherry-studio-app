@@ -21,7 +21,7 @@ export type AccountState = Readonly<{
   isSignedIn: boolean;
   /** Whether this runtime serves an enterprise profile rather than local data. */
   isEnterprise: boolean;
-  /** The stored cloud session has not yet been matched to this enterprise profile. */
+  /** The stored session has not yet been matched to this enterprise profile. */
   isRestoringSession: boolean;
   /** The session was rejected, does not match this profile, or is being replaced by sign-in. */
   needsSignIn: boolean;

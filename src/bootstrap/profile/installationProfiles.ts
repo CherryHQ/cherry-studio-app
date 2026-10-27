@@ -1,7 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import { createMMKV } from 'react-native-mmkv';
 
-import { ProfileRegistry } from '@/backend/data/profile';
+import { ProfileRegistry, resetProfileCaches } from '@/backend/data/profile';
 import { setActiveProfile } from '@/shared/data/activeProfile';
 
 let registry: ProfileRegistry | undefined;
@@ -20,5 +20,13 @@ export function installationProfiles(): ProfileRegistry {
 
 /** Runs from the entry point before any profile-owned store opens. */
 export function selectActiveProfile(): void {
-  setActiveProfile(installationProfiles().getActive());
+  const profile = installationProfiles().getActive();
+  const store = createMMKV({ id: 'cherry-installation-profiles' });
+  if (store.getString('cache-owner') !== profile.id) {
+    // An absent owner also clears caches left by an older installation. Publish ownership only
+    // after cleanup succeeds; a failure must retry before the next profile can read old content.
+    resetProfileCaches();
+    store.set('cache-owner', profile.id);
+  }
+  setActiveProfile(profile);
 }

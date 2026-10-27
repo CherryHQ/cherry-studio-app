@@ -53,10 +53,32 @@ describe('ProfileRegistry', () => {
     expect(createRegistry(stored()).registry.getActive()).toEqual(moved);
   });
 
-  it('falls back to local data when the directory is unreadable', () => {
-    const { registry, stored } = createRegistry('{not json');
+  it.each(['{not json', ''])('preserves an unreadable directory (%j) and refuses writes', (raw) => {
+    const { registry, stored } = createRegistry(raw);
     expect(registry.getActive()).toBe(LOCAL_PROFILE);
-    expect(JSON.parse(stored()!)).toEqual({ version: 1, profiles: [], active: 'local' });
+    expect(() => registry.resolve(identity, 'https://a.example.com')).toThrow('unavailable');
+    expect(() => registry.setActive(LOCAL_PROFILE)).toThrow('unavailable');
+    expect(stored()).toBe(raw);
+  });
+
+  it('retries a failed storage read without losing the existing identity mapping', () => {
+    const original = createRegistry();
+    const profile = original.registry.resolve(identity, 'https://a.example.com');
+    let stored = original.stored();
+    const read = jest
+      .fn(() => stored)
+      .mockImplementationOnce(() => {
+        throw new Error('Storage temporarily unavailable');
+      });
+    const write = jest.fn((value: string) => (stored = value));
+    const createId = jest.fn();
+    const registry = new ProfileRegistry({ read, write }, createId);
+    expect(registry.getActive()).toBe(LOCAL_PROFILE);
+    expect(write).not.toHaveBeenCalled();
+    expect(registry.resolve(identity, 'https://moved.example.com').id).toBe(profile.id);
+    expect(createId).not.toHaveBeenCalled();
+    registry.setActive(profile);
+    expect(createRegistry(stored).registry.getActive().id).toBe(profile.id);
   });
 
   it('isolates private identities from portal identities and retains them across server moves', () => {

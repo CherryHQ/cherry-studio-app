@@ -101,11 +101,12 @@ export class AccountRuntime implements AccountModule {
   constructor(private readonly options: AccountRuntimeOptions) {
     const { active, portal } = options;
     const isCloudProfile = active.identity !== null && !('authentication' in active.identity);
+    const isPrivateProfile = active.identity !== null && 'authentication' in active.identity;
     this.state = {
       isCloudSignInAvailable: portal !== null,
       isSignedIn: false,
       isEnterprise: active.identity !== null,
-      isRestoringSession: portal !== null && isCloudProfile,
+      isRestoringSession: isPrivateProfile || (portal !== null && isCloudProfile),
       needsSignIn: portal === null && isCloudProfile,
       hasPrompted: options.prompt.read(),
       isBusy: false,
@@ -120,13 +121,14 @@ export class AccountRuntime implements AccountModule {
       void portal.ready.then(
         () => {
           this.updateCloudSession(portal.getState());
-          this.update({ isRestoringSession: false });
+          if (!isPrivateProfile) this.update({ isRestoringSession: false });
         },
         () => {
-          this.update({
-            isRestoringSession: false,
-            ...(isCloudProfile && { needsSignIn: true }),
-          });
+          if (!isPrivateProfile)
+            this.update({
+              isRestoringSession: false,
+              ...(isCloudProfile && { needsSignIn: true }),
+            });
         },
       );
     }
@@ -155,6 +157,7 @@ export class AccountRuntime implements AccountModule {
       });
       const result = await this.options.openBrowser(url, redirectUri);
       if (!result) return false;
+      const wasOpen = this.state.isSignedIn && !this.state.needsSignIn;
       // The SDK replaces credentials before it publishes the new identity. Fence the old cloud
       // profile before that replacement, including failures after the SDK has saved new tokens.
       if (this.state.isEnterprise && !this.state.privateAddress)
@@ -181,10 +184,7 @@ export class AccountRuntime implements AccountModule {
           .createApi(enterpriseAddress, {
             getProductToken: () => portal.getProductToken(enterpriseAddress, choice),
           })
-          .getConfiguration()
-          .catch((error: unknown) => {
-            throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
-          });
+          .getConfiguration();
         const server = ServerIdentitySchema.safeParse(configuration);
         if (!server.success) throw new AccountError('connection');
         // The display name is presentation only; an unreachable profile list never blocks sign-in.
@@ -207,10 +207,18 @@ export class AccountRuntime implements AccountModule {
           organization,
         );
       } catch (error) {
-        // Entering another organization failed: end the session just received.
-        if (isOpenIdentity) keepOpenSession();
-        else await this.endCloudSession();
-        throw error;
+        // Only a network outage may preserve an already admitted identity. A refused or
+        // malformed admission must not reopen its data, including after an earlier rejection.
+        if (isOpenIdentity) {
+          if (
+            wasOpen &&
+            isHttpError(error) &&
+            (error.kind === 'network' || error.kind === 'timeout')
+          )
+            keepOpenSession();
+        } else await this.endCloudSession();
+        if (error instanceof AccountError) throw error;
+        throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
       }
       if (profile.id === this.options.active.id) {
         keepOpenSession();
@@ -307,12 +315,31 @@ export class AccountRuntime implements AccountModule {
   readonly verify = async (): Promise<void> => {
     const { portal, active } = this.options;
     if (active.identity && 'authentication' in active.identity) {
+      const revision = this.credentialRevision;
       try {
         const credentials = await this.readPrivateCredentials();
+        if (revision !== this.credentialRevision) return;
+        if (this.state.needsSignIn || this.isPrivateSessionClosed)
+          throw new AccountError('rejected');
         this.update({
+          isRestoringSession: false,
           isSignedIn: true,
           name: credentials.user.username ?? active.identity.subject,
         });
+      } catch (error) {
+        if (revision !== this.credentialRevision) return;
+        this.update({
+          isRestoringSession: false,
+          needsSignIn: true,
+          isSignedIn: false,
+          name: undefined,
+        });
+        logger.warn('Could not restore the private session', error as Error);
+        return;
+      }
+      // A matching local credential permits offline use; network verification is independent
+      // of the initial restoration gate and must not turn storage errors into offline access.
+      try {
         const api = this.options.createApi(active.address, {
           getProductToken: this.getProductToken,
           refuseProductToken: this.refuseProductToken,
@@ -425,6 +452,7 @@ export class AccountRuntime implements AccountModule {
         this.isPrivateSessionClosed = false;
         this.update({
           needsSignIn: false,
+          isRestoringSession: false,
           isSignedIn: true,
           name: user.data.username ?? user.data.id,
         });

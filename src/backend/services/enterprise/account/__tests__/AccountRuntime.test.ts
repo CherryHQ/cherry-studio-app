@@ -204,6 +204,42 @@ describe('AccountRuntime', () => {
     await expect(runtime.getProductToken()).resolves.toBe('product-token');
   });
 
+  it.each([401, 403])(
+    'keeps the same organization blocked after admission returns %s',
+    async (status) => {
+      const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
+      await runtime.verify();
+      const api = options.createApi();
+      api.getConfiguration.mockRejectedValue(new HttpError('Refused', { kind: 'http', status }));
+      options.createApi.mockReturnValue(api);
+      await expect(runtime.signIn()).rejects.toMatchObject({ code: 'rejected' });
+      expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true });
+      await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
+      expect(options.profiles.setActive).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not reopen a previously refused organization when reauthentication is offline', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
+    await runtime.verify();
+    runtime.reportRejected();
+    const api = options.createApi();
+    api.getConfiguration.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
+    options.createApi.mockReturnValue(api);
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true });
+  });
+
+  it('does not treat malformed admission as permission to reopen the same organization', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
+    await runtime.verify();
+    const api = options.createApi();
+    api.getConfiguration.mockResolvedValue({ serverUniqueId: '' });
+    options.createApi.mockReturnValue(api);
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true });
+  });
+
   it('still opens the organization when its display name cannot be read', async () => {
     const { runtime, options } = setup(signedIn('enterprise'));
     options.portal.listProfiles.mockRejectedValueOnce(new Error('offline'));
@@ -448,6 +484,81 @@ describe('AccountRuntime', () => {
     });
     expect(await runtime.getProductToken()).toBe('private-token');
     expect(options.portal.getProductToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps private data gated until local credentials match, without waiting for the network', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    let restore!: (value: string) => void;
+    options.credentials.read.mockReturnValue(
+      new Promise((resolve) => {
+        restore = resolve;
+      }),
+    );
+    let finishNetwork!: () => void;
+    const api = options.createApi();
+    api.getUser.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishNetwork = () => resolve(privateCredentials.user);
+        }),
+    );
+    options.createApi.mockReturnValue(api);
+    const verification = runtime.verify();
+    await options.portal.ready;
+    expect(runtime.getState()).toMatchObject({ isRestoringSession: true, isSignedIn: false });
+    restore(JSON.stringify(privateCredentials));
+    // The local credential read and its verification settle before the blocked network request.
+    await runtime.getProductToken();
+    expect(runtime.getState()).toMatchObject({ isRestoringSession: false, isSignedIn: true });
+    finishNetwork();
+    await verification;
+  });
+
+  it.each(['missing', 'mismatched', 'storage-error'] as const)(
+    'closes private restoration when local credentials are %s',
+    async (failure) => {
+      const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+      if (failure === 'storage-error')
+        options.credentials.read.mockRejectedValue(new Error('Keychain unavailable'));
+      else
+        options.credentials.read.mockResolvedValue(
+          failure === 'missing'
+            ? null
+            : JSON.stringify({
+                ...privateCredentials,
+                user: { id: 'other-user' },
+              }),
+        );
+      expect(runtime.getState().isRestoringSession).toBe(true);
+      await runtime.verify();
+      expect(runtime.getState()).toMatchObject({
+        isRestoringSession: false,
+        isSignedIn: false,
+        needsSignIn: true,
+      });
+      expect(options.createApi).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not let an old credential read close a successfully reauthenticated private session', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    let failRead!: (error: Error) => void;
+    options.credentials.read.mockReturnValue(
+      new Promise((_, reject) => {
+        failRead = reject;
+      }),
+    );
+    options.profiles.resolve.mockReturnValue(privateProfile);
+    const restoring = runtime.verify();
+    await runtime.signIn({ address: privateProfile.address!, username: 'Ada', password: 'new' });
+    failRead(new Error('Old storage read failed'));
+    await restoring;
+    expect(runtime.getState()).toMatchObject({
+      isRestoringSession: false,
+      isSignedIn: true,
+      needsSignIn: false,
+    });
+    await expect(runtime.getProductToken()).resolves.toBe('private-token');
   });
 
   it('preserves the independent private session after a failed cloud sign-in', async () => {
