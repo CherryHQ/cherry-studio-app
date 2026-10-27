@@ -1,7 +1,8 @@
 # Release Checklist Template
 
-Copy this file to `release-status.md` in the version's artifact archive. Replace placeholders,
-keep one current record, and link reports to it. Follow [Cloud Releases](./cloud-releases.md) and
+Copy this file to `release-status.md` in the version's artifact archive (a `<version>/` directory
+outside the repository; see [Release Preparation](./cloud-releases.md#release-preparation)).
+Replace placeholders, keep one current record, and link reports to it. Follow [Cloud Releases](./cloud-releases.md) and
 [Local EAS Builds](./local-builds.md); replace these guide links with repository links in the copy.
 Keep the filled record and private evidence outside committed documentation. Check an item only
 when its evidence is recorded; use `not applicable` with a reason for excluded work.
@@ -24,7 +25,7 @@ when its evidence is recorded; use `not applicable` with a reason for excluded w
 - [ ] Build locations and profiles are selected; tag-triggered cloud jobs are accounted for.
 - [ ] Local tool readiness and cloud queue/fallback decisions are recorded before starting builds.
 - [ ] Channel access, signing/upload credentials, and target commit/tag reachability are ready.
-- [ ] A maintainer with GitCode repository write access owns the upload through their own agent using Computer Use in their authenticated browser.
+- [ ] A maintainer with GitCode repository write access owns the tag push with their own Git credentials and the upload through their own agent using Computer Use in their authenticated browser.
 - [ ] Change inventory, exclusions, upgrade requirements, and curated notes are complete.
 - [ ] Required store locales and screenshot assets are identified; remaining gaps have owners.
 - [ ] Final-package checks have an owner, authorization status, and evidence or an explicit gap.
@@ -39,12 +40,13 @@ Credential records contain location, access result, and expiry/readiness only, n
 
 | Channel / service | Publishing path; credential location | Access and target readiness; checked at | Gap / owner |
 | --- | --- | --- | --- |
-| GitCode | Maintainer's own agent via Computer Use; maintainer's authenticated browser | `<repository write access; matching tag; timestamp>` | `<gap or none; maintainer>` |
+| GitCode | Maintainer's Git credentials for the tag push; own agent via Computer Use in their authenticated browser | `<repository write access; GitCode tag absent or matching; timestamp>` | `<gap or none; maintainer>` |
 | `<other service>` | `<channel-specific path; location>` | `<result; timestamp>` | `<gap or none; owner>` |
 
 GitCode handoff: `<tag, source commit, GitHub release URL, same APK and SHA256SUMS, Chinese title
-and notes>`. Follow the guide's GitCode Maintainer Upload procedure; no repository publishing
-workflow, upload script, or GitCode automation token is used.
+and notes>`. Follow the guide's GitCode Maintainer Upload procedure: push the tag first, then
+publish in the browser. No repository publishing workflow, upload script, or GitCode automation
+token is used.
 
 ## Copy And Assets
 

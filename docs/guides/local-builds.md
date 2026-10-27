@@ -44,9 +44,6 @@ For a release, record this preparation in the
   the package script. The wrapper uses `eas` from `PATH`; it does not pin or install EAS CLI.
 - Confirm the selected platform's tools, signing access, profile environment, output path, and
   free disk space. Follow [Dependencies](./development.md#dependencies) for any installation work.
-- If a prior local attempt failed to launch the local-build plugin, inspect that command's
-  resolution and its CLI/plugin versions before retrying. Record the actual error and workaround;
-  a successful bypass does not prove the standard wrapper has been repaired.
 - Account for active cloud jobs and the source commit before creating a replacement artifact.
   Build numbers can advance before compilation starts. Do not start a build merely as a tool
   availability check; this preparation is manual, not an implemented preflight in the wrapper.

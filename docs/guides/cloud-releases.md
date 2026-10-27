@@ -15,10 +15,14 @@ profiles retain the current ARM64-only device support.
 
 ## Release Preparation
 
-Copy the [Release Checklist Template](./release-checklist-template.md) to `release-status.md` in
-the version's artifact archive. Use that one record throughout preparation, delivery, and handoff;
-link other reports to it. Keep private evidence and account details outside committed documentation.
-These are execution procedures, not automated gates in the release workflow.
+The version's artifact archive is a `<version>/` directory outside the repository, chosen by the
+release owner. It holds that version's artifacts (in `build-<native-build-number>/` directories),
+the artifact manifest, and the release record. Copy the
+[Release Checklist Template](./release-checklist-template.md) to `release-status.md` in that
+directory and record the archive path in it. Use that one record throughout preparation, delivery,
+and handoff; link other reports to it and share it with whoever takes over the release. Keep
+private evidence and account details outside committed documentation. These are execution
+procedures, not automated gates in the release workflow.
 
 Before starting a release:
 
@@ -30,9 +34,9 @@ Before starting a release:
    starts the cloud jobs described above; choosing local builds in this record does not disable
    them. Account for those jobs before pushing a tag or starting a replacement build.
 3. Confirm access to each selected channel, signing/upload credentials, and the target repository
-   and commit. For GitCode, identify a maintainer with repository write access who will use their
-   own agent and authenticated browser via Computer Use. Confirm the matching tag is available.
-   Record readiness and credential location, never secret values.
+   and commit. For GitCode, identify a maintainer with repository write access who will push the
+   tag with their own Git credentials and upload through their own agent and authenticated browser
+   via Computer Use. Record readiness and credential location, never secret values.
 4. Prepare the complete change inventory, curated notes, store descriptions, and asset inventory.
    Record required store locales and screenshots for this release; app translation locales are a
    separate set. Note missing materials before scheduling submission.
@@ -65,9 +69,10 @@ App Store public release as separate rows.
 | EAS production environment | Build and app environment variables | Includes the production Sentry upload token and configured app services |
 
 GitCode publication belongs to a maintainer with write access to the GitCode repository. The
-maintainer uses their own agent with Computer Use to upload and publish through their authenticated
-browser session. The repository provides no GitCode publishing workflow or upload script; no
-GitCode automation token is required. See [GitCode Maintainer Upload](#gitcode-maintainer-upload).
+maintainer pushes the release tag with their own Git credentials, then uses their own agent with
+Computer Use to upload and publish through their authenticated browser session. The repository
+provides no GitCode publishing workflow or upload script; no GitCode automation token is required.
+See [GitCode Maintainer Upload](#gitcode-maintainer-upload).
 
 `submit.production.ios.ascAppId` in `eas.json` must identify the App Store Connect app for the
 production bundle identifier in `app.json`. Set up its submission API key with
@@ -112,8 +117,8 @@ build numbers even when they share a release tag.
 4. Publish the files and notes to GitHub Releases.
 
 GitHub prepares a draft, attaches the files, and publishes it automatically. The authorized
-GitCode maintainer uses their own agent through Computer Use to publish from the matching tag,
-using the same APK and `SHA256SUMS` from the GitHub release.
+GitCode maintainer pushes the matching tag and uses their own agent through Computer Use to publish
+it with the same APK and `SHA256SUMS` from the GitHub release.
 Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
 Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
 download information; do not copy one platform's notes verbatim to the other. Keep version tags,
@@ -147,12 +152,26 @@ Store links can be added to the release page after the listings are available.
 1. Hand the authorized maintainer the release tag, source commit, GitHub release URL, exact APK,
    `SHA256SUMS`, and Simplified Chinese title and notes. Record that maintainer as the GitCode owner
    in `release-status.md`.
-2. The maintainer directs their own agent to use Computer Use in their authenticated browser.
-   Open the GitCode repository and confirm the release tag points to the intended commit. If the
-   tag is missing or differs, leave publication pending for the maintainer to resolve repository
-   synchronization; do not publish against a different commit.
-3. Create or edit the matching release in the browser, enter the Chinese title and notes, and
-   select the appropriate stable or prerelease status.
+2. GitCode is not a mirror of GitHub, so each release tag is pushed explicitly. From a checkout
+   where the tag points to the source commit, the maintainer checks the GitCode tag:
+
+   ```bash
+   git ls-remote --tags https://gitcode.com/CherryHQ/cherry-studio-app.git refs/tags/<tag> 'refs/tags/<tag>^{}'
+   ```
+
+   If it is absent, push only the tag and the commits it needs, using the maintainer's own Git
+   credentials:
+
+   ```bash
+   git push https://gitcode.com/CherryHQ/cherry-studio-app.git refs/tags/<tag>:refs/tags/<tag>
+   ```
+
+   If it exists and its peeled commit (`^{}`, or the tag itself for a lightweight tag) matches the
+   source commit, continue. If it points elsewhere, stop and leave publication pending; never force
+   the tag, push a branch, or publish against a different commit.
+3. The maintainer directs their own agent to use Computer Use in their authenticated browser.
+   Create or edit the release for that tag, enter the Chinese title and notes, and select the
+   appropriate stable or prerelease status.
 4. Upload the same APK and `SHA256SUMS` from GitHub. Wait for both attachments to finish uploading
    before publishing. On retry, inspect existing attachments first and retain matching files;
    do not replace an existing attachment with a different build.
@@ -228,12 +247,8 @@ not configure groups or submit the app for an App Store public release.
   does not itself start another build. Track queue time, execution time, and retry gaps separately.
 - On failure, save the exact job ID, source commit, profile, error, and relevant logs. An unchanged
   retry needs evidence of a transient failure and a bounded attempt count. If the same error
-  recurs, reassess the hypothesis and change the plan before another attempt. A failed mirror
-  sync with no new diagnostics also calls for reassessment of the available publishing path.
-- For an Android build process exit, inspect both Gradle task concurrency and the native compiler
-  processes it starts. Preserve uncertainty when resource or crash evidence is missing. Success
-  after changing both the machine and configuration does not isolate the cause or validate the
-  original cloud environment.
+  recurs, reassess the hypothesis and change the plan before another attempt. A success after
+  changing several factors at once does not isolate the cause or validate the original environment.
 - Before switching paths, check for still-running jobs and record which one will supply the final
   artifact. Reuse successful artifacts and account for new build numbers. Record the recovery
   change and expected result before retrying; use the local prerequisite check below when relevant.
