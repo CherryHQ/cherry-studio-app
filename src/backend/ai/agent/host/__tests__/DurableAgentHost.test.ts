@@ -254,7 +254,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     updateSessionTitle() {},
     startTurn: jest.fn(() => reply),
   };
-  const host = new DurableAgentHost(store, ports, background, new FakeRuntime(), conversations);
+  const host = new DurableAgentHost(store, ports, background, conversations);
   const reserve = async (
     status: RuntimeDurableTurn['status'] = 'completed',
     userParts: AgentMessagePart[] = [
@@ -1965,6 +1965,11 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         readDocumentText: async () => undefined,
         readAsDataUrl,
       },
+    });
+    const preflight = await state.conversations.preflightModel(configuration.model);
+    state.conversations.preflightModel = async () => ({
+      ...preflight,
+      inputModalities: ['text', 'image'],
     });
     await state.reserve('completed');
     await state.host.initialize();

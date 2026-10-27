@@ -52,7 +52,6 @@ import {
   raceAbort,
   runtimeLane,
   sameLane,
-  type AgentRuntime,
   type DurableAgentRuntime,
   type RuntimeLane,
   type RuntimeConversationEvent,
@@ -225,7 +224,6 @@ export class DurableAgentHost implements AgentProtocol {
     private readonly store: AgentSessionStore,
     private readonly ports: MobileAgentHostPorts,
     private readonly background: BackgroundReplyLifecycle,
-    private readonly runtime: AgentRuntime,
     readonly conversations: DurableAgentRuntime,
   ) {
     this.naming = ports.naming(this.controller.signal);
@@ -1301,7 +1299,7 @@ export class DurableAgentHost implements AgentProtocol {
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       imageGeneration: this.ports.imageGeneration,
-      runtime: this.runtime,
+      runtime: this.conversations,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
