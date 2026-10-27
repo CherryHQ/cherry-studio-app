@@ -13,6 +13,47 @@ Google Play builds use `production-google-play`, which inherits the production i
 and automatic native build-number increments, but generates an AAB instead of an APK. Both Android
 profiles retain the current ARM64-only device support.
 
+## Release Preparation
+
+Copy the [Release Checklist Template](./release-checklist-template.md) to `release-status.md` in
+the version's artifact archive. Use that one record throughout preparation, delivery, and handoff;
+link other reports to it. Keep private evidence and account details outside committed documentation.
+These are execution procedures, not automated gates in the release workflow.
+
+Before starting a release:
+
+1. Record the tag, source commit, intended channels, completion criteria, and release owner. Carry
+   forward decisions and authorization already given in the task; identify only outstanding
+   decisions. Preparing the checklist does not authorize additional builds or external actions.
+2. Choose local or cloud builds for each artifact using the task's requirements and preferences.
+   Record the profile, tool versions, queue budget, and available fallback. A version-tag push
+   starts the cloud jobs described above; choosing local builds in this record does not disable
+   them. Account for those jobs before pushing a tag or starting a replacement build.
+3. Confirm access to each selected channel, signing/upload credentials, and the target repository
+   and commit. For GitCode, identify a maintainer with repository write access who will use their
+   own agent and authenticated browser via Computer Use. Confirm the matching tag is available.
+   Record readiness and credential location, never secret values.
+4. Prepare the complete change inventory, curated notes, store descriptions, and asset inventory.
+   Record required store locales and screenshots for this release; app translation locales are a
+   separate set. Note missing materials before scheduling submission.
+5. Assign the checks for the final artifacts: who performs them, their current authorization and
+   evidence, and any unverified scope. Build success, screenshots from a development client, and
+   store approval do not establish final-package runtime acceptance.
+
+### Before The First Store Submission
+
+Check each store independently. Select the intended version and build, complete the configured
+locales and declarations, and confirm that all required screenshots have finished processing.
+Record each asset's source, app/client version, locale, device/display, dimensions, and upload
+status. Use suitable application captures without test content or development overlays; do not
+treat design mockups as application screenshots.
+
+For an existing rejection, map every issue to its code/content resolution, reply, sent-message
+evidence, and replacement build. A reply draft remains distinct from a sent reply. Complete the
+materials for the selected store before submitting it; another channel's pending review need not
+block that submission. Keep internal TestFlight distribution, external beta review, and the
+App Store public release as separate rows.
+
 ## Required Configuration
 
 | Location | Setting | Purpose |
@@ -23,9 +64,10 @@ profiles retain the current ARM64-only device support.
 | EAS credentials | iOS production signing and App Store Connect API key | Sign and upload iOS builds without prompts |
 | EAS production environment | Build and app environment variables | Includes the production Sentry upload token and configured app services |
 
-Configure the GitCode token in **Settings → Secrets and variables → Actions**. The token owner must
-have write access to the target GitCode repository. Tokens are supplied through headers and process
-environment variables, never embedded in a Git URL or committed file.
+GitCode publication belongs to a maintainer with write access to the GitCode repository. The
+maintainer uses their own agent with Computer Use to upload and publish through their authenticated
+browser session. The repository provides no GitCode publishing workflow or upload script; no
+GitCode automation token is required. See [GitCode Maintainer Upload](#gitcode-maintainer-upload).
 
 `submit.production.ios.ascAppId` in `eas.json` must identify the App Store Connect app for the
 production bundle identifier in `app.json`. Set up its submission API key with
@@ -69,8 +111,9 @@ build numbers even when they share a release tag.
    for 30 days. The filename is `cherry-studio-<release-version>-android.apk`.
 4. Publish the files and notes to GitHub Releases.
 
-GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
-published manually from the matching tag using the same APK and `SHA256SUMS` from the GitHub release.
+GitHub prepares a draft, attaches the files, and publishes it automatically. The authorized
+GitCode maintainer uses their own agent through Computer Use to publish from the matching tag,
+using the same APK and `SHA256SUMS` from the GitHub release.
 Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
 Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
 download information; do not copy one platform's notes verbatim to the other. Keep version tags,
@@ -83,8 +126,6 @@ The app shows these notes in its update dialog. Start both bodies with the `#` t
 with the download section headed exactly `## 下载安装` (GitCode) or `## Download and Installation`
 (GitHub); the app removes the title and that final section, so put everything users should read in
 the app before it.
-When using `scripts/publishGitcodeRelease.ts`, supply the Chinese version as `release-notes.md` in
-its `RELEASE_DIRECTORY`; the script reads that file as-is and does not translate it.
 
 The public APK uses `production`, which enables GitCode update checks, in-app downloads and
 user-confirmed Android installation. Publish the matching GitCode stable release with both the
@@ -100,6 +141,37 @@ releases. The workflow does not replace an existing attachment with different co
 Both language versions describe Android installation and explain that store distribution is independent.
 The APK becomes public when this workflow succeeds; it does not wait for either store's review.
 Store links can be added to the release page after the listings are available.
+
+### GitCode Maintainer Upload
+
+1. Hand the authorized maintainer the release tag, source commit, GitHub release URL, exact APK,
+   `SHA256SUMS`, and Simplified Chinese title and notes. Record that maintainer as the GitCode owner
+   in `release-status.md`.
+2. The maintainer directs their own agent to use Computer Use in their authenticated browser.
+   Open the GitCode repository and confirm the release tag points to the intended commit. If the
+   tag is missing or differs, leave publication pending for the maintainer to resolve repository
+   synchronization; do not publish against a different commit.
+3. Create or edit the matching release in the browser, enter the Chinese title and notes, and
+   select the appropriate stable or prerelease status.
+4. Upload the same APK and `SHA256SUMS` from GitHub. Wait for both attachments to finish uploading
+   before publishing. On retry, inspect existing attachments first and retain matching files;
+   do not replace an existing attachment with a different build.
+5. Confirm the published page has the intended tag, notes, and both attachments. Record the release
+   URL, observation time, and completion evidence in the GitCode status row.
+
+### Release Notes And Channel Coverage
+
+First inventory the changes since the previous release, with commit or PR evidence and any upgrade
+requirements. Then curate the public notes using **Features / Fixes / Architecture Upgrades**
+(**功能 / 修复 / 架构升级** for GitCode). Use a module name and one concise sentence per item; omit
+empty sections. Keep detailed implementation evidence in the inventory. Record release-specific
+exclusions instead of carrying an old exclusion into every future release.
+
+Use the copy outline and coverage table in the checklist. Track each core feature, named device
+capability, and upgrade warning across GitHub English, GitCode Simplified Chinese, configured store
+locales, and test notes. Store copy can be shorter, but an intentional omission needs a reason.
+When wording changes, revisit the affected channel cells, including already published notes, and
+record the confirmed result. A local draft does not establish that a channel has been updated.
 
 ## Google Play
 
@@ -151,6 +223,20 @@ not configure groups or submit the app for an App Store public release.
 
 ## Failure Recovery
 
+- At the recorded queue budget, reassess the active job and available fallback. Report the current
+  phase, elapsed time, estimate with its basis (or unknown), and next decision time. Reassessment
+  does not itself start another build. Track queue time, execution time, and retry gaps separately.
+- On failure, save the exact job ID, source commit, profile, error, and relevant logs. An unchanged
+  retry needs evidence of a transient failure and a bounded attempt count. If the same error
+  recurs, reassess the hypothesis and change the plan before another attempt. A failed mirror
+  sync with no new diagnostics also calls for reassessment of the available publishing path.
+- For an Android build process exit, inspect both Gradle task concurrency and the native compiler
+  processes it starts. Preserve uncertainty when resource or crash evidence is missing. Success
+  after changing both the machine and configuration does not isolate the cause or validate the
+  original cloud environment.
+- Before switching paths, check for still-running jobs and record which one will supply the final
+  artifact. Reuse successful artifacts and account for new build numbers. Record the recovery
+  change and expected result before retrying; use the local prerequisite check below when relevant.
 - If a publishing job fails, fix its credentials or service error and choose **Re-run failed jobs**
   in GitHub Actions. Successful build jobs are reused, so publishing retries use the same APK or
   iOS build ID without a new EAS build.
@@ -164,6 +250,34 @@ not configure groups or submit the app for an App Store public release.
   new build is intended. A build job timeout does not cancel the remote EAS build; check EAS first.
 - Saved Actions artifacts expire after 30 days. Recover the GitHub APK from its published release
   or EAS; recover the Google Play AAB from the exact EAS build recorded in the workflow summary.
+
+For a local fallback, follow [Before Starting A Local Build](./local-builds.md#before-starting-a-local-build).
+
+## Status And Closeout
+
+Update `release-status.md` whenever a channel changes state. Each row carries its own version/build,
+observed status, observation time with timezone, evidence, owner, and next action. Preserve the
+platform's wording: uploaded, submitted, approved, and available are different observations.
+Use `unknown`, `pending`, or `out of scope` with a reason when appropriate. Do not infer an external
+TestFlight result from App Store approval or a publication time from the time it was observed.
+
+Progress updates should explain changes, blockers, remaining estimates, and the next decision.
+When a monitoring task ends, distinguish that from artifact delivery or review completion.
+
+Before handing off:
+
+- Record each final artifact's actual commit, build ID/number, profile, checksum, and evidence for
+  integrity, signing, and production diagnostic uploads. Reference the artifact manifest for
+  details. Keep the public tag unchanged if a recovery build uses a later commit.
+- Record the recovery commits and their path back to shared history, with an owner and completion
+  condition. Local success does not establish that the recovery is merged or cloud-validated.
+- Reconcile the latest channel observations into the status record. Keep earlier snapshots as
+  dated evidence and explicitly identify which statuses have been superseded.
+- Assign unresolved compatibility warnings, credential gaps, and missing verification evidence.
+  Link existing issues or PRs; carry items awaiting issue creation in the handoff. Do not bury
+  release-specific unfinished work in the permanent guides.
+- State delivery completion and process closeout separately. Every remaining action must have an
+  owner, next step, and completion condition; checks owned by the user remain clearly identified.
 
 ## References
 
