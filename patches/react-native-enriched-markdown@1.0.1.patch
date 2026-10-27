@@ -643,11 +643,25 @@ index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83
    if (linkColor != nil) {
      [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
    }
+diff --git a/ios/attachments/ENRMMathInlineAttachment.h b/ios/attachments/ENRMMathInlineAttachment.h
+index 956792262d7301cbe7a781d8515a8019a5a294d3..b7f582a99b4da075b9e8e8e5ebec6b37bb5457ca 100644
+--- a/ios/attachments/ENRMMathInlineAttachment.h
++++ b/ios/attachments/ENRMMathInlineAttachment.h
+@@ -8,6 +8,9 @@
+ @property (nonatomic, strong) NSString *latex;
+ @property (nonatomic, assign) CGFloat fontSize;
+ @property (nonatomic, strong, nullable) RCTUIColor *mathTextColor;
++/// Cherry Mobile: YES for display math nested in a paragraph or list item (root-level
++/// display math uses the scrolling segment instead). Inline math keeps intrinsic bounds.
++@property (nonatomic, assign) BOOL displayMath;
+ 
+ @property (nonatomic, readonly) CGFloat boxHeight;
+ 
 diff --git a/ios/attachments/ENRMMathInlineAttachment.m b/ios/attachments/ENRMMathInlineAttachment.m
-index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..21951d2d9ec87a1241b8835da5b979e252561c70 100644
+index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a1f8ead8efe5206078c31d01460ab4554c12fe73 100644
 --- a/ios/attachments/ENRMMathInlineAttachment.m
 +++ b/ios/attachments/ENRMMathInlineAttachment.m
-@@ -46,13 +46,50 @@
+@@ -46,13 +46,54 @@
    _cachedSize = CGSizeMake(ceil(result.width), ceil(result.totalHeight));
  }
  
@@ -661,9 +675,9 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..21951d2d9ec87a1241b8835da5b979e2
 +  return columnWidth > 0 ? columnWidth : 0;
 +}
 +
-+static double ENRMMathFitScale(double intrinsicWidth, double columnWidth)
++static double ENRMMathFitScale(double intrinsicWidth, double columnWidth, int isDisplayMath)
 +{
-+  if (intrinsicWidth <= 0 || columnWidth <= 0)
++  if (!isDisplayMath || intrinsicWidth <= 0 || columnWidth <= 0)
 +    return 1;
 +  double scale = columnWidth / intrinsicWidth;
 +  return scale < 1 ? scale : 1;
@@ -677,12 +691,16 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..21951d2d9ec87a1241b8835da5b979e2
  {
    [self prepareIfNeeded];
 -  return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
-+  // Cherry Mobile: budget against the usable paragraph column, never against what is left of
-+  // the current line. A formula that fits the column keeps its intrinsic size, so TextKit
-+  // breaks the line and moves it down exactly as the unpatched attachment did; only a formula
-+  // wider than the column is scaled down. This single policy covers inline math and display
-+  // math nested in a paragraph or list item alike: RendererFactory.m routes both node types
-+  // through this attachment and the attachment carries no inline/display flag.
++  // Cherry Mobile: inline math keeps the unpatched bounds, so TextKit wraps and
++  // moves it down exactly as upstream does, whatever the insertion position.
++  if (!self.displayMath)
++    return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
++  // Display math nested in a paragraph or list item cannot scroll, so it is fitted to
++  // the usable paragraph column — never to what is left of the current line, which would
++  // shrink a formula that merely landed near the end of a line. A formula that fits the
++  // column keeps scale 1 and therefore still wraps; only a formula wider than the column
++  // shrinks. Root-level display math is a different path (its own segment backed by a
++  // scrolling container) and does not come through this attachment.
 +  CGFloat availableWidth = _cachedSize.width;
 +  if (textContainer) {
 +    NSTextStorage *storage = textContainer.layoutManager.textStorage;
@@ -694,12 +712,12 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..21951d2d9ec87a1241b8835da5b979e2
 +    CGFloat right = style.tailIndent > 0 ? style.tailIndent : textContainer.size.width + style.tailIndent;
 +    availableWidth = ENRMMathColumnWidth(right, indent, textContainer.lineFragmentPadding);
 +  }
-+  CGFloat scale = ENRMMathFitScale(_cachedSize.width, availableWidth);
++  CGFloat scale = ENRMMathFitScale(_cachedSize.width, availableWidth, self.displayMath);
 +  return CGRectMake(0, -_mathDescent * scale, _cachedSize.width * scale, _cachedSize.height * scale);
  }
  
  - (UIImage *)imageForBounds:(CGRect)imageBounds
-@@ -63,22 +100,31 @@
+@@ -63,22 +104,31 @@
    if (!_renderResult && !_fallbackSource)
      return nil;
  
@@ -735,7 +753,63 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..21951d2d9ec87a1241b8835da5b979e2
    }];
  }
  
-
+diff --git a/ios/renderer/ENRMMathInlineRenderer.h b/ios/renderer/ENRMMathInlineRenderer.h
+index bdfe794b253e7ed92153b7701c4b01b9c2403b34..c49556026bea99a0a01896afae73641e646d6e14 100644
+--- a/ios/renderer/ENRMMathInlineRenderer.h
++++ b/ios/renderer/ENRMMathInlineRenderer.h
+@@ -4,6 +4,9 @@
+ NS_ASSUME_NONNULL_BEGIN
+ 
+ @interface ENRMMathInlineRenderer : BaseRenderer
++/// Cherry Mobile: YES only for display math nested in a paragraph or list item.
++/// Inline math keeps upstream geometry; nested display math is fitted to the usable column.
++@property (nonatomic, assign) BOOL displayMath;
+ @end
+ 
+ NS_ASSUME_NONNULL_END
+diff --git a/ios/renderer/ENRMMathInlineRenderer.m b/ios/renderer/ENRMMathInlineRenderer.m
+index bff00b34db8ff08034871e778a852a00d3490b92..a0c1421213a0ef069ed6156d18d1eeb1a7ed6cd6 100644
+--- a/ios/renderer/ENRMMathInlineRenderer.m
++++ b/ios/renderer/ENRMMathInlineRenderer.m
+@@ -27,6 +27,9 @@
+   attachment.latex = latex;
+   attachment.fontSize = currentFont ? currentFont.pointSize : [_config paragraphFontSize];
+   attachment.mathTextColor = [_config inlineMathColor];
++  // Cherry Mobile: display math nested in a paragraph/list item is fitted to the
++  // usable column; inline math keeps its intrinsic width so TextKit wraps it as before.
++  attachment.displayMath = self.displayMath;
+ 
+ #if TARGET_OS_OSX
+   // On macOS, NSLayoutManager uses self.image/self.bounds rather than calling
+diff --git a/ios/renderer/RendererFactory.m b/ios/renderer/RendererFactory.m
+index 1f4ff795e9d7e155f0b9d89723df37b4a4a055d6..49defb037204a6ac593764d2ea9a62fe97a30ce3 100644
+--- a/ios/renderer/RendererFactory.m
++++ b/ios/renderer/RendererFactory.m
+@@ -112,14 +112,22 @@
+ #if ENRICHED_MARKDOWN_MATH
+     case MarkdownNodeTypeLatexMathInline:
+       return [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
+-    case MarkdownNodeTypeLatexMathDisplay:
++    case MarkdownNodeTypeLatexMathDisplay: {
+       // Display math INSIDE a paragraph (mid-paragraph / softbreak-adjacent
+       // `$$…$$`) previously fell through to the nil-renderer child dump —
+       // the body leaked as plain text with its delimiters silently dropped.
+       // Typeset it as an inline attachment instead; block-level display math
+       // is unaffected (SegmentRenderer intercepts root-level display nodes
+       // before this factory is consulted).
+-      return [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
++      // Cherry Mobile: thread the node kind into the attachment so ordinary inline
++      // math keeps its upstream bounds (and its line wrapping), while display math
++      // nested in a paragraph or list item is fitted to the usable paragraph column.
++      // Root-level display math never reaches this factory — SegmentRenderer
++      // intercepts it and renders it in the scrolling ENRMMathContainerView.
++      ENRMMathInlineRenderer *renderer = [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
++      renderer.displayMath = YES;
++      return renderer;
++    }
+ #endif
+     case MarkdownNodeTypeSpoiler:
+       return [[ENRMSpoilerRenderer alloc] initWithRendererFactory:self config:_config];
 diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
 index 204fc18510d3de0b79c3d3741b1599659a53d4d9..0c34c0637f57f8ba97ce83d83a70ae3341cd1fd4 100644
 --- a/ios/renderer/ListItemRenderer.m

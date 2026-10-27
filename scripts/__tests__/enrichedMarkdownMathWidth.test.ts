@@ -7,6 +7,10 @@ import { join } from 'node:path';
 const patchPath = 'patches/react-native-enriched-markdown@1.0.1.patch';
 const patch = readFileSync(patchPath, 'utf8');
 const attachmentFile = 'ios/attachments/ENRMMathInlineAttachment.m';
+const attachmentHeaderFile = 'ios/attachments/ENRMMathInlineAttachment.h';
+const rendererFile = 'ios/renderer/ENRMMathInlineRenderer.m';
+const rendererHeaderFile = 'ios/renderer/ENRMMathInlineRenderer.h';
+const factoryFile = 'ios/renderer/RendererFactory.m';
 const filePatch = (file: string) => patch.split(`+++ b/${file}\n`)[1]?.split('diff --git ')[0];
 const compact = (source: string) => source.replace(/\s+/g, '');
 const afterSide = (file: string) => {
@@ -29,7 +33,7 @@ describe('Enriched Markdown iOS math width patch', () => {
     expect(lockfile).toContain(`  react-native-enriched-markdown@1.0.1: ${hash}\n`);
   });
 
-  test('executes the column-only fit policy from the native patch', () => {
+  test('executes the display-only column fit policy from the native patch', () => {
     const added = filePatch(attachmentFile)
       ?.split('\n')
       .filter((line) => line.startsWith('+'))
@@ -40,12 +44,14 @@ describe('Enriched Markdown iOS math width patch', () => {
     expect(block).not.toMatch(/position|lineFragment/);
 
     const cases = [
-      [240, 0, 0, 86, 240, 1],
-      [320, 40, 0, 500, 280, 0.56],
-      [240, 0, 0, 300, 240, 0.8],
-      [240, 0, 5, 300, 235, 235 / 300],
-      [0, 0, 0, 86, 0, 1],
-      [240, 0, 0, 0, 240, 1],
+      [240, 0, 0, 86, 1, 240, 1],
+      [320, 40, 0, 500, 1, 280, 0.56],
+      [240, 0, 0, 300, 1, 240, 0.8],
+      [240, 0, 5, 300, 1, 235, 235 / 300],
+      [0, 0, 0, 86, 1, 0, 1],
+      [240, 0, 0, 0, 1, 240, 1],
+      [240, 0, 0, 86, 0, 240, 1],
+      [280, 0, 0, 500, 0, 280, 1],
     ];
     const directory = mkdtempSync(join(tmpdir(), 'enriched-math-fit-'));
     try {
@@ -57,14 +63,14 @@ describe('Enriched Markdown iOS math width patch', () => {
 #include <stdio.h>
 int main(void)
 {
-  const double cases[][4] = {
-    ${cases.map((row) => `{${row.slice(0, 4).join(', ')}}`).join(',\n    ')}
+  const double cases[][5] = {
+    ${cases.map((row) => `{${row.slice(0, 5).join(', ')}}`).join(',\n    ')}
   };
   for (unsigned int i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
     const double *row = cases[i];
     double column = ENRMMathColumnWidth(row[0], row[1], row[2]);
-    double scale = ENRMMathFitScale(row[3], column);
-    printf("%.17g %.17g %.17g %.17g %.17g %.17g\\n", row[0], row[1], row[2], row[3], column, scale);
+    double scale = ENRMMathFitScale(row[3], column, (int)row[4]);
+    printf("%.17g %.17g %.17g %.17g %.17g %.17g %.17g\\n", row[0], row[1], row[2], row[3], row[4], column, scale);
   }
   return 0;
 }
@@ -91,19 +97,35 @@ int main(void)
     }
   });
 
-  test('wires attachment bounds to the usable paragraph column', () => {
+  test('wires only nested display attachments to the usable paragraph column', () => {
     const source = afterSide(attachmentFile);
     expect(source).toContain('CGFloatavailableWidth=_cachedSize.width;');
     expect(source).toContain(
       'availableWidth=ENRMMathColumnWidth(right,indent,textContainer.lineFragmentPadding);',
     );
-    expect(source).toContain('CGFloatscale=ENRMMathFitScale(_cachedSize.width,availableWidth);');
+    expect(source).toContain(
+      'if(!self.displayMath)returnCGRectMake(0,-_mathDescent,_cachedSize.width,_cachedSize.height);',
+    );
+    expect(source).toContain(
+      'CGFloatscale=ENRMMathFitScale(_cachedSize.width,availableWidth,self.displayMath);',
+    );
     expect(source).toContain(
       'returnCGRectMake(0,-_mathDescent*scale,_cachedSize.width*scale,_cachedSize.height*scale);',
     );
     expect(source).not.toContain('fragmentBudget');
     expect(source).not.toContain('containerBudget');
     expect(source).not.toContain('MAX(position.x');
+    expect(afterSide(attachmentHeaderFile)).toContain(
+      '@property(nonatomic,assign)BOOLdisplayMath;',
+    );
+    expect(afterSide(rendererFile)).toContain('attachment.displayMath=self.displayMath;');
+    expect(afterSide(rendererHeaderFile)).toContain('@property(nonatomic,assign)BOOLdisplayMath;');
+    const factory = afterSide(factoryFile);
+    expect(factory).toContain('renderer.displayMath=YES;');
+    expect(factory.match(/caseMarkdownNodeTypeLatexMathInline:/g)).toHaveLength(1);
+    expect(factory).toContain(
+      'caseMarkdownNodeTypeLatexMathInline:return[[ENRMMathInlineRendereralloc]initWithRendererFactory:selfconfig:_config];',
+    );
   });
 
   test('sizes the raster from the current image bounds and rejects empty dimensions first', () => {
@@ -173,7 +195,7 @@ int main(void)
       ),
     );
     expect(renderer).toContain('attachment.latex=latex;');
-    expect(filePatch('ios/renderer/ENRMMathInlineRenderer.m')).toBeUndefined();
+    expect(filePatch('ios/renderer/ENRMMathInlineRenderer.m')).toBeDefined();
     expect(filePatch('ios/utils/MarkdownExtractor.m')).toBeUndefined();
     expect(filePatch('ios/views/ENRMMathContainerView.m')).toBeUndefined();
   });
