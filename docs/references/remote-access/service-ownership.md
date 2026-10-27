@@ -1,8 +1,6 @@
 # Service Dependencies And Ownership
 
-Status: source audit of the in-progress #997 migration on 2026-09-23. This describes the current
-working tree, including uncommitted implementation; it is not a statement that the remote chat
-path has shipped or passed device acceptance. See [Remote Access](./README.md) for the wire contract
+Status: source audit of `main` on 2026-10-27, after the remote chat path shipped. See [Remote Access](./README.md) for the wire contract
 and [Runtime Ownership](../runtime-ownership.md) for general lifecycle rules.
 
 ## Boundaries And Current Call Graph
@@ -94,7 +92,7 @@ must also be considered when reviewing shutdown safety.
 | --- | --- | --- |
 | `MobileAgentHost` | Local turns, approvals, runtime sessions and terminal persistence | Route-independent. Explicit cancel targets a turn. Host shutdown drains; process restart marks unfinished local turns interrupted. |
 | `RemoteAgentRuntime` | Shared Agent scopes, concurrent acquisitions, pending command demand | Each caller releases its handle independently. Pending commands retain demand after route exit; stop drains openings and scopes. Process restart recovers journal state when that source is opened again. |
-| `RemoteAgentScope` | One Agent-domain lease, session observations, resource registry, read projection and operation recovery | Reacts to lease state; no separate physical reconnect owner. Sync retries and command-receipt recovery are logical work within a usable connection. |
+| `RemoteAgentScope` | One Agent-domain lease, session observations, resource registry, read projection, operation recovery, and the phone's background presentation of desktop execution: background reply cards, decision buttons, and their keep-alive leases | Reacts to lease state; no separate physical reconnect owner. Sync retries and command-receipt recovery are logical work within a usable connection. Background presentation follows desktop snapshots through `BackgroundReplyRuntime` and never cancels desktop execution. |
 | `RemoteSessionReadCache` | Runtime-owned bounded protocol values, latest history membership, verified bodies | Survives route disposal without retaining network demand. Binding invalidation clears idle data too; current Scope reissues resource references. See [read cache](./session-read-cache.md). |
 | `SessionSync` | One observed desktop session's checkpoint and in-memory projection/cursor | Installs a fresh desktop checkpoint on every subscription and applies events in memory before ACK. Background/disconnect stops observation; reconnect never resumes a stored cursor. It never cancels desktop execution. |
 | `RemoteAgentActions` | Exact command parameters, fixed IDs, create/send workflow and receipt interpretation | Journal before send. A lost response queries the receipt and may retry identical IDs; interrupted outcomes do not become blind retries. |
@@ -108,7 +106,7 @@ must also be considered when reviewing shutdown safety.
 The main declared lifecycle edges are:
 
 ```text
-RemoteAgentRuntime       → DesktopConnectionManager
+RemoteAgentRuntime       → DesktopConnectionManager + BackgroundReplyRuntime
 DesktopConnectionRuntime → DesktopConnectionManager + DbService
 DesktopConnectionManager → DbService
 DocumentExportRuntime    → DbService
