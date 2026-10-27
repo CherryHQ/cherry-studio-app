@@ -20,7 +20,7 @@ export function useWindowClass(): WindowClass {
   });
 }
 
-/** Expanded windows keep the sidebar as a column beside the content instead of an overlay. */
+/** Wide windows keep the sidebar as a column beside the content instead of an overlay. */
 export function useIsSidebarPersistent() {
-  return useWindowClass() === 'expanded';
+  return useWindowClass() === 'wide';
 }

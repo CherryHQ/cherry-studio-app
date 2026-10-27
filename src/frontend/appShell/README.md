@@ -12,7 +12,7 @@ page.
   sources used by the drawer, Agent picker and chat. Its `remote/` boundary owns desktop Session
   observation and history; local chat observation belongs to `features/chat/runtime`.
 - `sidebar/` owns the drawer's navigation surface.
-- `pane/` owns the file pane beside chat in medium and expanded windows.
+- `pane/` owns the file pane beside chat in wide windows.
 - `search/` owns the cross-page request session that opens the transient search page.
 - `backgroundActivity/` owns platform Live Activity factories registered during bootstrap.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.

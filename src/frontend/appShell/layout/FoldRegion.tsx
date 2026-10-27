@@ -52,6 +52,33 @@ export function FoldRegionReporter() {
   return <FoldRegionObserver onLayoutChange={setLayout} style={styles.observer} />;
 }
 
+const WindowFoldRegionContext = createContext<FoldRegionLayout | null>(null);
+
+/**
+ * Observes the fold across the whole window for layouts that place regions around it, such as the
+ * sidebar column. The split reporter cannot serve them: it only sees a fold inside its own host,
+ * so a column that grows to the fold would push the host past it and lose the fold it sized to.
+ */
+export function WindowFoldRegion({ children }: PropsWithChildren) {
+  const [layout, setLayout] = useState<FoldRegionLayout | null>(null);
+  return (
+    <WindowFoldRegionContext value={layout}>
+      {FoldRegionObserver ? (
+        <FoldRegionObserver onLayoutChange={setLayout} style={styles.observer} />
+      ) : null}
+      {children}
+    </WindowFoldRegionContext>
+  );
+}
+
+/** The fold across the window from a current snapshot, or null. */
+export function useWindowFoldRegion() {
+  const layout = use(WindowFoldRegionContext);
+  const { width, height } = useWindowDimensions();
+  const isCurrent = layout?.window.width === width && layout.window.height === height;
+  return isCurrent ? (layout?.fold ?? null) : null;
+}
+
 const styles = StyleSheet.create({
   observer: { ...StyleSheet.absoluteFill, pointerEvents: 'none' },
 });

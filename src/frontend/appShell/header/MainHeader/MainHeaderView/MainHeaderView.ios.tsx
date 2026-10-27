@@ -5,10 +5,10 @@ import { Stack, useIsPreview } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
+import { useReportChatHeaderHeight } from '@/frontend/appShell/layout';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-import { HeaderAction } from '../../components/HeaderAction';
-import { HeaderActionGroup } from '../../components/HeaderActionGroup/HeaderActionGroup';
+import { HeaderAction, type HeaderToolbarAction } from '../../components/HeaderAction';
 import { headerScreenOptions } from '../../headerScreenOptions';
 import { MainHeaderAgentLabel } from '../MainHeaderAgentLabel';
 import { useMainHeaderActions } from '../useMainHeaderActions';
@@ -29,6 +29,7 @@ export function MainHeaderView({
 }: MainHeaderViewProps) {
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
+  useReportChatHeaderHeight();
   if (isPreview) {
     return null;
   }
@@ -55,13 +56,7 @@ export function MainHeaderView({
       />
       <Stack.Toolbar placement="left">
         {/* A permanent sidebar has no button that opens it. */}
-        {leadingAction ? (
-          <Stack.Toolbar.View>
-            <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
-              <HeaderAction action={leadingAction} />
-            </View>
-          </Stack.Toolbar.View>
-        ) : null}
+        {leadingAction ? renderToolbarItem(leadingAction) : null}
         <Stack.Toolbar.Spacer hidden={!leadingAction || !agent} width={4} />
         {agent ? (
           <Stack.Toolbar.View>
@@ -71,8 +66,39 @@ export function MainHeaderView({
           </Stack.Toolbar.View>
         ) : null}
       </Stack.Toolbar>
-      <HeaderActionGroup actions={rightActions} placement="right" />
+      {rightActions.length > 0 ? (
+        <Stack.Toolbar placement="right">{rightActions.map(renderToolbarItem)}</Stack.Toolbar>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * An action with a native icon becomes a standard toolbar button, which iOS can place where the
+ * window puts its controls, such as an iPhone Duo's vertical rail. Without the shared glass surface
+ * (before iOS 26) every action keeps its custom view and fallback surface. A plain function, not a
+ * component: Expo reads the toolbar's direct children before rendering them.
+ */
+function renderToolbarItem(action: HeaderToolbarAction) {
+  if (isLiquidGlassAvailable && action.type === 'icon' && action.nativeIcon) {
+    return (
+      <Stack.Toolbar.Button
+        key={action.key}
+        accessibilityLabel={action.accessibilityLabel}
+        disabled={action.disabled}
+        icon={action.nativeIcon}
+        iconRenderingMode="template"
+        onPress={action.onPress}
+      />
+    );
+  }
+
+  return (
+    <Stack.Toolbar.View key={action.key}>
+      <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
+        <HeaderAction action={action} />
+      </View>
+    </Stack.Toolbar.View>
   );
 }
 

@@ -18,7 +18,10 @@ export function RouteHeader({
 }: RouteHeaderProps) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
-  const defaultLeftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
+  const defaultLeftActions = useMemo<HeaderToolbarAction[]>(
+    () => (leadingAction ? [leadingAction] : []),
+    [leadingAction],
+  );
   const selectionActions: HeaderToolbarAction[] | undefined = selection
     ? [
         {
