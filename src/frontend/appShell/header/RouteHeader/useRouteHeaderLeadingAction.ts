@@ -13,6 +13,8 @@ import type { RouteHeaderRootAction } from './RouteHeader.types';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
 
+const SIDEBAR_NATIVE_ICON = require('@/assets/header-toolbar/sidebar.png');
+
 /** Resolves child screens to back and route roots to their declared action. */
 export function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
   const rootAction = useRouteHeaderRootAction();
@@ -51,6 +53,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
             accessibilityLabel: t('navigation.openMenu'),
             icon: SidebarExpandIcon,
             key: 'route-leading',
+            nativeIcon: SIDEBAR_NATIVE_ICON,
             onPress: openDrawer,
             testID: 'main-header-open-sidebar',
             type: 'icon',
