@@ -13,6 +13,35 @@ Google Play builds use `production-google-play`, which inherits the production i
 and automatic native build-number increments, but generates an AAB instead of an APK. Both Android
 profiles retain the current ARM64-only device support.
 
+## Release Channels
+
+A release reaches five channels from three builds:
+
+| Channel | Artifact | Build | Publication |
+| --- | --- | --- | --- |
+| GitHub | APK | Built in the cloud on every version tag | Published automatically with `SHA256SUMS` ([Android GitHub Downloads](#android-github-downloads)) |
+| GitCode | The same APK | None; reuses the GitHub APK | Mirror sync and browser upload by a maintainer ([GitCode Maintainer Upload](#gitcode-maintainer-upload)) |
+| Google Play | AAB | Built in the cloud on stable tags only | Manual upload and review in Play Console ([Google Play](#google-play)) |
+| TestFlight | IPA | Built in the cloud on every version tag | Uploaded automatically; internal distribution and external beta review in App Store Connect ([iOS](#ios)) |
+| App Store | The same IPA | None; reuses the TestFlight build | Manual submission and release in App Store Connect |
+
+GitHub and GitCode must publish the identical APK and checksum. TestFlight and the App Store share
+one build, but their reviews and releases are independent.
+
+## Release Preparation
+
+Releases are built by the workflows above. Before pushing the tag, have these ready:
+
+- GitHub English and GitCode Simplified Chinese release notes, following
+  [Release Notes And Channel Coverage](#release-notes-and-channel-coverage).
+- Store descriptions and release notes in every configured store locale.
+- The required store screenshots, captured from the application rather than mockups or
+  development builds.
+- If a store rejected the previous submission, a reply to every issue and its fix in this build.
+- A maintainer with GitCode write access to sync and upload the release.
+
+Submit each store once its materials are complete; another store's pending review does not block it.
+
 ## Required Configuration
 
 | Location | Setting | Purpose |
@@ -23,9 +52,11 @@ profiles retain the current ARM64-only device support.
 | EAS credentials | iOS production signing and App Store Connect API key | Sign and upload iOS builds without prompts |
 | EAS production environment | Build and app environment variables | Includes the production Sentry upload token and configured app services |
 
-Configure the GitCode token in **Settings → Secrets and variables → Actions**. The token owner must
-have write access to the target GitCode repository. Tokens are supplied through headers and process
-environment variables, never embedded in a Git URL or committed file.
+GitCode publication belongs to a maintainer with write access to the GitCode repository. The
+maintainer uses their own agent with Computer Use to sync the repository mirror, then upload and
+publish through their authenticated browser session. The repository
+provides no GitCode publishing workflow or upload script; no GitCode automation token is required.
+See [GitCode Maintainer Upload](#gitcode-maintainer-upload).
 
 `submit.production.ios.ascAppId` in `eas.json` must identify the App Store Connect app for the
 production bundle identifier in `app.json`. Set up its submission API key with
@@ -69,8 +100,9 @@ build numbers even when they share a release tag.
    for 30 days. The filename is `cherry-studio-<release-version>-android.apk`.
 4. Publish the files and notes to GitHub Releases.
 
-GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
-published manually from the matching tag using the same APK and `SHA256SUMS` from the GitHub release.
+GitHub prepares a draft, attaches the files, and publishes it automatically. The authorized
+GitCode maintainer uses their own agent through Computer Use to sync the matching tag and publish
+it with the same APK and `SHA256SUMS` from the GitHub release.
 Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
 Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
 download information; do not copy one platform's notes verbatim to the other. Keep version tags,
@@ -83,8 +115,6 @@ The app shows these notes in its update dialog. Start both bodies with the `#` t
 with the download section headed exactly `## 下载安装` (GitCode) or `## Download and Installation`
 (GitHub); the app removes the title and that final section, so put everything users should read in
 the app before it.
-When using `scripts/publishGitcodeRelease.ts`, supply the Chinese version as `release-notes.md` in
-its `RELEASE_DIRECTORY`; the script reads that file as-is and does not translate it.
 
 The public APK uses `production`, which enables GitCode update checks, in-app downloads and
 user-confirmed Android installation. Publish the matching GitCode stable release with both the
@@ -100,6 +130,57 @@ releases. The workflow does not replace an existing attachment with different co
 Both language versions describe Android installation and explain that store distribution is independent.
 The APK becomes public when this workflow succeeds; it does not wait for either store's review.
 Store links can be added to the release page after the listings are available.
+
+### GitCode Maintainer Upload
+
+1. Hand the authorized maintainer the release tag, source commit, GitHub release URL, exact APK,
+   `SHA256SUMS`, and Simplified Chinese title and notes.
+2. The maintainer directs their own agent to use Computer Use in their authenticated browser.
+   GitCode does not sync automatically: open the repository's mirror settings (pull from GitHub)
+   and run **立即同步**. After it finishes, confirm the release tag exists and points to the source
+   commit. If it is missing or points elsewhere, leave publication pending; do not publish against
+   a different commit.
+3. Create or edit the release for that tag in the browser, enter the Chinese title and notes, and
+   select the appropriate stable or prerelease status.
+4. Upload the same APK and `SHA256SUMS` from GitHub. Wait for both attachments to finish uploading
+   before publishing. On retry, inspect existing attachments first and retain matching files;
+   do not replace an existing attachment with a different build.
+5. Confirm the published page has the intended tag, notes, and both attachments, then record the
+   release URL in the [release status](#release-status).
+
+### Release Notes And Channel Coverage
+
+List the changes since the previous release, then curate the public notes in this outline. Use a
+module name and one concise sentence per item, and omit empty sections. GitCode uses `功能`, `修复`,
+`架构升级`, `升级提醒`, and ends with `## 下载安装`.
+
+```markdown
+# Cherry Studio <version>
+
+## Features
+
+- [Module] One-sentence change.
+
+## Fixes
+
+- [Module] One-sentence fix.
+
+## Architecture Upgrades
+
+- [Module] One-sentence upgrade.
+
+## Upgrade Notes
+
+<Required upgrade steps, or omit this section.>
+
+## Download and Installation
+
+<APK, checksum, installation instructions, and independent store availability.>
+```
+
+Store copy can be shorter, but keep core features and upgrade warnings consistent across GitHub,
+GitCode, and store locales. When the wording changes, update every affected channel, including
+notes that are already published.
 
 ## Google Play
 
@@ -151,6 +232,8 @@ not configure groups or submit the app for an App Store public release.
 
 ## Failure Recovery
 
+- On failure, save the job ID, error, and logs. Retry unchanged only for a transient failure; if the
+  same error recurs, change the approach instead of retrying again.
 - If a publishing job fails, fix its credentials or service error and choose **Re-run failed jobs**
   in GitHub Actions. Successful build jobs are reused, so publishing retries use the same APK or
   iOS build ID without a new EAS build.
@@ -164,6 +247,16 @@ not configure groups or submit the app for an App Store public release.
   new build is intended. A build job timeout does not cancel the remote EAS build; check EAS first.
 - Saved Actions artifacts expire after 30 days. Recover the GitHub APK from its published release
   or EAS; recover the Google Play AAB from the exact EAS build recorded in the workflow summary.
+
+## Release Status
+
+Keep one `release-status.md` per version outside the repository, with a row for each channel:
+GitHub, GitCode, TestFlight internal, TestFlight external, App Store, and Google Play. Each row
+records the version/build, the status in the platform's own wording, when it was observed, and a
+link. Update a row whenever its channel changes state. Uploaded, submitted, approved, and available
+are different states; record `unknown` rather than inferring one, and do not infer the external
+TestFlight result from App Store approval. Open an issue for anything left unfinished after the
+release, such as fixes that have not reached `main`.
 
 ## References
 
