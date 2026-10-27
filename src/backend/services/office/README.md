@@ -89,7 +89,7 @@ recorded child artifact survives parent interruption through the existing durabl
 managed-file commit and Pi receipt are not one transaction: a crash in that gap may leave an orphan;
 this implementation neither retries that unsafe write automatically nor claims exactly-once output.
 
-Storage uses `createBytesEntry` with generated provenance, returning only managed metadata and
+Storage uses `createFileEntry` with generated provenance, returning only managed metadata and
 artifacts. Cancellation before publication produces no successful artifact; storage owns rollback
 if its write or entry transaction fails. Successful outputs receive the catalog's usual turn grant.
 Source and image reads use `WorkspaceFileAccess.resolveRead`: conversation grants or live membership

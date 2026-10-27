@@ -35,14 +35,14 @@ jest.mock('../importedImageNormalization', () => ({
   normalizeImportedImage: jest.fn(),
 }));
 
-function resolvedFile(mediaType = 'text/plain') {
+function resolvedFile(mediaType = 'text/plain', provenance = 'imported') {
   return {
     entry: FileEntrySchema.parse({
       id: FILE_ID,
       filename: 'notes.txt',
       mediaType,
       size: 1,
-      provenance: 'imported',
+      provenance,
       createdAt: 1,
       updatedAt: 1,
     }),
@@ -75,8 +75,9 @@ describe('fileContent attachment boundary', () => {
   });
 
   test.each(['session', 'draft'] as const)(
-    'copies outside attachments and reuses workspace entries for a %s',
+    'copies outside attachments with their origin and reuses workspace entries for a %s',
     async (target) => {
+      jest.mocked(resolveFileEntry).mockResolvedValue(resolvedFile('image/png', 'generated'));
       const folderId = '00000000-0000-7000-8000-000000000009';
       jest.spyOn(fileLibraryService, 'workspace').mockResolvedValue({ id: folderId } as never);
       jest
@@ -91,13 +92,19 @@ describe('fileContent attachment boundary', () => {
       await fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, ...address });
       expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
         {},
-        expect.objectContaining({ folderId, name: 'Renamed.txt', uri: resolvedFile().uri }),
+        expect.objectContaining({
+          folderId,
+          name: 'Renamed.txt',
+          provenance: 'generated',
+          uri: resolvedFile().uri,
+        }),
       );
+      expect(normalizeImportedImage).not.toHaveBeenCalled();
       jest.mocked(createInternalEntryWithPreview).mockClear();
       contains.mockResolvedValue(true);
       await expect(
         fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, ...address }),
-      ).resolves.toEqual(resolvedFile());
+      ).resolves.toEqual(resolvedFile('image/png', 'generated'));
       expect(createInternalEntryWithPreview).not.toHaveBeenCalled();
       jest.restoreAllMocks();
     },

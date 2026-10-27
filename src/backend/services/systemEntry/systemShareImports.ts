@@ -1,12 +1,13 @@
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import { createInternalEntry, getInternalFileUri } from '@/backend/services/file/fileStorage';
+import { getInternalFileUri } from '@/backend/services/file/fileStorage';
+import { importManagedFile } from '@/backend/services/file/importManagedFile';
 import type { SystemSharedFile } from '@/shared/contracts';
 
 import type { NativeSystemEntry } from '../../../../modules/system-integration';
 
 /**
- * Copies a share's attachments into the file library. An imported file belongs to the library
- * immediately, exactly as a picked one does, so an unsent share leaves the files behind rather
+ * Copies a share's attachments into the file library through the same import as a picked file. An
+ * imported file belongs to the library immediately, so an unsent share leaves the files behind rather
  * than a staging area to reconcile.
  */
 export function createSystemShareImporter(entries: FileEntryService) {
@@ -17,17 +18,11 @@ export function createSystemShareImporter(entries: FileEntryService) {
     const files: SystemSharedFile[] = [];
     for (const attachment of entry.files) {
       signal.throwIfAborted();
-      const created = await createInternalEntry(
-        entries,
-        {
-          source: 'uri',
-          uri: attachment.uri,
-          name: attachment.name,
-          mediaType: attachment.mediaType,
-          provenance: 'imported',
-        },
-        signal,
-      );
+      const created = await importManagedFile(entries, {
+        uri: attachment.uri,
+        name: attachment.name,
+        mediaType: attachment.mediaType,
+      });
       const uri = getInternalFileUri(created);
       if (!uri) throw new Error('Shared file is unavailable');
       files.push({
