@@ -1,5 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const patchPath = 'patches/react-native-enriched-markdown@1.0.1.patch';
 const patch = readFileSync(patchPath, 'utf8');
@@ -26,32 +29,81 @@ describe('Enriched Markdown iOS math width patch', () => {
     expect(lockfile).toContain(`  react-native-enriched-markdown@1.0.1: ${hash}\n`);
   });
 
-  test('caps against both the remaining fragment and the container with paragraph margins', () => {
+  test('executes the column-only fit policy from the native patch', () => {
+    const added = filePatch(attachmentFile)
+      ?.split('\n')
+      .filter((line) => line.startsWith('+'))
+      .map((line) => line.slice(1))
+      .join('\n');
+    const block = added?.split('// CHERRY-MATH-FIT-BEGIN\n')[1]?.split('// CHERRY-MATH-FIT-END')[0];
+    if (!block) throw new Error('Missing CHERRY-MATH-FIT block');
+    expect(block).not.toMatch(/position|lineFragment/);
+
+    const cases = [
+      [240, 0, 0, 86, 240, 1],
+      [320, 40, 0, 500, 280, 0.56],
+      [240, 0, 0, 300, 240, 0.8],
+      [240, 0, 5, 300, 235, 235 / 300],
+      [0, 0, 0, 86, 0, 1],
+      [240, 0, 0, 0, 240, 1],
+    ];
+    const directory = mkdtempSync(join(tmpdir(), 'enriched-math-fit-'));
+    try {
+      const sourcePath = join(directory, 'fit.c');
+      const binaryPath = join(directory, 'fit');
+      writeFileSync(
+        sourcePath,
+        `${block}
+#include <stdio.h>
+int main(void)
+{
+  const double cases[][4] = {
+    ${cases.map((row) => `{${row.slice(0, 4).join(', ')}}`).join(',\n    ')}
+  };
+  for (unsigned int i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+    const double *row = cases[i];
+    double column = ENRMMathColumnWidth(row[0], row[1], row[2]);
+    double scale = ENRMMathFitScale(row[3], column);
+    printf("%.17g %.17g %.17g %.17g %.17g %.17g\\n", row[0], row[1], row[2], row[3], column, scale);
+  }
+  return 0;
+}
+`,
+      );
+      const args = [sourcePath, '-o', binaryPath];
+      try {
+        execFileSync('cc', args);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        execFileSync('clang', args);
+      }
+      const rows = execFileSync(binaryPath, { encoding: 'utf8' })
+        .trim()
+        .split('\n')
+        .map((line) => line.split(' ').map(Number));
+      expect(rows).toHaveLength(cases.length);
+      rows.forEach((row, index) => {
+        expect(row).toHaveLength(cases[index].length);
+        row.forEach((value, column) => expect(value).toBeCloseTo(cases[index][column], 6));
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('wires attachment bounds to the usable paragraph column', () => {
     const source = afterSide(attachmentFile);
-    expect(source).toContain('CGFloatpadding=textContainer?textContainer.lineFragmentPadding:0;');
+    expect(source).toContain('CGFloatavailableWidth=_cachedSize.width;');
     expect(source).toContain(
-      'CGFloatfragmentBudget=lineFragment.size.width-MAX(position.x,0)-padding;',
+      'availableWidth=ENRMMathColumnWidth(right,indent,textContainer.lineFragmentPadding);',
     );
-    expect(source).toContain('CGFloatavailableWidth=fragmentBudget;if(textContainer){');
-    expect(source).toContain('NSTextStorage*storage=textContainer.layoutManager.textStorage;');
-    expect(source).toContain('storage&&characterIndex<storage.length?');
-    expect(source).toContain(
-      '[storageattribute:NSParagraphStyleAttributeNameatIndex:characterIndexeffectiveRange:NULL]',
-    );
-    expect(source).toContain('CGFloatglyphX=lineFragment.origin.x+position.x;');
-    expect(source).toContain('CGFloatindent=MAX(style.firstLineHeadIndent,style.headIndent);');
-    expect(source).toContain(
-      'CGFloatright=style.tailIndent>0?style.tailIndent:textContainer.size.width+style.tailIndent;',
-    );
-    expect(source).toContain('CGFloatcontainerBudget=right-MAX(glyphX,indent)-padding;');
-    expect(source).toContain('availableWidth=MIN(fragmentBudget,containerBudget);');
-    expect(source).toContain('availableWidth=MAX(0,availableWidth);');
-    expect(source).toContain(
-      'CGFloatscale=_cachedSize.width>0?MIN(1,availableWidth/_cachedSize.width):1;',
-    );
+    expect(source).toContain('CGFloatscale=ENRMMathFitScale(_cachedSize.width,availableWidth);');
     expect(source).toContain(
       'returnCGRectMake(0,-_mathDescent*scale,_cachedSize.width*scale,_cachedSize.height*scale);',
     );
+    expect(source).not.toContain('fragmentBudget');
+    expect(source).not.toContain('containerBudget');
+    expect(source).not.toContain('MAX(position.x');
   });
 
   test('sizes the raster from the current image bounds and rejects empty dimensions first', () => {

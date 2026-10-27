@@ -644,37 +644,62 @@ index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83
      [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
    }
 diff --git a/ios/attachments/ENRMMathInlineAttachment.m b/ios/attachments/ENRMMathInlineAttachment.m
-index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a4f34ed10ab407058a54784c600f62473ca742ef 100644
+index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..21951d2d9ec87a1241b8835da5b979e252561c70 100644
 --- a/ios/attachments/ENRMMathInlineAttachment.m
 +++ b/ios/attachments/ENRMMathInlineAttachment.m
-@@ -52,7 +52,25 @@
+@@ -46,13 +46,50 @@
+   _cachedSize = CGSizeMake(ceil(result.width), ceil(result.totalHeight));
+ }
+ 
++// CHERRY-MATH-FIT-BEGIN
++// Cherry Mobile math-fit geometry. Kept in plain C with no UIKit types so that
++// scripts/__tests__/enrichedMarkdownMathWidth.test.ts can compile and execute this exact
++// block instead of matching its source text.
++static double ENRMMathColumnWidth(double right, double indent, double padding)
++{
++  double columnWidth = right - indent - padding;
++  return columnWidth > 0 ? columnWidth : 0;
++}
++
++static double ENRMMathFitScale(double intrinsicWidth, double columnWidth)
++{
++  if (intrinsicWidth <= 0 || columnWidth <= 0)
++    return 1;
++  double scale = columnWidth / intrinsicWidth;
++  return scale < 1 ? scale : 1;
++}
++// CHERRY-MATH-FIT-END
++
+ - (CGRect)attachmentBoundsForTextContainer:(NSTextContainer *)textContainer
+                       proposedLineFragment:(CGRect)lineFragment
+                              glyphPosition:(CGPoint)position
                              characterIndex:(NSUInteger)characterIndex
  {
    [self prepareIfNeeded];
 -  return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
-+  // Cherry Mobile: nested math must fit both the remaining fragment and the indented column.
-+  CGFloat padding = textContainer ? textContainer.lineFragmentPadding : 0;
-+  CGFloat fragmentBudget = lineFragment.size.width - MAX(position.x, 0) - padding;
-+  CGFloat availableWidth = fragmentBudget;
++  // Cherry Mobile: budget against the usable paragraph column, never against what is left of
++  // the current line. A formula that fits the column keeps its intrinsic size, so TextKit
++  // breaks the line and moves it down exactly as the unpatched attachment did; only a formula
++  // wider than the column is scaled down. This single policy covers inline math and display
++  // math nested in a paragraph or list item alike: RendererFactory.m routes both node types
++  // through this attachment and the attachment carries no inline/display flag.
++  CGFloat availableWidth = _cachedSize.width;
 +  if (textContainer) {
 +    NSTextStorage *storage = textContainer.layoutManager.textStorage;
 +    NSParagraphStyle *style = storage && characterIndex < storage.length
 +        ? [storage attribute:NSParagraphStyleAttributeName atIndex:characterIndex effectiveRange:NULL]
 +        : nil;
-+    CGFloat glyphX = lineFragment.origin.x + position.x;
 +    CGFloat indent = MAX(style.firstLineHeadIndent, style.headIndent);
 +    // UIKit measures a positive tail indent from the leading edge; zero/negative from the trailing edge.
 +    CGFloat right = style.tailIndent > 0 ? style.tailIndent : textContainer.size.width + style.tailIndent;
-+    CGFloat containerBudget = right - MAX(glyphX, indent) - padding;
-+    availableWidth = MIN(fragmentBudget, containerBudget);
++    availableWidth = ENRMMathColumnWidth(right, indent, textContainer.lineFragmentPadding);
 +  }
-+  availableWidth = MAX(0, availableWidth);
-+  CGFloat scale = _cachedSize.width > 0 ? MIN(1, availableWidth / _cachedSize.width) : 1;
++  CGFloat scale = ENRMMathFitScale(_cachedSize.width, availableWidth);
 +  return CGRectMake(0, -_mathDescent * scale, _cachedSize.width * scale, _cachedSize.height * scale);
  }
  
  - (UIImage *)imageForBounds:(CGRect)imageBounds
-@@ -63,22 +81,31 @@
+@@ -63,22 +100,31 @@
    if (!_renderResult && !_fallbackSource)
      return nil;
  
@@ -710,6 +735,7 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a4f34ed10ab407058a54784c600f6247
    }];
  }
  
+
 diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
 index 204fc18510d3de0b79c3d3741b1599659a53d4d9..0c34c0637f57f8ba97ce83d83a70ae3341cd1fd4 100644
 --- a/ios/renderer/ListItemRenderer.m
