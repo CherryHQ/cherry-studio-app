@@ -17,6 +17,8 @@ const translations: Record<string, string> = {
   'chat.backgroundReply.tool.generic': 'Using a tool',
   'chat.backgroundReply.tool.webSearch': 'Searching the web',
   'chat.builtinTool.calendar.listEvents': 'Find calendar events',
+  'chat.builtinTool.library.move': 'Move a library item',
+  'chat.builtinTool.office.script': 'Run an Office script',
 };
 const t = (key: string) => translations[key] ?? key;
 
@@ -63,6 +65,8 @@ describe('deriveBackgroundReplyContent', () => {
   test.each([
     ['web_search', 'Searching the web'],
     ['calendar_list_events', 'Find calendar events'],
+    ['run_office_script', 'Run an Office script'],
+    ['library_move_item', 'Move a library item'],
     ['private_mcp_tool', 'Using a tool'],
   ])('maps active tool %s to a safe label', (toolName, detail) => {
     const content = deriveBackgroundReplyContent(message([toolPart(toolName)]), t);
