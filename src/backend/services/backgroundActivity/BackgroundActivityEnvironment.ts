@@ -13,7 +13,11 @@ import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ReplyCompletionNotifier } from '../backgroundReply/replyCompletionNotifications';
-import { noopBackgroundActivityPresenter, type BackgroundActivityPresenter } from './presenter';
+import {
+  noopBackgroundActivityPresenter,
+  type BackgroundActivityPresenter,
+  type RemoteConnectionNotices,
+} from './presenter';
 
 const logger = loggerService.withContext('BackgroundActivityEnvironment');
 
@@ -31,6 +35,8 @@ export type BackgroundActivityEnvironmentConfig = {
   isReplyCompletionNotificationEnabled: () => boolean;
   /** iOS completion and decision notices; absent means the platform owns another channel. */
   replyNotifications?: ReplyCompletionNotifier;
+  /** Persistent desktop connection notices; absent where connections stay page-scoped. */
+  connectionNotices?: RemoteConnectionNotices;
   /** Deep link of the focused, foreground task surface. Absent sources never report one. */
   subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
@@ -133,6 +139,10 @@ export class BackgroundActivityEnvironment extends BaseService {
 
   get replyNotifications(): ReplyCompletionNotifier | undefined {
     return this.config.replyNotifications;
+  }
+
+  get connectionNotices(): RemoteConnectionNotices | undefined {
+    return this.config.connectionNotices;
   }
 
   onForegroundAttention = (attention: ForegroundActivityAttention): void => {

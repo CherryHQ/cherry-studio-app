@@ -191,3 +191,20 @@ test('task and connection notices stay a flat list labelled in the header line',
   expect(bridge).toContain('if (options?.get("connection") == true) builder.setShowWhen(false)');
   expect(bridge).toContain('actionIntent(context, id, token, button["id"]');
 });
+
+test('the service and the notification bridge draw one brand color on one channel', () => {
+  const bridge = readFileSync(
+    join(
+      process.cwd(),
+      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundExecution.kt',
+    ),
+    'utf8',
+  );
+  const runtime = readFileSync(join(__dirname, '../AndroidBackgroundActivityRuntime.ts'), 'utf8');
+  const brand = bridge.match(/BRAND_COLOR = 0xFF([0-9A-F]{6})\.toInt\(\)/)?.[1];
+  expect(brand).toBeDefined();
+  expect(runtime).toContain(`color: '#${brand}'`);
+  const channel = service.match(/CHANNEL_ID = "([^"]+)"/)?.[1];
+  expect(channel).toBeDefined();
+  expect(bridge).toContain(`RUNNING_CHANNEL = "${channel}"`);
+});

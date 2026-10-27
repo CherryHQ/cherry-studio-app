@@ -16,10 +16,11 @@ must fit one of Mobile's existing execution boundaries.
 
 Mobile has two AI execution paths:
 
-- Conversation turns run on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
-  `src/backend/ai/agent/runtime/pi`.
-- Non-conversation text generation, SDK-only probes, model listing, and image generation run through
-  `AiService` and the AI SDK.
+- All text generation runs on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
+  `src/backend/ai/agent/runtime/pi`: conversation turns, product model checks, translation, and
+  session naming.
+- Model listing and image generation run through `AiService` and the AI SDK. AI SDK patches keep
+  only hunks on those two paths.
 
 Desktop code is admitted only when all of the following are true:
 

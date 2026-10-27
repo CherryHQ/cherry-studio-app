@@ -29,6 +29,7 @@ import {
   DEFAULT_API_FEATURES as DEFAULT_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
 } from '@/shared/data/types/provider';
+import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
 import {
   assertCustomProviderEndpointConfiguration,
@@ -250,10 +251,7 @@ function rowToProvider(row: UserProviderRow): Provider {
     },
     apiKeys,
     authMethods: metadata.authMethods,
-    authOptional:
-      row.authConfig?.type === 'api-key' && row.authConfig.required !== undefined
-        ? !row.authConfig.required
-        : metadata.authOptional,
+    authOptional: resolveAuthOptional(row.authConfig, metadata.authOptional),
     authType,
     defaultChatEndpoint: row.defaultChatEndpoint ?? undefined,
     description: metadata.description,

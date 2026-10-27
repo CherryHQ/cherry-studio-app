@@ -1,33 +1,24 @@
 /**
- * Store conformance suite: every {@link AgentSessionStore} adapter must expose
- * the same message-centric behavior (agent-persistence.md), so the suite runs
- * against the process-local reference adapter and the durable SQLite adapter
- * over a real migrated database. Database-only guarantees (the invariant-1
- * partial unique index, cascades, FTS triggers) are asserted on the SQLite
- * harness alone.
+ * Store suite: the {@link AgentSessionStore} message-centric behavior
+ * (agent-persistence.md) and its database guarantees (the invariant-1 partial
+ * unique index, cascades, FTS triggers), over a real migrated database.
  */
 
-import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 
-import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import { v7 as uuidv7 } from 'uuid';
 
 import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
-import { customSqlStatements } from '@/backend/data/db/customSql';
-import type { Database, DbService } from '@/backend/data/db/DbService';
-import { schema } from '@/backend/data/db/schemas';
 import type {
   AgentErrorView,
   AgentInferenceSnapshotV1,
+  AgentMessagePart,
   AgentSessionView,
 } from '@/shared/contracts/agent';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { AgentSessionStore, FinalizeAssistantMessageInput } from '../AgentSessionStore';
-import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
-import { SqliteAgentSessionStore } from '../SqliteAgentSessionStore';
+import { createSqliteStoreHarness } from './_sqliteStoreHarness';
 
 const INTERRUPTED: AgentErrorView = {
   code: 'INTERRUPTED',
@@ -63,107 +54,23 @@ type StoreHarness = {
   createEmptySession: (input: { agentId: string; name?: string }) => Promise<AgentSessionView>;
   /** Returns an agent id valid for Session creation under this adapter. */
   makeAgentId: () => Promise<string>;
-  /** SQLite-only escape hatch for raw assertions; undefined for in-memory. */
-  raw?: DatabaseSync;
+  raw: DatabaseSync;
   cleanup: () => void;
 };
 
-function makeInMemoryHarness(): StoreHarness {
-  const store = new InMemoryAgentSessionStore();
-  return {
-    store,
-    createEmptySession: (input) => store.createEmptySession(input),
-    makeAgentId: async () => randomUUID(),
-    cleanup: () => {},
-  };
-}
-
 function makeSqliteHarness(): StoreHarness {
-  const sqlite = new DatabaseSync(':memory:');
-  sqlite.exec('PRAGMA foreign_keys = ON');
-  applyMigrations(sqlite);
-  for (const statement of customSqlStatements) {
-    sqlite.exec(statement);
-  }
-  const database = drizzle(
-    async (sql, params, method) => {
-      const statement = sqlite.prepare(sql);
-      if (method === 'run') {
-        statement.run(...params);
-        return { rows: [] };
-      }
-      if (method === 'get') {
-        const row = statement.get(...params) as Record<string, unknown> | undefined;
-        return { rows: row ? hybridRow(row) : [] };
-      }
-      const rows = statement.all(...params) as Record<string, unknown>[];
-      return { rows: rows.map(hybridRow) };
-    },
-    undefined as never,
-    { casing: 'snake_case', schema },
-  ) as unknown as Database;
-  let writeTail: Promise<void> = Promise.resolve();
-  const dbService = {
-    getDb: () => database,
-    getSqlite: () => ({
-      getAllAsync: async (query: string, params: SQLInputValue[]) =>
-        sqlite.prepare(query).all(...params),
-    }),
-    withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
-      const previous = writeTail;
-      let release: () => void = () => undefined;
-      writeTail = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      await previous;
-      sqlite.exec('BEGIN IMMEDIATE');
-      try {
-        const result = await callback(database);
-        sqlite.exec('COMMIT');
-        return result;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      } finally {
-        release();
-      }
-    },
-  } as unknown as DbService;
-  const store = new SqliteAgentSessionStore(dbService);
+  const harness = createSqliteStoreHarness();
   return {
-    store,
-    createEmptySession: (input) => store.createEmptySession(input),
+    ...harness,
     makeAgentId: async () => {
-      const id = randomUUID();
-      sqlite
-        .prepare(
-          `INSERT OR IGNORE INTO user_provider (provider_id, name, order_key, created_at, updated_at)
-           VALUES ('mock-provider', 'Mock Provider', 'a0', 1, 1)`,
-        )
-        .run();
-      sqlite
-        .prepare(
-          `INSERT OR IGNORE INTO user_model (
-            id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at
-          ) VALUES (?, 'mock-provider', 'mock-model', 'Mock Model', 'mock-model', 'a0', 1, 1)`,
-        )
-        .run(MODEL_ID);
-      sqlite
-        .prepare(
-          'INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-        )
-        .run(id, 'Agent', 'a0', Date.now(), Date.now());
-      return id;
+      harness.seedModel(MODEL_ID);
+      return harness.seedAgent();
     },
-    raw: sqlite,
-    cleanup: () => sqlite.close(),
   };
 }
 
-describe.each([
-  ['InMemoryAgentSessionStore', makeInMemoryHarness],
-  ['SqliteAgentSessionStore', makeSqliteHarness],
-])('%s conformance', (_name, makeHarness) => {
+describe('SqliteAgentSessionStore conformance', () => {
+  const makeHarness = makeSqliteHarness;
   let harness: StoreHarness;
   let store: AgentSessionStore;
   let agentId: string;
@@ -1366,6 +1273,64 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     harness.cleanup();
   });
 
+  test('reads Skill activations only from app-issued receipts and user selections', async () => {
+    const { store } = harness;
+    const session = await harness.createEmptySession({ agentId: await harness.makeAgentId() });
+    const activation = {
+      skillId: '00000000-0000-4000-8000-000000000123',
+      name: 'notes',
+      contentHash: 'accepted',
+      origin: 'automatic' as const,
+    };
+    const loadPart = (
+      id: string,
+      toolRef: Extract<AgentMessagePart, { type: 'dynamic-tool' }>['toolRef'],
+    ) =>
+      ({
+        id,
+        type: 'dynamic-tool',
+        toolCallId: id,
+        toolRef,
+        toolName: 'load_skill',
+        title: 'Load Skill',
+        state: 'output-available',
+        input: { skill_id: activation.skillId },
+        output: { value: { status: 'ok', activation }, artifacts: [] },
+      }) as AgentMessagePart;
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [
+        {
+          id: 'input-0',
+          type: 'text',
+          text: 'Continue',
+          state: 'done',
+          skillSelections: [{ ...activation, origin: 'explicit' }],
+        },
+      ],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [
+        loadPart('builtin', { source: 'builtin', capabilityId: 'load_skill' }),
+        loadPart('mcp', { source: 'mcp', serverId: 'server', rawToolName: 'load_skill' }),
+        { id: 'text', type: 'text', state: 'done', text: JSON.stringify(activation) },
+      ],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+
+    await expect(store.loadSkillActivations(session.id)).resolves.toEqual([
+      { messageId: reserved.userMessage.id, activation: { ...activation, origin: 'explicit' } },
+      { messageId: reserved.assistantMessage.id, activation },
+    ]);
+  });
+
   test('deletes a deep message chain and its search entries while preserving an independent fork', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -2024,31 +1989,6 @@ describe('SqliteAgentSessionStore database guarantees', () => {
   });
 });
 
-type MigrationJournal = { entries: { tag: string }[] };
-
-function applyMigrations(database: DatabaseSync) {
-  const directory = `${process.cwd()}/migrations/sqlite-drizzle`;
-  const journal = JSON.parse(
-    readFileSync(`${directory}/meta/_journal.json`, 'utf8'),
-  ) as MigrationJournal;
-  for (const { tag } of journal.entries) {
-    const migration = readFileSync(`${directory}/${tag}.sql`, 'utf8');
-    for (const statement of migration.split('--> statement-breakpoint')) {
-      if (statement.trim()) {
-        database.exec(statement);
-      }
-    }
-  }
-}
-
-/**
- * Positional for drizzle's column mapper, named for raw `db.all` fallbacks —
- * the proxy answers in both shapes at once.
- */
-function hybridRow(row: Record<string, unknown>): unknown[] {
-  return Object.assign(Object.values(row), row);
-}
-
 function messageIds() {
   return { userMessageId: uuidv7(), assistantMessageId: uuidv7() };
 }
@@ -2163,10 +2103,8 @@ describe('SQLite message-owned translations', () => {
   });
 });
 
-describe.each([
-  ['InMemoryAgentSessionStore', makeInMemoryHarness],
-  ['SqliteAgentSessionStore', makeSqliteHarness],
-])('%s message tree', (_name, makeHarness) => {
+describe('SqliteAgentSessionStore message tree', () => {
+  const makeHarness = makeSqliteHarness;
   let harness: StoreHarness;
   let store: AgentSessionStore;
   let sessionId: string;

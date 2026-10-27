@@ -39,7 +39,6 @@ import {
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
-import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -49,13 +48,10 @@ import type { TraceContext } from '@/shared/data/types/trace';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
-  createImageRequestErrorToolResult,
-  LANES_PER_SESSION,
   laneKey,
   raceAbort,
   runtimeLane,
   sameLane,
-  type AgentRuntime,
   type DurableAgentRuntime,
   type RuntimeLane,
   type RuntimeConversationEvent,
@@ -72,12 +68,14 @@ import {
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
+import { createImageRequestTool } from './agentImageGeneration';
 import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
 import {
   durableRuntimeTiming,
   DurableTurnMetadataSchema,
   projectDurableHostTurn,
 } from './durableHostProjection';
+import { chooseLanes, type LaneChoice, type LaneTail } from './lanePlanning';
 import { toAgentApprovalView } from './runtimeProjection';
 import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
@@ -124,20 +122,6 @@ type LiveSession = {
   >;
 };
 type PreparedInput = { turnId: string; plan: TurnPlan };
-/**
- * How one answer reaches a working copy: continue a lane whose newest answer is
- * the question's parent, natively fork the lane that executed that parent, or
- * rebuild a new lane from the Cherry history.
- */
-type LaneChoice =
-  | { lane: RuntimeLane; mode: 'native' | 'rebuild' }
-  | {
-      lane: RuntimeLane;
-      mode: 'fork';
-      from: { lane: RuntimeLane; boundary: string };
-    };
-/** The newest answer submitted to a copy, and when the copy was last used. */
-type LaneTail = { answerId: string | undefined; usedAt: number };
 type ReplyTarget = LaneChoice & {
   plan: TurnPlan;
   input: Pick<AgentSubmitMessageInput, 'assistantMessageId'>;
@@ -240,7 +224,6 @@ export class DurableAgentHost implements AgentProtocol {
     private readonly store: AgentSessionStore,
     private readonly ports: MobileAgentHostPorts,
     private readonly background: BackgroundReplyLifecycle,
-    private readonly runtime: AgentRuntime,
     readonly conversations: DurableAgentRuntime,
   ) {
     this.naming = ports.naming(this.controller.signal);
@@ -596,65 +579,21 @@ export class DurableAgentHost implements AgentProtocol {
         );
   }
 
-  /**
-   * Picks a working copy for each of `count` answers below `parent`. The first
-   * answer continues the copy whose newest answer is `parent`; the others
-   * natively fork the copy that executed `parent`, or rebuild from Cherry
-   * history when no current copy holds it. New copies take a free slot, else
-   * replace the least recently used idle copy: every copy is rebuildable.
-   * Engine tails are read only as far as the choice needs them.
-   */
-  private async chooseLanes(
+  private chooseLanes(
     sessionId: string,
     parent: string | null,
     count: number,
     current: readonly RuntimeLane[],
-  ): Promise<LaneChoice[]> {
-    const tails = new Map<string, LaneTail>();
-    const tail = async (lane: RuntimeLane) => {
-      const key = laneKey(lane);
-      const known = tails.get(key);
-      if (known) return known;
-      const read = await this.laneTail(lane);
-      tails.set(key, read);
-      return read;
-    };
-    // The copy this Host last gave `parent` is checked first; the engine's tail decides.
-    const hinted = (lane: RuntimeLane) =>
-      Number(this.live.get(laneKey(lane))?.lastAnswerId === parent);
-    const ordered = [...current].sort((a, b) => hinted(b) - hinted(a));
-    let native: RuntimeLane | undefined;
-    if (parent)
-      for (const lane of ordered)
-        if ((await tail(lane)).answerId === parent) {
-          native = lane;
-          break;
-        }
-    const choices: LaneChoice[] = native ? [{ lane: native, mode: 'native' }] : [];
-    const source =
-      parent && choices.length < count
-        ? await this.answerBoundary(
-            native ? [native, ...ordered.filter((lane) => lane !== native)] : ordered,
-            parent,
-          )
-        : undefined;
-    // Free slots first, then idle copies from the least recently used; the copy continued or
-    // forked from stays.
-    const bound = new Set(current.map(laneKey));
-    const free = Array.from({ length: LANES_PER_SESSION }, (_, slot) =>
-      runtimeLane(sessionId, slot),
-    ).filter((lane) => !bound.has(laneKey(lane)));
-    const needed = count - choices.length;
-    const reusable: { lane: RuntimeLane; usedAt: number }[] = [];
-    if (free.length < needed)
-      for (const lane of current)
-        if (lane !== native && lane !== source?.lane && !this.isBusy(lane))
-          reusable.push({ lane, usedAt: (await tail(lane)).usedAt });
-    reusable.sort((a, b) => a.usedAt - b.usedAt);
-    for (const lane of [...free, ...reusable.map((entry) => entry.lane)].slice(0, needed))
-      choices.push(source ? { lane, mode: 'fork', from: source } : { lane, mode: 'rebuild' });
-    if (choices.length < count) fail('SESSION_BUSY', 'Every working copy of this session is busy.');
-    return choices;
+  ) {
+    return chooseLanes(
+      {
+        tail: (lane) => this.laneTail(lane),
+        hinted: (lane) => this.live.get(laneKey(lane))?.lastAnswerId === parent,
+        isBusy: (lane) => this.isBusy(lane),
+        answerBoundary: (lanes, answerId) => this.answerBoundary(lanes, answerId),
+      },
+      { sessionId, parent, count, current },
+    );
   }
 
   /** The current copy that executed a settled answer, and that answer's history boundary. */
@@ -933,7 +872,9 @@ export class DurableAgentHost implements AgentProtocol {
       kind: plan.imageGeneration ? 'image' : 'language',
       model: plan.agent.model,
       options: plan.agent.options,
-      tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
+      tools: plan.imageGeneration
+        ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
+        : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
         plan.agent.mode === 'standard'
@@ -1358,7 +1299,7 @@ export class DurableAgentHost implements AgentProtocol {
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       imageGeneration: this.ports.imageGeneration,
-      runtime: this.runtime,
+      runtime: this.conversations,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
@@ -1440,9 +1381,11 @@ export class DurableAgentHost implements AgentProtocol {
     signal: AbortSignal,
   ): Promise<RuntimeTool> {
     const { plan } = await this.prepareExecution(identity, signal);
-    const tool = (plan.imageGeneration ? [this.imageTool(plan)] : plan.tools).find((tool) =>
-      sameRef(tool.ref, ref),
-    );
+    const tool = (
+      plan.imageGeneration
+        ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
+        : plan.tools
+    ).find((tool) => sameRef(tool.ref, ref));
     if (!tool) throw new Error('This capability is no longer available for the owning input.');
     return {
       ...tool,
@@ -1462,40 +1405,6 @@ export class DurableAgentHost implements AgentProtocol {
         } catch (error) {
           span?.end(call.signal.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
           throw error;
-        }
-      },
-    };
-  }
-
-  private imageTool(plan: TurnPlan): RuntimeTool {
-    return {
-      ref: { source: 'builtin', capabilityId: 'image_generation' },
-      providerName: 'cherry_generate_image',
-      displayName: 'Generate image',
-      description: 'Execute the explicitly submitted image request.',
-      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      approval: 'auto',
-      execute: async ({ signal }) => {
-        if (!plan.imageGeneration) throw new Error('The image request is unavailable.');
-        try {
-          const entries = await plan.imageGeneration.execute(
-            signal,
-            plan.usageAttribution.resolve(),
-          );
-          return {
-            value: { status: 'completed' },
-            artifacts: entries.map((entry) => ({
-              ref: { kind: 'managed-file', fileEntryId: entry.id },
-              mediaType: entry.mediaType,
-              name: entry.filename,
-              kind: 'created',
-            })),
-          };
-        } catch (error) {
-          if (signal.aborted || !(error instanceof AiRequestError)) throw error;
-          // AiService already normalized and redacted this request failure. Preserve it at the
-          // capability boundary so both tool traces and the final reply keep its structured facts.
-          return createImageRequestErrorToolResult(error.detail);
         }
       },
     };

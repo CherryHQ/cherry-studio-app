@@ -1,6 +1,6 @@
 import type { SkillActivation } from '@/shared/data/types/skill';
 
-import type { StoredSkillActivation } from '../sessionStore/skillActivations';
+import type { StoredSkillActivation } from '../sessionStore/AgentSessionStore';
 import type { SkillTurnScope } from './skillScope';
 
 /** Most recent receipt per Skill; retry excludes the answer it is replacing. */

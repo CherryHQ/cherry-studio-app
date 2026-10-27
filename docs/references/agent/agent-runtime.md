@@ -912,6 +912,10 @@ When the selected Agent model generates images, the Host prepares a direct image
 managed image inputs and registry mode support, captures image parameters in the inference snapshot,
 and skips text-model preflight, tool discovery, and opening a Pi session. Pi remains the text engine.
 
+Under [Pi Durable](./pi-durable-migration.md) this turn is no longer outside Pi: the conversation
+submits it like any other, and a Pi image model schedules the Host's single `cherry_generate_image`
+tool (`createImageRequestTool`), which runs the prepared request.
+
 The image capability calls `AiService.generateImage` with the Agent instructions, current prompt,
 explicit reference attachments, and the reserved assistant message's usage attribution. It imports
 outputs as managed generated files, then the Host persists them as assistant artifact parts using

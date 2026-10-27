@@ -3,7 +3,6 @@ import { AppState, type AppStateStatus, Platform } from 'react-native';
 import background from 'react-native-background-actions';
 
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
-import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { AndroidBackgroundActivityRuntime } from '../AndroidBackgroundActivityRuntime';
@@ -25,11 +24,9 @@ jest.mock('expo-notifications', () => ({
   AndroidNotificationVisibility: { PRIVATE: 0 },
   dismissNotificationAsync: jest.fn(async () => {}),
   getPermissionsAsync: jest.fn(),
-  getPresentedNotificationsAsync: jest.fn(async () => []),
   requestPermissionsAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(async ({ identifier }: { identifier: string }) => identifier),
   setNotificationChannelAsync: jest.fn(async () => {}),
-  setNotificationHandler: jest.fn(),
 }));
 
 const mockTaskIds = new Map<string, number>();
@@ -113,7 +110,6 @@ beforeEach(async () => {
     running = false;
   });
   native.updateNotification.mockResolvedValue(undefined);
-  notices.getPresentedNotificationsAsync.mockResolvedValue([]);
   notices.getPermissionsAsync.mockResolvedValue({
     granted: true,
   } as notifications.NotificationPermissionsStatus);
@@ -134,25 +130,23 @@ afterEach(async () => {
 test('retires cancelled startup registrations without stopping or clearing a replacement', async () => {
   await runtime._doStop();
   runtime = new AndroidBackgroundActivityRuntime(environment);
-  let finishRead!: (presented: notifications.Notification[]) => void;
-  let markReading!: () => void;
-  const reading = new Promise<void>((resolve) => {
-    markReading = resolve;
+  let finishSweep!: () => void;
+  let markSweeping!: () => void;
+  const sweeping = new Promise<void>((resolve) => {
+    markSweeping = resolve;
   });
-  const presented = new Promise<notifications.Notification[]>((resolve) => {
-    finishRead = resolve;
-  });
-  notices.getPresentedNotificationsAsync.mockImplementationOnce(() => {
-    markReading();
-    return presented;
+  mockTaskNative.clearBackgroundTaskNotifications.mockImplementationOnce(() => {
+    markSweeping();
+    return new Promise<void>((resolve) => {
+      finishSweep = resolve;
+    });
   });
   const controller = new AbortController();
   const initializing = runtime._doInit(controller.signal);
-  await reading;
+  await sweeping;
   controller.abort(new Error('Host replaced'));
   expect(listeners.size).toBe(0);
   expect(serviceStoppedListeners.size).toBe(0);
-  expect(notices.setNotificationHandler).toHaveBeenLastCalledWith(null);
 
   const replacement = new AndroidBackgroundActivityRuntime(environment);
   try {
@@ -161,24 +155,14 @@ test('retires cancelled startup registrations without stopping or clearing a rep
     await flush();
     expect(running).toBe(true);
     const stopCalls = native.stop.mock.calls.length;
-    const handlerCalls = notices.setNotificationHandler.mock.calls.length;
-    finishRead([
-      {
-        request: {
-          identifier: 'old-notification',
-          content: { data: { owner: BACKGROUND_NOTIFICATION_OWNER } },
-        },
-      } as unknown as notifications.Notification,
-    ]);
+    finishSweep();
     await expect(initializing).rejects.toThrow('Host replaced');
     await runtime._doStop();
 
-    expect(notices.dismissNotificationAsync).not.toHaveBeenCalled();
     expect(native.stop).toHaveBeenCalledTimes(stopCalls);
-    expect(notices.setNotificationHandler).toHaveBeenCalledTimes(handlerCalls);
     expect(running).toBe(true);
   } finally {
-    finishRead([]);
+    finishSweep();
     await initializing.catch(() => {});
     await replacement._doStop();
   }
@@ -329,21 +313,6 @@ test('the service task cannot later auto-stop a replacement when the old service
   expect(completed).toBe(false);
   expect(running).toBe(true);
   expect(native.stop).toHaveBeenCalledTimes(1);
-});
-
-test('cleans abandoned approval notifications while retaining completed and unrelated notices', async () => {
-  await runtime._doStop();
-  notices.getPresentedNotificationsAsync.mockResolvedValue([
-    notice('approval', { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: false }),
-    notice('completed', { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: true }),
-    notice('unrelated', {}),
-  ]);
-  runtime = new AndroidBackgroundActivityRuntime(environment);
-  await runtime._doInit();
-  expect(notices.dismissNotificationAsync).toHaveBeenCalledWith('approval');
-  expect(notices.dismissNotificationAsync).not.toHaveBeenCalledWith('completed');
-  expect(notices.dismissNotificationAsync).not.toHaveBeenCalledWith('unrelated');
-  expect(native.start).not.toHaveBeenCalled();
 });
 
 test('the background deadline drains cancellation before stopping and rejects more background work', async () => {
@@ -682,13 +651,6 @@ function props(phase: BackgroundReplyActivityProps['phase']): BackgroundReplyAct
     icon: 'bubble-ellipsis',
     startedAtEpochMs: 1000,
   };
-}
-
-function notice(identifier: string, data: Record<string, unknown>): notifications.Notification {
-  return {
-    date: 0,
-    request: { identifier, trigger: null, content: { data } },
-  } as notifications.Notification;
 }
 
 function setAppState(state: AppStateStatus): void {

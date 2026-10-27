@@ -22,6 +22,9 @@ import type {
   RuntimeWebTools,
 } from './types';
 
+/** Provider name of the Host tool that runs an explicitly submitted image request. */
+export const DURABLE_IMAGE_TOOL_NAME = 'cherry_generate_image';
+
 /** Portable storage capability supplied by composition; no Expo, data service, or Pi types. */
 export type RuntimeSqlValue = null | number | bigint | string | Uint8Array;
 export interface RuntimeSqlExecutor {

@@ -64,3 +64,19 @@ export function noopBackgroundActivityPresenter<
     start: () => ({ dismiss: async () => {}, end: async () => {}, update: async () => {} }),
   };
 }
+
+/** One persistent desktop connection shown as a system notice with a disconnect action. */
+export type RemoteConnectionNotification = {
+  connectionId: string;
+  key: string;
+  title: string;
+  body: string;
+  url: string;
+  token: string;
+  disconnectLabel: string;
+};
+
+/** Platform surface for persistent connection notices; absent where the platform has none. */
+export type RemoteConnectionNotices = {
+  setRemoteConnections(notifications: readonly RemoteConnectionNotification[]): Promise<void>;
+};

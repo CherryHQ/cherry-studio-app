@@ -2,7 +2,7 @@ import * as z from 'zod';
 
 import {
   getHealthSummary,
-  type HealthKitLoader,
+  type HealthDataReaderLoader,
   healthMetricNames,
   listHealthWorkouts,
 } from '@/backend/services/device';
@@ -52,7 +52,7 @@ const workoutsSchema = z
 
 export function createHealthTools(
   deps: DeviceToolDependencies,
-  loadHealthKit?: HealthKitLoader,
+  loadHealthData?: HealthDataReaderLoader,
 ): RuntimeTool[] {
   const tools = [
     createDeviceRuntimeTool({
@@ -80,7 +80,7 @@ export function createHealthTools(
             metrics,
             startDate: input.startDate || undefined,
           },
-          loadHealthKit,
+          loadHealthData,
           signal,
         );
         return {

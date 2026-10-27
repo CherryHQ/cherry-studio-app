@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react';
+import { BackHandler } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -26,6 +27,17 @@ jest.mock('../hooks/useSidebarPresence', () => ({
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+jest.mock('@/frontend/appShell/navigation', () =>
+  jest.requireActual('@/frontend/appShell/navigation/useFocusedBackPress'),
+);
+let mockFocused = true;
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const isFocused = mockFocused;
+    useEffect(() => (isFocused ? effect() : undefined), [effect, isFocused]);
+  },
 }));
 jest.mock('@/frontend/components/Selection', () =>
   jest.requireActual('@/frontend/components/Selection/selection'),
@@ -97,6 +109,7 @@ function renderProvider() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocused = true;
   mockSidebarPresence = 'open';
   act(() => {
     renderer = create(renderProvider());
@@ -151,4 +164,39 @@ test('keeps a selection beside a permanent sidebar and ends it once the sidebar 
   mockSidebarPresence = 'closed';
   act(() => renderer.update(renderProvider()));
   expect(selection.getSnapshot().isSelecting).toBe(false);
+});
+
+test('leaves back to a route pushed beside a permanent sidebar while selecting', () => {
+  // The latest subscription runs first, as on Android.
+  const backListeners: Parameters<typeof BackHandler.addEventListener>[1][] = [];
+  const addListener = jest
+    .spyOn(BackHandler, 'addEventListener')
+    .mockImplementation((_event, listener) => {
+      backListeners.push(listener);
+      return { remove: () => backListeners.splice(backListeners.indexOf(listener), 1) };
+    });
+  const pressBack = () =>
+    act(() => {
+      backListeners
+        .toReversed()
+        .some((listener) => listener({ timeStamp: 0, type: 'hardwareBackPress' }));
+    });
+  const navigatorBack = jest.fn(() => true);
+  backListeners.push(navigatorBack);
+  mockSidebarPresence = 'persistent';
+  act(() => renderer.update(renderProvider()));
+  act(() => selection.enter());
+
+  mockFocused = false;
+  act(() => renderer.update(renderProvider()));
+  pressBack();
+  expect(navigatorBack).toHaveBeenCalledTimes(1);
+  expect(selection.getSnapshot().isSelecting).toBe(true);
+
+  mockFocused = true;
+  act(() => renderer.update(renderProvider()));
+  pressBack();
+  expect(navigatorBack).toHaveBeenCalledTimes(1);
+  expect(selection.getSnapshot().isSelecting).toBe(false);
+  addListener.mockRestore();
 });
