@@ -40,6 +40,7 @@ it already exists.
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
 | Diagnostic event identity and versions | `src/backend/utils/diagnosticContext.ts`; bootstrap supplies an in-memory reader, logs and traces capture it before persistence |
+| Diagnostic temporary files | `src/backend/utils/diagnosticTemporaryFiles.ts`; bundles and trace snapshots share a runtime-owned cache parent, startup reclaims previous runs |
 | Startup stage timing and milestones | `src/shared/core/logger/startupDiagnostics.ts`, exported through the diagnostic log allowlist |
 
 Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScript), `expo-crypto`

@@ -137,7 +137,9 @@ policy, not arbitrary-content redaction.
 
 ## Stored format and limits
 
-Files live under `{Paths.document}/Runtime/trace/v1`. Each rolling `.jsonl` file contains
+Files live under the active data profile's `Runtime/trace/v1` directory: directly below
+`{Paths.document}` for local data, or `{Paths.document}/profiles/<id>` for enterprise data.
+Each rolling `.jsonl` file contains
 span snapshots conforming to `src/shared/data/types/trace.ts`. Started spans are written before
 completion so a later diagnostic package can identify unfinished work after a crash.
 
@@ -151,8 +153,11 @@ byte-for-byte Desktop schema.
 - At most 32 active traces and 256 spans per trace; root completion closes unfinished children.
 - At most 256 KiB buffered, 64 KiB per write batch, and 16 KiB per record. Oversized attributes are
   removed before the record is dropped. Capture never waits for filesystem I/O.
-- History retains at most 7 days, 20 MiB, and 512 files, whichever limit is reached first.
-  Cleanup runs off the first-paint path, after writes, and before diagnostic snapshots.
+- History across **all** data profiles shares a 7-day / 20 MiB / 512-file retention budget.
+  Cleanup runs off the first-paint path, after writes, and before diagnostic snapshots. It discovers
+  UUID profile directories from disk, so inactive or unregistered profiles are cleaned too. Only
+  known trace files and interrupted trace temporary files in the exact trace directories are touched;
+  the newest files across profiles take priority. Directory scans and metadata reads are asynchronous.
 - Flushes append to the current UTC day's file, rotating before 1 MiB. Starting/ending a request
   still triggers a flush, but no longer consumes a new file for every small batch. The existing
   512-file guard protects against legacy/exceptional file counts rather than limiting ordinary
@@ -180,10 +185,11 @@ try {
 ```
 
 This flushes queued records, serializes against retention, and copies retained batches into a
-private `{Paths.cache}/Diagnostics/trace-<id>` directory, using the same parent-directory casing as
+private `{Paths.cache}/Diagnostics/run-<runtime-id>/trace-<id>` directory, using the same parent-directory casing as
 upload archives. `files` includes `manifest.json` with the
 format version, capture policy, retention limits, file sizes, and collection-loss counters for the
 current service generation. Subsequent tracing and pruning cannot alter these copies.
-`metadata` also exposes retention and loss counters without parsing a file. The caller owns
+`metadata` also exposes retention and loss counters without parsing a file; `retention.scope` is
+`installation`, while the snapshot itself still contains only the active profile's traces. The caller owns
 archive/upload policy and must release the snapshot after consumption. Snapshot creation
 reports its own I/O failures to that caller; ordinary trace producers never receive those failures.

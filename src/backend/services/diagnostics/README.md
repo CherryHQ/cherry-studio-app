@@ -139,7 +139,10 @@ and submission; these flushes also drain pending startup events. An abrupt proce
 pending startup events and repeat counts, but not the already written first error occurrence.
 Collection limits are upper bounds, not a guarantee of seven days of history.
 
-Request traces retain at most 7 days / 20 MiB / 512 files under `Runtime/trace/v1`. Flushes append to
+Request traces retain at most 7 days / 20 MiB / 512 files **across the installation**, under each
+data profile's `Runtime/trace/v1`. Retention scans local and all UUID profile directories, including
+inactive profiles, and favors the newest files. This gives retained ordinary logs and traces a
+combined 40 MiB budget, excluding temporary bundle/snapshot copies. Flushes append to
 the current file, rotating at 1 MiB or a UTC day boundary instead of creating a file per request
 boundary. The 512-file guard remains for legacy files and exceptional histories. Submission flushes
 and copies stable trace snapshots, then releases them on success, failure or cancellation.
@@ -147,7 +150,7 @@ Collection projects every record again through an explicit field allowlist and f
 24 hours. A terminal span uses its end timestamp; a running span uses its start.
 Captured identity/version context is validated again, never filled from the current account.
 Historical records without context remain unattributed. Traces retain their existing data-profile
-storage scope; collecting the current profile does not sweep other profiles' traces.
+storage scope; exporting the current profile does not include other profiles' traces.
 New budget/count fields must remain nonnegative finite numbers; product reasons, retry scopes,
 estimate sources and serialized cap field names are validated again during export.
 The 50 MiB source budget favors representation of both sources, then recent files. The manifest
@@ -197,7 +200,14 @@ is temporary service unavailability, distinct from the IP frequency limit. Error
 request signatures and tracking IDs are not logged. Responses remain bounded to 64 KiB, and
 redirects are not followed.
 
-Each upload attempt owns its temporary directory. A `finally` block removes the ZIP on success,
+Each upload attempt owns its temporary directory under `Caches/Diagnostics/run-<runtime-id>/`.
+The shared `backend/utils/diagnosticTemporaryFiles` owner allocates the parent once per JS runtime
+for both bundles and trace snapshots. During PostReady initialization, the bundle service removes
+previous runs and the legacy flat UUID/`trace-<uuid>` directories left by interrupted attempts.
+It preserves the current runtime's parent even if capture or upload overlaps startup cleanup, and
+leaves unknown files/directories alone. Host replacement reuses the current parent. Cleanup failure
+is logged without disabling feedback; a later initialization retries it.
+A `finally` block removes the ZIP on success,
 rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
 remove staged files. There is no retained ZIP, save-original action, or automatic retry. The form
 retains its in-memory description and screenshot selection after a failed attempt; an uncertain

@@ -13,6 +13,10 @@ import type { DbService } from '@/backend/data/db/DbService';
 import { readDiagnosticPluginState } from '@/backend/data/services/diagnosticPluginState';
 import { readDiagnosticContext } from '@/backend/utils/diagnosticContext';
 import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
+import {
+  cleanupDiagnosticTemporaryDirectories,
+  createDiagnosticTemporaryDirectory,
+} from '@/backend/utils/diagnosticTemporaryFiles';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 import {
   DiagnosticError,
@@ -29,7 +33,6 @@ import { flushLogWriter, loggerService } from '@/shared/core/logger/LoggerServic
 
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 import { CherryDiagnosticUploadClient } from './CherryDiagnosticUploadClient';
-import { createDiagnosticTemporaryDirectory } from './diagnosticFiles';
 import { getDiagnosticReportStatus } from './diagnosticReportStatus';
 import {
   collectDiagnosticSources,
@@ -80,6 +83,14 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     private readonly traces: { createDiagnosticSnapshot(): Promise<TraceDiagnosticSnapshot> },
   ) {
     super();
+  }
+
+  protected async onInit(): Promise<void> {
+    try {
+      await cleanupDiagnosticTemporaryDirectories();
+    } catch {
+      logger.warn('Failed to clean diagnostic temporary files');
+    }
   }
 
   protected async onStop(): Promise<void> {
