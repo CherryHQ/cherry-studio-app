@@ -19,6 +19,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
+import { useSidebarHeaderTop } from '../hooks/useSidebarHeaderTop';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarRecents } from './SidebarRecents';
@@ -38,7 +39,7 @@ export function SidebarBody() {
   const { theme } = useUniwind();
   const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
   const { bottomPadding: dockBottomPadding } = useDockMetrics();
-  const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
+  const headerInset = useSidebarHeaderTop() + appSidebar.headerRowHeight + appSidebar.headerGapY;
   const endReachedHandlerRef = useRef<(() => void) | undefined>(undefined);
   const wasNearEndRef = useRef(false);
   const registerEndReachedHandler = useCallback<RegisterEndReachedHandler>((handler) => {

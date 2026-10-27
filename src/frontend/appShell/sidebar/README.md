@@ -26,7 +26,11 @@ selected while the pane is open beside the chat. In compact windows the `/librar
 current local chat, so its previews can add files to that chat.
 
 The floating dock insets from the sidebar's leading safe area only: the column sits at the window's
-leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it.
+leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. Rows
+scrolled under the dock blur toward the bottom edge, as they do under the title row.
+`useSidebarHeaderTop` places the title row below the top safe area, except where the chat header
+fills that inset (an upright iPhone Duo inner display) or keeps its own margin below a zero inset
+(the same display on its side); there the row centers on the header's controls.
 
 The circular search button beside the sidebar title opens the shared `/search` page for local
 conversations in compact windows. In wide windows the same request renders as `AppSearchPanel` in

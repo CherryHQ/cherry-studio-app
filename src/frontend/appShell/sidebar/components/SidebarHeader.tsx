@@ -13,6 +13,7 @@ import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
+import { useSidebarHeaderTop } from '../hooks/useSidebarHeaderTop';
 import { useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarFade } from './SidebarFade/SidebarFade';
 import { SidebarTitle } from './SidebarTitle';
@@ -30,7 +31,8 @@ export function SidebarHeader() {
   const { openSearch } = useSidebarActions('SidebarHeader');
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const insets = useSafeAreaInsets();
-  const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
+  const rowTop = useSidebarHeaderTop();
+  const headerInset = rowTop + appSidebar.headerRowHeight + appSidebar.headerGapY;
 
   return (
     <View className="absolute top-0 right-0 left-0" pointerEvents="box-none">
@@ -41,7 +43,7 @@ export function SidebarHeader() {
         style={{
           height: appSidebar.headerRowHeight,
           paddingLeft: 20 + insets.left,
-          top: insets.top + appSidebar.headerGapY,
+          top: rowTop,
         }}
       >
         <SidebarDeviceTitle />

@@ -1,4 +1,10 @@
-export { ChatDockFooter, ChatDockLayoutProvider, useChatDockFooterHeight } from './ChatDockLayout';
+export {
+  ChatDockFooter,
+  ChatDockLayoutProvider,
+  useChatDockFooterHeight,
+  useChatHeaderHeight,
+  useReportChatHeaderHeight,
+} from './ChatDockLayout';
 export {
   FormContentFrame,
   ReadingContentFrame,

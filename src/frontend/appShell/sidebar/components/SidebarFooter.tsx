@@ -15,6 +15,7 @@ import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
+import { SidebarFade } from './SidebarFade/SidebarFade';
 
 // Floats over the session list while the body owns enough bottom padding to
 // keep its final row reachable.
@@ -47,6 +48,14 @@ export function SidebarFooter() {
       pointerEvents="box-none"
       style={{ paddingBottom: bottomPadding, paddingEnd: insetEnd, paddingStart: insetStart }}
     >
+      {/* Rows scrolled under the dock blur toward the bottom edge, as they do under the title row,
+          instead of showing in full below the buttons on a short window. */}
+      <View className="absolute right-0 bottom-0 left-0" pointerEvents="none">
+        <SidebarFade
+          edge="bottom"
+          size={bottomPadding + appSidebar.dockHeight + appSidebar.headerGapY * 2}
+        />
+      </View>
       <View style={{ height: appSidebar.dockHeight }}>
         <Animated.View
           accessibilityElementsHidden={isSelecting}

@@ -5,6 +5,7 @@ import { Stack, useIsPreview } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
+import { useReportChatHeaderHeight } from '@/frontend/appShell/layout';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { HeaderAction } from '../../components/HeaderAction';
@@ -29,6 +30,7 @@ export function MainHeaderView({
 }: MainHeaderViewProps) {
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
+  useReportChatHeaderHeight();
   if (isPreview) {
     return null;
   }

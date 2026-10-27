@@ -57,4 +57,7 @@ actions.
 
 `ChatDockLayoutProvider` shares the height measured by `ChatDockFooter`, including its top gap,
 across the chat and drawer. The sidebar adds this space to the composer's action-center offset so
-its floating controls stay aligned when footer text wraps or scales.
+its floating controls stay aligned when footer text wraps or scales. It also shares the chat's native header height,
+published by the iOS chat header, so the sidebar's title row can sit level with the header's
+controls where the header does not start below the top safe area, as on an iPhone Duo's inner
+display.
