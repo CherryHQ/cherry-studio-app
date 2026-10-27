@@ -1,8 +1,9 @@
 # Office Tools Design
 
 > Status: bounded generation, inspection, reading, editing and preview-selection handoff are
-> implemented in source; focused tests pass and native/Office acceptance remains pending. All eight tools require
-> native QuickJS. Template filling and advanced content remain design. The exact implemented
+> implemented in source; focused tests pass and native/Office acceptance remains pending. All nine tools require
+> native QuickJS. `run_office_script` covers template filling, inserting or deleting pictures, layout
+> changes and other content the fixed tools do not express; no fixed tool is planned for them. The exact implemented
 > contract is in the [Office service](../../../src/backend/services/office/README.md) and
 > [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 
@@ -44,8 +45,10 @@ and [HTML Conversion](../html-conversion.md) for these current capabilities.
 | `edit_document` | Managed source id and `DocumentEditOperationV1[]` | New derived `.docx` |
 | `edit_workbook` | Managed source id and `WorkbookEditOperationV1[]` | New derived `.xlsx` |
 | `edit_presentation` | Managed source id and `PresentationEditOperationV1[]` | New derived `.pptx` |
+| `run_office_script` | Output filename, model-written JavaScript over pinned Office libraries, and authorized managed inputs | New `.docx`, `.xlsx` or `.pptx` |
 
-All eight names are registered in source. Creation uses version 1 specs; edits require top-level
+All nine names are registered in source. The eight fixed tools are the fast path for bounded
+changes; `run_office_script` handles everything else. Creation uses version 1 specs; edits require top-level
 version 1 and an exact source SHA-256. Current inspection lists body paragraphs, sheets, and
 slides/shapes with bounded paging; exact reads resolve one supported anchor. These are narrower
 than the full target matrix above. Native and Office acceptance remain required before release.
@@ -172,7 +175,7 @@ Model direct call OR Code Mode script in native QuickJS
   stable `ToolRef` identities. Adapt them through `createPiDurableToolExtension`, which already
   supplies `defineTool`, `ToolTask` hooks, and result projection. Keep Pi imports inside the runtime
   adapter rather than adding them to the Office service.
-- All eight Office tools declare `RuntimeTool.deferred`, following the same contract as Skill
+- All nine Office tools declare `RuntimeTool.deferred`, following the same contract as Skill
   installation/adaptation and library management. The Pi adapter forwards this metadata rather
   than maintaining a separate list of Office names. The model discovers
   Office tools through upstream `tool_search`; scripts use `searchTools`, `describeTool`, and
@@ -255,10 +258,9 @@ versioned selector representation scoped to immutable file ids and revalidate it
 If inspection uses an in-memory cache, losing it must require only reinspection, not invalidate
 the managed file or silently retarget a selector.
 
-Template filling follows this same path after inspection and editing are available. Initially,
-only explicitly supported placeholders or inspected targets may be filled. Templates are managed
-files, preserved as sources, and results are derived entries. Placeholder syntax and how a caller
-requests filling remain a later contract decision; no executable template language is implied.
+Template filling is covered by `run_office_script`: a script reads the template as a managed input
+and saves a new file, so the template stays a preserved source. No fixed template tool or
+placeholder syntax is planned.
 
 ## Tool Policy, Files, And Failure Behavior
 
@@ -307,7 +309,7 @@ documentation only when it lands.
 | 2. Basic generation | Enable DOCX and XLSX creation separately, then PPTX with editable supported elements; reuse artifact storage and preview | Each enabled format produces valid files through direct and Code Mode calls, opens in Office, displays in the app, and retains editable content; cancellation and failed publication leave no successful partial artifact |
 | 3. Structural inspection | Add inspection and paged structural reads, format by format, with revision-bound selectors and operation findings | Selector stability, bounded paging, compatibility reporting, and rejection of stale or cross-file selectors demonstrated |
 | 4. Bounded editing | Start with ordinary XLSX ranges, then simple DOCX text and PPTX text shapes; each format depends on its inspector and preservation evidence | Whole-batch behavior, source immutability, untouched-part preservation, formula-cache handling where relevant, and derived-artifact admission demonstrated |
-| 5. Template filling | Define placeholders/target mapping and reuse the proven inspection/edit path | Filling retains unrelated template content, reports missing or unsupported targets, and preserves the original template |
+| 5. Scripted content | `run_office_script` over pinned libraries for template filling, pictures, layout and other content outside the fixed tools | Scripts read only authorized inputs, never overwrite a source, and failed runs publish nothing |
 
 Generation does not wait for a general patcher. Editing does wait for a reliable inspector and
 format-specific preservation evidence. If a format fails a gate, retain the supported formats and

@@ -19,7 +19,7 @@ There is no remote service or job queue.
 | `edit_document` | Version 1, source/hash, filename, exact paragraph replacements and/or existing picture replacements | New DOCX copy, retaining surrounding runs, hyperlinks and picture layout |
 | `edit_workbook` | Version 1, source/hash, filename, one sheet, up to 1000 scalar cell edits and/or existing picture replacements | New XLSX copy, retaining untouched package parts |
 | `edit_presentation` | Version 1, source/hash, filename, slide/shape/table-cell paragraph replacements and/or existing picture replacements | New PPTX copy, retaining surrounding runs, hyperlinks and picture layout |
-| `run_office_script` | Output filename, model-written JavaScript and up to 8 authorized managed file ids | New DOCX, XLSX or PPTX produced by the script |
+| `run_office_script` | Output filename, model-written JavaScript and up to 50 authorized managed file ids | New DOCX, XLSX or PPTX produced by the script |
 
 Creation inputs have `filename` and `spec`, and every creation spec requires `version: 1`.
 Edit inputs require top-level `version: 1`. Unknown properties and
@@ -191,7 +191,8 @@ Replacement supports existing embedded PNG/JPEG pictures. Linked images, alterna
 tiled fills and picture BLIP effects/extensions (including SVG alternatives) are refused rather
 than leaving competing image sources. The existing frame, crop, rotation, grouping and alt text
 remain unchanged: this operation does not automatically fit a different aspect ratio, so prepare
-the replacement accordingly. Inserting/deleting pictures and changing layout remain future work.
+the replacement accordingly. Inserting/deleting pictures and changing layout go through
+`run_office_script`, not a fixed operation.
 
 Only the chosen picture reference is redirected to newly added media and a fresh relationship.
 Other occurrences sharing the original image are unchanged. The old media/relationships are
