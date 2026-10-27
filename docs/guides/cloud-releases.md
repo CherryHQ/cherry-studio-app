@@ -13,6 +13,21 @@ Google Play builds use `production-google-play`, which inherits the production i
 and automatic native build-number increments, but generates an AAB instead of an APK. Both Android
 profiles retain the current ARM64-only device support.
 
+## Release Channels
+
+A release reaches five channels from three builds:
+
+| Channel | Artifact | Build | Publication |
+| --- | --- | --- | --- |
+| GitHub | APK | Built in the cloud on every version tag | Published automatically with `SHA256SUMS` ([Android GitHub Downloads](#android-github-downloads)) |
+| GitCode | The same APK | None; reuses the GitHub APK | Mirror sync and browser upload by a maintainer ([GitCode Maintainer Upload](#gitcode-maintainer-upload)) |
+| Google Play | AAB | Built in the cloud on stable tags only | Manual upload and review in Play Console ([Google Play](#google-play)) |
+| TestFlight | IPA | Built in the cloud on every version tag | Uploaded automatically; internal distribution and external beta review in App Store Connect ([iOS](#ios)) |
+| App Store | The same IPA | None; reuses the TestFlight build | Manual submission and release in App Store Connect |
+
+GitHub and GitCode must publish the identical APK and checksum. TestFlight and the App Store share
+one build, but their reviews and releases are independent.
+
 ## Release Preparation
 
 Releases are built by the workflows above. Before pushing the tag, have these ready:
