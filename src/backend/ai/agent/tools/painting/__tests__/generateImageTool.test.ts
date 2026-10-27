@@ -439,6 +439,34 @@ describe('createGenerateImageTool', () => {
     },
   );
 
+  test('stops waiting for a provider after 10 minutes and tells the model not to repeat', async () => {
+    jest.useFakeTimers();
+    try {
+      let requestSignal: AbortSignal | undefined;
+      const deps = createDependencies({
+        generateImage: (input?: { requestOptions?: { signal?: AbortSignal } }) => {
+          requestSignal = input?.requestOptions?.signal;
+          return new Promise<never>(() => undefined);
+        },
+      });
+      const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
+
+      const pending = execute(tool, { prompt: 'A cherry.' });
+      await jest.advanceTimersByTimeAsync(10 * 60_000);
+      const result = await pending;
+
+      expect(requestSignal?.aborted).toBe(true);
+      expect(result.failure).toMatchObject({
+        scope: 'call',
+        error: { code: 'image_generation_timeout', retryable: false, origin: 'tool' },
+      });
+      expect(result.failure?.error.message).toContain('do not automatically repeat');
+      expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('does not turn cancellation into a failed tool result', async () => {
     const controller = new AbortController();
     const abort = new Error('Cancelled');
@@ -609,7 +637,7 @@ function configuredModel(overrides: Partial<Model> = {}): ConfiguredPaintingMode
   };
 }
 
-function createDependencies(overrides: { generateImage?: () => Promise<never> } = {}) {
+function createDependencies(overrides: { generateImage?: (input?: never) => Promise<never> } = {}) {
   return {
     ai: {
       generateImage: jest.fn(

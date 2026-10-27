@@ -39,7 +39,6 @@ import {
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
-import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -49,7 +48,6 @@ import type { TraceContext } from '@/shared/data/types/trace';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
-  createImageRequestErrorToolResult,
   LANES_PER_SESSION,
   laneKey,
   raceAbort,
@@ -72,6 +70,7 @@ import {
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
+import { createImageRequestTool } from './agentImageGeneration';
 import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
 import {
   durableRuntimeTiming,
@@ -933,7 +932,9 @@ export class DurableAgentHost implements AgentProtocol {
       kind: plan.imageGeneration ? 'image' : 'language',
       model: plan.agent.model,
       options: plan.agent.options,
-      tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
+      tools: plan.imageGeneration
+        ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
+        : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
         plan.agent.mode === 'standard'
@@ -1440,9 +1441,11 @@ export class DurableAgentHost implements AgentProtocol {
     signal: AbortSignal,
   ): Promise<RuntimeTool> {
     const { plan } = await this.prepareExecution(identity, signal);
-    const tool = (plan.imageGeneration ? [this.imageTool(plan)] : plan.tools).find((tool) =>
-      sameRef(tool.ref, ref),
-    );
+    const tool = (
+      plan.imageGeneration
+        ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
+        : plan.tools
+    ).find((tool) => sameRef(tool.ref, ref));
     if (!tool) throw new Error('This capability is no longer available for the owning input.');
     return {
       ...tool,
@@ -1462,40 +1465,6 @@ export class DurableAgentHost implements AgentProtocol {
         } catch (error) {
           span?.end(call.signal.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
           throw error;
-        }
-      },
-    };
-  }
-
-  private imageTool(plan: TurnPlan): RuntimeTool {
-    return {
-      ref: { source: 'builtin', capabilityId: 'image_generation' },
-      providerName: 'cherry_generate_image',
-      displayName: 'Generate image',
-      description: 'Execute the explicitly submitted image request.',
-      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      approval: 'auto',
-      execute: async ({ signal }) => {
-        if (!plan.imageGeneration) throw new Error('The image request is unavailable.');
-        try {
-          const entries = await plan.imageGeneration.execute(
-            signal,
-            plan.usageAttribution.resolve(),
-          );
-          return {
-            value: { status: 'completed' },
-            artifacts: entries.map((entry) => ({
-              ref: { kind: 'managed-file', fileEntryId: entry.id },
-              mediaType: entry.mediaType,
-              name: entry.filename,
-              kind: 'created',
-            })),
-          };
-        } catch (error) {
-          if (signal.aborted || !(error instanceof AiRequestError)) throw error;
-          // AiService already normalized and redacted this request failure. Preserve it at the
-          // capability boundary so both tool traces and the final reply keep its structured facts.
-          return createImageRequestErrorToolResult(error.detail);
         }
       },
     };

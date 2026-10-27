@@ -61,6 +61,7 @@ export type {
   FakeRuntimeProgram,
 } from './FakeRuntime';
 export {
+  DURABLE_IMAGE_TOOL_NAME,
   LANES_PER_SESSION,
   laneKey,
   parseLaneKey,
