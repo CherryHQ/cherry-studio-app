@@ -7,6 +7,7 @@ import {
 import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
 import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+import { VertexAuthFieldsSchema } from '@/shared/utils/vertexAuth';
 
 /** Validate stored connection facts without probing the network or rejecting configured cloud auth. */
 export function getProviderConfigurationIssue(
@@ -40,27 +41,18 @@ export function getProviderConfigurationIssue(
         : 'unsupported-auth';
     case 'iam-gcp': {
       if (auth?.type !== 'iam-gcp') return 'invalid-service-account';
-      if (
-        !/^[a-zA-Z0-9][a-zA-Z0-9:.-]*$/.test(auth.project.trim()) ||
-        !/^[a-z][a-z0-9-]*$/.test(auth.location.trim())
-      )
-        return 'invalid-service-account';
-      const { clientEmail, privateKey } = normalizeVertexCredentials(auth.credentials);
-      if (
-        !clientEmail ||
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail) ||
-        !privateKey ||
-        !/^-----BEGIN PRIVATE KEY-----\s+[A-Za-z0-9+/=\s]+\s+-----END PRIVATE KEY-----$/.test(
-          privateKey,
-        )
-      ) {
-        return 'invalid-service-account';
-      }
+      const fields = VertexAuthFieldsSchema.safeParse({
+        project: auth.project,
+        location: auth.location,
+        ...normalizeVertexCredentials(auth.credentials),
+      });
+      if (!fields.success) return 'invalid-service-account';
+      const { project, location } = fields.data;
       try {
         for (const endpoint of Object.values(provider.endpointConfigs ?? {})) {
-          resolveVertexUrls(endpoint?.baseUrl ?? '', auth.project.trim(), auth.location.trim());
+          resolveVertexUrls(endpoint?.baseUrl ?? '', project, location);
         }
-        resolveVertexUrls('', auth.project.trim(), auth.location.trim());
+        resolveVertexUrls('', project, location);
         return null;
       } catch {
         return 'invalid-endpoint';

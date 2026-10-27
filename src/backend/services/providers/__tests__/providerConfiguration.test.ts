@@ -51,6 +51,12 @@ describe('provider configuration prerequisites', () => {
       'invalid-service-account',
     );
     expect(
+      getProviderConfigurationIssue(vertex, [], {
+        ...auth,
+        credentials: { ...auth.credentials, client_email: 'svc..invalid@example.com' },
+      }),
+    ).toBe('invalid-service-account');
+    expect(
       getProviderConfigurationIssue(
         {
           ...vertex,

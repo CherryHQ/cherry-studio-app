@@ -59,12 +59,8 @@ describe('VertexAuthClient', () => {
       serviceAccount: { clientEmail: 'service@example.com', privateKey },
     };
 
-    await expect(client.getAuthorizationHeaders(input)).resolves.toEqual({
-      Authorization: 'Bearer vertex-token',
-    });
-    await expect(client.getAuthorizationHeaders(input)).resolves.toEqual({
-      Authorization: 'Bearer vertex-token',
-    });
+    await expect(client.getAccessToken(input)).resolves.toBe('vertex-token');
+    await expect(client.getAccessToken(input)).resolves.toBe('vertex-token');
     expect(request).toHaveBeenCalledTimes(1);
   });
 
@@ -83,7 +79,7 @@ describe('VertexAuthClient', () => {
     });
 
     await expect(
-      client.getAuthorizationHeaders({
+      client.getAccessToken({
         providerId: 'provider',
         projectId: 'project-id',
         serviceAccount: { clientEmail: 'service@example.com', privateKey: 'private-key' },
@@ -101,18 +97,16 @@ describe('VertexAuthClient', () => {
       sign: async () => 'assertion',
     });
     const input = authInput();
-    await expect(client.getAuthorizationHeaders(input)).resolves.toEqual({
-      Authorization: 'Bearer token-1',
-    });
-    await client.getAuthorizationHeaders({ ...input, providerId: 'second' });
+    await expect(client.getAccessToken(input)).resolves.toBe('token-1');
+    await client.getAccessToken({ ...input, providerId: 'second' });
     const replacement = {
       ...input,
       serviceAccount: { ...input.serviceAccount, privateKey: 'replacement' },
     };
-    await client.getAuthorizationHeaders(replacement);
-    await client.getAuthorizationHeaders(replacement);
+    await client.getAccessToken(replacement);
+    await client.getAccessToken(replacement);
     now = 3_550_000;
-    await client.getAuthorizationHeaders(replacement);
+    await client.getAccessToken(replacement);
     expect(request).toHaveBeenCalledTimes(4);
   });
 
@@ -129,8 +123,8 @@ describe('VertexAuthClient', () => {
       sign: async () => 'assertion',
     });
     const controller = new AbortController();
-    const first = client.getAuthorizationHeaders(authInput(), controller.signal);
-    const second = client.getAuthorizationHeaders(authInput());
+    const first = client.getAccessToken(authInput(), controller.signal);
+    const second = client.getAccessToken(authInput());
     const cancelled = expect(first).rejects.toMatchObject({ name: 'AbortError' });
     await Promise.resolve();
     controller.abort();
@@ -140,10 +134,10 @@ describe('VertexAuthClient', () => {
     client.forget('provider');
     finish(tokenResponse('old-token'));
     await forgotten;
-    const third = client.getAuthorizationHeaders(authInput());
+    const third = client.getAccessToken(authInput());
     await Promise.resolve();
     finish(tokenResponse('new-token'));
-    await expect(third).resolves.toEqual({ Authorization: 'Bearer new-token' });
+    await expect(third).resolves.toBe('new-token');
     expect(request).toHaveBeenCalledTimes(2);
   });
 
@@ -160,14 +154,14 @@ describe('VertexAuthClient', () => {
       sign: async () => 'assertion',
     });
     const controller = new AbortController();
-    const pending = client.getAuthorizationHeaders(authInput(), controller.signal);
+    const pending = client.getAccessToken(authInput(), controller.signal);
     const failed = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     await Promise.resolve();
     controller.abort();
     await failed;
     expect(transportSignal?.aborted).toBe(true);
     await client._doStop();
-    await expect(client.getAuthorizationHeaders(authInput())).rejects.toMatchObject({
+    await expect(client.getAccessToken(authInput())).rejects.toMatchObject({
       name: 'AbortError',
     });
   });

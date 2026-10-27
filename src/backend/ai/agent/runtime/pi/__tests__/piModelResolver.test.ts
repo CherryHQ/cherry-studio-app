@@ -136,16 +136,16 @@ describe('Pi model resolver', () => {
         private_key: '-----BEGIN PRIVATE KEY-----\nYWJjZA==\n-----END PRIVATE KEY-----',
       },
     });
-    const getAuthorizationHeaders = jest
+    const getAccessToken = jest
       .fn()
-      .mockResolvedValueOnce({ Authorization: 'Bearer token-one' })
-      .mockResolvedValueOnce({ Authorization: 'Bearer token-two' });
-    const vertexResolver = createPiModelResolver(undefined, { getAuthorizationHeaders });
+      .mockResolvedValueOnce('token-one')
+      .mockResolvedValueOnce('token-two');
+    const vertexResolver = createPiModelResolver(undefined, { getAccessToken });
     const first = await resolve(vertexResolver);
     const second = await resolve(vertexResolver);
     expect(mockResolveApiKey).not.toHaveBeenCalled();
     expect(mockListApiKeys).not.toHaveBeenCalled();
-    expect(getAuthorizationHeaders).toHaveBeenCalledTimes(2);
+    expect(getAccessToken).toHaveBeenCalledTimes(2);
     expect(first.model).toMatchObject({
       api: 'google-vertex',
       baseUrl: 'https://aiplatform.googleapis.com/v1/projects/project-id/locations/global',

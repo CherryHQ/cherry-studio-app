@@ -63,12 +63,9 @@ export class VertexAuthClient extends BaseService {
     this.http = dependencies.http ?? createHttpClient({ baseUrl: 'https://oauth2.googleapis.com' });
   }
 
-  async getAuthorizationHeaders(
-    input: VertexAuthInput,
-    signal?: AbortSignal,
-  ): Promise<Record<string, string>> {
+  async getAccessToken(input: VertexAuthInput, signal?: AbortSignal): Promise<string> {
     const token = await this.getToken(input, signal);
-    return { Authorization: `Bearer ${token.accessToken}` };
+    return token.accessToken;
   }
 
   forget(providerId: string): void {

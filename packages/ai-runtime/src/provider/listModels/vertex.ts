@@ -23,13 +23,13 @@ export interface VertexModelListContext {
   appHeaders?: Readonly<Record<string, string>>;
   diagnostics?: ProviderRuntimeDiagnostics;
   getAuthConfig?: (providerId: string) => AuthConfig | Promise<AuthConfig | undefined> | undefined;
-  getVertexAuthHeaders?: (
+  getVertexAccessToken?: (
     input: {
       projectId: string;
       serviceAccount: { clientEmail: string; privateKey: string };
     },
     signal?: AbortSignal,
-  ) => Promise<Record<string, string>>;
+  ) => Promise<string>;
 }
 
 const EXCLUDED_VERTEX_PUBLISHER_MODEL_KEYWORDS = ['tts', 'audio'] as const;
@@ -64,7 +64,7 @@ export async function createVertexModelListRequest(
     return undefined;
   };
 
-  if (!context.getAuthConfig || !context.getVertexAuthHeaders) {
+  if (!context.getAuthConfig || !context.getVertexAccessToken) {
     return failOrSkip('authentication adapters are unavailable');
   }
 
@@ -95,9 +95,9 @@ export async function createVertexModelListRequest(
     return failOrSkip('project, location or base URL is invalid');
   }
 
-  let authHeaders: Record<string, string>;
+  let accessToken: string;
   try {
-    authHeaders = await context.getVertexAuthHeaders(
+    accessToken = await context.getVertexAccessToken(
       {
         projectId: project,
         serviceAccount: { privateKey: privateKey!, clientEmail: clientEmail! },
@@ -128,7 +128,7 @@ export async function createVertexModelListRequest(
     baseUrl,
     headers: {
       ...headers,
-      ...authHeaders,
+      Authorization: `Bearer ${accessToken}`,
     },
   };
 }

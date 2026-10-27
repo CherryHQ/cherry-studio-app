@@ -66,7 +66,7 @@ export function createPiModelResolver(
   accounts?: {
     resolveAuth(provider: Provider, signal?: AbortSignal): Promise<ResolvedPiOAuth | undefined>;
   },
-  vertexAuth?: Pick<VertexAuthClient, 'getAuthorizationHeaders'>,
+  vertexAuth?: Pick<VertexAuthClient, 'getAccessToken'>,
 ): PiRuntimeDependencies {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
@@ -122,9 +122,9 @@ export function createPiModelResolver(
           auth.project.trim(),
           auth.location.trim(),
         ).resourceUrl;
-        const authHeaders = await (
+        const accessToken = await (
           vertexAuth ?? application.get('VertexAuthClient')
-        ).getAuthorizationHeaders(
+        ).getAccessToken(
           {
             providerId: provider.id,
             projectId: auth.project.trim(),
@@ -132,7 +132,7 @@ export function createPiModelResolver(
           },
           signal,
         );
-        vertex = { accessToken: authHeaders.Authorization.slice('Bearer '.length), baseUrl };
+        vertex = { accessToken, baseUrl };
       }
       const oauth =
         !vertex && apiKeyOverride === undefined

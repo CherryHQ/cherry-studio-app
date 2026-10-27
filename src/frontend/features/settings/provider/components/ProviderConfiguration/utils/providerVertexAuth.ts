@@ -1,25 +1,14 @@
 import { z } from 'zod';
 
+import { VertexAuthFieldsSchema } from '@/shared/utils/vertexAuth';
+
 import type { VertexAuthConfig } from '../types';
 
-const projectSchema = z
-  .string()
-  .trim()
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9:.-]*$/);
-const locationSchema = z
-  .string()
-  .trim()
-  .regex(/^[a-z][a-z0-9-]*$/);
-const emailSchema = z.string().trim().email();
-const privateKeySchema = z
-  .string()
-  .trim()
-  .regex(/^-----BEGIN PRIVATE KEY-----\s+[A-Za-z0-9+/=\s]+\s+-----END PRIVATE KEY-----$/);
 const serviceAccountSchema = z.object({
   type: z.literal('service_account'),
-  project_id: projectSchema,
-  client_email: emailSchema,
-  private_key: privateKeySchema,
+  project_id: VertexAuthFieldsSchema.shape.project,
+  client_email: VertexAuthFieldsSchema.shape.clientEmail,
+  private_key: VertexAuthFieldsSchema.shape.privateKey,
 });
 
 export type VertexAuthField = 'project' | 'location' | 'clientEmail' | 'privateKey' | 'json';
@@ -66,13 +55,7 @@ export function parseVertexAuthEdit(
       return { error: VERTEX_AUTH_ERRORS.json };
     }
   }
-  const schemas = {
-    project: projectSchema,
-    location: locationSchema,
-    clientEmail: emailSchema,
-    privateKey: privateKeySchema,
-  };
-  const parsed = schemas[field].safeParse(text);
+  const parsed = VertexAuthFieldsSchema.shape[field].safeParse(text);
   if (!parsed.success) return { error: VERTEX_AUTH_ERRORS[field] };
   return {
     config:

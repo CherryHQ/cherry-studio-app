@@ -55,7 +55,7 @@ export async function listPiOAuthModels(
       {
         getRotatedApiKey: () => auth.auth.apiKey ?? '',
         getAuthConfig: async () => undefined,
-        getVertexAuthHeaders: async () => {
+        getVertexAccessToken: async () => {
           throw new ProviderAccountError('unsupported');
         },
       },

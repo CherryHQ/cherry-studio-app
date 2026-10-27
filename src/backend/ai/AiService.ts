@@ -74,7 +74,7 @@ export interface AiServiceDependencies {
     ProviderRegistryService,
     'getImageGenerationSupport' | 'listProviderRegistryModels'
   >;
-  vertexAuth: Pick<VertexAuthClient, 'getAuthorizationHeaders'>;
+  vertexAuth: Pick<VertexAuthClient, 'getAccessToken'>;
 }
 
 function bareModelKey(model: Partial<Model>): string {
@@ -200,11 +200,8 @@ export class AiService extends BaseService {
         getAuthConfig: async (providerId) =>
           (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
         getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
-        getVertexAuthHeaders: (input, signal) =>
-          this.services.vertexAuth.getAuthorizationHeaders(
-            { ...input, providerId: provider.id },
-            signal,
-          ),
+        getVertexAccessToken: (input, signal) =>
+          this.services.vertexAuth.getAccessToken({ ...input, providerId: provider.id }, signal),
       },
       request.requestOptions?.signal,
       { throwOnError: request.throwOnError },
