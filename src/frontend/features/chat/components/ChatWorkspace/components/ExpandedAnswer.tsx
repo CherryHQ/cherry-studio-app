@@ -6,7 +6,6 @@ import {
   Skeleton,
 } from '@cherrystudio/ui/components';
 import { duration, easing, spring } from '@cherrystudio/ui/motion';
-import { useFocusEffect } from 'expo-router';
 import {
   type PropsWithChildren,
   type ReactNode,
@@ -18,7 +17,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  BackHandler,
   Keyboard,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -44,6 +42,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem } from '@/frontend/components/Message';
 
@@ -273,16 +272,7 @@ function ExpandedAnswer({
   }, [onClosed, row?.branch]);
 
   // A route pushed over the chat keeps back for itself; the layer stays open underneath.
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'android') return;
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        close();
-        return true;
-      });
-      return () => subscription.remove();
-    }, [close]),
-  );
+  useFocusedBackPress(close);
 
   const openDuration = useRef<number>(undefined);
   const handleHostLayout = () => {
