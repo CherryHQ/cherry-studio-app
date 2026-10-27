@@ -54,6 +54,11 @@ jest.mock('../../../../menu/menu-overlay', () => {
   };
 });
 
+let mockWindowWidth = 402;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  default: () => ({ fontScale: 1, height: 874, scale: 3, width: mockWindowWidth }),
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -308,7 +313,7 @@ describe('MorphMenu', () => {
   it('ignores an older opening measurement delivered after the latest press', () => {
     const pending: ((x: number, y: number, width: number, height: number) => void)[] = [];
     jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((callback) => {
-      pending.push(callback);
+      pending.push(callback as (typeof pending)[number]);
     });
     const tree = render();
     press(tree, 'menu-trigger');
@@ -406,7 +411,29 @@ describe('MorphMenu', () => {
       return style?.height === 420;
     });
 
-    expect(StyleSheet.flatten(container.props.style as StyleProp<ViewStyle>).width).toBe(340);
+    expect(StyleSheet.flatten(container.props.style as StyleProp<ViewStyle>)?.width).toBe(340);
+  });
+
+  it.each([
+    [402, 241],
+    [1440, 264],
+  ])('keeps a %ipt window from stretching the panel past a phone-sized floor', (width, floor) => {
+    mockWindowWidth = width;
+    act(() => {
+      renderer = create(
+        <MorphMenu accessibilityLabel="Add" testID="menu">
+          <MorphMenu.Item label="Camera" onPress={jest.fn()} testID="menu-camera" />
+        </MorphMenu>,
+      );
+    });
+
+    const panel = renderer!.root.find(
+      (node) => node.props.testID === 'menu-panel' && typeof node.props.onLayout === 'function',
+    );
+    expect(StyleSheet.flatten(panel.props.contentStyle as StyleProp<ViewStyle>)?.minWidth).toBe(
+      floor,
+    );
+    mockWindowWidth = 402;
   });
 
   it('rejects an item rendered outside a menu', () => {

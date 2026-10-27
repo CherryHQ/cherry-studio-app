@@ -10,7 +10,8 @@ domains.
 - `SelectionControls` accepts feature actions alongside delete. The file library owns batch moves
   and their picker; source copy describes only the delete confirmation and failure.
 - `SelectionToolbar` is the platform-specific bottom action surface for consumers that own their
-  selection state. It requires `allSelected` and `selectableCount` so both platforms show the same
+  selection state. iOS uses the native bottom toolbar, which only exists in a native-stack screen;
+  inside a side pane it draws the same floating bar Android uses. It requires `allSelected` and `selectableCount` so both platforms show the same
   select-all/deselect-all action and disable it for empty lists or pending operations.
 - `areAllSelected`, `toggleSelection`, and `useListBottomInset` support those custom consumers.
 

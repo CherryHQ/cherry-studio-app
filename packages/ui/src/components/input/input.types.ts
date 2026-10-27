@@ -1,5 +1,11 @@
 import type { Ref } from 'react';
-import type { StyleProp, TextInput, TextInputProps, TextStyle, ViewStyle } from 'react-native';
+import type {
+  StyleProp,
+  TextInputInstance,
+  TextInputProps,
+  TextStyle,
+  ViewStyle,
+} from 'react-native';
 
 export type InputAutoCapitalize = NonNullable<TextInputProps['autoCapitalize']>;
 
@@ -25,7 +31,7 @@ type InputBaseProps = Omit<
   invalid?: boolean;
   keyboardType?: InputKeyboardType;
   onChangeText?: (value: string) => void;
-  ref?: Ref<TextInput>;
+  ref?: Ref<TextInputInstance>;
   returnKeyType?: InputReturnKeyType;
   value: string;
 };

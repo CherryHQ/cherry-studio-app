@@ -1,5 +1,11 @@
 import type { ReactNode, RefObject } from 'react';
-import { type AccessibilityState, Pressable, View, type ViewProps } from 'react-native';
+import {
+  type AccessibilityState,
+  Pressable,
+  View,
+  type ViewProps,
+  type ViewInstance,
+} from 'react-native';
 
 import type { MenuAnchor } from './menu.types';
 
@@ -23,7 +29,7 @@ export function AnchoredTrigger({
   onOpen: (anchor: MenuAnchor) => void;
   onStartShouldSetResponderCapture?: ViewProps['onStartShouldSetResponderCapture'];
   testID?: string;
-  triggerRef: RefObject<View | null>;
+  triggerRef: RefObject<ViewInstance | null>;
 }) {
   return (
     <Pressable

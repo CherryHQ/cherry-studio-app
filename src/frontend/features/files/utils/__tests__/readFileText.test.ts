@@ -10,7 +10,7 @@ jest.mock('expo-file-system', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockOpen.mockReturnValue({ close: mockClose, readBytes: mockRead });
+  mockOpen.mockReturnValue({ close: mockClose, readBytesSync: mockRead });
 });
 
 it('reads bounded bytes with a read-only handle and always closes it', () => {

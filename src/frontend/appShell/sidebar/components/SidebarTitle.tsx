@@ -1,5 +1,4 @@
 import { easing } from '@cherrystudio/ui/motion';
-import { useDrawerStatus } from 'expo-router/drawer';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import Animated, {
@@ -10,6 +9,8 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+
+import { useSidebarPresence } from '../hooks/useSidebarPresence';
 
 const baseFontSize = 24;
 const minFontSize = 18;
@@ -36,8 +37,8 @@ type SidebarTitleProps = {
  * shrinks, down to `minFontSize`; one still too wide is clipped and scrolls by in a marquee.
  *
  * Motion: the marquee reveals the clipped end of the name. It runs one lap, after `lapDelay`,
- * each time the drawer opens or the name changes, then rests at the start of the name. Closing
- * the drawer cancels it and returns to the start. With reduced motion it does not run; the full
+ * each time the sidebar appears or the name changes, then rests at the start of the name. Hiding
+ * the sidebar cancels it and returns to the start. With reduced motion it does not run; the full
  * name stays readable in the device menu and the switcher's accessibility label.
  */
 export function SidebarTitle({ name, width }: SidebarTitleProps) {
@@ -52,13 +53,13 @@ export function SidebarTitle({ name, width }: SidebarTitleProps) {
   const textWidth = naturalWidth ? (naturalWidth * fontSize) / baseFontSize : 0;
   const lap = !fits && textWidth > width ? textWidth + lapGap : 0;
 
-  const open = useDrawerStatus() === 'open';
+  const isVisible = useSidebarPresence() !== 'closed';
   const reducedMotion = useReducedMotion();
   const offset = useSharedValue(0);
   useEffect(() => {
     cancelAnimation(offset);
     offset.value = 0;
-    if (!open || reducedMotion || !lap) return;
+    if (!isVisible || reducedMotion || !lap) return;
     // The second copy sits exactly one lap behind, so snapping back to 0 is seamless.
     offset.value = withDelay(
       lapDelay,
@@ -67,7 +68,7 @@ export function SidebarTitle({ name, width }: SidebarTitleProps) {
       }),
     );
     return () => cancelAnimation(offset);
-  }, [lap, offset, open, reducedMotion]);
+  }, [isVisible, lap, offset, reducedMotion]);
   const lapStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
 
   return (

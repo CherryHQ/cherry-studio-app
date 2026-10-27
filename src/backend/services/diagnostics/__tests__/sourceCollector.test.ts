@@ -10,7 +10,7 @@ function snapshot(bytes: Uint8Array, claimedSize = bytes.length) {
       let offset = 0;
       return {
         close,
-        readBytes: (size: number) => {
+        readBytesSync: (size: number) => {
           const result = bytes.subarray(offset, offset + size);
           offset += result.length;
           return result;

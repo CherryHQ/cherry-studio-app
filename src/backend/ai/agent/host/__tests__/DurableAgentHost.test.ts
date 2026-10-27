@@ -1774,6 +1774,117 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('an answer without the background reply still surfaces its approval there', async () => {
+    const state = fixture();
+    const controller = new AbortController();
+    let decision: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const other = runningTurns(state).find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id !== turn.assistantMessageId,
+      )!;
+      const approvalId = uuid();
+      decision = state
+        .execution()!
+        .requestApproval(
+          other.identity,
+          {
+            id: approvalId,
+            turnId: other.identity.turnId,
+            toolCallId: 'pending-tool',
+            toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+            displayName: 'Search',
+            input: {},
+            status: 'pending',
+          },
+          controller.signal,
+        )
+        .catch((error: unknown) => error);
+      await settle();
+      const interaction = state.reply.setInteraction.mock.calls.at(-1)?.[0];
+      expect(interaction).toMatchObject({ kind: 'approval', id: approvalId });
+      await interaction.respond('approve');
+      await expect(decision).resolves.toBe('approve');
+      expect(state.reply.setInteraction).toHaveBeenLastCalledWith(undefined);
+    } finally {
+      controller.abort();
+      await decision;
+      await state.host.close();
+    }
+  });
+
+  test('cancelling one parallel answer withdraws its approval while its sibling still waits', async () => {
+    const state = fixture();
+    const controllers = [new AbortController(), new AbortController()];
+    const decisions: Promise<unknown>[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await askTwoModels(state);
+      const running = runningTurns(state);
+      const approvalIds = running.map(() => uuid());
+      for (const [index, turn] of running.entries())
+        decisions.push(
+          state
+            .execution()!
+            .requestApproval(
+              turn.identity,
+              {
+                id: approvalIds[index]!,
+                turnId: turn.identity.turnId,
+                toolCallId: `search-${index}`,
+                toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+                displayName: 'Search',
+                input: {},
+                status: 'pending',
+              },
+              controllers[index]!.signal,
+            )
+            .catch((error: unknown) => error),
+        );
+      await settle();
+      const cancelled = running[0]!;
+      await state.host.cancelTurn({
+        sessionId: state.sessionId,
+        turnId: cancelled.identity.turnId,
+        messageId: cancelled.assistantMessageId,
+      });
+      // The fixture's engine emits the terminal turn; its task signal is controlled here.
+      const reason = new Error('The answer was cancelled.');
+      controllers[0]!.abort(reason);
+      await expect(decisions[0]).resolves.toBe(reason);
+      await settle();
+
+      expect(events).toContainEqual({
+        type: 'approval.resolved',
+        approval: expect.objectContaining({ id: approvalIds[0], status: 'cancelled' }),
+      });
+      expect(events.findLast((event) => event.type === 'turn.updated')).toMatchObject({
+        type: 'turn.updated',
+        turn: { status: 'awaiting-approval', assistantMessageId: running[1]!.assistantMessageId },
+      });
+      await state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: running[1]!.identity.turnId,
+        approvalId: approvalIds[1]!,
+        decision: 'approve',
+      });
+      await expect(decisions[1]).resolves.toBe('approve');
+    } finally {
+      for (const controller of controllers) controller.abort();
+      await Promise.all(decisions);
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
   test('background handoff binds the remaining answer approval to its system card', async () => {
     const state = fixture();
     const controller = new AbortController();

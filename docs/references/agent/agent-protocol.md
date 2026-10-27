@@ -391,7 +391,7 @@ type AgentApprovalView = {
   toolRef: AgentToolRef
   displayName: string
   input: JsonValue
-  status: 'pending' | 'approved' | 'denied'
+  status: 'pending' | 'approved' | 'denied' | 'cancelled'
 }
 
 type AgentCapabilities = {
@@ -403,6 +403,10 @@ type AgentCapabilities = {
 ```
 
 `assistant` remains the standard message role; the configurable product entity is always `Agent`.
+
+Every pending approval ends with `approval.resolved`. When its execution is interrupted, the status
+is `cancelled`; this withdraws the request without recording a user denial, even while sibling
+answers continue running.
 
 Cancellation is required by the Runtime contract and is therefore not a capability flag.
 Capabilities are a stable projection of what the Host's local engine contract can
@@ -819,12 +823,16 @@ question has, and the questions an answer has, are alternatives the client can s
 - **Parallel answers.** A submission with `additionalReplies` asks several models the same question.
   The question gets one answer per model in one sibling group, sharing the turn id; the first is
   selected. Each runs separately, can be stopped alone with `cancelTurn({ messageId })`, and may use
-  only tools that are read-only and automatically approved, so parallel answers neither change the
-  outside world nor stop to ask the user. Read-only means a declared `effect: 'read'`: built-in web,
-  calendar, reminder and location reads, workspace listing, search and file reads, Office file
-  inspection and content reads, and file-library search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
-  read. Approval-gated tools stay out even when the Agent approves automatically, as do
-  `ask_user_question`, `run_js` and Code Mode. Skills and image generation are refused. The Session
+  only tools declared read-only. Read-only means a declared
+  `effect: 'read'`: built-in web, calendar, reminder and location reads, workspace listing, search
+  and file reads, Office file inspection and content reads, and file-library search, reads and
+  listings; a plugin tool its bundled policy declares a read; a third-party MCP tool its server
+  annotates with `readOnlyHint`. Remote annotations are server claims, not an enforced sandbox;
+  execution refuses a frozen read when the latest catalog revokes that annotation. MCP and plugin
+  reads follow the Agent's approval mode. Built-in
+  reads that still ask after it are consents, such as location or health data, and stay out, as do
+  `ask_user_question`, `run_js` and Code Mode. The Session's one background reply surfaces the
+  first pending decision of any answer. Skills and image generation are refused. The Session
   stays busy until every answer settles; a selected completed answer's send control is disabled
   while another answer runs. Observation includes the completed siblings of active answers because
   settled history omits their shared turn until all answers finish. Every parallel submission

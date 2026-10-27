@@ -1,0 +1,150 @@
+diff --git a/android/build.gradle b/android/build.gradle
+index fb16bb0..ca72b90 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -228,6 +228,7 @@ dependencies {
+     implementation 'androidx.transition:transition-ktx:1.7.0'
+     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+-    implementation 'com.google.android.material:material:1.13.0'
++    // 1.14 guards legacy system-bar APIs on Android 15+ in native sheet dialogs.
++    implementation 'com.google.android.material:material:1.14.0'
+     implementation "androidx.core:core-ktx:1.17.0"
+ }
+diff --git a/android/src/main/java/com/swmansion/rnscreens/Screen.kt b/android/src/main/java/com/swmansion/rnscreens/Screen.kt
+index 2f2133b..5847350 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/Screen.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/Screen.kt
+@@ -79,6 +79,8 @@ class Screen(
+ 
+     // Keeps `startTransitionRecursive` / `endTransitionRecursive` calls paired. Should be used on UI thread only.
+     private var isRemovalTransitionStarted = false
++    private var isEndingRemovalTransition = false
++    private val removalTransitionViews = ArrayList<Pair<ViewGroup, View>>()
+ 
+     // Props for controlling modal presentation
+     var isSheetGrabberVisible: Boolean = false
+@@ -463,24 +465,20 @@ class Screen(
+     }
+ 
+     fun endRemovalTransition() {
+-        if (isRemovalTransitionStarted) {
+-            isRemovalTransitionStarted = false
+-            isBeingRemoved = false
+-            endTransitionRecursive(this)
++        if (!isRemovalTransitionStarted || isEndingRemovalTransition) {
++            return
+         }
+-    }
+-
+-    private fun endTransitionRecursive(parent: ViewGroup) {
+-        parent.children.forEach { childView ->
+-            parent.endViewTransition(childView)
+-
+-            if (childView is ScreenStackHeaderConfig) {
+-                endTransitionRecursive(childView.toolbar)
+-            }
+-
+-            if (childView is ViewGroup) {
+-                endTransitionRecursive(childView)
++        isEndingRemovalTransition = true
++        val viewsToFinish = removalTransitionViews.toList()
++        removalTransitionViews.clear()
++        try {
++            for ((parent, child) in viewsToFinish.asReversed()) {
++                parent.endViewTransition(child)
+             }
++        } finally {
++            isRemovalTransitionStarted = false
++            isBeingRemoved = false
++            isEndingRemovalTransition = false
+         }
+     }
+ 
+@@ -500,7 +498,10 @@ class Screen(
+                     // TODO: find a better way to handle this scenario
+                     it.addView(View(context))
+                 } else {
+-                    child?.let { view -> it.startViewTransition(view) }
++                    child?.let { view ->
++                        it.startViewTransition(view)
++                        removalTransitionViews.add(it to view)
++                    }
+                 }
+ 
+                 if (child is ScreenStackHeaderConfig) {
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
+index 2372cac..644969a 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
+@@ -83,6 +83,8 @@ class ScreenStack(
+             return
+         }
+ 
++        // Finish descendants before Android detaches the fragment's root view.
++        view.fragment.screen.endRemovalTransition()
+         super.endViewTransition(view)
+ 
+         disappearingTransitioningChildren.remove(view)
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt
+index 68b8d85..da6a094 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt
+@@ -7,6 +7,7 @@ import android.text.TextUtils
+ import android.util.TypedValue
+ import android.view.Gravity
+ import android.view.View.OnClickListener
++import android.view.ViewParent
+ import android.widget.ImageView
+ import android.widget.TextView
+ import androidx.appcompat.app.ActionBar
+@@ -213,6 +214,17 @@ class ScreenStackHeaderConfig(
+     private val screen: Screen?
+         get() = parent as? Screen
+ 
++    private fun isInRemovalTransition(): Boolean {
++        var ancestor: ViewParent? = parent
++        while (ancestor != null) {
++            if (ancestor is Screen && ancestor.isBeingRemoved) {
++                return true
++            }
++            ancestor = ancestor.parent
++        }
++        return false
++    }
++
+     private val screenStack: ScreenStack?
+         get() = screen?.container as? ScreenStack
+ 
+@@ -238,7 +250,7 @@ class ScreenStackHeaderConfig(
+         }
+         val isTop = stack.topScreen == parent
+ 
+-        if (!isAttachedToWindow || !isTop || isDestroyed) {
++        if (!isAttachedToWindow || !isTop || isDestroyed || isInRemovalTransition()) {
+             return
+         }
+ 
+@@ -405,7 +417,7 @@ class ScreenStackHeaderConfig(
+     }
+ 
+     private fun maybeUpdate() {
+-        if (parent != null && !isDestroyed && screen?.isBeingRemoved == false) {
++        if (parent != null) {
+             onUpdate()
+         }
+     }
+diff --git a/ios/RNSScreenStackHeaderConfig.mm b/ios/RNSScreenStackHeaderConfig.mm
+index e217b24..27c3a3c 100644
+--- a/ios/RNSScreenStackHeaderConfig.mm
++++ b/ios/RNSScreenStackHeaderConfig.mm
+@@ -212,7 +212,8 @@ - (void)updateHeaderStateInShadowTreeInContextOfNavigationBar:(nullable UINaviga
+   [self updateShadowStateWithSize:navigationBar.frame.size
+                        edgeInsets:[self computeEdgeInsetsOfNavigationBar:navigationBar]
+                       frameOrigin:navBarFrameInScreenView.origin];
+-  for (RNSScreenStackHeaderSubview *subview in self.reactSubviews) {
++  // Synchronous state updates can mount/unmount header subviews while this loop runs.
++  for (RNSScreenStackHeaderSubview *subview in [self.reactSubviews copy]) {
+     [subview updateShadowStateInContextOfAncestorView:navigationBar];
+   }
+ }

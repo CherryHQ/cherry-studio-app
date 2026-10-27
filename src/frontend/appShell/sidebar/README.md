@@ -3,9 +3,16 @@
 This App Shell module owns the drawer navigation surface, recent Agent Sessions, and bottom dock.
 It is app-wide navigation infrastructure rather than a route page.
 
-The drawer remains a temporary overlay on every window size, with its width capped at 400 logical
-points and at least 64 points of chat left visible. Tablet support does not change destination or
-back-navigation behavior.
+In compact and medium windows the drawer is a temporary overlay, with its width capped at 400
+logical points and at least 64 points of chat left visible. Expanded windows (see
+[layout](../layout/README.md)) make it a permanent 280-point column beside chat, divided by a hairline;
+the chat header then drops its sidebar and new-chat buttons. Navigation state reports a permanent
+drawer as closed, so visibility comes from `useSidebarPresence`: `persistent`, `open`, or `closed`.
+Selection mode, the title marquee, and read receipts use it instead of the raw drawer status.
+In medium and expanded windows, Files opens the [file pane](../pane/README.md) beside chat and
+stays selected while the pane is open; other destinations and back navigation do not change.
+In compact windows the `/library` page carries the current local chat, so its previews can add
+files to that chat.
 
 The circular search button beside the sidebar title opens the shared `/search` page for local
 conversations. Before a query is entered, it shows the ten most recently active conversations.

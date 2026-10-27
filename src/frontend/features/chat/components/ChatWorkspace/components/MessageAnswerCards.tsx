@@ -8,7 +8,6 @@ import {
   Spinner,
 } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo, type Ref, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,13 +17,15 @@ import {
   type NativeSyntheticEvent,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   useWindowDimensions,
   View,
+  type ScrollViewInstance,
+  type ViewInstance,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useReducedMotion } from 'react-native-reanimated';
+import { useResolveClassNames } from 'uniwind';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
@@ -101,7 +102,7 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
   const { t } = useTranslation();
   const { selectBranch } = useAssistantMessageActions();
   const expand = useExpandAnswer();
-  const cardRefs = useRef(new Map<string, View>());
+  const cardRefs = useRef(new Map<string, ViewInstance>());
   const measure = useCallback((id: string) => measureFrame(cardRefs.current.get(id)), []);
   const sessionId = useChatSessionId();
   const branchSiblings = message.branch?.siblings;
@@ -112,7 +113,7 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
   const { height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Once horizontal scrolling wins, the drawer must not take over the same touch.
   const scrollGesture = useMemo(() => Gesture.Native().disallowInterruption(true), []);
   const placement = useRef<{ id: string; offset: number }>(undefined);
@@ -271,13 +272,14 @@ const AnswerCard = memo(function AnswerCard({
   model: Answers['models'][number];
   name: string;
   onPress: () => void;
-  ref: Ref<View>;
+  ref: Ref<ViewInstance>;
   status: MessageListItem['status'];
   testID: string;
   width: number;
 }) {
   const { t, i18n } = useTranslation();
-  const maskColor = useThemeColor('constant-black');
+  const cardColor = useThemeColor('card');
+  const { backgroundColor: transparentCardColor } = useResolveClassNames('bg-card/0');
   const preview = useMemo(() => answerPreview(answer?.data.parts), [answer?.data.parts]);
   const [contentHeight, setContentHeight] = useState(0);
   const isFolded = preview.isTruncated || contentHeight > bodyHeight;
@@ -313,50 +315,52 @@ const AnswerCard = memo(function AnswerCard({
           </View>
         ) : null}
       </View>
-      {/* Fades the text itself, so the card's surface never picks up a band. */}
-      <MaskedView
-        maskElement={
-          <LinearGradient
-            colors={isFolded ? [maskColor, maskColor, 'transparent'] : [maskColor, maskColor]}
-            locations={isFolded ? [0, 1 - FADE_HEIGHT / bodyHeight, 1] : [0, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-        }
+      {/* Keep streaming content out of a native mask, which can expose its black bitmap on mount. */}
+      <View
+        className="overflow-hidden"
+        // Preview gestures belong to the cards; links, tables and code are interactive in full view.
+        pointerEvents="none"
+        style={{ height: contentHeight ? Math.min(contentHeight, bodyHeight) : bodyHeight }}
       >
         {/* Text measures no taller than its parent, so the body lays out free of the fold and
             the fold takes its height up to the cap. */}
         <View
-          className="overflow-hidden"
-          // Preview gestures belong to the cards; links, tables and code are interactive in full view.
-          pointerEvents="none"
-          style={{ height: contentHeight ? Math.min(contentHeight, bodyHeight) : bodyHeight }}
+          className="absolute top-0 right-0 left-0"
+          onLayout={(event) => setContentHeight(event.nativeEvent.layout.height)}
         >
-          <View
-            className="absolute top-0 right-0 left-0"
-            onLayout={(event) => setContentHeight(event.nativeEvent.layout.height)}
-          >
-            {!answer ? (
-              <AnswerSkeleton />
-            ) : preview.text ? (
-              <MarkdownText isStreaming={isRunning} markdown={preview.text} selectable={false} />
-            ) : isRunning ? (
-              <ShimmerText className="text-base text-muted-foreground">
-                {t('chat.branch.answering')}
-              </ShimmerText>
-            ) : (
-              <Text className="text-base text-muted-foreground">
-                {t(
-                  status === 'error'
-                    ? 'chat.branch.failed'
-                    : status === 'paused'
-                      ? 'chat.message.stopped'
-                      : 'chat.branch.noTextPreview',
-                )}
-              </Text>
-            )}
-          </View>
+          {!answer ? (
+            <AnswerSkeleton />
+          ) : preview.text ? (
+            <MarkdownText isStreaming={isRunning} markdown={preview.text} selectable={false} />
+          ) : isRunning ? (
+            <ShimmerText className="text-base text-muted-foreground">
+              {t('chat.branch.answering')}
+            </ShimmerText>
+          ) : (
+            <Text className="text-base text-muted-foreground">
+              {t(
+                status === 'error'
+                  ? 'chat.branch.failed'
+                  : status === 'paused'
+                    ? 'chat.message.stopped'
+                    : 'chat.branch.noTextPreview',
+              )}
+            </Text>
+          )}
         </View>
-      </MaskedView>
+        {isFolded ? (
+          <LinearGradient
+            colors={[transparentCardColor ?? 'transparent', cardColor]}
+            style={{
+              bottom: 0,
+              height: Math.min(FADE_HEIGHT, bodyHeight),
+              left: 0,
+              position: 'absolute',
+              right: 0,
+            }}
+          />
+        ) : null}
+      </View>
     </Pressable>
   );
 });

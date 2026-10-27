@@ -132,7 +132,7 @@ export function ComposerInput({
         // submenu and "Copy as Markdown" both offer to do things the rest of
         // the field gives no way to see or undo.
         selectionMenuConfig={{ copyAsMarkdown: { enabled: false }, format: { enabled: false } }}
-        style={resolvedStyle}
+        style={resolvedStyle ?? undefined}
         testID={testID}
       />
     </TextInputWrapper>

@@ -56,6 +56,8 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   const readyFrameRef = useRef<number | null>(null);
   const sendFrameRef = useRef<number | null>(null);
   const stickFrameRef = useRef<number | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
+  const viewportWidthRef = useRef<number | null>(null);
   const liveEdgeScrollCountRef = useRef(0);
   const needsStickAfterScrollRef = useRef(false);
   const isMomentumScrollingRef = useRef(false);
@@ -280,7 +282,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   );
 
   const reportReadyAfterRestore = useCallback(
-    (generation: number) => {
+    (generation: number, shouldReportReady = true) => {
       if (generation !== restoreGenerationRef.current) {
         return;
       }
@@ -294,7 +296,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         }
 
         suppressSaveRef.current = false;
-        inputsRef.current.onReady?.();
+        if (shouldReportReady) inputsRef.current.onReady?.();
         const pendingMessageId = pendingEnteringMessageIdRef.current;
         if (pendingMessageId) {
           scheduleLocalSendScroll(pendingMessageId);
@@ -404,13 +406,60 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     stickToBottomIfFollowing();
   }, [stickToBottomIfFollowing]);
 
-  // A viewport resize (keyboard, rotation) moves the live edge without changing
-  // content size, so it needs the same correction from its own native callback.
+  // Height changes only move the live edge. A width change also reflows earlier messages, so
+  // readers restore the last observed row and offset before native scroll updates replace it.
   const handleLayout = useCallback(
-    (_event: LayoutChangeEvent) => {
+    (event: LayoutChangeEvent) => {
+      const width = event.nativeEvent.layout.width;
+      const previousWidth = viewportWidthRef.current;
+      if (width > 0) viewportWidthRef.current = width;
       stickToBottomIfFollowing();
+
+      const observed = observedScrollAnchorRef.current;
+      if (
+        width <= 0 ||
+        previousWidth === null ||
+        width === previousWidth ||
+        follow.isFollowing() ||
+        !observed?.anchor ||
+        observed.dataKey !== inputsRef.current.dataKey
+      ) {
+        return;
+      }
+
+      const generation = ++restoreGenerationRef.current;
+      suppressSaveRef.current = true;
+      if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = requestAnimationFrame(() => {
+        resizeFrameRef.current = null;
+        if (generation !== restoreGenerationRef.current) return;
+        if (follow.isFollowing()) {
+          reportReadyAfterRestore(generation, false);
+          return;
+        }
+        const current = inputsRef.current;
+        const list = current.listRef.current;
+        const target = resolveRestoreTarget(
+          observed.anchor,
+          (key) => current.messages.findIndex((message) => message.id === key),
+          current.messages.length - 1,
+        );
+        const complete = () => reportReadyAfterRestore(generation, false);
+        if (!list || target.align !== 'start') {
+          complete();
+          return;
+        }
+        void list
+          .scrollToIndex({
+            animated: false,
+            index: target.index,
+            viewOffset: -target.offset,
+            viewPosition: 0,
+          })
+          .then(complete, complete);
+      });
     },
-    [stickToBottomIfFollowing],
+    [follow, reportReadyAfterRestore, stickToBottomIfFollowing],
   );
 
   const enterReadingForUser = useCallback(
@@ -422,7 +471,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       }
       follow.enterReading(reason);
       if (suppressSaveRef.current) {
-        // A committed interaction outranks mount-time restoration. Invalidate
+        // A committed interaction outranks initial placement and width restoration. Invalidate
         // any pending restore completion, reveal the list, and let MVCP preserve
         // the position when late history arrives.
         didRestoreRef.current = true;
@@ -505,7 +554,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       saveScrollAnchor(true);
       flushObservedScrollAnchor(activeDataKeyRef.current);
       restoreGenerationRef.current += 1;
-      for (const frame of [readyFrameRef, sendFrameRef, stickFrameRef]) {
+      for (const frame of [readyFrameRef, sendFrameRef, stickFrameRef, resizeFrameRef]) {
         if (frame.current !== null) {
           cancelAnimationFrame(frame.current);
           frame.current = null;

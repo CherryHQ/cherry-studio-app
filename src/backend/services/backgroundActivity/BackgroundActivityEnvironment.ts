@@ -154,8 +154,8 @@ export class BackgroundActivityEnvironment extends BaseService {
       }
       const dark = new File(widgetsDirectory, 'cherry-studio-logo-dark.png');
       const light = new File(widgetsDirectory, 'cherry-studio-logo-light.png');
-      dark.write(CHERRY_ACTIVITY_LOGO_DARK_BASE64, { encoding: 'base64' });
-      light.write(CHERRY_ACTIVITY_LOGO_LIGHT_BASE64, { encoding: 'base64' });
+      dark.writeSync(CHERRY_ACTIVITY_LOGO_DARK_BASE64, { encoding: 'base64' });
+      light.writeSync(CHERRY_ACTIVITY_LOGO_LIGHT_BASE64, { encoding: 'base64' });
       return { dark: dark.uri, light: light.uri };
     } catch (error) {
       logger.warn('Background activity logo preparation failed', error as Error);

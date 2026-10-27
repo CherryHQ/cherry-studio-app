@@ -69,7 +69,8 @@ Before enabling it, verify:
   page header inside that nested Stack.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) and contains
   only the `(chat)` scene. The chat header is therefore the only header that can open the sidebar,
-  and the full-width drawer gesture exists only on the chat surface.
+  and the full-width drawer gesture exists only on the chat surface. In expanded windows the drawer
+  is permanent instead: the sidebar sits beside chat, and neither the button nor the gesture exists.
 - The sidebar is the `frontend/appShell/sidebar` compound. Its destinations close the drawer and push
   `library`, `agents`, `drawings`, `plugins`, `skills`, `search`, or `settings` onto the root Stack.
   Their root headers lead with back; popping returns to the exact chat route that opened them. A cold-start
@@ -85,8 +86,25 @@ Before enabling it, verify:
 
 ## Window Sizes
 
-The first tablet adaptation keeps the same single-scene navigation and chat-only drawer. The drawer
-leaves at least 64 points of chat visible and is capped at 400 points on wider windows.
+`useWindowClass` in the [app-shell layout](../../src/frontend/appShell/layout/README.md) resolves
+each window to `compact`, `medium`, or `expanded` from its width, both horizontal safe areas, and the
+rendered text size. Device identity never decides layout, so iPad Split View, Android tablets, and
+foldable inner displays follow the width they actually have.
+
+Compact and medium windows keep the single-scene navigation and chat-only overlay drawer. The drawer
+leaves at least 64 points of chat visible and is capped at 400 points on wider windows. Expanded
+windows make the same drawer permanent: a 280-point sidebar column beside chat, without the chat
+header's sidebar and new-chat buttons, which the sidebar already provides. Switching classes during
+rotation or resizing keeps the chat tree mounted. Sidebar destinations still push full-screen root
+routes that cover the sidebar until they return to chat, except Files.
+
+In medium and expanded windows, Files opens the [file pane](../../src/frontend/appShell/pane/README.md)
+beside the current chat instead of pushing `/library`: the `(chat)` layout lays out the pane and the
+chat stack side by side, and file previews replace the list inside the pane. The pane belongs to the
+drawer group, so it hides with a desktop chat source and in compact windows, and routes pushed over
+the drawer keep opening their own viewer page. A pane preview can expand over the chat's space;
+the chat stays mounted behind it. Android back first returns an expanded preview beside the chat,
+then leaves the preview, then the pane.
 
 The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
 content to 800 points and form/management content to 720, inside the horizontal safe area. They
@@ -285,7 +303,12 @@ enabled.
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
 - Only the chat route exposes the sidebar button and full-width drawer gesture; every other route
-  exposes back and returns to chat.
+  exposes back and returns to chat. In expanded windows the permanent sidebar replaces both, and
+  resizing across the threshold keeps the chat, its draft, and its scroll position.
+- In medium and expanded windows, Files and file previews open beside the chat without changing its
+  route, draft, or scroll position; closing and reopening the pane keeps the list's place.
+  Expanding a preview and returning to chat keeps the same draft and scroll position, and Add to
+  current chat attaches the file once without changing the draft text.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
 - Opening model selection from chat input keeps the picker stable; focusing or clearing in-place
   search changes the sheet size without a competing route, back handler, or inset jump.

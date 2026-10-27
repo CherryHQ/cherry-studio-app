@@ -3,7 +3,7 @@ import { loggerService } from '@logger';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, TextInput, View } from 'react-native';
+import { Keyboard, View, type TextInputInstance } from 'react-native';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/Avatar';
@@ -19,7 +19,7 @@ export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [userName, setUserName] = usePreference('app.user.name');
   const profile = useBackendModule('profile');
   const [nameDraft, setNameDraft] = useState(userName);

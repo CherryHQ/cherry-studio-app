@@ -118,7 +118,7 @@ export async function writeMcpToolCatalog(catalog: StoredMcpToolCatalog): Promis
     destination.parentDirectory.create({ intermediates: true, idempotent: true });
     const temporary = new File(destination.parentDirectory, `${destination.name}.tmp`);
     temporary.create({ overwrite: true });
-    temporary.write(JSON.stringify(catalog));
+    temporary.writeSync(JSON.stringify(catalog));
     await temporary.move(destination, { overwrite: true });
   } catch (error) {
     logger.warn('Could not save the MCP tool catalog', error as Error, {

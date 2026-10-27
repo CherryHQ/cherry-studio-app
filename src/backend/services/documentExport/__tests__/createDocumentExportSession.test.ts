@@ -52,7 +52,7 @@ jest.mock('expo-file-system', () => {
       get exists() {
         return mockFiles.has(this.uri);
       }
-      write(text: string) {
+      writeSync(text: string) {
         mockFiles.set(this.uri, text);
       }
       copy(destination: { uri: string }) {

@@ -17,15 +17,16 @@ export type SectionHeaderProps = Omit<ViewProps, 'children' | 'className' | 'sty
   title: ReactNode;
 };
 
-type SectionItemBaseProps = AccessibilityProps & {
-  density?: SectionItemDensity;
-  destructive?: boolean;
-  disabled?: boolean;
-  onPress?: () => void;
-  onPressIn?: PressableProps['onPressIn'];
-  onPressOut?: PressableProps['onPressOut'];
-  testID?: string;
-};
+type SectionItemBaseProps = AccessibilityProps &
+  Pick<ViewProps, 'onAccessibilityAction'> & {
+    density?: SectionItemDensity;
+    destructive?: boolean;
+    disabled?: boolean;
+    onPress?: () => void;
+    onPressIn?: PressableProps['onPressIn'];
+    onPressOut?: PressableProps['onPressOut'];
+    testID?: string;
+  };
 
 export type SectionItemDensity = 'compact' | 'comfortable' | 'default';
 

@@ -408,20 +408,26 @@ diff --git a/dist/auth/oauth/github-copilot.js b/dist/auth/oauth/github-copilot.
 index 09e54941f456ab1b5cedd23710711c2c2a40db39..61351418c17951fe8c457d50dd37d8837af2e82c 100644
 --- a/dist/auth/oauth/github-copilot.js
 +++ b/dist/auth/oauth/github-copilot.js
-@@ -1,3 +1,4 @@
-+import { oauthFetch as fetch } from "./platform.js";
+@@ -1,6 +1,7 @@
  /**
   * GitHub Copilot OAuth flow
   */
++import { oauthFetch as fetch } from "./platform.js";
+ import { GITHUB_COPILOT_MODELS } from "../../providers/github-copilot.models.js";
+ import { sleep } from "../../utils/sleep.js";
+ import { pollOAuthDeviceCodeFlow } from "./device-code.js";
 diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
 index ac0ed3900d6a6201d9b6bde1e899212422d4e648..a4717ffb868a5a278a71408f99b860a489628fb4 100644
 --- a/dist/auth/oauth/kimi-coding.js
 +++ b/dist/auth/oauth/kimi-coding.js
-@@ -1,3 +1,4 @@
+@@ -5,6 +5,7 @@
+  * responses. The access token authenticates requests to
+  * https://api.kimi.com/coding as an `Authorization: Bearer` header.
+  */
 +import { oauthFetch as fetch } from "./platform.js";
- /**
-  * Kimi Code (subscription) OAuth flow
-  *
+ import { getProviderEnvValue } from "../../utils/provider-env.js";
+ import { sleep } from "../../utils/sleep.js";
+ import { pollOAuthDeviceCodeFlow } from "./device-code.js";
 diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
 index b543b9381352951833aeeaa1fc27ebdddda570bf..e9b1b155a162e9245383a1ce1bd608ac38852b38 100644
 --- a/dist/auth/oauth/openai-codex.js
@@ -460,11 +466,14 @@ diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
 index b9587c246449505a6f0e6e5bed96f050a05f48ef..d519324e893dd7cad7272aca9bb46b74ad4ffbec 100644
 --- a/dist/auth/oauth/openrouter.js
 +++ b/dist/auth/oauth/openrouter.js
-@@ -1,3 +1,4 @@
+@@ -10,6 +10,7 @@
+  * NOTE: This module uses node:http (via callback-server.ts) for the OAuth callback server.
+  * It is only intended for CLI use, not browser environments.
+  */
 +import { oauthFetch as fetch } from "./platform.js";
- /**
-  * OpenRouter OAuth PKCE flow.
-  *
+ import { getProviderEnvValue } from "../../utils/provider-env.js";
+ import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.js";
+ import { generatePKCE } from "./pkce.js";
 diff --git a/dist/auth/oauth/pkce.js b/dist/auth/oauth/pkce.js
 index d69bf462dfddde17f048f705f99f8c11c4ecfd07..bf24d3e5bcf0502d6e24f20670d75f27d9013f90 100644
 --- a/dist/auth/oauth/pkce.js
@@ -509,11 +518,14 @@ diff --git a/dist/auth/oauth/xai.js b/dist/auth/oauth/xai.js
 index f70a3beaf50222a12006d8f4ffc951397d1a9b62..f73e2f2c9411f6b08e54e3fed0c0485316a52692 100644
 --- a/dist/auth/oauth/xai.js
 +++ b/dist/auth/oauth/xai.js
-@@ -1,3 +1,4 @@
-+import { oauthFetch as fetch } from "./platform.js";
+@@ -1,6 +1,7 @@
  /**
   * xAI OAuth device-code flow.
   */
++import { oauthFetch as fetch } from "./platform.js";
+ import { pollOAuthDeviceCodeFlow } from "./device-code.js";
+ const XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
+ const XAI_SCOPE = "openid profile email offline_access grok-cli:access api:access";
 diff --git a/dist/env-api-keys.js b/dist/env-api-keys.js
 index e27cf6f1015a5d0d0058df808b5737879eeb90c4..4c3d66faa784f16f1d604c6cac71eea1b523aba2 100644
 --- a/dist/env-api-keys.js

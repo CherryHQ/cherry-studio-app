@@ -1,7 +1,9 @@
 import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
+import { loggerService } from '@logger';
 import { AppState } from 'react-native';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
@@ -231,6 +233,36 @@ describe('DesktopConnectionRuntime', () => {
     await runtime._doDestroy();
     await manager._doStop();
     await manager._doDestroy();
+  });
+
+  it('rejects a missing re-pair target before contacting the desktop or creating a record', async () => {
+    const failure = DataApiErrorFactory.notFound('DesktopConnection', id);
+    store.getRow.mockRejectedValueOnce(failure);
+    const report = jest.fn();
+    const removeReporter = loggerService.setErrorReporter(report);
+    try {
+      await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
+        code: ErrorCode.NOT_FOUND,
+        details: { reason: 'connection-not-found' },
+      });
+      expect(connect).not.toHaveBeenCalled();
+      expect(store.savePair).not.toHaveBeenCalled();
+      // The stale ID's origin is unknown, so the classified failure is still reported once.
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(report).toHaveBeenCalledWith(failure, {
+        module: 'DesktopConnection',
+        operation: 'desktop.pair.load-existing',
+      });
+    } finally {
+      removeReporter();
+    }
+  });
+
+  it('does not turn an unrelated missing resource into a missing pairing target', async () => {
+    const failure = DataApiErrorFactory.notFound('Provider', id);
+    store.getRow.mockRejectedValueOnce(failure);
+    await expect(runtime.pair(pairing, signal())).rejects.toBe(failure);
+    expect(connect).not.toHaveBeenCalled();
   });
 
   it.each([undefined, id])(

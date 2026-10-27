@@ -103,7 +103,7 @@ describe('ContextMenu.ios', () => {
     const control = renderer!.root.find(
       (node) => node.type === View && node.props.testID === 'control',
     );
-    const excludedTouch = { nativeEvent: { touches: [{}] } } as GestureResponderEvent;
+    const excludedTouch = { nativeEvent: { touches: [{}] } } as unknown as GestureResponderEvent;
     act(() => {
       control.props.onTouchStart(excludedTouch);
       anchor.props.onTouchStart(excludedTouch);

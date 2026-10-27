@@ -10,7 +10,7 @@ The app owns task counting, content, cancellation, and route selection. A scoped
 adds native admission, identity reuse, and protection reporting to the library's existing service. The library still owns Headless
 JS and wake locks; SystemIntegration adds only a non-exported receiver for explicit notification
 decisions, without another execution service. An
-[`expo-notifications` patch](../../patches/expo-notifications@57.0.17.patch) exposes Android's
+[`expo-notifications` patch](../../patches/expo-notifications@58.1.6.patch) exposes Android's
 post-presentation event so a focused task screen can dismiss asynchronously delivered notifications.
 
 ## Ownership And Behavior
@@ -159,7 +159,7 @@ Unused boot-receiver permission is blocked. Before Play distribution, complete i
 
 Assessment date: 2026-10-01. The priority is a small application adapter over maintained open-source
 execution and Expo capabilities, with no application-owned Java/Kotlin service lifecycle.
-Expo Notifications is pinned to `57.0.17`, within the `~57.0.17` range recommended by Expo 57.0.21's
+Expo Notifications is pinned to `58.1.6`, within the `~58.1.6` range recommended by Expo 58.0.19's
 `bundledNativeModules.json` and matching the version-specific native patch.
 
 | Option | Decision |
@@ -180,7 +180,7 @@ library's iOS-only `expiration` event.
 
 These native dependencies, both patches, and config plugins require a rebuilt development client. Metro reloads
 and EAS Updates cannot add native modules. Use [Local EAS Builds](../guides/local-builds.md) when a
-build is authorized. Compatibility with Cherry's Expo 57 / React Native 0.86 and device behavior
+build is authorized. Compatibility with Cherry's Expo 58 / React Native 0.88 and device behavior
 must be verified in that client; source review and lint do not establish runtime compatibility.
 
 `package.json` opts `expo-notifications` into `expo.autolinking.android.buildFromSource`. Expo's

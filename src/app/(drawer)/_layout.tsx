@@ -1,11 +1,17 @@
 import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
 import { StyleSheet, useWindowDimensions } from 'react-native';
-import type { PanGesture } from 'react-native-gesture-handler';
+import type { LegacyPanGesture } from 'react-native-gesture-handler';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeaderProvider } from '@/frontend/appShell/header';
-import { ChatDockLayoutProvider } from '@/frontend/appShell/layout';
+import {
+  ChatDockLayoutProvider,
+  FoldRegionProvider,
+  useIsSidebarPersistent,
+  windowRegionWidths,
+} from '@/frontend/appShell/layout';
 import { ChatSourceProvider } from '@/frontend/appShell/navigation/chat';
+import { FilePaneProvider } from '@/frontend/appShell/pane';
 import { Sidebar } from '@/frontend/appShell/sidebar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
@@ -22,7 +28,7 @@ function renderSidebar(props: DrawerContentComponentProps) {
 // vertical fail distance scales with it so the accepted swipe angle stays the
 // same as the library default; vertical intent is already claimed earlier by
 // the message list.
-function configureDrawerGesture(gesture: PanGesture) {
+function configureDrawerGesture(gesture: LegacyPanGesture) {
   const distance = appSidebar.swipeActivationDistance;
   return gesture.activeOffsetX([-distance, distance]).failOffsetY([-distance, distance]);
 }
@@ -30,6 +36,7 @@ function configureDrawerGesture(gesture: PanGesture) {
 export default function DrawerLayout() {
   const { width } = useWindowDimensions();
   const { theme } = useUniwind();
+  const isPersistent = useIsSidebarPersistent();
   const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
     'background',
     'sidebar',
@@ -40,43 +47,51 @@ export default function DrawerLayout() {
   return (
     <RouteHeaderProvider rootAction="drawer">
       <ChatSourceProvider>
-        <ChatDockLayoutProvider>
-          <Drawer
-            drawerContent={renderSidebar}
-            screenOptions={{
-              configureGestureHandler: configureDrawerGesture,
-              // The sidebar stops short of the right edge so a dimmed strip of chat
-              // stays visible: it tells the user where they came from and closes the
-              // drawer on tap.
-              drawerStyle: {
-                backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
-                borderEndColor: sidebarBorderColor,
-                borderEndWidth: theme === 'dark' ? StyleSheet.hairlineWidth : 0,
-                width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
-              },
-              // The chat surface is stable context; the sidebar is a temporary
-              // surface that slides over it as the only moving plane.
-              drawerType: 'front',
-              headerShown: false,
-              // Dim the exposed scene while preserving the drawer's native progress
-              // animation and tap-to-close interaction.
-              overlayColor,
-              sceneStyle: {
-                // Keep the scene opaque where a screen leaves its own content style
-                // transparent, including beneath the overlaid sidebar.
-                backgroundColor,
-                // The full-screen scene reaches every window edge. Let the display
-                // handle physical corners without clipping the header's blur.
-                overflow: 'hidden',
-              },
-              // Only chat belongs to this navigator, so the full-width gesture can
-              // never expose the sidebar over another product screen.
-              swipeEdgeWidth: width,
-            }}
-          >
-            <Drawer.Screen name="(chat)" />
-          </Drawer>
-        </ChatDockLayoutProvider>
+        <FoldRegionProvider>
+          <FilePaneProvider>
+            <ChatDockLayoutProvider>
+              <Drawer
+                drawerContent={renderSidebar}
+                screenOptions={{
+                  configureGestureHandler: configureDrawerGesture,
+                  // An overlay stops short of the right edge so a dimmed strip of chat stays
+                  // visible: it tells the user where they came from and closes the drawer on
+                  // tap. A permanent sidebar is a column of its own, separated by a hairline.
+                  drawerStyle: {
+                    backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
+                    borderEndColor: sidebarBorderColor,
+                    borderEndWidth: isPersistent || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
+                    width: isPersistent
+                      ? windowRegionWidths.sidebar
+                      : Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+                  },
+                  // The chat surface is stable context. In narrower windows the sidebar is
+                  // a temporary surface sliding over it; expanded windows keep it beside the
+                  // chat. Switching keeps the same chat tree mounted.
+                  drawerType: isPersistent ? 'permanent' : 'front',
+                  headerShown: false,
+                  // Dim the exposed scene while preserving the drawer's native progress
+                  // animation and tap-to-close interaction.
+                  overlayColor,
+                  sceneStyle: {
+                    // Keep the scene opaque where a screen leaves its own content style
+                    // transparent, including beneath the overlaid sidebar.
+                    backgroundColor,
+                    // The full-screen scene reaches every window edge. Let the display
+                    // handle physical corners without clipping the header's blur.
+                    overflow: 'hidden',
+                  },
+                  // Only chat belongs to this navigator, so the full-width gesture can
+                  // never expose the sidebar over another product screen.
+                  swipeEdgeWidth: width,
+                  swipeEnabled: !isPersistent,
+                }}
+              >
+                <Drawer.Screen name="(chat)" />
+              </Drawer>
+            </ChatDockLayoutProvider>
+          </FilePaneProvider>
+        </FoldRegionProvider>
       </ChatSourceProvider>
     </RouteHeaderProvider>
   );

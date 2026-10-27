@@ -35,6 +35,11 @@ clean install.
   12.2.1 reapplies patches to already patched files.
 - Repeated declarations in a patched file under `node_modules` mean a patch was applied twice.
   Delete that package's directory under `node_modules/.pnpm` and run `pnpm install --force`.
+- Write patches that cannot apply twice. EAS runs another `pnpm install` after prebuild, and any
+  install that is not a no-op re-applies patches in place. A patched file whose every hunk still
+  matches after one application receives the change again, so insert next to lines the patch
+  itself changes or that stay unique, not at the top of a file or between two functions.
+  `scripts/__tests__/patchReapplication.test.ts` checks each registered patch.
 
 ### Pi Dependency Upgrades
 

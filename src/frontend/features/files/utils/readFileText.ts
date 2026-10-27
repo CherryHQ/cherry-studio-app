@@ -19,7 +19,7 @@ export function decodeFileText(bytes: Uint8Array): FileText {
 export function readFileText(uri: string): FileText {
   const handle = new File(uri).open(FileMode.ReadOnly);
   try {
-    return decodeFileText(handle.readBytes(FILE_VIEWER_MAX_BYTES + 1));
+    return decodeFileText(handle.readBytesSync(FILE_VIEWER_MAX_BYTES + 1));
   } finally {
     handle.close();
   }

@@ -15,6 +15,6 @@ android {
 }
 
 dependencies {
-  // Match @sentry/react-native 7.11.0, including its NDK crash handler.
-  implementation 'io.sentry:sentry-android:8.31.0'
+  // Match @sentry/react-native 8.28.0, including its NDK crash handler.
+  implementation 'io.sentry:sentry-android:8.57.0'
 }

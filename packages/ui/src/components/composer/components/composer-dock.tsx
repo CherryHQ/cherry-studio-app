@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { type LayoutChangeEvent, Pressable, View } from 'react-native';
+import { type LayoutChangeEvent, Pressable, View, type ViewInstance } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +23,7 @@ import { useComposerExpansion } from './composer-expansion';
 const StyledKeyboardStickyView = withUniwind(KeyboardStickyView);
 
 export type ComposerDockProps = PropsWithChildren<{
-  containerRef?: RefObject<View | null>;
+  containerRef?: RefObject<ViewInstance | null>;
   /** Uses normal parent layout instead of overlaying sibling content. */
   layoutMode?: 'floating' | 'flow' | 'expandable';
   collapseLabel?: string;
@@ -45,7 +45,7 @@ export function ComposerDock({
   const { bottom } = useSafeAreaInsets();
   const bottomPadding = getComposerBottomPadding(bottom);
   const expansion = useComposerExpansion();
-  const fallbackRef = useRef<View>(null);
+  const fallbackRef = useRef<ViewInstance>(null);
   const dockRef = containerRef ?? fallbackRef;
   const [compactHeight, setCompactHeight] = useState(0);
   const isExpandable = layoutMode === 'expandable' && expansion !== null;

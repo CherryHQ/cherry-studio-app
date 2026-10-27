@@ -1,0 +1,48 @@
+diff --git a/lib/views/swift/SwiftHybridViewManager.js b/lib/views/swift/SwiftHybridViewManager.js
+index e5033ab..a06810d 100644
+--- a/lib/views/swift/SwiftHybridViewManager.js
++++ b/lib/views/swift/SwiftHybridViewManager.js
+@@ -10,7 +10,7 @@ export function createSwiftHybridViewManager(spec) {
+     const namespace = spec.config.getCxxNamespace('c++');
+     const swiftNamespace = spec.config.getIosModuleName();
+     const { HybridTSpec, HybridTSpecSwift, HybridTSpecCxx } = getHybridObjectName(spec.name);
+-    const { component, descriptorClassName, propsClassName } = getViewComponentNames(spec);
++    const { component, descriptorClassName, propsClassName, shadowNodeClassName } = getViewComponentNames(spec);
+     const implementation = spec.config.getIosAutolinkedImplementation(spec.name);
+     if (implementation?.language !== 'swift') {
+         throw new Error(`Cannot create Swift HybridView ViewManager for ${spec.name} - it must be autolinked with a Swift iOS implementation in nitro.json!`);
+@@ -76,6 +76,7 @@ using namespace ${namespace}::views;
+ 
+ - (instancetype) init {
+   if (self = [super init]) {
++    _props = ${shadowNodeClassName}::defaultSharedProps();
+     std::shared_ptr<${HybridTSpec}> hybridView = ${getHybridObjectConstructorCall(spec.name)}
+     _hybridView = std::dynamic_pointer_cast<${HybridTSpecSwift}>(hybridView);
+     [self updateView];
+diff --git a/src/views/swift/SwiftHybridViewManager.ts b/src/views/swift/SwiftHybridViewManager.ts
+index 68c579f..3777134 100644
+--- a/src/views/swift/SwiftHybridViewManager.ts
++++ b/src/views/swift/SwiftHybridViewManager.ts
+@@ -26,8 +26,12 @@ export function createSwiftHybridViewManager(
+   const { HybridTSpec, HybridTSpecSwift, HybridTSpecCxx } = getHybridObjectName(
+     spec.name
+   )
+-  const { component, descriptorClassName, propsClassName } =
+-    getViewComponentNames(spec)
++  const {
++    component,
++    descriptorClassName,
++    propsClassName,
++    shadowNodeClassName,
++  } = getViewComponentNames(spec)
+   const implementation = spec.config.getIosAutolinkedImplementation(spec.name)
+   if (implementation?.language !== 'swift') {
+     throw new Error(
+@@ -100,6 +104,7 @@ using namespace ${namespace}::views;
+ 
+ - (instancetype) init {
+   if (self = [super init]) {
++    _props = ${shadowNodeClassName}::defaultSharedProps();
+     std::shared_ptr<${HybridTSpec}> hybridView = ${getHybridObjectConstructorCall(spec.name)}
+     _hybridView = std::dynamic_pointer_cast<${HybridTSpecSwift}>(hybridView);
+     [self updateView];
