@@ -35,19 +35,6 @@ do not use Expo's cloud build workers. See the
 [Expo local build guide](https://docs.expo.dev/build-reference/local-builds/) for platform requirements
 and limitations.
 
-### Before Starting A Local Build
-
-For a release, record this preparation in the
-[Release Checklist Template](./release-checklist-template.md) before invoking `pnpm build:local`:
-
-- Resolve the `eas` executable and record its version in the same shell environment that will run
-  the package script. The wrapper uses `eas` from `PATH`; it does not pin or install EAS CLI.
-- Confirm the selected platform's tools, signing access, profile environment, output path, and
-  free disk space. Follow [Dependencies](./development.md#dependencies) for any installation work.
-- Account for active cloud jobs and the source commit before creating a replacement artifact.
-  Build numbers can advance before compilation starts. Do not start a build merely as a tool
-  availability check; this preparation is manual, not an implemented preflight in the wrapper.
-
 ## App Variants
 
 `app.json` holds the production defaults. `app.config.ts` selects the app identity using `PROFILE`,

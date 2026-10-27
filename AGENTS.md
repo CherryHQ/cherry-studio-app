@@ -32,8 +32,7 @@ configuration, not in repository rules.
 - Before creating commits, splitting work, or opening a pull request, read
   [Git Workflow](docs/guides/git-workflow.md).
 - Before preparing or publishing a release, read [Cloud Releases](docs/guides/cloud-releases.md)
-  and use the [Release Checklist Template](docs/guides/release-checklist-template.md) for preparation,
-  channel status, recovery decisions, and handoff.
+  and track the release with the [Release Checklist Template](docs/guides/release-checklist-template.md).
 - Before creating installation packages or changing build configuration, read
   [Local EAS Builds](docs/guides/local-builds.md). Use `pnpm build:local` for local EAS packaging;
   it defaults to development. Sentry reporting and build-time uploads are production-only.
