@@ -34,9 +34,8 @@ Before starting a release:
    starts the cloud jobs described above; choosing local builds in this record does not disable
    them. Account for those jobs before pushing a tag or starting a replacement build.
 3. Confirm access to each selected channel, signing/upload credentials, and the target repository
-   and commit. For GitCode, identify a maintainer with repository write access who will push the
-   tag with their own Git credentials and upload through their own agent and authenticated browser
-   via Computer Use. Record readiness and credential location, never secret values.
+   and commit. For GitCode, identify a maintainer with repository write access who will sync and
+   upload through their own agent and authenticated browser via Computer Use. Record readiness and credential location, never secret values.
 4. Prepare the complete change inventory, curated notes, store descriptions, and asset inventory.
    Record required store locales and screenshots for this release; app translation locales are a
    separate set. Note missing materials before scheduling submission.
@@ -69,8 +68,8 @@ App Store public release as separate rows.
 | EAS production environment | Build and app environment variables | Includes the production Sentry upload token and configured app services |
 
 GitCode publication belongs to a maintainer with write access to the GitCode repository. The
-maintainer pushes the release tag with their own Git credentials, then uses their own agent with
-Computer Use to upload and publish through their authenticated browser session. The repository
+maintainer uses their own agent with Computer Use to sync the repository mirror, then upload and
+publish through their authenticated browser session. The repository
 provides no GitCode publishing workflow or upload script; no GitCode automation token is required.
 See [GitCode Maintainer Upload](#gitcode-maintainer-upload).
 
@@ -117,7 +116,7 @@ build numbers even when they share a release tag.
 4. Publish the files and notes to GitHub Releases.
 
 GitHub prepares a draft, attaches the files, and publishes it automatically. The authorized
-GitCode maintainer pushes the matching tag and uses their own agent through Computer Use to publish
+GitCode maintainer uses their own agent through Computer Use to sync the matching tag and publish
 it with the same APK and `SHA256SUMS` from the GitHub release.
 Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
 Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
@@ -152,26 +151,13 @@ Store links can be added to the release page after the listings are available.
 1. Hand the authorized maintainer the release tag, source commit, GitHub release URL, exact APK,
    `SHA256SUMS`, and Simplified Chinese title and notes. Record that maintainer as the GitCode owner
    in `release-status.md`.
-2. GitCode is not a mirror of GitHub, so each release tag is pushed explicitly. From a checkout
-   where the tag points to the source commit, the maintainer checks the GitCode tag:
-
-   ```bash
-   git ls-remote --tags https://gitcode.com/CherryHQ/cherry-studio-app.git refs/tags/<tag> 'refs/tags/<tag>^{}'
-   ```
-
-   If it is absent, push only the tag and the commits it needs, using the maintainer's own Git
-   credentials:
-
-   ```bash
-   git push https://gitcode.com/CherryHQ/cherry-studio-app.git refs/tags/<tag>:refs/tags/<tag>
-   ```
-
-   If it exists and its peeled commit (`^{}`, or the tag itself for a lightweight tag) matches the
-   source commit, continue. If it points elsewhere, stop and leave publication pending; never force
-   the tag, push a branch, or publish against a different commit.
-3. The maintainer directs their own agent to use Computer Use in their authenticated browser.
-   Create or edit the release for that tag, enter the Chinese title and notes, and select the
-   appropriate stable or prerelease status.
+2. The maintainer directs their own agent to use Computer Use in their authenticated browser.
+   GitCode does not sync automatically: open the repository's mirror settings (pull from GitHub)
+   and run **立即同步**. After it finishes, confirm the release tag exists and points to the source
+   commit. If it is missing or points elsewhere, leave publication pending; do not publish against
+   a different commit.
+3. Create or edit the release for that tag in the browser, enter the Chinese title and notes, and
+   select the appropriate stable or prerelease status.
 4. Upload the same APK and `SHA256SUMS` from GitHub. Wait for both attachments to finish uploading
    before publishing. On retry, inspect existing attachments first and retain matching files;
    do not replace an existing attachment with a different build.
