@@ -64,12 +64,3 @@ export async function extractPdfText(
     cancel();
   }
 }
-
-/**
- * 获取 PDF 页数
- * @param filePath - PDF 文件路径
- * @returns 页数，失败返回 0
- */
-export async function getPdfPageCount(filePath: string): Promise<number> {
-  return getNativeModule().getPageCount(filePath);
-}

@@ -24,6 +24,7 @@ const entry: NativeSystemEntry = {
   id: '42f7f701-37d6-4731-b7a8-8e7f3040be55',
   createdAt: 1,
   kind: 'share.receive',
+  text: '',
   files: [
     { uri: 'file:///staged/photo.png', name: 'photo.png', mediaType: 'image/png', size: 9e6 },
   ],

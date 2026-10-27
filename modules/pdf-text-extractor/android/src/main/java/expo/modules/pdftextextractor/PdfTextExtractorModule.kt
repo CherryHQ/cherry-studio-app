@@ -109,12 +109,6 @@ class PdfTextExtractorModule : Module() {
                 requests.remove(requestId)
             }
         }
-
-        AsyncFunction("getPageCount") Coroutine { filePath: String ->
-            withContext(Dispatchers.IO) {
-                documentMutex.withLock { getPageCount(filePath) }
-            }
-        }
     }
 
     private fun initializePdfBox() {
@@ -232,24 +226,6 @@ class PdfTextExtractorModule : Module() {
             }
         } finally {
             if (isTempFile) file.delete()
-        }
-    }
-
-    private fun getPageCount(filePath: String): Int {
-        return try {
-            val isTempFile = filePath.startsWith("content://")
-            val file = parseFilePath(filePath)
-            try {
-                loadDocument(file).use { doc ->
-                    doc.numberOfPages
-                }
-            } finally {
-                if (isTempFile && file.exists()) {
-                    file.delete()
-                }
-            }
-        } catch (e: Exception) {
-            0
         }
     }
 
