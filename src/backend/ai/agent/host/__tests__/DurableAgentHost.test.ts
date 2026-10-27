@@ -26,7 +26,10 @@ import {
   type RuntimeTool,
   type RuntimeToolResult,
 } from '../../runtime';
-import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
+import {
+  createSqliteStoreHarness,
+  type SqliteStoreHarness,
+} from '../../sessionStore/__tests__/_sqliteStoreHarness';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
@@ -50,9 +53,18 @@ const configuration = {
   tools: [],
 };
 
+const harnesses: SqliteStoreHarness[] = [];
+afterEach(() => {
+  for (const harness of harnesses.splice(0)) harness.cleanup();
+});
+
 function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
-  const store = new InMemoryAgentSessionStore();
-  const agentId = uuid();
+  const harness = createSqliteStoreHarness();
+  harnesses.push(harness);
+  const { store } = harness;
+  for (const modelId of ['model', 'second-model'])
+    harness.seedModel(createUniqueModelId('provider', modelId));
+  const agentId = harness.seedAgent(uuid());
   const sessionId = uuid();
   const steps: string[] = [];
   const copies = new Map<string, { revision: number; turns: RuntimeDurableTurn[] }>();
@@ -291,6 +303,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   return {
     host,
     store,
+    seedFolder: harness.seedFolder,
     conversations,
     sessionId,
     agentId,
@@ -530,7 +543,6 @@ describe('durable tool diagnostics', () => {
   });
 
   test('stores Code Mode outputs in the workspace the turn captured', async () => {
-    const workspaceFolderId = uuid();
     const writeToolOutput = jest.fn(
       async (): Promise<RuntimeArtifact> => ({
         ref: { kind: 'managed-file', fileEntryId: uuid() },
@@ -540,6 +552,7 @@ describe('durable tool diagnostics', () => {
       }),
     );
     const state = fixture({ writeToolOutput });
+    const workspaceFolderId = state.seedFolder();
     const turn = await state.reserve('running', undefined, workspaceFolderId);
     await state.host.initialize();
     try {
@@ -561,8 +574,6 @@ describe('durable tool diagnostics', () => {
   test.each(['bound', 'unbound'] as const)(
     'preserves an admitted %s workspace through rebinding and host suspension',
     async (binding) => {
-      const originalFolderId = binding === 'bound' ? uuid() : null;
-      const nextFolderId = uuid();
       let interrupt!: (reason: Error) => void | Promise<void>;
       const getTools = jest.fn(async () => []);
       const resolveTools = jest.fn(async () => ({ tools: [], pluginGuides: [] }));
@@ -583,6 +594,8 @@ describe('durable tool diagnostics', () => {
         runtimeTools: { resolve: resolveTools },
         writeToolOutput,
       });
+      const originalFolderId = binding === 'bound' ? state.seedFolder() : null;
+      const nextFolderId = state.seedFolder();
       state.conversations.watchWork = async () => ({ active: true, unsubscribe: async () => {} });
       await state.host.initialize();
       try {
