@@ -103,7 +103,7 @@ export const PiConfigurationSchema = z
         : configuration.instructions,
   }));
 
-const PiSubmissionSchema = z.object({
+const PiSubmissionSchema = z.looseObject({
   kind: z.literal('cherry.input'),
   version: z.literal(1),
   requestId: z.string().min(1),
@@ -113,6 +113,8 @@ const PiSubmissionSchema = z.object({
   createdAt: z.number().finite().nonnegative(),
   metadata: z.record(z.string(), RuntimeJsonValueSchema),
   tools: z.array(PiToolBlueprintSchema),
+  // Keep malformed/unknown versions visible: mutation must reject rather than guess.
+  authoredTextLayout: RuntimeJsonValueSchema.optional(),
 });
 export type PiStoredSubmission = z.infer<typeof PiSubmissionSchema>;
 export type PiStoredConfiguration = z.infer<typeof PiConfigurationSchema>;
@@ -174,7 +176,12 @@ export function piSubmissionMetadata(
 ): JsonObject {
   return detachedJson(
     PiSubmissionSchema.parse({
-      ...input,
+      requestId: input.requestId,
+      turnId: input.turnId,
+      userMessageId: input.userMessageId,
+      assistantMessageId: input.assistantMessageId,
+      createdAt: input.createdAt,
+      metadata: input.metadata,
       kind: 'cherry.input',
       version: 1,
       tools: tools.map(piToolBlueprint),

@@ -11,6 +11,8 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
+import type { AuthoredTextLayoutV1 } from '@/shared/contracts/agent';
+
 import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
@@ -41,6 +43,7 @@ export type PiConversation = {
   /** Current-turn replay, excluded from completed-history compaction. */
   resume?: PiMessage[];
   systemPrompt: string;
+  authoredTextLayout?: AuthoredTextLayoutV1;
 };
 
 export type PiHistoryTurn = {
@@ -73,7 +76,7 @@ export function toPiConversation(
       if (message.role === 'user') {
         historyTurn.messages.push({
           role: 'user',
-          content: collectUserContent(message.parts, mediaCapabilities),
+          content: serializePiUserContent(message.parts, mediaCapabilities).content,
           timestamp: Date.now(),
         });
         continue;
@@ -93,24 +96,35 @@ export function toPiConversation(
   if (request.resume?.length) {
     appendAssistantHistory(resume, request.resume, providerNamesByCallId, model);
   }
+  const serialized = serializePiUserContent(request.input, mediaCapabilities);
   return {
+    authoredTextLayout: serialized.layout,
     history: historyTurns.flatMap((turn) => turn.messages),
     historyTurns,
     ...(resume.length ? { resume } : {}),
     prompt: {
       role: 'user',
-      content: collectUserContent(request.input, mediaCapabilities),
+      content: serialized.content,
       timestamp: Date.now(),
     },
     systemPrompt: systemParts.join('\n\n'),
   };
 }
 
-function collectUserContent(
-  parts: readonly RuntimeMessagePart[],
+export function serializePiUserContent(
+  parts: readonly (RuntimeMessagePart & { partId?: string })[],
   mediaCapabilities: { image: boolean; video: boolean; audio: boolean },
-): UserMessage['content'] {
+): { content: UserMessage['content']; layout?: AuthoredTextLayoutV1 } {
+  const spans: { partId: string; blockIndex: number; start: number; end: number }[] = [];
+  let blockIndex = 0;
   const content = parts.flatMap<TextContent | ImageContent>((part) => {
+    const blocks = serializePart(part);
+    if (part.type === 'text' && 'partId' in part && typeof part.partId === 'string')
+      spans.push({ partId: part.partId, blockIndex, start: 0, end: part.text.length });
+    blockIndex += blocks.length;
+    return blocks;
+  });
+  function serializePart(part: RuntimeMessagePart): (TextContent | ImageContent)[] {
     if (part.type === 'text') {
       return [{ type: 'text' as const, text: part.text }];
     }
@@ -140,10 +154,61 @@ function collectUserContent(
       ];
     }
     return [];
-  });
-  return content.some((part) => part.type === 'image')
-    ? content
-    : content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
+  }
+  if (content.some((part) => part.type === 'image'))
+    return {
+      content,
+      ...(spans.length
+        ? {
+            layout: {
+              version: 1,
+              renderer: 'runtime-user-text-v1',
+              contentKind: 'blocks',
+              spans,
+            } as const,
+          }
+        : {}),
+    };
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const block of content) {
+    offsets.push(offset);
+    if (block.type === 'text') offset += block.text.length + 1;
+  }
+  return {
+    content: content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n'),
+    ...(spans.length
+      ? {
+          layout: {
+            version: 1,
+            renderer: 'runtime-user-text-v1',
+            contentKind: 'string',
+            spans: spans.map(({ partId, blockIndex, start, end }) => ({
+              partId,
+              start: offsets[blockIndex]! + start,
+              end: offsets[blockIndex]! + end,
+            })),
+          } as const,
+        }
+      : {}),
+  };
+}
+
+/** Image prompts use plain authored text followed by frozen image placeholders. */
+export function serializePiPlainUserContent(
+  parts: readonly { partId?: string; text: string }[],
+  placeholders: readonly string[] = [],
+): { content: string; layout: AuthoredTextLayoutV1 } {
+  let content = '';
+  const spans: { partId: string; start: number; end: number }[] = [];
+  for (const [index, part] of parts.entries()) {
+    if (index) content += '\n';
+    const start = content.length;
+    content += part.text;
+    if (part.partId) spans.push({ partId: part.partId, start, end: content.length });
+  }
+  for (const placeholder of placeholders) content += `\n${placeholder}`;
+  return { content, layout: { version: 1, renderer: 'plain-v1', contentKind: 'string', spans } };
 }
 
 function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {

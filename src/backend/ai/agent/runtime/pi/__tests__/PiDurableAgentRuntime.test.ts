@@ -528,6 +528,73 @@ describe('Persistent Agent facade', () => {
     }
   });
 
+  test('queue command lookup retains withdrawn ownership for accepted mutation receipt replay', async () => {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    const stream = new AssistantMessageEventStream();
+    const started = deferred<void>();
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        started.resolve();
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    const observed = await runtime.observe(lane, () => {});
+    try {
+      await runtime.submit(lane, input('first'));
+      await started.promise;
+      await runtime.submit(lane, {
+        ...input('second'),
+        metadata: {
+          userParts: [{ id: 'body', type: 'text', state: 'done', text: 'Question second' }],
+        },
+      });
+      const edit = {
+        requestId: 'second',
+        assistantMessageId: 'answer-second',
+        mutationId: 'edit-before-withdraw',
+        parts: [
+          {
+            partId: 'body',
+            expectedText: 'Question second',
+            text: 'Edited',
+            expectedRenderedText: 'Question second',
+            renderedText: 'Edited',
+          },
+        ],
+      };
+      await expect(runtime.editQueuedInput(lane, edit)).resolves.toEqual({ status: 'updated' });
+      await expect(runtime.withdraw(lane, 'second')).resolves.toBe('aborted');
+      expect(await runtime.message(lane, 'answer-second')).toMatchObject({
+        role: 'assistant',
+        turn: {
+          identity: { requestId: 'second' },
+          assistantMessageId: 'answer-second',
+          status: 'cancelled',
+        },
+      });
+
+      await expect(runtime.editQueuedInput(lane, edit)).resolves.toEqual({
+        status: 'unchanged',
+        reason: 'already-applied',
+      });
+    } finally {
+      await observed.unsubscribe();
+      stream.push({
+        type: 'done',
+        reason: 'stop',
+        message: { ...emptyAssistantMessage(wire), stopReason: 'stop' },
+      });
+      await runtime.abort(lane);
+      await runtime.close();
+    }
+  });
+
   test('starts the next queued input after a terminal provider failure without resubmission', async () => {
     const state = fixture();
     const resolveModel = state.dependencies.resolveModel;

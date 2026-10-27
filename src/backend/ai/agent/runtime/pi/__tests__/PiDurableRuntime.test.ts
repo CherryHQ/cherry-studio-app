@@ -14,8 +14,11 @@ import {
   type ConversationId,
   type TaskGraphNode,
   type TaskId,
+  type JsonObject,
 } from '@earendil-works/pi-durable';
 
+import type { RuntimeEditQueuedInput } from '../../durableTypes';
+import { serializePiUserContent } from '../modelMessages';
 import { hasRunnablePiTasks, PiDurableRuntime } from '../PiDurableRuntime';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { ToolInstructions } from '../piToolInstructions';
@@ -401,6 +404,74 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
+  test('commits metadata and layout before native admission; failed admission leaves no queue item and retry deduplicates', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    const layout = {
+      version: 1,
+      renderer: 'plain-v1',
+      contentKind: 'string',
+      spans: [{ partId: 'body', start: 0, end: 8 }],
+    };
+    const metadata = {
+      authoredTextLayout: layout,
+      userMessageId: 'user',
+      assistantMessageId: 'answer',
+    };
+    const draft = {
+      type: 'input' as const,
+      requestId: 'metadata-first',
+      content: 'Continue',
+      whenBusy: 'followUp' as const,
+    };
+    let native: jest.SpyInstance | undefined;
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      const prototype = Object.getPrototypeOf(conversation) as {
+        submit: typeof conversation.submit;
+      };
+      const original = prototype.submit;
+      native = jest.spyOn(prototype, 'submit').mockImplementationOnce(async () => {
+        // Native admission observes the already committed provenance document.
+        const family = defineDocFamily<{ value: JsonObject }, JsonObject>({
+          kind: 'cherry.submission',
+          version: 1,
+          scope: 'session',
+          checkpointWhen: () => false,
+          family: true,
+          initial: (value) => ({ value }),
+        });
+        expect(
+          await conversation.commit(
+            async (tx) =>
+              JSON.parse(
+                JSON.stringify(
+                  (await tx.doc(family, `${conversation.id}:${draft.requestId}`, {})).value,
+                ),
+              ),
+            BACKGROUND_CONTEXT,
+          ),
+        ).toEqual(metadata);
+        expect(await runtime.inputRecord(seed.sessionId, draft.requestId)).toBeUndefined();
+        throw new Error('Native admission unavailable');
+      });
+      await expect(runtime.submit(seed.sessionId, draft, metadata)).rejects.toThrow(
+        'Native admission unavailable',
+      );
+      expect(await runtime.readQueuedInputs(seed.sessionId)).toEqual([]);
+      native.mockImplementation(original);
+      const first = await runtime.submit(seed.sessionId, draft, metadata);
+      const retry = await runtime.submit(seed.sessionId, draft, metadata);
+      expect(retry.id).toBe(first.id);
+      expect(await runtime.submissionMetadata(await first.status(BACKGROUND_CONTEXT))).toEqual(
+        metadata,
+      );
+    } finally {
+      native?.mockRestore();
+      await runtime.close();
+    }
+  });
+
   test('native admission deduplicates retries and keeps immutable display identities', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     const metadata = { userMessageId: 'user', assistantMessageId: 'assistant', version: 1 };
@@ -533,4 +604,501 @@ describe('PiDurableRuntime identity and handoff', () => {
       await runtime.close();
     }
   });
+});
+
+const TestSubmissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+  kind: 'cherry.submission',
+  version: 1,
+  scope: 'session',
+  family: true,
+  checkpointWhen: () => false,
+  initial: (value) => ({ value }),
+});
+
+async function queueFixture(text = 'B', legacy = false) {
+  const storage = new MemoryStorage();
+  const runtime = await PiDurableRuntime.open(storage, options());
+  const conversation = await runtime.ensureConversation({ ...seed, entries: [] });
+  const records = [];
+  for (const name of ['B', 'C', 'D']) {
+    const body = name === 'B' ? text : name;
+    const serialized = serializePiUserContent([{ type: 'text', text: body, partId: 'body' }], {
+      image: false,
+      video: false,
+      audio: false,
+    });
+    const value = {
+      kind: 'cherry.input',
+      version: 1,
+      requestId: name,
+      turnId: name,
+      userMessageId: `user-${name}`,
+      assistantMessageId: `assistant-${name}`,
+      createdAt: 1,
+      tools: [],
+      unknownEnvelope: { retained: true },
+      metadata: {
+        parentMessageId: name === 'B' ? 'assistant-A' : `assistant-${name === 'C' ? 'B' : 'C'}`,
+        userParts: [{ id: 'body', type: 'text', text: body, state: 'done' }],
+        captured: 'keep',
+      },
+      ...(!legacy ? { authoredTextLayout: serialized.layout } : {}),
+    } as JsonObject;
+    records.push(
+      await conversation.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        await tx.doc(TestSubmissionMetadata, `${conversation.id}:${name}`, value);
+        const record = await tx.createSubmission({
+          conversationId: conversation.id,
+          requestId: name,
+          type: 'input',
+          status: 'queued',
+        });
+        inbox.items.push({ id: record.id, mode: 'followUp', content: serialized.content });
+        return record;
+      }, BACKGROUND_CONTEXT),
+    );
+  }
+  const edit: RuntimeEditQueuedInput = {
+    requestId: 'B',
+    assistantMessageId: 'assistant-B',
+    mutationId: 'edit-1',
+    parts: [
+      {
+        partId: 'body',
+        expectedText: text,
+        text: 'edited B',
+        expectedRenderedText: text,
+        renderedText: 'edited B',
+      },
+    ],
+  };
+  return {
+    runtime,
+    storage,
+    conversation,
+    records,
+    edit,
+    inbox: () =>
+      conversation.commit(
+        async (tx) => JSON.parse(JSON.stringify(await tx.doc(InboxDoc, conversation.id))),
+        BACKGROUND_CONTEXT,
+      ),
+  };
+}
+
+test('plain image provenance uses authored text while retaining expanded render data in the command', async () => {
+  const f = await queueFixture();
+  try {
+    await f.conversation.commit(async (tx) => {
+      const metadata = await tx.doc(TestSubmissionMetadata, `${f.conversation.id}:B`, {});
+      (metadata.value.authoredTextLayout as JsonObject).renderer = 'plain-v1';
+    }, BACKGROUND_CONTEXT);
+    const edited = {
+      ...f.edit,
+      parts: f.edit.parts.map((part) => ({
+        ...part,
+        expectedRenderedText: 'B plus retained plugin intent',
+        renderedText: 'edited B plus retained plugin intent',
+      })),
+    };
+    await expect(f.runtime.editQueuedInput(seed.sessionId, edited)).resolves.toEqual({
+      status: 'updated',
+    });
+    const queued = await f.conversation.commit(
+      async (tx) => JSON.parse(JSON.stringify(await tx.doc(InboxDoc, f.conversation.id))),
+      BACKGROUND_CONTEXT,
+    );
+    expect(queued?.items[0]).toMatchObject({ content: 'edited B' });
+  } finally {
+    await f.runtime.close();
+  }
+});
+
+test('edits inbox and nested display parts atomically, preserves envelope, and deduplicates ABA retries', async () => {
+  const fixture = await queueFixture();
+  const { runtime, storage, records, edit } = fixture;
+  try {
+    const commit = jest.spyOn(storage, 'commit');
+    expect(await runtime.editQueuedInput(seed.sessionId, edit)).toEqual({ status: 'updated' });
+    expect(
+      commit.mock.calls.some(
+        ([writes]) =>
+          writes.filter(
+            (write) => write.type === 'document.change' || write.type === 'document.create',
+          ).length >= 3,
+      ),
+    ).toBe(true);
+    expect((await fixture.inbox()).items[0].content).toBe('edited B');
+    const metadata = await runtime.submissionMetadata(records[0]!);
+    expect(metadata).toMatchObject({
+      unknownEnvelope: { retained: true },
+      metadata: {
+        captured: 'keep',
+        userParts: [{ id: 'body', text: 'edited B' }],
+      },
+      authoredTextLayout: { spans: [{ partId: 'body', start: 0, end: 8 }] },
+    });
+    expect(
+      await runtime.editQueuedInput(seed.sessionId, {
+        ...edit,
+        mutationId: 'restore',
+        parts: [
+          {
+            ...edit.parts[0]!,
+            expectedText: 'edited B',
+            expectedRenderedText: 'edited B',
+            text: 'B',
+            renderedText: 'B',
+          },
+        ],
+      }),
+    ).toEqual({ status: 'updated' });
+    expect(await runtime.editQueuedInput(seed.sessionId, edit)).toEqual({
+      status: 'unchanged',
+      reason: 'already-applied',
+    });
+    expect((await fixture.inbox()).items[0].content).toBe('B');
+    expect(
+      await runtime.editQueuedInput(seed.sessionId, {
+        ...edit,
+        parts: [{ ...edit.parts[0]!, text: 'other' }],
+      }),
+    ).toEqual({ status: 'conflict', reason: 'mutation-id-reused' });
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('moves one adjacent item, repairs waiting parents, preserves identities and rejects edges and stale neighbors', async () => {
+  const f = await queueFixture();
+  const move = {
+    requestId: 'D',
+    assistantMessageId: 'assistant-D',
+    mutationId: 'move-1',
+    direction: 'earlier' as const,
+    expectedNeighborAssistantMessageId: 'assistant-C',
+  };
+  try {
+    const before = (await f.inbox()).items;
+    expect(await f.runtime.moveQueuedInput(seed.sessionId, move)).toEqual({ status: 'moved' });
+    expect((await f.inbox()).items).toEqual([before[0], before[2], before[1]]);
+    expect(
+      (await f.runtime.readQueuedInputs(seed.sessionId)).map((item) => item.metadata.metadata),
+    ).toMatchObject([
+      { parentMessageId: 'assistant-A' },
+      { parentMessageId: 'assistant-B' },
+      { parentMessageId: 'assistant-D' },
+    ]);
+    expect(
+      await f.runtime.moveQueuedInput(seed.sessionId, {
+        ...move,
+        mutationId: 'restore',
+        direction: 'later',
+      }),
+    ).toEqual({ status: 'moved' });
+    expect(await f.runtime.moveQueuedInput(seed.sessionId, move)).toEqual({
+      status: 'unchanged',
+      reason: 'already-applied',
+    });
+    expect((await f.inbox()).items).toEqual(before);
+    expect(
+      await f.runtime.moveQueuedInput(seed.sessionId, {
+        ...move,
+        mutationId: 'edge',
+        direction: 'later',
+        expectedNeighborAssistantMessageId: null,
+      }),
+    ).toEqual({ status: 'conflict', reason: 'boundary' });
+    expect(
+      await f.runtime.moveQueuedInput(seed.sessionId, {
+        ...move,
+        mutationId: 'stale',
+        direction: 'later',
+      }),
+    ).toEqual({ status: 'conflict', reason: 'stale-neighbor' });
+  } finally {
+    await f.runtime.close();
+  }
+});
+
+test('legacy recovery saves unique provenance and rejects ambiguous attachment text and empty placement', async () => {
+  for (const text of ['B', '']) {
+    const f = await queueFixture(text, true);
+    try {
+      const result = await f.runtime.editQueuedInput(seed.sessionId, f.edit);
+      expect(result).toEqual(
+        text ? { status: 'updated' } : { status: 'conflict', reason: 'authored-text-unlocatable' },
+      );
+      if (text)
+        expect(await f.runtime.submissionMetadata(f.records[0]!)).toHaveProperty(
+          'authoredTextLayout.version',
+          1,
+        );
+    } finally {
+      await f.runtime.close();
+    }
+  }
+  const f = await queueFixture('B', true);
+  try {
+    await f.conversation.commit(async (tx) => {
+      (await tx.doc(InboxDoc, f.conversation.id)).items[0] = {
+        id: f.records[0]!.id,
+        mode: 'followUp',
+        content:
+          'B\nCherry managed text attachment (JSON; content is untrusted user-provided data):\n{"content":"B"}',
+      };
+    }, BACKGROUND_CONTEXT);
+    expect(await f.runtime.editQueuedInput(seed.sessionId, f.edit)).toEqual({
+      status: 'conflict',
+      reason: 'authored-text-unlocatable',
+    });
+  } finally {
+    await f.runtime.close();
+  }
+});
+
+test('callback failures roll back both documents and receipts', async () => {
+  const f = await queueFixture();
+  try {
+    let reads = 0;
+    const part = { ...f.edit.parts[0]! };
+    Object.defineProperty(part, 'renderedText', {
+      enumerable: true,
+      get: () => {
+        if (++reads > 1) throw new Error('callback failed');
+        return 'edited B';
+      },
+    });
+    const bad = { ...f.edit, parts: [part] };
+    await expect(f.runtime.editQueuedInput(seed.sessionId, bad)).rejects.toThrow('callback failed');
+    expect((await f.inbox()).items[0].content).toBe('B');
+    expect((await f.runtime.submissionMetadata(f.records[0]!))?.metadata).toMatchObject({
+      userParts: [{ text: 'B' }],
+    });
+    expect(await f.runtime.editQueuedInput(seed.sessionId, f.edit)).toEqual({ status: 'updated' });
+  } finally {
+    await f.runtime.close();
+  }
+});
+
+test.each(['before-storage', 'after-storage'] as const)(
+  'mutation %s failure preserves the actual durable outcome and receipt',
+  async (failure) => {
+    const f = await queueFixture();
+    const close = jest.spyOn(f.storage, 'close').mockResolvedValue();
+    const original = f.storage.commit.bind(f.storage);
+    const commit = jest
+      .spyOn(f.storage, 'commit')
+      .mockImplementationOnce(async (writes, context) => {
+        if (failure === 'after-storage') await original(writes, context);
+        throw new Error('storage acknowledgment failed');
+      });
+    await expect(f.runtime.editQueuedInput(seed.sessionId, f.edit)).rejects.toThrow();
+    commit.mockRestore();
+    await f.runtime.close();
+    const reopened = await PiDurableRuntime.open(f.storage, options());
+    try {
+      const queue = await reopened.readQueuedInputs(seed.sessionId);
+      expect(queue[0]?.metadata.metadata).toMatchObject({
+        userParts: [{ text: failure === 'after-storage' ? 'edited B' : 'B' }],
+      });
+      expect(await reopened.editQueuedInput(seed.sessionId, f.edit)).toEqual(
+        failure === 'after-storage'
+          ? { status: 'unchanged', reason: 'already-applied' }
+          : { status: 'updated' },
+      );
+    } finally {
+      await reopened.close();
+      close.mockRestore();
+      await f.storage.close(BACKGROUND_CONTEXT);
+    }
+  },
+);
+
+test('failed in-memory adoption after storage commit is recovered through the durable receipt', async () => {
+  const f = await queueFixture();
+  // Test-only fault injection at Pi's post-storage adoption boundary; no private state writes.
+  const prototype = await f.conversation.commit(
+    async (tx) =>
+      Object.getPrototypeOf(tx) as {
+        adopt(seq: unknown): unknown;
+      },
+    BACKGROUND_CONTEXT,
+  );
+  const adoption = jest.spyOn(prototype, 'adopt').mockImplementationOnce(() => {
+    throw new Error('adoption failed');
+  });
+  const close = jest.spyOn(f.storage, 'close').mockResolvedValue();
+  try {
+    await expect(f.runtime.editQueuedInput(seed.sessionId, f.edit)).rejects.toThrow(
+      'adoption failed',
+    );
+    adoption.mockRestore();
+    await f.runtime.close();
+    const reopened = await PiDurableRuntime.open(f.storage, options());
+    try {
+      expect((await reopened.readQueuedInputs(seed.sessionId))[0]?.metadata.metadata).toMatchObject(
+        { userParts: [{ text: 'edited B' }] },
+      );
+      expect(await reopened.editQueuedInput(seed.sessionId, f.edit)).toEqual({
+        status: 'unchanged',
+        reason: 'already-applied',
+      });
+    } finally {
+      await reopened.close();
+    }
+  } finally {
+    adoption.mockRestore();
+    close.mockRestore();
+    await f.storage.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('a swap preserves unrelated inbox positions and rejects an unprovable adjacent lane', async () => {
+  const f = await queueFixture();
+  try {
+    await f.conversation.commit(async (tx) => {
+      const inbox = await tx.doc(InboxDoc, f.conversation.id);
+      const unrelated = await tx.createSubmission({
+        conversationId: f.conversation.id,
+        type: 'write',
+        status: 'queued',
+      });
+      inbox.items.unshift({
+        id: unrelated.id,
+        mode: 'write',
+        entry: { kind: 'unrelated', data: { keep: true } },
+      });
+    }, BACKGROUND_CONTEXT);
+    const before = (await f.inbox()).items;
+    expect(
+      await f.runtime.moveQueuedInput(seed.sessionId, {
+        requestId: 'D',
+        assistantMessageId: 'assistant-D',
+        mutationId: 'swap',
+        direction: 'earlier',
+        expectedNeighborAssistantMessageId: 'assistant-C',
+      }),
+    ).toEqual({ status: 'moved' });
+    expect((await f.inbox()).items).toEqual([before[0], before[1], before[3], before[2]]);
+    expect(
+      await f.runtime.moveQueuedInput(seed.sessionId, {
+        requestId: 'B',
+        assistantMessageId: 'assistant-B',
+        mutationId: 'foreign',
+        direction: 'earlier',
+        expectedNeighborAssistantMessageId: 'unknown',
+      }),
+    ).toEqual({ status: 'conflict', reason: 'different-lane' });
+  } finally {
+    await f.runtime.close();
+  }
+});
+
+test.each([false, true])(
+  'edits interleaved spans right-to-left while freezing attachments and images=%s',
+  async (blocks) => {
+    const f = await queueFixture();
+    const attachment = {
+      type: 'text-attachment' as const,
+      fileEntryId: 'file',
+      name: 'f.txt',
+      mediaType: 'text/plain',
+      trust: 'untrusted-user-content' as const,
+      text: 'B repeats B',
+      truncated: false,
+    };
+    const serialized = serializePiUserContent(
+      [
+        { type: 'text', partId: 'body', text: 'B' },
+        attachment,
+        ...(blocks
+          ? [{ type: 'file' as const, uri: 'data:image/png;base64,eA==', mediaType: 'image/png' }]
+          : []),
+        { type: 'text', partId: 'second', text: '😀 Z' },
+        { type: 'text', partId: 'empty', text: '' },
+      ],
+      { image: true, video: false, audio: false },
+    );
+    try {
+      await f.conversation.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, f.conversation.id);
+        const document = await tx.doc(TestSubmissionMetadata, `${f.conversation.id}:B`, {});
+        const item = inbox.items[0]!;
+        if (item.mode === 'write') throw new Error('Expected input');
+        item.content = serialized.content;
+        document.value.authoredTextLayout = serialized.layout!;
+        (document.value.metadata as JsonObject).userParts = [
+          { id: 'body', type: 'text', text: 'B', state: 'done' },
+          { id: 'file', type: 'file', fileEntryId: 'file', mediaType: 'text/plain' },
+          { id: 'second', type: 'text', text: '😀 Z', state: 'done' },
+          { id: 'empty', type: 'text', text: '', state: 'done' },
+        ];
+      }, BACKGROUND_CONTEXT);
+      expect(
+        await f.runtime.editQueuedInput(seed.sessionId, {
+          ...f.edit,
+          parts: [
+            { ...f.edit.parts[0]!, text: 'longer B', renderedText: 'longer B' },
+            {
+              partId: 'second',
+              expectedText: '😀 Z',
+              expectedRenderedText: '😀 Z',
+              text: '',
+              renderedText: '',
+            },
+            {
+              partId: 'empty',
+              expectedText: '',
+              expectedRenderedText: '',
+              text: 'tail',
+              renderedText: 'tail',
+            },
+          ],
+        }),
+      ).toEqual({ status: 'updated' });
+      const expected = serializePiUserContent(
+        [
+          { type: 'text', partId: 'body', text: 'longer B' },
+          attachment,
+          ...(blocks
+            ? [{ type: 'file' as const, uri: 'data:image/png;base64,eA==', mediaType: 'image/png' }]
+            : []),
+          { type: 'text', partId: 'second', text: '' },
+          { type: 'text', partId: 'empty', text: 'tail' },
+        ],
+        { image: true, video: false, audio: false },
+      );
+      expect((await f.inbox()).items[0].content).toEqual(expected.content);
+      expect((await f.runtime.submissionMetadata(f.records[0]!))?.authoredTextLayout).toEqual(
+        expected.layout,
+      );
+    } finally {
+      await f.runtime.close();
+    }
+  },
+);
+
+test('invalid persisted provenance never falls back to legacy text guessing', async () => {
+  const f = await queueFixture();
+  try {
+    await f.conversation.commit(async (tx) => {
+      (
+        await tx.doc(TestSubmissionMetadata, `${f.conversation.id}:B`, {})
+      ).value.authoredTextLayout = {
+        version: 2,
+        renderer: 'future',
+        contentKind: 'string',
+        spans: [],
+      };
+    }, BACKGROUND_CONTEXT);
+    expect(await f.runtime.editQueuedInput(seed.sessionId, f.edit)).toEqual({
+      status: 'conflict',
+      reason: 'invalid-text-layout',
+    });
+    expect((await f.inbox()).items[0].content).toBe('B');
+  } finally {
+    await f.runtime.close();
+  }
 });

@@ -30,6 +30,9 @@ it already exists.
 | Importing a file into managed storage, including one-time image normalization | `importManagedFile` in `src/backend/services/file/importManagedFile.ts`, used by `fileContent.createInternalEntry` and system share import |
 | Reading and writing ZIP archives | `readZipDirectory`, `extractZipEntries` in `src/backend/utils/zipReader.ts`; `writeZipFile` in `src/backend/utils/zipWriter.ts` |
 | Built-in tool display titles | `BUILT_IN_TOOL_TITLE_KEYS`, `getBuiltInToolTitleKey` in `src/shared/data/types/builtInToolTitles.ts`, read by the transcript and background activity |
+| Authored-input rendering and provenance | `toRuntimeInputParts` / `runtimeUserText` in `src/backend/ai/agent/host/turnRuntimeInput.ts`; `serializePiUserContent` in `src/backend/ai/agent/runtime/pi/modelMessages.ts` owns serialized authored spans |
+| Durable waiting-input mutations and reconciliation | `PiDurableAgentRuntime` / `PiDurableRuntime` in `src/backend/ai/agent/runtime/pi` own transactional text edits, adjacent moves and receipts; `PiDurableObserver` and `piDurableProjection` own authoritative ordered input reconciliation |
+| Durable user-input projection | `AgentSessionStore.reconcileDurableInput` in `src/backend/ai/agent/sessionStore`, implemented by `SqliteAgentSessionStore`, atomically projects authored slots, search text, pending parents and selected continuation |
 | Image request deadline for an Agent turn | `withImageGenerationDeadline` in `src/backend/ai/agent/host/agentImageGeneration.ts` |
 | Model purpose (text, image, embedding, rerank, audio) | `src/shared/utils/modelPurpose.ts` |
 | Provider connection facts for language and image serving | `resolveProviderConnection` in `src/backend/ai/provider/providerConnection.ts` |

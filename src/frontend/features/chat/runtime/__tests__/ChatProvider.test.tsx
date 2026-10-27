@@ -141,7 +141,12 @@ describe('ChatProvider Draft handoff', () => {
 
   it('keeps a queued-only composer sendable without showing an active-generation stop state', () => {
     mockChatState.queuedInputs = [
-      { turnId: 'waiting', assistantMessageId: 'answer', userMessage: {} as AgentMessageView },
+      {
+        moveTargets: { earlier: null, later: null },
+        turnId: 'waiting',
+        assistantMessageId: 'answer',
+        userMessage: {} as AgentMessageView,
+      },
     ];
     act(() => {
       renderer = create(<Harness sessionId="session-1" />);
@@ -275,7 +280,12 @@ describe('ChatProvider Draft handoff', () => {
       parentId: background.id,
     };
     mockChatState.queuedInputs = [
-      { turnId: 'queued-turn', assistantMessageId: 'queued-answer', userMessage: queuedUser },
+      {
+        moveTargets: { earlier: null, later: null },
+        turnId: 'queued-turn',
+        assistantMessageId: 'queued-answer',
+        userMessage: queuedUser,
+      },
     ];
     mockChatState.snapshot = {
       ...mockChatState.snapshot,
@@ -443,6 +453,7 @@ describe('ChatProvider Draft handoff', () => {
       act(() => {
         mockChatState.queuedInputs = [
           {
+            moveTargets: { earlier: null, later: null },
             turnId: 'queued-turn',
             assistantMessageId: pending.messages[1].id,
             userMessage: { id: pending.messages[0].id } as AgentMessageView,

@@ -1,5 +1,10 @@
 import {
+  AgentEditQueuedInputInputSchema,
+  AgentEditQueuedInputResultSchema,
+  AgentMoveQueuedInputInputSchema,
+  AgentMoveQueuedInputResultSchema,
   AgentEventSchema,
+  AuthoredTextLayoutV1Schema,
   AgentRespondQuestionSchema,
   validateUserAnswers,
   AgentApprovalViewSchema,
@@ -338,6 +343,7 @@ describe('Agent tool and managed-file contracts', () => {
     const snapshot = {
       queuedInputs: [
         {
+          moveTargets: { earlier: null, later: null },
           turnId: 'queued-turn',
           userMessage: { ...userMessage, id: 'queued-user', turnId: 'queued-turn' },
           assistantMessageId: 'queued-answer',
@@ -726,5 +732,113 @@ describe('user question protocol', () => {
         answer: answerWith({ selectedOptionIds: [], text: 'x'.repeat(4001), skipped: false }),
       }).success,
     ).toBe(false);
+  });
+});
+
+test('authored text layouts round-trip and reject unsafe, overlapping, duplicate or unknown layouts', () => {
+  const layout = {
+    version: 1,
+    renderer: 'runtime-user-text-v1',
+    contentKind: 'blocks',
+    spans: [{ partId: 'body', blockIndex: 2, start: 0, end: 4 }],
+  };
+  expect(AuthoredTextLayoutV1Schema.parse(JSON.parse(JSON.stringify(layout)))).toEqual(layout);
+  for (const invalid of [
+    { ...layout, version: 2 },
+    { ...layout, spans: [{ ...layout.spans[0], start: -1 }] },
+    { ...layout, spans: [{ ...layout.spans[0], end: Number.MAX_SAFE_INTEGER + 1 }] },
+    { ...layout, spans: [{ ...layout.spans[0], start: 5 }] },
+    { ...layout, spans: [...layout.spans, ...layout.spans] },
+    { ...layout, spans: [...layout.spans, { partId: 'next', blockIndex: 2, start: 3, end: 6 }] },
+    { ...layout, spans: [...layout.spans, { partId: 'next', blockIndex: 1, start: 8, end: 9 }] },
+  ])
+    expect(AuthoredTextLayoutV1Schema.safeParse(invalid).success).toBe(false);
+});
+
+describe('queued input commands', () => {
+  const identity = {
+    sessionId: 'session',
+    turnId: 'turn',
+    assistantMessageId: 'answer',
+    mutationId: 'mutation',
+  };
+  const edit = {
+    ...identity,
+    parts: [{ partId: 'text', expectedText: 'Before', text: 'After\n🍒' }],
+  };
+  const move = { ...identity, direction: 'earlier', expectedNeighborAssistantMessageId: null };
+  test('round trips exact authored text and neighbor preconditions', () => {
+    expect(AgentEditQueuedInputInputSchema.parse(roundTrip(edit))).toEqual(edit);
+    expect(AgentMoveQueuedInputInputSchema.parse(roundTrip(move))).toEqual(move);
+  });
+  test('rejects empty identities, duplicate slots and settings or attachment fields', () => {
+    for (const key of Object.keys(identity)) {
+      expect(AgentEditQueuedInputInputSchema.safeParse({ ...edit, [key]: '' }).success).toBe(false);
+      expect(AgentMoveQueuedInputInputSchema.safeParse({ ...move, [key]: '' }).success).toBe(false);
+    }
+    for (const extra of [{ attachments: [] }, { settings: {} }, { modelId: 'model' }])
+      expect(AgentEditQueuedInputInputSchema.safeParse({ ...edit, ...extra }).success).toBe(false);
+    expect(
+      AgentEditQueuedInputInputSchema.safeParse({ ...edit, parts: [edit.parts[0], edit.parts[0]] })
+        .success,
+    ).toBe(false);
+    expect(
+      AgentEditQueuedInputInputSchema.safeParse({
+        ...edit,
+        parts: [{ ...edit.parts[0], partId: '' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentEditQueuedInputInputSchema.safeParse({
+        ...edit,
+        parts: [{ ...edit.parts[0], file: {} }],
+      }).success,
+    ).toBe(false);
+    for (const invalid of [
+      { direction: 'up' },
+      { expectedNeighborAssistantMessageId: '' },
+      { order: 1 },
+    ])
+      expect(AgentMoveQueuedInputInputSchema.safeParse({ ...move, ...invalid }).success).toBe(
+        false,
+      );
+  });
+  test('round trips every result and rejects mixed outcomes', () => {
+    const common = [
+      { status: 'already-started' },
+      { status: 'not-found' },
+      { status: 'unchanged', reason: 'already-applied' },
+    ];
+    const edits = [
+      ...common,
+      { status: 'updated' },
+      { status: 'unchanged', reason: 'same-text' },
+      ...[
+        'stale-text',
+        'authored-text-unlocatable',
+        'invalid-text-layout',
+        'reference-conflict',
+        'empty-message',
+        'mutation-id-reused',
+      ].map((reason) => ({ status: 'conflict', reason })),
+    ];
+    const moves = [
+      ...common,
+      { status: 'moved' },
+      ...['stale-neighbor', 'boundary', 'different-lane', 'mutation-id-reused'].map((reason) => ({
+        status: 'conflict',
+        reason,
+      })),
+    ];
+    for (const result of edits)
+      expect(AgentEditQueuedInputResultSchema.parse(roundTrip(result))).toEqual(result);
+    for (const result of moves)
+      expect(AgentMoveQueuedInputResultSchema.parse(roundTrip(result))).toEqual(result);
+    for (const schema of [AgentEditQueuedInputResultSchema, AgentMoveQueuedInputResultSchema]) {
+      expect(schema.safeParse({ status: 'not-found', reason: 'boundary' }).success).toBe(false);
+      expect(schema.safeParse({ status: 'conflict', reason: 'unknown' }).success).toBe(false);
+    }
+    expect(AgentEditQueuedInputResultSchema.safeParse({ status: 'moved' }).success).toBe(false);
+    expect(AgentMoveQueuedInputResultSchema.safeParse({ status: 'updated' }).success).toBe(false);
   });
 });

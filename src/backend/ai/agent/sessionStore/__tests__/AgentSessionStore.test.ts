@@ -4,6 +4,9 @@
  * unique index, cascades, FTS triggers), over a real migrated database.
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { v7 as uuidv7 } from 'uuid';
@@ -83,6 +86,210 @@ describe('SqliteAgentSessionStore conformance', () => {
 
   afterEach(() => {
     harness.cleanup();
+  });
+
+  test('durable input reconciliation preserves attachments, guards identities and survives assistant settlement', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const attachment: AgentMessagePart = {
+      id: 'file',
+      type: 'file',
+      fileEntryId: INPUT_FILE_ID,
+      filename: 'input.txt',
+      mediaType: 'text/plain',
+      purpose: 'input-attachment',
+    };
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'body', type: 'text', text: 'Originalword', state: 'done' }, attachment],
+    });
+    const assistantBefore = await store.getMessage(session.id, reserved.assistantMessage.id);
+    const input = {
+      sessionId: session.id,
+      turnId: reserved.turnId,
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
+      parts: [
+        { id: 'body', type: 'text' as const, state: 'done' as const, text: 'Editedword\n🍒' },
+      ],
+    };
+    await store.reconcileDurableInput([{ ...input, turnId: uuidv7() }]);
+    expect((await store.getMessage(session.id, reserved.userMessage.id))?.parts[0]).toMatchObject({
+      text: 'Originalword',
+    });
+    await store.reconcileDurableInput([{ ...input, sessionId: uuidv7() }]);
+    await store.reconcileDurableInput([{ ...input, userMessageId: reserved.assistantMessage.id }]);
+    await store.reconcileDurableInput([input]);
+    const confirmed = await store.getMessage(session.id, reserved.userMessage.id);
+    await store.reconcileDurableInput([input]);
+    expect(await store.getMessage(session.id, reserved.userMessage.id)).toEqual(confirmed);
+    expect((await store.getMessage(session.id, reserved.userMessage.id))?.parts).toEqual([
+      ...input.parts,
+      attachment,
+    ]);
+    expect(await store.getMessage(session.id, reserved.assistantMessage.id)).toEqual(
+      assistantBefore,
+    );
+    expect(
+      harness.raw
+        .prepare('SELECT searchable_text FROM agent_session_message WHERE id = ?')
+        .get(reserved.userMessage.id),
+    ).toMatchObject({ searchable_text: expect.stringContaining('Editedword') });
+    const search = (word: string) =>
+      harness.raw
+        .prepare(
+          'SELECT count(*) AS count FROM agent_session_message_fts WHERE agent_session_message_fts MATCH ?',
+        )
+        .get(word);
+    expect(search('Editedword')).toMatchObject({ count: 1 });
+    expect(search('Originalword')).toMatchObject({ count: 0 });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      turnId: reserved.turnId,
+      status: 'success',
+      parts: [{ id: 'answer', type: 'text', state: 'done', text: 'Assistant unchanged' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    await store.reconcileDurableInput([input]);
+    expect((await store.listMessages(session.id)).map((message) => message.parts)).toEqual([
+      [...input.parts, attachment],
+      [{ id: 'answer', type: 'text', state: 'done', text: 'Assistant unchanged' }],
+    ]);
+  });
+
+  test('reordered pending descendants reconnect when the middle execution item is withdrawn', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const reserve = (text: string) =>
+      store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'body', type: 'text', text, state: 'done' }],
+      });
+    const first = await reserve('First');
+    const middle = await reserve('Middle');
+    const last = await reserve('Last');
+    // The committed order is now First / Last / Middle.
+    const projection = [
+      {
+        sessionId: session.id,
+        turnId: last.turnId,
+        userMessageId: last.userMessage.id,
+        assistantMessageId: last.assistantMessage.id,
+        parts: last.userMessage.parts,
+        parentMessageId: first.assistantMessage.id,
+      },
+      {
+        sessionId: session.id,
+        turnId: middle.turnId,
+        userMessageId: middle.userMessage.id,
+        assistantMessageId: middle.assistantMessage.id,
+        parts: middle.userMessage.parts,
+        parentMessageId: last.assistantMessage.id,
+      },
+    ];
+    const before = await store.listMessages(session.id);
+    harness.raw.exec(
+      `CREATE TRIGGER reject_projection BEFORE UPDATE ON agent_session_message WHEN NEW.id = '${middle.userMessage.id}' BEGIN SELECT RAISE(ABORT, 'projection failed'); END`,
+    );
+    await expect(store.reconcileDurableInput(projection)).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: 'projection failed' }),
+    });
+    harness.raw.exec('DROP TRIGGER reject_projection');
+    expect(await store.listMessages(session.id)).toEqual(before);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(last.assistantMessage.id);
+    await store.reconcileDurableInput(projection);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(middle.assistantMessage.id);
+    const sibling = await store.reserveAnswer({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userMessageId: first.userMessage.id,
+      assistantMessageId: uuidv7(),
+    });
+    await store.reconcileDurableInput(projection);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(sibling.assistantMessage.id);
+    await store.selectMessage(session.id, middle.assistantMessage.id);
+
+    await store.discardQueuedTurn({ sessionId: session.id, turnId: last.turnId });
+    expect((await store.getMessage(session.id, middle.userMessage.id))?.parentId).toBe(
+      first.assistantMessage.id,
+    );
+    expect((await store.listMessages(session.id)).map((message) => message.id)).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+      middle.userMessage.id,
+      middle.assistantMessage.id,
+    ]);
+  });
+
+  test('edited authored text and its search index survive closing and reopening SQLite', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'cherry-queued-input-'));
+    const path = join(directory, 'history.sqlite');
+    let owner = createSqliteStoreHarness({ path });
+    try {
+      owner.seedModel(MODEL_ID);
+      const agentId = owner.seedAgent();
+      const reserved = await owner.store.reserveInitialSubmission({
+        sessionId: uuidv7(),
+        agentId,
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        userParts: [{ id: 'body', type: 'text', state: 'done', text: 'Originalword' }],
+      });
+      const sessionId = reserved.userMessage.sessionId;
+      const input = {
+        sessionId,
+        turnId: reserved.turnId,
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        parts: [
+          { id: 'body', type: 'text' as const, state: 'done' as const, text: 'Persistededit' },
+        ],
+      };
+      await owner.store.reconcileDurableInput([input]);
+      await owner.store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        turnId: reserved.turnId,
+        status: 'success',
+        parts: [{ id: 'answer', type: 'text', state: 'done', text: 'Answer retained' }],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      const before = await owner.store.listMessages(sessionId);
+      owner.cleanup();
+      owner = createSqliteStoreHarness({ path, existing: true });
+      expect(await owner.store.listMessages(sessionId)).toEqual(before);
+      await owner.store.reconcileDurableInput([input]);
+      expect((await owner.store.getMessage(sessionId, reserved.userMessage.id))?.parts).toEqual(
+        input.parts,
+      );
+      expect(
+        (await owner.store.getMessage(sessionId, reserved.assistantMessage.id))?.parts,
+      ).toEqual([{ id: 'answer', type: 'text', state: 'done', text: 'Answer retained' }]);
+      expect(
+        owner.raw
+          .prepare(
+            "SELECT count(*) AS count FROM agent_session_message_fts WHERE agent_session_message_fts MATCH 'Persistededit'",
+          )
+          .get(),
+      ).toMatchObject({ count: 1 });
+      expect(
+        owner.raw
+          .prepare(
+            "SELECT count(*) AS count FROM agent_session_message_fts WHERE agent_session_message_fts MATCH 'Originalword'",
+          )
+          .get(),
+      ).toMatchObject({ count: 0 });
+    } finally {
+      owner.cleanup();
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test('withdrawing a queued reservation preserves history, checkpoints and the current runtime revision', async () => {

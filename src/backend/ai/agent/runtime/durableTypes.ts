@@ -220,6 +220,43 @@ export type RuntimeConversationEvent =
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
+export type RuntimeEditQueuedInput = {
+  requestId: string;
+  assistantMessageId: string;
+  mutationId: string;
+  parts: readonly {
+    partId: string;
+    expectedText: string;
+    text: string;
+    expectedRenderedText: string;
+    renderedText: string;
+  }[];
+};
+export type RuntimeMoveQueuedInput = {
+  requestId: string;
+  assistantMessageId: string;
+  mutationId: string;
+  direction: 'earlier' | 'later';
+  expectedNeighborAssistantMessageId: string | null;
+};
+export type RuntimeQueueMutationResult =
+  | { status: 'updated' | 'moved' }
+  | { status: 'unchanged'; reason: 'same-text' | 'already-applied' }
+  | { status: 'already-started' | 'not-found' }
+  | {
+      status: 'conflict';
+      reason:
+        | 'stale-text'
+        | 'authored-text-unlocatable'
+        | 'invalid-text-layout'
+        | 'reference-conflict'
+        | 'empty-message'
+        | 'mutation-id-reused'
+        | 'stale-neighbor'
+        | 'boundary'
+        | 'different-lane';
+    };
+
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
 export interface DurableAgentRuntime {
   drainUsage(): Promise<void>;
@@ -274,6 +311,7 @@ export interface DurableAgentRuntime {
     listener: (event: RuntimeConversationEvent) => void,
   ): Promise<{
     snapshot: RuntimeConversationSnapshot;
+    reconcileQueue(): Promise<void>;
     unsubscribe(): Promise<void>;
   }>;
   history(
@@ -299,5 +337,13 @@ export interface DurableAgentRuntime {
     lane: RuntimeLane,
     requestId: string,
   ): Promise<'aborted' | 'already-placed' | 'settled' | 'not-found'>;
+  editQueuedInput(
+    lane: RuntimeLane,
+    input: RuntimeEditQueuedInput,
+  ): Promise<RuntimeQueueMutationResult>;
+  moveQueuedInput(
+    lane: RuntimeLane,
+    input: RuntimeMoveQueuedInput,
+  ): Promise<RuntimeQueueMutationResult>;
   hasUnfinishedWork(): Promise<boolean>;
 }

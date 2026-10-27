@@ -56,6 +56,8 @@ test.each([
     );
     let advance!: Parameters<AgentEventStream['start']>[0];
     const runtime = {
+      readQueuedInputs: async () => [],
+      submissionMetadata: async () => undefined,
       watchWork: async () => ({ value: { tasks: {} }, start: () => {}, stop: async () => {} }),
       watch: async () => ({
         snapshot,
@@ -134,6 +136,8 @@ test('restores compaction failure, shows progress, and clears failure only after
   };
   let advance!: (events: readonly AgentEvent[]) => Promise<void>;
   const runtime = {
+    readQueuedInputs: async () => [],
+    submissionMetadata: async () => undefined,
     watchWork: async () => ({ value: { tasks: {} }, start: () => {}, stop: async () => {} }),
     watch: async () => ({
       snapshot,
@@ -181,6 +185,8 @@ function attach(
   let advance!: (events: readonly AgentEvent[]) => Promise<void>;
   let advanceWork!: Parameters<TaskGraphWatch['start']>[0];
   const runtime = {
+    readQueuedInputs: async () => [],
+    submissionMetadata: async () => undefined,
     watchWork: async () => ({
       value: tasks,
       start: (listener: typeof advanceWork) => {
@@ -448,3 +454,140 @@ test.each(['message_start', 'message_update', 'message_end'] as const)(
     }
   },
 );
+
+test('inbox invalidations refresh content and order; delayed batches and old snapshots cannot restore either', async () => {
+  const make = (name: string, id: number) => ({
+    record: {
+      id,
+      conversationId: 1,
+      requestId: name,
+      type: 'input',
+      status: 'queued',
+    } as SubmissionRecord,
+    metadata: piSubmissionMetadata(
+      {
+        requestId: name,
+        turnId: name,
+        userMessageId: `user-${name}`,
+        assistantMessageId: `assistant-${name}`,
+        createdAt: 1,
+        input: [],
+        metadata: { userParts: [{ id: 'body', type: 'text', text: name, state: 'done' }] },
+      },
+      [],
+    ),
+  });
+  const original = [make('B', 2), make('C', 3), make('D', 4)];
+  let queue = original;
+  let advance!: (events: readonly AgentEvent[]) => Promise<void>;
+  const snapshot: SnapshotEvent = {
+    type: 'snapshot',
+    entries: [],
+    tools: [],
+    nestedTools: [],
+    compactions: [],
+    inbox: original.map(({ record }) => ({ id: record.id, mode: 'followUp' })),
+    agent: {},
+    usage: { models: {}, tools: {} },
+  };
+  let blocked: Promise<void> | undefined;
+  let release!: () => void;
+  let reading!: () => void;
+  let readStarted: Promise<void> | undefined;
+  const runtime = {
+    watchWork: async () => ({ value: { tasks: {} }, start: () => {}, stop: async () => {} }),
+    watch: async () => ({
+      snapshot,
+      start: (listener: typeof advance) => {
+        advance = listener;
+      },
+      stop: async () => {},
+    }),
+    submissions: async () => original,
+    submissionMetadata: async (record: SubmissionRecord) =>
+      (
+        queue.find((item) => item.record.id === record.id) ??
+        original.find((item) => item.record.id === record.id)
+      )?.metadata,
+    turnEntries: async () => [],
+    readQueuedInputs: async () => {
+      const captured = queue;
+      if (blocked) {
+        reading();
+        await blocked;
+        blocked = undefined;
+      }
+      return captured;
+    },
+  } as unknown as PiDurableRuntime;
+  const events: RuntimeConversationEvent[] = [];
+  const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, (event) =>
+    events.push(event),
+  );
+  const lastQueue = () =>
+    events.findLast((event) => event.type === 'queue.updated') as Extract<
+      RuntimeConversationEvent,
+      { type: 'queue.updated' }
+    >;
+  try {
+    expect((await observer.start()).queue.map((turn) => turn.identity.requestId)).toEqual([
+      'B',
+      'C',
+      'D',
+    ]);
+    queue = [
+      {
+        ...original[0]!,
+        metadata: {
+          ...original[0]!.metadata,
+          metadata: { userParts: [{ id: 'body', type: 'text', text: 'edited', state: 'done' }] },
+        },
+      },
+      original[2]!,
+      original[1]!,
+    ];
+    await advance([{ type: 'inbox_update', items: snapshot.inbox }]);
+    expect(lastQueue().queue.map((turn) => turn.identity.requestId)).toEqual(['B', 'D', 'C']);
+    expect(lastQueue().queue[0]?.metadata.userParts).toMatchObject([{ text: 'edited' }]);
+    readStarted = new Promise((resolve) => {
+      reading = resolve;
+    });
+    blocked = new Promise((resolve) => {
+      release = resolve;
+    });
+    const oldBatch = advance([{ type: 'inbox_update', items: snapshot.inbox }]);
+    await readStarted;
+    queue = [queue[2]!, queue[0]!, queue[1]!];
+    const reconciled = observer.reconcileQueue();
+    release();
+    await oldBatch;
+    await reconciled;
+    const expected = lastQueue().queue;
+    await advance([snapshot]);
+    const replacement = events.at(-1) as Extract<RuntimeConversationEvent, { type: 'snapshot' }>;
+    expect(replacement.snapshot.queue).toEqual(expected);
+    expect(replacement.snapshot.queue.map((turn) => turn.identity.requestId)).toEqual([
+      'C',
+      'B',
+      'D',
+    ]);
+    expect(replacement.snapshot.queue[1]?.metadata.userParts).toMatchObject([{ text: 'edited' }]);
+    const admitted = queue.find((item) => item.record.requestId === 'B')!;
+    queue = queue.filter((item) => item.record.id !== admitted.record.id);
+    await advance([
+      {
+        type: 'submission',
+        record: { ...admitted.record, status: 'placed', entry: 12 } as SubmissionRecord,
+      },
+    ]);
+    await observer.reconcileQueue();
+    await advance([snapshot]);
+    const afterAdmission = events.at(-1) as Extract<RuntimeConversationEvent, { type: 'snapshot' }>;
+    expect(afterAdmission.snapshot.queue.map((turn) => turn.identity.requestId)).toEqual([
+      'C',
+      'D',
+    ]);
+  } finally {
+    await observer.stop();
+  }
+});

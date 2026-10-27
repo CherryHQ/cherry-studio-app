@@ -1,5 +1,8 @@
 export type {
   DurableAgentRuntime,
+  RuntimeEditQueuedInput,
+  RuntimeMoveQueuedInput,
+  RuntimeQueueMutationResult,
   RuntimeConversationConfiguration,
   RuntimeConversationEvent,
   RuntimeConversationSeed,

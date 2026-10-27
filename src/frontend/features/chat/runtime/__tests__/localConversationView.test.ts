@@ -88,7 +88,12 @@ test('a queued-only session blocks history edits while leaving its queue outside
   const row = message('answer');
   const f = fixture({
     queuedInputs: [
-      { turnId: 'waiting', userMessage: message('waiting', 'user'), assistantMessageId: 'pending' },
+      {
+        moveTargets: { earlier: null, later: null },
+        turnId: 'waiting',
+        userMessage: message('waiting', 'user'),
+        assistantMessageId: 'pending',
+      },
     ],
   });
   const projected = f.projector.message(row, f.state);

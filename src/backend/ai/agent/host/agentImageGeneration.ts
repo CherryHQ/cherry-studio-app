@@ -65,7 +65,11 @@ export function isImageGenerationTimeout(error: unknown): boolean {
 /** A prepared direct image request, owned by the same Host turn as text requests. */
 export type AgentImageGenerationPlan = {
   settings: AgentImageGeneration;
-  execute(signal: AbortSignal, usageAttribution: AiUsageAttribution): Promise<FileEntry[]>;
+  execute(
+    signal: AbortSignal,
+    usageAttribution: AiUsageAttribution,
+    authoredPrompt?: string,
+  ): Promise<FileEntry[]>;
 };
 
 export type AgentImageGenerationPort = {
@@ -111,7 +115,7 @@ export function createAgentImageGeneration(dependencies: {
       const capturedSettings = { mode: prepared.mode, paramValues: prepared.paramValues };
       return {
         settings: capturedSettings,
-        execute(turnSignal, usageAttribution) {
+        execute(turnSignal, usageAttribution, authoredPrompt = prompt) {
           return withImageGenerationDeadline(turnSignal, async (requestSignal) => {
             const entries: FileEntry[] = [];
             try {
@@ -132,7 +136,7 @@ export function createAgentImageGeneration(dependencies: {
                 dependencies.ai.generateImage({
                   ...capturedSettings,
                   inputImages,
-                  prompt: [instructions.trim(), prompt.trim()].filter(Boolean).join('\n\n'),
+                  prompt: [instructions.trim(), authoredPrompt.trim()].filter(Boolean).join('\n\n'),
                   requestOptions: { signal: requestSignal },
                   uniqueModelId,
                   usageAttribution,
@@ -147,7 +151,7 @@ export function createAgentImageGeneration(dependencies: {
                     folderId: workspaceFolderId ?? null,
                     data: image.base64,
                     mediaType: image.mediaType,
-                    name: readableFilename(prompt, {
+                    name: readableFilename(authoredPrompt, {
                       extension: generatedImageExtension(image.mediaType),
                       fallback: 'Image',
                       ordinal: index + 1,
@@ -179,6 +183,7 @@ export function createAgentImageGeneration(dependencies: {
 export function createImageRequestTool(
   imageGeneration: AgentImageGenerationPlan,
   resolveUsageAttribution: AiUsageAttributionResolver,
+  resolvePrompt?: () => Promise<string>,
 ): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: 'image_generation' },
@@ -189,7 +194,11 @@ export function createImageRequestTool(
     approval: 'auto',
     execute: async ({ signal }) => {
       try {
-        const entries = await imageGeneration.execute(signal, resolveUsageAttribution());
+        const entries = await imageGeneration.execute(
+          signal,
+          resolveUsageAttribution(),
+          await resolvePrompt?.(),
+        );
         return {
           value: { status: 'completed' },
           artifacts: entries.map((entry) => ({

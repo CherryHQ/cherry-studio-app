@@ -21,6 +21,7 @@ import {
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -34,6 +35,9 @@ import {
   type RuntimeConversationEvent,
   type RuntimeConversationSeed,
   type RuntimeDurableSubmission,
+  type RuntimeEditQueuedInput,
+  type RuntimeMoveQueuedInput,
+  type RuntimeQueueMutationResult,
   type RuntimeDurableTurn,
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
@@ -42,7 +46,7 @@ import {
   type RuntimeUsageOwner,
 } from '../durableTypes';
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
-import { toPiConversation } from './modelMessages';
+import { serializePiPlainUserContent, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { fitPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
@@ -491,6 +495,35 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const configuration = this.requireConfiguration(key);
     const model = this.requireModel(configuration);
     const tools = configuration.tools.map((blueprint) => this.toolTemplate(blueprint));
+    const display = input.metadata.userParts;
+    const authored = Array.isArray(display)
+      ? display.filter(
+          (part) =>
+            part && typeof part === 'object' && !Array.isArray(part) && part.type === 'text',
+        )
+      : [];
+    const textParts = input.input.filter((part) => part.type === 'text');
+    const ids = authored.flatMap((part) =>
+      part && typeof part === 'object' && !Array.isArray(part) && typeof part.id === 'string'
+        ? [part.id]
+        : [],
+    );
+    let textIndex = 0;
+    let runtimeInput = input.input.map((part) =>
+      part.type === 'text' ? { ...part, partId: ids[textIndex++] } : part,
+    );
+    if (!textParts.length && Array.isArray(display)) {
+      const partId = ids[0] ?? 'authored-text';
+      runtimeInput = [{ type: 'text', text: '', partId }, ...runtimeInput];
+      if (!ids.length)
+        input = {
+          ...input,
+          metadata: {
+            ...input.metadata,
+            userParts: [{ id: partId, type: 'text', text: '', state: 'done' }, ...display],
+          },
+        };
+    }
     const assembled = toPiConversation(
       {
         turnId: input.turnId,
@@ -501,11 +534,34 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         history: [],
         contextCheckpoint: null,
         tools: [],
-        input: input.input,
+        input: runtimeInput,
         resume: input.resume,
       },
       model,
     );
+    if (configuration.kind === 'image' && Array.isArray(display)) {
+      const plain = display.flatMap((part): { text: string; partId?: string }[] => {
+        if (!part || typeof part !== 'object' || Array.isArray(part)) return [];
+        if (part.type === 'text' && typeof part.id === 'string' && typeof part.text === 'string')
+          return [{ partId: part.id, text: part.text }];
+        if (part.type === 'file')
+          return [{ text: `[Image input: ${part.filename ?? part.fileEntryId}]` }];
+        return [];
+      });
+      if (!ids.length) {
+        plain.unshift({ partId: 'authored-text', text: '' });
+        input = {
+          ...input,
+          metadata: {
+            ...input.metadata,
+            userParts: [{ id: 'authored-text', type: 'text', text: '', state: 'done' }, ...display],
+          },
+        };
+      }
+      const serialized = serializePiPlainUserContent(plain);
+      assembled.prompt.content = serialized.content;
+      assembled.authoredTextLayout = serialized.layout;
+    }
     const prompt = assembled.resume?.length
       ? {
           ...assembled.prompt,
@@ -516,7 +572,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const submission = await runtime.submit(
       key,
       { type: 'input', requestId: input.requestId, content: prompt.content, whenBusy: 'followUp' },
-      piSubmissionMetadata(input, tools),
+      {
+        ...piSubmissionMetadata(input, tools),
+        ...(!assembled.resume?.length && assembled.authoredTextLayout
+          ? { authoredTextLayout: assembled.authoredTextLayout }
+          : {}),
+      },
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );
     const record = await submission.status(BACKGROUND_CONTEXT);
@@ -530,6 +591,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     this.observers.add(observer);
     return {
       snapshot,
+      reconcileQueue: () => observer.reconcileQueue(),
       unsubscribe: async () => {
         this.observers.delete(observer);
         await observer.stop();
@@ -558,7 +620,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       );
       const visible = new Set(page.entries.map((entry) => entry.id));
       for (const { record, metadata } of [...page.submissions].sort(
-        (a, b) => b.record.id - a.record.id,
+        (a, b) => Number(b.record.entry ?? 0) - Number(a.record.entry ?? 0),
       )) {
         if (record.type !== 'input' || record.entry === undefined || !visible.has(record.entry))
           continue;
@@ -635,6 +697,39 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         ? ('not-found' as const)
         : result;
   }
+  async editQueuedInput(lane: RuntimeLane, input: RuntimeEditQueuedInput) {
+    return this.mutateAndReconcile(lane, (runtime) =>
+      runtime.editQueuedInput(laneKey(lane), input),
+    );
+  }
+
+  async moveQueuedInput(lane: RuntimeLane, input: RuntimeMoveQueuedInput) {
+    return this.mutateAndReconcile(lane, (runtime) =>
+      runtime.moveQueuedInput(laneKey(lane), input),
+    );
+  }
+
+  private async mutateAndReconcile(
+    lane: RuntimeLane,
+    change: (runtime: PiDurableRuntime) => Promise<RuntimeQueueMutationResult>,
+  ) {
+    try {
+      const result = await change(this.requireRuntime());
+      await Promise.all(
+        [...this.observers]
+          .filter((observer) => observer.observes(lane))
+          .map((observer) => observer.reconcileQueue()),
+      );
+      return result;
+    } catch {
+      throw new AgentProtocolError({
+        code: this.runtime ? 'EXECUTION_FAILED' : 'EXECUTION_UNAVAILABLE',
+        message: 'The durable queue mutation could not be acknowledged.',
+        retryable: true,
+      });
+    }
+  }
+
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
     return state.tasks.length > 0 || state.submissions.length > 0;

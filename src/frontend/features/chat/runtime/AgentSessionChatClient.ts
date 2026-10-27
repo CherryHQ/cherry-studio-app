@@ -479,6 +479,24 @@ export class AgentSessionChatClient {
     }
   }
 
+  async editQueuedInput(
+    sessionId: string,
+    input: Omit<Parameters<AgentProtocol['editQueuedInput']>[0], 'sessionId'>,
+  ) {
+    const result = await this.protocol.editQueuedInput({ ...input, sessionId });
+    await this.refresh(sessionId);
+    return result;
+  }
+
+  async moveQueuedInput(
+    sessionId: string,
+    input: Omit<Parameters<AgentProtocol['moveQueuedInput']>[0], 'sessionId'>,
+  ) {
+    const result = await this.protocol.moveQueuedInput({ ...input, sessionId });
+    await this.refresh(sessionId);
+    return result;
+  }
+
   async cancelQueuedInput(sessionId: string, turnId: string) {
     const result = await this.protocol.cancelQueuedInput({ sessionId, turnId });
     await this.refresh(sessionId);

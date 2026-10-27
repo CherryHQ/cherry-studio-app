@@ -5,6 +5,9 @@ import {
   defineDoc,
   defineDocFamily,
   Harness,
+  InboxDoc,
+  type Tx,
+  type InboxItem,
   type AgentChange,
   type Conversation,
   type ConversationId,
@@ -25,8 +28,21 @@ import {
   watchEvents,
 } from '@earendil-works/pi-durable';
 
+import {
+  AuthoredTextLayoutV1Schema,
+  AgentInputPartSchema,
+  type AuthoredTextLayoutV1,
+} from '@/shared/contracts/agent';
+import { sha256HexOfText } from '@/shared/utils/sha256';
+
+import type {
+  RuntimeEditQueuedInput,
+  RuntimeMoveQueuedInput,
+  RuntimeQueueMutationResult,
+} from '../durableTypes';
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
+import { readPiSubmission } from './piDurableProjection';
 import { ToolInstructions } from './piToolInstructions';
 
 type PiSessionBinding = {
@@ -52,6 +68,16 @@ const SubmissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
   checkpointWhen: () => false,
   family: true,
   initial: (value) => ({ value }),
+});
+
+/** Retry deduplication lasts as long as the working copy. Never stores input bodies. */
+const QueueMutation = defineDocFamily<{ fingerprint: string; outcome: JsonObject | null }, null>({
+  kind: 'cherry.queue-mutation',
+  version: 1,
+  scope: 'session',
+  checkpointWhen: () => false,
+  family: true,
+  initial: () => ({ fingerprint: '', outcome: null }),
 });
 
 /** Tiny aliases support selected-ID reads without maintaining a second transcript table. */
@@ -408,11 +434,7 @@ export class PiDurableRuntime {
     }, context);
   }
 
-  /**
-   * Metadata is committed first, so even an immediately running task can read its display identity.
-   * Only native submission admission starts work. A crash in between leaves harmless metadata;
-   * a crash after admission is deduplicated by Pi's conversation-scoped requestId on retry.
-   */
+  /** Commit display provenance before native admission. A crash leaves harmless metadata. */
   async submit(
     sessionId: string,
     draft: InputSubmissionDraft & { requestId: string },
@@ -513,6 +535,247 @@ export class PiDurableRuntime {
         const record = await submission.status(context);
         return { record, metadata: await this.submissionMetadata(record, context) };
       }),
+    );
+  }
+
+  /** Resolve immutable identities off the Session line, then validate all mutable facts in one read. */
+  async readQueuedInputs(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
+    const conversation = await this.requireSession(sessionId, context);
+    return this.withQueue(
+      conversation.id,
+      async (_tx, _inbox, queue) =>
+        queue
+          .filter((input) => input.eligible)
+          .map(({ record, metadata }) => ({
+            record,
+            metadata: JSON.parse(JSON.stringify(metadata)) as JsonObject,
+          })),
+      context,
+    );
+  }
+
+  private async withQueue<T>(
+    conversationId: ConversationId,
+    callback: (
+      tx: Tx,
+      inbox: { items: InboxItem[] },
+      queue: { record: SubmissionRecord; metadata: JsonObject; eligible: boolean }[],
+    ) => Promise<T>,
+    context: Context,
+  ): Promise<T> {
+    const identities = new Map<SubmissionId, SubmissionRecord>();
+    const retry = Symbol('new-inbox-identity');
+    for (;;) {
+      const snapshot = await this.harness.snapshot(InboxDoc, conversationId, context);
+      for (const item of snapshot?.items ?? []) {
+        if (identities.has(item.id)) continue;
+        const submission = await this.harness.submission(item.id, context);
+        if (!submission) throw new Error('The inbox references a missing submission.');
+        identities.set(item.id, await submission.status(context));
+      }
+      const result = await this.harness.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, conversationId);
+        if (inbox.items.some((item) => !identities.has(item.id))) return retry;
+        const queue = [];
+        for (const item of inbox.items) {
+          const identity = identities.get(item.id)!;
+          if (!identity.requestId) {
+            queue.push({ record: identity, metadata: {}, eligible: false });
+            continue;
+          }
+          const record = await tx.submissionByRequest(conversationId, identity.requestId);
+          if (!record || record.id !== item.id || record.status !== 'queued')
+            throw new Error('The inbox and submission lifecycle disagree.');
+          const metadata = (
+            await tx.doc(SubmissionMetadata, metadataKey(conversationId, identity.requestId), {})
+          ).value;
+          const cherry = metadata.kind === 'cherry.input';
+          if (cherry) readPiSubmission(metadata); // Corrupt Cherry metadata is a runtime failure.
+          const eligible = cherry && item.mode === 'followUp' && record.type === 'input';
+          queue.push({ record, metadata, eligible });
+        }
+        return callback(tx, inbox, queue);
+      }, context);
+      if (result !== retry) return result as T;
+    }
+  }
+
+  async editQueuedInput(
+    sessionId: string,
+    input: RuntimeEditQueuedInput,
+  ): Promise<RuntimeQueueMutationResult> {
+    return this.mutateQueue(sessionId, input, 'edit', async (_tx, inbox, record, metadata) => {
+      const stored = readPiSubmission(metadata);
+      const userParts = stored.metadata.userParts;
+      if (!Array.isArray(userParts)) throw new Error('A Cherry input has no display parts.');
+      const authored = userParts.filter(
+        (part): part is JsonObject =>
+          part !== null && typeof part === 'object' && !Array.isArray(part) && part.type === 'text',
+      );
+      if (
+        authored.length !== input.parts.length ||
+        authored.some(
+          (part, index) =>
+            part.id !== input.parts[index]?.partId ||
+            part.text !== input.parts[index]?.expectedText,
+        )
+      )
+        return { status: 'conflict', reason: 'stale-text' };
+      const replacements: JsonObject[] = authored.map((part, index) => ({
+        ...part,
+        text: input.parts[index]!.text,
+      }));
+      if (
+        replacements.some(
+          (part) =>
+            !AgentInputPartSchema.safeParse({
+              type: 'text',
+              text: part.text,
+              ...Object.fromEntries(
+                ['pluginReferences', 'skillReferences', 'selectionReferences']
+                  .filter((key) => part[key] !== undefined)
+                  .map((key) => [key, part[key]]),
+              ),
+            }).success,
+        )
+      )
+        return { status: 'conflict', reason: 'reference-conflict' };
+      if (
+        !userParts.some(
+          (part) =>
+            part && typeof part === 'object' && !Array.isArray(part) && part.type === 'file',
+        ) &&
+        replacements.every((part) => !String(part.text).trim())
+      )
+        return { status: 'conflict', reason: 'empty-message' };
+      const item = inbox.items.find((item) => item.id === record.id);
+      if (!item || item.mode === 'write')
+        throw new Error('A queued input is missing from the inbox.');
+      let layout: AuthoredTextLayoutV1;
+      if (metadata.authoredTextLayout !== undefined) {
+        const parsed = AuthoredTextLayoutV1Schema.safeParse(metadata.authoredTextLayout);
+        if (!parsed.success) return { status: 'conflict', reason: 'invalid-text-layout' };
+        layout = parsed.data;
+      } else {
+        const recovered = recoverAuthoredLayout(item.content, input.parts);
+        if (!recovered) return { status: 'conflict', reason: 'authored-text-unlocatable' };
+        layout = recovered;
+      }
+      const rewritten = spliceAuthoredText(item.content, layout, input.parts);
+      if (!rewritten) return { status: 'conflict', reason: 'invalid-text-layout' };
+      const same = input.parts.every((part) => part.text === part.expectedText);
+      item.content = rewritten.content;
+      metadata.authoredTextLayout = rewritten.layout;
+      let index = 0;
+      stored.metadata.userParts = userParts.map((part) =>
+        authored.includes(part as JsonObject) ? replacements[index++]! : part,
+      );
+      // Mutate the original envelope: unknown fields and captured settings survive.
+      metadata.metadata = stored.metadata;
+      return same ? { status: 'unchanged', reason: 'same-text' } : { status: 'updated' };
+    });
+  }
+
+  async moveQueuedInput(
+    sessionId: string,
+    input: RuntimeMoveQueuedInput,
+  ): Promise<RuntimeQueueMutationResult> {
+    return this.mutateQueue(
+      sessionId,
+      input,
+      'move',
+      async (_tx, inbox, record, _metadata, queue) => {
+        if (input.expectedNeighborAssistantMessageId === null)
+          return { status: 'conflict', reason: 'boundary' };
+        const index = inbox.items.findIndex((item) => item.id === record.id);
+        const neighborIndex = index + (input.direction === 'earlier' ? -1 : 1);
+        const neighbor = inbox.items[neighborIndex];
+        if (!neighbor) return { status: 'conflict', reason: 'stale-neighbor' };
+        const adjacent = queue.find((item) => item.record.id === neighbor.id);
+        if (!adjacent?.eligible) return { status: 'conflict', reason: 'different-lane' };
+        if (adjacent.metadata.assistantMessageId !== input.expectedNeighborAssistantMessageId)
+          return { status: 'conflict', reason: 'stale-neighbor' };
+        // Repair the three affected pending parent links, without reparenting the running input.
+        const ordered = queue.filter((item) => item.eligible);
+        const firstParent = (ordered[0]?.metadata.metadata as JsonObject | undefined)
+          ?.parentMessageId;
+        [inbox.items[index], inbox.items[neighborIndex]] = [neighbor, inbox.items[index]!];
+        const byId = new Map(ordered.map((item) => [item.record.id, item]));
+        let parent = firstParent;
+        for (const item of inbox.items) {
+          const current = byId.get(item.id);
+          if (!current) continue;
+          const nested = current.metadata.metadata as JsonObject;
+          if (parent !== undefined) nested.parentMessageId = parent;
+          parent = current.metadata.assistantMessageId;
+        }
+        return { status: 'moved' };
+      },
+    );
+  }
+
+  private async mutateQueue(
+    sessionId: string,
+    input: RuntimeEditQueuedInput | RuntimeMoveQueuedInput,
+    kind: 'edit' | 'move',
+    change: (
+      tx: Tx,
+      inbox: { items: InboxItem[] },
+      record: SubmissionRecord,
+      metadata: JsonObject,
+      queue: { record: SubmissionRecord; metadata: JsonObject; eligible: boolean }[],
+    ) => Promise<RuntimeQueueMutationResult>,
+  ): Promise<RuntimeQueueMutationResult> {
+    const conversation = await this.requireSession(sessionId, BACKGROUND_CONTEXT);
+    if (!input.mutationId || !input.requestId || !input.assistantMessageId)
+      throw new Error('Queue mutation identities must be nonempty.');
+    const fingerprint = sha256HexOfText(
+      canonicalJson(JSON.parse(JSON.stringify({ kind, ...input }))),
+    );
+    const previous = await this.harness.snapshot(
+      QueueMutation,
+      metadataKey(conversation.id, input.mutationId),
+      BACKGROUND_CONTEXT,
+    );
+    if (previous?.outcome)
+      return previous.fingerprint === fingerprint
+        ? { status: 'unchanged', reason: 'already-applied' }
+        : { status: 'conflict', reason: 'mutation-id-reused' };
+    return this.withQueue(
+      conversation.id,
+      async (tx, inbox, queue) => {
+        const receipt = await tx.doc(
+          QueueMutation,
+          metadataKey(conversation.id, input.mutationId),
+          null,
+        );
+        if (receipt.outcome)
+          return receipt.fingerprint === fingerprint
+            ? { status: 'unchanged', reason: 'already-applied' }
+            : { status: 'conflict', reason: 'mutation-id-reused' };
+        const record = await tx.submissionByRequest(conversation.id, input.requestId);
+        if (!record) return { status: 'not-found' };
+        const metadata = (
+          await tx.doc(SubmissionMetadata, metadataKey(conversation.id, input.requestId), {})
+        ).value;
+        if (metadata.assistantMessageId !== input.assistantMessageId)
+          return { status: 'not-found' };
+        if (record.entry !== undefined) return { status: 'already-started' };
+        if (record.status !== 'queued') return { status: 'not-found' };
+        if (!queue.some((item) => item.record.id === record.id && item.eligible))
+          throw new Error('The queued input is not eligible.');
+        const result = await change(tx, inbox, record, metadata, queue);
+        if (
+          result.status === 'updated' ||
+          result.status === 'moved' ||
+          result.status === 'unchanged'
+        ) {
+          receipt.fingerprint = fingerprint;
+          receipt.outcome = result;
+        }
+        return result;
+      },
+      BACKGROUND_CONTEXT,
     );
   }
 
@@ -765,4 +1028,118 @@ export function hasRunnablePiTasks(graph: TaskGraph, now = Date.now()): boolean 
         return task.state.on.every((id) => graph.tasks[String(id)] === undefined);
     }
   });
+}
+
+/** The only write to serialized content; frozen bytes never pass through a renderer. */
+export function spliceAuthoredText(
+  content: Extract<InboxItem, { content: unknown }>['content'],
+  layout: AuthoredTextLayoutV1,
+  parts: RuntimeEditQueuedInput['parts'],
+):
+  | { content: Extract<InboxItem, { content: unknown }>['content']; layout: AuthoredTextLayoutV1 }
+  | undefined {
+  if (
+    (typeof content === 'string') !== (layout.contentKind === 'string') ||
+    layout.spans.length !== parts.length
+  )
+    return undefined;
+  const blocks =
+    typeof content === 'string'
+      ? [{ type: 'text' as const, text: content }]
+      : content.map((block) => ({ ...block }));
+  const next = JSON.parse(JSON.stringify(layout)) as AuthoredTextLayoutV1;
+  for (let index = 0; index < layout.spans.length; index++) {
+    const span = layout.spans[index]!;
+    const part = parts[index]!;
+    const block = blocks['blockIndex' in span ? span.blockIndex : 0];
+    if (
+      span.partId !== part.partId ||
+      block?.type !== 'text' ||
+      span.end > block.text.length ||
+      block.text.slice(span.start, span.end) !==
+        (layout.renderer === 'plain-v1' ? part.expectedText : part.expectedRenderedText)
+    )
+      return undefined;
+  }
+  for (let index = layout.spans.length - 1; index >= 0; index--) {
+    const span = layout.spans[index]!;
+    const blockIndex = 'blockIndex' in span ? span.blockIndex : 0;
+    const block = blocks[blockIndex]!;
+    if (block.type !== 'text') return undefined;
+    const text = layout.renderer === 'plain-v1' ? parts[index]!.text : parts[index]!.renderedText;
+    block.text = block.text.slice(0, span.start) + text + block.text.slice(span.end);
+    const delta = text.length - (span.end - span.start);
+    next.spans[index]!.end = span.start + text.length;
+    for (let later = index + 1; later < next.spans.length; later++) {
+      const other = next.spans[later]!;
+      if (('blockIndex' in other ? other.blockIndex : 0) === blockIndex) {
+        other.start += delta;
+        other.end += delta;
+      }
+    }
+  }
+  return {
+    content: typeof content === 'string' ? (blocks[0] as { text: string }).text : blocks,
+    layout: next,
+  };
+}
+
+/** Bounded legacy recovery: entire standalone authored segments, never text within an envelope. */
+function recoverAuthoredLayout(
+  content: Extract<InboxItem, { content: unknown }>['content'],
+  parts: RuntimeEditQueuedInput['parts'],
+): AuthoredTextLayoutV1 | undefined {
+  if (!parts.length || parts.some((part) => !part.expectedRenderedText.length)) return undefined;
+  const blocks = typeof content === 'string' ? [{ type: 'text' as const, text: content }] : content;
+  const spans: { partId: string; blockIndex: number; start: number; end: number }[] = [];
+  let previousBlock = 0;
+  let previousEnd = 0;
+  for (const part of parts) {
+    const matches = [];
+    for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+      const block = blocks[blockIndex]!;
+      if (block.type !== 'text') continue;
+      let start = block.text.indexOf(part.expectedRenderedText);
+      while (start >= 0) {
+        matches.push({
+          partId: part.partId,
+          blockIndex,
+          start,
+          end: start + part.expectedRenderedText.length,
+        });
+        start = block.text.indexOf(part.expectedRenderedText, start + 1);
+      }
+    }
+    // Even a duplicate inside JSON is ambiguous: no attachment parsing on save.
+    if (matches.length !== 1) return undefined;
+    const span = matches[0]!;
+    const text = (blocks[span.blockIndex] as { text: string }).text;
+    if (
+      span.blockIndex < previousBlock ||
+      (span.blockIndex === previousBlock && span.start < previousEnd)
+    )
+      return undefined;
+    // Standalone prefix/suffix separated only by known frozen serializer segment starts.
+    const prefix = text.slice(0, span.start);
+    const suffix = text.slice(span.end);
+    if (
+      prefix.length ||
+      (suffix.length &&
+        !/^\nCherry managed (?:text attachment|document attachment|image|document image):?/.test(
+          suffix,
+        ))
+    )
+      return undefined;
+    spans.push(span);
+    previousBlock = span.blockIndex;
+    previousEnd = span.end;
+  }
+  return typeof content === 'string'
+    ? {
+        version: 1,
+        renderer: 'runtime-user-text-v1',
+        contentKind: 'string',
+        spans: spans.map(({ partId, start, end }) => ({ partId, start, end })),
+      }
+    : { version: 1, renderer: 'runtime-user-text-v1', contentKind: 'blocks', spans };
 }

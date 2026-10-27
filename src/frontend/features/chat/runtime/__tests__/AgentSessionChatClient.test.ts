@@ -44,6 +44,7 @@ function snapshot(): AgentSessionSnapshot {
 
 test('observes a removable queue without inventing an active execution and reconciles placement races', async () => {
   const queued = {
+    moveTargets: { earlier: null, later: null },
     turnId: 'waiting',
     userMessage: { ...userMessage(), id: 'waiting-user', turnId: 'waiting' },
     assistantMessageId: 'waiting-answer',
@@ -122,6 +123,8 @@ function protocolWithObservation(
   observeSession: AgentProtocol['observeSession'],
 ): jest.Mocked<AgentProtocol> {
   return {
+    editQueuedInput: jest.fn(),
+    moveQueuedInput: jest.fn(),
     cancelSubmission: jest.fn(),
     cancelTurn: jest.fn(),
     cancelQueuedInput: jest.fn<
@@ -1306,4 +1309,103 @@ describe('AgentSessionChatClient', () => {
       status: 'error',
     });
   });
+});
+
+test('queue wrappers reconcile every protocol outcome and retain confirmed contents on rejection and runtime failure', async () => {
+  let publish!: (event: AgentEvent) => void;
+  let current = snapshot();
+  const protocol = protocolWithObservation(async (_id, listener) => {
+    publish = listener;
+    return { snapshot: current, unsubscribe() {} };
+  });
+  const client = new AgentSessionChatClient(protocol);
+  const release = client.subscribe('session-1', () => {});
+  const identity = {
+    turnId: 'waiting',
+    assistantMessageId: 'waiting-answer',
+    mutationId: 'mutation',
+  };
+  const edit = {
+    ...identity,
+    parts: [{ partId: 'input-0', expectedText: 'Hello', text: 'Edited' }],
+  };
+  const move = {
+    ...identity,
+    direction: 'earlier' as const,
+    expectedNeighborAssistantMessageId: null,
+  };
+  try {
+    await client.observe('session-1');
+    const queued = {
+      ...identity,
+      moveTargets: { earlier: null, later: null },
+      userMessage: userMessage(),
+    };
+    const editResults: Awaited<ReturnType<AgentProtocol['editQueuedInput']>>[] = [
+      { status: 'updated' },
+      { status: 'unchanged', reason: 'same-text' },
+      { status: 'unchanged', reason: 'already-applied' },
+      { status: 'already-started' },
+      { status: 'not-found' },
+      ...(
+        [
+          'stale-text',
+          'authored-text-unlocatable',
+          'invalid-text-layout',
+          'reference-conflict',
+          'empty-message',
+          'mutation-id-reused',
+        ] as const
+      ).map((reason) => ({ status: 'conflict' as const, reason })),
+    ];
+    const moveResults: Awaited<ReturnType<AgentProtocol['moveQueuedInput']>>[] = [
+      { status: 'moved' },
+      { status: 'unchanged', reason: 'already-applied' },
+      { status: 'already-started' },
+      { status: 'not-found' },
+      ...(['stale-neighbor', 'boundary', 'different-lane', 'mutation-id-reused'] as const).map(
+        (reason) => ({ status: 'conflict' as const, reason }),
+      ),
+    ];
+    for (const result of editResults) {
+      current = {
+        ...snapshot(),
+        queuedInputs: [
+          {
+            ...queued,
+            userMessage: {
+              ...userMessage(),
+              parts: [{ id: 'input-0', type: 'text', state: 'done', text: JSON.stringify(result) }],
+            },
+          },
+        ],
+      };
+      protocol.editQueuedInput.mockResolvedValueOnce(result);
+      const calls = protocol.observeSession.mock.calls.length;
+      await expect(client.editQueuedInput('session-1', edit)).resolves.toEqual(result);
+      expect(protocol.observeSession.mock.calls.length).toBe(calls + 1);
+      expect(client.getState('session-1').queuedInputs).toEqual(current.queuedInputs);
+    }
+    for (const result of moveResults) {
+      current = { ...snapshot(), queuedInputs: result.status === 'not-found' ? [] : [queued] };
+      protocol.moveQueuedInput.mockResolvedValueOnce(result);
+      const calls = protocol.observeSession.mock.calls.length;
+      await expect(client.moveQueuedInput('session-1', move)).resolves.toEqual(result);
+      expect(protocol.observeSession.mock.calls.length).toBe(calls + 1);
+      expect(client.getState('session-1').queuedInputs).toEqual(current.queuedInputs);
+    }
+    const confirmed = client.getState('session-1').queuedInputs;
+    protocol.editQueuedInput.mockRejectedValueOnce(new Error('storage'));
+    await expect(client.editQueuedInput('session-1', edit)).rejects.toThrow('storage');
+    expect(client.getState('session-1').queuedInputs).toEqual(confirmed);
+    protocol.moveQueuedInput.mockRejectedValueOnce(new Error('storage'));
+    await expect(client.moveQueuedInput('session-1', move)).rejects.toThrow('storage');
+    publish({ type: 'runtime.failed' });
+    expect(client.getState('session-1').queuedInputs).toEqual(confirmed);
+    expect(protocol.editQueuedInput).toHaveBeenCalledWith({ ...edit, sessionId: 'session-1' });
+    expect(protocol.moveQueuedInput).toHaveBeenCalledWith({ ...move, sessionId: 'session-1' });
+  } finally {
+    release();
+    client.dispose();
+  }
 });

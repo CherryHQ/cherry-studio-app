@@ -26,7 +26,7 @@ import type {
 export type RuntimeAttachmentContents = ReadonlyMap<string, RuntimeInputPart>;
 
 export function toRuntimeInputParts(
-  parts: AgentInputPart[],
+  parts: (AgentInputPart & { id?: string })[],
   resources?: Pick<TurnResourceLedger, 'fileEntryIds'>,
   attachments?: RuntimeAttachmentContents,
 ): RuntimeInputPart[] {
@@ -41,7 +41,7 @@ export function toRuntimeInputParts(
       }
       return [attachment];
     }
-    return [{ type: 'text', text: runtimeUserText(part) }];
+    return [{ type: 'text', text: runtimeUserText(part), ...(part.id ? { partId: part.id } : {}) }];
   });
 }
 
@@ -182,7 +182,7 @@ function contextAnchor(
 }
 
 /** Preserve message-scoped composer intent as user content, without changing the stored text. */
-function runtimeUserText(part: {
+export function runtimeUserText(part: {
   text: string;
   pluginReferences?: PluginTextReference[];
   selectionReferences?: SelectionTextReference[];

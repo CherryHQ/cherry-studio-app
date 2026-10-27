@@ -457,6 +457,15 @@ interface AgentProtocol {
 
   cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>
   cancelQueuedInput(input: { sessionId: string; turnId: string }): Promise<'withdrawn' | 'already-started' | 'not-found'>
+  editQueuedInput(input: {
+    sessionId: string; turnId: string; assistantMessageId: string; mutationId: string
+    parts: { partId: string; expectedText: string; text: string }[]
+  }): Promise<AgentEditQueuedInputResult>
+  moveQueuedInput(input: {
+    sessionId: string; turnId: string; assistantMessageId: string; mutationId: string
+    direction: 'earlier' | 'later'
+    expectedNeighborAssistantMessageId: string | null
+  }): Promise<AgentMoveQueuedInputResult>
   cancelSubmission(input: { sessionId: string }): Promise<void>
 
   respondApproval(input: {
@@ -624,6 +633,44 @@ inside the process at their original position. The marker has no detail disclosu
 summary text or tool payloads. The model-history adapter excludes these presentation parts. A marker
 records an event; it does not turn an execution-local summary into a durable checkpoint.
 
+### Waiting-input mutations
+
+```ts
+type AgentEditQueuedInputResult =
+  | { status: 'updated' }
+  | { status: 'unchanged'; reason: 'same-text' | 'already-applied' }
+  | { status: 'already-started' | 'not-found' }
+  | { status: 'conflict'; reason:
+      'stale-text' | 'authored-text-unlocatable' | 'invalid-text-layout' |
+      'reference-conflict' | 'empty-message' | 'mutation-id-reused' }
+
+type AgentMoveQueuedInputResult =
+  | { status: 'moved' }
+  | { status: 'unchanged'; reason: 'already-applied' }
+  | { status: 'already-started' | 'not-found' }
+  | { status: 'conflict'; reason:
+      'stale-neighbor' | 'boundary' | 'different-lane' | 'mutation-id-reused' }
+```
+
+Both commands target the existing session, turn, and assistant identity and affect only waiting
+work. Each operation carries a nonempty mutation ID. An accepted mutation and its fingerprint are
+recorded atomically with the durable change; replaying the same ID and payload returns
+`unchanged: already-applied`, while reusing it for another payload returns `mutation-id-reused`.
+Clients generate a new mutation ID for a new attempt. Edit compares every `expectedText` exactly
+against its authored part before replacing that part's text. It preserves part identity/order,
+attachments, references, and captured execution settings. Every authored text part must occur
+exactly once, with no duplicate part IDs; an empty message without attachments is rejected.
+Unlocatable or invalid historical provenance requires removing and resending the input.
+
+Move compares the adjacent waiting assistant identity in the requested direction within the same
+lane against `expectedNeighborAssistantMessageId`; null denotes a boundary, not permission to
+cross it. Stale neighbors and cross-lane moves are conflicts. Admission and mutation are serialized:
+`already-started` never aborts or edits running work. Neither command changes the unsent composer
+draft. The client refreshes observation after every returned outcome, including conflicts and
+no-ops, and never applies optimistic queue changes. Rejected retryable protocol errors leave the
+confirmed queue intact. Durable observer reconciliation repairs ordered user text, search text,
+pending parent links and selected continuation even if the command acknowledgment was lost.
+
 ## Snapshot and recovery
 
 ```ts
@@ -632,7 +679,10 @@ type AgentSessionSnapshot = {
   session: AgentSessionView
   capabilities: AgentCapabilities
   activeTurn: AgentTurnView | null
-  queuedInputs: { turnId: string; userMessage: AgentMessageView; assistantMessageId: string }[]
+  queuedInputs: {
+    turnId: string; userMessage: AgentMessageView; assistantMessageId: string
+    moveTargets: { earlier: string | null; later: string | null }
+  }[]
   activeUserMessage: AgentMessageView | null
   hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
@@ -648,9 +698,11 @@ snapshot. The snapshot contains only live state that must be composed over persi
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
 
-`queuedInputs` is the durable follow-up inbox in submission order; `queue.updated` replaces its
-membership. These inputs appear above the composer and do not create transcript rows in the live
-projection. Local history requests `settledOnly`, excluding unsettled message pairs before paging
+`queuedInputs` is the authoritative waiting execution order within each durable lane;
+`queue.updated` replaces its complete ordered contents, including confirmed text and neighbor
+`moveTargets` (assistant identities, null at a lane boundary). Lanes are flattened for observation;
+move targets never cross lanes. These inputs appear above the composer and do not create transcript
+rows in the live projection. Local history requests `settledOnly`, excluding unsettled message pairs before paging
 and render-window selection; observation supplies each active turn's question and all its answers,
 including completed siblings, until the turn settles. `cancelQueuedInput`
 atomically withdraws only waiting work: `already-started` preserves the active run and asks the
@@ -662,12 +714,13 @@ retains its existing semantics.
 runs ahead of the threshold in the background does not delay the reply and is not reported.
 
 On route remount or foreground transition, the client creates a new observation and replaces its
-live projection with the returned snapshot. On process restart, the Host reconciles unfinished
-local turns to `interrupted`, replaces their non-terminal tool parts with `interrupted` parts carrying
-normalized results, and removes live approvals; version 1 does not resume execution. Recovery runs
-after the first paint, so the Host publishes `message.finalized` for every reconciled assistant
-message: an observer attached before recovery refreshes in place instead of showing a stale
-pending placeholder until the Session is reopened.
+live projection with the returned snapshot. On process restart, the Durable Host initializes native
+storage, attaches observers to current unfinished lanes, discards obsolete copies, and reconciles unsettled input and assistant facts
+before resuming native conversations. Working copies survive the process and retain their native
+context. Reservations with no recoverable execution are reconciled as interrupted. MobileAgentHost
+is the lifecycle facade over DurableAgentHost and requires a persistent runtime; there is no
+non-resuming production fallback. Recovery publishes finalized assistant messages so an observer
+attached before recovery refreshes in place instead of retaining stale placeholders.
 
 ## Errors
 
@@ -841,7 +894,8 @@ question has, and the questions an answer has, are alternatives the client can s
   in that copy's native Pi inbox. Pi queues input, not configuration: a follow-up to a parallel
   answer needs a different model and tool set, and changing a copy's configuration applies from its
   next request, which would reach the answer still running. Cherry does not emulate a queue around
-  this.
+  this. Editing or reordering a waiting input changes only its text or position; it does not
+  reconfigure a copy or admit parallel follow-ups.
 - **Switching.** `selectMessage` selects the branch containing a message. Switching never calls a
   model and never stops work on another branch; it restores the newest continuation below the chosen
   alternative.

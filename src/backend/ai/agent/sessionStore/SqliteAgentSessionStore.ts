@@ -934,6 +934,107 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     );
   }
 
+  async reconcileDurableInput(inputs: Parameters<AgentSessionStore['reconcileDurableInput']>[0]) {
+    if (!inputs.length) return;
+    await this.dbService.withWriteTx(async (tx) => {
+      const rows = [];
+      for (const input of inputs) {
+        const guard = and(
+          eq(agentSessionMessageTable.id, input.userMessageId),
+          eq(agentSessionMessageTable.sessionId, input.sessionId),
+          eq(agentSessionMessageTable.turnId, input.turnId),
+          eq(agentSessionMessageTable.role, 'user'),
+        );
+        const [existing] = await tx
+          .select({
+            data: agentSessionMessageTable.data,
+            parentId: agentSessionMessageTable.parentId,
+          })
+          .from(agentSessionMessageTable)
+          .where(guard)
+          .limit(1);
+        const [assistant] = await tx
+          .select({ id: agentSessionMessageTable.id })
+          .from(agentSessionMessageTable)
+          .where(
+            and(
+              eq(agentSessionMessageTable.id, input.assistantMessageId),
+              eq(agentSessionMessageTable.sessionId, input.sessionId),
+              eq(agentSessionMessageTable.turnId, input.turnId),
+              eq(agentSessionMessageTable.parentId, input.userMessageId),
+              eq(agentSessionMessageTable.role, 'assistant'),
+            ),
+          )
+          .limit(1);
+        if (existing && assistant) rows.push({ input, existing, guard });
+      }
+      // Capture selection before reparenting, then move only the affected chain's selected tail.
+      const sessions = new Map<string, string | null>();
+      for (const { input } of rows) {
+        if (sessions.has(input.sessionId)) continue;
+        const [session] = await tx
+          .select({ activeNodeId: agentSessionTable.activeNodeId })
+          .from(agentSessionTable)
+          .where(eq(agentSessionTable.id, input.sessionId))
+          .limit(1);
+        sessions.set(input.sessionId, session?.activeNodeId ?? null);
+      }
+      for (const { input, existing, guard } of rows) {
+        const authored = new Map(
+          input.parts.filter((part) => part.type === 'text').map((part) => [part.id, part]),
+        );
+        const existingIds = new Set(existing.data.parts.map((part) => part.id));
+        const parts = [
+          ...[...authored.values()].filter((part) => !existingIds.has(part.id)),
+          ...existing.data.parts.map((part) =>
+            part.type === 'text' ? (authored.get(part.id) ?? part) : part,
+          ),
+        ];
+        if (
+          JSON.stringify(parts) === JSON.stringify(existing.data.parts) &&
+          (input.parentMessageId === undefined || input.parentMessageId === existing.parentId)
+        )
+          continue;
+        await tx
+          .update(agentSessionMessageTable)
+          .set({
+            data: { ...existing.data, parts },
+            searchableText: toSearchableText(parts),
+            ...(input.parentMessageId !== undefined ? { parentId: input.parentMessageId } : {}),
+          })
+          .where(guard);
+      }
+      for (const [sessionId, selected] of sessions) {
+        const chain = rows.filter((row) => row.input.sessionId === sessionId);
+        if (
+          !selected ||
+          !chain.some((row) => row.input.assistantMessageId === selected) ||
+          chain.some((row) => row.existing.parentId === selected)
+        )
+          continue;
+        const tails = chain.filter(
+          (row) =>
+            !chain.some(
+              (other) =>
+                (other.input.parentMessageId !== undefined
+                  ? other.input.parentMessageId
+                  : other.existing.parentId) === row.input.assistantMessageId,
+            ),
+        );
+        if (tails.length === 1 && tails[0].input.assistantMessageId !== selected)
+          await tx
+            .update(agentSessionTable)
+            .set({ activeNodeId: tails[0].input.assistantMessageId })
+            .where(
+              and(
+                eq(agentSessionTable.id, sessionId),
+                eq(agentSessionTable.activeNodeId, selected),
+              ),
+            );
+      }
+    });
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     const message = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx

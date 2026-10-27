@@ -550,3 +550,21 @@ describe('Turn Runtime input assembly', () => {
     ]);
   });
 });
+
+test('carries the captured display ID through authored reference rendering', () => {
+  const parts = toRuntimeInputParts([
+    {
+      id: 'captured-display-id',
+      type: 'text',
+      text: 'Plugin',
+      pluginReferences: [{ type: 'plugin', pluginId: 'chosen', label: 'Plugin', offset: 0 }],
+    },
+  ]);
+  expect(parts).toEqual([
+    {
+      partId: 'captured-display-id',
+      type: 'text',
+      text: 'Plugin\n\nFor this message, use the plugins explicitly selected in the composer: ["chosen"]. Other connected plugins remain available if needed.',
+    },
+  ]);
+});
