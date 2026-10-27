@@ -26,7 +26,11 @@ import {
   type SystemIntegrationNativeModule,
 } from '../../../../modules/system-integration';
 import type { BackgroundActivityEnvironment } from './BackgroundActivityEnvironment';
-import type { BackgroundActivityPresenter } from './presenter';
+import type {
+  BackgroundActivityPresenter,
+  RemoteConnectionNotification,
+  RemoteConnectionNotices,
+} from './presenter';
 
 // Android 15 gives dataSync six background hours, reset on foreground entry.
 // Leave a minute for the domain's normal cancellation and notification drain.
@@ -61,15 +65,6 @@ type ServiceContent = {
   taskDesc: string;
   linkingURI?: string;
 };
-export type RemoteConnectionNotification = {
-  connectionId: string;
-  key: string;
-  title: string;
-  body: string;
-  url: string;
-  token: string;
-  disconnectLabel: string;
-};
 type ConnectionNotificationRecord = RemoteConnectionNotification & {
   id: number;
   delivered?: string;
@@ -80,7 +75,10 @@ type ConnectionNotificationRecord = RemoteConnectionNotification & {
 @ServicePhase(Phase.PostReady)
 @DependsOn(['BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
-export class AndroidBackgroundActivityRuntime extends BaseService implements KeepAliveSource {
+export class AndroidBackgroundActivityRuntime
+  extends BaseService
+  implements KeepAliveSource, RemoteConnectionNotices
+{
   private readonly activities = new Set<ActivityRecord>();
   private connections: ConnectionNotificationRecord[] = [];
   private readonly leases = new Set<LeaseRecord>();
