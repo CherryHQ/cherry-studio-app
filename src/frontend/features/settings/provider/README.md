@@ -6,7 +6,8 @@ This page branch owns the `/settings/provider` list and its child pages.
 
 - The list page is exported from this directory's `index.ts`; every child page has its own public
   `index.ts`.
-- `useProviderListNavigation` lets the parent settings page open and prefetch the provider list.
+- `useProviderListNavigation` lets the parent settings page open the list and prefetch its data
+  without preloading the route.
   Its route, query key, pagination, and cache policy remain private to this branch.
 - Provider avatar persistence stays private to this page branch under `hooks/`.
 

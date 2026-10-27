@@ -377,7 +377,7 @@ entry. Expo Asset 58 resolves bundled resources through that public export; with
 preview fails before loading its HTML page. Keep the forwarding until Uniwind includes it upstream.
 `scripts/__tests__/uniwindAssetRegistry.test.ts` guards the installed entry and patch registration.
 
-Android builds compile `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
+Android builds compile `expo-app-metrics` and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's

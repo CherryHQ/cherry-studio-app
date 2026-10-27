@@ -1,7 +1,8 @@
 import { createContext, type PropsWithChildren, type ReactNode, use } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { builtInToolDefinitions } from './builtInTool/definitions';
+import { getBuiltInToolTitleKey } from '@/shared/data/types/builtInToolTitles';
+
 import { isMetaToolPart, META_TOOL_TITLE_KEYS, type MetaToolName } from './metaTool/metaToolState';
 import { getToolName, type ToolMessagePart } from './toolPartState';
 
@@ -37,7 +38,7 @@ export function useToolTitle() {
     const name = getToolName(part);
     if (getSourceTitle) return getSourceTitle(name);
     const titleKey =
-      builtInToolDefinitions[name]?.titleKey ??
+      getBuiltInToolTitleKey(name) ??
       (isMetaToolPart(part) ? META_TOOL_TITLE_KEYS[name as MetaToolName] : undefined);
     return titleKey ? t(titleKey) : part.title?.trim() || name;
   };

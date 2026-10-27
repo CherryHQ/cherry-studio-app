@@ -2,15 +2,7 @@ import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import { Button, Image } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  BackHandler,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -28,6 +20,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import { useComposerActions } from '@/frontend/components/Composer';
 
 import type { PaintingTemplateOrigin } from '../../utils/paintingTemplateOrigin';
@@ -178,14 +171,11 @@ export function TemplateStage({
     [scrollX],
   );
 
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (mode === 'use') exitUse();
-      else dismiss();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [dismiss, exitUse, mode]);
+  // A route pushed from the stage, such as provider setup, keeps back for itself.
+  useFocusedBackPress(() => {
+    if (mode === 'use') exitUse();
+    else dismiss();
+  });
 
   const pan = Gesture.Pan()
     .enabled(mode === 'browse')

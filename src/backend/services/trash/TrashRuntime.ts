@@ -70,7 +70,7 @@ export class TrashRuntime extends BaseService {
 
   restore(kind: TrashKind, id: string, signal?: AbortSignal) {
     return this.mutate(async () => {
-      await this.entries.restore(kind, id, signal);
+      await this.files.restore(kind, id, signal);
     });
   }
 

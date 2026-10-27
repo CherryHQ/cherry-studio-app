@@ -1,6 +1,5 @@
 import { loggerService } from '@logger';
 import { resolveScheme } from 'expo-linking';
-import { Platform } from 'react-native';
 
 import {
   AppStatePolicy,
@@ -10,8 +9,8 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import type { RemoteConnectionNotices } from '@/backend/services/backgroundActivity/presenter';
 import type {
   KeepAliveCoordinator,
   KeepAliveLease,
@@ -21,13 +20,18 @@ import type { DesktopConnectionManager } from './DesktopConnectionManager';
 
 const logger = loggerService.withContext('RemoteConnectionNotification');
 
-/** One host owns connection demand; ending a route or remote task does not release it. */
+/**
+ * One host owns connection demand; ending a route or remote task does not release it. Only a
+ * platform with connection notices keeps connections past their page; elsewhere this is inert.
+ */
 @Injectable('RemoteConnectionNotificationRuntime')
+// Listed last, past the injected arguments: the Android notice surface is ordering only, reached
+// through the environment.
 @DependsOn([
   'DesktopConnectionManager',
   'KeepAliveCoordinator',
-  'AndroidBackgroundActivityRuntime',
   'BackgroundActivityEnvironment',
+  'AndroidBackgroundActivityRuntime',
 ])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('continue')
@@ -35,18 +39,19 @@ export class RemoteConnectionNotificationRuntime extends BaseService {
   private lease?: KeepAliveLease;
   private disposed = false;
   private signature?: string;
+  private notices?: RemoteConnectionNotices;
 
   constructor(
     private readonly connections: DesktopConnectionManager,
     private readonly keepAlive: KeepAliveCoordinator,
-    private readonly android: AndroidBackgroundActivityRuntime,
     private readonly environment: BackgroundActivityEnvironment,
   ) {
     super();
   }
 
   protected onInit(): void {
-    if (Platform.OS !== 'android') return;
+    this.notices = this.environment.connectionNotices;
+    if (!this.notices) return;
     this.connections.enablePersistentConnections();
     this.registerDisposable(this.connections.subscribeConnections(() => this.reconcile()));
     this.registerDisposable(
@@ -80,7 +85,7 @@ export class RemoteConnectionNotificationRuntime extends BaseService {
     const signature = JSON.stringify(notifications);
     if (signature !== this.signature) {
       this.signature = signature;
-      void this.android.setRemoteConnections(notifications).catch((error: unknown) => {
+      void this.notices?.setRemoteConnections(notifications).catch((error: unknown) => {
         this.signature = undefined;
         logger.warn('Could not update connection notification', { error });
       });
@@ -102,6 +107,6 @@ export class RemoteConnectionNotificationRuntime extends BaseService {
     this.disposed = true;
     this.lease?.release();
     this.lease = undefined;
-    if (Platform.OS === 'android') await this.android.setRemoteConnections([]);
+    await this.notices?.setRemoteConnections([]);
   }
 }

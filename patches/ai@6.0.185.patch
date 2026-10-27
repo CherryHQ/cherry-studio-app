@@ -54,33 +54,7 @@ diff --git a/dist/index.js b/dist/index.js
 index 5774837..a06b785 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -8468,6 +8468,16 @@ function createUIMessageStream({
- }
- 
- // src/ui-message-stream/read-ui-message-stream.ts
-+// PATCHED(cherry): structural-sharing snapshot (mirrors vercel/ai#18692) — structuredClone here
-+// was O(message bytes) per chunk, melting the renderer on long fast streams (vercel/ai#18624).
-+function cherrySnapshotUIMessage(message) {
-+  const snapshot = { ...message, parts: message.parts.map((part) => ({ ...part })) };
-+  if ("metadata" in message) {
-+    const metadata = message.metadata;
-+    snapshot.metadata = Array.isArray(metadata) ? [...metadata] : metadata !== null && typeof metadata === "object" ? { ...metadata } : metadata;
-+  }
-+  return snapshot;
-+}
- function readUIMessageStream({
-   message,
-   stream,
-@@ -8500,7 +8510,7 @@ function readUIMessageStream({
-         return job({
-           state,
-           write: () => {
--            controller == null ? void 0 : controller.enqueue(structuredClone(state.message));
-+            controller == null ? void 0 : controller.enqueue(cherrySnapshotUIMessage(state.message));
-           }
-         });
-       },
-@@ -9636,6 +9646,14 @@ var DefaultEmbedManyResult = class {
+@@ -9636,6 +9636,14 @@ var DefaultEmbedManyResult = class {
  
  // src/generate-image/generate-image.ts
  var import_provider_utils25 = require("@ai-sdk/provider-utils");
@@ -95,7 +69,7 @@ index 5774837..a06b785 100644
  async function generateImage({
    model: modelArg,
    prompt: promptArg,
-@@ -9647,7 +9665,8 @@ async function generateImage({
+@@ -9647,7 +9655,8 @@ async function generateImage({
    providerOptions,
    maxRetries: maxRetriesArg,
    abortSignal,
@@ -105,7 +79,7 @@ index 5774837..a06b785 100644
  }) {
    var _a21, _b;
    const model = resolveImageModel(modelArg);
-@@ -9696,11 +9715,36 @@ async function generateImage({
+@@ -9696,11 +9705,36 @@ async function generateImage({
      outputTokens: void 0,
      totalTokens: void 0
    };
@@ -146,7 +120,7 @@ index 5774837..a06b785 100644
            return new DefaultGeneratedFile({
              data: image,
              mediaType: (_a22 = detectMediaType({
-@@ -9708,9 +9752,22 @@ async function generateImage({
+@@ -9708,9 +9742,22 @@ async function generateImage({
                signatures: imageMediaTypeSignatures
              })) != null ? _a22 : "image/png"
            });
@@ -174,33 +148,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
 index 6862f01..ccdb020 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -8392,6 +8392,16 @@ function createUIMessageStream({
- }
- 
- // src/ui-message-stream/read-ui-message-stream.ts
-+// PATCHED(cherry): structural-sharing snapshot (mirrors vercel/ai#18692) — structuredClone here
-+// was O(message bytes) per chunk, melting the renderer on long fast streams (vercel/ai#18624).
-+function cherrySnapshotUIMessage(message) {
-+  const snapshot = { ...message, parts: message.parts.map((part) => ({ ...part })) };
-+  if ("metadata" in message) {
-+    const metadata = message.metadata;
-+    snapshot.metadata = Array.isArray(metadata) ? [...metadata] : metadata !== null && typeof metadata === "object" ? { ...metadata } : metadata;
-+  }
-+  return snapshot;
-+}
- function readUIMessageStream({
-   message,
-   stream,
-@@ -8424,7 +8434,7 @@ function readUIMessageStream({
-         return job({
-           state,
-           write: () => {
--            controller == null ? void 0 : controller.enqueue(structuredClone(state.message));
-+            controller == null ? void 0 : controller.enqueue(cherrySnapshotUIMessage(state.message));
-           }
-         });
-       },
-@@ -9575,6 +9585,14 @@ import {
+@@ -9575,6 +9575,14 @@ import {
    convertBase64ToUint8Array as convertBase64ToUint8Array4,
    withUserAgentSuffix as withUserAgentSuffix5
  } from "@ai-sdk/provider-utils";
@@ -215,7 +163,7 @@ index 6862f01..ccdb020 100644
  async function generateImage({
    model: modelArg,
    prompt: promptArg,
-@@ -9586,7 +9604,8 @@ async function generateImage({
+@@ -9586,7 +9594,8 @@ async function generateImage({
    providerOptions,
    maxRetries: maxRetriesArg,
    abortSignal,
@@ -225,7 +173,7 @@ index 6862f01..ccdb020 100644
  }) {
    var _a21, _b;
    const model = resolveImageModel(modelArg);
-@@ -9635,11 +9654,36 @@ async function generateImage({
+@@ -9635,11 +9644,36 @@ async function generateImage({
      outputTokens: void 0,
      totalTokens: void 0
    };
@@ -266,7 +214,7 @@ index 6862f01..ccdb020 100644
            return new DefaultGeneratedFile({
              data: image,
              mediaType: (_a22 = detectMediaType({
-@@ -9647,9 +9691,22 @@ async function generateImage({
+@@ -9647,9 +9681,22 @@ async function generateImage({
                signatures: imageMediaTypeSignatures
              })) != null ? _a22 : "image/png"
            });

@@ -37,6 +37,7 @@ import {
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 import { createUniqueModelId, ENDPOINT_TYPE, type EndpointType } from '@/shared/data/types/model';
 import type { EndpointConfig, EndpointConfigs } from '@/shared/data/types/provider';
+import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
 import { buildModelInsertValues, type CreateModelInput } from './ModelService';
 import {
@@ -152,10 +153,11 @@ function getProviderImportRejection(
   const authConfig = parseSupportedAuthConfig(provider.authConfig);
   const authOptional =
     provider.authOptional ??
-    (authConfig?.type === 'api-key' && authConfig.required !== undefined
-      ? !authConfig.required
-      : providerRegistryService.getProviderDisplayMetadata(provider.id, provider.presetProviderId)
-          .authOptional);
+    resolveAuthOptional(
+      authConfig,
+      providerRegistryService.getProviderDisplayMetadata(provider.id, provider.presetProviderId)
+        .authOptional,
+    );
   return authOptional || hasUsableKey ? undefined : 'missing-api-key';
 }
 

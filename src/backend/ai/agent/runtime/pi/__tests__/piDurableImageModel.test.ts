@@ -2,7 +2,8 @@ import type { Api, Context, Model, ToolResultMessage } from '@earendil-works/pi-
 import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
-import { imageModelStream, PI_IMAGE_TOOL_NAME } from '../piDurableImageModel';
+import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
+import { imageModelStream } from '../piDurableImageModel';
 
 const model: Model<Api> = {
   api: 'cherry-image',
@@ -20,7 +21,7 @@ const user = { role: 'user' as const, content: 'Draw a cat.', timestamp: 1 };
 const result: ToolResultMessage = {
   role: 'toolResult',
   toolCallId: 'image-call',
-  toolName: PI_IMAGE_TOOL_NAME,
+  toolName: DURABLE_IMAGE_TOOL_NAME,
   content: [{ type: 'text', text: 'Saved image.' }],
   isError: false,
   timestamp: 2,
@@ -33,7 +34,7 @@ describe('Pi direct image scheduling', () => {
     const first = await stream({ messages: [user] }).result();
     expect(first.stopReason).toBe('toolUse');
     expect(first.content).toEqual([
-      expect.objectContaining({ type: 'toolCall', name: PI_IMAGE_TOOL_NAME }),
+      expect.objectContaining({ type: 'toolCall', name: DURABLE_IMAGE_TOOL_NAME }),
     ]);
     const complete = await stream({ messages: [user, result] }).result();
     expect(complete).toMatchObject({ stopReason: 'stop', content: [] });

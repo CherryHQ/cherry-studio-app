@@ -7,6 +7,9 @@ import type { FilePane } from '../FilePaneProvider';
 import { useFilePaneBackPress } from '../useFilePaneBackPress';
 
 let mockFocused = true;
+jest.mock('@/frontend/appShell/navigation', () =>
+  jest.requireActual('@/frontend/appShell/navigation/useFocusedBackPress'),
+);
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
     const { useEffect } = jest.requireActual<typeof import('react')>('react');

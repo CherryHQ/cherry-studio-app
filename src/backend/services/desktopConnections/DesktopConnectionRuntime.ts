@@ -150,6 +150,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               signal,
               existing,
             );
+            this.connections!.forgetDisconnect(id);
             this.connections!.invalidate(id);
             this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
@@ -191,6 +192,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               Boolean(qr.connectionId),
               signal,
             );
+            this.connections!.forgetDisconnect(id);
             this.connections!.invalidate(id);
             this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
@@ -272,6 +274,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     return this.run('remove', signal, async (store, signal) => {
       signal.throwIfAborted();
       await store.remove(id);
+      this.connections!.forgetDisconnect(id);
       this.connections!.invalidate(id, 'removed');
     });
   }

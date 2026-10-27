@@ -10,7 +10,11 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
 - Expo Router `Stack` / React Navigation native-stack bridges native screen stacks and back animations through `react-native-screens`.
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
-- Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation.
+- Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation, and to layers inside a route that Android back dismisses first, such as the file pane, an expanded answer, sidebar selection, or the template stage.
+- Layers inside a route take Android back through `useFocusedBackPress` from
+  `src/frontend/appShell/navigation`, so they hold it only while their route is focused. A route
+  pushed over the layer keeps the layer mounted underneath, and Android calls the latest listener
+  first, so an unfocused listener would take back from the visible route.
 - Device pairing, desktop provider import, and first-use setup replace their entry page and each
   subsequent step. Completion replaces the current step with its destination; cancellation and
   retry use explicit replacement targets. Completed steps do not belong in back history.
@@ -103,8 +107,8 @@ beside the current chat instead of pushing `/library`: the `(chat)` layout lays 
 chat stack side by side, and file previews replace the list inside the pane. The pane belongs to the
 drawer group, so it hides with a desktop chat source and in compact windows, and routes pushed over
 the drawer keep opening their own viewer page. A pane preview can expand over the chat's space;
-the chat stays mounted behind it. Android back first returns an expanded preview beside the chat,
-then leaves the preview, then the pane.
+the chat stays mounted behind it. While the chat is focused, Android back first returns an expanded
+preview beside the chat, then leaves the preview, then the pane.
 
 The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
 content to 800 points and form/management content to 720, inside the horizontal safe area. They
