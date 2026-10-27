@@ -104,6 +104,11 @@ export function createVoiceRuntime({
     const effective = await effectiveEngine(capability, signal);
     if (!effective && capability === 'dictation')
       throw new VoiceError('not-configured', 'Select a dictation engine first.');
+    if (effective?.status === 'needs-setup')
+      throw new VoiceError(
+        'recognition-not-configured',
+        'Configure system speech recognition first.',
+      );
     if (effective?.status === 'ready') return registry(capability)[effective.id] as T;
     throw new VoiceError('unsupported', `No ${capability} engine is available on this device.`);
   }

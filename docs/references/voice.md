@@ -76,6 +76,22 @@ in continuous mode with live partial results; each final utterance is appended w
 `appendUtterance`, which adds no spaces between Chinese or Japanese utterances. On Android the
 engine checks `isRecognitionAvailable()` and uses the configured default `RecognitionService`,
 including vendor implementations. It does not select a Google package or use a vendor allowlist.
+An installed Android service without a selected default reports `needs-setup`, not unsupported.
+The enabled composer action remains available to explain the missing system setup before requesting
+microphone access. Android voice settings also offer a guidance entry. Both explain the device-wide
+scope and service-dependent languages/network use, then open system settings only on the user's
+action. The app never selects a service or writes Android's default-service setting.
+
+Settings navigation lets the device resolve the public voice-input settings action, falling back
+to default-app settings and then system settings when that action is unavailable. Xiaomi devices
+open system settings directly with separate guidance: HyperOS 4 / Android 17 on the tested M610BB
+resolves voice-input settings to the default digital assistant screen, which offers no recognition
+service selector. The app does not guess OEM-private component names or treat opening a settings
+activity as proof that a service can be selected. Some devices do not expose a service selector;
+guidance includes settings search terms and keyboard dictation as an alternative. Returning from
+settings refreshes engine status through the shared query focus bridge. Other manufacturers and
+system versions still require device acceptance.
+
 The config plugin declares the generic `android.speech.RecognitionService` query for package
 visibility. Recognition quality and support for languages, partial results and continuous mode
 depend on the device service.

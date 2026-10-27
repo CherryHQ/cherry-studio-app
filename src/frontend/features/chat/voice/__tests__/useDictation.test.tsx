@@ -220,4 +220,21 @@ describe('dictation into the composer draft', () => {
     expect(mockToast).not.toHaveBeenCalled();
     expect(mockDraft).toBe('Meeting notes:');
   });
+
+  test('a missing recognition default explains system setup without losing the draft', async () => {
+    mockStartDictation.mockRejectedValueOnce(
+      new VoiceError('recognition-not-configured', 'missing'),
+    );
+    await act(async () => dictation.start());
+    expect(mockConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'settings.voice.dictation.systemSettings',
+        description: expect.stringContaining('settings.voice.dictation.setupRequired'),
+        confirmLabel: 'settings.permissions.openSystemSettings',
+      }),
+    );
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockDraft).toBe('Meeting notes:');
+    expect(dictation.state).toBe('idle');
+  });
 });

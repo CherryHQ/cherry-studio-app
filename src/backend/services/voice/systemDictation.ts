@@ -2,8 +2,13 @@ import {
   ExpoSpeechRecognitionModule,
   type ExpoSpeechRecognitionErrorCode,
 } from 'expo-speech-recognition';
+import { Platform } from 'react-native';
 
-import { VoiceError, type DictationSession } from '@/shared/contracts/voice';
+import {
+  VoiceError,
+  type DictationSession,
+  type VoiceEngineStatus,
+} from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { appendUtterance } from '@/shared/utils/dictationText';
 
@@ -24,6 +29,18 @@ const ERRORS: Partial<Record<ExpoSpeechRecognitionErrorCode, VoiceError['code']>
 /** Level events range from -2 to 10, where values below 0 are inaudible. */
 const toLevel = (value: number) => Math.min(1, Math.max(0, value / 10));
 
+function recognitionStatus(): VoiceEngineStatus {
+  if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) return 'unsupported';
+  // Android can discover installed services without having a default selected for startListening.
+  if (
+    Platform.OS === 'android' &&
+    !ExpoSpeechRecognitionModule.getDefaultRecognitionService().packageName
+  ) {
+    return 'needs-setup';
+  }
+  return 'ready';
+}
+
 /** iOS Speech framework or Android SpeechRecognizer through expo-speech-recognition. */
 export function createSystemDictationEngine({
   permissions,
@@ -33,7 +50,7 @@ export function createSystemDictationEngine({
   return {
     async status() {
       try {
-        return ExpoSpeechRecognitionModule.isRecognitionAvailable() ? 'ready' : 'unsupported';
+        return recognitionStatus();
       } catch (error) {
         logger.warn('Could not query speech recognition', { error });
         return 'unsupported';
@@ -41,6 +58,13 @@ export function createSystemDictationEngine({
     },
 
     async start({ language, signal, onText, onLevel }) {
+      // Recheck at the action boundary, before requesting microphone access or starting capture.
+      if (recognitionStatus() === 'needs-setup') {
+        throw new VoiceError(
+          'recognition-not-configured',
+          'No default recognition service selected.',
+        );
+      }
       await requireAccess(
         permissions,
         {

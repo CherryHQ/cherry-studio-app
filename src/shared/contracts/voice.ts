@@ -11,8 +11,8 @@ export const VOICE_ENGINE_PREFERENCE = {
   speech: 'feature.voice.speech_engine',
 } as const satisfies Record<VoiceCapability, string>;
 
-/** `unsupported` cannot run on this device. */
-export type VoiceEngineStatus = 'ready' | 'unsupported';
+/** `needs-setup` requires device configuration; `unsupported` cannot run on this device. */
+export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'unsupported';
 
 export type SpeechVoice = { id: string; name: string; language?: string };
 
@@ -45,6 +45,7 @@ export type VoiceActivity =
 export type VoiceErrorCode =
   | 'unsupported'
   | 'not-configured'
+  | 'recognition-not-configured'
   | 'permission-denied'
   | 'permission-blocked'
   | 'invalid-voice'

@@ -92,6 +92,7 @@ jest.mock('expo-speech-recognition', () => ({
     abort: jest.fn(),
     addListener: jest.fn(() => ({ remove: jest.fn() })),
     getPermissionsAsync: jest.fn(),
+    getDefaultRecognitionService: jest.fn(() => ({ packageName: '' })),
     getSpeechRecognitionServices: jest.fn(() => []),
     isRecognitionAvailable: jest.fn(() => false),
     requestPermissionsAsync: jest.fn(),

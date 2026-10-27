@@ -79,6 +79,20 @@ function setup({
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('engine choice', () => {
+  test('a missing device default preserves the choice and reports actionable setup', async () => {
+    const system = dictationEngine('needs-setup');
+    const { module } = setup({
+      dictation: { system: system.engine },
+      selected: { dictation: 'system' },
+    });
+    await expect(module.getEffectiveEngine('dictation')).resolves.toBe('system');
+    await expect(module.startDictation()).rejects.toMatchObject({
+      code: 'recognition-not-configured',
+    });
+    expect(system.engine.start).not.toHaveBeenCalled();
+    expect(module.getActivity()).toEqual({ kind: 'idle' });
+  });
+
   test('dictation stays off until an engine is explicitly selected', async () => {
     const system = dictationEngine();
     const { module } = setup({ dictation: { system: system.engine } });

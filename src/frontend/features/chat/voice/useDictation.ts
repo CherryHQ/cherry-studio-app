@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
+import { useDictationSetup } from '@/frontend/hooks/useDictationSetup';
 import { VoiceError, type DictationSession } from '@/shared/contracts/voice';
 import { appendUtterance } from '@/shared/utils/dictationText';
 
@@ -32,6 +33,7 @@ export function useDictation() {
   const { alert } = useAlert();
   const voice = useBackendModule('voice');
   const permissions = useBackendModule('permissions');
+  const showDictationSetup = useDictationSetup();
   const { draft } = useComposerState();
   const { setDraft, subscribeDraftEdits } = useComposerActions();
   const active = useRef<ActiveDictation | null>(null);
@@ -55,6 +57,10 @@ export function useDictation() {
 
   const report = useCallback(
     (error: unknown) => {
+      if (error instanceof VoiceError && error.code === 'recognition-not-configured') {
+        showDictationSetup('needs-setup');
+        return;
+      }
       if (error instanceof VoiceError && error.code === 'permission-blocked') {
         alert.confirm({
           title: t('settings.permissions.accessRequired'),
@@ -69,7 +75,7 @@ export function useDictation() {
       }
       toast.show({ label: t(voiceErrorLabelKey(error)), variant: 'danger' });
     },
-    [alert, permissions, t, toast],
+    [alert, permissions, showDictationSetup, t, toast],
   );
 
   const start = useCallback(async () => {

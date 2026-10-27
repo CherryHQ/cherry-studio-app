@@ -1,8 +1,10 @@
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import { Platform } from 'react-native';
 
 import { createSystemDictationEngine } from '../systemDictation';
 
 const native = jest.mocked(ExpoSpeechRecognitionModule);
+const originalPlatform = Platform.OS;
 type Handler = (event: unknown) => void;
 let handlers: Map<string, Set<Handler>>;
 
@@ -18,6 +20,7 @@ const queue = {
 };
 
 beforeEach(() => {
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
   jest.clearAllMocks();
   handlers = new Map();
   native.addListener.mockImplementation(((event: string, handler: Handler) => {
@@ -28,8 +31,13 @@ beforeEach(() => {
   }) as never);
   native.getPermissionsAsync.mockResolvedValue({ granted: true, canAskAgain: true } as never);
   native.isRecognitionAvailable.mockReturnValue(true);
+  native.getDefaultRecognitionService.mockReturnValue({ packageName: 'com.xiaomi.mibrain.speech' });
   native.getSpeechRecognitionServices.mockReturnValue([]);
   native.start.mockImplementation(() => queueMicrotask(() => emit('start')));
+});
+
+afterEach(() => {
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
 });
 
 async function start() {
@@ -64,6 +72,27 @@ test('reports unsupported when Android has no recognition service', async () => 
   native.isRecognitionAvailable.mockReturnValue(false);
   const engine = createSystemDictationEngine({ permissions: queue });
   await expect(engine.status(new AbortController().signal)).resolves.toBe('unsupported');
+});
+
+test('an installed service without a default requires setup before microphone access', async () => {
+  native.getSpeechRecognitionServices.mockReturnValue(['com.xiaomi.mibrain.speech']);
+  native.getDefaultRecognitionService.mockReturnValue({ packageName: '' });
+  const engine = createSystemDictationEngine({ permissions: queue });
+  await expect(engine.status(new AbortController().signal)).resolves.toBe('needs-setup');
+  await expect(start()).rejects.toMatchObject({ code: 'recognition-not-configured' });
+  expect(native.getPermissionsAsync).not.toHaveBeenCalled();
+  expect(native.start).not.toHaveBeenCalled();
+
+  native.getDefaultRecognitionService.mockReturnValue({ packageName: 'com.xiaomi.mibrain.speech' });
+  await expect(engine.status(new AbortController().signal)).resolves.toBe('ready');
+});
+
+test('iOS does not require an Android recognition service selection', async () => {
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+  native.getDefaultRecognitionService.mockReturnValue({ packageName: '' });
+  const engine = createSystemDictationEngine({ permissions: queue });
+  await expect(engine.status(new AbortController().signal)).resolves.toBe('ready');
+  expect(native.getDefaultRecognitionService).not.toHaveBeenCalled();
 });
 
 test('live text accumulates utterances and stop keeps the final transcript', async () => {

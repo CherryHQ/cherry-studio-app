@@ -3,6 +3,7 @@ import { VoiceError, type VoiceErrorCode } from '@/shared/contracts/voice';
 const VOICE_ERROR_KEYS = {
   unsupported: 'voice.error.unsupported',
   'not-configured': 'voice.error.notConfigured',
+  'recognition-not-configured': 'settings.voice.dictation.setupRequired',
   'permission-denied': 'voice.error.permissionDenied',
   'permission-blocked': 'voice.error.permissionDenied',
   'invalid-voice': 'voice.error.invalidVoice',

@@ -2,8 +2,10 @@ import { BottomSheet, Section, useToast } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Platform } from 'react-native';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
+import { useDictationSetup } from '@/frontend/hooks/useDictationSetup';
 import {
   VOICE_ENGINE_PREFERENCE,
   VOICE_ENGINES,
@@ -25,6 +27,7 @@ export function VoiceEngineSection({
   const { t } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
+  const showDictationSetup = useDictationSetup();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [, setSelected] = usePreference(VOICE_ENGINE_PREFERENCE[capability]);
   const statuses = useQuery({
@@ -39,9 +42,11 @@ export function VoiceEngineSection({
         ),
       ) as Record<VoiceEngineId, VoiceEngineStatus>,
     placeholderData: keepPreviousData,
+    staleTime: 0,
   });
   const describe = (engine: VoiceEngineId) => {
     const status = statuses.data?.[engine];
+    if (status === 'needs-setup') return t('settings.voice.dictation.setupRequired');
     if (status === 'unsupported') return t(`settings.voice.${capability}.systemUnavailable`);
     return t(`settings.voice.engine.${engine}Description`);
   };
@@ -66,6 +71,20 @@ export function VoiceEngineSection({
                 : '—'
           }
         />
+        {capability === 'dictation' && Platform.OS === 'android' ? (
+          <Section.Item
+            description={
+              statuses.data?.system === 'needs-setup'
+                ? t('settings.voice.dictation.setupRequired')
+                : statuses.data?.system === 'unsupported'
+                  ? t('settings.voice.dictation.systemUnavailable')
+                  : t('settings.voice.dictation.systemSettingsDescription')
+            }
+            label={t('settings.voice.dictation.systemSettings')}
+            onPress={() => showDictationSetup(statuses.data?.system)}
+            testID="settings-voice-dictation-system-settings"
+          />
+        ) : null}
         {children}
       </Section>
       <BottomSheet

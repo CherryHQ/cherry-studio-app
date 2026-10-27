@@ -53,3 +53,8 @@ test('does not reuse stale availability after a query fails', () => {
   mockQueryFailed = true;
   expect(available()).toBe(false);
 });
+
+test('keeps the enabled action available to guide a missing system default', () => {
+  mockSystemStatus = 'needs-setup';
+  expect(available()).toBe(true);
+});
