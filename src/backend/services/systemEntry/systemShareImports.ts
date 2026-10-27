@@ -18,11 +18,15 @@ export function createSystemShareImporter(entries: FileEntryService) {
     const files: SystemSharedFile[] = [];
     for (const attachment of entry.files) {
       signal.throwIfAborted();
-      const created = await importManagedFile(entries, {
-        uri: attachment.uri,
-        name: attachment.name,
-        mediaType: attachment.mediaType,
-      });
+      const created = await importManagedFile(
+        entries,
+        {
+          uri: attachment.uri,
+          name: attachment.name,
+          mediaType: attachment.mediaType,
+        },
+        signal,
+      );
       const uri = getInternalFileUri(created);
       if (!uri) throw new Error('Shared file is unavailable');
       files.push({

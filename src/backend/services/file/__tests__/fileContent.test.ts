@@ -70,6 +70,7 @@ describe('fileContent attachment boundary', () => {
     expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ folderId, provenance: 'imported' }),
+      undefined,
     );
     jest.restoreAllMocks();
   });
@@ -128,6 +129,7 @@ describe('fileContent attachment boundary', () => {
     expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
       {},
       { ...normalized, provenance: 'imported', source: 'uri' },
+      undefined,
     );
     expect(discardNormalizedImage).toHaveBeenCalledWith(normalized);
   });

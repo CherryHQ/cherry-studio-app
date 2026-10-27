@@ -30,6 +30,8 @@ const entry: NativeSystemEntry = {
   ],
 };
 
+beforeEach(() => jest.resetAllMocks());
+
 test('imports a shared image the way a picked one is imported', async () => {
   const normalized = { mediaType: 'image/jpeg', name: 'photo.jpg', uri: 'file:///cache/photo.jpg' };
   jest.mocked(normalizeImportedImage).mockResolvedValue(normalized);
@@ -45,19 +47,35 @@ test('imports a shared image the way a picked one is imported', async () => {
     }),
   );
   const entries = { create: jest.fn(), delete: jest.fn() };
+  const signal = new AbortController().signal;
 
-  const files = await createSystemShareImporter(entries as never)(
-    entry,
-    new AbortController().signal,
+  const files = await createSystemShareImporter(entries as never)(entry, signal);
+
+  expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
+    entries,
+    { ...normalized, provenance: 'imported', source: 'uri' },
+    signal,
   );
-
-  expect(createInternalEntryWithPreview).toHaveBeenCalledWith(entries, {
-    ...normalized,
-    provenance: 'imported',
-    source: 'uri',
-  });
   expect(discardNormalizedImage).toHaveBeenCalledWith(normalized);
   expect(files).toEqual([
     expect.objectContaining({ mediaType: 'image/jpeg', name: 'photo.jpg', size: 2e6 }),
   ]);
+});
+
+test('discards a normalized image when the share is cancelled during normalization', async () => {
+  const controller = new AbortController();
+  const cancelled = new Error('cancelled');
+  const normalized = { mediaType: 'image/jpeg', name: 'photo.jpg', uri: 'file:///cache/photo.jpg' };
+  jest.mocked(normalizeImportedImage).mockImplementationOnce(async () => {
+    controller.abort(cancelled);
+    return normalized;
+  });
+  const entries = { create: jest.fn(), delete: jest.fn() };
+
+  await expect(createSystemShareImporter(entries as never)(entry, controller.signal)).rejects.toBe(
+    cancelled,
+  );
+
+  expect(discardNormalizedImage).toHaveBeenCalledWith(normalized);
+  expect(createInternalEntryWithPreview).not.toHaveBeenCalled();
 });

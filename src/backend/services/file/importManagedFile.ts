@@ -12,15 +12,22 @@ import { discardNormalizedImage, normalizeImportedImage } from './importedImageN
 export async function importManagedFile(
   entries: Pick<FileEntryService, 'create' | 'delete'>,
   input: { folderId?: string | null; mediaType?: string; name?: string; uri: string },
+  signal?: AbortSignal,
 ): Promise<FileEntry> {
+  signal?.throwIfAborted();
   const normalized = await normalizeImportedImage(input);
   try {
-    return await createInternalEntryWithPreview(entries, {
-      ...input,
-      ...normalized,
-      provenance: 'imported',
-      source: 'uri',
-    });
+    signal?.throwIfAborted();
+    return await createInternalEntryWithPreview(
+      entries,
+      {
+        ...input,
+        ...normalized,
+        provenance: 'imported',
+        source: 'uri',
+      },
+      signal,
+    );
   } finally {
     if (normalized) discardNormalizedImage(normalized);
   }
