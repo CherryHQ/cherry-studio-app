@@ -565,9 +565,8 @@ medication doses inherit the medication selection's authorization. `reselectReco
 selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
 selections share the application permission queue.
 
-A new native binary is required. The initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
-App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
-categories and selected AI service. See [Health Review](../../guides/health-review.md).
+Changes to the HealthKit native module require a new installation package. Privacy disclosures
+must describe the supported health categories and selected AI service.
 
 ### Image Generation
 

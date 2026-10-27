@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { Pressable } from 'react-native';
+import { BackHandler, Platform, Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
@@ -9,6 +9,15 @@ import { ExpandedAnswerProvider } from '../ExpandedAnswer';
 
 const mockSelectBranch = jest.fn();
 let mockAnswers = new Map<string, MessageListItem>();
+let mockFocused = true;
+
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const isFocused = mockFocused;
+    useEffect(() => (isFocused ? effect() : undefined), [effect, isFocused]);
+  },
+}));
 
 jest.mock('react-native', () => {
   const React = jest.requireActual('react');
@@ -139,6 +148,7 @@ describe('ExpandedAnswerProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFocused = true;
     mockSelectBranch.mockResolvedValue(true);
     mockAnswers = new Map([
       ['a1', answer('a1')],
@@ -149,6 +159,7 @@ describe('ExpandedAnswerProvider', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   test('opens the answer over the screen with its own actions', async () => {
@@ -206,6 +217,38 @@ describe('ExpandedAnswerProvider', () => {
     await act(async () => close().props.onPress());
     // The screen is released first; the layer goes a frame later.
     await act(() => new Promise(requestAnimationFrame));
+    expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
+  });
+
+  test('Android back closes the layer, but leaves it to a route pushed over the chat', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    // The latest subscription runs first, as on Android.
+    const backListeners: Parameters<typeof BackHandler.addEventListener>[1][] = [];
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, listener) => {
+      backListeners.push(listener);
+      return { remove: () => backListeners.splice(backListeners.indexOf(listener), 1) };
+    });
+    const pressBack = () =>
+      act(async () => {
+        backListeners
+          .toReversed()
+          .some((listener) => listener({ timeStamp: 0, type: 'hardwareBackPress' }));
+      });
+    const navigatorBack = jest.fn(() => true);
+    backListeners.push(navigatorBack);
+    await open('a1');
+
+    mockFocused = false;
+    act(() => renderer!.update(tree([row()])));
+    await pressBack();
+    expect(navigatorBack).toHaveBeenCalledTimes(1);
+    expect(layer()).toBeTruthy();
+
+    mockFocused = true;
+    act(() => renderer!.update(tree([row()])));
+    await pressBack();
+    await act(() => new Promise(requestAnimationFrame));
+    expect(navigatorBack).toHaveBeenCalledTimes(1);
     expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 

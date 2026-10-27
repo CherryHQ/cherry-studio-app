@@ -49,7 +49,8 @@ stay at the top, the answer's toolbar at the bottom, and there is no composer. S
 to another answer, which becomes the shown one; closing (the close button, pulling down past the top
 on iOS, or Android back) returns to the transcript with that answer's card shown. The layer is a
 component inside the workspace's providers rather than a route, so menus, sheets and toasts portal
-above it as they do over the transcript.
+above it as they do over the transcript. Android back belongs to it only while the chat is focused;
+a route pushed over the chat, such as settings from a permanent sidebar, keeps back for itself.
 
 The layer grows from the card's frame and shrinks back onto the shown card on the shared settle
 spring, which starts from rest and lands exactly without overshoot. Its content lays out once at the

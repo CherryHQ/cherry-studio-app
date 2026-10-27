@@ -6,6 +6,7 @@ import {
   Skeleton,
 } from '@cherrystudio/ui/components';
 import { duration, easing, spring } from '@cherrystudio/ui/motion';
+import { useFocusEffect } from 'expo-router';
 import {
   type PropsWithChildren,
   type ReactNode,
@@ -271,14 +272,17 @@ function ExpandedAnswer({
     if (!row?.branch) onClosed();
   }, [onClosed, row?.branch]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      close();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [close]);
+  // A route pushed over the chat keeps back for itself; the layer stays open underneath.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        close();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [close]),
+  );
 
   const openDuration = useRef<number>(undefined);
   const handleHostLayout = () => {

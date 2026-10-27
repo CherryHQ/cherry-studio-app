@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane';
+import { useFilePane } from '@/frontend/appShell/pane/state';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 

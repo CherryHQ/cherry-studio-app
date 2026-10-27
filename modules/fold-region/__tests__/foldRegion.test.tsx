@@ -1,10 +1,10 @@
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 
-import { type FoldRegion, FoldRegionObserver } from '../index';
+import { type FoldRegionLayout, FoldRegionObserver } from '../index';
 
 let mockNativeProps: {
-  onFoldChange: (event: { nativeEvent: { fold: FoldRegion | null } }) => void;
+  onLayoutChange: (event: { nativeEvent: FoldRegionLayout }) => void;
 };
 
 jest.mock('expo', () => ({
@@ -16,15 +16,20 @@ jest.mock('expo', () => ({
     },
 }));
 
-it('hands callers the bare fold rather than the synthetic event', () => {
-  const onFoldChange = jest.fn();
-  const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+it('delivers the host, safe area, window and fold in one snapshot, including unfolded windows', () => {
+  const onLayoutChange = jest.fn();
+  const layout: FoldRegionLayout = {
+    host: { height: 669, width: 951, x: 0, y: 0 },
+    insets: { left: 0, right: 24 },
+    window: { height: 669, width: 951 },
+    fold: { height: 669, isActive: true, width: 40, x: 455, y: 0 },
+  };
   act(() => {
-    create(createElement(FoldRegionObserver!, { onFoldChange }));
+    create(createElement(FoldRegionObserver!, { onLayoutChange }));
   });
 
-  act(() => mockNativeProps.onFoldChange({ nativeEvent: { fold } }));
-  act(() => mockNativeProps.onFoldChange({ nativeEvent: { fold: null } }));
+  act(() => mockNativeProps.onLayoutChange({ nativeEvent: layout }));
+  act(() => mockNativeProps.onLayoutChange({ nativeEvent: { ...layout, fold: null } }));
 
-  expect(onFoldChange.mock.calls).toEqual([[fold], [null]]);
+  expect(onLayoutChange.mock.calls).toEqual([[layout], [{ ...layout, fold: null }]]);
 });
