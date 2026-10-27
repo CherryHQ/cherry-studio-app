@@ -83,7 +83,6 @@ patchedDependencies:
   react-native-drawer-layout@4.2.12: patches/react-native-drawer-layout@4.2.12.patch
   expo-calendar@58.0.6: patches/expo-calendar@58.0.6.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
-  expo-notifications@58.1.6: patches/expo-notifications@58.1.6.patch
   expo-app-metrics@58.0.14: patches/expo-app-metrics@58.0.14.patch
   react-native-screens@4.30.0: patches/react-native-screens@4.30.0.patch
   react-native@0.88.0: patches/react-native@0.88.0.patch

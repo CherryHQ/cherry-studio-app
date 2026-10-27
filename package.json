@@ -9,7 +9,6 @@
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-notifications",
           "expo-app-metrics",
           "expo-observe"
         ]

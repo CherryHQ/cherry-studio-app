@@ -17,7 +17,6 @@ import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAli
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
 import { parseBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
-import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import type { BackgroundExecutionStatus } from '@/shared/contracts/backgroundExecution';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -185,17 +184,6 @@ export class AndroidBackgroundActivityRuntime
     const serviceStopped = this.registerDisposable(() =>
       background.off('stopped', handleServiceStopped),
     );
-    notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldPlaySound: AppState.currentState === 'background',
-        shouldSetBadge: false,
-        shouldShowBanner: AppState.currentState === 'background',
-        shouldShowList: AppState.currentState === 'background',
-      }),
-    });
-    const notificationHandler = this.registerDisposable(() =>
-      notifications.setNotificationHandler(null),
-    );
     const appState = this.registerAppStateListener((state) => {
       if (state === 'active') {
         this.backgroundStartedAt = undefined;
@@ -213,7 +201,6 @@ export class AndroidBackgroundActivityRuntime
       this.clearDeadline();
       protectionChanged.dispose();
       serviceStopped.dispose();
-      notificationHandler.dispose();
       appState.dispose();
       // Startup has not admitted dependent owners. Retire global registrations
       // now; a late stop must not stop the replacement's native service.
@@ -223,19 +210,11 @@ export class AndroidBackgroundActivityRuntime
     };
     signal?.addEventListener('abort', cancel, { once: true });
     try {
-      // The notification bridge creates channels at delivery, after locale initialization.
+      // Never restore a dead process's stream or replay paid work. The notification bridge
+      // posts every Android task notice, so its sweep covers them; channels are created at
+      // delivery, after locale initialization.
       await this.native?.clearBackgroundTaskNotifications?.();
       signal?.throwIfAborted();
-      // Never restore a dead process's stream or replay paid work.
-      const presented = await notifications.getPresentedNotificationsAsync();
-      signal?.throwIfAborted();
-      for (const notification of presented) {
-        signal?.throwIfAborted();
-        const data = notification.request.content.data;
-        if (data?.owner === BACKGROUND_NOTIFICATION_OWNER && data.terminal !== true) {
-          await notifications.dismissNotificationAsync(notification.request.identifier);
-        }
-      }
     } finally {
       signal?.removeEventListener('abort', cancel);
     }
