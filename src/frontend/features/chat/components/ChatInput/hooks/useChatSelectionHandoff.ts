@@ -10,7 +10,7 @@ import { isComposerAttachmentReady } from '@/frontend/components/Composer/utils/
 
 import { createSelectionMention } from '../utils/selectionMentions';
 
-/** Append the reference when the preview returns; the existing draft stays mounted. */
+/** Append the file or reference when the preview returns; the existing draft stays mounted. */
 export function useChatSelectionHandoff(token: string | undefined) {
   const { attachments } = useComposerState();
   const { addAttachments, setDraft } = useComposerActions();
@@ -34,6 +34,11 @@ export function useChatSelectionHandoff(token: string | undefined) {
             (isComposerAttachmentReady(attachment) &&
               attachment.fileEntryId === handoff.attachment.fileEntryId),
         );
+        // A whole file joins the draft once; an attachment it already holds stays as it is.
+        if (!handoff.selection) {
+          if (!existing) addAttachments([handoff.attachment]);
+          return;
+        }
         pending.current = {
           token,
           attachmentId: existing?.id ?? handoff.attachment.id,

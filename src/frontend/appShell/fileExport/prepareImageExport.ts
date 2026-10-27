@@ -120,7 +120,7 @@ export async function prepareImageExport(
     const directory = new Directory(Paths.cache, 'ImageExports');
     directory.create({ idempotent: true, intermediates: true });
     output = new File(directory, `${randomUUID()}.png`);
-    output.write(bytes);
+    output.writeSync(bytes);
     const completed = output;
     return {
       uri: completed.uri,

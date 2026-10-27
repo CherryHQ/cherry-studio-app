@@ -5,6 +5,13 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`ReorderList` is a controlled ordering list for small collections. It renders the shared Section
+rows with labeled up/down buttons, disables moves at the first and last positions, and returns
+a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
+optional descriptions, translated action labels, and `onReorder`. The component owns neither
+scrolling nor persistence, so it can sit in a screen or a bottom sheet. No drag gesture or
+animation is required to reorder items.
+
 `OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
 read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
 dismissible sheets and Cherry-rendered menus close
@@ -70,7 +77,8 @@ thumbnail caching. Loading placeholders belong to the caller because it owns the
 A caller may supply `metadata` before file bytes are available; the tile renders the shared type
 card without reading a URI. `disabled` prevents opening unavailable sources. Optional `transfer`
 state draws acknowledged progress around the frame or marks a failure, with a caller-localized
-accessible label. Removing that state restores the ordinary preview. Transfer tasks, retries,
+accessible label. `uploading` and `processing` (local work such as text recognition) share the
+progress stroke and the busy state. Removing that state restores the ordinary preview. Transfer tasks, retries,
 and file acquisition remain caller-owned; CherryUI does not start uploads or downloads.
 
 Rendering is plugin-based and `kind` is an open set. CherryUI ships an `image` renderer and falls
@@ -246,7 +254,15 @@ page for visual debugging.
 `MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
 caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
 
-`MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
+`MessagePart.Section` composes a quiet heading, an optional action, and content. Its `tone="danger"`
+marks the heading with an error indicator while keeping the content readable. `SectionBody` is the
+neutral padded reading surface for prose and fact rows; code renderers with their own surface are
+composed directly below the section heading. `TextSection` and `ValueSection` use these same
+primitives. The app supplies translated copy controls and highlighted code, so the UI package never
+reads the clipboard or imports application preferences.
+
+`MessagePart.Pending` owns the empty-response loader and its stable text-line height. An optional
+`reason` names local work that delays the reply, such as attachment text recognition, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
 

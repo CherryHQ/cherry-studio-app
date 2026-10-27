@@ -81,6 +81,9 @@ and [Runtime Ownership](./runtime-ownership.md) for long-lived resources.
 - A barrel has no JSX and uses `.ts`; Expo's reserved `index.tsx` route files remain route adapters.
 - External callers import the module root. Module internals import their leaf files directly and do
   not route dependencies back through their own barrel.
+- A pure-logic sub-entry may be public when loading the UI root would pull in unrelated native
+  dependencies. Declare it in the module README and keep private buckets inaccessible; for example,
+  `ModelPicker/badges` exposes model badge rules without loading picker components.
 - Private `components`, `hooks`, and `utils` buckets do not need barrels.
 - Route files remain thin adapters to exact page boundaries.
 
@@ -119,6 +122,11 @@ owners cannot import page trees. Frontend cannot import AI SDK or database imple
 `shared/contracts`, `shared/data`, and `shared/utils` remain React- and platform-independent.
 Package restrictions also cover `import()` and `require()` with string literals or template literals
 without substitutions, using the same package patterns as static imports.
+
+The frontend data owner exposes imperative `useApiClient` from `@/frontend/data`; consumers do not
+reach into `DataApiProvider`. ModelPicker consumers use its root or declared `badges` sub-entry.
+ESLint protects these public boundaries as well as the layer rules. Add equivalent restrictions
+when a module declares a private surface, preserving any documented pure-logic entry.
 
 The existing composition exceptions remain explicit: `backend/core/application/serviceRegistry.ts`
 may name service implementations, and `piModelResolver.ts` bridges runtime-neutral requests to

@@ -1,12 +1,12 @@
 # File Preview WebView
 
-The trusted page that renders `@cherrystudio/file-preview` (PDF, DOCX, PPTX and XLSX) inside the
+The trusted page that renders `@cherrystudio/file-preview` (PDF, DOCX, PPTX, XLSX and RTF) inside the
 file viewer's WebView. The package owns rendering and in-document interaction; this page only wires
 it to the app: bytes, PDF resources, theme, locale, diagnostics, structural selections and the
 system-open request.
 The app side lives in [`src/frontend/features/files`](../../src/frontend/features/files/README.md).
 
-> Status: uses the published npm package `@cherrystudio/file-preview@0.1.3`.
+> Status: uses the published npm package `@cherrystudio/file-preview@0.2.3`.
 > Native acceptance is still pending.
 
 ## Build
@@ -43,6 +43,11 @@ drops the package's fallback worker files because `createWorker` always takes pr
 outline uses `overlay` below 640 CSS pixels of page width and `panel` otherwise; a `resize`
 listener re-renders with the matching layout, so rotation needs no message from the app.
 
+The managed entry's `updatedAt` is passed as `refreshKey`. Refreshing the same entry reopens its
+bytes while retaining the package's valid reading state; Mobile clears any held structural selection.
+DOCX supports native text selection and copying. RTF is read-only, with a 10 MiB source limit and
+no structural selection references.
+
 ## Bridge Protocol
 
 [`src/protocol.ts`](src/protocol.ts) is shared by the page and the app. The app validates every page
@@ -62,7 +67,8 @@ The app answers through `window.__filePreviewPage.receive(message)`: `render` (s
 dark mode, CSS custom properties), `opened` (`size`, `revision`), and `chunk` (base64, at most
 1 MiB raw) followed by `done` or `failed` with a `PreviewErrorCode`. The page writes chunks into one
 buffer of the requested length and rejects a short total. Aborted reads reject immediately and send
-`cancel`; reads after `close` reject with `closed` on both sides.
+`cancel`; reads after `close` reject with `closed` on both sides. Document IDs use the page's
+monotonic open-request IDs, so late reads or closes cannot target a replacement bridge's document.
 
 ## Office Selection Handoff
 

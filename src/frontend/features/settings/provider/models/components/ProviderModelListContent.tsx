@@ -25,7 +25,15 @@ import {
   buildProviderModelListItems,
   type ProviderModelListItem,
 } from '../utils/providerModelListItems';
+import type { ProviderModelPurpose } from '../utils/providerModelPurpose';
 import { ProviderModelRow, providerModelRowEstimatedHeights } from './ProviderModelRow';
+
+const sectionLabelKeys = {
+  chat: 'settings.provider.models.section.chat',
+  painting: 'settings.provider.models.section.painting',
+  speech: 'settings.provider.models.classification.speech',
+  transcription: 'settings.provider.models.classification.transcription',
+} as const satisfies Record<Exclude<ProviderModelPurpose, 'all'>, string>;
 
 export type ProviderModelListContentProps = {
   groupByPurpose: boolean;
@@ -95,11 +103,7 @@ export function ProviderModelListContent({
             }
           >
             <Text className="font-medium text-foreground-tertiary text-sm">
-              {t(
-                item.purpose === 'chat'
-                  ? 'settings.provider.models.section.chat'
-                  : 'settings.provider.models.section.painting',
-              )}
+              {t(sectionLabelKeys[item.purpose])}
             </Text>
             <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
               {item.count}

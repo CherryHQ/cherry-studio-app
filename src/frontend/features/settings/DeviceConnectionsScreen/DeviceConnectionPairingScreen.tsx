@@ -19,7 +19,7 @@ export function DeviceConnectionPairingScreen({
 }: { setupIntent?: FirstUseSetupIntent } = {}) {
   const { input: pendingInput, setInput } = useDesktopPairingInput();
   const [input] = useState(pendingInput);
-  const { connection, error, progress } = useDesktopPairing(input);
+  const { connection, error, progress, repairConnectionId } = useDesktopPairing(input);
   const { t } = useTranslation();
   const router = useRouter();
   const current = progress.at(-1);
@@ -34,10 +34,10 @@ export function DeviceConnectionPairingScreen({
         setupIntent === 'chat'
           ? '/onboarding/device-connections/scan'
           : '/settings/device-connections/scan',
-      params: input?.connectionId ? { connectionId: input.connectionId } : {},
+      params: repairConnectionId ? { connectionId: repairConnectionId } : {},
     });
 
-  const cancel = () => router.replace(pairingCancelDestination(setupIntent, input?.connectionId));
+  const cancel = () => router.replace(pairingCancelDestination(setupIntent, repairConnectionId));
 
   const finish = () => {
     if (!connection) return;

@@ -76,6 +76,8 @@ export interface FilePreviewSourceInfo {
   id: string;
   name: string;
   mediaType: string;
+  /** The managed file's updatedAt; reopens changed bytes without remounting the viewer. */
+  revision: number;
 }
 
 export interface FilePreviewRenderOptions {

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
+import { useFilePane } from '@/frontend/appShell/pane/state';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -87,6 +88,7 @@ function SidebarBodyContent({
   const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
     useSidebarActions('SidebarBody');
   const { source } = useChatSource();
+  const pane = useFilePane();
   const { progress } = useSidebarSelection();
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const navigationStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.get() * 0.45 }));
@@ -130,6 +132,7 @@ function SidebarBodyContent({
             onPress={openLibrary}
             testID="sidebar-library"
             disabled={disabled}
+            isSelected={Boolean(pane?.isAvailable && pane.isOpen)}
           />
         </Animated.View>
       ) : null}

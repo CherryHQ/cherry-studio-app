@@ -20,18 +20,18 @@ function fakeFile(content: Uint8Array) {
       get size() {
         return state.size;
       },
-      readBytes(length: number) {
+      readBytesSync(length: number) {
         const bytes = content.slice(offset, offset + Math.min(length, state.truncateReadsTo));
         offset += bytes.length;
         return bytes;
       },
-      writeBytes() {
+      writeBytesSync() {
         throw new Error('read-only');
       },
       close() {
         state.closeCount++;
       },
-    } as FileHandle;
+    } as unknown as FileHandle;
   };
   return { state, open };
 }
@@ -49,7 +49,7 @@ function decode(messages: HostMessage[], requestId: number): Uint8Array {
   return new Uint8Array(Buffer.concat(chunks));
 }
 
-function setup(content: Uint8Array, resources = new Uint8Array()) {
+function setup(content: Uint8Array, resources = new Uint8Array(), revision = '42') {
   const file = fakeFile(content);
   const resourceFile = fakeFile(resources);
   const sent: HostMessage[] = [];
@@ -57,7 +57,7 @@ function setup(content: Uint8Array, resources = new Uint8Array()) {
   let isPaused = false;
   const bridge = new FilePreviewBridge({
     fileUri: 'file:///doc.pdf',
-    revision: '42',
+    revision,
     pdfResources: {
       uri: 'file:///pdf-resources.bin',
       index: { 'cmap/UniGB-UCS2-H': [2, 3] },
@@ -86,10 +86,10 @@ describe('FilePreviewBridge', () => {
     const content = patterned(FILE_PREVIEW_CHUNK_BYTES * 2 + 123);
     const { bridge, sent } = setup(content);
 
-    bridge.handle({ type: 'open', requestId: 1 });
+    bridge.handle({ type: 'open', requestId: 0 });
     expect(sent[0]).toEqual({
       type: 'opened',
-      requestId: 1,
+      requestId: 0,
       documentId: 0,
       size: content.length,
       revision: '42',
@@ -109,8 +109,8 @@ describe('FilePreviewBridge', () => {
 
   it('gives every open its own handle and closes each once', async () => {
     const { bridge, file, sent } = setup(patterned(16));
+    bridge.handle({ type: 'open', requestId: 0 });
     bridge.handle({ type: 'open', requestId: 1 });
-    bridge.handle({ type: 'open', requestId: 2 });
     bridge.handle({ type: 'close', documentId: 0 });
     bridge.handle({ type: 'close', documentId: 0 });
     expect(file.state.closeCount).toBe(1);
@@ -127,7 +127,7 @@ describe('FilePreviewBridge', () => {
 
   it('rejects short reads and out-of-range requests', async () => {
     const { bridge, file, sent } = setup(patterned(16));
-    bridge.handle({ type: 'open', requestId: 1 });
+    bridge.handle({ type: 'open', requestId: 0 });
     bridge.handle({ type: 'read', requestId: 2, documentId: 0, offset: 8, length: 9 });
     file.state.truncateReadsTo = 3;
     bridge.handle({ type: 'read', requestId: 3, documentId: 0, offset: 0, length: 8 });
@@ -140,7 +140,7 @@ describe('FilePreviewBridge', () => {
 
   it('fails a read when the file changes size underneath it', async () => {
     const { bridge, file, sent, pause, resume } = setup(patterned(FILE_PREVIEW_CHUNK_BYTES * 2));
-    bridge.handle({ type: 'open', requestId: 1 });
+    bridge.handle({ type: 'open', requestId: 0 });
     pause();
     bridge.handle({
       type: 'read',
@@ -160,7 +160,7 @@ describe('FilePreviewBridge', () => {
 
   it('stops streaming a cancelled or closed request without answering it', async () => {
     const { bridge, sent, pause, resume } = setup(patterned(FILE_PREVIEW_CHUNK_BYTES * 3));
-    bridge.handle({ type: 'open', requestId: 1 });
+    bridge.handle({ type: 'open', requestId: 0 });
     pause();
     bridge.handle({
       type: 'read',
@@ -178,6 +178,42 @@ describe('FilePreviewBridge', () => {
     expect(
       sent.filter((message) => 'requestId' in message && message.requestId === 2),
     ).toHaveLength(1);
+  });
+
+  it('keeps late reads and closes from the previous revision away from its replacement', async () => {
+    const previous = setup(patterned(16));
+    previous.bridge.handle({ type: 'open', requestId: 5 });
+    const oldDocument = previous.sent[0] as Extract<HostMessage, { type: 'opened' }>;
+    previous.bridge.dispose();
+
+    const content = patterned(8);
+    const current = setup(content, undefined, '43');
+    current.bridge.handle({ type: 'open', requestId: 9 });
+    const newDocument = current.sent[0] as Extract<HostMessage, { type: 'opened' }>;
+    expect(newDocument.revision).toBe('43');
+    expect(newDocument.documentId).not.toBe(oldDocument.documentId);
+    current.bridge.handle({ type: 'close', documentId: oldDocument.documentId });
+    current.bridge.handle({
+      type: 'read',
+      requestId: 10,
+      documentId: oldDocument.documentId,
+      offset: 0,
+      length: 4,
+    });
+    current.bridge.handle({
+      type: 'read',
+      requestId: 11,
+      documentId: newDocument.documentId,
+      offset: 0,
+      length: content.length,
+    });
+    await flush();
+
+    expect(current.file.state.closeCount).toBe(0);
+    expect(current.sent).toContainEqual(expect.objectContaining({ requestId: 10, code: 'closed' }));
+    expect(decode(current.sent, 11)).toEqual(content);
+    expect(current.sent).toContainEqual({ type: 'done', requestId: 11 });
+    current.bridge.dispose();
   });
 
   it('serves PDF resources from the bundled index', async () => {

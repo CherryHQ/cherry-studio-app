@@ -18,6 +18,7 @@ export const WEB_SEARCH_PROVIDER_IDS = [
   'searxng',
   'exa',
   'exa-mcp',
+  'yuanbao',
   'bocha',
   'querit',
   'deepseek',

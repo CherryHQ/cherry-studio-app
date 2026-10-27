@@ -3,7 +3,7 @@ import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { View } from 'react-native';
+import type { ViewInstance } from 'react-native';
 
 import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/Composer';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
@@ -25,7 +25,7 @@ export function ChatInputMenu({
   onPickPlugins?: () => void;
   onPickPrompts?: () => void;
   onPickSkills?: () => void;
-  triggerRef: RefObject<View | null>;
+  triggerRef: RefObject<ViewInstance | null>;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();

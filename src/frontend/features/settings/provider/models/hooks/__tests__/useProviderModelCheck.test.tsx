@@ -60,15 +60,18 @@ describe('useProviderModelCheck', () => {
 
   function Probe({
     apiKeys = EMPTY_API_KEYS,
+    selectedApiKeyId,
     selectedModelId,
   }: {
     apiKeys?: readonly ApiKeyEntry[];
+    selectedApiKeyId?: string;
     selectedModelId?: string;
   }) {
     modelCheck = useProviderModelCheck({
       apiKeys,
       models: [model, otherModel],
       providerId: 'provider-1',
+      selectedApiKeyId,
       selectedModelId,
     });
     return null;
@@ -128,5 +131,31 @@ describe('useProviderModelCheck', () => {
 
     expect(modelCheck?.selectedModel?.id).toBe(otherModel.id);
     expect(modelCheck?.modelStatus).toMatchObject({ status: 'pending' });
+  });
+
+  test('tests the selected key and clears the previous result when the selection changes', async () => {
+    const apiKeys = [
+      { id: 'a', isEnabled: true, key: 'sk-first', label: 'Work' },
+      { id: 'b', isEnabled: true, key: 'sk-second', label: 'Personal' },
+    ];
+    mockCheckHealth.mockResolvedValue([{ latency: 120, model, status: 'success' }]);
+    act(() => renderer?.update(<Probe apiKeys={apiKeys} selectedApiKeyId="b" />));
+    await act(async () => modelCheck?.startCheck());
+    expect(mockCheckHealth).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk-second' }));
+    expect(modelCheck?.modelStatus?.status).toBe('success');
+
+    act(() => renderer?.update(<Probe apiKeys={apiKeys} selectedApiKeyId="a" />));
+    expect(modelCheck?.modelStatus?.status).toBe('pending');
+  });
+
+  test('falls back to an enabled key when the selected key is disabled or removed', () => {
+    const apiKeys = [
+      { id: 'a', isEnabled: true, key: 'sk-first' },
+      { id: 'b', isEnabled: false, key: 'sk-second' },
+    ];
+    act(() => renderer?.update(<Probe apiKeys={apiKeys} selectedApiKeyId="b" />));
+    expect(modelCheck?.selectedApiKey?.id).toBe('a');
+    act(() => renderer?.update(<Probe apiKeys={apiKeys} selectedApiKeyId="removed" />));
+    expect(modelCheck?.selectedApiKey?.id).toBe('a');
   });
 });

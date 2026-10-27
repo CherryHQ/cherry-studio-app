@@ -75,4 +75,5 @@ export {
   createDeniedToolResult,
   createErrorToolResult,
   createInterruptedToolResult,
+  createImageRequestErrorToolResult,
 } from './toolResults';

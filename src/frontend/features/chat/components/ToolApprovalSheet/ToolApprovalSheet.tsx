@@ -1,7 +1,9 @@
-import { BottomSheet, Button, MessagePart } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
+
+import { MessageDetailValue } from '@/frontend/components/MessageDetail';
 
 const ignoreClose = () => undefined;
 
@@ -103,7 +105,7 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={approval.input} />
+        <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         {children}
       </ScrollView>
     </BottomSheet>
@@ -137,7 +139,7 @@ function ToolApprovalSheetActions({
           onPress={() => onRespond(true)}
           variant="default"
         >
-          <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+          <Button.Label>{t('chat.tool.approval.continue')}</Button.Label>
         </Button>
       </View>
     </View>

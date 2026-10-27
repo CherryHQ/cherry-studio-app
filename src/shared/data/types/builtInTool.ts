@@ -9,6 +9,7 @@
  * permission, and application configuration.
  */
 
+import type { AgentToolRef } from '@/shared/contracts/agent';
 import { HEALTH_SUMMARY_METRICS } from '@/shared/contracts/health';
 import {
   type DevicePermissionScope,
@@ -55,7 +56,6 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'health_list_data_types',
   'health_query_data',
   'health_get_record',
-  'health_share_verifiable_records',
   'inspect_office_file',
   'location_get_current',
   'read_file',
@@ -204,11 +204,6 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
       platforms: ['ios'],
     }),
   ),
-  describe('health_share_verifiable_records', 'ask', {
-    agentCapability: 'health',
-    autoApprovalEligible: false,
-    platforms: ['ios'],
-  }),
   describe('location_get_current', 'auto', {
     agentCapability: 'location',
     permissionScopes: ['location.read'],
@@ -254,6 +249,17 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
 ];
+
+const HEALTH_TOOL_IDS = new Set<string>(
+  BUILT_IN_TOOL_DESCRIPTORS.filter((tool) => tool.agentCapability === 'health').map(
+    (tool) => tool.capabilityId,
+  ),
+);
+
+/** Approvals for these tools must disclose the receiving model service in the app. */
+export function isHealthToolRef(toolRef: AgentToolRef): boolean {
+  return toolRef.source === 'builtin' && HEALTH_TOOL_IDS.has(toolRef.capabilityId);
+}
 
 export type AgentCapabilityAvailability = {
   /** Union of the member tools' OS permission scopes; empty when none apply. */

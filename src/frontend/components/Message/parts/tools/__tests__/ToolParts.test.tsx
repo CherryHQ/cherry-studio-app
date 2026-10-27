@@ -21,6 +21,7 @@ jest.mock('@/frontend/components/McpApp', () => ({
 }));
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetStringAsync(text) }));
+jest.mock('@cherrystudio/app-icons/icons/copy', () => jest.requireActual('react-native').View);
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -94,6 +95,22 @@ jest.mock('@cherrystudio/ui/components', () => {
     hasMessagePartValue: hasValue,
     Image: (props: Record<string, unknown>) => <MockView {...props} />,
     MessagePart: {
+      Section: ({
+        title,
+        action,
+        children,
+      }: {
+        title: string;
+        action?: ReactNode;
+        children: ReactNode;
+      }) => (
+        <MockView>
+          <MockText>{title}</MockText>
+          {action}
+          {children}
+        </MockView>
+      ),
+      SectionBody: ({ children }: { children: ReactNode }) => <MockView>{children}</MockView>,
       SectionTitle: ({ title }: { title: string }) => <MockText>{title}</MockText>,
       Source: ({ label }: { label: string }) => <MockText>{label}</MockText>,
       TextSection: ({ title, value, ...props }: { title: string; value: string }) => (
@@ -168,10 +185,9 @@ describe('tool message detail sheets', () => {
       findByTestID('tool-part-trigger').props.onPress();
     });
 
-    expect(findByTestID('mock-markdown-text').props).toMatchObject({
-      markdown: '```json\n{\n  "answer": 42\n}\n```',
-      selectable: false,
-    });
+    expect(findByTestID('mock-markdown-text').props.markdown).toBe(
+      '```json\n{\n  "answer": 42\n}\n```',
+    );
   });
 
   it('clips JSON before Markdown rendering and copies the full output on demand', async () => {
@@ -217,6 +233,38 @@ describe('tool message detail sheets', () => {
       variant: 'danger',
     });
     expect(findText('x'.repeat(5_000))).toHaveLength(0);
+  });
+
+  it('copies all arguments even when the JSON preview is truncated', async () => {
+    const input = { prompt: '文'.repeat(5_000), refs: ['audio-1'] };
+    await render(
+      <GenericToolPart
+        part={makeToolPart({ input, state: 'input-available', toolName: 'analyze_media' })}
+      />,
+    );
+    await act(async () => findByTestID('tool-part-trigger').props.onPress());
+
+    const markdown = findByTestID('mock-markdown-text').props.markdown as string;
+    expect(markdown.startsWith('```json\n')).toBe(true);
+    expect(markdown).not.toContain('audio-1');
+    const copy = renderer!.root
+      .findAllByType(View)
+      .find((node) => node.props.accessibilityHint === 'chat.tool.arguments');
+    await act(async () => copy!.props.onPress());
+    expect(mockSetStringAsync).toHaveBeenCalledWith(JSON.stringify(input, null, 2));
+    expect(findByTestID('mock-markdown-text').props.markdown).toBe(markdown);
+  });
+
+  it('offers a copy action for short output without a truncation notice', async () => {
+    await render(
+      <GenericToolPart
+        part={makeToolPart({ output: 'A readable response.', toolName: 'analyze_media' })}
+      />,
+    );
+    await act(async () => findByTestID('tool-part-trigger').props.onPress());
+    expect(findText('chat.tool.previewTruncated')).toHaveLength(0);
+    await act(async () => findByTestID('tool-result-copy-full-text').props.onPress());
+    expect(mockSetStringAsync).toHaveBeenCalledWith('A readable response.');
   });
 
   it('maps a processing generic tool to the shared running state', async () => {

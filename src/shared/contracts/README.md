@@ -22,6 +22,9 @@ of these paths.
 
 Resource operations remain Data API endpoints even when their implementations use SQLite or a
 backend data module. Do not add a `Backend` module merely to avoid defining an endpoint.
+Imperative reads and custom history windows use the public `useApiClient` entry under the
+[frontend data contract](../../frontend/data/README.md); they remain on the resource seam and own
+their cancellation, query keys and cache policy.
 
 The credential-free `remoteAgent` workflow exposes source reads, observations and bound command
 results. Desktop transport, grants and recovery remain backend-owned; frontend conversation
@@ -118,21 +121,42 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 
 ## Current Modules
 
-| Module | Why it qualifies |
-| --- | --- |
-| `file` | Encapsulates managed-file import, Expo URI resolution, and user-triggered deletion |
-| `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
-| `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
-| `paintings` | Atomically creates painting receipts and durable jobs, cancels generation, and resolves files |
-| `permissions` | Coordinates stored permission policy with device status, recovery, and system settings |
-| `plugins` | Validates credentials and coordinates authorization, connection persistence, and runtime invalidation; connection reads use the Data API |
-| `profile` | Encapsulates profile avatar storage and preference coordination |
-| `providers` | Combines provider removal policy with provider avatar storage |
-| `systemEntry` | Claims one staged native share, imports its attachments into the library, and releases native staging |
-| `webSearch` | Encapsulates provider-specific connectivity checks and third-party behavior |
+The 20 keys in [`Backend`](./backend.ts) are public capabilities, not 20 lifecycle services.
+Host-owned resources stop with `ApplicationHost`; ordinary module calls use their caller's lifetime.
+Private disposers stay with bootstrap, and callers release their own observations and sessions.
+
+| Module | Workflow and implementation owner | State and release ownership |
+| --- | --- | --- |
+| `agent` | `MobileAgentHost` / `DurableAgentHost`: local conversation admission, branches, approvals and execution projection | Host-owned execution; Cherry owns durable transcripts. Route observation release does not cancel turns |
+| `remoteAgent` | `RemoteAgentRuntime`: remote reads, observations and command recovery | Host-owned scopes; callers dispose retained sources. Desktop remains the execution and history authority |
+| `desktopConnections` | `DesktopConnectionRuntime`: pairing, credentials and configuration import | Host-owned requests and credential operations; connection leases belong to `DesktopConnectionManager` |
+| `skills` | `createSkillsModule`: discovery, validation and installation | Caller-cancelled preparation; bootstrap's private `disposeSkills` rejects and drains admitted publication writes |
+| `translation` | `createTranslationModule`: language/model selection and one text-generation invocation | Per-call cancellation; no conversation or tool-loop lifetime |
+| `models` | `createModelsModule`: model pull, preview, reconcile and health checks | Per-call deadlines and cancellation; model records remain Data API resources |
+| `providers` | `createProvidersModule`: provider policy, presets, avatars, registry updates and account workflows | Calls delegate persistent state and long-lived work to their existing data, registry and account owners |
+| `webSearch` | `WebSearchService`: external-provider connectivity checks; also serves internal Agent search calls | Host-owned API-key rotation; requests belong to individual calls |
+| `file` | `fileContent`: managed-file import, URI resolution, attachment preparation, preview, editing and trash admission | Module-level adapter; operation/observer cancellation belongs to callers. Shared PDF extraction retains one request until its last consumer releases it |
+| `paintings` | `createPaintingsModule`: atomically creates receipts and jobs, cancels generation and resolves files | `JobRuntime` owns execution and recovery beyond the route; receipts and jobs are durable resources |
+| `documentExport` | `DocumentExportRuntime`: export sessions and HTML conversion | Caller-owned `DocumentExportSession.dispose()`; host stop drains remaining sessions |
+| `systemEntry` | `createSystemEntryModule`: claims native shares, imports files and acknowledges staging | Bootstrap's private `disposeSystemEntry` cancels/drains claims; a delivered draft belongs to the composer |
+| `mcp` | `McpRuntimeService`: shared connections, OAuth, discovery, resources, prompts and Apps | Host-owned connections/auth attempts; callers close App views and observations without cancelling other Agent work |
+| `plugins` | `createPluginsModule`: credentials, authorization and connection coordination | Per-plugin operation queues; `McpRuntimeService` owns authorization and connection lifetimes |
+| `permissions` | `DevicePermissions`: system permission queries, serialized prompts and settings recovery | Module-level native prompt queue; an open system prompt retains its slot until native completion |
+| `backgroundExecution` | `KeepAliveCoordinator`: background protection status, settings and observation | Host-owned platform sources; backend consumers acquire/release execution leases |
+| `backup` | `BackupRuntime`: capture, validation, staging and restore with storage admission | Host-owned operation and staged restore; explicit cancellation and host stop settle accepted work |
+| `diagnostics` | `DiagnosticBundleService`: metadata inspection, archive creation, saving and upload | Host-owned in-flight operation; host stop cancels and joins it. Process log recording has a separate lifetime |
+| `appUpdate` | `createAppUpdateModule`: channel routing, release discovery, APK transfer and installation | App-owned download; bootstrap's private `disposeAppUpdate` cancels/drains it. Closing a dialog does not cancel the download |
+| `profile` | `createProfileModule`: avatar storage and preference coordination | Per-call replacement; preferences and avatar bytes retain their own storage owners |
 
 Ordinary persistence for these resource families still belongs to the Data API. For example, model
 CRUD is a Data API concern while model pull and health checks are workflow contracts.
+Implementation modules live under `backend/services`, except local Agent and MCP execution under
+`backend/ai`. The private [service registry](../../backend/core/application/serviceRegistry.ts)
+also contains owners such as `JobRuntime` that do not need a separate public `Backend` key.
+
+For each capability change, identify the public entry, business-rule owner, durable source of truth,
+in-flight lifetime, cancellation/disposal owner, and structured failure result. A second entry point
+reuses those rules while retaining its own authorization and presentation responsibilities.
 
 ## Adding Or Changing A Contract
 

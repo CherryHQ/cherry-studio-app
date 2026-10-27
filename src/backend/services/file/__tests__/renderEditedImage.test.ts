@@ -24,7 +24,7 @@ jest.mock('expo-file-system', () => ({
   File: class {
     uri = 'file:///cache/edit.png';
     exists = true;
-    write = mockWrite;
+    writeSync = mockWrite;
     delete = mockDelete;
   },
 }));

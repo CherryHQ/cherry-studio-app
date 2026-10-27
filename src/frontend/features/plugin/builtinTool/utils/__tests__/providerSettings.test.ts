@@ -20,6 +20,7 @@ describe('web search provider settings', () => {
   test('derives each provider settings from its preset', () => {
     expect(sectionTypes('tavily')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('deepseek')).toEqual(['apiKeys', 'apiHost']);
+    expect(sectionTypes('yuanbao')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('deepseek', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('firecrawl', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('crawl4ai', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
@@ -35,7 +36,7 @@ describe('web search provider settings', () => {
       isSelfHostedWebSearchProvider(getWebSearchProviderPreset(id), capability);
 
     expect(selfHosted('searxng', 'searchKeywords')).toBe(true);
-    expect(selfHosted('crawl4ai', 'fetchUrls')).toBe(true);
+    expect(selfHosted('crawl4ai', 'fetchUrls')).toBe(false);
     expect(selfHosted('tavily', 'searchKeywords')).toBe(false);
     expect(selfHosted('fetch', 'fetchUrls')).toBe(false);
   });
@@ -46,9 +47,10 @@ describe('web search provider settings', () => {
 
     expect(placement('tavily', 'searchKeywords')).toBe('apiKeys');
     expect(placement('deepseek', 'searchKeywords')).toBe('apiKeys');
+    expect(placement('yuanbao', 'searchKeywords')).toBe('apiKeys');
     expect(placement('deepseek', 'fetchUrls')).toBe('apiKeys');
     expect(placement('jina', 'fetchUrls')).toBe('apiKeys');
-    expect(placement('crawl4ai', 'fetchUrls')).toBe('apiHost');
+    expect(placement('crawl4ai', 'fetchUrls')).toBe('apiKeys');
     expect(placement('searxng', 'searchKeywords')).toBe('apiHost');
     expect(placement('exa-mcp', 'searchKeywords')).toBe('apiHost');
     expect(placement('fetch', 'fetchUrls')).toBeNull();

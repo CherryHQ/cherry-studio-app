@@ -11,11 +11,12 @@
 import * as z from 'zod';
 
 import type { ParsedDocument } from '@/backend/services/file/documentParser';
+import { linkPdfOcr } from '@/backend/services/file/pdfText';
 import {
   readAttachmentContent,
   type ReadAttachmentContent,
 } from '@/backend/services/file/readAttachmentContent';
-import { countCodePoints, takeCodePoints } from '@/backend/services/file/utf8Text';
+import { countCodePoints } from '@/backend/services/file/utf8Text';
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   FileAttachmentError,
@@ -45,6 +46,12 @@ export const READ_FILE_DEFAULT_LINE_LIMIT = 500;
 export const READ_FILE_MAX_LINE_LIMIT = 2_000;
 /** Below the attachment projection budget: a read is a window, not an attachment. */
 export const READ_FILE_MAX_CHARACTERS = 100_000;
+/**
+ * Pi keeps only the first 50 KiB of a model-facing tool result. A window's text,
+ * measured as it appears inside the serialized result, stops below that, leaving
+ * room for the other fields, so `nextOffset` never skips text the model was cut off from.
+ */
+export const READ_FILE_MAX_TEXT_BYTES = 40 * 1024;
 
 export const readFileInputSchema = z.strictObject({
   file_entry_id: z
@@ -80,7 +87,7 @@ export const readFileInputSchema = z.strictObject({
     .max(READ_FILE_MAX_CHARACTERS)
     .optional()
     .describe(
-      `Maximum Unicode code points from offset. Defaults to ${READ_FILE_MAX_CHARACTERS}. Do not combine with start_line or limit.`,
+      `Maximum Unicode code points from offset. Defaults to ${READ_FILE_MAX_CHARACTERS}; a window also ends at about 40 KB of text, so continue with nextOffset. Do not combine with start_line or limit.`,
     ),
 });
 
@@ -108,8 +115,14 @@ export function createReadFileTool(
    */
   let lastDocument: { id: FileEntryId; content: ReadContent } | undefined;
 
-  const read = async (source: ManagedFileFact, signal: AbortSignal): Promise<ReadContent> => {
+  const read = async (
+    source: ManagedFileFact,
+    signal: AbortSignal,
+    toolCallId: string,
+  ): Promise<ReadContent> => {
     if (lastDocument?.id === source.fileEntryId) return lastDocument.content;
+    // The tool row observes recognition by call ID, including reads by workspace path.
+    const unlinkOcr = linkPdfOcr(toolCallId, source.fileEntryId);
     const content = await readAttachmentContent(
       source,
       {
@@ -119,7 +132,7 @@ export function createReadFileTool(
       signal,
       READ_FILE_MAX_SOURCE_BYTES,
       documentParserMode,
-    );
+    ).finally(unlinkOcr);
     const result: ReadContent =
       content.kind === 'document'
         ? { ...content, json: JSON.stringify(content.parsed.output.ir) }
@@ -141,7 +154,7 @@ export function createReadFileTool(
     } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. PNG, JPEG, WebP and GIF reads return bounded image pixels to vision models; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
-    async execute({ input, signal }): Promise<RuntimeToolResult> {
+    async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
       const parsed = readFileInputSchema.safeParse(input);
       if (!parsed.success) {
         return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
@@ -202,9 +215,10 @@ export function createReadFileTool(
       }
       let text: string;
       let sourceTruncated: boolean;
+      let unrecognizedPages: number[] | undefined;
       let parser: 'builtin' | 'native-pdf' | undefined;
       try {
-        const content = await read(source, signal);
+        const content = await read(source, signal, toolCallId);
         if (content.kind === 'document') {
           if (hasLineParameters)
             return invalid('AnyDoc JSON requires offset/max_characters, not start_line/limit.');
@@ -232,7 +246,7 @@ export function createReadFileTool(
             artifacts: [],
           };
         }
-        ({ text, sourceTruncated, parser } = content);
+        ({ text, sourceTruncated, parser, unrecognizedPages } = content);
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof FileAttachmentError) {
@@ -251,7 +265,7 @@ export function createReadFileTool(
           }
           return invalid(
             error.issue.code === 'document-empty'
-              ? 'The document has no extractable text. Scanned or image-only documents require OCR.'
+              ? 'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.'
               : error.message,
           );
         }
@@ -266,6 +280,7 @@ export function createReadFileTool(
         filename: source.name,
         size: source.size,
         ...(parser ? { parser } : {}),
+        ...(unrecognizedPages ? { unrecognizedPages } : {}),
       };
       if (hasJsonParameters) {
         return {
@@ -303,13 +318,21 @@ export function characterWindow(text: string, offset: number, maxCharacters: num
   let utf16Offset = 0;
   let start = text.length;
   let end = text.length;
+  let stop: number | undefined;
+  let bytes = 0;
   for (const character of text) {
     if (totalCharacters === offset) start = utf16Offset;
-    if (totalCharacters === offset + maxCharacters) end = utf16Offset;
+    if (totalCharacters >= offset && stop === undefined) {
+      bytes += serializedBytes(character);
+      if (totalCharacters === offset + maxCharacters || bytes > READ_FILE_MAX_TEXT_BYTES) {
+        stop = totalCharacters;
+        end = utf16Offset;
+      }
+    }
     totalCharacters += 1;
     utf16Offset += character.length;
   }
-  const characterCount = Math.min(maxCharacters, Math.max(0, totalCharacters - offset));
+  const characterCount = Math.max(0, (stop ?? totalCharacters) - offset);
   const complete = offset + characterCount >= totalCharacters;
   return {
     offset,
@@ -319,6 +342,28 @@ export function characterWindow(text: string, offset: number, maxCharacters: num
     complete,
     text: text.slice(start, end),
   };
+}
+
+/** UTF-8 bytes of one code point inside a JSON string, escapes included. */
+function serializedBytes(character: string): number {
+  const code = character.codePointAt(0)!;
+  if (code === 0x22 || code === 0x5c) return 2;
+  if (code < 0x20) return [0x08, 0x09, 0x0a, 0x0c, 0x0d].includes(code) ? 2 : 6;
+  if (code < 0x80) return 1;
+  if (code < 0x800) return 2;
+  // JSON.stringify escapes a lone surrogate as \uXXXX.
+  if (code >= 0xd800 && code <= 0xdfff) return 6;
+  return code < 0x10000 ? 3 : 4;
+}
+
+/** Serialized bytes of `text`, stopping once they exceed `limit`. */
+function textBytes(text: string, limit: number): number {
+  let bytes = 0;
+  for (const character of text) {
+    bytes += serializedBytes(character);
+    if (bytes > limit) break;
+  }
+  return bytes;
 }
 
 type LineWindow = {
@@ -331,7 +376,7 @@ type LineWindow = {
 };
 
 /**
- * `limit` lines from `startLine` (one-based), cut further to the character
+ * `limit` lines from `startLine` (one-based), cut further to the serialized-size
  * budget on a line boundary so `startLine + lineCount` is always the next line
  * to ask for.
  */
@@ -346,24 +391,27 @@ export function lineWindow(text: string, startLine: number, limit: number): Line
   const start = startLine - 1;
   const requested = lines.slice(start, start + limit);
   const kept: string[] = [];
-  let characters = 0;
+  // Serialized bytes never undercount UTF-16 length, so this budget also bounds characters.
+  let bytes = 0;
   for (const line of requested) {
-    const cost = line.length + (kept.length > 0 ? 1 : 0);
-    if (characters + cost > READ_FILE_MAX_CHARACTERS) {
+    // An escaped newline separator is two bytes.
+    const separator = kept.length > 0 ? 2 : 0;
+    const size = textBytes(line, READ_FILE_MAX_TEXT_BYTES - bytes - separator) + separator;
+    if (bytes + size > READ_FILE_MAX_TEXT_BYTES) {
       break;
     }
     kept.push(line);
-    characters += cost;
+    bytes += size;
   }
   let nextOffset: number | undefined;
   if (kept.length === 0 && requested.length > 0) {
     // One line over budget alone: return its head. A later line cannot reach
     // the rest, so the result hands over the code-point offset that does.
-    const head = takeCodePoints(requested[0]!, READ_FILE_MAX_CHARACTERS);
-    kept.push(head.value);
-    if (head.didTruncate) {
+    const head = characterWindow(requested[0]!, 0, READ_FILE_MAX_CHARACTERS);
+    kept.push(head.text);
+    if (!head.complete) {
       const lineStart = start === 0 ? 0 : countCodePoints(lines.slice(0, start).join('\n')) + 1;
-      nextOffset = lineStart + head.characters;
+      nextOffset = lineStart + head.characterCount;
     }
   }
   return {

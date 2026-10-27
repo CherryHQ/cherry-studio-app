@@ -12,6 +12,7 @@ it already exists.
 
 | Need | Owner |
 | --- | --- |
+| Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
 | Non-streaming HTTP requests | `createHttpClient` in `src/backend/services/http`, the only transport; its README lists the streaming exceptions |
 | Fetch-shaped adapter for a protocol SDK | `createFetchBridge` in `src/backend/services/http` |
 | Remote web-search provider protocols and metadata | `@cherrystudio/web-search`; mobile transport and policy adapters in `src/backend/services/webSearch` |
@@ -27,6 +28,7 @@ it already exists.
 | Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `fileContent.createInternalEntry` in `src/backend/services/file/fileContent.ts` |
+| PDF text extraction and on-device scanned-page OCR | `modules/pdf-text-extractor`; `src/backend/services/file/pdfText.ts` shares extraction and derived disk results across `documentText.ts` readers; `FileModule.observePdfOcr` reports one file's recognition progress |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
@@ -47,12 +49,16 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Need | Owner |
 | --- | --- |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
+| Window size classes and the persistent-sidebar rule | `useWindowClass` and `useIsSidebarPersistent` in `src/frontend/appShell/layout` |
+| Pages rendered in a side pane, and the file pane beside chat | `PaneChromeProvider` in `src/frontend/appShell/layout`; `FilePaneProvider`, `FilePaneHost`, and `useFilePane` in `src/frontend/appShell/pane` |
+| Readable message detail content and full-text copy | `MessageDetail` in `src/frontend/components/MessageDetail`, composing CherryUI sections and the existing Markdown code renderer |
 | Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Target-language menus for text translation | `useTranslationLanguageMenu` in `src/frontend/hooks/useTranslationLanguageMenu.ts`, rendered by CherryUI `ActionMenu` |
-| List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy |
+| List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy; management pages use `RouteHeader.selection` for the count and single exit |
 | Opening external links | `openExternalUrl` in `src/frontend/utils/openExternalUrl.ts` |
 | Compact counts | `formatCompactNumber` in `src/frontend/utils/compactNumber.ts` |
 | Library folder browsing, creation, and selection for moves and Session workspaces | `FileFolderPicker` and `useCreateFileFolder` in `src/frontend/components/FileFolderPicker`; `FileFolderBreadcrumbs` owns the shared path navigation |

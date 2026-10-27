@@ -201,6 +201,8 @@ export type RuntimeDurableTurn = {
   hasAssistant: boolean;
   /** A provider attempt failed and the engine is retrying it automatically. */
   isRetrying?: boolean;
+  /** Repeated process interruptions paused execution; the input is still durable. */
+  isPaused?: boolean;
 };
 
 export type RuntimeConversationSnapshot = {
@@ -220,7 +222,11 @@ export interface DurableAgentRuntime {
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
-  initialize(database: RuntimeSqlDatabase, ports: RuntimeExecutionPorts): Promise<void>;
+  initialize(
+    database: RuntimeSqlDatabase,
+    ports: RuntimeExecutionPorts,
+    signal?: AbortSignal,
+  ): Promise<void>;
   /** Enable scheduling only after business identities and capabilities have been reconstructed. */
   resume(): void;
   /** Native task demand, including background compaction; observing does not schedule work. */

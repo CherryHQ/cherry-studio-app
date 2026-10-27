@@ -95,6 +95,8 @@ export function createAgentManagementTools(
       description,
       inputSchema: toRuntimeInputSchema(schema),
       approval,
+      // Agent management is occasional, so these schemas load through tool_search.
+      deferred: true,
       async execute({ input, signal }) {
         const parsed = schema.safeParse(input);
         if (!parsed.success) return failure('agent_invalid_input', z.prettifyError(parsed.error));

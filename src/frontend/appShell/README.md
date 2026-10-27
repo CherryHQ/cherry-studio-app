@@ -5,12 +5,16 @@ page.
 
 - `account/` owns the Accounts Portal sign-in page, its `/login` route and the gate that returns an
   enterprise profile with a rejected session to sign-in.
+- `appUpdate/` owns the package-update dialog, cold-start offer and entry state across channels.
 - `fileExport/` owns watermark preparation, system file sharing and photo saving.
 - `documentExport/` owns the source-neutral document export navigation handoff.
 - `header/` owns the app-wide main and route header adapters.
 - `navigation/` owns Expo Router and React Navigation integration shared by routes and pages.
-- `remoteAgent/` owns PC controller bindings and queries shared by the drawer and chat.
+- [`conversation/`](./conversation/README.md) owns the shared conversation read model and catalog
+  sources used by the drawer, Agent picker and chat. Its `remote/` boundary owns desktop Session
+  observation and history; local chat observation belongs to `features/chat/runtime`.
 - `sidebar/` owns the drawer's navigation surface.
+- `pane/` owns the file pane beside chat in medium and expanded windows.
 - `search/` owns the cross-page request session that opens the transient search page.
 - `backgroundActivity/` owns platform Live Activity factories registered during bootstrap.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.

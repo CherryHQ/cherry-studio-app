@@ -2,19 +2,29 @@ import { GENERATE_IMAGE_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTool
 import * as z from 'zod';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { createPaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
 import type { TurnFileScope } from '../../resources/managedFileResolver';
-import type { RuntimeTool } from '../../runtime';
+import {
+  createErrorToolResult,
+  createImageRequestErrorToolResult,
+  type RuntimeTool,
+} from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 import {
   type ConfiguredPaintingModel,
-  GENERATE_IMAGE_DESCRIPTION,
   generateImageFromPrompt,
   isPaintingError,
+  type PaintingResult,
   type PaintingToolDependencies,
   toGenerateImageOutput,
 } from './generateImage';
-import { buildGenerateImageToolSchema, type GenerateImageToolInput } from './generateImageSchema';
+import {
+  buildGenerateImageToolDescription,
+  buildGenerateImageToolSchema,
+  type GenerateImageToolInput,
+} from './generateImageSchema';
 
 export { GENERATE_IMAGE_TOOL_NAME };
 
@@ -29,13 +39,14 @@ export function createGenerateImageTool(
   turnFiles: TurnFileScope,
   resolveUsageAttribution?: AiUsageAttributionResolver,
 ): RuntimeTool {
-  const inputSchema = buildGenerateImageToolSchema(configuredModel?.support);
+  const strategy = createPaintingGenerationStrategy(configuredModel?.model);
+  const inputSchema = buildGenerateImageToolSchema(strategy);
 
   return {
     ref: { source: 'builtin', capabilityId: GENERATE_IMAGE_TOOL_NAME },
     providerName: GENERATE_IMAGE_TOOL_NAME,
     displayName: 'Generate image',
-    description: GENERATE_IMAGE_DESCRIPTION,
+    description: buildGenerateImageToolDescription(strategy),
     inputSchema: toRuntimeInputSchema(inputSchema),
     // Generation spends the user's provider quota, so it asks unless an Agent
     // binding says otherwise (agent-tools-and-resources.md, Image Generation).
@@ -43,28 +54,37 @@ export function createGenerateImageTool(
     async execute({ input, signal }) {
       const parsed = inputSchema.safeParse(input);
       if (!parsed.success) {
+        const error = {
+          code: 'invalid_image_request',
+          message: `Invalid input: ${z.prettifyError(parsed.error)}`,
+          retryable: true,
+          origin: 'tool' as const,
+        };
         return {
-          value: {
-            status: 'error',
-            message: `Invalid input: ${z.prettifyError(parsed.error)}`,
-            retryable: true,
-          },
-          artifacts: [],
+          ...createErrorToolResult(error),
+          failure: { error, scope: 'call' },
         };
       }
 
-      const result = await generateImageFromPrompt(
-        dependencies,
-        parsed.data as GenerateImageToolInput,
-        signal,
-        configuredModel,
-        turnFiles,
-        resolveUsageAttribution?.(),
-      );
+      let result: PaintingResult;
+      try {
+        result = await generateImageFromPrompt(
+          dependencies,
+          parsed.data as GenerateImageToolInput,
+          signal,
+          configuredModel,
+          strategy,
+          turnFiles,
+          resolveUsageAttribution?.(),
+        );
+      } catch (error) {
+        if (signal.aborted || !(error instanceof AiRequestError)) throw error;
+        return createImageRequestErrorToolResult(error.detail);
+      }
       if (isPaintingError(result)) {
         return {
-          value: { status: 'error', message: result.error, retryable: false },
-          artifacts: [],
+          ...createErrorToolResult(result.error),
+          failure: { error: result.error, scope: 'call' },
         };
       }
 

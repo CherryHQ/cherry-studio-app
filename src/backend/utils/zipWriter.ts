@@ -44,7 +44,7 @@ export async function writeZipFile(
     signal?.throwIfAborted();
     size += chunk.byteLength;
     if (limit && size > limit.bytes) throw limit.error();
-    output.writeBytes(chunk);
+    output.writeBytesSync(chunk);
     finished = final;
   });
   try {
@@ -65,7 +65,7 @@ export async function writeZipFile(
           let remaining = entry.file.size;
           while (remaining > 0) {
             signal?.throwIfAborted();
-            const chunk = source.readBytes(Math.min(CHUNK_BYTES, remaining));
+            const chunk = source.readBytesSync(Math.min(CHUNK_BYTES, remaining));
             if (!chunk.byteLength) throw new Error('ZIP source file was truncated');
             remaining -= chunk.byteLength;
             stream.push(chunk, false);

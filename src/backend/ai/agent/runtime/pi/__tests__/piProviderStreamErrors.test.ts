@@ -372,6 +372,13 @@ describe('Pi provider stream errors', () => {
       error: { code: 'subscription_sharing_usage_limit_exceeded', message: '请求失败' },
       retryable: false,
     },
+    {
+      error: {
+        code: 'subscription_sharing_workplace_individual_usage_limit_exceeded',
+        message: '请求失败',
+      },
+      retryable: false,
+    },
     { error: { code: 'insufficient_quota', message: '请求失败' }, retryable: false },
     { error: { code: 'billing_not_active', message: '请求失败' }, retryable: false },
   ])('distinguishes Codex JSON throttling from quota exhaustion: $error', async (testCase) => {

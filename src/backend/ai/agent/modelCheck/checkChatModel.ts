@@ -62,7 +62,7 @@ export async function checkChatModel(
           return { status: 'failed', reason: classifyChatModelFailure(event.error) };
         if (event.type === 'completed')
           return hasText
-            ? { status: 'success', latency: performance.now() - startedAt }
+            ? { status: 'success', latency: Math.round(performance.now() - startedAt) }
             : { status: 'failed', reason: 'model' };
       }
       return { status: 'failed', reason: 'unknown' };

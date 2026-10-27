@@ -53,6 +53,51 @@ test.each(['approve', 'deny'] as const)(
   },
 );
 
+test.each(['app', 'notification'] as const)(
+  'resolving another answer approval from %s restores the quiet owner content immediately',
+  async (source) => {
+    const test = await fixture();
+    try {
+      const turn = test.start();
+      turn.update({
+        parts: [{ id: 'reasoning', type: 'reasoning', state: 'streaming', text: 'Thinking' }],
+      });
+      turn.setInteraction({
+        kind: 'approval',
+        id: 'other-answer',
+        title: 'Search',
+        respond: async () => {},
+      });
+      turn.awaitApproval(undefined, undefined, 'other-answer');
+      expect(test.props().phase).toBe('awaiting-approval');
+
+      if (source === 'app') turn.setInteraction(undefined);
+      else
+        await test.runtime.respondToAction({
+          token: test.props().actions!.token,
+          actionId: 'approve',
+        });
+
+      expect(test.props()).toMatchObject({ phase: 'thinking', compactIcon: 'bubble-ellipsis' });
+      expect(test.props().attentionId).toBeUndefined();
+      expect(test.props().actions).toBeUndefined();
+    } finally {
+      await test.runtime._doStop();
+    }
+  },
+);
+
+test('a health approval offers no notification decision, so sharing is confirmed in the app', async () => {
+  const test = await fixture();
+  const turn = test.start();
+  const respond = jest.fn(async () => {});
+  turn.setInteraction({ kind: 'approval', id: 'a1', title: 'Health', requiresApp: true, respond });
+  turn.awaitApproval(undefined, undefined, 'a1');
+  expect(test.props().actions).toBeUndefined();
+  expect(respond).not.toHaveBeenCalled();
+  await test.runtime._doStop();
+});
+
 test('a repeated tap while responding cannot start a second decision', async () => {
   const test = await fixture();
   let release!: () => void;

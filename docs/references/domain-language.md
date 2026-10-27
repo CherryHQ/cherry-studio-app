@@ -18,11 +18,19 @@ settings.
 _Avoid_: Assistant entity, bot, character
 
 **Agent Session**:
-A linear conversation owned by one Agent configuration.
+A conversation owned by one Agent configuration. Its Messages form a tree; the selected leaf
+determines the visible transcript and the history used by the next submission.
 _Avoid_: Topic, room
 
+**Conversation Branch**:
+The path from a Session's first Message to one selected leaf. Regeneration and parallel model
+answers add sibling answers inside the same Session; switching branches changes selection without
+calling a model or undoing tool effects.
+_Avoid_: separate Session, Runtime working copy
+
 **Session Fork**:
-A new Agent Session created by copying an existing transcript up to and including a chosen Message.
+A new Agent Session created by copying the selected branch up to and including a chosen Message,
+without its sibling alternatives.
 The fork records the Session it came from plus the copied Message that closes its inherited prefix;
 the source is never modified.
 _Avoid_: branch, clone, duplicate
@@ -37,9 +45,10 @@ A typed unit of message content, such as text, reasoning, tool output, source, f
 _Avoid_: flat message text, legacy block
 
 **Transcript History Window**:
-The database-backed, linear Agent Session window. It owns cursor pagination, older-message prefetch,
-reveal policy, and persisted Messages handed to the chat list.
-_Avoid_: active branch, stream state, live message buffer
+The database-backed window over the selected Conversation Branch, including sibling-answer
+metadata. It owns cursor pagination, older-message prefetch, reveal policy, and persisted Messages
+handed to the chat list.
+_Avoid_: complete message tree, stream state, live message buffer
 
 **Streaming Message Overlay**:
 The in-memory active assistant Message layer composed on top of transcript history while the Agent

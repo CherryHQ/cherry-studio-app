@@ -1,0 +1,62 @@
+diff --git a/lib/module/views/Drawer.native.js b/lib/module/views/Drawer.native.js
+index f463263..010b8ed 100644
+--- a/lib/module/views/Drawer.native.js
++++ b/lib/module/views/Drawer.native.js
+@@ -314,6 +314,7 @@ export function Drawer({
+             children: [/*#__PURE__*/_jsxs(Animated.View, {
+               style: [styles.content, contentAnimatedStyle],
+               children: [/*#__PURE__*/_jsx(Animated.View, {
++                collapsable: false,
+                 animatedProps: contentAnimatedProps,
+                 style: styles.content,
+                 children: children
+diff --git a/lib/typescript/src/types.d.ts b/lib/typescript/src/types.d.ts
+index 1276b61..b3d89dc 100644
+--- a/lib/typescript/src/types.d.ts
++++ b/lib/typescript/src/types.d.ts
+@@ -1,6 +1,7 @@
+ import * as React from 'react';
+ import type { StyleProp, View, ViewStyle } from 'react-native';
+-import type { PanGesture } from 'react-native-gesture-handler';
++// Gesture Handler 3 renamed the builder-based pan type that this drawer still creates.
++import type { LegacyPanGesture as PanGesture } from 'react-native-gesture-handler';
+ import type { SharedValue } from 'react-native-reanimated';
+ export type Layout = {
+     width: number;
+diff --git a/src/types.tsx b/src/types.tsx
+index 6933eef..de0a0cd 100644
+--- a/src/types.tsx
++++ b/src/types.tsx
+@@ -1,6 +1,7 @@
+ import * as React from 'react';
+ import type { StyleProp, View, ViewStyle } from 'react-native';
+-import type { PanGesture } from 'react-native-gesture-handler';
++// Gesture Handler 3 renamed the builder-based pan type that this drawer still creates.
++import type { LegacyPanGesture as PanGesture } from 'react-native-gesture-handler';
+ import type { SharedValue } from 'react-native-reanimated';
+ 
+ export type Layout = { width: number; height: number };
+diff --git a/src/utils/DrawerGestureContext.tsx b/src/utils/DrawerGestureContext.tsx
+index 3aac957..1e502f3 100644
+--- a/src/utils/DrawerGestureContext.tsx
++++ b/src/utils/DrawerGestureContext.tsx
+@@ -1,5 +1,6 @@
+ import * as React from 'react';
+-import type { PanGesture } from 'react-native-gesture-handler';
++// Gesture Handler 3 renamed the builder-based pan type that this drawer still creates.
++import type { LegacyPanGesture as PanGesture } from 'react-native-gesture-handler';
+ 
+ export const DrawerGestureContext = React.createContext<PanGesture | undefined>(
+   undefined
+diff --git a/src/views/Drawer.native.tsx b/src/views/Drawer.native.tsx
+index 0c3e038..3a1cd43 100644
+--- a/src/views/Drawer.native.tsx
++++ b/src/views/Drawer.native.tsx
+@@ -504,6 +504,7 @@ export function Drawer({
+             >
+               <Animated.View style={[styles.content, contentAnimatedStyle]}>
+                 <Animated.View
++                  collapsable={false}
+                   animatedProps={contentAnimatedProps}
+                   style={styles.content}
+                 >

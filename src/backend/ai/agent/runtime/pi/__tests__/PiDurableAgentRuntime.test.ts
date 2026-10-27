@@ -182,6 +182,29 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('releases late startup storage without opening the engine after cancellation', async () => {
+    const f = fixture();
+    const storage = deferred<ReopenableMemoryStorage>();
+    const close = jest.spyOn(f.storage, 'close');
+    const open = jest.spyOn(PiDurableRuntime, 'open');
+    const runtime = new PiDurableAgentRuntime(f.dependencies, () => storage.promise);
+    const controller = new AbortController();
+    const initializing = runtime.initialize(f.database, f.ports, controller.signal);
+    controller.abort(new Error('Host replaced'));
+    storage.resolve(f.storage);
+
+    try {
+      await expect(initializing).rejects.toThrow('Host replaced');
+      await runtime.close();
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(open).not.toHaveBeenCalled();
+      expect(f.ports.recordUsage).not.toHaveBeenCalled();
+    } finally {
+      open.mockRestore();
+      close.mockRestore();
+    }
+  });
+
   test('migrates an unfinished v1 conversation across midnight without resetting loaded instructions', async () => {
     const state = fixture();
     const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
@@ -242,6 +265,7 @@ describe('Persistent Agent facade', () => {
         kind: 'cherry.submission',
         version: 1,
         scope: 'session',
+        checkpointWhen: () => false,
         family: true,
         initial: (value) => ({ value }),
       });

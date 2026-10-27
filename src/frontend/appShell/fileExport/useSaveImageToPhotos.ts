@@ -77,7 +77,7 @@ export function useSaveImageToPhotos(
         await saveToPhotos();
       } else if (canRequestDevicePermission(permission)) {
         alert.confirm({
-          confirmLabel: t('settings.permissions.writeAccess'),
+          confirmLabel: t('settings.permissions.action.request'),
           description: t('imageActions.savePermissionDenied'),
           onConfirm: requestPhotoAccessAndSave,
           title: t('settings.permissions.accessRequired'),

@@ -6,7 +6,14 @@ import {
   type ReactNode,
   useContext,
 } from 'react';
-import { Pressable, Text, type PressableProps, type TextProps, type View } from 'react-native';
+import {
+  Pressable,
+  Text,
+  type PressableProps,
+  type TextProps,
+  type TextInstance,
+  type ViewInstance,
+} from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
@@ -35,8 +42,10 @@ export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style
 
 export type ButtonLabelProps = Omit<TextProps, 'className' | 'style'>;
 
+// Clearing borderWidth passes NaN into Android's rounded overflow clipping and hides children.
+// Keep an explicit zero when switching away from a bordered variant (react-native#54217).
 const rootBaseStyles =
-  'flex-row items-center justify-center overflow-hidden active:opacity-80 disabled:opacity-40';
+  'flex-row items-center justify-center overflow-hidden border-0 active:opacity-80 disabled:opacity-40';
 
 const shapeStyles: Record<ButtonShape, string> = {
   pill: 'rounded-full',
@@ -130,7 +139,7 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
 const ButtonVariantContext = createContext<ButtonVariant>('default');
 const ButtonSizeContext = createContext<ButtonSize>('default');
 
-const ButtonLabel = forwardRef<Text, ButtonLabelProps>(function ButtonLabel(props, ref) {
+const ButtonLabel = forwardRef<TextInstance, ButtonLabelProps>(function ButtonLabel(props, ref) {
   const variant = useContext(ButtonVariantContext);
   const size = useContext(ButtonSizeContext);
 
@@ -149,7 +158,7 @@ const ButtonLabel = forwardRef<Text, ButtonLabelProps>(function ButtonLabel(prop
 
 ButtonLabel.displayName = 'Button.Label';
 
-const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
+const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
   {
     accessibilityRole = 'button',
     accessibilityState,

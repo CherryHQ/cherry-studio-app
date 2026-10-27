@@ -7,13 +7,9 @@
  * `file_entry` ids cross back (agent-tools-and-resources.md, Image Generation).
  */
 
-import {
-  buildParamsSchema,
-  type ImageGenerationMode,
-  type ImageGenerationSupport,
-  type ParamValues,
-} from '@cherrystudio/provider-registry';
+import type { CanonicalParamKey, ParamValues } from '@cherrystudio/provider-registry';
 import type { GenerateImageOutput } from '@cherrystudio/universal/ai/builtinTools';
+import { ZodError } from 'zod';
 
 import type { AiService, AiUsageAttribution } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
@@ -21,6 +17,8 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { CreateInternalEntryInput } from '@/backend/services/file/fileStorage';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { ResolvedFile } from '@/shared/contracts';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type FileEntry,
@@ -28,29 +26,29 @@ import {
   FileEntryIdSchema,
   readableFilename,
 } from '@/shared/data/types/file';
-import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import {
+  isUniqueModelId,
+  ModelSchema,
+  type Model,
+  type UniqueModelId,
+} from '@/shared/data/types/model';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
+import {
+  createPaintingGenerationStrategy,
+  PaintingGenerationError,
+  type PaintingGenerationStrategy,
+} from '@/shared/utils/paintingGenerationStrategy';
 
 import type { TurnFileScope } from '../../resources/managedFileResolver';
-import { type GenerateImageToolInput, limitGenerateImageInputIds } from './generateImageSchema';
+import type { RuntimeError } from '../../runtime';
+import type { GenerateImageToolInput } from './generateImageSchema';
 
 const logger = loggerService.withContext('GenerateImageTool');
 
-export const GENERATE_IMAGE_DESCRIPTION = `Generate or edit an image using the user's configured drawing model.
-
-Use this when:
-- The user asks you to draw, paint, illustrate, or generate an image, picture, logo, or icon.
-- The user asks you to modify a previously generated image and provides its file entry id.
-
-Notes:
-- Describe the desired image or edit vividly in the prompt.
-- Pass image_ids only when editing or using an existing image as a reference.
-- Generated images are displayed automatically in the conversation. Returned ids and names are file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text.
-- Generation can take 10-60 seconds.
-- Requires a drawing model configured in Settings > Model. If none is set, tell the user instead of retrying.`;
-
 export const PAINTING_ERROR_NOTE =
-  'Image generation failed (provider error); retry or inform the user.';
+  'The image generation request failed. Inform the user; do not automatically repeat the request.';
+const PAINTING_STORAGE_ERROR_NOTE =
+  'The generated images could not be saved. Inform the user; do not automatically repeat the paid generation.';
 export const PAINTING_MODEL_NOT_CONFIGURED_NOTE =
   'No drawing model is configured. Tell the user to pick one in Settings > Model; do not retry until then.';
 export const PAINTING_EDIT_NOT_SUPPORTED_NOTE =
@@ -58,12 +56,12 @@ export const PAINTING_EDIT_NOT_SUPPORTED_NOTE =
 export const PAINTING_GENERATE_NOT_SUPPORTED_NOTE =
   "The configured drawing model can't generate a new image without input images. Ask for image references or tell the user to choose a generation-capable drawing model.";
 export const PAINTING_INPUT_IMAGE_ERROR_NOTE =
-  'One or more image references could not be read as images. Ask the user for valid generated-image file entry ids.';
+  'The reference image is unavailable or could not be read as an image. Use the intended image file entry id already visible in this conversation. If that image is no longer available, ask the user to attach it again, not to supply a technical id. Do not substitute text-only generation.';
 export const PAINTING_INPUT_IMAGE_NOT_IN_TURN_NOTE =
-  'One or more image references are not part of this conversation. Only file entry ids visible in this session may be used; ask the user to attach the image instead.';
+  'One or more image references are not part of this conversation. Reuse the intended image file entry id from a conversation attachment or an earlier tool result. If the image is outside this conversation, ask the user to attach it, not to supply a technical id.';
 
 export type ConfiguredPaintingModel = {
-  support: ImageGenerationSupport | null;
+  model: Model;
   uniqueModelId: UniqueModelId;
 };
 
@@ -72,14 +70,14 @@ export type PaintingToolDependencies = {
   files: {
     createInternalEntry(input: CreateInternalEntryInput): Promise<FileEntry>;
     discard(files: readonly FileEntry[]): Promise<void>;
-    readDataUrl(uri: string, mediaType: string): Promise<string>;
+    readDataUrl(uri: string, mediaType: string, signal?: AbortSignal): Promise<string>;
     resolve(id: FileEntryId): Promise<ResolvedFile | null>;
   };
   preference: Pick<PreferenceService, 'get'>;
   models: Pick<ModelService, 'getById'>;
 };
 
-export type PaintingError = { error: string };
+export type PaintingError = { error: RuntimeError };
 export type PaintingResult = { entries: FileEntry[] } | PaintingError;
 
 export function isPaintingError(result: PaintingResult): result is PaintingError {
@@ -91,6 +89,7 @@ export function toGenerateImageOutput(entries: readonly FileEntry[]): GenerateIm
   return entries.map((entry) => ({ id: entry.id, name: entry.filename }));
 }
 
+/** Only a model the shared strategy can run counts as configured, so an unusable one omits the tool. */
 export async function resolveConfiguredPaintingModel(
   dependencies: Pick<PaintingToolDependencies, 'preference' | 'models'>,
 ): Promise<ConfiguredPaintingModel | null> {
@@ -99,8 +98,13 @@ export async function resolveConfiguredPaintingModel(
     return null;
   }
 
-  const model = await dependencies.models.getById(uniqueModelId);
-  return model ? { support: model.imageGeneration ?? null, uniqueModelId } : null;
+  const stored = await dependencies.models.getById(uniqueModelId);
+  if (!stored) return null;
+  // Parsing copies nested capability data so later model updates cannot mutate this turn's rules.
+  const model = ModelSchema.parse(stored);
+  return createPaintingGenerationStrategy(model).kind === 'unavailable'
+    ? null
+    : { model, uniqueModelId };
 }
 
 export async function generateImageFromPrompt(
@@ -108,60 +112,104 @@ export async function generateImageFromPrompt(
   input: GenerateImageToolInput,
   signal: AbortSignal,
   configuredModel: ConfiguredPaintingModel | null,
+  strategy: PaintingGenerationStrategy,
   turnFiles: TurnFileScope,
   usageAttribution?: AiUsageAttribution,
 ): Promise<PaintingResult> {
   throwIfAborted(signal);
-  const resolvedModel = configuredModel ?? (await resolveConfiguredPaintingModel(dependencies));
-  if (!resolvedModel) {
-    return { error: PAINTING_MODEL_NOT_CONFIGURED_NOTE };
+  if (!configuredModel || strategy.kind === 'unavailable') {
+    return paintingError('image_model_unavailable', PAINTING_MODEL_NOT_CONFIGURED_NOTE);
   }
 
-  const { support, uniqueModelId } = resolvedModel;
-  const mode = resolveMode(input);
-  if (
-    (mode === 'edit' && !support?.modes.edit) ||
-    (mode === 'generate' && support && !support.modes.generate)
-  ) {
-    return {
-      error:
-        mode === 'edit' ? PAINTING_EDIT_NOT_SUPPORTED_NOTE : PAINTING_GENERATE_NOT_SUPPORTED_NOTE,
-    };
-  }
-
-  let inputImages: string[] | undefined;
-  if (mode === 'edit') {
+  const { uniqueModelId } = configuredModel;
+  const imageIds = [...new Set(input.image_ids ?? [])];
+  let images: ResolvedFile[] = [];
+  if (imageIds.length > 0) {
     // The turn ledger is the authority for what this conversation may read. A
     // valid-looking id from anywhere else (another session, the wider library)
     // proves existence, not authorization.
-    if ((input.image_ids ?? []).some((id) => !turnFiles.fileEntryIds.has(id))) {
-      return { error: PAINTING_INPUT_IMAGE_NOT_IN_TURN_NOTE };
+    if (imageIds.some((id) => !turnFiles.fileEntryIds.has(id))) {
+      return paintingError('image_reference_not_authorized', PAINTING_INPUT_IMAGE_NOT_IN_TURN_NOTE);
     }
     try {
-      inputImages = await resolveInputImages(dependencies, input.image_ids ?? []);
+      images = await Promise.all(
+        imageIds.map(async (id) => {
+          const resolved = await dependencies.files.resolve(FileEntryIdSchema.parse(id));
+          if (!resolved || !resolved.entry.mediaType.startsWith('image/')) {
+            throw new Error('The reference file is not an available image');
+          }
+          return resolved;
+        }),
+      );
     } catch (error) {
       if (signal.aborted || isAbortError(error)) {
         throw error;
       }
       logger.warn('Failed to resolve generate_image input images', error as Error);
-      return { error: PAINTING_INPUT_IMAGE_ERROR_NOTE };
+      return paintingError('image_reference_unavailable', PAINTING_INPUT_IMAGE_ERROR_NOTE);
     }
     throwIfAborted(signal);
   }
 
+  let request: ReturnType<PaintingGenerationStrategy['prepare']>;
+  try {
+    request = strategy.prepare({
+      images: images.map(({ entry }) => ({
+        fileEntryId: entry.id,
+        name: entry.filename,
+        mediaType: entry.mediaType,
+        size: entry.size,
+      })),
+      prompt: input.prompt,
+      paramValues: extractParamValues(input, strategy),
+    });
+  } catch (error) {
+    if (error instanceof PaintingGenerationError) {
+      const message =
+        error.issue.code === 'images-unsupported'
+          ? PAINTING_EDIT_NOT_SUPPORTED_NOTE
+          : error.issue.code === 'image-required'
+            ? PAINTING_GENERATE_NOT_SUPPORTED_NOTE
+            : `Invalid image request: ${error.issue.code}. Correct the request before trying again.`;
+      return paintingError('invalid_image_request', message);
+    }
+    if (error instanceof ZodError)
+      return paintingError('invalid_image_request', 'The image request has invalid parameters.');
+    if (error instanceof FileAttachmentError)
+      return paintingError(
+        'image_reference_invalid',
+        `The reference image cannot be used: ${error.issue.code}. Ask the user for a supported image; do not substitute text-only generation.`,
+      );
+    throw error;
+  }
+
+  let inputImages: string[];
+  try {
+    inputImages = await Promise.all(
+      images.map(({ entry, uri }) => dependencies.files.readDataUrl(uri, entry.mediaType, signal)),
+    );
+    throwIfAborted(signal);
+  } catch (error) {
+    if (signal.aborted || isAbortError(error)) throw error;
+    return paintingError('image_reference_unavailable', PAINTING_INPUT_IMAGE_ERROR_NOTE);
+  }
+
   const createdFiles: FileEntry[] = [];
+  let stage: 'request' | 'storage' = 'request';
   try {
     const result = await dependencies.ai.generateImage({
-      ...(inputImages && { inputImages }),
-      mode,
-      paramValues: extractParamValues(input, support, mode),
-      prompt: input.prompt,
+      ...request,
+      ...(inputImages.length > 0 && { inputImages }),
       requestOptions: { signal },
       uniqueModelId,
       usageAttribution,
     });
     throwIfAborted(signal);
+    if (result.images.length === 0) {
+      return paintingError('image_generation_empty', 'The image provider returned no image.');
+    }
 
+    stage = 'storage';
     for (const [index, image] of result.images.entries()) {
       createdFiles.push(
         await dependencies.files.createInternalEntry({
@@ -187,56 +235,36 @@ export async function generateImageFromPrompt(
       throw error;
     }
     logger.error('generate_image failed', error as Error, { uniqueModelId });
-    return { error: PAINTING_ERROR_NOTE };
+    if (stage === 'request' && error instanceof AiRequestError) throw error;
+    return paintingError(
+      stage === 'storage' ? 'image_storage_failed' : 'image_generation_failed',
+      stage === 'storage' ? PAINTING_STORAGE_ERROR_NOTE : PAINTING_ERROR_NOTE,
+    );
   }
 }
 
-function resolveMode(input: GenerateImageToolInput): ImageGenerationMode {
-  return input.image_ids && input.image_ids.length > 0 ? 'edit' : 'generate';
+function paintingError(code: string, message: string): PaintingError {
+  return { error: { code, message, retryable: false, origin: 'tool' } };
 }
 
 function extractParamValues(
   input: GenerateImageToolInput,
-  support: ImageGenerationSupport | null,
-  mode: ImageGenerationMode,
+  strategy: PaintingGenerationStrategy,
 ): ParamValues {
-  const supports = support?.modes[mode]?.supports;
-  if (!supports) {
-    return {};
-  }
-
-  const candidate: Record<string, unknown> = {};
-  for (const key of Object.keys(supports)) {
-    const value = input[key as keyof GenerateImageToolInput];
-    if (value !== undefined && value !== null && value !== '') {
-      candidate[key] = value;
-    }
-  }
-
-  const parsed = buildParamsSchema(support, mode).parse(candidate);
-  const paramValues: Record<string, unknown> = {};
-  for (const [key, spec] of Object.entries(supports)) {
-    const value = parsed[key];
-    if (value !== undefined) {
-      paramValues[spec.type === 'size' && spec.pairedEnumKey ? spec.pairedEnumKey : key] = value;
-    }
-  }
-  return paramValues as ParamValues;
-}
-
-async function resolveInputImages(
-  dependencies: Pick<PaintingToolDependencies, 'files'>,
-  imageIds: readonly string[],
-): Promise<string[]> {
-  return Promise.all(
-    limitGenerateImageInputIds(imageIds).map(async (id) => {
-      const resolved = await dependencies.files.resolve(FileEntryIdSchema.parse(id));
-      if (!resolved || !resolved.entry.mediaType.startsWith('image/')) {
-        throw new Error(`File entry ${id} is not an image`);
-      }
-      return dependencies.files.readDataUrl(resolved.uri, resolved.entry.mediaType);
+  const parameters = strategy.resolveParameters(input.image_ids?.length ?? 0);
+  return Object.fromEntries(
+    Object.entries(input).flatMap(([key, value]) => {
+      if (key === 'prompt' || key === 'image_ids') return [];
+      const spec = parameters?.definition.supports[key as CanonicalParamKey];
+      // Tool inputs name custom-size fields directly; the shared strategy accepts canonical requests.
+      return [
+        [
+          spec?.type === 'size' ? (spec.pairedEnumKey ?? 'size') : key,
+          spec?.type === 'size' && typeof value === 'string' ? value.toLowerCase() : value,
+        ],
+      ];
     }),
-  );
+  ) as ParamValues;
 }
 
 async function discardCreatedFiles(

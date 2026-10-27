@@ -5,7 +5,7 @@ import { Composer } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import { type PropsWithChildren, type RefObject, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { View, type ViewInstance } from 'react-native';
 
 import { useCameraAccess } from '@/frontend/hooks/useCameraAccess';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -39,7 +39,7 @@ const logger = loggerService.withContext('ComposerMenu');
 type ComposerMenuProps = PropsWithChildren<{
   media?: 'all' | 'images';
   onPickFiles?: () => void;
-  triggerRef?: RefObject<View | null>;
+  triggerRef?: RefObject<ViewInstance | null>;
 }>;
 
 export function ComposerMenu({

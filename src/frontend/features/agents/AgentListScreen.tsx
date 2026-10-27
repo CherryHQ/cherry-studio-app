@@ -91,15 +91,6 @@ function AgentListScreenBody() {
     },
     [enterEditing, isDeletionPending, isEditing, toggleId],
   );
-  const handleSearchChange = useCallback(
-    (nextQuery: string) => {
-      if (isEditing) {
-        exitEditing();
-      }
-      setQuery(nextQuery);
-    },
-    [exitEditing, isEditing, setQuery],
-  );
 
   const openCreateAgent = useCallback(() => {
     router.push('/agents/new');
@@ -115,19 +106,6 @@ function AgentListScreenBody() {
       },
     ],
     [openCreateAgent, t],
-  );
-  const doneActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.done'),
-        disabled: isDeletionPending,
-        key: 'finish-selecting-agents',
-        label: t('common.done'),
-        onPress: exitEditing,
-        type: 'label',
-      },
-    ],
-    [exitEditing, isDeletionPending, t],
   );
   const openAgentEditor = useCallback(
     (agentId: string) => {
@@ -185,12 +163,12 @@ function AgentListScreenBody() {
   return (
     <>
       <RouteHeader
-        onBack={isEditing ? exitEditing : undefined}
-        rightActions={isEditing ? doneActions : rightActions}
+        rightActions={rightActions}
+        selection={isEditing ? { onExit: exitEditing, selectedCount: selectedIds.size } : undefined}
         title={t('agent.list.title')}
       />
       <View className="flex-1">
-        <InlineSearch onChangeText={handleSearchChange} value={query} />
+        {isEditing ? null : <InlineSearch onChangeText={setQuery} value={query} />}
         <LegendList
           alwaysBounceVertical={false}
           contentContainerStyle={listContentStyle}

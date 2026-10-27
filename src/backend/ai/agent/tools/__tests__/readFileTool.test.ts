@@ -11,17 +11,47 @@ import {
   READ_FILE_DEFAULT_LINE_LIMIT,
   READ_FILE_MAX_CHARACTERS,
   READ_FILE_MAX_SOURCE_BYTES,
+  READ_FILE_MAX_TEXT_BYTES,
   type ReadFileFiles,
 } from '../readFileTool';
 
 const FILE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const OTHER_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
 const IN_SCOPE: TurnFileScope = { fileEntryIds: new Set([FILE_ID]) };
+/** Pi keeps only the first 50 KiB of a model-facing tool result. */
+const PI_TOOL_OUTPUT_BYTES = 50 * 1024;
+const serializedSize = (result: RuntimeToolResult) =>
+  Buffer.byteLength(JSON.stringify(result), 'utf8');
 
 jest.mock('@/backend/services/file/anydocParser', () => ({
   ANYDOC_PARSER_VERSION: '0.4.1',
   parseAnydocDocument: jest.fn(),
 }));
+
+test('every PDF text window retains unrecognized page metadata, including windows past the notice', async () => {
+  const files = createFiles('pdf');
+  files.resolveAvailable.mockResolvedValue(
+    new Map([
+      [
+        FILE_ID,
+        {
+          fileEntryId: FILE_ID,
+          mediaType: 'application/pdf',
+          name: 'scan.pdf',
+          size: 3,
+        },
+      ],
+    ]),
+  );
+  files.readDocumentText.mockResolvedValue({
+    text: 'Extraction notice\nBody',
+    truncated: false,
+    unrecognizedPages: [1, 3],
+  });
+  const tool = createReadFileTool(files, IN_SCOPE);
+  const result = await execute(tool, { file_entry_id: FILE_ID, start_line: 2, limit: 1 });
+  expect(result.value).toMatchObject({ text: 'Body', unrecognizedPages: [1, 3] });
+});
 
 describe('AnyDoc raw JSON reads', () => {
   function documentFiles() {
@@ -79,6 +109,7 @@ describe('AnyDoc raw JSON reads', () => {
         complete: boolean;
       };
       fragments.push(value.text);
+      expect(serializedSize(result)).toBeLessThanOrEqual(PI_TOOL_OUTPUT_BYTES);
       expect([...value.text].length).toBe(value.characterCount);
       expect(value.characterCount).toBeLessThanOrEqual(READ_FILE_MAX_CHARACTERS);
       expect(JSON.stringify(result)).not.toContain('base64');
@@ -360,8 +391,36 @@ describe('readFileTool', () => {
     });
   });
 
+  test('pages Chinese text without losing what Pi would cut from an oversized result', async () => {
+    const lines = Array.from(
+      { length: 600 },
+      (_, index) => `第${index}行「中文」\t${'内容'.repeat(60)}`,
+    );
+    const tool = createReadFileTool(createFiles(lines.join('\n')), IN_SCOPE);
+    const read: string[] = [];
+    for (let startLine = 1; startLine <= lines.length;) {
+      const result = await execute(tool, { file_entry_id: FILE_ID, start_line: startLine });
+      expect(serializedSize(result)).toBeLessThanOrEqual(PI_TOOL_OUTPUT_BYTES);
+      const value = result.value as { text: string; lineCount: number };
+      read.push(value.text);
+      startLine += value.lineCount;
+    }
+    expect(read.length).toBeGreaterThan(1);
+    expect(read.join('\n')).toBe(lines.join('\n'));
+
+    const fragments: string[] = [];
+    for (let offset: number | null = 0; offset !== null;) {
+      const result = await execute(tool, { file_entry_id: FILE_ID, offset });
+      expect(serializedSize(result)).toBeLessThanOrEqual(PI_TOOL_OUTPUT_BYTES);
+      const value = result.value as { text: string; nextOffset: number | null };
+      fragments.push(value.text);
+      offset = value.nextOffset;
+    }
+    expect(fragments.join('')).toBe(lines.join('\n'));
+  });
+
   test('continues a line longer than one window through nextOffset', async () => {
-    const long = `${'x'.repeat(READ_FILE_MAX_CHARACTERS)}🍒tail`;
+    const long = `${'x'.repeat(READ_FILE_MAX_TEXT_BYTES)}🍒tail`;
     const tool = createReadFileTool(createFiles(`a🍒\n${long}\nlast`), IN_SCOPE);
 
     const head = await execute(tool, { file_entry_id: FILE_ID, start_line: 2 });
@@ -439,8 +498,8 @@ describe('lineWindow', () => {
     expect(window.truncated).toBe(true);
   });
 
-  test('cuts on a line boundary at the character budget', () => {
-    const line = 'x'.repeat(READ_FILE_MAX_CHARACTERS / 2);
+  test('cuts on a line boundary at the size budget', () => {
+    const line = 'x'.repeat(READ_FILE_MAX_TEXT_BYTES / 2);
     const window = lineWindow([line, line, line].join('\n'), 1, 10);
 
     // Two half-budget lines plus their separator exceed the budget, so one fits.
@@ -453,23 +512,23 @@ describe('lineWindow', () => {
   });
 
   test('flags the head of a single line that alone exceeds the budget', () => {
-    const window = lineWindow('y'.repeat(READ_FILE_MAX_CHARACTERS + 1), 1, 10);
+    const window = lineWindow('y'.repeat(READ_FILE_MAX_TEXT_BYTES + 1), 1, 10);
     expect(window.lineCount).toBe(1);
-    expect(window.text).toHaveLength(READ_FILE_MAX_CHARACTERS);
+    expect(window.text).toHaveLength(READ_FILE_MAX_TEXT_BYTES);
     // A later line cannot reach the rest, so the window hands over its offset.
-    expect(window.nextOffset).toBe(READ_FILE_MAX_CHARACTERS);
+    expect(window.nextOffset).toBe(READ_FILE_MAX_TEXT_BYTES);
     expect(window.truncated).toBe(true);
   });
 
   test('cuts a long line on a code point', () => {
-    const window = lineWindow('🍒'.repeat(READ_FILE_MAX_CHARACTERS + 1), 1, 10);
-    expect([...window.text]).toHaveLength(READ_FILE_MAX_CHARACTERS);
+    const window = lineWindow('🍒'.repeat(READ_FILE_MAX_TEXT_BYTES), 1, 10);
+    expect([...window.text]).toHaveLength(READ_FILE_MAX_TEXT_BYTES / 4);
     expect(window.text.endsWith('🍒')).toBe(true);
-    expect(window.nextOffset).toBe(READ_FILE_MAX_CHARACTERS);
+    expect(window.nextOffset).toBe(READ_FILE_MAX_TEXT_BYTES / 4);
   });
 
-  test('returns a whole line whose code points fit though its UTF-16 length does not', () => {
-    const line = '🍒'.repeat(READ_FILE_MAX_CHARACTERS);
+  test('returns a whole line that exactly fills the size budget', () => {
+    const line = '🍒'.repeat(READ_FILE_MAX_TEXT_BYTES / 4);
     expect(lineWindow(line, 1, 10)).toEqual({
       lineCount: 1,
       text: line,

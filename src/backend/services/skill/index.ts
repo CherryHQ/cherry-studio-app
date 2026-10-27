@@ -12,4 +12,3 @@ export {
 export { readSkillArchive, SKILL_ARCHIVE_MAX_BYTES } from './skillArchive';
 export { createGithubSkillClients, createGithubSkillSource } from './skillSources';
 export { skillStorage, type SkillStorage } from './skillStorage';
-export { getSystemSkillInstructions } from './bundled';

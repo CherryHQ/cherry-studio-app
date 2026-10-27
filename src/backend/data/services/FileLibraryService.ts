@@ -13,7 +13,7 @@ import {
   type LibraryFileRow,
 } from '@/backend/data/db/schemas';
 import { publishFileEntryChanges } from '@/backend/data/fileEntryChanges';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, toDataApiError } from '@/shared/data/api/errors';
 import type { TrashItem, TrashKind } from '@/shared/data/api/schemas/trash';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntry } from '@/shared/data/types/file';
@@ -22,6 +22,7 @@ import {
   fileNameKey,
   workspacePathSegments,
   type FileFolder,
+  type FileMoveResult,
   type LibraryFile,
 } from '@/shared/data/types/fileLibrary';
 
@@ -204,20 +205,57 @@ export class FileLibraryService {
     changes: { name?: string; folderId?: string | null },
     signal?: AbortSignal,
   ): Promise<void> {
-    await this.mutate(async (tx) => {
-      const file = await this.requireFile(tx, id);
-      const folderId = changes.folderId === undefined ? file.folderId : changes.folderId;
-      const name = await availableLibraryName(tx, folderId, changes.name ?? file.name, {
-        excludeId: id,
-        suffix: changes.folderId !== undefined,
-        allowRootDuplicates: true,
-      });
-      await tx
-        .update(libraryFileTable)
-        .set({ folderId, name, nameKey: fileNameKey(name) })
-        .where(eq(libraryFileTable.id, id));
-    }, signal);
-    publishDataApiChanges(['/files/library']);
+    const changed = await this.mutate((tx) => this.updateFileTx(tx, id, changes), signal);
+    if (changed) publishDataApiChanges(['/files/library']);
+  }
+
+  /** Each file commits independently; one failed move must not hide earlier successes. */
+  async moveFiles(
+    fileEntryIds: readonly string[],
+    folderId: string | null,
+  ): Promise<FileMoveResult[]> {
+    const results: FileMoveResult[] = [];
+    for (const fileEntryId of new Set(fileEntryIds)) {
+      try {
+        const changed = await this.mutate(async (tx) => {
+          const [entry] = await tx
+            .select({ libraryFileId: fileEntryTable.libraryFileId })
+            .from(fileEntryTable)
+            .where(and(eq(fileEntryTable.id, fileEntryId), isNull(fileEntryTable.deletedAt)));
+          if (!entry?.libraryFileId) throw DataApiErrorFactory.notFound('FileEntry', fileEntryId);
+          return this.updateFileTx(tx, entry.libraryFileId, { folderId });
+        });
+        results.push({ fileEntryId, status: changed ? 'moved' : 'unchanged' });
+      } catch (error) {
+        results.push({ fileEntryId, status: 'failed', code: toDataApiError(error).code });
+      }
+    }
+    if (results.some((result) => result.status === 'moved'))
+      publishDataApiChanges(['/files/library']);
+    return results;
+  }
+
+  private async updateFileTx(
+    tx: Database,
+    id: string,
+    changes: { name?: string; folderId?: string | null },
+  ): Promise<boolean> {
+    const file = await this.requireFile(tx, id);
+    const folderId = changes.folderId === undefined ? file.folderId : changes.folderId;
+    if (folderId === file.folderId && (changes.name === undefined || changes.name === file.name)) {
+      await requireActiveFolder(tx, folderId);
+      return false;
+    }
+    const name = await availableLibraryName(tx, folderId, changes.name ?? file.name, {
+      excludeId: id,
+      suffix: changes.folderId !== undefined,
+      allowRootDuplicates: true,
+    });
+    await tx
+      .update(libraryFileTable)
+      .set({ folderId, name, nameKey: fileNameKey(name) })
+      .where(eq(libraryFileTable.id, id));
+    return true;
   }
 
   async workspace(sessionId: string): Promise<FileFolder | null> {

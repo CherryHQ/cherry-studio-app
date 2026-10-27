@@ -57,10 +57,6 @@ public class HealthAccessModule: Module {
       try await HealthDataReader(store: self.store).workouts(
         start: healthDate(startDate), end: healthDate(endDate), limit: limit)
     }
-    AsyncFunction("shareVerifiableRecords") {
-      (options: HealthVerifiableRecordRequest) async throws -> [String: Any] in
-      try await HealthDataReader(store: self.store).verifiableRecords(options)
-    }
   }
 
   private func getStatuses(_ types: [HealthTypeRecord]) async throws -> [String: [String: Any]] {
@@ -100,7 +96,7 @@ public class HealthAccessModule: Module {
         default: result[descriptor.name] = ["state": "error", "canAskAgain": false]
         }
       } catch {
-        // A clinical capability failure must not hide unrelated health types.
+        // One type's status failure must not hide unrelated health types.
         result[descriptor.name] = ["state": "error", "canAskAgain": false]
       }
     }
@@ -141,14 +137,6 @@ public class HealthAccessModule: Module {
     case "correlation":
       type = HKObjectType.correlationType(
         forIdentifier: HKCorrelationTypeIdentifier(rawValue: identifier))
-    case "document":
-      type = HKObjectType.documentType(
-        forIdentifier: HKDocumentTypeIdentifier(rawValue: identifier))
-    case "clinical":
-      type =
-        store.supportsHealthRecords()
-        ? HKObjectType.clinicalType(forIdentifier: HKClinicalTypeIdentifier(rawValue: identifier))
-        : nil
     case "workout": type = HKObjectType.workoutType()
     case "activitySummary": type = HKObjectType.activitySummaryType()
     case "route": type = HKSeriesType.workoutRoute()
@@ -206,15 +194,6 @@ struct HealthRecordRequest: Record {
   @Field var id: String = ""
   @Field var offset: Int = 0
   @Field var limit: Int = 1000
-}
-
-struct HealthVerifiableRecordRequest: Record {
-  @Field var recordTypes: [String] = []
-  @Field var sourceTypes: [String] = []
-  @Field var offset: Int = 0
-  @Field var limit: Int = 20
-  @Field var dataOffset: Int = 0
-  @Field var dataLimit: Int = 1000
 }
 
 class HealthDataException: GenericException<String> {

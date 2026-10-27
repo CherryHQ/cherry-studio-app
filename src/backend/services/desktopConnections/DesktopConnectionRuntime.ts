@@ -25,7 +25,6 @@ import {
 
 import type { DesktopConnectionManager } from './DesktopConnectionManager';
 import {
-  DesktopSession,
   DesktopUnreachableError,
   RemoteFailureError,
   RemoteTransportError,
@@ -49,6 +48,23 @@ const logger = loggerService.withContext('DesktopConnection');
 
 export function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
+}
+
+// A deleted re-pair target can only be paired from scratch. How a stale ID reaches pairing is
+// still unknown, so the failure stays reported.
+function missingRepairTarget(error: unknown): unknown {
+  if (
+    !(error instanceof DataApiError) ||
+    error.code !== ErrorCode.NOT_FOUND ||
+    error.details?.resource !== 'DesktopConnection'
+  )
+    return error;
+  logger.error('Desktop connection re-pair target is missing', error, {
+    operation: 'desktop.pair.load-existing',
+  });
+  return new DataApiError(ErrorCode.NOT_FOUND, 'The pairing connection no longer exists', {
+    reason: 'connection-not-found',
+  });
 }
 
 const toHex = (bytes: Uint8Array) =>
@@ -97,12 +113,23 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   ) {
     return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
+      const endpoints =
+        qr.v === 3
+          ? qr.endpoints
+          : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' as const }));
       const id = qr.connectionId ?? Crypto.randomUUID();
-      const existing = qr.connectionId ? await store.getRow(id) : undefined;
+      const existing = qr.connectionId
+        ? await store.getRow(id).catch((error: unknown) => {
+            throw missingRepairTarget(error);
+          })
+        : undefined;
       if (existing && existing.desktopIdentity !== qr.desktopIdentity)
         throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
       onProgress?.({ stage: 'connecting' });
-      const session = await this.connect(qr, signal).catch((error: unknown) => {
+      const session = await this.connections!.connectTemporary(
+        { desktopIdentity: qr.desktopIdentity, endpoints },
+        signal,
+      ).catch((error: unknown) => {
         throw translate(error);
       });
       try {
@@ -124,11 +151,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               existing,
             );
             this.connections!.invalidate(id);
-            this.connections!.seedLocation(
-              id,
-              qr.desktopIdentity,
-              qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
-            );
+            this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             signal.throwIfAborted();
@@ -169,11 +192,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               signal,
             );
             this.connections!.invalidate(id);
-            this.connections!.seedLocation(
-              id,
-              qr.desktopIdentity,
-              qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
-            );
+            this.connections!.seedLocation(id, qr.desktopIdentity, endpoints);
             onProgress?.({ stage: 'syncing' });
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             return connection;
@@ -287,16 +306,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     this.stopped = true;
     for (const controller of this.controllers) controller.abort();
     await this.tail;
-  }
-
-  private connect(
-    target: { ips: string[]; desktopIdentity: string; port: number },
-    signal: AbortSignal,
-  ): Promise<DesktopSession> {
-    return this.connections!.connectTemporary(
-      { addresses: target.ips, desktopIdentity: target.desktopIdentity, port: target.port },
-      signal,
-    );
   }
 
   private run<T>(
@@ -434,7 +443,10 @@ function deviceName(): string {
 function translate(error: unknown): unknown {
   if (error instanceof DesktopUnreachableError) {
     logger.warn('Desktop unreachable', { attempts: error.attempts });
-    return desktopError(error.reason, 'Could not connect to the desktop');
+    return new DataApiError(ErrorCode.INVALID_OPERATION, 'Could not connect to the desktop', {
+      reason: error.reason,
+      connectionFailures: error.connectionFailures,
+    });
   }
   if (error instanceof RemoteTransportError) {
     logger.warn('Desktop request lost', { kind: error.kind });

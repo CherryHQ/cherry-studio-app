@@ -11,8 +11,10 @@ Sections always appear in one order and hide themselves when they do not apply:
 1. Identity — avatar (tap to replace) and name (tap to rename; an input-style underline hints at it).
 2. Account — sign-in for providers whose account supplies keys or a balance.
 3. API keys — the first key is typed into the card; later keys toggle in place and open a
-   sheet for their label or removal.
-4. Connection test — a text model and one row that runs the check and shows the result.
+   sheet for their label or removal. Two or more keys expose an ordering sheet using CherryUI's
+   `ReorderList`; each move is saved immediately, with rollback on failure.
+4. Connection test — a text model, a labeled key selection when more than one key is enabled, and
+   one row that runs the check and shows the result.
    Shown only for saved providers with an enabled key and a text model.
 5. Address — "Advanced" for presets (API address and API format); an address per protocol,
    with the default marked, for custom providers.
@@ -37,3 +39,10 @@ Callers add only a `header`, a `footer` inside the scroll view, or a fixed `bott
 
 Editing sheets are presentational: their owners keep the text or key draft, so sheet content
 never depends on app providers from inside its portal.
+
+Key rows and pickers show the saved label (or an unnamed-key fallback) plus a masked suffix. An
+unnamed key's display name does not change when reordered. Ordering preserves IDs, labels, values,
+and enabled states. Disabled keys stay in the list but are skipped by runtime rotation.
+Connectivity checks default to the first enabled key and, with several enabled, allow choosing
+another. That choice is ephemeral, overrides credentials only for the probe, and never advances
+rotation or fails over.

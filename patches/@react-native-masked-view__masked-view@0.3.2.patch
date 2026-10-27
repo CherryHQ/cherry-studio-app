@@ -1,0 +1,25 @@
+diff --git a/types/index.d.ts b/types/index.d.ts
+index 6a66a1e..cc8f63c 100644
+--- a/types/index.d.ts
++++ b/types/index.d.ts
+@@ -3,8 +3,6 @@
+ import * as React from 'react';
+ import * as ReactNative from 'react-native';
+ 
+-type Constructor<T> = new (...args: any[]) => T;
+-
+ interface MaskedViewProps extends ReactNative.ViewProps {
+   maskElement: React.ReactElement;
+   androidRenderingMode?: 'software' | 'hardware';
+@@ -12,9 +10,5 @@ interface MaskedViewProps extends ReactNative.ViewProps {
+ /**
+  * @see https://github.com/react-native-masked-view/masked-view
+  */
+-declare class MaskedViewComponent extends React.Component<MaskedViewProps> {}
+-declare const MaskedViewBase: Constructor<
+-  ReactNative.NativeMethods
+-> &
+-  typeof MaskedViewComponent;
+-export default class MaskedView extends MaskedViewBase {}
++// React Native 0.87 removed the public `NativeMethods` type this class mixed in.
++export default class MaskedView extends React.Component<MaskedViewProps> {}

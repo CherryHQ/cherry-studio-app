@@ -25,7 +25,7 @@ describe('file attachment feedback', () => {
     expect(getFileAttachmentIssue(new Error('invalid-utf8'))).toBeUndefined();
   });
 
-  test.each(['parser-unavailable', 'parser-unsupported'] as const)(
+  test.each(['parser-unavailable', 'parser-unsupported', 'document-ocr-failed'] as const)(
     'localizes %s without showing native details',
     (code) => {
       const error = new FileAttachmentError(

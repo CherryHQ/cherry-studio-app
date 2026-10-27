@@ -192,7 +192,7 @@ private final class CrashReportingState {
       options.environment = "production"
       options.cacheDirectoryPath = self.cacheDirectory.path
       options.sendDefaultPii = false
-      options.experimental.enableLogs = false
+      options.enableLogs = false
       options.sendClientReports = false
       options.maxBreadcrumbs = UInt(crashBreadcrumbLimit)
       options.beforeBreadcrumb = { sanitizeCrashBreadcrumb($0) }

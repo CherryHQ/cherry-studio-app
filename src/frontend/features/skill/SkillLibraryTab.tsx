@@ -6,7 +6,7 @@ import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
 import { ManagedBadge } from '@/frontend/components/ManagedBadge';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useApiClient } from '@/frontend/data';
 import { useSkillsApi } from '@/frontend/hooks/skill';
 import type { SkillListItem } from '@/shared/data/types/skill';
 

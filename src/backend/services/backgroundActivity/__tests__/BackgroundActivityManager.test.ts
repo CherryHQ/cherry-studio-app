@@ -97,6 +97,99 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     await manager._doStop();
   });
 
+  test.each(['orphans', 'logos'] as const)(
+    'retires a cancelled initialization while %s are pending without touching its replacement',
+    async (stage) => {
+      const first = createMockPresenter();
+      const second = createMockPresenter();
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let markStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      if (stage === 'orphans') {
+        first.presenter.clearOrphans.mockImplementationOnce(async () => {
+          markStarted();
+          await pending;
+          return 0;
+        });
+      }
+      const prepareLogos = jest.fn(async () => {
+        if (stage === 'logos') {
+          markStarted();
+          await pending;
+        }
+        return undefined;
+      });
+      const removeAppState = jest.fn();
+      jest.mocked(AppState.addEventListener).mockImplementationOnce((_event, listener) => {
+        appStateListener = listener;
+        return { remove: removeAppState };
+      });
+      const removePresentation = jest.fn(() => {
+        presentationEnabledListener = undefined;
+      });
+      const removeVisibleTask = jest.fn(() => {
+        visibleTaskListener = undefined;
+      });
+      const manager = new BackgroundActivityManager(
+        { acquire: mockAcquire },
+        {
+          getColorScheme: () => 'dark',
+          isPresentationEnabled: () => isPresentationEnabled,
+          subscribePresentationEnabled: (listener) => {
+            presentationEnabledListener = listener;
+            return removePresentation;
+          },
+          subscribeVisibleTask: (listener) => {
+            visibleTaskListener = listener;
+            return removeVisibleTask;
+          },
+          prepareLogos,
+          presenters: [first.presenter, second.presenter],
+        },
+      );
+      const controller = new AbortController();
+      const initializing = manager._doInit(controller.signal);
+      await started;
+      const reason = new Error('Initialization cancelled');
+      controller.abort(reason);
+
+      expect(removeAppState).toHaveBeenCalledTimes(1);
+      expect(removePresentation).toHaveBeenCalledTimes(1);
+      expect(removeVisibleTask).toHaveBeenCalledTimes(1);
+      manager.startSession({
+        keepAlive: true,
+        presenter: first.presenter,
+        props: makeProps('late'),
+        tag: 'chat.cancelled-startup',
+      });
+      expect(first.presenter.start).not.toHaveBeenCalled();
+      expect(mockAcquire).not.toHaveBeenCalled();
+
+      const replacement = await createManager([]);
+      const replacementPresentation = presentationEnabledListener;
+      const replacementVisibleTask = visibleTaskListener;
+      release();
+      await expect(initializing).rejects.toBe(reason);
+      await manager._doStop();
+
+      if (stage === 'orphans') {
+        expect(second.presenter.clearOrphans).not.toHaveBeenCalled();
+        expect(prepareLogos).not.toHaveBeenCalled();
+      }
+      expect(removeAppState).toHaveBeenCalledTimes(1);
+      expect(removePresentation).toHaveBeenCalledTimes(1);
+      expect(removeVisibleTask).toHaveBeenCalledTimes(1);
+      expect(presentationEnabledListener).toBe(replacementPresentation);
+      expect(visibleTaskListener).toBe(replacementVisibleTask);
+      await replacement._doStop();
+    },
+  );
+
   test('starts the surface synchronously in the foreground and keeps it across AppState changes', async () => {
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);

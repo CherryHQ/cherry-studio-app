@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type RefObject, useState } from 'react';
-import { Keyboard, type View } from 'react-native';
+import { Keyboard, type ViewInstance } from 'react-native';
 
 import {
   ConversationSourceBoundary,
@@ -22,7 +22,7 @@ export function MainHeader({
   hidden,
   actions,
 }: {
-  blurTarget: RefObject<View | null>;
+  blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
   actions?: readonly HeaderToolbarAction[];
 }) {

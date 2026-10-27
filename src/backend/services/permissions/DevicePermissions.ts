@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import * as Calendar from 'expo-calendar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -19,6 +20,7 @@ import {
 import { healthRecordSelectionType } from '@/shared/contracts/health';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
 import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
 
@@ -37,7 +39,6 @@ type ExpoPermission = {
   granted: boolean;
   status: string;
   canAskAgain: boolean;
-  accessPrivileges?: 'all' | 'limited' | 'none';
 };
 
 export class DevicePermissions implements PermissionsModule {
@@ -90,8 +91,8 @@ export class DevicePermissions implements PermissionsModule {
     }, signal);
   }
 
-  /** Backend-only: serialize native operations that may present a system authorization sheet. */
-  runWithSystemPrompt<TResult>(
+  /** Serialize native operations that may present a system authorization sheet. */
+  private runWithSystemPrompt<TResult>(
     operation: () => Promise<TResult>,
     signal?: AbortSignal,
   ): Promise<TResult> {
@@ -120,6 +121,21 @@ export class DevicePermissions implements PermissionsModule {
       return;
     }
     await Linking.openSettings();
+  }
+
+  /** The update workflow owns the explanation; this owner serializes the system authorization. */
+  requestPackageInstallAuthorization(): Promise<boolean> {
+    return this.runWithSystemPrompt(async () => {
+      if (Platform.OS !== 'android' || !Application.applicationId) return false;
+      const native = getNativeAppUpdate();
+      if (!native?.isApkInstallationEnabled()) return false;
+      if (native.canInstallPackages()) return true;
+      const { ActivityAction, startActivityAsync } = await import('expo-intent-launcher');
+      await startActivityAsync(ActivityAction.MANAGE_UNKNOWN_APP_SOURCES, {
+        data: `package:${Application.applicationId}`,
+      });
+      return native.canInstallPackages();
+    });
   }
 
   private async getStatus(scope: DevicePermissionScope): Promise<DevicePermissionStatus> {
@@ -153,12 +169,6 @@ export class DevicePermissions implements PermissionsModule {
           : unsupported;
       case 'camera.read':
         return toPermissionStatus(await ImagePicker.getCameraPermissionsAsync());
-      case 'photos.read':
-        // Android selection uses the system picker, which grants access to selected URIs.
-        // The app does not browse the library or declare its read permissions.
-        return Platform.OS === 'android'
-          ? unsupported
-          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
       case 'photos.write':
         // Expo's modern MediaStore writer starts at Android 11; its older writer
         // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.
@@ -213,9 +223,6 @@ export class DevicePermissions implements PermissionsModule {
         case 'camera.read':
           await ImagePicker.requestCameraPermissionsAsync();
           break;
-        case 'photos.read':
-          await MediaLibrary.requestPermissionsAsync(false, ['photo']);
-          break;
         case 'photos.write':
           await MediaLibrary.requestPermissionsAsync(true, ['photo']);
           break;
@@ -257,14 +264,11 @@ function healthTypesForScopes(scopes: readonly DevicePermissionScope[]): HealthD
 
 function toPermissionStatus(response: ExpoPermission): DevicePermissionStatus {
   return {
-    state:
-      response.accessPrivileges === 'limited'
-        ? 'limited'
-        : response.granted
-          ? 'granted'
-          : response.status === 'undetermined'
-            ? 'undetermined'
-            : 'denied',
+    state: response.granted
+      ? 'granted'
+      : response.status === 'undetermined'
+        ? 'undetermined'
+        : 'denied',
     canAskAgain: response.canAskAgain,
   };
 }

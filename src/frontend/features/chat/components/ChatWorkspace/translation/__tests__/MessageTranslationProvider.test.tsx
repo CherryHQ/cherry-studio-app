@@ -15,9 +15,9 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ i18n: { resolvedLanguage: mockLanguage } }),
 }));
 jest.mock('@/frontend/data', () => ({
+  useApiClient: () => mockDataApi,
   useBackendModule: () => ({ translate: mockTranslate }),
 }));
-jest.mock('@/frontend/data/DataApiProvider', () => ({ useApiClient: () => mockDataApi }));
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => () => void) => {
     const React = jest.requireActual('react');

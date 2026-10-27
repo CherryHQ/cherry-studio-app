@@ -38,9 +38,10 @@ private func cleanStack(_ stack: SentryStacktrace?) {
 func sanitizeCrashEvent(_ event: Event) -> Event? {
   // JS delivery is not guaranteed (especially during startup). Keep the native fatal fallback.
   let isJavaScriptFatal = event.exceptions?.contains(where: {
-    $0.type.contains("Unhandled JS Exception")
-      || $0.type.contains("RCTFatalException")
-      || $0.value.contains("ExceptionsManager.reportException")
+    let type = $0.type ?? ""
+    return type.contains("Unhandled JS Exception")
+      || type.contains("RCTFatalException")
+      || ($0.value ?? "").contains("ExceptionsManager.reportException")
   }) == true
 
   event.message = nil
@@ -85,8 +86,8 @@ func sanitizeCrashEvent(_ event: Event) -> Event? {
 
   for exception in event.exceptions ?? [] {
     // RCTFatal embeds the JS message in its NSException name, not only in the reason.
-    if exception.type.contains("Unhandled JS Exception")
-      || exception.type.contains("RCTFatalException") {
+    if let type = exception.type,
+      type.contains("Unhandled JS Exception") || type.contains("RCTFatalException") {
       exception.type = "ReactNativeFatal"
     }
     exception.value = "Error details omitted for privacy"

@@ -48,7 +48,7 @@ export async function writeProviderRegistrySnapshot(
   destination.parentDirectory.create({ intermediates: true, idempotent: true });
   const temporary = new File(destination.parentDirectory, `${destination.name}.tmp`);
   temporary.create({ overwrite: true });
-  temporary.write(JSON.stringify({ files, manifest }));
+  temporary.writeSync(JSON.stringify({ files, manifest }));
   await temporary.move(destination, { overwrite: true });
   return slot;
 }

@@ -6,10 +6,13 @@ import type { Agent } from '@/shared/data/types/agent';
 export const acceptsSelection = (agent: Agent) => agent.mode === 'standard';
 
 /**
- * Whether an Office selection returns to the chat that opened the preview. A chat whose Agent
- * cannot use the reference, or no longer exists, falls back to choosing another Agent.
+ * Whether an Office selection, or another handoff the Agent `accepts`, returns to the chat that
+ * opened the preview. A chat whose Agent cannot use it, or no longer exists, does not take it.
  */
-export function useSelectionSourceChat(sourceChat: ChatTarget | undefined) {
+export function useSelectionSourceChat(
+  sourceChat: ChatTarget | undefined,
+  accepts: (agent: Agent) => boolean = acceptsSelection,
+) {
   const session = useAgentSession(
     sourceChat?.kind === 'session' ? sourceChat.sessionId : undefined,
   );
@@ -22,6 +25,6 @@ export function useSelectionSourceChat(sourceChat: ChatTarget | undefined) {
 
   return {
     isResolving,
-    returnsToSourceChat: isResolving || Boolean(sourceChat && agent && acceptsSelection(agent)),
+    returnsToSourceChat: isResolving || Boolean(sourceChat && agent && accepts(agent)),
   };
 }

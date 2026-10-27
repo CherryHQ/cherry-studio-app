@@ -37,6 +37,7 @@ import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { EnterpriseSyncService } from '@/backend/services/enterprise';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
+import { resetPdfTextCacheForRestore } from '@/backend/services/file/pdfTextCache';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
@@ -176,6 +177,7 @@ export function createAppBootstrapRuntime(
     backend,
     dataApiDependencies,
     disposeSystemEntry,
+    disposeAppUpdate,
     disposeSkills,
     initializeSkills,
     hasPendingSkillStorageWork,
@@ -257,7 +259,12 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await Promise.all([disposeSystemEntry(), disposeSkills(), enterpriseSync.stop()]);
+        await Promise.all([
+          disposeSystemEntry(),
+          disposeSkills(),
+          disposeAppUpdate(),
+          enterpriseSync.stop(),
+        ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -288,6 +295,7 @@ export function createAppBootstrapRuntime(
           cache.resetForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
+          resetPdfTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
         // An enterprise profile opens offline from its last sync; only the very first sync blocks,

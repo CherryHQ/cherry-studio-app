@@ -3,6 +3,7 @@ import type {
   Api,
   AssistantMessage,
   AssistantMessageEvent,
+  ClientIdentity,
   JsonObject,
   Model,
   SimpleStreamOptions,
@@ -10,6 +11,9 @@ import type {
 } from '@earendil-works/pi-ai';
 import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { createModels, createProvider } from '@earendil-works/pi-ai/models';
+import type { CompactionPolicy } from '@earendil-works/pi-durable';
+
+import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
@@ -18,10 +22,12 @@ import { piDurableUsage, withPiContinuationUsage } from './piDurableProjection';
 import { piDurableSetupError, protectPiDurableStream } from './piDurableStream';
 import {
   piModelErrorAttributes,
+  piModelRequestAttributes,
   piModelTerminalErrorAttributes,
   type PiModelFailureStage,
 } from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import { resolvePiOutputReservation } from './piOutputReservation';
 import { providerErrorEvent } from './piStreamEvents';
 import { applyPiWebReplay, PiWebResponse } from './PiWebResponse';
 import { applyPiWebTools, type PiWebToolRoutes } from './piWebTools';
@@ -31,6 +37,14 @@ type PiRequestConfiguration = (
   providerSessionId: string | undefined,
   signal: AbortSignal | undefined,
 ) => Promise<RuntimeOptions>;
+
+/** Every Harness, including provider checks, identifies its model requests as Cherry. */
+export function cherryClientIdentity(): ClientIdentity {
+  return {
+    userAgent: { custom: defaultAppHeaders()['User-Agent']! },
+    attribution: { name: 'CherryStudioMobile', url: 'https://cherry-ai.com' },
+  };
+}
 
 /** Keep Cherry identities in stored model references; materialize credentials only when sending. */
 export function createPiDurableModels(
@@ -51,6 +65,7 @@ export function createPiDurableModels(
     authContext: { env: async () => undefined, fileExists: async () => false },
   });
   const providers = new Map<string, Map<string, Model<Api>>>();
+  const compactionOverrides: Record<string, Partial<CompactionPolicy>> = {};
 
   async function registerModel(
     reference: RuntimeModel,
@@ -85,6 +100,18 @@ export function createPiDurableModels(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     });
     providers.set(reference.providerId, registered);
+    // Preserve Pi's defaults for large contexts; smaller models need room for both summary and reply.
+    compactionOverrides[`${reference.providerId}/${piDurableModelKey(reference, kind)}`] =
+      kind === 'image'
+        ? { enabled: false }
+        : {
+            reserveTokens: Math.max(
+              1,
+              Math.min(16_384, preflight.maxOutputTokens, Math.floor(contextWindow / 8)),
+            ),
+            keepRecentTokens: Math.min(20_000, Math.floor(contextWindow / 4)),
+            backgroundTokens: Math.min(32_768, Math.floor(contextWindow / 4)),
+          };
 
     const streamSimple = (
       model: Model<Api>,
@@ -147,8 +174,20 @@ export function createPiDurableModels(
               : undefined;
           const createStream = async (continuedContent?: JsonObject[]) => {
             const requestStartedAt = Date.now();
+            const ceiling = resolved.model.maxTokens;
+            // Preserve explicit budget intersections; the registered input cap is not the wire window.
+            const explicitMaxTokens =
+              options?.maxTokens === undefined && selected.maxOutputTokens === undefined
+                ? undefined
+                : Math.min(options?.maxTokens ?? ceiling, selected.maxOutputTokens ?? ceiling);
+            const maxTokens = Math.min(
+              ceiling,
+              resolvePiOutputReservation(ceiling, resolved.model.contextWindow, explicitMaxTokens),
+            );
+            trace?.setAttributes(piModelRequestAttributes(resolved, context, maxTokens));
             const stream = await resolved.streamFn(resolved.model, context, {
               ...options,
+              trace,
               onPayload: async (payload: unknown, wire: Model<Api>) => {
                 // A credential retry sends the request again; its metadata starts over.
                 if (!continuedContent) web?.reset();
@@ -176,11 +215,7 @@ export function createPiDurableModels(
                 : {}),
               reasoning: thinking === 'off' ? undefined : thinking,
               temperature: selected.temperature ?? options?.temperature,
-              maxTokens: Math.min(
-                resolved.model.maxTokens,
-                options?.maxTokens ?? resolved.model.maxTokens,
-                selected.maxOutputTokens ?? resolved.model.maxTokens,
-              ),
+              maxTokens,
             });
             return measuredStream(
               protectPiDurableStream(stream, resolved.model, secrets, options?.signal),
@@ -244,6 +279,7 @@ export function createPiDurableModels(
   return {
     models,
     registerModel,
+    compactionOverrides,
     getModel: (reference: RuntimeModel, kind: 'language' | 'image' = 'language') =>
       models.getModel(reference.providerId, piDurableModelKey(reference, kind)),
   };

@@ -24,6 +24,7 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { AccountSessionGate } from '@/frontend/appShell/account';
+import { AppUpdateObserver, AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
@@ -39,11 +40,7 @@ import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/obser
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
-import {
-  AppUpdateObserver,
-  StartupCoordinator,
-  StartupRouteReadyReporter,
-} from '@/frontend/appShell/startup';
+import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -81,23 +78,25 @@ function RootLayout() {
                               <AppAlertProvider>
                                 <BottomSheetProvider>
                                   <RouteHeaderProvider rootAction="back">
-                                    <AppUpdateObserver />
-                                    <BackgroundActivityBridge />
-                                    <LanguagePreferenceObserver />
-                                    <SystemEntryBridge />
-                                    <FeedbackCaptureProvider>
-                                      <FeedbackHintProvider>
-                                        <AccountSessionGate>
-                                          <ConversationProvider>
-                                            <RootStack />
-                                          </ConversationProvider>
-                                        </AccountSessionGate>
-                                      </FeedbackHintProvider>
-                                    </FeedbackCaptureProvider>
-                                    <PrivacyConsentGate />
-                                    <RestoreOutcomeNotice />
-                                    <BackupDialog />
-                                    <McpInteractionDialog />
+                                    <AppUpdateProvider>
+                                      <AppUpdateObserver />
+                                      <BackgroundActivityBridge />
+                                      <LanguagePreferenceObserver />
+                                      <SystemEntryBridge />
+                                      <FeedbackCaptureProvider>
+                                        <FeedbackHintProvider>
+                                          <AccountSessionGate>
+                                            <ConversationProvider>
+                                              <RootStack />
+                                            </ConversationProvider>
+                                          </AccountSessionGate>
+                                        </FeedbackHintProvider>
+                                      </FeedbackCaptureProvider>
+                                      <PrivacyConsentGate />
+                                      <RestoreOutcomeNotice />
+                                      <BackupDialog />
+                                      <McpInteractionDialog />
+                                    </AppUpdateProvider>
                                   </RouteHeaderProvider>
                                 </BottomSheetProvider>
                               </AppAlertProvider>

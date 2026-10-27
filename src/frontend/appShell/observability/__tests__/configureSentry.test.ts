@@ -44,7 +44,6 @@ jest.mock('@sentry/react-native', () => ({
   nativeLinkedErrorsIntegration: jest.fn(),
   inboundFiltersIntegration: jest.fn(),
   functionToStringIntegration: jest.fn(),
-  dedupeIntegration: jest.fn(),
   nativeReleaseIntegration: jest.fn(),
   deviceContextIntegration: jest.fn(),
   expoContextIntegration: jest.fn(),
@@ -162,7 +161,9 @@ describe('Sentry consent lifecycle', () => {
     mockNative.setConsent.mockResolvedValue({ enabled: true, active: true });
     await reporting.setSentryConsent(true);
     expect(mockOptions.enabled).toBe(true);
-    expect(mockBeforeSend?.(event, {})).not.toBeNull();
+    expect(
+      mockBeforeSend?.({ exception: { values: [{ type: 'RangeError' }] } }, {}),
+    ).not.toBeNull();
     // The existing client is reused; the logger reporter is attached again.
     expect(mockInit).toHaveBeenCalledTimes(1);
     expect(mockSetReporter).toHaveBeenCalledTimes(2);
@@ -225,6 +226,29 @@ describe('Sentry consent lifecycle', () => {
     await first;
     expect(mockInit).not.toHaveBeenCalled();
     expect(reporting.getSentryConsentStatus().active).toBe(false);
+  });
+
+  test('sends each distinct JavaScript error once per runtime', async () => {
+    mockStatus.enabled = true;
+    mockStatus.active = true;
+    const reporting = loadReporting();
+    await reporting.configureSentry();
+    const thrownAt = (colno: number, operation?: string) => ({
+      tags: { operation },
+      exception: {
+        values: [
+          {
+            type: 'TypeError',
+            value: 'private response',
+            stacktrace: { frames: [{ filename: 'app:///index.android.bundle', lineno: 1, colno }] },
+          },
+        ],
+      },
+    });
+    expect(mockBeforeSend?.(thrownAt(10), {})).not.toBeNull();
+    expect(mockBeforeSend?.(thrownAt(10), {})).toBeNull();
+    expect(mockBeforeSend?.(thrownAt(20), {})).not.toBeNull();
+    expect(mockBeforeSend?.(thrownAt(10, 'app.render'), {})).not.toBeNull();
   });
 
   test('excludes attachment and telemetry items from outgoing JS envelopes', async () => {

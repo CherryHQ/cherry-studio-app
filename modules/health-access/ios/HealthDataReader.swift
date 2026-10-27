@@ -59,7 +59,7 @@ final class HealthDataReader {
     if options.mode == "statistics" {
       guard let quantityType = type as? HKQuantityType else {
         throw HealthDataException(
-          "Statistics require a quantity type; use samples for categories and clinical records")
+          "Statistics require a quantity type; use samples for other types")
       }
       return try await statistics(
         quantityType, predicate: predicate, start: start, end: end,
@@ -347,9 +347,9 @@ final class HealthDataReader {
   }
 
   /// Stops every query on completion or timeout and prevents callbacks from resuming twice.
-  func execute<T>(
-    timeout: TimeInterval = 20, _ makeQuery: (@escaping (Result<T, Error>) -> Void) -> HKQuery
-  ) async throws -> T {
+  func execute<T>(_ makeQuery: (@escaping (Result<T, Error>) -> Void) -> HKQuery)
+    async throws -> T
+  {
     try await withCheckedThrowingContinuation { continuation in
       let lock = NSLock()
       var finished = false
@@ -375,7 +375,7 @@ final class HealthDataReader {
       timer = DispatchWorkItem {
         finish(.failure(HealthDataException("HealthKit query timed out")))
       }
-      if let timer { DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timer) }
+      if let timer { DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: timer) }
       if let query { store.execute(query) }
     }
   }

@@ -3,6 +3,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { CacheRetention, FetchFunction, ProviderHeaders } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
@@ -172,6 +173,7 @@ export async function bindPiStream(
   const fetch = adapter.supportsCustomFetch ? withRetryableBodyFailure(binding.fetch) : undefined;
 
   return (model, context, options) => {
+    const { trace, ...providerOptions } = options ?? {};
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
     const headers: ProviderHeaders = { ...options?.headers, ...binding.headers };
@@ -186,7 +188,7 @@ export async function bindPiStream(
       }
     }
     const streamOptions = {
-      ...options,
+      ...providerOptions,
       apiKey: binding.apiKey === '' ? 'unused' : binding.apiKey,
       cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
       sessionId: binding.sessionId ?? options?.sessionId,
@@ -201,7 +203,7 @@ export async function bindPiStream(
       onPayload: async (payload, requestModel) => {
         const previous = await options?.onPayload?.(payload, requestModel);
         const resolvedPayload = previous === undefined ? payload : previous;
-        return binding.requestParameters
+        const requestPayload = binding.requestParameters
           ? applyPiRequestParameters(
               resolvedPayload,
               adapter.api,
@@ -210,6 +212,8 @@ export async function bindPiStream(
               temperature,
             )
           : resolvedPayload;
+        trace?.setAttributes(piModelPayloadAttributes(requestPayload, adapter.api));
+        return requestPayload;
       },
       signal: options?.signal,
       temperature,

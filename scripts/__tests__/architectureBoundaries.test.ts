@@ -33,6 +33,21 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/features/chat/probe.ts', "import '../plugin';"],
     ['src/frontend/features/chat/probe.ts', "import type { PluginListScreen } from '../plugin';"],
     ['src/frontend/hooks/probe.ts', "import '../features/plugin';"],
+    ['src/frontend/features/chat/probe.ts', "import '@/frontend/data/DataApiProvider';"],
+    ['src/frontend/hooks/probe.ts', "import '../data/DataApiProvider';"],
+    ['src/frontend/hooks/probe.ts', "void import('@src/frontend/data/DataApiProvider');"],
+    [
+      'src/frontend/features/settings/probe.ts',
+      "import '@/frontend/components/ModelPicker/utils/modelPickerBadges';",
+    ],
+    [
+      'src/frontend/components/Avatar/probe.ts',
+      "import '../ModelPicker/components/ModelPickerBadge';",
+    ],
+    [
+      'src/frontend/hooks/probe.ts',
+      "require('@src/frontend/components/ModelPicker/hooks/useModelPickerData');",
+    ],
     ['src/shared/utils/probe.ts', "import '../../frontend/data';"],
     ['src/shared/data/probe.ts', "import 'react-native';"],
     ['src/shared/utils/probe.ts', "import 'expo-file-system';"],
@@ -82,6 +97,32 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/features/chat/probe.ts', "import './components/ChatInput/ChatInput';"],
     ['src/frontend/features/chat/probe.ts', "import '@/frontend/hooks/plugin';"],
     ['src/frontend/features/plugin/probe.ts', "import '@/frontend/components/PluginIcon';"],
+    ['src/frontend/features/chat/probe.ts', "import { useApiClient } from '@/frontend/data';"],
+    ['src/frontend/data/hooks/probe.ts', "import '../DataApiProvider';"],
+    [
+      'src/frontend/hooks/__tests__/probe.test.tsx',
+      "import { DataApiProvider } from '@/frontend/data/DataApiProvider';",
+    ],
+    [
+      'src/bootstrap/runtime/probe.ts',
+      "import { DataApiProvider } from '@/frontend/data/DataApiProvider';",
+    ],
+    [
+      'src/frontend/features/settings/probe.ts',
+      "import { ModelPickerDrawer } from '@/frontend/components/ModelPicker';",
+    ],
+    [
+      'src/frontend/features/settings/probe.ts',
+      "import { ModelPickerBadge, getModelPickerBadges } from '@/frontend/components/ModelPicker/badges';",
+    ],
+    [
+      'src/frontend/components/ModelPicker/components/probe.ts',
+      "import '../utils/modelPickerBadges';",
+    ],
+    [
+      'src/frontend/features/chat/probe.ts',
+      "import '@/frontend/components/Composer/utils/composerAttachments';",
+    ],
     ['src/frontend/utils/probe.ts', "import '@/shared/utils/providerEndpoints';"],
     ['src/frontend/utils/probe.ts', "void import('react-native');"],
     ['src/frontend/utils/probe.ts', "require('@/assets/icon.png');"],

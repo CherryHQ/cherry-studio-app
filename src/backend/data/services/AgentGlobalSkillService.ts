@@ -178,8 +178,7 @@ export class AgentGlobalSkillService {
    */
   async list(params: ListSkillsQueryParams): Promise<ListSkillsResult> {
     const query = ListSkillsQuerySchema.parse(params);
-    // App-owned system workflows are not part of the user-managed library,
-    // including copies installed by earlier builds.
+    // Built-in copies installed by earlier builds are not part of the user-managed library.
     const conditions: SQL[] = [eq(agentGlobalSkillTable.source, 'marketplace')];
     if (query.search) {
       const pattern = escapeLike(query.search);

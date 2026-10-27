@@ -1,4 +1,5 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { ProviderService } from '../ProviderService';
@@ -9,7 +10,9 @@ describe('ProviderService integration', () => {
 
   beforeEach(async () => {
     testDatabase = createServiceTestDatabase();
-    await installTestHost({ DbService: testDatabase.dbService });
+    const cacheService = new CacheService(createInMemoryBackendCacheStorage());
+    await cacheService._doInit();
+    await installTestHost({ CacheService: cacheService, DbService: testDatabase.dbService });
     service = new ProviderService();
   });
 
@@ -41,6 +44,27 @@ describe('ProviderService integration', () => {
     const page = await service.listPage({ cursor: 'not-a-provider-cursor', limit: 1 });
 
     expect(page.items.map((provider) => provider.id)).toEqual(['enabled-a']);
+  });
+
+  it('rotates in the saved order, continuing after the last used key when reordered', async () => {
+    insertProvider('key-provider', true, 'a');
+    const a = { id: 'a', isEnabled: true, key: 'key-a', label: 'Work' };
+    const b = { id: 'b', isEnabled: true, key: 'key-b', label: 'Personal' };
+    const c = { id: 'c', isEnabled: true, key: 'key-c', label: 'Backup' };
+    const disabled = { id: 'disabled', isEnabled: false, key: 'key-disabled' };
+    await service.update('key-provider', { apiKeys: [a, b, c, disabled] });
+    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-a');
+
+    await service.update('key-provider', { apiKeys: [disabled, c, a, b] });
+    await expect(service.listApiKeys('key-provider')).resolves.toEqual({
+      keys: [disabled, c, a, b],
+    });
+    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-b');
+    await expect(service.resolveApiKey('key-provider', 'key-a')).resolves.toMatchObject({
+      value: 'key-a',
+    });
+    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-c');
+    await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-a');
   });
 
   function insertProvider(

@@ -189,12 +189,16 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation, library
-management and Office operations) register as upstream `deferred` tools. Upstream `tool_search`
+MCP capabilities and built-in tools marked `deferred` (Skill creation/installation/adaptation,
+library management, Office operations, Health and Agent management) register as upstream `deferred`
+tools. The system prompt's Tools On Demand section names each deferred built-in tool of the turn,
+because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
-Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
-only a small Unicode tokenization patch so Chinese service and capability names can be searched.
+Loaded tools remain available in that Pi conversation, including after compaction, so the prompt
+asks for exact names with `limit` equal to their count. Cherry patches the search so Chinese service
+and capability names can be searched and exact deferred names load before ranked matches; plain
+BM25 otherwise ranks a shorter tool that mentions the name, such as `agent_get` for `agent_list`.
 
 Cherry no longer maintains empty-query browsing, coverage counters, distinct-term ranking tiers,
 `tool_describe`, a per-turn inspected-name ledger, or the `tool_call` dispatch/correction wrapper.
@@ -209,9 +213,9 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
 For MCP calls, `value.content` contains the bounded model-visible content, including serialized
 structured output and managed image references. UI-only metadata never enters this script channel.
-Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
-carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
-rest through the discovery helpers.
+Cherry sets Code Mode's declaration `inlineBudget` to 0. Direct tools already carry their complete
+schemas, and any inlined declaration would repeat one of them, so scripts inspect signatures through
+the discovery helpers.
 The initial prompt retains plugin capability overviews, critical constraints, and shared operation
 rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
 connection's tools are refused before approval until its guide is present. Loading ends its tool
@@ -498,8 +502,8 @@ real OAuth providers, protocol negotiation, and third-party Apps still require a
 
 ### Health And Fitness
 
-Health is an iOS-only built-in tool group, not a separate page. The `health` Agent capability
-contains these tools:
+Health is an iOS-only built-in tool group, not a separate page. Its tools are deferred and loaded
+through `tool_search`. The `health` Agent capability contains these tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -507,8 +511,7 @@ contains these tools:
 | `health_list_workouts` | Newest-first workout overview with truncation information |
 | `health_list_data_types` | Search the public catalog and current iOS availability; no personal data |
 | `health_query_data` | Any supported type's original records, quantity statistics, characteristics, activity rings or medication list |
-| `health_get_record` | Record details, waveform/route/quantity points, clinical/CDA content and attachments |
-| `health_share_verifiable_records` | One-time selected SMART Health Cards / EU Digital COVID Certificates; requires Apple’s restricted entitlement |
+| `health_get_record` | Record details, waveform/route/quantity points and attachments |
 
 All personal-data tools require application approval even in automatic approval mode. Only public
 catalog discovery can run automatically. The approval sheet names the receiving model service and
@@ -518,8 +521,9 @@ Existing Agents retain their stored preference. Android has no Health Connect br
 
 The [native module](../../../modules/health-access/README.md) and shared catalog cover the current
 public HealthKit types in the iOS 27.1 SDK, including quantities, symptoms, reproductive health,
-nutrition, hearing, vision, ECG, clinical records and medications. Minimum iOS versions are checked
-per type. Neither a supported type nor a completed authorization request proves that read access
+nutrition, hearing, vision, ECG and medications. Clinical health records, CDA documents and
+verifiable health records are deliberately excluded, so the app requests no Health Records
+entitlement. Minimum iOS versions are checked per type. Neither a supported type nor a completed authorization request proves that read access
 was granted. Empty data cannot distinguish denied access from missing records and must not be
 reported as measured zero. No writing, background delivery or extended-history access is requested.
 
@@ -559,21 +563,10 @@ Activity rings cover complete local calendar days. Blood-pressure and food autho
 the contained quantities. Vision prescriptions and medications use per-object selection;
 medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
 selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
-selections, CDA content prompts and verifiable credential prompts share the application permission
-queue. Queued reads respect cancellation; an open selection retains the queue until native
-completion or timeout. Clinical reads require the extra Health Records entitlement and usage
-description.
+selections share the application permission queue.
 
-Verifiable credentials use a separate one-time selection query and explicit application approval,
-with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;
-continuations require selecting the same records. Original payload bytes are returned without
-verifying the signature or issuer. This API also requires a restricted entitlement approved by Apple,
-which this change does not obtain or enable; an ordinary clinical capability does not suffice.
-
-A new native binary is required, including a signing profile with the clinical capability. The
-initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
-App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
-categories and selected AI service. See [Health Review](../../guides/health-review.md).
+Changes to the HealthKit native module require a new installation package. Privacy disclosures
+must describe the supported health categories and selected AI service.
 
 ### Image Generation
 
@@ -585,8 +578,28 @@ categories and selected AI service. See [Health Review](../../guides/health-revi
 - Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
   `generate_image` is never auto-approval eligible, so even an Agent in automatic approval mode
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
-  model is configured. Its input schema is built from that model's capability block so the model is
-  never offered a parameter its provider rejects.
+  model is configured. A disabled, hidden or non-drawing model counts as unconfigured, so it omits
+  the tool rather than failing approved calls. Its description, input schema and request admission
+  use one model capability snapshot and the same `createPaintingGenerationStrategy` as painting jobs
+  and direct image chat. Custom sizes go in the size field; the paired enum's `custom` sentinel is
+  not advertised.
+- Reference support is a model capability, not a synonym for the provider's `edit` mode. A
+  reference-capable `generate` route stays `generate`; declared image-input endpoints can provide
+  support when the detailed capability block is absent. `image_ids` accepts at most one conversation
+  image, subject to a stricter model limit, and is required when the model cannot generate without
+  an image. Unsupported references fail explicitly rather than becoming text-only requests.
+- Request failures retain the sanitized `AiRequestError` facts in `RuntimeToolResult.failure` with
+  call scope, so execution, transcript and diagnostics agree on failure. Output-storage failures
+  have their own stage instead of being labelled provider failures. Retryability describes the
+  cause; it does not authorize automatic replay of an image side effect.
+- The Agent selects references from uploaded attachment `fileEntryId`, an earlier `generate_image`
+  result's `id`, or an artifact's `ref.fileEntryId`. Users do not need to supply these technical ids;
+  an ambiguous reference needs clarification, and an unavailable image needs reattachment. The
+  tool reads the original managed image and passes it to the drawing model. A direct `read_file`
+  call is needed only when the Agent must inspect pixels that are no longer in context; generated
+  results expose reusable references rather than automatically sending pixels to the Agent. When
+  the chat model does not accept images, the omission note that replaces an attachment still names
+  its `fileEntryId`, so the Agent can edit an uploaded image it cannot see.
 
 ### Office Files
 
@@ -726,8 +739,11 @@ For ordinary text, built-in Office text, and native PDF text, `read_file` takes 
 plus optional one-based `start_line` and `limit` (default 500
 lines, at most 2,000) and returns
 `{ status, fileEntryId, filename, size, startLine, lineCount, totalLines, truncated, text }`. The
-window is cut on a line boundary at 100,000 characters, so `startLine + lineCount` is always the
-next line to request. A single line larger than the whole budget is the one case that cannot be cut
+window is cut on a line boundary at 40 KiB of serialized text, so `startLine + lineCount` is
+always the next line to request. The size budget is
+measured as UTF-8 inside the JSON result, escapes included, and stays below the 50 KiB that Pi
+keeps of a model-facing tool result; a larger result would be cut after `nextOffset` was computed
+and silently skip text. A single line larger than the whole budget is the one case that cannot be cut
 on a boundary: the head is returned with `lineTruncated: true`, the read reports itself truncated,
 and `nextOffset` gives the code-point offset where the rest of the line starts, since asking for a
 later line cannot reach it. Text sources share attachment preparation's 5 MiB source ceiling and
@@ -739,8 +755,8 @@ independent of the pageable window's `truncated` flag. This lets a model continu
 attached document or revisit a file it wrote
 in an earlier turn, whose content is deliberately not replayed as an attachment.
 
-Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points) read the
-full text as a raw code-point window instead of lines, returning `text`, `offset`,
+Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points, also ended
+by the same 40 KiB size budget) read the full text as a raw code-point window instead of lines, returning `text`, `offset`,
 `characterCount`, `totalCharacters`, `nextOffset`, and `complete`. They are how a cut line
 continues, and the only paging AnyDoc output accepts: its result is explicitly
 `format: 'json-fragment'`. Concatenating
@@ -928,6 +944,7 @@ background execution or recovery after the operating system terminates the app.
 ## Agent Management
 
 The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+All four are deferred and loaded through `tool_search`.
 The editor lists it as Agent management alongside the other capability groups; it needs no OS
 permission. New Agents start with it disabled,
 whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a

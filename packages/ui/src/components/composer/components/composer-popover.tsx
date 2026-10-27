@@ -6,6 +6,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
+  type ViewInstance,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
@@ -34,13 +35,13 @@ type ComposerPopoverProps = {
   accessibilityLabel: string;
   children: ReactNode;
   content: ReactNode;
-  initialFocusRef: RefObject<View | null>;
+  initialFocusRef: RefObject<ViewInstance | null>;
   maxHeight?: number;
   maxWidth?: number;
   onClose: (reason: 'outside' | 'anchor' | 'back') => void;
   onClosed?: () => void;
   open: boolean;
-  returnFocusRef?: RefObject<View | null>;
+  returnFocusRef?: RefObject<ViewInstance | null>;
   testID?: string;
 };
 
@@ -64,7 +65,7 @@ export function ComposerPopover({
   returnFocusRef,
   testID,
 }: ComposerPopoverProps) {
-  const anchorRef = useAnimatedRef<View>();
+  const anchorRef = useAnimatedRef<ViewInstance>();
   const frame = useSharedValue<ComposerPopoverFrame>({ left: 0, top: 0, width: 0, height: 0 });
   const { isVisible, progress } = useMenuMotion(open);
   const wasVisible = useRef(false);
@@ -131,7 +132,7 @@ function ComposerPopoverPanel({
   progress,
   testID,
 }: Omit<ComposerPopoverProps, 'content'> & {
-  anchorRef: AnimatedRef<View>;
+  anchorRef: AnimatedRef<ViewInstance>;
   frame: SharedValue<ComposerPopoverFrame>;
   progress: SharedValue<number>;
 }) {

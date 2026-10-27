@@ -1,3 +1,5 @@
+import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
+
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 
 import type { DesktopSession } from './DesktopSession';
@@ -47,8 +49,7 @@ export type PersistentDesktopConnection = {
 };
 export type DesktopConnectionTarget = {
   desktopIdentity: string;
-  addresses: string[];
-  port: number;
+  endpoints: DirectEndpoint[];
 };
 export type DesktopBindingInvalidation = {
   connectionId: string;

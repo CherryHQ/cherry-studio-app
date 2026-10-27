@@ -26,6 +26,7 @@ import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
 import { deleteFilePreview } from './filePreviewCache';
+import { deletePdfTextCache } from './pdfTextCache';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
@@ -139,11 +140,11 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
     const name = SafeNameSchema.parse(input.name ?? `painting-${id}`);
     filename = filenameExtension(name) ? name : `${name}.${ext}`;
     const payload = input.data.includes(',') ? (input.data.split(',', 2)[1] ?? '') : input.data;
-    write = (destination) => destination.write(payload, { encoding: 'base64' });
+    write = (destination) => destination.writeSync(payload, { encoding: 'base64' });
   } else {
     mediaType = resolveMediaType(input.mediaType);
     filename = SafeNameSchema.parse(input.name);
-    write = (destination) => destination.write(input.data);
+    write = (destination) => destination.writeSync(input.data);
   }
 
   const destination = new File(ensureFileDirectory(), `${id}${extSuffix(filename)}`);
@@ -268,6 +269,7 @@ export async function discardInternalEntries(
     try {
       deleteInternalFile(entry);
       deleteFilePreview(entry);
+      deletePdfTextCache(entry);
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
@@ -313,7 +315,7 @@ export async function rewriteInternalTextEntry(
     signal?.throwIfAborted();
     // Availability, synchronous bytes and metadata share the deletion write queue.
     // Once bytes change, complete bookkeeping even if the caller cancels.
-    file.write(input.data);
+    file.writeSync(input.data);
     const size = file.size;
     if (!Number.isSafeInteger(size) || size < 0) {
       throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
@@ -358,6 +360,7 @@ export function deleteInternalEntryFiles(entry: FileEntry): void {
   try {
     deleteInternalFile(entry);
     deleteFilePreview(entry);
+    deletePdfTextCache(entry);
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
   }

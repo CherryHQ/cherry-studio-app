@@ -3,7 +3,7 @@ import { Image, Section, Switch, type SwitchProps } from '@cherrystudio/ui/compo
 import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
 import { memo, type ReactNode, useState } from 'react';
-import type { AccessibilityProps } from 'react-native';
+import type { AccessibilityProps, ViewProps } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
@@ -21,7 +21,7 @@ export type SettingsServiceRowProps = {
   name: string;
   /** Inert content beside the name; include its meaning in `accessibilityLabel`. */
   nameAccessory?: ReactNode;
-  onAccessibilityAction?: AccessibilityProps['onAccessibilityAction'];
+  onAccessibilityAction?: ViewProps['onAccessibilityAction'];
   onPress?: () => void;
   onPressedChange?: (id: string, isPressed: boolean) => void;
   /** Draws {@link SettingsGroupedSeparator} above the row. */

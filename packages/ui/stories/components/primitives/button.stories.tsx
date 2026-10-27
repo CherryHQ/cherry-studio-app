@@ -7,6 +7,7 @@ import {
   type ButtonVariant,
 } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
@@ -100,6 +101,29 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
   );
 }
 
+function VariantTransitionPreview({ label, theme }: Omit<ThemePreviewProps, 'args'>) {
+  const [isComplete, setIsComplete] = useState(false);
+
+  return (
+    <ScopedTheme theme={theme}>
+      <View className="gap-4 bg-background p-4">
+        <Text className="text-lg font-semibold text-foreground">{label}</Text>
+        <Text className="text-sm text-muted-foreground">
+          Toggle repeatedly. The label must stay visible when the border is removed.
+        </Text>
+        <View className="flex-row flex-wrap items-center justify-center gap-3">
+          <Button size="sm" variant={isComplete ? 'default' : 'secondary'}>
+            {isComplete ? '完成' : '取消'}
+          </Button>
+        </View>
+        <Button onPress={() => setIsComplete((value) => !value)} variant="text">
+          Toggle completion
+        </Button>
+      </View>
+    </ScopedTheme>
+  );
+}
+
 const meta = {
   title: 'Components/Primitives/Button',
   component: Button,
@@ -143,6 +167,17 @@ export const Playground: Story = {
     <View className="gap-4">
       {themes.map((theme) => (
         <ThemePreview args={args} key={theme.value} label={theme.label} theme={theme.value} />
+      ))}
+    </View>
+  ),
+};
+
+// Reuse the same button instance, as the pairing screen does when pairing completes.
+export const VariantTransition: Story = {
+  render: () => (
+    <View className="gap-4">
+      {themes.map((theme) => (
+        <VariantTransitionPreview key={theme.value} label={theme.label} theme={theme.value} />
       ))}
     </View>
   ),

@@ -2,7 +2,7 @@ import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button, Image, Input, TextField, useToast } from '@cherrystudio/ui/components';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, type TextInput, View } from 'react-native';
+import { ScrollView, Text, type TextInputInstance, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AccountError, type AccountErrorCode } from '@/shared/contracts/account';
@@ -51,8 +51,8 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
   const [address, setAddress] = useState(state.privateAddress ?? '');
   const [username, setUsername] = useState(lockedUsername ?? '');
   const [password, setPassword] = useState('');
-  const usernameInput = useRef<TextInput>(null);
-  const passwordInput = useRef<TextInput>(null);
+  const usernameInput = useRef<TextInputInstance>(null);
+  const passwordInput = useRef<TextInputInstance>(null);
   const canSignIn =
     !state.isBusy &&
     (isPrivate

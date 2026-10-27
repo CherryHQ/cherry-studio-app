@@ -1,6 +1,5 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { useDrawerStatus } from 'expo-router/drawer';
 import {
   createContext,
   type PropsWithChildren,
@@ -28,6 +27,8 @@ import type {
 } from '@/frontend/appShell/conversation';
 import { areAllSelected, toggleSelection } from '@/frontend/components/Selection';
 
+import { useSidebarPresence } from './hooks/useSidebarPresence';
+
 type SelectionEntry = { key: string; source: ConversationSource; ref: ConversationRef };
 type SelectionSnapshot = {
   isSelecting: boolean;
@@ -52,7 +53,7 @@ export function SidebarSelectionProvider({
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
-  const open = useDrawerStatus() === 'open';
+  const isVisible = useSidebarPresence() !== 'closed';
   const isSelecting = useSelectionSnapshot(store, (state) => state.isSelecting);
   const progress = useSharedValue(0);
 
@@ -67,21 +68,21 @@ export function SidebarSelectionProvider({
     return () => cancelAnimation(progress);
   }, [isSelecting, progress]);
 
-  // Drawer dismissal and a different catalog end the selection, not admitted deletions.
+  // Hiding the sidebar and a different catalog end the selection, not admitted deletions.
   useEffect(() => {
     store.exit();
   }, [scope, store]);
   useEffect(() => {
-    if (!open) store.exit();
-  }, [open, store]);
+    if (!isVisible) store.exit();
+  }, [isVisible, store]);
   useEffect(() => {
-    if (!open || !isSelecting) return;
+    if (!isVisible || !isSelecting) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       store.exit();
       return true;
     });
     return () => subscription.remove();
-  }, [isSelecting, open, store]);
+  }, [isSelecting, isVisible, store]);
 
   const requestDelete = useCallback(() => {
     const state = store.getSnapshot();

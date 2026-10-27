@@ -9,7 +9,8 @@ Storybook disable automatic OTA updates and continue using Metro.
 
 The native client checks asynchronously on cold launch, downloads a compatible update, and uses it
 on a subsequent cold launch. `fallbackToCacheTimeout: 0` keeps startup from waiting for the network.
-There is no application-owned reload call, update dialog, foreground polling, or background task.
+This OTA path has no application-owned reload call, update dialog, foreground polling, or background task.
+The separate installed-package updater can remind users and handle explicit update actions.
 Active conversations are not restarted. Offline launches use available downloaded or embedded
 code; incomplete downloads do not become runnable updates.
 
@@ -52,9 +53,10 @@ Platform-specific channels in `eas.json` preserve existing build profile names a
 workflows. GitHub and GitCode distribute the same APK and use `production-apk`. Channels separate
 distribution configuration; matching runtime versions additionally enforce native compatibility.
 
-The GitCode whole-APK updater still handles native/public APK upgrades. It compares the installed
+The shared package-update infrastructure handles GitCode APK upgrades and store update actions.
+Its APK strategy compares the installed
 version from `expo-application`, rather than an OTA manifest's version, and packaged builds enable
-it only on the native channel `production-apk`, which an OTA cannot change. A development client
+APK downloads only on the native channel `production-apk`, which an OTA cannot change. A development client
 can opt in with `APK_UPDATES_ENABLED=true`. About, diagnostics, analytics, and backup manifests use
 the native version/build. See the [APK update service](../../src/backend/services/appUpdate/README.md).
 
@@ -76,8 +78,10 @@ eas channel:create production-ios
 Keep `PROFILE`, `APK_UPDATES_ENABLED`, `ANDROID_COMPRESS_NATIVE_LIBS`, and
 `EXPO_PUBLIC_STORYBOOK_ENABLED` out of shared EAS environments; remote variables can otherwise
 override publication configuration. Build profiles in `eas.json` own `PROFILE` and
-`ANDROID_COMPRESS_NATIVE_LIBS`. `APK_UPDATES_ENABLED` and `EXPO_PUBLIC_STORYBOOK_ENABLED` are local
-development switches; packaged APKs gate update checks on the native `production-apk` channel.
+`ANDROID_COMPRESS_NATIVE_LIBS`. `APK_UPDATES_ENABLED` additionally controls native APK installation permission: the APK build
+profile enables it and Play disables it. It remains an opt-in development switch at build and Metro
+time. `EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
+actions using the embedded native channel.
 Other service settings and credentials still come from the selected environment. Client/config
 values must be readable during both builds and updates; Secret-only values cannot be read by
 EAS Update.
@@ -142,13 +146,13 @@ there is no runtime check or source-map upload. Do not republish a preview bundl
 
 ## Download Size
 
-SDK 57 supports bundle diffing, explicitly enabled here. EAS serves a patch when available and
+SDK 58 supports bundle diffing, explicitly enabled here. EAS serves a patch when available and
 sufficiently smaller than the new bundle, and unchanged assets are reused. Patches are not
 guaranteed for every update pair or immediately after publication.
 
 The first OTA from an embedded build normally downloads a full JavaScript bundle and missing
 assets, **not a full APK or IPA**. Uploading the embedded bundle can enable first-update patches,
-but `EAS_UPDATE_EXPERIMENTAL_UPLOAD_EMBEDDED_BUNDLE=1` is experimental on SDK 57 and is not enabled
+but `EAS_UPDATE_EXPERIMENTAL_UPLOAD_EMBEDDED_BUNDLE=1` is experimental and is not enabled
 here. Evaluate it separately; do not claim a fixed reduction percentage.
 
 ## Acceptance

@@ -1,4 +1,5 @@
 import type { Api, Context, Model, ToolResultMessage } from '@earendil-works/pi-ai';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { imageModelStream, PI_IMAGE_TOOL_NAME } from '../piDurableImageModel';
@@ -43,6 +44,15 @@ describe('Pi direct image scheduling', () => {
       messages: [user, { ...result, isError: true }],
     }).result();
     expect(complete).toMatchObject({ stopReason: 'error', content: [] });
+    // The fallback wording matches Pi's transient-error heuristic. Explicit scheduling policy
+    // must win so it does not spend 2 + 4 + 8 seconds reading the same failed receipt.
+    expect(complete.errorMessage).toContain('ended without');
+    expect(isRetryableAssistantError(complete)).toBe(false);
+    const repeated = await stream({
+      messages: [user, { ...result, isError: true }, complete],
+    }).result();
+    expect(repeated).toMatchObject({ stopReason: 'error', content: [] });
+    expect(isRetryableAssistantError(repeated)).toBe(false);
   });
 
   test('a previous turn image does not satisfy a new user request', async () => {

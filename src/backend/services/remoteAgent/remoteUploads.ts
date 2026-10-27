@@ -173,7 +173,7 @@ export async function uploadAttachments(
             const writes = [];
             try {
               for (let i = 0; i < uploadTransferLimits.window && offset < size; i++) {
-                const bytes = handle.readBytes(
+                const bytes = handle.readBytesSync(
                   Math.min(uploadTransferLimits.chunkBytes, size - offset),
                 );
                 if (!bytes.length) throw new RemoteAgentError('RESOURCE_UNAVAILABLE');

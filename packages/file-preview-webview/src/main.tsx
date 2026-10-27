@@ -87,7 +87,11 @@ let lastRender: FilePreviewRenderOptions | null = null;
 
 function sourceFor(info: FilePreviewRenderOptions['source']): PreviewSource {
   // Theme and locale updates re-render with the same source, so the open document survives them.
-  if (currentSource?.id !== info.id) {
+  if (
+    currentSource?.id !== info.id ||
+    currentSource.name !== info.name ||
+    currentSource.mediaType !== info.mediaType
+  ) {
     currentSource = { ...info, open: (signal) => bridge.open(signal) };
   }
   return currentSource;
@@ -112,6 +116,7 @@ function render(options: FilePreviewRenderOptions): void {
         options.captureSelection ? (selection) => post({ type: 'selection', selection }) : undefined
       }
       options={currentLayoutOptions()}
+      refreshKey={options.source.revision}
       resources={resources}
       source={sourceFor(options.source)}
       style={options.style as CSSProperties}

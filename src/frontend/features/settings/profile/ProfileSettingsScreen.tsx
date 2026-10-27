@@ -3,7 +3,7 @@ import { loggerService } from '@logger';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, TextInput, View } from 'react-native';
+import { Keyboard, Text, View, type TextInputInstance } from 'react-native';
 
 import { ACCOUNT_ERROR_KEYS, organizationLabel, useAccount } from '@/frontend/appShell/account';
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/Avatar';
@@ -30,7 +30,7 @@ export default function ProfileSettingsScreen() {
   const router = useRouter();
   const { toast } = useToast();
   const { alert } = useAlert();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [userName, setUserName] = usePreference('app.user.name');
   const profile = useBackendModule('profile');
   const { account, state } = useAccount();

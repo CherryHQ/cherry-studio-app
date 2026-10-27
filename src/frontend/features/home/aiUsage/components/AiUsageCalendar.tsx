@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ScrollViewInstance,
+} from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { aiUsageCalendar } from '@/frontend/utils/constants';
@@ -44,7 +51,7 @@ export function AiUsageCalendar({
 }: AiUsageCalendarProps) {
   const { i18n, t } = useTranslation();
   const squareRefs = useRef(new Map<string, AiUsageAnimationControls>());
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const levelColors = useThemeColor(aiUsageLevelColors);
   const weeks = useMemo(() => buildAiUsageCalendarWeeks(data), [data]);
   const activeDayCount = Object.values(data).filter((level) => level > 0).length;

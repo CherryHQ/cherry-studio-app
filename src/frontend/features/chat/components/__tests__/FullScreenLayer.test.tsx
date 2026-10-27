@@ -25,6 +25,10 @@ jest.mock('react-native', () => {
   });
 });
 
+jest.mock('react-native-reanimated', () => ({
+  useSharedValue: (initial: unknown) => ({ get: () => initial, set: () => undefined }),
+}));
+
 let presented: boolean[] = [];
 
 function Layer({ active }: { active: boolean }) {

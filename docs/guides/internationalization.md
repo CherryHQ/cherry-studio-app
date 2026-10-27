@@ -73,9 +73,21 @@ and must not be changed merely because the UI language changed.
 Painting template names and prompts have a separate catalog under
 [`assets/paintings/templates`](../../assets/paintings/templates/README.md). Its current explicit
 policy is Simplified Chinese for `zh-CN` and English for other languages; user-edited prompts are
-never retranslated. Native permission descriptions in `app.json` are also separate from the UI
-catalog and currently use English. Adding a UI language does not claim those separate resource
-surfaces have translations.
+never retranslated. Native permission descriptions are separate from the UI catalog:
+`app.json` supplies the English defaults, and
+[`assets/permissions/locales`](../../assets/permissions/locales) supplies calendar, reminders and
+foreground-location descriptions in every supported language through Expo's `locales` setting.
+These resources cover both legacy and full-access calendar/reminders keys and the separate
+write-only calendar key. Other native permission descriptions currently remain in English.
+The native resources use Apple language identifiers, including `zh-Hans` and `zh-Hant`;
+iOS selects them using its app language, independently of Cherry's in-app language preference.
+The app's iOS `CFBundleLocalizations` is derived from the same `locales` keys; the location
+prompt ignores `.lproj` directories that list does not name.
+Keep the English defaults and localized values aligned, and add a native resource when adding
+a supported UI language. Changes require a new iOS binary; an OTA update cannot replace
+`InfoPlist.strings`.
+Follow Apple's [purpose-string guidance](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-purpose-strings):
+explain the feature, give a concrete example, and localize the description.
 
 ## Changing Translations
 

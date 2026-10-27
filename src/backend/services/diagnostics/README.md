@@ -82,6 +82,10 @@ and a stable WebView source prevent status writes from reloading the page.
   payloads are not diagnostic sources. See [AI Diagnostic Tracing](../../ai/observability/README.md).
   Archives retain model failure stage/category/retryability and fixed tool business outcomes, so
   returned errors, partial failures and requests for user choice remain distinguishable.
+  Archives also retain the product's closed failure reason, explicit automatic/user retry scope,
+  model limits, request output budgets, serialized output caps, transcript token estimates and
+  observed compaction lifecycle facts. Estimates are labeled by source and are not exact provider
+  counts. Product reasons remain separate from classifications based only on provider codes/status.
 - System summary: app/build/runtime version, device model, OS and locale. No device name or unique
   hardware identifier is read. Plugin configuration includes server/plugin identifiers, enabled
   state, authorization method and disabled-tool count; no names, accounts, endpoints or credentials.
@@ -95,10 +99,11 @@ existing [Sentry integration](../../../frontend/appShell/observability/README.md
 
 The process-owned logger and JS exception/rejection observer are installed before router imports.
 They preserve React Native's existing handlers and persist projected warning/error metadata plus
-the fixed `Startup` / `Startup stage` info event. Other info logs remain excluded. Startup events
+the fixed `Startup` / `Startup stage` and `PiDurableObserver` / `Pi durable context compaction`
+info events. Other info logs remain excluded. Lifecycle events
 use the same local retention and submission path; they do not add an external reporting channel.
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
-Startup events retain separate records without repetition aggregation, preserving retry timings.
+Lifecycle events retain separate records without repetition aggregation, preserving retry timings.
 They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
 the buffer limit, or on explicit flush. Database stages run synchronously and would block the
 timer, so each flushes its start before running. Warning/error writes first drain preceding startup events
@@ -121,6 +126,8 @@ boundary. The 512-file guard remains for legacy files and exceptional histories.
 and copies stable trace snapshots, then releases them on success, failure or cancellation.
 Collection projects every record again through an explicit field allowlist and filters by the last
 24 hours. A terminal span uses its end timestamp; a running span uses its start.
+New budget/count fields must remain nonnegative finite numbers; product reasons, retry scopes,
+estimate sources and serialized cap field names are validated again during export.
 The 50 MiB source budget favors representation of both sources, then recent files. The manifest
 reports unreadable/malformed/changed sources, size omissions and trace storage loss counters.
 

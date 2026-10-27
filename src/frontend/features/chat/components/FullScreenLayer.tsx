@@ -8,12 +8,15 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { useWindowDimensions, View, type ViewInstance } from 'react-native';
+import { type SharedValue, useSharedValue } from 'react-native-reanimated';
 
 type FullScreenLayers = Readonly<{
   isPresented: boolean;
   /** Returns the release; the screen stays covered until every layer released. */
   present: () => () => void;
+  /** How far the shown layer has grown over the screen, from 0 to 1. */
+  progress: SharedValue<number>;
 }>;
 
 const FullScreenLayerContext = createContext<FullScreenLayers | null>(null);
@@ -24,16 +27,25 @@ const FullScreenLayerContext = createContext<FullScreenLayers | null>(null);
  */
 export function FullScreenLayerProvider({ children }: PropsWithChildren) {
   const [count, setCount] = useState(0);
+  const progress = useSharedValue(0);
   const present = useCallback(() => {
     setCount((current) => current + 1);
     return () => setCount((current) => current - 1);
   }, []);
-  const value = useMemo(() => ({ isPresented: count > 0, present }), [count, present]);
+  const value = useMemo(
+    () => ({ isPresented: count > 0, present, progress }),
+    [count, present, progress],
+  );
   return <FullScreenLayerContext value={value}>{children}</FullScreenLayerContext>;
 }
 
 export function useIsFullScreenLayerPresented() {
   return use(FullScreenLayerContext)?.isPresented ?? false;
+}
+
+/** The screen's layer progress, which its own chrome follows; absent outside a chat screen. */
+export function useFullScreenLayerProgress() {
+  return use(FullScreenLayerContext)?.progress;
 }
 
 /** Covers the screen while `active`; outside a chat screen there is nothing to cover. */
@@ -51,7 +63,7 @@ export function useFullScreenLayer(active: boolean) {
 export function FullScreenLayerHost({ children }: PropsWithChildren) {
   const isPresented = useIsFullScreenLayerPresented();
   const { height: windowHeight } = useWindowDimensions();
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   const [restingBottom, setRestingBottom] = useState<number>();
   const measure = () => {
     if (!isPresented)

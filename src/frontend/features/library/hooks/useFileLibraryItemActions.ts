@@ -2,6 +2,7 @@ import { type MenuItem, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useSelectionActions, useSelectionState } from '@/frontend/components/Selection';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { FileFolder, LibraryFile } from '@/shared/data/types/fileLibrary';
@@ -16,6 +17,8 @@ export function useFileLibraryItemActions() {
   const { toast } = useToast();
   const { alert } = useAlert();
   const files = useBackendModule('file');
+  const { enterEditing, selectIds } = useSelectionActions();
+  const { isDeletionPending } = useSelectionState();
   const editFolder = useMutation('PATCH', '/files/folders/:id');
   const editFile = useMutation('PATCH', '/files/library/:id');
   const deleteFolder = useMutation('DELETE', '/files/folders/:id');
@@ -112,6 +115,19 @@ export function useFileLibraryItemActions() {
 
   const getMenuItems = useCallback(
     (selection: LibrarySelection): MenuItem[] => [
+      ...(selection.kind === 'file'
+        ? [
+            {
+              disabled: isPending || isDeletionPending,
+              id: 'select',
+              label: t('library.selection.start'),
+              onPress: () => {
+                enterEditing();
+                selectIds([selection.file.entry.id]);
+              },
+            },
+          ]
+        : []),
       {
         disabled: isPending,
         id: 'rename',
@@ -132,7 +148,7 @@ export function useFileLibraryItemActions() {
         onPress: () => trash(selection),
       },
     ],
-    [isPending, rename, t, trash],
+    [enterEditing, isDeletionPending, isPending, rename, selectIds, t, trash],
   );
 
   return { closeMove, getMenuItems, isPending, move, moving };

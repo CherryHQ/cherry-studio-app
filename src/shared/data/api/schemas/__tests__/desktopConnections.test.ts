@@ -1,6 +1,7 @@
 import {
   DesktopPairingQrSchema,
   DesktopProvidersSnapshotSchema,
+  PairDesktopConnectionSchema,
   parseSupportedAuthConfig,
 } from '../desktopConnections';
 
@@ -35,8 +36,86 @@ describe('desktop connection api schemas', () => {
       t: 'cherry-studio-pair',
       v: 2,
     };
-    expect(DesktopPairingQrSchema.parse(input).ips).toEqual(ips);
+    expect(DesktopPairingQrSchema.parse(input)).toMatchObject({ v: 2, ips });
     expect(DesktopPairingQrSchema.safeParse({ ...input, ips: [...ips, '10.0.0.33'] }).success).toBe(
+      false,
+    );
+  });
+
+  test('accepts v3 endpoint invitations while keeping local pairing choices out of the QR', () => {
+    const endpoints = [
+      { host: 'Desktop.Example.com', port: 443, security: 'wss' },
+      { host: '2001:db8::2', port: 24444, security: 'ws' },
+    ];
+    const input = {
+      t: 'cherry-studio-pair',
+      v: 3,
+      name: 'Desktop',
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
+      protocolVersions: [1],
+      endpoints,
+      connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',
+      capabilities: ['agent'],
+    };
+    const qr = DesktopPairingQrSchema.parse(input);
+    expect(qr).toMatchObject({
+      v: 3,
+      endpoints: [{ ...endpoints[0], host: 'desktop.example.com' }, endpoints[1]],
+    });
+    expect(qr).not.toHaveProperty('connectionId');
+    expect(qr).not.toHaveProperty('capabilities');
+    expect(
+      PairDesktopConnectionSchema.parse({ ...qr, capabilities: ['configuration'] }),
+    ).toMatchObject({
+      v: 3,
+      capabilities: ['configuration'],
+    });
+    expect(
+      PairDesktopConnectionSchema.safeParse({ ...qr, capabilities: ['agent', 'agent'] }).success,
+    ).toBe(false);
+    for (const invalid of [
+      [],
+      Array.from({ length: 33 }, () => endpoints[0]),
+      [{ ...endpoints[0], port: 65536 }],
+      [{ ...endpoints[0], security: 'https' }],
+      [{ ...endpoints[0], host: 'desktop.example.com/path' }],
+    ]) {
+      expect(DesktopPairingQrSchema.safeParse({ ...input, endpoints: invalid }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  test('bounds v3 endpoints and retains only local pairing options supplied by the caller', () => {
+    const endpoints = Array.from({ length: 32 }, (_, i) => ({
+      host: `desktop-${i}.example.com`,
+      port: 443,
+      security: 'wss',
+    }));
+    const input = {
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
+      name: 'Desktop',
+      protocolVersions: [1],
+      t: 'cherry-studio-pair',
+      v: 3,
+      endpoints,
+      capabilities: ['configuration', 'agent'],
+      connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',
+    };
+    expect(PairDesktopConnectionSchema.parse(input)).toEqual(input);
+    expect(DesktopPairingQrSchema.parse(input)).not.toHaveProperty('connectionId');
+    expect(
+      DesktopPairingQrSchema.safeParse({ ...input, endpoints: [...endpoints, endpoints[0]] })
+        .success,
+    ).toBe(false);
+    expect(
+      PairDesktopConnectionSchema.safeParse({ ...input, capabilities: ['agent', 'agent'] }).success,
+    ).toBe(false);
+    expect(PairDesktopConnectionSchema.safeParse({ ...input, capabilities: [] }).success).toBe(
       false,
     );
   });

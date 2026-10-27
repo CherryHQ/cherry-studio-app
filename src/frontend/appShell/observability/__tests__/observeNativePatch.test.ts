@@ -43,10 +43,10 @@ test('the enqueued request keeps its unique name and in-flight dispatch', () => 
   expect(worker).toContain('private const val WORK_NAME = "eas-observe-dispatch"');
 });
 
-// Scheduling stays unconditional on purpose: the worker is what clears the pending tables
+// Scheduling stays unconditional on purpose: the worker is what moves past the pending rows
 // once dispatching is disabled, so gating the enqueue would let them grow without bound.
 test('the dispatch gate stays inside the worker', () => {
   expect(scheduleBody).not.toContain('ObservePreferences');
-  expect(manager).toMatch(/if \(!shouldDispatch\(\)\)[\s\S]*?removeAllPendingMetrics\(\)/);
+  expect(manager).toMatch(/if \(!shouldDispatch\(\)\) \{[\s\S]*?setLastDispatchedMetricId\(/);
   expect(manager).toContain('val dispatchingEnabled = config?.dispatchingEnabled ?: true');
 });

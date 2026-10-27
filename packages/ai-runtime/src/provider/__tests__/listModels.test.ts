@@ -257,7 +257,7 @@ describe('listModels — geminiFetcher API key transport', () => {
   });
 });
 
-describe('listModels — openAIFetcher (official OpenAI provider, audio/video filtering)', () => {
+describe('listModels — openAIFetcher (official OpenAI provider, voice model discovery)', () => {
   function makeOpenAIProvider() {
     return makeProvider({
       id: 'openai',
@@ -268,7 +268,7 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
     });
   }
 
-  it('drops audio/video models (tts/whisper/transcribe/audio/realtime/sora), keeping chat, image, embedding, and moderation', async () => {
+  it('includes supported TTS/STT models while keeping realtime, audio chat and video out', async () => {
     aiSdkGetFromApiMock.mockResolvedValue({
       value: {
         data: [
@@ -282,6 +282,9 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
           { id: 'gpt-4o-mini-tts' },
           { id: 'whisper-1' },
           { id: 'gpt-4o-transcribe' },
+          { id: 'gpt-4o-mini-tts-2025-12-15' },
+          { id: 'gpt-4o-mini-transcribe-2025-12-15' },
+          { id: 'gpt-4o-transcribe-diarize' },
           { id: 'gpt-4o-realtime-preview' },
           { id: 'gpt-4o-audio-preview' },
           { id: 'sora-2' },
@@ -298,10 +301,26 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
       'dall-e-3',
       'text-embedding-3-large',
       'omni-moderation-latest',
+      'tts-1',
+      'gpt-4o-mini-tts',
+      'whisper-1',
+      'gpt-4o-transcribe',
+      'gpt-4o-mini-tts-2025-12-15',
+      'gpt-4o-mini-transcribe-2025-12-15',
     ]);
+    expect(models.find((model) => model.apiModelId === 'gpt-4o-mini-tts')).toMatchObject({
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+      inputModalities: ['text'],
+      outputModalities: ['audio'],
+    });
+    expect(models.find((model) => model.apiModelId === 'whisper-1')).toMatchObject({
+      capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+      inputModalities: ['audio'],
+      outputModalities: ['text'],
+    });
   });
 
-  it('applies the audio/video filter to copied OpenAI providers that keep presetProviderId but get a uuid id (REGRESSION)', async () => {
+  it('also discovers voice models for copied OpenAI providers', async () => {
     const copiedOpenAIProvider = makeProvider({
       id: '550e8400-e29b-41d4-a716-446655440000',
       presetProviderId: 'openai',
@@ -318,7 +337,29 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
 
     const models = await listModels(copiedOpenAIProvider);
 
-    expect(models.map((m) => m.apiModelId)).toEqual(['gpt-4o']);
+    expect(models.map((m) => m.apiModelId)).toEqual(['gpt-4o', 'tts-1', 'whisper-1']);
+  });
+
+  it('keeps known audio types on compatible gateways without classifying names by loose keywords', async () => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: {
+        data: [{ id: 'openai/gpt-4o-mini-tts' }, { id: 'whisper-1' }, { id: 'speech-chat' }],
+      },
+    });
+    const models = await listModels(
+      makeProvider({
+        id: 'custom-gateway',
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://gateway.invalid/v1' },
+        },
+      }),
+    );
+    expect(models.map((model) => model.capabilities)).toEqual([
+      [MODEL_CAPABILITY.AUDIO_GENERATION],
+      [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+      [],
+    ]);
   });
 });
 

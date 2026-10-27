@@ -1,9 +1,12 @@
-import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
-import { toAgentMessagePart } from '../../../host/runtimeProjection';
+import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
+import type { RuntimeError } from '../../types';
+import { PI_IMAGE_TOOL_NAME } from '../piDurableImageModel';
 import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
+import { piDurableSetupError } from '../piDurableStream';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -107,6 +110,222 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  test.each(['provider_response_failure', 'pi_messages_response_failure'])(
+    'preserves the terminal %s facts in the displayed failure',
+    (type) => {
+      const response = {
+        message: '预扣费额度失败, 用户剩余额度: $1.032202, 需要预扣费额度: $1.299970',
+        code: 'insufficient_user_quota',
+        request_id: 'req-quota',
+      };
+      const responseBody = JSON.stringify(response);
+      const terminal: AssistantMessage = {
+        ...call('', 2000),
+        provider: 'cherryin',
+        model: 'openai/gpt-test',
+        content: [],
+        stopReason: 'error',
+        errorMessage: `cherryin API error (403): ${responseBody}`,
+        diagnostics: [
+          {
+            type: 'provider_response_failure',
+            timestamp: 1,
+            error: { name: 'EarlierError', code: 'server_error', message: 'Earlier failure' },
+            details: { status: 503, body: 'Earlier response', retryable: true },
+          },
+          {
+            type,
+            timestamp: 2,
+            error: { name: 'APIError', code: response.code, message: response.message },
+            details:
+              type === 'provider_response_failure'
+                ? { status: 403, body: responseBody, retryable: false }
+                : { statusCode: 403, body: response, retryable: false },
+          },
+          {
+            type: 'transport_fallback',
+            timestamp: 3,
+            error: { name: 'TransportError', message: 'Recovered transport failure' },
+          },
+        ],
+      };
+      const turn = projectPiTurn({
+        lane: { sessionId: 'session', slot: 0 },
+        metadata,
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          reason: 'model_error',
+          entry: 1,
+        } as unknown as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+        ] as unknown as EntryRecord[],
+      });
+
+      expect(turn.status).toBe('failed');
+      expect(toAgentErrorView(turn.error!)).toEqual({
+        code: 'EXECUTION_FAILED',
+        message: terminal.errorMessage,
+        // Manual retry stays available after the account limit is resolved.
+        retryable: true,
+        failure: {
+          version: 1,
+          reasonCode: 'quota',
+          source: { layer: 'provider', code: 'insufficient_user_quota', name: 'APIError' },
+          context: {
+            providerId: 'cherryin',
+            modelId: 'openai/gpt-test',
+            statusCode: 403,
+            finishReason: 'error',
+            responseBody,
+          },
+        },
+      });
+    },
+  );
+
+  test('keeps the provider source code when the stored diagnostic has no provider code', async () => {
+    const failure = Object.assign(new Error('provider API error (503): upstream unavailable'), {
+      status: 503,
+    });
+    const model: Model<Api> = {
+      api: 'openai-responses',
+      provider: 'provider',
+      id: 'model',
+      name: 'Model',
+      baseUrl: '',
+      contextWindow: 32768,
+      maxTokens: 4096,
+      input: ['text'],
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    // Setup failures receive the same normalized diagnostic shape that Pi persists.
+    let terminal: AssistantMessage | undefined;
+    for await (const event of piDurableSetupError(model, failure, []))
+      if (event.type === 'error') terminal = event.error;
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'unanswered',
+        reason: 'model_error',
+        entry: 1,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+
+    expect(toAgentErrorView(turn.error!).failure).toMatchObject({
+      reasonCode: 'provider_unavailable',
+      source: { layer: 'provider', code: 'provider_error', name: 'Error' },
+      context: { statusCode: 503 },
+    });
+  });
+
+  test.each([
+    { api: 'cherry-image', statusCode: 403, retryable: false },
+    { api: 'cherry-image', statusCode: 503, retryable: true },
+    { api: 'cherry', statusCode: 403, retryable: false },
+  ])('uses the tool failure only for a direct image scheduling error: %j', (scenario) => {
+    const failure: RuntimeError = {
+      code: 'image_provider_error',
+      message: 'Provider rejected the image request.',
+      name: 'APIError',
+      origin: 'provider',
+      retryable: scenario.retryable,
+      context: {
+        statusCode: scenario.statusCode,
+        providerId: 'provider',
+        modelId: 'image-model',
+        responseBody: 'Sanitized provider response',
+      },
+    };
+    const imageTool = {
+      ...writeFile,
+      ref: { source: 'builtin', capabilityId: 'image_generation' },
+      providerName: PI_IMAGE_TOOL_NAME,
+    };
+    const scheduled: AssistantMessage = {
+      ...call('', 2000),
+      api: scenario.api,
+      content: [{ type: 'toolCall', id: 'call', name: PI_IMAGE_TOOL_NAME, arguments: {} }],
+    };
+    const terminal: AssistantMessage = {
+      ...scheduled,
+      content: [],
+      stopReason: 'error',
+      errorMessage: 'The image request ended without a successful result.',
+      timestamp: 2200,
+    };
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata: { ...metadata, tools: [imageTool] },
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'unanswered',
+        reason: 'model_error',
+        entry: 1,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [scheduled] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'call',
+              toolName: PI_IMAGE_TOOL_NAME,
+              content: [{ type: 'text', text: failure.message }],
+              details: {
+                kind: 'cherry.tool-result',
+                ref: imageTool.ref,
+                providerName: imageTool.providerName,
+                displayName: 'Generate image',
+                output: {
+                  value: { status: 'error' },
+                  artifacts: [],
+                  failure: { scope: 'call', error: failure },
+                },
+              },
+              isError: true,
+              timestamp: 2100,
+            },
+          ],
+        },
+        { id: 4, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+
+    expect(turn.status).toBe('failed');
+    if (scenario.api === 'cherry-image') {
+      expect(turn.error).toEqual(failure);
+      expect(toAgentErrorView(turn.error!)).toMatchObject({
+        message: failure.message,
+        retryable: failure.retryable,
+        failure: {
+          source: { layer: 'provider', code: failure.code, name: failure.name },
+          context: failure.context,
+        },
+      });
+    } else {
+      expect(turn.error).toMatchObject({
+        code: 'provider_error',
+        message: terminal.errorMessage,
+        retryable: true,
+      });
+    }
+  });
+
   test('preserves upstream loaded tool names for search presentation', () => {
     const turn = projectPiTurn({
       lane: { sessionId: 'session', slot: 0 },

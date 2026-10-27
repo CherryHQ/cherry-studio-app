@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
@@ -117,6 +117,33 @@ describe('createSystemModelSupport', () => {
 
     expect(isModelSupportedBySystem(createProvider(), model)).toBe(false);
     expect(supportsLanguageModel).not.toHaveBeenCalled();
+  });
+
+  it.each([MODEL_CAPABILITY.AUDIO_GENERATION, MODEL_CAPABILITY.AUDIO_TRANSCRIPT])(
+    'admits %s only for accounts with a supported audio protocol',
+    (capability) => {
+      const supportsLanguageModel = jest.fn().mockReturnValue(true);
+      const { isModelSupportedBySystem } = supportWith(supportsLanguageModel);
+      const model = createModel({ capabilities: [capability] });
+      expect(isModelSupportedBySystem(createProvider(), model)).toBe(true);
+      expect(isModelSupportedBySystem(createProvider({ endpointConfigs: {} }), model)).toBe(false);
+      expect(isModelSupportedBySystem(createProvider({ authType: 'iam-gcp' }), model)).toBe(false);
+      expect(supportsLanguageModel).not.toHaveBeenCalled();
+    },
+  );
+
+  it('admits audio-only recognition catalog models as transcription', () => {
+    const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(false));
+    expect(
+      isModelSupportedBySystem(
+        createProvider(),
+        createModel({
+          capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+          inputModalities: [MODALITY.AUDIO],
+          outputModalities: [MODALITY.TEXT],
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('filters out models whose provider is unknown', () => {

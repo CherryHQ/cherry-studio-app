@@ -32,6 +32,7 @@ type SelectionActions = {
   enterEditing: () => void;
   exitEditing: () => void;
   finishDeletion: (scope: string, ids: readonly string[]) => void;
+  selectIds: (ids: readonly string[]) => void;
   toggleAll: (allIds: readonly string[]) => void;
   toggleId: (id: string) => void;
 };
@@ -122,6 +123,10 @@ export function SelectionProvider({ children, onEditingChange }: SelectionProvid
     setSelectedIds((current) => toggleSelection(current, id));
   }, []);
 
+  const selectIds = useCallback((ids: readonly string[]) => {
+    setSelectedIds(new Set(ids));
+  }, []);
+
   const toggleAll = useCallback((allIds: readonly string[]) => {
     setSelectedIds((current) => (areAllSelected(current, allIds) ? new Set() : new Set(allIds)));
   }, []);
@@ -147,8 +152,16 @@ export function SelectionProvider({ children, onEditingChange }: SelectionProvid
     [isDeletionPending, isEditing, pendingDeletionIds, selectedIds],
   );
   const actionsValue = useMemo(
-    () => ({ beginDeletion, enterEditing, exitEditing, finishDeletion, toggleAll, toggleId }),
-    [beginDeletion, enterEditing, exitEditing, finishDeletion, toggleAll, toggleId],
+    () => ({
+      beginDeletion,
+      enterEditing,
+      exitEditing,
+      finishDeletion,
+      selectIds,
+      toggleAll,
+      toggleId,
+    }),
+    [beginDeletion, enterEditing, exitEditing, finishDeletion, selectIds, toggleAll, toggleId],
   );
 
   return (

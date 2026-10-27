@@ -1,5 +1,5 @@
 import { createRef, type ReactElement } from 'react';
-import { type TextInput, type TextInputProps } from 'react-native';
+import { type TextInputProps, type TextInputInstance } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Input } from '../input';
@@ -107,7 +107,7 @@ describe('Input', () => {
     expect(input.props.autoCapitalize).toBe('sentences');
     expect(input.props.autoCorrect).toBe(true);
     expect(input.props.className).toBe(
-      'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+      'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-border',
     );
     expect(input.props.className).not.toContain('text-[16px]');
 
@@ -294,7 +294,7 @@ describe('Input', () => {
   });
 
   test('forwards a password ref to the native input', () => {
-    const ref = createRef<TextInput>();
+    const ref = createRef<TextInputInstance>();
 
     renderInput(
       <Input

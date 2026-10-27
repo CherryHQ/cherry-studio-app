@@ -9,7 +9,6 @@ import {
   Tabs,
   TextField,
 } from '@cherrystudio/ui/components';
-import type { TFunction } from 'i18next';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,14 +19,19 @@ import type {
   ImageParamField,
   ResolvedImageGenerationMode,
 } from '@/shared/utils/imageGenerationParams';
-import { getImageParamFields } from '@/shared/utils/imageGenerationParams';
+import { getImageParamFields, parseImageRatio } from '@/shared/utils/imageGenerationParams';
 
-import { imageParamLabel, imageParamOptionLabel, simplifiedRatio } from './imageGenerationLabels';
+import {
+  imageParamLabel,
+  imageParamOptionLabel,
+  optionRatioLabel,
+  pixelSizeLabel,
+} from './imageGenerationLabels';
 
 const FIELD_GAP = 8;
-// 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。
-const RATIO_GRID_COLUMNS = 5;
-// 外壳（选中框）固定为正方形，边长 = 单元格宽；1:1 预览方形为其一半，
+// 最多 5 列等宽网格；文字放不下时减列，并让各行数量均衡，不截断、不缩字号。
+const RATIO_GRID_MAX_COLUMNS = 5;
+// 外壳（选中框）固定为 5 列时的单元格宽，减列也不放大；1:1 预览方形为其一半，
 // 其它比例按等面积缩放（观感大小一致），并收进外壳内边距。
 const RATIO_SHELL_INSET = 20;
 // Choices this short fit one segmented control; longer lists open their own page.
@@ -193,7 +197,14 @@ function PaintingSettingField({
       );
     case 'enum': {
       const options = enumOptions(field, fields);
-      if (field.spec.render !== 'chips' && options.length <= MAX_SEGMENTS) {
+      // Segments always show a selection, so an enum without a default would
+      // display an option that is never sent. The row reports the unset state.
+      const defaultValue = field.spec.default;
+      if (
+        field.spec.render !== 'chips' &&
+        defaultValue !== undefined &&
+        options.length <= MAX_SEGMENTS
+      ) {
         return (
           <SegmentedField
             label={label}
@@ -202,7 +213,7 @@ function PaintingSettingField({
               label: imageParamOptionLabel(t, field.key, option),
               value: option,
             }))}
-            value={String(value ?? field.spec.default ?? options[0])}
+            value={String(value ?? defaultValue)}
           />
         );
       }
@@ -217,7 +228,7 @@ function PaintingSettingField({
       }
       // 比例/尺寸型字段（如 2:3、1024x1024）走截图式比例卡片；auto/custom
       // 等不可解析项在卡片里渲染成虚线占位，纯文字型字段回退普通 chips。
-      return options.filter((option) => parseRatio(option)).length >= 2 ? (
+      return options.filter((option) => parseImageRatio(option)).length >= 2 ? (
         <AspectRatioField
           field={{ key: field.key, spec: field.spec }}
           onValueChange={onValueChange}
@@ -310,29 +321,50 @@ function AspectRatioField({
 }) {
   const { t } = useTranslation();
   const selectedValue = values[field.key];
-  const selectedOption = typeof selectedValue === 'string' ? selectedValue : undefined;
   const { onLayout, width: gridWidth } = useLayoutWidth();
-  // Cells show the shape and ratio; the header adds what they cannot: the exact pixels.
-  const selectedRatio = selectedOption ? parseRatio(selectedOption) : undefined;
-  const selectedPixels =
-    selectedOption && selectedRatio && /^\s*\d+\s*[x×]\s*\d+\s*$/i.test(selectedOption)
-      ? `${selectedRatio.width}×${selectedRatio.height}`
-      : undefined;
-  const cellWidth = Math.max(
+  const { onLayout: onTextLayout, width: textWidth } = useLayoutWidth();
+  const cells = options.map((option) => ({
+    label: optionRatioLabel(field.key, option) ?? imageParamOptionLabel(t, field.key, option),
+    option,
+    pixels: pixelSizeLabel(field.key, option),
+  }));
+  const shellSide = Math.max(
     48,
-    (gridWidth - FIELD_GAP * (RATIO_GRID_COLUMNS - 1)) / RATIO_GRID_COLUMNS,
+    (gridWidth - FIELD_GAP * (RATIO_GRID_MAX_COLUMNS - 1)) / RATIO_GRID_MAX_COLUMNS,
   );
+  const fittingColumns = Math.floor(
+    (gridWidth + FIELD_GAP) / (Math.max(shellSide, Math.ceil(textWidth)) + FIELD_GAP),
+  );
+  const rows = Math.ceil(
+    options.length / Math.min(RATIO_GRID_MAX_COLUMNS, Math.max(1, fittingColumns)),
+  );
+  const columns = Math.ceil(options.length / rows);
+  const cellWidth = (gridWidth - FIELD_GAP * (columns - 1)) / columns;
   return (
     <View className="gap-3">
-      <FieldHeader label={imageParamLabel(t, field.key)} value={selectedPixels} />
+      <FieldHeader label={imageParamLabel(t, field.key)} />
       <View className="flex-row flex-wrap" onLayout={onLayout} style={styles.chipGrid}>
-        {options.map((option) => (
+        {/* Invisible copy of every cell's text; its width is the widest line a cell must hold. */}
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          onLayout={onTextLayout}
+          pointerEvents="none"
+          style={styles.textMeasure}
+        >
+          {cells.map(({ label, option, pixels }) => (
+            <RatioOptionText isSelected key={option} label={label} pixels={pixels} />
+          ))}
+        </View>
+        {cells.map(({ label, option, pixels }) => (
           <AspectRatioOption
             cellWidth={cellWidth}
             isSelected={selectedValue === option}
             key={option}
-            label={ratioOptionLabel(t, field.key, option)}
+            label={label}
             onPress={() => onValueChange(field.key, option)}
+            pixels={pixels}
+            shellSide={shellSide}
             value={option}
           />
         ))}
@@ -346,18 +378,21 @@ function AspectRatioOption({
   isSelected,
   label,
   onPress,
+  pixels,
+  shellSide,
   value,
 }: {
   cellWidth: number;
   isSelected: boolean;
   label: string;
   onPress: () => void;
+  pixels?: string;
+  shellSide: number;
   value: string;
 }) {
-  // 外壳固定正方形（边长 = 单元格宽）；1:1 预览方形恰为其一半。
-  const shellSide = cellWidth;
+  // 外壳固定正方形；1:1 预览方形恰为其一半。
   const squareSide = shellSide / 2;
-  const ratio = parseRatio(value);
+  const ratio = parseImageRatio(value);
   const shapeStyle = ratio
     ? ratioShapeSize(ratio, squareSide * squareSide, shellSide - RATIO_SHELL_INSET)
     : { height: squareSide, width: squareSide };
@@ -384,7 +419,7 @@ function AspectRatioOption({
   const shellStyle = { height: shellSide, width: shellSide };
   return (
     <Pressable
-      accessibilityLabel={label}
+      accessibilityLabel={pixels ? `${label} · ${pixels}` : label}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       className="items-center gap-2 active:opacity-70"
@@ -403,6 +438,23 @@ function AspectRatioOption({
           shape
         )}
       </View>
+      <RatioOptionText isSelected={isSelected} label={label} pixels={pixels} />
+    </Pressable>
+  );
+}
+
+/** Ratio, then the exact pixels when the option is a pixel size. */
+function RatioOptionText({
+  isSelected,
+  label,
+  pixels,
+}: {
+  isSelected: boolean;
+  label: string;
+  pixels?: string;
+}) {
+  return (
+    <View className="items-center">
       <Text
         className={
           isSelected
@@ -414,7 +466,16 @@ function AspectRatioOption({
       >
         {label}
       </Text>
-    </Pressable>
+      {pixels ? (
+        <Text
+          className="text-muted-foreground text-xs"
+          numberOfLines={1}
+          style={styles.tabularText}
+        >
+          {pixels}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -683,7 +744,7 @@ function enumOptions(field: ImageParamField, fields: readonly ImageParamField[])
 }
 
 function RatioPreview({ value }: { value: string }) {
-  const ratio = parseRatio(value);
+  const ratio = parseImageRatio(value);
   if (!ratio) {
     return null;
   }
@@ -698,14 +759,6 @@ function RatioPreview({ value }: { value: string }) {
   );
 }
 
-/** Pixel sizes read as their simplified ratio; anything else keeps its option label. */
-function ratioOptionLabel(t: TFunction, key: CanonicalParamKey, value: string): string {
-  const ratio = parseRatio(value);
-  return (
-    (ratio && simplifiedRatio(ratio.width, ratio.height)) ?? imageParamOptionLabel(t, key, value)
-  );
-}
-
 /** 等面积缩放：给定基准面积，各比例观感大小一致，再收进外壳的最大边长内。 */
 function ratioShapeSize(
   ratio: { height: number; width: number },
@@ -716,17 +769,6 @@ function ratioShapeSize(
   const height = area / width;
   const scale = Math.min(1, maxSide / width, maxSide / height);
   return { height: Math.max(8, height * scale), width: Math.max(8, width * scale) };
-}
-
-function parseRatio(value: string): { height: number; width: number } | undefined {
-  const normalized = value
-    .replace(/^ASPECT_/i, '')
-    .replace('_', ':')
-    .replace('x', ':');
-  const [width, height] = normalized.split(':').map(Number);
-  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
-    ? { height, width }
-    : undefined;
 }
 
 function isSideValid(value: unknown, min: number, max: number): boolean {
@@ -761,4 +803,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tabularText: { fontVariant: ['tabular-nums'] },
+  textMeasure: { left: 0, opacity: 0, position: 'absolute', top: 0 },
 });

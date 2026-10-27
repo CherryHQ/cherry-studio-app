@@ -1,5 +1,4 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import { defaultDatabaseDirectory } from 'expo-sqlite';
 
 import { BackupError, type RestoreOutcome } from '@/shared/contracts/backup';
 import { getActiveProfile } from '@/shared/data/activeProfile';
@@ -21,8 +20,9 @@ export function profileRoot(): Directory {
 }
 
 function legacyDatabaseDirectory(): string {
+  // Keep the local SQLite directory as the file URI that FileSystem requires.
   return getActiveProfile().id === 'local'
-    ? defaultDatabaseDirectory
+    ? new Directory(Paths.document, 'SQLite').uri
     : new Directory(profileRoot(), 'database').uri;
 }
 
@@ -187,11 +187,7 @@ export function cleanupStorageAfterBoot(): void {
       'pi-agent.db-wal',
       'pi-agent.db-shm',
     ]) {
-      // Directory objects keep file URIs; Android rejects the plain SQLite directory path.
-      const file =
-        getActiveProfile().id === 'local'
-          ? new File(Paths.document, 'SQLite', name)
-          : new File(profileRoot(), 'database', name);
+      const file = new File(databaseDirectory('legacy'), name);
       if (file.exists) file.delete();
     }
     for (const parts of [

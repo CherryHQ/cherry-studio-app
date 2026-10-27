@@ -65,10 +65,10 @@ export function MainHeaderView({
           pointerEvents="box-none"
           style={{ height: mainHeaderRowHeight, paddingHorizontal: horizontalInset }}
         >
-          {/* The chat route is currently a drawer root, so the route policy
-              resolves this leading action to the sidebar button. */}
+          {/* The chat route is a drawer root, so the route policy resolves this
+              leading action to the sidebar button, or to none beside a permanent sidebar. */}
           <View className="shrink-0 items-start">
-            <HeaderActionGroup actions={[leadingAction]} placement="left" />
+            <HeaderActionGroup actions={leadingAction ? [leadingAction] : []} placement="left" />
           </View>
           <View className="min-w-0 flex-1 items-start" pointerEvents="box-none">
             {agent ? (

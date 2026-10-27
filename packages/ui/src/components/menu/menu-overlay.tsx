@@ -7,7 +7,15 @@ import {
   useRef,
   useState,
 } from 'react';
-import { BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import {
+  BackHandler,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  type ViewInstance,
+} from 'react-native';
 import {
   GestureHandlerRootView,
   Pressable as GesturePressable,
@@ -67,10 +75,10 @@ function MenuOverlayRoot({
 }) {
   const [isPresented, setIsPresented] = useState(isVisible);
   if (isVisible && !isPresented) setIsPresented(true);
-  const items = useRef(new Set<View>());
+  const items = useRef(new Set<ViewInstance>());
   const isActive = useRef(isOpen);
   const focusFrame = useRef<number | undefined>(undefined);
-  const registerItem = useCallback((item: View) => {
+  const registerItem = useCallback((item: ViewInstance) => {
     items.current.add(item);
     return () => {
       items.current.delete(item);

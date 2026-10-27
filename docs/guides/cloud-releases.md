@@ -70,22 +70,34 @@ build numbers even when they share a release tag.
 4. Publish the files and notes to GitHub Releases.
 
 GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
-published manually from the matching tag using the same APK, `SHA256SUMS`, and release notes from
-the GitHub release.
+published manually from the matching tag using the same APK and `SHA256SUMS` from the GitHub release.
+Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
+Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
+download information; do not copy one platform's notes verbatim to the other. Keep version tags,
+artifact filenames, checksums, and technical identifiers unchanged.
 
-The public APK uses `production`, which enables Android update checks against GitCode's
-latest stable mobile release after app startup. Settings marks the update row with `NEW` when a newer
-APK is recorded. Tapping that row confirms the download when a newer APK is recorded and otherwise
-runs a fresh check; users confirm before the APK attachment opens in the system browser.
-Keep the matching GitCode release and APK published for the app to announce that version; it does
-not fall back to GitHub or the desktop website's release service. `production-google-play`
-explicitly disables this feature, and iOS always disables it regardless of profile. Store artifacts
-must be built with their own profiles rather than reusing this APK.
+GitHub's generated notes reuse pull request titles without translating them. Review their language
+and keep any manually curated replacement in English. Published GitHub release notes can be updated
+with `gh release edit <tag> --notes-file <english-notes.md>` without rebuilding or uploading the APK.
+The app shows these notes in its update dialog. Start both bodies with the `#` title and end them
+with the download section headed exactly `## 下载安装` (GitCode) or `## Download and Installation`
+(GitHub); the app removes the title and that final section, so put everything users should read in
+the app before it.
+When using `scripts/publishGitcodeRelease.ts`, supply the Chinese version as `release-notes.md` in
+its `RELEASE_DIRECTORY`; the script reads that file as-is and does not translate it.
+
+The public APK uses `production`, which enables GitCode update checks, in-app downloads and
+user-confirmed Android installation. Publish the matching GitCode stable release with both the
+APK and `SHA256SUMS` before clients can announce it; GitHub publication alone is insufficient.
+The shared update UI also serves store channels: Play checks actual installation eligibility,
+and iOS queries published App Store metadata. These channels open their store and never download
+the public APK. App Store metadata checks do not discover TestFlight builds. Each store's review,
+rollout and publication remain independent from the public APK release.
 
 Tags with a prerelease suffix are marked as prereleases on GitHub. Plain version tags publish regular
 releases. The workflow does not replace an existing attachment with different contents.
 
-The shared notes describe Android installation and explain that store distribution is independent.
+Both language versions describe Android installation and explain that store distribution is independent.
 The APK becomes public when this workflow succeeds; it does not wait for either store's review.
 Store links can be added to the release page after the listings are available.
 

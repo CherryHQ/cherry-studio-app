@@ -3,7 +3,7 @@ import { Button, Composer } from '@cherrystudio/ui/components';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
 import { useComposerMeta, useComposerState } from '@/frontend/components/Composer';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
@@ -17,7 +17,7 @@ type ChatInputPluginPopoverProps = {
   onClose: () => void;
   open: boolean;
   plugins: readonly ChatInputPlugin[];
-  returnFocusRef?: RefObject<View | null>;
+  returnFocusRef?: RefObject<ViewInstance | null>;
 };
 
 /** Reads composer context here; the portal receives presentation and callbacks only. */
@@ -32,7 +32,7 @@ export function ChatInputPluginPopover({
   const router = useRouter();
   const { inputRef } = useComposerMeta();
   const { draft } = useComposerState();
-  const initialFocusRef = useRef<View>(null);
+  const initialFocusRef = useRef<ViewInstance>(null);
   const selectionAccepted = useRef(false);
   const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);
   useEffect(() => {

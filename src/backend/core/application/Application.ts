@@ -20,7 +20,7 @@ import type { ServiceRegistry } from './serviceRegistry';
 class Application {
   private host: ApplicationHost | null = null;
 
-  /** Serializes install/uninstall so two generations never overlap. */
+  /** Serializes host transitions; resource owners fence work that outlives bounded disposal. */
   private transition: Promise<unknown> = Promise.resolve();
 
   /**
@@ -49,9 +49,9 @@ class Application {
   /**
    * Install a host, replacing any current one.
    *
-   * The outgoing host is disposed to completion before the incoming one starts,
-   * so a database connection or job claim is never held by two generations at
-   * once. Concurrent calls queue rather than interleave.
+   * The outgoing host completes its bounded disposal before the incoming one
+   * starts. Late initialization remains responsible for its captured resources
+   * and must honor its closing signal. Concurrent calls queue rather than interleave.
    *
    * If `start()` rejects, its resources are released before the host is cleared
    * and the original startup error propagates.

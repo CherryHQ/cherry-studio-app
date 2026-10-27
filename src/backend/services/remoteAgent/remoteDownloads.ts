@@ -115,7 +115,7 @@ export async function downloadAttachment(
           page.eof !== (offset + chunk.length === size)
         )
           throw new RemoteAgentError('PROTOCOL_ERROR');
-        handle.writeBytes(chunk);
+        handle.writeBytesSync(chunk);
         hash.update(chunk);
         offset += chunk.length;
       }
