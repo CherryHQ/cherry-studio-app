@@ -83,7 +83,7 @@ const chevronWidth = 20;
 function SidebarDeviceTitle() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { closeDrawer } = useSidebarActions('SidebarDeviceTitle');
+  const { closeDrawer, returnToChat } = useSidebarActions('SidebarDeviceTitle');
   const { source, remoteTarget, selectDevice } = useChatSource();
   const { connections } = useDesktopConnections();
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
@@ -108,14 +108,20 @@ function SidebarDeviceTitle() {
       id: 'device-local',
       checked: source === 'local',
       label: brand,
-      onPress: () => selectDevice(),
+      onPress: () => {
+        returnToChat();
+        selectDevice();
+      },
     },
     ...connections.map((connection) => ({
       group: 'devices',
       id: `device-${connection.id}`,
       checked: source === 'remote' && connection.id === remoteTarget.connectionId,
       label: connection.name,
-      onPress: () => selectDevice(connection.id),
+      onPress: () => {
+        returnToChat();
+        selectDevice(connection.id);
+      },
     })),
     {
       group: 'manage',

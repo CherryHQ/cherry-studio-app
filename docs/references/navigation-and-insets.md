@@ -67,19 +67,21 @@ Before enabling it, verify:
 - `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
-- The root Stack hosts the `(drawer)` group (header hidden) plus root-level `home`, `library`,
-  `agents`, `drawings`, `plugins`, `skills`, `onboarding`, `search`, `settings`,
-  and `paintings` flows. Directories with their own nested Stack hide the root header and draw the
-  page header inside that nested Stack.
-- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) and contains
-  only the `(chat)` scene. The chat header is therefore the only header that can open the sidebar,
-  and the full-width drawer gesture exists only on the chat surface. In expanded windows the drawer
-  is permanent instead: the sidebar sits beside chat, and neither the button nor the gesture exists.
-- The sidebar is the `frontend/appShell/sidebar` compound. Its destinations close the drawer and push
-  `library`, `agents`, `drawings`, `plugins`, `skills`, `search`, or `settings` onto the root Stack.
-  Their root headers lead with back; popping returns to the exact chat route that opened them. A cold-start
-  deep link with no back history replaces to `/` when that leading action is pressed.
-- Settings is a normal root-stack card with its own nested Stack, not a modal or form sheet. Its
+- The root Stack hosts the `(drawer)` group (header hidden) plus window-level `home`, `onboarding`,
+  `search`, `files/[fileEntryId]`, `chat-share`, and `document-export` flows, which cover the whole
+  window, sidebar included.
+- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`). Its only
+  scene, `(main)`, is the content region: a Stack whose initial route is `(chat)`, with `agents`,
+  `drawings`, `paintings`, `plugins`, `skills`, `library`, `settings`, and `trash` above it.
+  Directories with their own nested Stack hide the `(main)` header and draw the page header inside
+  that nested Stack. Only the chat header can open the overlay sidebar, and the full-width drawer
+  gesture is enabled only while the chat is focused.
+- The sidebar is the `frontend/appShell/sidebar` compound. In a compact window its destinations
+  close the drawer and push onto `(main)` above the chat; their root headers lead with back, and
+  popping returns to the chat that opened them. A cold-start deep link lands above the chat because
+  `(chat)` is the initial route. In a wide window the sidebar stays beside every page; see
+  [Window Sizes](#window-sizes).
+- Settings is a normal content-region card with its own nested Stack, not a modal or form sheet. Its
   management and detail pages use back navigation. Its one-time pairing and import workflows use
   replacement navigation, including opening desktop chat from device details.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
@@ -91,27 +93,34 @@ Before enabling it, verify:
 ## Window Sizes
 
 `useWindowClass` in the [app-shell layout](../../src/frontend/appShell/layout/README.md) resolves
-each window to `compact`, `medium`, or `expanded` from its width, both horizontal safe areas, and the
-rendered text size. Device identity never decides layout, so iPad Split View, Android tablets, and
-foldable inner displays follow the width they actually have.
+each window to `compact` or `wide` from its width, both horizontal safe areas, and the rendered text
+size. Device identity never decides layout, so iPad Split View, Android tablets, and foldable inner
+displays follow the width they actually have. An iPad 11" or 13" is wide in both orientations; an
+iPad mini and an iPhone Duo's inner display are compact upright and wide on their side.
 
-Compact and medium windows keep the single-scene navigation and chat-only overlay drawer. The drawer
-leaves at least 64 points of chat visible and is capped at 400 points on wider windows. Expanded
-windows make the same drawer permanent: a 280-point sidebar column beside chat, without the chat
-header's sidebar and new-chat buttons, which the sidebar already provides. Switching classes during
-rotation or resizing keeps the chat tree mounted. Sidebar destinations still push full-screen root
-routes that cover the sidebar until they return to chat, except Files.
+Compact windows keep the overlay drawer. It leaves at least 64 points of chat visible and is capped
+at 400 points. A wide window has one structure: a left column beside one content region. The
+left column is the 280-point sidebar, or in its place the file pane or conversation search, at the
+file pane width. The content region holds the chat or one first-level destination. The chat header
+drops its sidebar and new-chat buttons, which the sidebar provides. First-level destinations lead
+with nothing (`RouteHeaderProvider rootAction="none"`), and the sidebar marks the open one: a
+destination opened from the chat pushes above it without animation, and another destination takes
+its place, so moving between sidebar entries builds no back history. Pages beneath a destination
+still push and lead with back. Opening a conversation or a new chat, or Files, first pops the
+content region back to the chat. Switching classes during rotation or resizing keeps every page
+mounted: a destination in the content region becomes a pushed page with back, and back again.
 
-In medium and expanded windows, Files opens the [file pane](../../src/frontend/appShell/pane/README.md)
-beside the current chat instead of pushing `/library`: the `(chat)` layout lays out the pane and the
-chat stack side by side, and file previews replace the list inside the pane. The pane belongs to the
-drawer group, so it hides with a desktop chat source and in compact windows, and routes pushed over
-the drawer keep opening their own viewer page. A pane preview can expand over the chat's space;
-the chat stays mounted behind it. While the chat is focused, Android back first returns an expanded
-preview beside the chat, then leaves the preview, then the pane.
+In wide windows, Files opens the [file pane](../../src/frontend/appShell/pane/README.md) beside the
+current chat instead of pushing `/library`. The pane takes the left column while the chat is
+focused, and the sidebar returns when the pane closes or a page covers the chat. File previews
+replace the list inside the pane. The pane belongs to the drawer group, so it hides with a desktop
+chat source and in compact windows, and pages above the chat keep opening their own viewer page. A
+pane preview can expand over the chat's space; the chat stays mounted behind it. While the chat is
+focused, Android back first returns an expanded preview beside the chat, then leaves the preview,
+then the pane. On a partly folded iPhone Duo the left column, sidebar or pane, ends at the fold.
 
 The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
-content to 800 points and form/management content to 720, inside the horizontal safe area. They
+and form/management content to 720 points, inside the horizontal safe area. They
 retain the same mounted page tree during rotation and resizing. Galleries measure their own list
 viewport and grow their column count from two as space permits; image previews and picker grids
 also measure their own region instead of assuming it fills the window.
@@ -295,8 +304,8 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 - iOS interactive pop and Android system back are not the same product contract; do not flatten them into one JavaScript gesture.
 
 Current horizontal gestures, such as Session-row swipe actions, start inside content areas. The
-chat-only drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); non-chat
-routes live above it in the root Stack and cannot expose it. The drawer pan commits only after
+overlay drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen) only while the
+chat is focused; pages pushed above it lead with back and cannot expose it. The drawer pan commits only after
 the platform scroll threshold, so native horizontal scroll surfaces inside chat (markdown tables,
 code blocks, math) claim their own touches first and cancel the drawer. On Android, the chat
 gesture still coexists with system edge back and must be re-validated whenever predictive back is
@@ -307,9 +316,10 @@ enabled.
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
 - Only the chat route exposes the sidebar button and full-width drawer gesture; every other route
-  exposes back and returns to chat. In expanded windows the permanent sidebar replaces both, and
-  resizing across the threshold keeps the chat, its draft, and its scroll position.
-- In medium and expanded windows, Files and file previews open beside the chat without changing its
+  exposes back and returns to chat. In wide windows the permanent sidebar replaces both, first-level
+  destinations lead with nothing, and resizing across the threshold keeps the chat, its draft, its
+  scroll position, and any open destination.
+- In wide windows, Files and file previews open beside the chat without changing its
   route, draft, or scroll position; closing and reopening the pane keeps the list's place.
   Expanding a preview and returning to chat keeps the same draft and scroll position, and Add to
   current chat attaches the file once without changing the draft text.

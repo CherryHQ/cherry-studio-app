@@ -11,11 +11,13 @@ This module owns Expo Router header adapters used by the app screens.
 ## Organization
 
 - Route layouts declare the root screen's leading behavior with `RouteHeaderProvider`. The root
-  stack uses back and the chat-only drawer stack uses the drawer action.
-- Only chat lives inside `app/(drawer)`, so only `MainHeader` can resolve to the drawer action.
-  Business screens live in the root Stack, declare only titles, right-side actions, and exceptional
-  back interception, and inherit back from the root provider. When no navigation history exists,
-  the default back action replaces to `/`.
+  stack uses back, the `(chat)` stack uses the drawer action, and the content region beside the
+  sidebar uses back in compact windows and `none` in wide ones, where the persistent sidebar already
+  moves between first-level pages. Any screen above a stack's root resolves to back, and a page that
+  intercepts back keeps it even at a `none` root.
+- Only `MainHeader` can resolve to the drawer action. Business screens declare only titles,
+  right-side actions, and exceptional back interception, and inherit their leading action from the
+  provider. When no navigation history exists, the default back action replaces to `/`.
 - The right side defaults to empty. Business screens choose `menu`, `icon`, or `label` according to
   the action semantics; multiple secondary actions belong in a menu, while save/done remain direct.
 - Management selection uses `RouteHeader.selection`: the header replaces the normal title and

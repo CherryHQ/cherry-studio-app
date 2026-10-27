@@ -1,12 +1,15 @@
 # File Pane
 
-In medium and expanded windows (see [layout](../layout/README.md)), the sidebar's Files destination
-and every file preview open in a pane beside the current chat instead of covering it.
+In wide windows (see [layout](../layout/README.md)), the sidebar's Files destination and every file
+preview open in a pane beside the current chat instead of covering it. The pane takes the window's
+left column: while it is open beside a focused chat the sidebar steps aside, and it returns when the
+pane closes or a page covers the chat.
 
 - `FilePaneProvider` sits in the drawer layout so the sidebar and chat share one pane state:
   whether it is open and which file it previews. It is available only for the local chat source,
-  outside compact windows or where a fold runs across the window. Routes pushed over the drawer have no provider and keep opening
-  their own pages.
+  outside compact windows or where a fold runs across the window. Pages above the chat in the content
+  region share the provider but keep opening their own viewer pages; `useOpenFileEntry` uses the
+  pane only while the chat is focused.
 - `FilePaneHost` lays the pane out beside the chat stack in the `(chat)` layout, which composes the
   library and viewer pages. It reads the complete native layout snapshot and splits with `resolvePaneSplit`,
   so on a foldable the pane and chat meet at the fold, side by side or stacked. Stacked, the

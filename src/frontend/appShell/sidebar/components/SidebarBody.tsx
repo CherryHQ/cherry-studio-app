@@ -18,6 +18,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
+import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarRecents } from './SidebarRecents';
@@ -87,8 +88,9 @@ function SidebarBodyContent({
   const { t } = useTranslation();
   const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
     useSidebarActions('SidebarBody');
-  const { source } = useChatSource();
+  const { isChatFocused, source } = useChatSource();
   const pane = useFilePane();
+  const destination = useSidebarDestination();
   const { progress } = useSidebarSelection();
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const navigationStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.get() * 0.45 }));
@@ -104,6 +106,7 @@ function SidebarBodyContent({
             onPress={navigateAgents}
             testID="sidebar-agents"
             disabled={disabled}
+            isSelected={destination === 'agents'}
           />
           <SidebarNavRow
             icon={PaletteIcon}
@@ -111,6 +114,7 @@ function SidebarBodyContent({
             onPress={openPaintings}
             testID="sidebar-paintings"
             disabled={disabled}
+            isSelected={destination === 'paintings'}
           />
           <SidebarNavRow
             icon={BoxesIcon}
@@ -118,6 +122,7 @@ function SidebarBodyContent({
             onPress={openPlugins}
             testID="sidebar-plugins"
             disabled={disabled}
+            isSelected={destination === 'plugins'}
           />
           <SidebarNavRow
             icon={ToolCaseIcon}
@@ -125,6 +130,7 @@ function SidebarBodyContent({
             onPress={openSkills}
             testID="sidebar-skills"
             disabled={disabled}
+            isSelected={destination === 'skills'}
           />
           <SidebarNavRow
             icon={FolderIcon}
@@ -132,7 +138,10 @@ function SidebarBodyContent({
             onPress={openLibrary}
             testID="sidebar-library"
             disabled={disabled}
-            isSelected={Boolean(pane?.isAvailable && pane.isOpen)}
+            isSelected={
+              destination === 'library' ||
+              Boolean(isChatFocused && pane?.isAvailable && pane.isOpen)
+            }
           />
         </Animated.View>
       ) : null}

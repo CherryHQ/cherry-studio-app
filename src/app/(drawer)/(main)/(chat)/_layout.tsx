@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 
-import { headerScreenOptions } from '@/frontend/appShell/header';
+import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import { getTransparentHeaderStyle } from '@/frontend/appShell/navigation';
 import { type FilePaneFile, FilePaneHost } from '@/frontend/appShell/pane';
 import { FileViewerPane } from '@/frontend/features/files';
@@ -17,17 +17,20 @@ export default function ChatStackLayout() {
   const [foregroundColor, chatBackgroundColor] = useThemeColor(['foreground', 'chat-background']);
 
   return (
-    <FilePaneHost library={<FileLibraryScreen />} renderFile={renderPaneFile}>
-      <Stack
-        screenOptions={{
-          ...headerScreenOptions,
-          contentStyle: { backgroundColor: chatBackgroundColor },
-          headerStyle: getTransparentHeaderStyle(),
-          headerTintColor: foregroundColor,
-          headerTransparent: isLiquidGlassAvailable,
-        }}
-      />
-    </FilePaneHost>
+    // Only the chat leads with the sidebar; every other page in the content region leads with back.
+    <RouteHeaderProvider rootAction="drawer">
+      <FilePaneHost library={<FileLibraryScreen />} renderFile={renderPaneFile}>
+        <Stack
+          screenOptions={{
+            ...headerScreenOptions,
+            contentStyle: { backgroundColor: chatBackgroundColor },
+            headerStyle: getTransparentHeaderStyle(),
+            headerTintColor: foregroundColor,
+            headerTransparent: isLiquidGlassAvailable,
+          }}
+        />
+      </FilePaneHost>
+    </RouteHeaderProvider>
   );
 }
 

@@ -10,6 +10,8 @@ export {
   useFoldRegion,
   useFoldRegionLayout,
   useIsFoldRegionLayoutCurrent,
+  useWindowFoldRegion,
+  WindowFoldRegion,
 } from './FoldRegion';
 export { PaneChromeProvider, usePaneChrome } from './PaneChrome';
 export { isAcross, resolvePaneSplit, type PaneSplit } from './paneSplit';

@@ -56,3 +56,15 @@ export type AppSearchRequest<TItem, TFilters = undefined, TFilterContext = undef
   renderItem: (item: TItem) => ReactNode;
   search: (input: AppSearchInput<TFilters>) => AppSearchPage<TItem> | Promise<AppSearchPage<TItem>>;
 };
+
+/**
+ * A search kept beside other content. Selecting reports the item without closing the panel, so the
+ * caller decides what it opens and whether the panel stays.
+ */
+export type AppSearchPanelProps<TItem> = {
+  request: AppSearchRequest<TItem>;
+  onSelect: (item: TItem) => void;
+  onClose: () => void;
+  /** Marks the result already open beside the panel. */
+  isSelected?: (item: TItem) => boolean;
+};

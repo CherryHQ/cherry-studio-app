@@ -25,7 +25,7 @@ export function PaintingOverviewChrome({
 }) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
-  const leftActions = useMemo(() => [leadingAction], [leadingAction]);
+  const leftActions = useMemo(() => (leadingAction ? [leadingAction] : []), [leadingAction]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {

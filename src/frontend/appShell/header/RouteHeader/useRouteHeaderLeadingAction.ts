@@ -13,15 +13,16 @@ import type { RouteHeaderRootAction } from './RouteHeader.types';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
 
-/** Resolves drawer child screens to back and route roots to their declared action. */
+/** Resolves child screens to back and route roots to their declared action. */
 export function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
   const rootAction = useRouteHeaderRootAction();
   const isStackChild = useNavigationState((state) => state.index > 0);
 
-  return rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
+  return (rootAction === 'drawer' || rootAction === 'none') && isStackChild ? 'back' : rootAction;
 }
 
-export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarAction {
+/** The header's leading action, or undefined when the route root leads with nothing. */
+export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarAction | undefined {
   const { t } = useTranslation();
   const router = useRouter();
   const openDrawer = useOpenDrawer();
@@ -74,5 +75,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
     [action, goBack, openDrawer, t],
   );
 
-  return pane && !onBack ? pane.leadingAction : routeAction;
+  if (pane && !onBack) return pane.leadingAction;
+  // A page that intercepts back keeps it even at a root that otherwise leads with nothing.
+  return routeKind === 'none' && !onBack ? undefined : routeAction;
 }

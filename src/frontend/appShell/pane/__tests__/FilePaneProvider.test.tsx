@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FilePaneProvider, useFilePane } from '../FilePaneProvider';
 
-let mockWindowClass = 'expanded';
+let mockWindowClass = 'wide';
 let mockSource = 'local';
 let mockIsLayoutCurrent = true;
 let mockFold: { x: number; y: number; width: number; height: number; isActive: boolean } | null =
@@ -56,14 +56,14 @@ function narrow() {
 }
 
 function expand() {
-  mockWindowClass = 'expanded';
+  mockWindowClass = 'wide';
   update();
 }
 
 const file = { entryId: '00000000-0000-7000-8000-000000000001' as never };
 
 beforeEach(() => {
-  mockWindowClass = 'expanded';
+  mockWindowClass = 'wide';
   mockSource = 'local';
   mockIsLayoutCurrent = true;
   mockFold = null;
