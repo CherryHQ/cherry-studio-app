@@ -3,8 +3,8 @@ import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
+import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
-import { PI_IMAGE_TOOL_NAME } from '../piDurableImageModel';
 import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 import { piDurableSetupError } from '../piDurableStream';
 
@@ -249,12 +249,12 @@ describe('Pi turn projection', () => {
     const imageTool = {
       ...writeFile,
       ref: { source: 'builtin', capabilityId: 'image_generation' },
-      providerName: PI_IMAGE_TOOL_NAME,
+      providerName: DURABLE_IMAGE_TOOL_NAME,
     };
     const scheduled: AssistantMessage = {
       ...call('', 2000),
       api: scenario.api,
-      content: [{ type: 'toolCall', id: 'call', name: PI_IMAGE_TOOL_NAME, arguments: {} }],
+      content: [{ type: 'toolCall', id: 'call', name: DURABLE_IMAGE_TOOL_NAME, arguments: {} }],
     };
     const terminal: AssistantMessage = {
       ...scheduled,
@@ -284,7 +284,7 @@ describe('Pi turn projection', () => {
             {
               role: 'toolResult',
               toolCallId: 'call',
-              toolName: PI_IMAGE_TOOL_NAME,
+              toolName: DURABLE_IMAGE_TOOL_NAME,
               content: [{ type: 'text', text: failure.message }],
               details: {
                 kind: 'cherry.tool-result',

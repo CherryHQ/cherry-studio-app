@@ -123,3 +123,26 @@ test('disposal aborts an in-flight import and releases the share', async () => {
   expect(observed?.aborted).toBe(true);
   expect(native.releaseEntry).toHaveBeenCalledWith(id);
 });
+
+test('disposal retains staging even if the last attachment finishes importing successfully', async () => {
+  const { runtime, native, importFiles } = setup();
+  let finish!: () => void;
+  importFiles.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve([file]);
+      }),
+  );
+  const claim = runtime.module.claimNext();
+  const rejected = expect(claim).rejects.toThrow('System share import failed');
+  await Promise.resolve();
+
+  const disposing = runtime.dispose();
+  finish();
+  await rejected;
+  await disposing;
+
+  expect(native.completeEntry).not.toHaveBeenCalled();
+  expect(native.releaseEntry).toHaveBeenCalledWith(id);
+  expect(runtime.module.isReceiving()).toBe(false);
+});

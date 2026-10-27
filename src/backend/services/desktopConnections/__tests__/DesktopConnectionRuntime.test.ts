@@ -814,6 +814,28 @@ describe('DesktopConnectionRuntime', () => {
     expect(session.isOpen).toBe(false);
   });
 
+  it('forgets an earlier disconnect once the same pairing completes again, and on removal', async () => {
+    const disconnected = new Set<string>();
+    manager.configure(store, {
+      isDisconnected: (connectionId) => disconnected.has(connectionId),
+      setDisconnected: (connectionId, value) => {
+        if (value) disconnected.add(connectionId);
+        else disconnected.delete(connectionId);
+      },
+    });
+    manager.disconnect(id);
+    connect.mockResolvedValueOnce(
+      createSession({ 'connection.authenticate': () => ({ authorization: { grants } }) }) as never,
+    );
+
+    await runtime.pair(pairing, signal());
+    expect(disconnected.has(id)).toBe(false);
+
+    manager.disconnect(id);
+    await runtime.remove(id, signal());
+    expect(disconnected.has(id)).toBe(false);
+  });
+
   it.each([
     new RemoteTransportError('timeout', 'Timed out'),
     new RemoteFailureError({ reason: 'INTERNAL', message: 'Desktop failed' }),

@@ -11,7 +11,6 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BackHandler } from 'react-native';
 import {
   cancelAnimation,
   ReduceMotion,
@@ -25,6 +24,7 @@ import type {
   ConversationSource,
   ConversationSummary,
 } from '@/frontend/appShell/conversation';
+import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import { areAllSelected, toggleSelection } from '@/frontend/components/Selection';
 
 import { useSidebarPresence } from './hooks/useSidebarPresence';
@@ -75,14 +75,8 @@ export function SidebarSelectionProvider({
   useEffect(() => {
     if (!isVisible) store.exit();
   }, [isVisible, store]);
-  useEffect(() => {
-    if (!isVisible || !isSelecting) return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      store.exit();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [isSelecting, isVisible, store]);
+  // A permanent sidebar stays mounted under routes the chat pushes, which keep back for themselves.
+  useFocusedBackPress(() => store.exit(), isVisible && isSelecting);
 
   const requestDelete = useCallback(() => {
     const state = store.getSnapshot();

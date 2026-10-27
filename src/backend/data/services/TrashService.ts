@@ -10,7 +10,6 @@ import {
   type TrashSummary,
 } from '@/shared/data/api/schemas/trash';
 
-import { FileLibraryService } from './FileLibraryService';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
 const trashRows = sql`(
@@ -84,9 +83,5 @@ export class TrashService {
       SELECT id, kind, title, deleted_at AS "deletedAt", size, thumbnail_entry_id AS "thumbnailEntryId" FROM ${trashRows} WHERE ${condition ?? sql`1 = 1`}
     `,
     );
-  }
-
-  restore(kind: TrashKind, id: string, signal?: AbortSignal) {
-    return new FileLibraryService(this.dbService).restore(kind, id, signal);
   }
 }

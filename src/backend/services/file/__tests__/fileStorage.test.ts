@@ -1,13 +1,10 @@
 import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import { type FileEntry, FileEntrySchema, fileEntryUrl } from '@/shared/data/types/file';
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
+import { type FileEntry, FileEntrySchema } from '@/shared/data/types/file';
 
 import { imageThumbnailCacheKey } from '../filePreviewCache';
 import {
   createInternalEntry,
-  createMessageParts,
   deleteInternalEntry,
   deleteInternalFile,
   discardInternalEntries,
@@ -161,21 +158,17 @@ describe('fileStorage', () => {
     testState.files.set('file:///picker/brief.PDF', 42);
     const entries = createEntryStore();
 
-    const managed = await createMessageParts(entries, [
-      createFilePart('file:///picker/brief.PDF', 'Quarterly Brief.PDF'),
-    ]);
+    const entry = await importFile(entries, 'file:///picker/brief.PDF', 'Quarterly Brief.PDF');
 
-    expect(managed.entries).toEqual([
-      {
-        createdAt: 1,
-        filename: 'Quarterly Brief.pdf',
-        id: '00000000-0000-7000-8000-000000000001',
-        mediaType: 'application/pdf',
-        provenance: 'imported',
-        size: 42,
-        updatedAt: 1,
-      },
-    ]);
+    expect(entry).toEqual({
+      createdAt: 1,
+      filename: 'Quarterly Brief.pdf',
+      id: '00000000-0000-7000-8000-000000000001',
+      mediaType: 'application/pdf',
+      provenance: 'imported',
+      size: 42,
+      updatedAt: 1,
+    });
     expect(entries.create).toHaveBeenCalledWith(
       {
         filename: 'Quarterly Brief.pdf',
@@ -189,26 +182,15 @@ describe('fileStorage', () => {
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf'),
     ).toBe(true);
-    const managedPart = managed.parts[0];
-    expect(managedPart.type).toBe('file');
-    if (managedPart.type !== 'file') {
-      throw new Error('Expected a managed file part');
-    }
-    expect(managedPart.url).toBe(fileEntryUrl(managed.entries[0].id));
-    expect(managedPart.url).toBe('cherry://file/00000000-0000-7000-8000-000000000001');
-    expect(managedPart.mediaType).toBe('application/pdf');
-    expect(readCherryMeta(managedPart)?.fileEntryId).toBe('00000000-0000-7000-8000-000000000001');
     expect(onFileChange).toHaveBeenCalledTimes(1);
   });
 
   test('stores extensionless files without a trailing dot', async () => {
     testState.files.set('file:///picker/README', 7);
 
-    const managed = await createMessageParts(createEntryStore(), [
-      createFilePart('file:///picker/README', 'README'),
-    ]);
+    const entry = await importFile(createEntryStore(), 'file:///picker/README', 'README');
 
-    expect(managed.entries[0]).toEqual(expect.objectContaining({ filename: 'README' }));
+    expect(entry).toEqual(expect.objectContaining({ filename: 'README' }));
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001'),
     ).toBe(true);
@@ -276,11 +258,9 @@ describe('fileStorage', () => {
   test('uses the source extension when a camera display name has none', async () => {
     testState.files.set('file:///camera/IMG_0001.JPG', 128);
 
-    const managed = await createMessageParts(createEntryStore(), [
-      createFilePart('file:///camera/IMG_0001.JPG', 'Photo'),
-    ]);
+    const entry = await importFile(createEntryStore(), 'file:///camera/IMG_0001.JPG', 'Photo');
 
-    expect(managed.entries[0]).toEqual(expect.objectContaining({ filename: 'Photo.jpg' }));
+    expect(entry).toEqual(expect.objectContaining({ filename: 'Photo.jpg' }));
   });
 
   test('folds an unsafe extension into the filename so writes and reads agree', async () => {
@@ -371,28 +351,6 @@ describe('fileStorage', () => {
     await expect(getFileUri(entries, entry.id)).resolves.toBe(uri);
   });
 
-  test('removes every copied destination when a later copy fails partially', async () => {
-    testState.files.set('file:///picker/first.txt', 1);
-    testState.files.set('file:///picker/second.txt', 2);
-    testState.failures.add('file:///picker/second.txt');
-    const entries = createEntryStore();
-
-    await expect(
-      createMessageParts(entries, [
-        createFilePart('file:///picker/first.txt', 'first.txt'),
-        createFilePart('file:///picker/second.txt', 'second.txt'),
-      ]),
-    ).rejects.toThrow('copy failed');
-
-    expect([...testState.files.keys()]).toEqual([
-      'file:///picker/first.txt',
-      'file:///picker/second.txt',
-    ]);
-    expect(entries.delete).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000001');
-    // The committed first file is announced, then its compensating discard is announced.
-    expect(onFileChange).toHaveBeenCalledTimes(2);
-  });
-
   test('writes generated base64 and persists its internal entry', async () => {
     const entries = createEntryStore();
     const entry = await createInternalEntry(entries, {
@@ -441,7 +399,7 @@ describe('fileStorage', () => {
     });
     expect(testState.files.has('file:///cache/OfficeJobs/output.docx')).toBe(true);
     expect(onFileChange).toHaveBeenCalledWith(
-      expect.arrayContaining(['/files/library', '/files/entries', `/files/entries/${entry.id}`]),
+      expect.arrayContaining(['/files/library', `/files/entries/${entry.id}`]),
     );
   });
 
@@ -887,13 +845,14 @@ function createEntryStore() {
   };
 }
 
-function createFilePart(url: string, filename: string): CherryMessagePart {
-  return {
-    filename,
+function importFile(entries: Parameters<typeof createInternalEntry>[0], uri: string, name: string) {
+  return createInternalEntry(entries, {
     mediaType: 'application/octet-stream',
-    type: 'file',
-    url,
-  };
+    name,
+    provenance: 'imported',
+    source: 'uri',
+    uri,
+  });
 }
 
 function internalEntry(): FileEntry {

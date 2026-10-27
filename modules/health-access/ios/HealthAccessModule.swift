@@ -187,6 +187,8 @@ struct HealthQueryRecord: Record {
   @Field var mode: String = "samples"
   @Field var granularity: String = "summary"
   @Field var workoutId: String = ""
+  /// Statistics only: a fixed HealthKit unit string instead of the user's preferred unit.
+  @Field var unit: String = ""
 }
 
 struct HealthRecordRequest: Record {

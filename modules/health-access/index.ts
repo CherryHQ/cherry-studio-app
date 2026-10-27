@@ -23,6 +23,8 @@ export type HealthQueryOptions = {
   mode: 'samples' | 'statistics';
   granularity: 'summary' | 'day';
   workoutId: string;
+  /** Statistics only: one of the app's fixed units instead of the user's preferred unit. */
+  unit?: 'count' | 'count/min' | 'kcal' | 'm' | 'ms';
 };
 export type HealthRecordOptions = {
   id: string;

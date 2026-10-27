@@ -7,6 +7,10 @@ Callers mount `PaintingInputProvider` inside their `ComposerSessionProvider`, ar
 image controls. The provider retains reference intent and per-model/per-mode parameter drafts across
 control switches, and holds the local model selection so switching presentations does not reset it.
 
+`paintingGenerationInput.ts` is a logic-only sub-entry: hooks and their tests import it directly to
+build a generation request without loading the composer UI. It is deliberately not re-exported
+from the module index.
+
 `PaintingInput` is the Agent-chat presentation: attachments above the field, then a toolbar with the
 + menu, the settings action, and the model pill. Agent chat supplies a controlled `modelSelection`,
 which permits switching between text and image models.

@@ -14,7 +14,12 @@ import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
-import type { RuntimeDurableSubmission, RuntimeDurableTurn, RuntimeLane } from '../durableTypes';
+import {
+  DURABLE_IMAGE_TOOL_NAME,
+  type RuntimeDurableSubmission,
+  type RuntimeDurableTurn,
+  type RuntimeLane,
+} from '../durableTypes';
 import { RuntimeJsonValueSchema, RuntimeOptionsSchema } from '../runtimeSchemas';
 import {
   createDeniedToolResult,
@@ -31,7 +36,6 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
-import { PI_IMAGE_TOOL_NAME } from './piDurableImageModel';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -327,7 +331,7 @@ export function projectPiTurn(options: {
       const imageTool =
         message.api === 'cherry-image'
           ? parts.findLast(
-              (part) => part.type === 'tool' && part.providerName === PI_IMAGE_TOOL_NAME,
+              (part) => part.type === 'tool' && part.providerName === DURABLE_IMAGE_TOOL_NAME,
             )
           : undefined;
       // The image scheduling message carries no new provider response. Its tool receipt owns

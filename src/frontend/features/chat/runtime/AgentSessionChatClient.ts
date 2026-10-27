@@ -23,8 +23,6 @@ export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
 
 export type AgentSessionChatState = {
   isSubmitting?: boolean;
-  /** Answer awaiting its replacement turn; rendered as pending until it arrives. */
-  retryingMessageId?: string;
   activeTurn: AgentTurnView | null;
   queuedInputs: readonly AgentQueuedInput[];
   enteringUserMessageId?: string;
@@ -370,7 +368,6 @@ export class AgentSessionChatClient {
       this.updateState(entry, {
         ...entry.state,
         isSubmitting: false,
-        retryingMessageId: undefined,
       });
       if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
         this.stopObservation(entry);
@@ -574,7 +571,6 @@ export class AgentSessionChatClient {
     }
     this.updateState(entry, {
       isSubmitting: entry.state.isSubmitting,
-      retryingMessageId: entry.state.retryingMessageId,
       activeTurn: snapshot.activeTurn,
       queuedInputs: snapshot.queuedInputs,
       ...(snapshot.activeUserMessage

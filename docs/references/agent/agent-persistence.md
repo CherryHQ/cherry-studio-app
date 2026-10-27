@@ -27,8 +27,9 @@ record for mobile-originated Agent Sessions only.
 - A message-centric `AgentSessionStore` port: the protocol's Turn is a Host projection over the
   assistant message plus Host-held live state. Starting from a Draft atomically inserts the Session
   and its first user/assistant message pair.
-- A `SqliteAgentSessionStore` adapter that is the production `AgentSessionStore` binding;
-  `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
+- A `SqliteAgentSessionStore` adapter that is the only `AgentSessionStore` binding. Store and Host
+  tests run it over a real migrated in-memory database rather than a second adapter, so they
+  exercise the same SQL, foreign keys, and workspace checks as production.
 - Agent CRUD plus cursor-paginated Session and transcript reads through the Data API, and an
   Agent-table-backed `AgentDefinitionSource` used by the production Host. Session renames and
   removals delegate to the Host so an active turn is cancelled and drained before the row is
@@ -407,6 +408,5 @@ projection:
 - Row ↔ view mapping converts epoch millis to ISO strings and validates `data` against the
   protocol schema on read paths that leave the store.
 
-A shared store conformance suite runs against both adapters, mirroring the Runtime conformance
-approach. The Agent Protocol, including `AgentTurnView`, its events, and its invariants, remains
+The store suite runs against that migrated database. The Agent Protocol, including `AgentTurnView`, its events, and its invariants, remains
 independent of the Host-private storage boundary.

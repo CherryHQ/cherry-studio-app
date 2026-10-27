@@ -15,7 +15,7 @@ import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
 } from '../../sessionStore/AgentSessionStore';
-import type { StoredSkillActivation } from '../../sessionStore/skillActivations';
+import type { StoredSkillActivation } from '../../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';

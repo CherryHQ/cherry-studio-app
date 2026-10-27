@@ -18,13 +18,15 @@ hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
 3. **Cherry owns every blob.** Picker, camera, and provider URIs are transient import sources whose
    bytes are copied into `Data/Files`. No entry references a path outside the sandbox.
 4. **Import happens when the file enters the app.** Painting imports at generation time; the Agent
-   Composer imports when an attachment enters its managed draft. Import is also the only place an
+   Composer imports when an attachment enters its managed draft; a system share imports when the
+   share is claimed, through the same `importManagedFile` as a picked file. Import is also the only place an
    image is resized: a user-imported JPEG, PNG, or WebP above about 2.2 MB, far below the strictest
    provider per-image limit because every request replays the conversation's images, is re-encoded
    once to a 2048-pixel long edge (an oversized PNG becomes a JPEG and is renamed to match), so the
    managed blob is already what a model request can carry and no request path compresses, caches a
    derivative, or retries on a provider size error. GIFs, generated images, and images that cannot
-   be re-encoded are stored untouched; send-time attachment limits remain their guard.
+   be re-encoded are stored untouched; send-time attachment limits remain their guard. Copying an
+   existing file into a workspace is not an import: the copy keeps its bytes and provenance.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
    every file it pointed at in place.
 6. **The user decides which files to delete.** Removing a composer attachment removes its reference,
@@ -371,8 +373,8 @@ image is named after its prompt through `readableFilename` (`sunset over the bay
 numeric suffix for siblings from one request). The `painting-{id}` fallback in `fileStorage` is a
 last resort for a caller that supplies no name, not a naming scheme.
 
-Office generation and editing tools publish bytes through `fileContent.createBytesEntry` and the
-`'bytes'` source of `createInternalEntry`, with generated provenance and the usual artifact envelope.
+Office generation and editing tools publish their finished output file through
+`fileContent.createFileEntry` and the `'uri'` source of `createInternalEntry`, with generated provenance and the usual artifact envelope.
 They read managed sources and images through `WorkspaceFileAccess.resolveRead`, requiring a
 conversation grant or live membership in the selected workspace. Outputs are separate logical files
 in that workspace, or at the library root without a workspace. Storage validates the workspace

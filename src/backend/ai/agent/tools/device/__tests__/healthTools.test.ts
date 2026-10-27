@@ -1,5 +1,4 @@
-import type { HealthKit } from 'react-native-nitro-healthkit';
-
+import type { HealthDataReaderLoader } from '@/backend/services/device';
 import type { PermissionStatuses, PermissionsModule } from '@/shared/contracts';
 
 import { createHealthTools } from '../healthTools';
@@ -20,11 +19,10 @@ function setup(statuses: PermissionStatuses, requested: PermissionStatuses = {})
     getStatuses: jest.fn(async () => statuses),
     request: jest.fn(async () => requested),
   } satisfies Pick<PermissionsModule, 'getStatuses' | 'request'>;
-  const native = {
-    getQuantityData: jest.fn(async (_identifier: string) => []),
-    getAggregatedQuantity: jest.fn(async () => 0),
-  };
-  const load = jest.fn(async () => native as unknown as HealthKit);
+  const native = { query: jest.fn(async (_type: string, _options: unknown) => ({ data: null })) };
+  const load = jest.fn(
+    async () => native as unknown as Awaited<ReturnType<HealthDataReaderLoader>>,
+  );
   const [summary] = createHealthTools({ devicePermissions: permissions }, load);
   return {
     permissions,
@@ -55,9 +53,7 @@ describe('health tool permission selection', () => {
       ['health.steps.read'],
       expect.any(AbortSignal),
     );
-    expect(native.getQuantityData.mock.calls.map(([identifier]) => identifier)).toEqual([
-      'HKQuantityTypeIdentifierStepCount',
-    ]);
+    expect(native.query.mock.calls.map(([type]) => type)).toEqual(['steps']);
   });
 
   test('continues with granted metrics after another metric is refused', async () => {
@@ -74,7 +70,7 @@ describe('health tool permission selection', () => {
       unavailableMetrics: ['heartRate'],
       metricStates: { steps: 'no-data' },
     });
-    expect(native.getQuantityData).toHaveBeenCalledTimes(1);
+    expect(native.query).toHaveBeenCalledTimes(1);
   });
 
   test('an iOS completed request allows an empty query without claiming zero activity', async () => {

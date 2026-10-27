@@ -270,7 +270,6 @@ export function createLocalConversationProjector(input: {
             ]
           : [],
         enteringMessageKey: state.enteringUserMessageId,
-        retryingMessageKey: state.retryingMessageId,
         hasHistoryBeforeExecution: state.hasHistoryBeforeActiveTurn,
       };
     },

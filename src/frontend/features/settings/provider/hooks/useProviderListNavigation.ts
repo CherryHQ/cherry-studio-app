@@ -10,12 +10,12 @@ export function useProviderListNavigation() {
   const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
 
   const prepareProviderList = useCallback(() => {
-    router.prefetch('/settings/provider');
+    // Preload data only: route preloading can replay the iOS entrance animation.
     void prefetchInfiniteQuery('/providers/page', {
       limit: PROVIDER_LIST_PAGE_SIZE,
       staleTime: PROVIDER_LIST_STALE_TIME,
     });
-  }, [prefetchInfiniteQuery, router]);
+  }, [prefetchInfiniteQuery]);
 
   const openProviderList = useCallback(() => {
     prepareProviderList();

@@ -3,15 +3,14 @@
 Android continues user-started chat and image generation with
 [`react-native-background-actions`](https://github.com/Rapsssito/react-native-background-actions)
 and reuses per-destination numeric notification identities through SystemIntegration.
-[`expo-notifications`](https://docs.expo.dev/versions/latest/sdk/notifications/) retains permission
-and legacy-notification handling.
+[`expo-notifications`](https://docs.expo.dev/versions/latest/sdk/notifications/) only requests
+notification permission; SystemIntegration posts every Android task notice.
 The app owns task counting, content, cancellation, and route selection. A scoped
 [`react-native-background-actions` patch](../../patches/react-native-background-actions@4.1.0.patch)
 adds native admission, identity reuse, and protection reporting to the library's existing service. The library still owns Headless
 JS and wake locks; SystemIntegration adds only a non-exported receiver for explicit notification
-decisions, without another execution service. An
-[`expo-notifications` patch](../../patches/expo-notifications@58.1.6.patch) exposes Android's
-post-presentation event so a focused task screen can dismiss asynchronously delivered notifications.
+decisions, without another execution service. Opening a task's destination retires its notices
+through the backend's visible-task subscription, so no screen listens for presented notifications.
 
 ## Ownership And Behavior
 
@@ -178,20 +177,15 @@ library's iOS-only `expiration` event.
 
 ## Verification And Development Client
 
-These native dependencies, both patches, and config plugins require a rebuilt development client. Metro reloads
+These native dependencies, the patch, and config plugins require a rebuilt development client. Metro reloads
 and EAS Updates cannot add native modules. Use [Local EAS Builds](../guides/local-builds.md) when a
 build is authorized. Compatibility with Cherry's Expo 58 / React Native 0.88 and device behavior
 must be verified in that client; source review and lint do not establish runtime compatibility.
 
-`package.json` opts `expo-notifications` into `expo.autolinking.android.buildFromSource`. Expo's
-bundled precompiled AAR does not contain our native presentation event; patching its Kotlin sources
-alone leaves that event absent from the installed app. Keep this opt-out while the native patch is
-required, and inspect the rebuilt APK as well as the installed source guards.
-
 Regression suites describe concurrent leases, foreground-only admission, permission denial,
 background-budget reset/cancellation, approval cleanup, single completion delivery, and awaiting
 painting notification delivery before task completion. Additional cases cover foreground event
-delivery races, post-presentation task cleanup, cold-start navigation, task-versus-draft route
+delivery races, cold-start navigation, task-versus-draft route
 identity, and legacy task URLs. Library lifecycle coverage exercises stopped-event ordering and
 stale generation rejection, unprotected continuation after failed or hidden admission,
 interruption persistence, and notification submission without retries or presentation waits. Installed-source guards protect both native patches against dependency upgrades; they do not prove

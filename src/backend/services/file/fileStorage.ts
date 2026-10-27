@@ -12,15 +12,12 @@ import {
   type FileEntryId,
   type FileEntryProvenance,
   FileEntryIdSchema,
-  fileEntryUrl,
   filenameExtension,
   MediaTypeSchema,
   SafeExtSchema,
   SafeNameSchema,
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
@@ -216,43 +213,6 @@ export async function createInternalEntry(
     }
     throw error;
   }
-}
-
-export async function createMessageParts(
-  entries: Pick<FileEntryService, 'create' | 'delete'>,
-  parts: readonly CherryMessagePart[],
-): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> {
-  const createdEntries: FileEntry[] = [];
-  const managedParts: CherryMessagePart[] = [];
-
-  try {
-    for (const part of parts) {
-      if (part.type !== 'file' || readCherryMeta(part)?.fileEntryId) {
-        managedParts.push(part);
-        continue;
-      }
-
-      const entry = await createInternalEntry(entries, {
-        mediaType: part.mediaType,
-        name: part.filename,
-        provenance: 'imported',
-        source: 'uri',
-        uri: part.url,
-      });
-      createdEntries.push(entry);
-      managedParts.push(
-        withCherryMeta(
-          { ...part, mediaType: entry.mediaType, url: fileEntryUrl(entry.id) },
-          { fileEntryId: entry.id },
-        ),
-      );
-    }
-  } catch (error) {
-    await discardInternalEntries(entries, createdEntries);
-    throw error;
-  }
-
-  return { entries: createdEntries, parts: managedParts };
 }
 
 export async function discardInternalEntries(

@@ -505,6 +505,11 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       this.refreshDiscoveryActivity();
     }
   }
+  /** A completed or removed pairing starts over: an earlier local disconnect no longer applies. */
+  forgetDisconnect(id: string): void {
+    this.intents?.setDisconnected(id, false);
+  }
+
   invalidate(id: string, reason: 'replaced' | 'removed' = 'replaced') {
     for (const listener of this.invalidations) listener({ connectionId: id });
     this.resolver.forget(id);

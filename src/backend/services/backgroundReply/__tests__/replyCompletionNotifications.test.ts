@@ -198,6 +198,34 @@ describe('createReplyCompletionNotifier', () => {
     expect(notices).not.toHaveBeenCalled();
   });
 
+  it('alerts a failure regardless of the completion preference, and in the open app', async () => {
+    const onForegroundAttention = jest.fn();
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+      onForegroundAttention,
+    });
+    enabled.mockReturnValue(false);
+
+    await expect(
+      notifier.notifyTurnFinished(
+        event({ outcome: 'failed', detail: 'Failed', occurredInBackground: false }),
+      ),
+    ).resolves.toBe(true);
+    expect(notices).toHaveBeenCalledTimes(1);
+
+    setAppState('active');
+    await expect(
+      notifier.notifyTurnFinished(event({ outcome: 'failed', detail: 'Failed' })),
+    ).resolves.toBe(false);
+    expect(onForegroundAttention).toHaveBeenCalledWith({
+      detail: 'Failed',
+      phase: 'failed',
+      title: 'First session',
+      url: 'cherrystudio:///?sessionId=session-1',
+    });
+    expect(notices).toHaveBeenCalledTimes(1);
+  });
+
   it('stays silent once the user is back at delivery time', async () => {
     const notifier = createReplyCompletionNotifier({
       isReplyCompletionNotificationEnabled: enabled,

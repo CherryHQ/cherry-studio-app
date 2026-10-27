@@ -51,11 +51,6 @@ public class PdfTextExtractorModule: Module {
         filePath: filePath, options: options, requestId: requestId, request: request
       )
     }.runOnQueue(extractionQueue)
-
-    // 异步函数：获取 PDF 页数
-    AsyncFunction("getPageCount") { (filePath: String) -> Int in
-      return self.getPageCount(filePath: filePath)
-    }.runOnQueue(extractionQueue)
   }
 
   // MARK: - PDF 文本提取核心逻辑
@@ -160,26 +155,6 @@ public class PdfTextExtractorModule: Module {
       "ocrUnavailable": ocrUnavailable,
       "unrecognizedPages": unrecognizedPages
     ]
-  }
-
-  private func getPageCount(filePath: String) -> Int {
-    do {
-      let url = try parseFileURL(filePath)
-      let didAccess = url.startAccessingSecurityScopedResource()
-      defer {
-        if didAccess {
-          url.stopAccessingSecurityScopedResource()
-        }
-      }
-      guard let document = PDFDocument(url: url) else {
-        os_log("PdfTextExtractor: failed to load PDF at %{public}@", log: .default, type: .error, filePath)
-        return 0
-      }
-      return document.pageCount
-    } catch {
-      os_log("PdfTextExtractor: getPageCount error for %{public}@: %{public}@", log: .default, type: .error, filePath, String(describing: error))
-      return 0
-    }
   }
 
   // MARK: - 辅助方法
