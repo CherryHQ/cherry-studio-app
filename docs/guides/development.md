@@ -60,7 +60,7 @@ when a block is added or retired; a block leaves when upstream ships an equivale
 | Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
 | iOS asynchronous clipboard paste keeping Markdown | Bug fix | #1467, #1476 | Not fixed in 1.1.1 | Upstream reads the clipboard asynchronously |
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
-| Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606, #1028 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
+| Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
 | Code block 192 pt viewport, header and divider (gesture arbitration part is a fix) | Product customization | #606 | Not upstream | Never, unless the design changes |
 | Table scrollbar that does not fade | Product customization | #606 | Not upstream | Never, unless the design changes |
 | Generic `linkVariantUtils`, `!TARGET_OS_OSX` guard | Build compatibility | #606 | Not upstream | Upstream builds without them |
