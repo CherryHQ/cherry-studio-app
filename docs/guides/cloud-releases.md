@@ -15,20 +15,17 @@ profiles retain the current ARM64-only device support.
 
 ## Release Preparation
 
-Releases are built by the workflows above. Copy the
-[Release Checklist Template](./release-checklist-template.md) to a `release-status.md` kept outside
-the repository, and prepare these materials before pushing the tag:
+Releases are built by the workflows above. Before pushing the tag, have these ready:
 
-1. Release notes: GitHub English and GitCode Simplified Chinese, following
-   [Release Notes And Channel Coverage](#release-notes-and-channel-coverage).
-2. Store materials: descriptions and release notes in every configured store locale, and the
-   required screenshots captured from the application (not mockups or development builds).
-3. Review replies: if a store rejected the previous submission, a reply for every issue and the
-   fix included in this build.
-4. GitCode: a maintainer with repository write access to sync and upload the release.
+- GitHub English and GitCode Simplified Chinese release notes, following
+  [Release Notes And Channel Coverage](#release-notes-and-channel-coverage).
+- Store descriptions and release notes in every configured store locale.
+- The required store screenshots, captured from the application rather than mockups or
+  development builds.
+- If a store rejected the previous submission, a reply to every issue and its fix in this build.
+- A maintainer with GitCode write access to sync and upload the release.
 
-Submit each store only after its materials are complete; another store's pending review does not
-block it.
+Submit each store once its materials are complete; another store's pending review does not block it.
 
 ## Required Configuration
 
@@ -134,15 +131,41 @@ Store links can be added to the release page after the listings are available.
    before publishing. On retry, inspect existing attachments first and retain matching files;
    do not replace an existing attachment with a different build.
 5. Confirm the published page has the intended tag, notes, and both attachments, then record the
-   release URL in the GitCode status row.
+   release URL in the [release status](#release-status).
 
 ### Release Notes And Channel Coverage
 
-List the changes since the previous release, then curate the public notes using
-**Features / Fixes / Architecture Upgrades** (**功能 / 修复 / 架构升级** for GitCode), with a module
-name and one concise sentence per item; omit empty sections. Store copy can be shorter, but keep
-core features and upgrade warnings consistent across GitHub, GitCode, and store locales. When the
-wording changes, update every affected channel, including notes that are already published.
+List the changes since the previous release, then curate the public notes in this outline. Use a
+module name and one concise sentence per item, and omit empty sections. GitCode uses `功能`, `修复`,
+`架构升级`, `升级提醒`, and ends with `## 下载安装`.
+
+```markdown
+# Cherry Studio <version>
+
+## Features
+
+- [Module] One-sentence change.
+
+## Fixes
+
+- [Module] One-sentence fix.
+
+## Architecture Upgrades
+
+- [Module] One-sentence upgrade.
+
+## Upgrade Notes
+
+<Required upgrade steps, or omit this section.>
+
+## Download and Installation
+
+<APK, checksum, installation instructions, and independent store availability.>
+```
+
+Store copy can be shorter, but keep core features and upgrade warnings consistent across GitHub,
+GitCode, and store locales. When the wording changes, update every affected channel, including
+notes that are already published.
 
 ## Google Play
 
@@ -210,13 +233,15 @@ not configure groups or submit the app for an App Store public release.
 - Saved Actions artifacts expire after 30 days. Recover the GitHub APK from its published release
   or EAS; recover the Google Play AAB from the exact EAS build recorded in the workflow summary.
 
-## Status And Closeout
+## Release Status
 
-Update `release-status.md` whenever a channel changes state: its version/build, the status in the
-platform's own wording, when it was observed, and a link. Uploaded, submitted, approved, and
-available are different states; record `unknown` rather than inferring one. When the release is
-done, bring every channel to its latest state and list anything still unfinished, such as fixes
-that have not reached `main`.
+Keep one `release-status.md` per version outside the repository, with a row for each channel:
+GitHub, GitCode, TestFlight internal, TestFlight external, App Store, and Google Play. Each row
+records the version/build, the status in the platform's own wording, when it was observed, and a
+link. Update a row whenever its channel changes state. Uploaded, submitted, approved, and available
+are different states; record `unknown` rather than inferring one, and do not infer the external
+TestFlight result from App Store approval. Open an issue for anything left unfinished after the
+release, such as fixes that have not reached `main`.
 
 ## References
 
