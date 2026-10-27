@@ -33,7 +33,9 @@ export function resolveVertexUrls(baseUrl: string, project: string, location: st
   const defaultOrigin =
     location === 'global'
       ? 'https://aiplatform.googleapis.com'
-      : `https://${location}-aiplatform.googleapis.com`;
+      : location === 'us' || location === 'eu'
+        ? `https://aiplatform.${location}.rep.googleapis.com`
+        : `https://${location}-aiplatform.googleapis.com`;
   if (baseUrl.trim() && getProviderBaseUrlIssue(baseUrl))
     throw new Error('Vertex base URL is invalid.');
   const url = new URL(baseUrl.trim() || defaultOrigin);
@@ -53,7 +55,9 @@ export function resolveVertexUrls(baseUrl: string, project: string, location: st
   }
   const servicePath = collection ? collection[1] : path.replace(/\/v1(?:beta1)?$/, '');
   const officialHost =
-    /^(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com$/.test(url.hostname) && !url.port;
+    (/^(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com$/.test(url.hostname) ||
+      /^aiplatform\.(?:us|eu)\.rep\.googleapis\.com$/.test(url.hostname)) &&
+    !url.port;
   const origin = officialHost && !servicePath ? defaultOrigin : url.origin;
   const serviceUrl = `${origin}${servicePath}`;
   const apiVersion =

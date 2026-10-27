@@ -12,15 +12,26 @@ describe('Vertex connection facts', () => {
 
   it.each([
     ['', 'global', 'https://aiplatform.googleapis.com'],
+    ['', 'us', 'https://aiplatform.us.rep.googleapis.com'],
+    ['', 'eu', 'https://aiplatform.eu.rep.googleapis.com'],
     ['', 'us-central1', 'https://us-central1-aiplatform.googleapis.com'],
     ['https://us-east5-aiplatform.googleapis.com', 'global', 'https://aiplatform.googleapis.com'],
+    ['https://aiplatform.googleapis.com', 'us', 'https://aiplatform.us.rep.googleapis.com'],
+    ['https://aiplatform.us.rep.googleapis.com', 'eu', 'https://aiplatform.eu.rep.googleapis.com'],
+    ['https://aiplatform.eu.rep.googleapis.com', 'global', 'https://aiplatform.googleapis.com'],
     ['https://gateway.example/vertex/v1', 'global', 'https://gateway.example/vertex'],
+    ['https://gateway.example/vertex/v1', 'eu', 'https://gateway.example/vertex'],
     [
       'https://gateway.example/vertex/v1/projects/project-id/locations/global',
       'global',
       'https://gateway.example/vertex',
     ],
     ['https://evilaiplatform.googleapis.com', 'global', 'https://evilaiplatform.googleapis.com'],
+    [
+      'https://aiplatform.eu.rep.googleapis.com.gateway.example',
+      'eu',
+      'https://aiplatform.eu.rep.googleapis.com.gateway.example',
+    ],
   ])(
     'resolves %s at %s without losing or duplicating the project path',
     (baseUrl, location, serviceUrl) => {
