@@ -11,6 +11,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
 import { readDiagnosticPluginState } from '@/backend/data/services/diagnosticPluginState';
+import { readDiagnosticContext } from '@/backend/utils/diagnosticContext';
 import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 import {
@@ -163,6 +164,11 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     let snapshot: TraceDiagnosticSnapshot | undefined;
     try {
       this.abort.signal.throwIfAborted();
+      const now = Date.now();
+      const submissionContext = {
+        capturedAt: new Date(now).toISOString(),
+        ...readDiagnosticContext(),
+      };
       tempRoot = createDiagnosticTemporaryDirectory(bundleId);
       // Adopt the selected screenshot before asynchronous collection. Only opaque IDs
       // from our capture directory are accepted, never arbitrary file paths.
@@ -180,7 +186,6 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
       }
       const fileName = `cherry-studio-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}-${bundleId}.zip`;
       const destination = new File(tempRoot, fileName);
-      const now = Date.now();
       const range: DiagnosticTimeRange = { fromMs: now - RANGE_DURATION_MS, toMs: now };
       const collected = await this.collect(range);
       snapshot = collected.snapshot;
@@ -270,6 +275,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
           : {}),
         system,
+        submissionContext,
         plugins,
         // Retain empty Desktop schema-v2 fields; no crash or conversation sources are read.
         crashDumps: { files: [], mode: 'inventory_only', totalBytes: 0 },

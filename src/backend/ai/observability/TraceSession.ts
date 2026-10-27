@@ -1,3 +1,4 @@
+import { readDiagnosticContext } from '@/backend/utils/diagnosticContext';
 import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
 import type { TraceContext, TraceSpanRecord } from '@/shared/data/types/trace';
@@ -29,6 +30,8 @@ export class TraceSession {
   readonly root: TraceSpan;
   private readonly openSpans = new Map<string, OpenSpan>();
   private readonly context: TraceContext;
+  // All revisions and children retain the initiating identity, including after community sign-out.
+  private readonly environment = readDiagnosticContext();
   private spanCount = 0;
   private droppedSpans = 0;
   private ended = false;
@@ -62,6 +65,7 @@ export class TraceSession {
       parentSpanId,
       name: name.slice(0, 128),
       context: this.context,
+      environment: this.environment,
       attributes: sanitizeTraceAttributes(attributes),
       status: 'running',
       startedAt: this.now(),

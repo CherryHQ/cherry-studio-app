@@ -1540,7 +1540,7 @@
   "settings.about.diagnostics.unknownHint": "サーバーがパッケージを受信した可能性がありますが、アプリでは結果を確認できませんでした。再送信するとレポートが重複する可能性があります。",
   "settings.about.diagnostics.upload": "フィードバックを送信",
   "settings.about.feedback.attachment": "診断情報を自動で添付",
-  "settings.about.feedback.consent": "送信すると、過去24時間のエラーとリクエストの概要、およびシステム情報が添付されます。診断ログにチャット本文や認証情報は含まれません。フィードバックに機密情報を入力しないでください。",
+  "settings.about.feedback.consent": "送信時には、過去24時間のエラーとリクエストの概要、システムとアプリのバージョン情報、ユーザー・組織・デプロイ環境のIDが添付されます。ログには、このデバイスで使用した複数のアカウントの情報が含まれる場合があります。診断ログにチャット本文や認証情報は含まれません。フィードバックに機密情報を入力しないでください。",
   "settings.about.feedback.copyFailed": "レポート ID をコピーできませんでした",
   "settings.about.feedback.copyId": "レポート ID をコピー",
   "settings.about.feedback.copySuccess": "レポート ID をコピーしました",

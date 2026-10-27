@@ -1557,7 +1557,7 @@
   "settings.about.diagnostics.unknownHint": "Der Server hat das Paket möglicherweise erhalten, aber die App konnte das Ergebnis nicht bestätigen. Erneutes Senden kann einen doppelten Bericht erzeugen.",
   "settings.about.diagnostics.upload": "Feedback senden",
   "settings.about.feedback.attachment": "Diagnosedaten werden automatisch angehängt",
-  "settings.about.feedback.consent": "Beim Senden werden Fehler- und Anfrageübersichten der letzten 24 Stunden sowie Systeminformationen beigefügt. Diagnoseprotokolle enthalten keine Chattexte oder Zugangsdaten. Geben Sie im Feedback keine vertraulichen Informationen an.",
+  "settings.about.feedback.consent": "Mit dem Absenden werden Fehler- und Anfragezusammenfassungen der letzten 24 Stunden, System- und App-Versionsinformationen sowie Benutzer-, Organisations- und Bereitstellungs-IDs übermittelt. Die Protokolle können mehrere auf diesem Gerät verwendete Konten betreffen. Diagnoseprotokolle enthalten keine Chattexte oder Zugangsdaten. Geben Sie in Ihrem Feedback keine vertraulichen Informationen an.",
   "settings.about.feedback.copyFailed": "Berichts-ID konnte nicht kopiert werden",
   "settings.about.feedback.copyId": "Berichts-ID kopieren",
   "settings.about.feedback.copySuccess": "Berichts-ID kopiert",

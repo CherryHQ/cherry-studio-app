@@ -1557,7 +1557,7 @@
   "settings.about.diagnostics.unknownHint": "Sunucu paketi almış olabilir ancak uygulama sonucu doğrulayamadı. Yeniden denemek yinelenen bir rapor oluşturabilir.",
   "settings.about.diagnostics.upload": "Geri bildirim gönder",
   "settings.about.feedback.attachment": "Tanılama bilgileri otomatik eklenir",
-  "settings.about.feedback.consent": "Gönderim, son 24 saatin hata ve istek özetlerini ve sistem bilgilerini içerir. Tanılama günlükleri sohbet metinlerini ve kimlik bilgilerini içermez. Geri bildiriminize hassas bilgiler yazmayın.",
+  "settings.about.feedback.consent": "Gönderime son 24 saatteki hata ve istek özetleri, sistem ve uygulama sürümü bilgileri ile kullanıcı, kuruluş ve dağıtım kimlikleri eklenir. Günlükler bu cihazda kullanılmış birden fazla hesabı kapsayabilir. Tanılama günlükleri sohbet metinlerini veya kimlik doğrulama bilgilerini içermez. Geri bildiriminize hassas bilgiler girmeyin.",
   "settings.about.feedback.copyFailed": "Rapor kimliği kopyalanamadı",
   "settings.about.feedback.copyId": "Rapor kimliğini kopyala",
   "settings.about.feedback.copySuccess": "Rapor kimliği kopyalandı",

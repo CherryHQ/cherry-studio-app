@@ -1,4 +1,5 @@
 import type { DbService } from '@/backend/data/db/DbService';
+import { installDiagnosticContextReader } from '@/backend/utils/diagnosticContext';
 import { installLogWriter } from '@/shared/core/logger/LoggerService';
 
 import { DiagnosticBundleService } from '../DiagnosticBundleService';
@@ -97,6 +98,7 @@ const mockSnapshot = jest.fn(async () => snapshot);
 
 const input = { description: 'The app stopped responding.' };
 beforeEach(() => {
+  installDiagnosticContextReader(() => ({}));
   jest.clearAllMocks();
   mockUploadAvailable = true;
   mockCopy.mockReset();
@@ -116,6 +118,20 @@ function service() {
 function manifest(call = 0) {
   return JSON.parse(mockWriteZip.mock.calls[call][1][0].content);
 }
+
+test('captures the submitting account before asynchronous collection can observe an account change', async () => {
+  let subject = 'submitter';
+  installDiagnosticContextReader(() => ({ accountSubjectId: subject }));
+  mockSnapshot.mockImplementationOnce(async () => {
+    subject = 'next-account';
+    return snapshot;
+  });
+  await service().uploadBundle(input);
+  expect(manifest().submissionContext).toEqual({
+    capturedAt: manifest().range.to,
+    accountSubjectId: 'submitter',
+  });
+});
 
 test('flushes pending log summaries before taking a trace snapshot', async () => {
   const flush = jest.fn();

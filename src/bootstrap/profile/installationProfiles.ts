@@ -4,6 +4,8 @@ import { createMMKV } from 'react-native-mmkv';
 import { ProfileRegistry, resetProfileCaches } from '@/backend/data/profile';
 import { setActiveProfile } from '@/shared/data/activeProfile';
 
+import { setDiagnosticProfile } from '../runtime/diagnosticContext';
+
 let registry: ProfileRegistry | undefined;
 
 /** Installation-owned; outlives every profile and runtime reload. */
@@ -29,4 +31,5 @@ export function selectActiveProfile(): void {
     store.set('cache-owner', profile.id);
   }
   setActiveProfile(profile);
+  setDiagnosticProfile(profile);
 }

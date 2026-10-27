@@ -3,6 +3,11 @@
 Mobile captures diagnostic metadata in ordinary app operation, including development builds. Capture has no developer-mode gate. Tracing itself has no upload destination; the user can export
 or submit selected metadata through the diagnostic bundle screen.
 
+Each trace snapshots the initiating data profile, admitted account and native/JavaScript version
+context in `environment`. Child spans and terminal revisions preserve that snapshot across account
+changes. Historical records without it remain unattributed; export never applies the submitting
+account to past requests. See [Diagnostics](../../services/diagnostics/README.md) for field semantics.
+
 ## Ownership and coverage
 
 `TraceStorageService` is a PostReady lifecycle service. `AgentHostDependencies` and

@@ -1540,7 +1540,7 @@
   "settings.about.diagnostics.unknownHint": "伺服器可能已收到診斷套件，但應用程式無法確認結果。再次傳送可能產生重複報告。",
   "settings.about.diagnostics.upload": "提交回饋",
   "settings.about.feedback.attachment": "自動附加診斷資訊",
-  "settings.about.feedback.consent": "提交即同意附帶最近 24 小時的錯誤與請求概況、系統資訊。診斷記錄不含聊天內文和憑證。請勿在回饋中填寫敏感資訊。",
+  "settings.about.feedback.consent": "提交時會附上最近 24 小時的錯誤與請求摘要、系統與應用程式版本資訊，以及使用者、組織與部署實例識別碼。日誌可能涉及此裝置上使用過的多個帳號。診斷日誌不包含聊天內文與憑證。請勿在回饋中填寫敏感資訊。",
   "settings.about.feedback.copyFailed": "無法複製報告 ID",
   "settings.about.feedback.copyId": "複製報告 ID",
   "settings.about.feedback.copySuccess": "報告 ID 已複製",

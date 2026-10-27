@@ -1540,7 +1540,7 @@
   "settings.about.diagnostics.unknownHint": "Máy chủ có thể đã nhận được gói nhưng ứng dụng không thể xác nhận kết quả. Thử lại có thể tạo báo cáo trùng lặp.",
   "settings.about.diagnostics.upload": "Gửi phản hồi",
   "settings.about.feedback.attachment": "Tự động đính kèm thông tin chẩn đoán",
-  "settings.about.feedback.consent": "Khi gửi, báo cáo sẽ kèm bản tóm tắt lỗi và yêu cầu trong 24 giờ qua cùng thông tin hệ thống. Nhật ký chẩn đoán không chứa nội dung trò chuyện hay thông tin xác thực. Không nhập thông tin nhạy cảm vào phản hồi.",
+  "settings.about.feedback.consent": "Khi gửi, báo cáo sẽ đính kèm bản tóm tắt lỗi và yêu cầu trong 24 giờ qua, thông tin hệ thống và phiên bản ứng dụng, cùng mã định danh người dùng, tổ chức và phiên bản triển khai. Nhật ký có thể liên quan đến nhiều tài khoản đã dùng trên thiết bị này. Nhật ký chẩn đoán không chứa nội dung trò chuyện hay thông tin xác thực. Vui lòng không nhập thông tin nhạy cảm vào phản hồi.",
   "settings.about.feedback.copyFailed": "Không thể sao chép ID báo cáo",
   "settings.about.feedback.copyId": "Sao chép ID báo cáo",
   "settings.about.feedback.copySuccess": "Đã sao chép ID báo cáo",

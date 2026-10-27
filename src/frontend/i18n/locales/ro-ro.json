@@ -1574,7 +1574,7 @@
   "settings.about.diagnostics.unknownHint": "Este posibil ca serverul să fi primit pachetul, dar aplicația nu a putut confirma rezultatul. Reîncercarea poate crea un raport duplicat.",
   "settings.about.diagnostics.upload": "Trimite feedback",
   "settings.about.feedback.attachment": "Date de diagnostic atașate automat",
-  "settings.about.feedback.consent": "Trimiterea include rezumatele erorilor și solicitărilor din ultimele 24 de ore și informații despre sistem. Jurnalele de diagnostic nu includ textul conversațiilor sau datele de autentificare. Nu introduceți informații sensibile în feedback.",
+  "settings.about.feedback.consent": "Trimiterea include rezumate ale erorilor și cererilor din ultimele 24 de ore, informații despre sistem și versiunea aplicației, precum și identificatori de utilizator, organizație și instanță de server. Jurnalele pot acoperi mai multe conturi utilizate pe acest dispozitiv. Jurnalele de diagnostic nu includ textul conversațiilor sau datele de autentificare. Nu introduceți informații sensibile în feedback.",
   "settings.about.feedback.copyFailed": "ID-ul raportului nu a putut fi copiat",
   "settings.about.feedback.copyId": "Copiază ID-ul raportului",
   "settings.about.feedback.copySuccess": "ID-ul raportului a fost copiat",

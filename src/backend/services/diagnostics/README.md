@@ -62,6 +62,19 @@ and a stable WebView source prevent status writes from reloading the page.
 
 - Warning/error summaries: timestamp, module, fixed message templates and allowlisted error facts.
   Arbitrary messages, stacks, causes and nested payloads are excluded before writing to disk.
+- Event context: native app version/build, JavaScript manifest version, platform and available OTA
+  runtime/update/channel identifiers. Logs capture this `environment` before buffering or repetition
+  aggregation. A request trace captures it once at initiation; every child and terminal revision keeps
+  that context even if a community account changes while the request is running.
+  `profileId`, `profileKind`, `profileSubjectId`, `deploymentId`, `organizationId` and
+  `profileIssuerHash` describe the selected data owner, including when its session is rejected.
+  `accountStatus` distinguishes unknown, restoring, signed-out, signed-in and sign-in-required states;
+  `accountSubjectId` and `accountIssuerHash` describe only the admitted account. Community accounts
+  share the local data profile but retain their own account identifiers. Private user IDs are scoped
+  by deployment; cloud user IDs are scoped by the SHA-256 hash of the issuer, with organization and
+  deployment identifiers for enterprise data. Issuer URLs, service addresses, display names, phone
+  numbers, email addresses and credentials are not read into this context. Unknown identity at early
+  boot stays unknown. IDs are technical metadata, not a claim of anonymity.
 - Startup metadata: JS entry, bootstrap, host/service phases, database open/configuration/migrations/
   seeding, cover handoff, theme/i18n, default Agent and skill initialization, first-content readiness,
   minimum cover duration and cover exit. Stages retain starts, terminal outcomes and monotonic
@@ -103,6 +116,11 @@ the fixed `Startup` / `Startup stage` and `PiDurableObserver` / `Pi durable cont
 info events. Other info logs remain excluded. Lifecycle events
 use the same local retention and submission path; they do not add an external reporting channel.
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
+They remain installation-wide across account switches; an archive can contain multiple accounts'
+metadata. Bootstrap supplies the in-memory identity/version reader through
+`backend/utils/diagnosticContext`; common diagnostics and tracing code never import enterprise
+implementation or restore credentials. The `diagnosticRecording` leaf is the public early-boot entry,
+and `appUpdate/runningUpdate` supplies the optional native update identity without loading update services.
 Lifecycle events retain separate records without repetition aggregation, preserving retry timings.
 They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
 the buffer limit, or on explicit flush. Database stages run synchronously and would block the
@@ -110,7 +128,8 @@ timer, so each flushes its start before running. Warning/error writes first drai
 in the same append, so fatal exceptions remain synchronous. File inspection and history pruning
 start with the first flush, outside the ordinary startup logging call path.
 The first matching error is written immediately. Within a 30-second window, repeated records with
-matching level/module/template and stable error/context facts are summarized. Request/turn/message
+matching level/module/template and stable error/context facts are summarized.
+Identity, account state and version changes always split groups. Request/turn/message
 ids, elapsed time, token totals and cumulative storage counters do not split a group; summaries omit
 those per-occurrence values. `repetition.count` counts **additional** occurrences, with their first
 and last timestamps; add the separately written first record when counting the complete burst.
@@ -126,6 +145,9 @@ boundary. The 512-file guard remains for legacy files and exceptional histories.
 and copies stable trace snapshots, then releases them on success, failure or cancellation.
 Collection projects every record again through an explicit field allowlist and filters by the last
 24 hours. A terminal span uses its end timestamp; a running span uses its start.
+Captured identity/version context is validated again, never filled from the current account.
+Historical records without context remain unattributed. Traces retain their existing data-profile
+storage scope; collecting the current profile does not sweep other profiles' traces.
 New budget/count fields must remain nonnegative finite numbers; product reasons, retry scopes,
 estimate sources and serialized cap field names are validated again during export.
 The 50 MiB source budget favors representation of both sources, then recent files. The manifest
@@ -139,6 +161,8 @@ at 200 connections, with truncation reported. The manifest declares `privacy.cap
 for collected diagnostics.
 `privacy.containsUnredactedData` is true because the user-authored feedback is included verbatim
 (after trimming and newline normalization); `feedback` identifies its file and user origin.
+The optional `submissionContext` records identity/version context and its capture time when bundle
+preparation starts. It identifies the submitting session, not the owner of every historical event.
 Technical identifiers can still be private; the form describes the scope before submission.
 
 ## Upload

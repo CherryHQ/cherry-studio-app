@@ -1574,7 +1574,7 @@
   "settings.about.diagnostics.unknownHint": "Le serveur a peut-être reçu le paquet, mais l’application n’a pas pu confirmer le résultat. Réessayer peut créer un rapport en double.",
   "settings.about.diagnostics.upload": "Envoyer les commentaires",
   "settings.about.feedback.attachment": "Diagnostic joint automatiquement",
-  "settings.about.feedback.consent": "L’envoi inclut les résumés des erreurs et des requêtes des dernières 24 heures ainsi que les informations système. Les journaux de diagnostic excluent le texte des conversations et les identifiants. Ne saisissez pas d’informations sensibles dans votre retour.",
+  "settings.about.feedback.consent": "L’envoi inclut les résumés des erreurs et des requêtes des dernières 24 heures, les informations système et de version de l’application, ainsi que les identifiants d’utilisateur, d’organisation et de déploiement. Les journaux peuvent concerner plusieurs comptes utilisés sur cet appareil. Les journaux de diagnostic ne contiennent ni le texte des conversations ni les identifiants de connexion secrets. N’incluez pas d’informations sensibles dans votre commentaire.",
   "settings.about.feedback.copyFailed": "Impossible de copier l’ID du rapport",
   "settings.about.feedback.copyId": "Copier l’ID du rapport",
   "settings.about.feedback.copySuccess": "ID du rapport copié",

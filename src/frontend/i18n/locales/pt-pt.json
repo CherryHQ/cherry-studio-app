@@ -1574,7 +1574,7 @@
   "settings.about.diagnostics.unknownHint": "O servidor poderá ter recebido o pacote, mas a aplicação não conseguiu confirmar o resultado. Tentar novamente pode criar um relatório duplicado.",
   "settings.about.diagnostics.upload": "Enviar comentários",
   "settings.about.feedback.attachment": "Diagnóstico anexado automaticamente",
-  "settings.about.feedback.consent": "O envio inclui resumos de erros e pedidos das últimas 24 horas e informações do sistema. Os registos de diagnóstico excluem o texto das conversas e as credenciais. Não introduza informações sensíveis nos comentários.",
+  "settings.about.feedback.consent": "O envio inclui resumos de erros e pedidos das últimas 24 horas, informações do sistema e da versão da aplicação, bem como identificadores de utilizador, organização e implementação. Os registos podem abranger várias contas utilizadas neste dispositivo. Os registos de diagnóstico não incluem textos de conversas nem credenciais. Não introduza informações sensíveis no seu comentário.",
   "settings.about.feedback.copyFailed": "Não foi possível copiar o ID do relatório",
   "settings.about.feedback.copyId": "Copiar ID do relatório",
   "settings.about.feedback.copySuccess": "ID do relatório copiado",

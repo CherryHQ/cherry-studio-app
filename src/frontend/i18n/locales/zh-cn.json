@@ -1540,7 +1540,7 @@
   "settings.about.diagnostics.unknownHint": "服务器可能已经接收了诊断包，但应用无法确认结果。再次发送可能产生重复报告。",
   "settings.about.diagnostics.upload": "提交反馈",
   "settings.about.feedback.attachment": "自动附带诊断信息",
-  "settings.about.feedback.consent": "提交即同意附带最近 24 小时的错误与请求概况、系统信息。诊断日志不含聊天正文和凭据。请勿在反馈中填写敏感信息。",
+  "settings.about.feedback.consent": "提交时会附带最近 24 小时的错误和请求摘要、系统与应用版本信息，以及用户、组织和部署实例标识。日志可能涉及此设备上使用过的多个账号。诊断日志不包含聊天正文和凭据。请勿在反馈中填写敏感信息。",
   "settings.about.feedback.copyFailed": "无法复制报告 ID",
   "settings.about.feedback.copyId": "复制报告 ID",
   "settings.about.feedback.copySuccess": "报告 ID 已复制",

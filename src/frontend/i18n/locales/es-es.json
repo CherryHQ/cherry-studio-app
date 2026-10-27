@@ -1574,7 +1574,7 @@
   "settings.about.diagnostics.unknownHint": "Es posible que el servidor haya recibido el paquete, pero la aplicación no ha podido confirmar el resultado. Reintentarlo puede crear un informe duplicado.",
   "settings.about.diagnostics.upload": "Enviar comentarios",
   "settings.about.feedback.attachment": "Diagnóstico adjunto automáticamente",
-  "settings.about.feedback.consent": "El envío incluye resúmenes de errores y solicitudes de las últimas 24 horas e información del sistema. Los registros de diagnóstico excluyen el texto de los chats y las credenciales. No escribas información sensible en tus comentarios.",
+  "settings.about.feedback.consent": "Al enviar, se incluyen resúmenes de errores y solicitudes de las últimas 24 horas, información del sistema y de la versión de la aplicación, e identificadores de usuario, organización e implementación. Los registros pueden abarcar varias cuentas utilizadas en este dispositivo. Los registros de diagnóstico no incluyen textos de chats ni credenciales. No introduzcas información confidencial en tus comentarios.",
   "settings.about.feedback.copyFailed": "No se pudo copiar el ID del informe",
   "settings.about.feedback.copyId": "Copiar ID del informe",
   "settings.about.feedback.copySuccess": "ID del informe copiado",

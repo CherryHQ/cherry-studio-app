@@ -16,7 +16,9 @@ import {
 import { createFetchBridge } from '@/backend/services/http';
 import { AccountError } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
+import { setDiagnosticAccountReader } from '../runtime/diagnosticContext';
 import { installationProfiles } from './installationProfiles';
 
 const ConfigSchema = z.object({
@@ -95,11 +97,12 @@ function createAccount(): AccountRuntime {
       .withContext('AccountRuntime')
       .error('Could not restore the sign-in', error as Error);
   });
-  return new AccountRuntime({
+  const active = getActiveProfile();
+  const runtime = new AccountRuntime({
     portal,
     issuer: config?.issuer ?? '',
     defaultAddress: config?.enterpriseAddress ?? '',
-    active: getActiveProfile(),
+    active,
     profiles: installationProfiles(),
     prompt: {
       read: () => store.getBoolean('sign-in-prompted') ?? false,
@@ -123,4 +126,26 @@ function createAccount(): AccountRuntime {
     },
     reload: () => reloadAppAsync('Switch data profile'),
   });
+  const issuerHash = config ? sha256HexOfText(config.issuer) : undefined;
+  setDiagnosticAccountReader(() => {
+    const state = runtime.getState();
+    const accountStatus = state.isRestoringSession
+      ? 'restoring'
+      : state.needsSignIn
+        ? 'sign_in_required'
+        : state.isSignedIn
+          ? 'signed_in'
+          : 'signed_out';
+    if (accountStatus !== 'signed_in') return { accountStatus };
+    if (active.identity && 'authentication' in active.identity)
+      return { accountStatus, accountSubjectId: active.identity.subject };
+    const session = portal?.getState();
+    return {
+      accountStatus,
+      ...(session?._tag === 'signedIn'
+        ? { accountSubjectId: session.subject, accountIssuerHash: issuerHash }
+        : {}),
+    };
+  });
+  return runtime;
 }
