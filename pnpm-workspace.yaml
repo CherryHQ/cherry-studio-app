@@ -9,7 +9,10 @@ sideEffectsCacheReadonly: true
 # fingerprint. See docs/guides/development.md#dependencies.
 verifyDepsBeforeRun: warn
 
-minimumReleaseAge: 0
+minimumReleaseAge: 1440
+# First-party Cherry packages ship in lockstep with Desktop and are adopted on release.
+minimumReleaseAgeExclude:
+  - '@cherrystudio/*'
 trustPolicy: no-downgrade
 
 # 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
