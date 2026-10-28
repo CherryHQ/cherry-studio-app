@@ -400,10 +400,9 @@ describe('MessagePart', () => {
     expect(
       renderer!.root.findByProps({
         accessibilityLabel: 'Waiting for response',
-        active: true,
-        size: 20,
+        accessibilityRole: 'progressbar',
       }),
-    ).toBeDefined();
+    ).toHaveProperty('props.accessibilityState.busy', true);
     expect(renderer!.root.findByProps({ children: '\u00A0' })).toBeDefined();
   });
 
