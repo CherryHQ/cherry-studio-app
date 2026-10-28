@@ -160,11 +160,12 @@ profile, only a community session counts as signed in.
   activation/reload failure remains gated when identities differ; it never opens old organization
   data using new credentials.
 
-Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Non-production
-builds default to the cn-dev staging deployment. Production has no default. Every build uses the
-production callback `cherrystudio://auth/callback`, the only one registered with the Accounts
-Portal client. iOS auth sessions capture it in any build; on Android only the production app
-receives it, so development and preview builds may not return from the browser.
+Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Every build
+profile reads them from the environment; the repository has no deployment defaults. Set local
+values in the Git-ignored repository-root `.env.local`, using the keys in `.env.example`; configure
+cloud builds in their selected EAS environment. The local build wrapper loads `.env.local` before
+starting EAS. Register the installed app's native callback scheme with the corresponding Accounts
+Portal client, as described above.
 
 ## Synchronization
 
