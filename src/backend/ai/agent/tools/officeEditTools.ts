@@ -14,11 +14,11 @@ import {
   type OfficeFormat,
   type OfficeTransformRequest,
 } from '@/backend/services/office';
-import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
 import type { RuntimeTool } from '../runtime';
 import {
   mebibytes,
+  normalizeOfficeFilename,
   officeFailure as invalid,
   prepareOfficeImages,
   startOfficeOperation,
@@ -115,10 +115,9 @@ export function createOfficeEditTools(
             return invalid('Source file changed. Inspect/read it again before editing.');
           let filename = '';
           if ('filename' in parsed.data) {
-            const extension = filenameExtension(parsed.data.filename);
-            filename = extension ? parsed.data.filename : `${parsed.data.filename}.${format}`;
-            if ((extension && extension !== format) || !SafeNameSchema.safeParse(filename).success)
-              return invalid(`Use a plain filename ending in .${format}.`);
+            const normalized = normalizeOfficeFilename(parsed.data.filename, format);
+            if (!normalized) return invalid(`Use a plain filename ending in .${format}.`);
+            filename = normalized;
           }
           const request = {
             ...parsed.data,

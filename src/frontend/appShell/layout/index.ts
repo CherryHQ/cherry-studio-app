@@ -1,4 +1,10 @@
-export { ChatDockFooter, ChatDockLayoutProvider, useChatDockFooterHeight } from './ChatDockLayout';
+export {
+  ChatDockFooter,
+  ChatDockLayoutProvider,
+  useChatDockFooterHeight,
+  useChatHeaderHeight,
+  useReportChatHeaderHeight,
+} from './ChatDockLayout';
 export {
   FormContentFrame,
   ReadingContentFrame,
@@ -10,6 +16,8 @@ export {
   useFoldRegion,
   useFoldRegionLayout,
   useIsFoldRegionLayoutCurrent,
+  useWindowFoldRegion,
+  WindowFoldRegion,
 } from './FoldRegion';
 export { PaneChromeProvider, usePaneChrome } from './PaneChrome';
 export { isAcross, resolvePaneSplit, type PaneSplit } from './paneSplit';

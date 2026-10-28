@@ -10,9 +10,12 @@ import type {
   MessageRuntimeTiming,
   MessageStats,
 } from '@/shared/data/types/message';
+import type { SkillActivation } from '@/shared/data/types/skill';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
-import type { StoredSkillActivation } from './skillActivations';
+
+/** Only successful built-in load receipts and Host-written user selections count. */
+export type StoredSkillActivation = { messageId: string; activation: SkillActivation };
 
 export type StoredRuntimeContextCheckpoint = {
   assistantMessageId: string;

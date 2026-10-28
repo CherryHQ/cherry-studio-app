@@ -13,7 +13,9 @@ import { appSidebar } from '@/frontend/utils/constants';
 import NewConversationIcon from '../../icons/NewConversationIcon';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
+import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
+import { SidebarFade } from './SidebarFade/SidebarFade';
 
 // Floats over the session list while the body owns enough bottom padding to
 // keep its final row reachable.
@@ -21,9 +23,11 @@ export function SidebarFooter() {
   const { t } = useTranslation();
   const [userName] = usePreference('app.user.name');
   const primaryForegroundColor = useThemeColor('sidebar-primary-foreground');
-  const { bottomPadding, inset } = useDockMetrics();
+  const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
   const { openSettings, startNewChat } = useSidebarActions('SidebarFooter');
   const displayName = userName.trim();
+  const isSettingsOpen = useSidebarDestination() === 'settings';
+  const selectedColor = useThemeColor('secondary');
   const selection = useSidebarSelection();
   const { progress } = selection;
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
@@ -42,8 +46,16 @@ export function SidebarFooter() {
     <View
       className="absolute right-0 bottom-0 left-0"
       pointerEvents="box-none"
-      style={{ paddingBottom: bottomPadding, paddingHorizontal: inset }}
+      style={{ paddingBottom: bottomPadding, paddingEnd: insetEnd, paddingStart: insetStart }}
     >
+      {/* Rows scrolled under the dock blur toward the bottom edge, as they do under the title row,
+          instead of showing in full below the buttons on a short window. */}
+      <View className="absolute right-0 bottom-0 left-0" pointerEvents="none">
+        <SidebarFade
+          edge="bottom"
+          size={bottomPadding + appSidebar.dockHeight + appSidebar.headerGapY * 2}
+        />
+      </View>
       <View style={{ height: appSidebar.dockHeight }}>
         <Animated.View
           accessibilityElementsHidden={isSelecting}
@@ -80,11 +92,14 @@ export function SidebarFooter() {
             <Pressable
               accessibilityLabel={t('navigation.settings')}
               accessibilityRole="button"
-              accessibilityState={{ disabled: isSelecting || isDeleting }}
+              accessibilityState={{ disabled: isSelecting || isDeleting, selected: isSettingsOpen }}
               disabled={isSelecting || isDeleting}
               onPress={openSettings}
               style={({ pressed }) => ({
                 alignItems: 'center',
+                // Settings filling the content region marks the avatar like a selected row.
+                backgroundColor: isSettingsOpen ? selectedColor : undefined,
+                borderRadius: appSidebar.dockHeight / 2,
                 flexDirection: 'row',
                 gap: 8,
                 height: appSidebar.dockHeight,

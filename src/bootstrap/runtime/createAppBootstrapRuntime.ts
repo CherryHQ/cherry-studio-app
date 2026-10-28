@@ -110,6 +110,7 @@ export function createAppBootstrapRuntime(
       Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
     isReplyCompletionNotificationEnabled,
     ...(replyCompletionNotifications ? { replyNotifications: replyCompletionNotifications } : {}),
+    ...(androidActivities ? { connectionNotices: androidActivities } : {}),
     subscribePresentationEnabled: (listener) =>
       preference.subscribeChange('chat.background_reply.enabled')(listener),
     onForegroundAttention: publishForegroundActivityAttention,

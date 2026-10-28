@@ -63,9 +63,6 @@ export function createFileHandlers(
       PATCH: ({ params, body }) =>
         library.bindWorkspace(params.id, z.uuid().nullable().parse(body.folderId)),
     },
-    '/files/entries': {
-      GET: ({ query }) => entries.listByCursor(query),
-    },
     '/files/entries/:id': {
       GET: ({ params }) => entries.getById(FileEntryIdSchema.parse(params.id)),
     },

@@ -50,7 +50,9 @@ function DrawingsScreenBody() {
   return (
     <>
       <RouteHeader title={t('navigation.paintings')} />
-      <View className="flex-1" style={{ paddingLeft: left, paddingRight: right }}>
+      {/* Margins, not padding: the dock is absolutely placed and would otherwise reach under a
+          side safe area, such as the status bar down an iPhone Duo's trailing edge. */}
+      <View className="flex-1" style={{ marginLeft: left, marginRight: right }}>
         <PaintingBoardList bottomInset={dockHeight} />
         <ComposerDock layoutMode="expandable" onHeightChange={setDockHeight}>
           <PaintingWorkspaceInput

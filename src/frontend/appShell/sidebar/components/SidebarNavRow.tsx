@@ -10,7 +10,7 @@ type SidebarNavRowProps = {
   onPress: () => void;
   testID: string;
   disabled?: boolean;
-  /** The module currently open beside chat. */
+  /** The page filling the content region, or the files open beside chat. */
   isSelected?: boolean;
 };
 
@@ -39,7 +39,7 @@ export function SidebarNavRow({
       {({ pressed }) => (
         <View
           className={cn(
-            'w-full flex-row items-center gap-4 rounded-xl px-5 py-2.5',
+            'mx-2 flex-row items-center gap-4 rounded-xl px-3 py-2.5',
             isSelected && 'bg-secondary/70',
             pressed && 'bg-sidebar-accent',
           )}

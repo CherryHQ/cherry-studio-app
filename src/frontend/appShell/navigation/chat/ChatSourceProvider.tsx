@@ -26,6 +26,10 @@ import {
 type ChatSource = 'local' | 'remote';
 type ChatSourceNavigation = {
   source: ChatSource;
+  /** Whether a chat, rather than another page beside the sidebar, fills the content region. */
+  isChatFocused: boolean;
+  /** The local chat on screen, or the last one shown while another page covers it. */
+  localChat: ChatTarget | undefined;
   remoteTarget: RemoteChatTarget;
   viewMode: 'sessions' | 'agents';
   setViewMode(mode: 'sessions' | 'agents'): Promise<void>;
@@ -36,14 +40,28 @@ type ChatSourceNavigation = {
 };
 const Context = createContext<ChatSourceNavigation | null>(null);
 
-/** The drawer owns source navigation; each source keeps its own last chat target. */
+/**
+ * The drawer owns source navigation; each source keeps its own last chat target. Pages opened beside
+ * the sidebar keep the chat they cover as the current source, so the sidebar does not switch
+ * catalogs while one of them is showing.
+ */
 export function ChatSourceProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useGlobalSearchParams<RemoteChatRouteParams>();
-  const source: ChatSource = pathname === '/remote' ? 'remote' : 'local';
-  const remoteTarget = useMemo(() => parseRemoteChatRoute(params), [params]);
-  const localRoute = useMemo(() => parseChatRoute(params), [params]);
+  const isChatFocused = pathname === '/' || pathname === '/remote';
+  const [coveredChat, setCoveredChat] = useState(() => ({
+    params: isChatFocused ? params : {},
+    pathname: isChatFocused ? pathname : '/',
+  }));
+  if (isChatFocused && (coveredChat.pathname !== pathname || coveredChat.params !== params))
+    setCoveredChat({ params, pathname });
+  const chat = isChatFocused ? { params, pathname } : coveredChat;
+  const source: ChatSource = chat.pathname === '/remote' ? 'remote' : 'local';
+  const remoteTarget = useMemo(() => parseRemoteChatRoute(chat.params), [chat.params]);
+  const localRoute = useMemo(() => parseChatRoute(chat.params), [chat.params]);
+  const localChat =
+    source === 'local' && localRoute.status === 'ready' ? localRoute.target : undefined;
   const { connections } = useDesktopConnections();
   const lastLocal = useRef<ChatTarget | undefined>(undefined);
   const lastRemote = useRef<RemoteChatTarget | undefined>(undefined);
@@ -111,6 +129,8 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
   const value = useMemo(
     () => ({
       source,
+      isChatFocused,
+      localChat,
       remoteTarget,
       selectDevice,
       openRemote,
@@ -120,6 +140,8 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
     }),
     [
       source,
+      isChatFocused,
+      localChat,
       remoteTarget,
       selectDevice,
       openRemote,

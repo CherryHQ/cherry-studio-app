@@ -113,11 +113,7 @@ export function ChatWorkspace({
   const projectedMessages = useMemo(() => {
     const projected = mergedMessages
       .filter((message) => message.display.role !== 'system')
-      .map((message) =>
-        message.key === live.retryingMessageKey
-          ? { ...message.display, status: 'pending' as const, data: { parts: [] } }
-          : message.display,
-      );
+      .map((message) => message.display);
     // A page around an older message is not the transcript's end.
     if (!pendingSend || hasNewerMessages) return projected;
     const [user, assistant] = pendingSend.messages;
@@ -129,7 +125,7 @@ export function ChatWorkspace({
     else if (assistantIndex >= 0) result.splice(assistantIndex, 0, user);
     else result.push(user, assistant);
     return result;
-  }, [hasNewerMessages, mergedMessages, pendingSend, live.retryingMessageKey]);
+  }, [hasNewerMessages, mergedMessages, pendingSend]);
   const timestampMessageIds = useMemo(
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],

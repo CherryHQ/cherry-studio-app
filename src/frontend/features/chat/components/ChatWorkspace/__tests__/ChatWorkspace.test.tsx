@@ -32,7 +32,6 @@ let mockAgentChatSession: {
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
   pendingQuestion: null;
-  retryingMessageId?: string;
   sessionId: string;
   status: 'ready';
 };
@@ -216,7 +215,6 @@ function ChatWorkspace(
     interactions: [],
     liveMessages: mockAgentChatSession.liveMessages.map(project),
     enteringMessageKey: mockAgentChatSession.enteringUserMessageId,
-    retryingMessageKey: mockAgentChatSession.retryingMessageId,
     hasHistoryBeforeExecution: mockAgentChatSession.hasHistoryBeforeActiveTurn,
   };
   const history = props.messageWindow.messages;
@@ -656,18 +654,6 @@ describe('ChatWorkspace message rendering integration', () => {
     ]);
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
     expect(mockMessageListProps?.extraData).toBe(extraData);
-  });
-
-  test('empties the retrying answer while admission runs, so the wait reads as pending', () => {
-    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
-    mockAgentChatSession = { ...mockAgentChatSession, retryingMessageId: 'assistant-1' };
-
-    renderer = renderWorkspace(false, messages);
-
-    expect(mockMessageListProps?.messages).toEqual([
-      expect.objectContaining({ id: 'user-1', status: 'success' }),
-      expect.objectContaining({ id: 'assistant-1', status: 'pending', data: { parts: [] } }),
-    ]);
   });
 
   test('composes the assistant toolbar for settled assistant messages', () => {

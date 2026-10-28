@@ -157,7 +157,7 @@ export async function resolveManagedInput(
  * when the selected model cannot consume it.
  */
 export function assertAttachmentRequestSupported(
-  runtime: AgentRuntime,
+  runtime: Pick<AgentRuntime, 'descriptor'>,
   input: AgentInputPart[],
   history: AgentMessageView[],
   resources: TurnResourceLedger,

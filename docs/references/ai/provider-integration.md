@@ -229,7 +229,7 @@ requires a fixed loopback callback and additional identity-validation/platform i
 has no Mobile provider preset or `pi-messages` binding. `grok-cli` still requires an external CLI and
 remains excluded. Supporting the xAI subscription flow on the `grok` preset does not enable `grok-cli`.
 
-The versioned Pi 0.99.1 patch exposes `native-oauth`, injects app HTTP/PKCE primitives, and adds a
+The versioned Pi patch (see the [maintained patch inventory](../agent/pi-durable-migration.md#maintained-patch-contracts)) exposes `native-oauth`, injects app HTTP/PKCE primitives, and adds a
 native manual-callback adapter. Metro honors this package's browser file map. OAuth protocol polling,
 refresh, token parsing, and request-auth derivation remain upstream implementations. Update this
 patch and the native module-graph regression coverage together when upgrading Pi.

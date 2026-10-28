@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "engines": {
     "node": "24.x"
   },
@@ -9,7 +9,6 @@
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-notifications",
           "expo-app-metrics",
           "expo-observe"
         ]
@@ -182,7 +181,6 @@
     "react-native-gesture-handler": "~3.3.0",
     "react-native-keyboard-controller": "1.22.7",
     "react-native-mmkv": "4.3.2",
-    "react-native-nitro-healthkit": "1.0.0",
     "react-native-nitro-modules": "0.36.4",
     "react-native-nitro-theme-transition": "^1.0.0",
     "react-native-quick-base64": "3.0.0",

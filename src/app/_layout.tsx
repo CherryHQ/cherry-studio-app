@@ -30,11 +30,7 @@ import { ConversationProvider } from '@/frontend/appShell/conversation';
 import { FeedbackCaptureProvider, FeedbackHintProvider } from '@/frontend/appShell/feedback';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import { McpInteractionDialog } from '@/frontend/appShell/mcp';
-import {
-  getRootHeaderStyle,
-  NavigationThemeProvider,
-  paintingRouteId,
-} from '@/frontend/appShell/navigation';
+import { getRootHeaderStyle, NavigationThemeProvider } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { AppErrorBoundary } from '@/frontend/appShell/recovery';
@@ -156,12 +152,6 @@ function RootStack() {
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="home" options={{ headerShown: false }} />
-      <Stack.Screen name="library" options={{ headerShown: false }} />
-      <Stack.Screen name="trash" />
-      <Stack.Screen name="agents" options={{ headerShown: false }} />
-      <Stack.Screen name="plugins" options={{ headerShown: false }} />
-      <Stack.Screen name="skills" options={{ headerShown: false }} />
-      <Stack.Screen name="drawings" options={{ headerShown: false }} />
       <Stack.Screen
         name="search"
         options={{
@@ -188,30 +178,6 @@ function RootStack() {
           headerShown: false,
           presentation: 'fullScreenModal',
         }}
-      />
-      {/* Settings owns a nested stack and draws its headers there, so the root
-          stack only needs to push the page without adding another header. */}
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
-      <Stack.Screen
-        // Task notifications reuse their task; each new draft owns its own page.
-        getId={({ params }) => paintingRouteId(params)}
-        name="paintings/index"
-        options={{
-          // Keep the full-bleed board's native canvas in sync with the app theme.
-          contentStyle: { backgroundColor },
-          headerStyle: { backgroundColor: 'transparent' },
-          headerTransparent: true,
-          title: '',
-        }}
-      />
-      {/* Released task links and viewer routes redirect into the board. */}
-      <Stack.Screen
-        name="paintings/[paintingId]"
-        options={{ contentStyle: { backgroundColor }, headerShown: false }}
-      />
-      <Stack.Screen
-        name="paintings/[paintingId]/conversation"
-        options={{ contentStyle: { backgroundColor }, headerShown: false }}
       />
     </Stack>
   );
