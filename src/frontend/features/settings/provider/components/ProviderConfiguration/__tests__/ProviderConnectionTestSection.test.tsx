@@ -41,7 +41,7 @@ describe('ProviderConnectionTestSection', () => {
     act(() => {
       renderer = create(
         <ProviderConnectionTestSection
-          apiKeys={apiKeys}
+          credentials={{ kind: 'api-key', keys: apiKeys, optional: false }}
           disabled={false}
           models={[]}
           providerId="provider"
@@ -63,5 +63,24 @@ describe('ProviderConnectionTestSection', () => {
     act(() => renderer.unmount());
     expect(render([a, b])).toHaveLength(1);
     expect(renderer.root.findByType('OptionPicker' as never).props.selectedValue).toBe('a');
+  });
+
+  it.each([true, false])('shows a service-account check only when ready is %s', (ready) => {
+    act(() => {
+      renderer = create(
+        <ProviderConnectionTestSection
+          credentials={{ kind: 'service-account', ready }}
+          disabled={false}
+          models={[]}
+          providerId="vertex"
+        />,
+      );
+    });
+    expect(
+      renderer.root.findAll(
+        (node) => typeof node.type === 'string' && node.props.testID === 'provider-connection-test',
+      ),
+    ).toHaveLength(ready ? 1 : 0);
+    expect(renderer.root.findAllByType('OptionPicker' as never)).toHaveLength(0);
   });
 });

@@ -341,7 +341,6 @@ describe('MobileRegistryLoader', () => {
       'omlx',
       'comfyui',
       'azure-openai',
-      'vertexai',
       'aws-bedrock',
       'jina',
       'voyageai',

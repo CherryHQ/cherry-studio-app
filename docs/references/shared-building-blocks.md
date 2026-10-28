@@ -22,6 +22,8 @@ it already exists.
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
 | OAuth discovery, registration, code exchange, refresh | MCP SDK functions over `createFetchBridge`, as in `src/backend/services/mcp/McpOAuthRuntime.ts` |
+| Google Cloud service-account signing and token exchange | `VertexAuthClient` in `src/backend/services/providers/vertex`, shared by model discovery and the pi-durable model resolver |
+| Vertex service-account field validation | `VertexAuthFieldsSchema` in `src/shared/utils/vertexAuth.ts`, shared by provider settings and backend configuration checks |
 | SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts` |
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |

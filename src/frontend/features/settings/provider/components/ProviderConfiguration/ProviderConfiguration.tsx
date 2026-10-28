@@ -11,7 +11,9 @@ import { ProviderAddressSection } from './components/ProviderAddressSection';
 import { ProviderApiKeysSection } from './components/ProviderApiKeysSection';
 import { ProviderConnectionTestSection } from './components/ProviderConnectionTestSection';
 import { ProviderIdentitySection } from './components/ProviderIdentitySection';
+import { ProviderVertexAuthSection } from './components/ProviderVertexAuthSection';
 import type { ProviderConfigurationValue } from './types';
+import { isVertexAuthConfigured } from './utils/providerVertexAuth';
 
 /**
  * The one provider configuration screen body, shared by provider details, setup from the
@@ -64,11 +66,26 @@ export function ProviderConfiguration({
             {value.apiKeys ? (
               <ProviderApiKeysSection apiKeys={value.apiKeys} value={value} />
             ) : null}
-            {value.models && (value.apiKeys || value.account?.signedIn) ? (
+            {value.vertexAuth ? (
+              <ProviderVertexAuthSection auth={value.vertexAuth} disabled={value.isBusy} />
+            ) : null}
+            {value.models && (value.apiKeys || value.account?.signedIn || value.vertexAuth) ? (
               <ProviderConnectionTestSection
-                apiKeys={value.account?.signedIn ? [] : (value.apiKeys ?? [])}
-                authOptional={value.provider?.authOptional}
-                signedIn={value.account?.signedIn}
+                key={`${value.providerId}:${value.connectionKey ?? ''}`}
+                credentials={
+                  value.vertexAuth
+                    ? {
+                        kind: 'service-account',
+                        ready: isVertexAuthConfigured(value.vertexAuth.config),
+                      }
+                    : value.account?.signedIn
+                      ? { kind: 'account' }
+                      : {
+                          kind: 'api-key',
+                          keys: value.apiKeys ?? [],
+                          optional: value.provider?.authOptional ?? false,
+                        }
+                }
                 disabled={value.isBusy}
                 models={value.models}
                 providerId={value.providerId}

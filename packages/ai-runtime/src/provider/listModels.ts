@@ -320,6 +320,7 @@ const vertexFetcher: ModelFetcher = {
   fetch: async (provider, context, signal, options) => {
     const request = await createVertexModelListRequest(provider, context, {
       throwOnError: options?.throwOnError,
+      signal,
     });
     if (!request) return [];
 

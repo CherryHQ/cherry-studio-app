@@ -28,6 +28,49 @@ const provider = {
 const key: ApiKeyEntry = { id: 'key', key: 'configured', isEnabled: true };
 
 describe('provider configuration prerequisites', () => {
+  it('requires real service-account fields while allowing the derived Vertex address', () => {
+    const vertex = {
+      ...provider,
+      authType: 'iam-gcp',
+      endpointConfigs: { 'google-generate-content': { adapterFamily: 'google-vertex' } },
+    } as Provider;
+    const auth = {
+      type: 'iam-gcp' as const,
+      project: 'my-project',
+      location: 'global',
+      credentials: {
+        client_email: 'svc@example.com',
+        private_key: '-----BEGIN PRIVATE KEY-----\nYWJjZA==\n-----END PRIVATE KEY-----',
+      },
+    };
+    expect(getProviderConfigurationIssue(vertex, [], auth)).toBeNull();
+    expect(
+      getProviderConfigurationIssue(vertex, [], { ...auth, credentials: { unrelated: true } }),
+    ).toBe('invalid-service-account');
+    expect(getProviderConfigurationIssue(vertex, [], { ...auth, project: '' })).toBe(
+      'invalid-service-account',
+    );
+    expect(
+      getProviderConfigurationIssue(vertex, [], {
+        ...auth,
+        credentials: { ...auth.credentials, client_email: 'svc..invalid@example.com' },
+      }),
+    ).toBe('invalid-service-account');
+    expect(
+      getProviderConfigurationIssue(
+        {
+          ...vertex,
+          endpointConfigs: {
+            'google-generate-content': {
+              baseUrl: 'https://example.com/v1/projects/other/locations/global',
+            },
+          },
+        },
+        [],
+        auth,
+      ),
+    ).toBe('invalid-endpoint');
+  });
   it('requires an enabled, non-blank credential when authentication is required', () => {
     expect(getProviderConfigurationIssue(provider, [])).toBe('missing-api-key');
     expect(getProviderConfigurationIssue(provider, [{ ...key, key: '  ' }])).toBe(

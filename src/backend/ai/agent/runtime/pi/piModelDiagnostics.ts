@@ -108,7 +108,7 @@ export function piModelPayloadAttributes(payload: unknown, api: Api): TraceAttri
       ? (body.config as Record<string, unknown>)
       : undefined;
   const field =
-    api === 'google-generative-ai'
+    api === 'google-generative-ai' || api === 'google-vertex'
       ? 'config.maxOutputTokens'
       : api === 'openai-responses' || api === 'azure-openai-responses'
         ? 'max_output_tokens'
