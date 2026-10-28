@@ -20,6 +20,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { duration, easing } from '../../../motion';
 import type { ComposerInputProps } from '../composer.types';
@@ -72,6 +73,9 @@ export function ComposerEditor({
   const fieldFrameHeight = useSharedValue(restingInputHeight);
   const expansionHeight = expansion?.meta.extraHeight;
   const collapseEditor = expansion?.actions.collapse;
+  const reportGrowth = expansion?.actions.reportEditorGrowth;
+  const morphTarget = useRef(isInputActive);
+  const isMorphing = useRef(false);
   const canExpand = expansion !== null;
   const hasCompactAccessory = compactAccessory != null;
   const context = useMemo(
@@ -83,18 +87,42 @@ export function ComposerEditor({
   );
 
   useEffect(() => () => collapseEditor?.(), [collapseEditor]);
+  useEffect(() => () => reportGrowth?.(null), [reportGrowth]);
+
+  // Content behind the dock reserves the settled growth, never a frame of the morph.
+  const publishGrowth = useCallback(
+    (isActive: boolean) =>
+      reportGrowth?.({
+        height: isActive ? naturalFieldHeight.current + activeToolbarGap : 0,
+        isActive,
+        isSettled: !isMorphing.current,
+      }),
+    [reportGrowth],
+  );
 
   // Preserve the existing isolated frame motion: the top grows away from the
   // anchored toolbar, interruptions reverse it, and Reduce Motion lands directly.
   useEffect(() => {
-    activeProgress.set(withTiming(isInputActive ? 1 : 0, activeTransitionMotion));
+    const settle = () => {
+      isMorphing.current = false;
+      publishGrowth(isInputActive);
+    };
+    // The frame mounts at its target, so only a changed target starts a morph.
+    if (morphTarget.current !== isInputActive) isMorphing.current = true;
+    morphTarget.current = isInputActive;
+    publishGrowth(isInputActive);
+    activeProgress.set(
+      withTiming(isInputActive ? 1 : 0, activeTransitionMotion, (finished) => {
+        if (finished) scheduleOnRN(settle);
+      }),
+    );
     fieldFrameHeight.set(
       withTiming(
         isInputActive ? naturalFieldHeight.current : restingInputHeight,
         activeTransitionMotion,
       ),
     );
-  }, [activeProgress, fieldFrameHeight, isInputActive]);
+  }, [activeProgress, fieldFrameHeight, isInputActive, publishGrowth]);
 
   const morphFrameStyle = useAnimatedStyle(() => ({
     height:
@@ -138,9 +166,12 @@ export function ComposerEditor({
         expansion.actions.resizeContent(nextHeight - naturalFieldHeight.current);
       }
       naturalFieldHeight.current = nextHeight;
-      if (isInputActive) fieldFrameHeight.set(nextHeight);
+      if (isInputActive) {
+        fieldFrameHeight.set(nextHeight);
+        publishGrowth(true);
+      }
     },
-    [expansion, fieldFrameHeight, isInputActive],
+    [expansion, fieldFrameHeight, isInputActive, publishGrowth],
   );
 
   return (

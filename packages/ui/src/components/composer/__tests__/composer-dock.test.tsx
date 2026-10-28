@@ -173,14 +173,22 @@ describe('Composer.Dock', () => {
           this.value = next;
         },
       }) as SharedValue<T>;
-    const contentInset = cell(0);
     const progress = cell(0);
+    const recordDockHeight = jest.fn();
+    const releaseDock = jest.fn();
     mockExpansion = {
       state: { isExpanded: false, isPresented: false },
-      actions: { expand: jest.fn(), collapse: jest.fn(), resizeContent: jest.fn() },
+      actions: {
+        expand: jest.fn(),
+        collapse: jest.fn(),
+        recordDockHeight,
+        releaseDock,
+        reportEditorGrowth: jest.fn(),
+        resizeContent: jest.fn(),
+      },
       meta: {
         compactDockHeight: cell(0),
-        contentInset,
+        contentInset: cell(0),
         extraHeight: cell(0),
         keyboardTrackingEnabled: cell(false),
         progress,
@@ -210,7 +218,7 @@ describe('Composer.Dock', () => {
         }),
       );
     }
-    expect(contentInset.get()).toBe(148);
+    expect(recordDockHeight).toHaveBeenLastCalledWith(148);
     expect(onRender).not.toHaveBeenCalled();
     const restingBackground = () =>
       renderer!.root.findByProps({ className: 'absolute inset-0 bg-chat-background' });
@@ -226,11 +234,11 @@ describe('Composer.Dock', () => {
         nativeEvent: { layout: { height: 600 } },
       }),
     );
-    expect(contentInset.get()).toBe(148);
+    expect(recordDockHeight).toHaveBeenCalledTimes(4);
     expect(onHeightChange).toHaveBeenLastCalledWith(600);
 
     act(() => renderer!.unmount());
     renderer = undefined;
-    expect(contentInset.get()).toBe(0);
+    expect(releaseDock).toHaveBeenCalledTimes(1);
   });
 });

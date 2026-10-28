@@ -758,10 +758,13 @@ For a screen that supports manual large-editor presentation, wrap its content an
 `Composer.Expansion` and use `Composer.Dock layoutMode="expandable"`. Its flow placeholder reserves
 only compact input space; expansion stays in the same native subtree above the transcript.
 Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholder, and
-`useComposerExpansion().meta.contentInset` publishes the measured compact space for the keyboard
-list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
-without resizing the list viewport or rerendering the screen for every height sample. The inset
-stays fixed through manual expansion and clears when the dock unmounts. Pass the page color as
+`useComposerExpansion().meta.contentInset` publishes the dock's space for the keyboard list's
+`contentInsetEndAdjustment` without resizing the list viewport or rerendering the screen. It is
+the resting dock height plus the editor's settled growth, never a measured frame of the editor's
+morph: growth that comes with focus or blur arrives on the keyboard's progress, so the transcript
+moves once with the keyboard while the editor morphs on its own curve. Without a keyboard on its
+way, the growth follows the editor's timing. The inset stays fixed through manual expansion and
+clears when the dock unmounts. Pass the page color as
 `backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
 transcript beneath it; it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
