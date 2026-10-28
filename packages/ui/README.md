@@ -757,6 +757,11 @@ const dock = useComposerDockLayout();
 For a screen that supports manual large-editor presentation, wrap its content and header in
 `Composer.Expansion` and use `Composer.Dock layoutMode="expandable"`. Its flow placeholder reserves
 only compact input space; expansion stays in the same native subtree above the transcript.
+Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholder, and
+`useComposerExpansion().meta.contentInset` publishes the measured compact space for the keyboard
+list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
+without resizing the list viewport or rerendering the screen for every height sample. The inset
+stays fixed through manual expansion and clears when the dock unmounts.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
 returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
 while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.

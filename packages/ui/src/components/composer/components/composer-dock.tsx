@@ -24,8 +24,8 @@ const StyledKeyboardStickyView = withUniwind(KeyboardStickyView);
 
 export type ComposerDockProps = PropsWithChildren<{
   containerRef?: RefObject<ViewInstance | null>;
-  /** Uses normal parent layout instead of overlaying sibling content. */
-  layoutMode?: 'floating' | 'flow' | 'expandable';
+  /** Expandable overlays publish contentInset instead of reserving parent flow space. */
+  layoutMode?: 'floating' | 'flow' | 'expandable' | 'expandable-overlay';
   collapseLabel?: string;
   /** Stops following keyboard coordinates while another surface owns input. */
   keyboardTrackingEnabled?: boolean;
@@ -48,20 +48,33 @@ export function ComposerDock({
   const fallbackRef = useRef<ViewInstance>(null);
   const dockRef = containerRef ?? fallbackRef;
   const [compactHeight, setCompactHeight] = useState(0);
-  const isExpandable = layoutMode === 'expandable' && expansion !== null;
+  const reservesSpace = layoutMode === 'expandable';
+  const isExpandable = (reservesSpace || layoutMode === 'expandable-overlay') && expansion !== null;
   const isPresented = isExpandable && expansion.state.isPresented;
   const tracking = expansion?.meta.keyboardTrackingEnabled;
   const progress = expansion?.meta.progress;
   const compactDockHeight = expansion?.meta.compactDockHeight;
+  const contentInset = expansion?.meta.contentInset;
 
   const recordCompactHeight = useCallback(
     (height: number) => {
       const measuredHeight = Math.ceil(height);
-      setCompactHeight((current) => (current === measuredHeight ? current : measuredHeight));
+      if (reservesSpace) {
+        setCompactHeight((current) => (current === measuredHeight ? current : measuredHeight));
+      }
       compactDockHeight?.set(measuredHeight);
+      contentInset?.set(measuredHeight);
     },
-    [compactDockHeight],
+    [compactDockHeight, contentInset, reservesSpace],
   );
+
+  useEffect(() => {
+    if (!isExpandable) return;
+    return () => {
+      compactDockHeight?.set(0);
+      contentInset?.set(0);
+    };
+  }, [compactDockHeight, contentInset, isExpandable]);
 
   useEffect(() => {
     if (!isExpandable || isPresented) return;
@@ -142,7 +155,7 @@ export function ComposerDock({
 
   return (
     <>
-      <View style={{ height: compactHeight }} />
+      {reservesSpace ? <View style={{ height: compactHeight }} /> : null}
       <Animated.View
         className="absolute inset-0 bg-scrim"
         pointerEvents={isPresented ? 'auto' : 'none'}

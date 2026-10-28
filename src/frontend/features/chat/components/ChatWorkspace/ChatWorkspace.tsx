@@ -2,6 +2,7 @@ import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/compone
 import { type ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 import type {
   ConversationHistoryView,
@@ -44,7 +45,7 @@ type ChatWorkspaceProps = {
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
-  feedbackHintBottomOffset?: number;
+  feedbackHintBottomOffset?: SharedValue<number>;
   messageWindow: ConversationHistoryView;
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
@@ -71,7 +72,7 @@ export function ChatWorkspace({
   forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
-  feedbackHintBottomOffset = 0,
+  feedbackHintBottomOffset,
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,

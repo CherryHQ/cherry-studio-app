@@ -137,3 +137,171 @@ index 9a40a85..ebec9e7 100644
          // Record actual scroll displacement so close can be symmetric
          if (effective > 0 && offsetBeforeScroll.value !== -1) {
            actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
+diff --git a/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts b/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts
+--- a/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts
++++ b/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts
+@@ -1,5 +1,6 @@
+ import { useCallback } from "react";
+ import { Platform } from "react-native";
++import { useSharedValue } from "react-native-reanimated";
+
+ import { IS_FABRIC } from "../../../architecture";
+ import { useAnimatedReaction } from "../../../reanimated";
+@@ -60,10 +61,15 @@
+     keyboardLiftBehavior,
+     freeze,
+   } = options;
++  const lastCommanded = useSharedValue<number | null>(null);
++  const lastObservedScroll = useSharedValue(0);
+
+   const scrollToTarget = useCallback(
+     (target: number) => {
+       "worklet";
++
++      lastCommanded.value = target;
++      lastObservedScroll.value = scroll.value;
+
+       if (contentOffsetY && IS_FABRIC) {
+         // eslint-disable-next-line react-compiler/react-compiler
+@@ -78,7 +84,7 @@
+         safeScrollTo(scrollViewRef, 0, target, false);
+       }
+     },
+-    [scrollViewRef, contentOffsetY],
++    [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll],
+   );
+
+   useAnimatedReaction(
+@@ -130,8 +136,15 @@
+         return;
+       }
+
++      // Native scroll events can trail inset frames. Accumulate pending commands,
++      // but let a newly observed offset (including a user drag) take ownership.
++      const base =
++        lastCommanded.value !== null && scroll.value === lastObservedScroll.value
++          ? lastCommanded.value
++          : scroll.value;
++
+       if (inverted) {
+-        const target = Math.max(scroll.value - effectiveDelta, -currentTotal);
++        const target = Math.max(base - effectiveDelta, -currentTotal);
+
+         scrollToTarget(target);
+       } else {
+@@ -143,7 +156,7 @@
+         // shrinking padding makes `effectiveDelta` negative while `scroll.value`
+         // is already 0, so the target would go below the top of the content.
+         const target = Math.max(
+-          Math.min(scroll.value + effectiveDelta, maxScroll),
++          Math.min(base + effectiveDelta, maxScroll),
+           0,
+         );
+
+diff --git a/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js b/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js
+--- a/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js
++++ b/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js
+@@ -1,5 +1,6 @@
+ import { useCallback } from "react";
+ import { Platform } from "react-native";
++import { useSharedValue } from "react-native-reanimated";
+ import { IS_FABRIC } from "../../../architecture";
+ import { useAnimatedReaction } from "../../../reanimated";
+ import { safeScrollTo } from "../../utils/safeScrollTo";
+@@ -34,9 +35,13 @@
+     keyboardLiftBehavior,
+     freeze
+   } = options;
++  const lastCommanded = useSharedValue(null);
++  const lastObservedScroll = useSharedValue(0);
+   const scrollToTarget = useCallback(target => {
+     "worklet";
+
++    lastCommanded.value = target;
++    lastObservedScroll.value = scroll.value;
+     if (contentOffsetY && IS_FABRIC) {
+       // eslint-disable-next-line react-compiler/react-compiler
+       contentOffsetY.value = target;
+@@ -49,7 +54,7 @@
+     } else {
+       safeScrollTo(scrollViewRef, 0, target, false);
+     }
+-  }, [scrollViewRef, contentOffsetY]);
++  }, [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll]);
+   useAnimatedReaction(() => extraContentPadding.value, (current, previous) => {
+     if (freeze.value || previous === null) {
+       return;
+@@ -76,15 +81,17 @@
+     if (!shouldShiftContent(keyboardLiftBehavior, atEnd)) {
+       return;
+     }
++    // Accumulate pending commands until a native scroll event takes ownership.
++    const base = lastCommanded.value !== null && scroll.value === lastObservedScroll.value ? lastCommanded.value : scroll.value;
+     if (inverted) {
+-      const target = Math.max(scroll.value - effectiveDelta, -currentTotal);
++      const target = Math.max(base - effectiveDelta, -currentTotal);
+       scrollToTarget(target);
+     } else {
+       const maxScroll = Math.max(size.value.height - layout.value.height + currentTotal, 0);
+       // Clamp at 0 as well: when the content is shorter than the viewport a
+       // shrinking padding makes `effectiveDelta` negative while `scroll.value`
+       // is already 0, so the target would go below the top of the content.
+-      const target = Math.max(Math.min(scroll.value + effectiveDelta, maxScroll), 0);
++      const target = Math.max(Math.min(base + effectiveDelta, maxScroll), 0);
+       scrollToTarget(target);
+     }
+   }, [inverted, keyboardLiftBehavior]);
+diff --git a/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js b/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js
+--- a/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js
++++ b/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js
+@@ -6,6 +6,7 @@
+ exports.useExtraContentPadding = useExtraContentPadding;
+ var _react = require("react");
+ var _reactNative = require("react-native");
++var _reactNativeReanimated = require("react-native-reanimated");
+ var _architecture = require("../../../architecture");
+ var _reanimated = require("../../../reanimated");
+ var _safeScrollTo = require("../../utils/safeScrollTo");
+@@ -40,9 +41,13 @@
+     keyboardLiftBehavior,
+     freeze
+   } = options;
++  const lastCommanded = (0, _reactNativeReanimated.useSharedValue)(null);
++  const lastObservedScroll = (0, _reactNativeReanimated.useSharedValue)(0);
+   const scrollToTarget = (0, _react.useCallback)(target => {
+     "worklet";
+
++    lastCommanded.value = target;
++    lastObservedScroll.value = scroll.value;
+     if (contentOffsetY && _architecture.IS_FABRIC) {
+       // eslint-disable-next-line react-compiler/react-compiler
+       contentOffsetY.value = target;
+@@ -55,7 +60,7 @@
+     } else {
+       (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, target, false);
+     }
+-  }, [scrollViewRef, contentOffsetY]);
++  }, [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll]);
+   (0, _reanimated.useAnimatedReaction)(() => extraContentPadding.value, (current, previous) => {
+     if (freeze.value || previous === null) {
+       return;
+@@ -82,15 +87,17 @@
+     if (!(0, _helpers.shouldShiftContent)(keyboardLiftBehavior, atEnd)) {
+       return;
+     }
++    // Accumulate pending commands until a native scroll event takes ownership.
++    const base = lastCommanded.value !== null && scroll.value === lastObservedScroll.value ? lastCommanded.value : scroll.value;
+     if (inverted) {
+-      const target = Math.max(scroll.value - effectiveDelta, -currentTotal);
++      const target = Math.max(base - effectiveDelta, -currentTotal);
+       scrollToTarget(target);
+     } else {
+       const maxScroll = Math.max(size.value.height - layout.value.height + currentTotal, 0);
+       // Clamp at 0 as well: when the content is shorter than the viewport a
+       // shrinking padding makes `effectiveDelta` negative while `scroll.value`
+       // is already 0, so the target would go below the top of the content.
+-      const target = Math.max(Math.min(scroll.value + effectiveDelta, maxScroll), 0);
++      const target = Math.max(Math.min(base + effectiveDelta, maxScroll), 0);
+       scrollToTarget(target);
+     }
+   }, [inverted, keyboardLiftBehavior]);

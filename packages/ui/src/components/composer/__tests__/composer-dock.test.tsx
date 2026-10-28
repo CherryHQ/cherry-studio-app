@@ -1,11 +1,18 @@
-import { useEffect } from 'react';
+import { Profiler, useEffect } from 'react';
 import { View } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ComposerDock } from '../components/composer-dock';
+import type { useComposerExpansion } from '../components/composer-expansion';
 import { useComposerDockLayout } from '../hooks/use-composer-dock-layout';
 
 let mockBottomInset = 34;
+let mockExpansion: ReturnType<typeof useComposerExpansion> = null;
+
+jest.mock('../components/composer-expansion', () => ({
+  useComposerExpansion: () => mockExpansion,
+}));
 
 jest.mock('uniwind', () => ({
   withUniwind: (component: unknown) => component,
@@ -26,6 +33,8 @@ jest.mock('react-native-keyboard-controller', () => {
 });
 
 jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: jest.requireActual('react-native').View },
   Easing: { bezier: () => 'settle' },
   useAnimatedStyle: (factory: () => object) => factory(),
   useSharedValue: (initialValue: number) => {
@@ -60,6 +69,7 @@ describe('Composer.Dock', () => {
 
   beforeEach(() => {
     mockBottomInset = 34;
+    mockExpansion = null;
     dockLayout = undefined;
   });
 
@@ -150,5 +160,66 @@ describe('Composer.Dock', () => {
     const container = renderer!.root.findByProps({ pointerEvents: 'box-none' });
     expect(container.props.className).toBe('z-10 shrink-0');
     expect(container.props.onLayout).toBeUndefined();
+  });
+
+  it('publishes overlay space without rerendering and holds it during manual expansion', () => {
+    const cell = <T,>(value: T) =>
+      ({
+        value,
+        get() {
+          return this.value;
+        },
+        set(next: T) {
+          this.value = next;
+        },
+      }) as SharedValue<T>;
+    const contentInset = cell(0);
+    mockExpansion = {
+      state: { isExpanded: false, isPresented: false },
+      actions: { expand: jest.fn(), collapse: jest.fn(), resizeContent: jest.fn() },
+      meta: {
+        compactDockHeight: cell(0),
+        contentInset,
+        extraHeight: cell(0),
+        keyboardTrackingEnabled: cell(false),
+        progress: cell(0),
+      },
+    };
+    const onRender = jest.fn();
+    const onHeightChange = jest.fn();
+    const renderDock = () => (
+      <Profiler id="dock" onRender={onRender}>
+        <ComposerDock layoutMode="expandable-overlay" onHeightChange={onHeightChange}>
+          <View testID="editor" />
+        </ComposerDock>
+      </Profiler>
+    );
+    act(() => {
+      renderer = create(renderDock());
+    });
+    onRender.mockClear();
+    for (const height of [100, 110, 125, 148]) {
+      act(() =>
+        renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.onLayout({
+          nativeEvent: { layout: { height } },
+        }),
+      );
+    }
+    expect(contentInset.get()).toBe(148);
+    expect(onRender).not.toHaveBeenCalled();
+
+    mockExpansion.state = { isExpanded: true, isPresented: true };
+    act(() => renderer!.update(renderDock()));
+    act(() =>
+      renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.onLayout({
+        nativeEvent: { layout: { height: 600 } },
+      }),
+    );
+    expect(contentInset.get()).toBe(148);
+    expect(onHeightChange).toHaveBeenLastCalledWith(600);
+
+    act(() => renderer!.unmount());
+    renderer = undefined;
+    expect(contentInset.get()).toBe(0);
   });
 });

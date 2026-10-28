@@ -9,6 +9,7 @@ import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
 import { type ComponentProps, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -198,7 +199,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
       : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
-  const [composerHeight, setComposerHeight] = useState(0);
+  const composerHeight = useSharedValue(0);
+  const setComposerHeight = useCallback(
+    (height: number) => composerHeight.set(height),
+    [composerHeight],
+  );
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -270,11 +275,12 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               )}
             </ComposerDismissArea>
           </FullScreenLayerHost>
-          {/* Below the transcript: the column's top edge sits under the header overlay. */}
-          {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+          {/* The transcript keeps its viewport; the keyboard adapter reserves the dock inset. */}
+          {!hasComposer && sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
+            <ComposerDock layoutMode="expandable-overlay" onHeightChange={setComposerHeight}>
               <View>
+                {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
                 <ChatInput
                   agentId={resolvedAgentId}
                   controls={controls}
