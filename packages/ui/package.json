@@ -102,7 +102,6 @@
     "@shopify/react-native-skia": "*",
     "@swmansion/react-native-bottom-sheet": "*",
     "expo-blur": "*",
-    "expo": "*",
     "expo-file-system": "*",
     "expo-glass-effect": "*",
     "expo-haptics": "*",

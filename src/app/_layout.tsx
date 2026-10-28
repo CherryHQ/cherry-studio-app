@@ -37,6 +37,7 @@ import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
+import { MermaidRendererHost } from '@/frontend/components/MermaidDiagram';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { LanguagePreferenceObserver } from '@/frontend/i18n';
@@ -78,6 +79,8 @@ function RootLayout() {
                                       <BackgroundActivityBridge />
                                       <LanguagePreferenceObserver />
                                       <SystemEntryBridge />
+                                      {/* Before the navigator, so opaque screens cover the renderer page. */}
+                                      <MermaidRendererHost />
                                       <FeedbackCaptureProvider>
                                         <FeedbackHintProvider>
                                           <ConversationProvider>
@@ -171,6 +174,7 @@ function RootStack() {
         options={{ headerTransparent: false }}
       />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
+      <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
       <Stack.Screen
         name="document-export"
         options={{

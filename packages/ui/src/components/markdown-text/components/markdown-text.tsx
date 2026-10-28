@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, type ReactElement, type ReactNode, useMemo, useState } from 'react';
 import { Platform, View } from 'react-native';
 import {
   EnrichedMarkdownText,
@@ -11,7 +11,6 @@ import { useCSSVariable, useUniwind } from 'uniwind';
 import { normalizeLatexDelimiters } from '../../../markdown';
 import { splitMermaidBlocks } from '../../../markdown/split-mermaid-blocks';
 import { resolveTypographyScale, type TypographySizeStep } from '../../../utils/typography-scale';
-import { MermaidDiagram } from '../../mermaid-diagram';
 import { resolveSyntaxColors } from '../utils/syntax-colors';
 
 const markdownThemeVariables = [
@@ -51,6 +50,11 @@ export type MarkdownTextProps = {
   isStreaming?: boolean;
   markdown: string;
   onLinkPress: (url: string) => void;
+  /**
+   * Presents a complete top-level Mermaid fence. `fallback` is the fence as an ordinary code
+   * block, for diagrams the caller cannot present. Without it, Mermaid stays a code block.
+   */
+  renderMermaid?: (diagram: { source: string; fallback: ReactElement }) => ReactNode;
   selectable?: boolean;
   selectionMenuLabels?: MarkdownSelectionMenuLabels;
 };
@@ -134,6 +138,7 @@ export function MarkdownText({
   isStreaming = false,
   markdown,
   onLinkPress,
+  renderMermaid,
   selectable = true,
   selectionMenuLabels,
 }: MarkdownTextProps) {
@@ -282,35 +287,41 @@ export function MarkdownText({
     [isStreaming, markdown],
   );
 
-  const parts = splitMermaidBlocks(normalizedMarkdown, isStreaming);
+  const parts = useMemo(
+    () => (renderMermaid ? splitMermaidBlocks(normalizedMarkdown, isStreaming) : undefined),
+    [isStreaming, normalizedMarkdown, renderMermaid],
+  );
 
+  const renderMarkdown = (markdown: string, key: string, isTail: boolean) => (
+    <MarkdownRenderer
+      key={key}
+      allowTrailingMargin={false}
+      flavor="github"
+      markdown={markdown}
+      markdownStyle={markdownStyle}
+      md4cFlags={{ latexMath: true, superscript: true, underline: false }}
+      onLinkPress={handleLinkPress}
+      selectable={selectable}
+      // iOS derives the translucent highlight and handles from one opaque tint.
+      selectionColor={Platform.OS === 'ios' ? mutedForeground : secondary}
+      selectionHandleColor={mutedForeground}
+      selectionMenuConfig={selectionMenuConfig}
+      streamingAnimation={isStreaming && isTail}
+    />
+  );
+
+  if (!parts || !renderMermaid) return renderMarkdown(normalizedMarkdown, '0', true);
+
+  // The wrapper stays mounted while fences complete, so streamed segments keep their native views.
+  // Each segment drops its trailing margin; the gap restores the code block's 12-point rhythm.
   return (
-    <View className="min-w-0 gap-3">
+    <View className="gap-3">
       {parts.map((part, index) => {
-        const content = (
-          <MarkdownRenderer
-            key={part.key}
-            allowTrailingMargin={false}
-            flavor="github"
-            markdown={part.markdown}
-            markdownStyle={markdownStyle}
-            md4cFlags={{ latexMath: true, superscript: true, underline: false }}
-            onLinkPress={handleLinkPress}
-            selectable={selectable}
-            // iOS derives the translucent highlight and handles from one opaque tint.
-            selectionColor={Platform.OS === 'ios' ? mutedForeground : secondary}
-            selectionHandleColor={mutedForeground}
-            selectionMenuConfig={selectionMenuConfig}
-            streamingAnimation={isStreaming && index === parts.length - 1}
-          />
-        );
+        const content = renderMarkdown(part.markdown, part.key, index === parts.length - 1);
         return part.kind === 'mermaid' ? (
-          <MermaidDiagram
-            key={part.key}
-            fallback={content}
-            fontSizeStep={fontSizeStep}
-            source={part.source}
-          />
+          <Fragment key={part.key}>
+            {renderMermaid({ source: part.source, fallback: content })}
+          </Fragment>
         ) : (
           content
         );
