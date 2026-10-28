@@ -211,6 +211,9 @@ export function MessageList({
           >
             {(scrollHandlers) => (
               <KeyboardAwareLegendList
+                // Give each window its own list: LegendList calls set$('readyToRender') during render on dataKey changes,
+                // triggering React's "Cannot update a component while rendering a different component" warning.
+                key={dataKey ?? 'live'}
                 ref={listRef}
                 {...scrollHandlers}
                 applyWorkaroundForContentInsetHitTestBug

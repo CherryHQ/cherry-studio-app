@@ -55,6 +55,7 @@ type MockLegendListProps = {
 };
 
 let mockLatestListProps: MockLegendListProps | undefined;
+let mockListMounts = 0;
 const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
   typeof KeyboardController.dismiss
 >;
@@ -122,6 +123,9 @@ jest.mock('@legendapp/list/keyboard', () => {
   return {
     KeyboardAwareLegendList: (props: MockLegendListProps) => {
       mockLatestListProps = props;
+      useLayoutEffect(() => {
+        mockListMounts += 1;
+      }, []);
       const listRef = props.ref;
       useLayoutEffect(() => {
         if (typeof listRef === 'function') {
@@ -281,6 +285,7 @@ describe('MessageList scroll-controller ownership', () => {
     cacheService.set('chat.scroll_anchor.session-1', null);
     mockAnimatedReactions = [];
     mockLatestListProps = undefined;
+    mockListMounts = 0;
     mockScrollButtonProps = undefined;
     mockKeyboardHeight = mockCreateSharedValue(0);
     mockKeyboardProgress = mockCreateSharedValue(0);
@@ -471,12 +476,31 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
   });
 
+  test.each([
+    ['the same dataKey', 'session-1'],
+    ['no dataKey', undefined],
+  ])('does not remount with %s when messages change', async (_label, dataKey) => {
+    const messages = [createMessage('user-1', 'user')];
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages, { dataKey })} />);
+    });
+    await loadList();
+    expect(mockListMounts).toBe(1);
+
+    act(() => {
+      renderer?.update(<MessageList {...listProps([...messages], { dataKey })} />);
+    });
+
+    expect(mockListMounts).toBe(1);
+  });
+
   test('restores a switched data set without waiting for a second list onLoad', async () => {
     const firstMessages = [createMessage('user-1', 'user')];
     act(() => {
       renderer = create(<MessageList {...listProps(firstMessages)} />);
     });
     await loadList();
+    expect(mockListMounts).toBe(1);
     mockListScrollToEnd.mockClear();
     mockListScrollToIndex.mockClear();
 
@@ -496,7 +520,60 @@ describe('MessageList scroll-controller ownership', () => {
       viewPosition: 0,
     });
     expect(mockLatestListProps?.dataKey).toBe('session-2');
+    expect(mockListMounts).toBe(2);
   });
+
+  test.each([false, true])(
+    'remounts a switched exact window and reports only a fulfilled scroll (%s rejected)',
+    async (rejected) => {
+      const onTargetRestored = jest.fn();
+      act(() => {
+        renderer = create(
+          <MessageList {...listProps([createMessage('user-1', 'user')], { onTargetRestored })} />,
+        );
+      });
+      await loadList();
+      expect(mockListMounts).toBe(1);
+
+      let finish!: () => void;
+      mockListScrollToIndex.mockImplementationOnce(
+        () =>
+          new Promise<undefined>((resolve, reject) => {
+            finish = () => (rejected ? reject(new Error('scroll failed')) : resolve(undefined));
+          }),
+      );
+      act(() => {
+        renderer?.update(
+          <MessageList
+            {...listProps([createMessage('source', 'user')], {
+              dataKey: 'exact-window',
+              initialScrollTarget: { messageId: 'source' },
+              onTargetRestored,
+            })}
+          />,
+        );
+      });
+
+      expect(mockListMounts).toBe(2);
+      expect(mockListScrollToIndex).toHaveBeenCalledWith({
+        animated: false,
+        index: 0,
+        viewOffset: 44,
+        viewPosition: 0,
+      });
+      expect(onTargetRestored).not.toHaveBeenCalled();
+
+      await act(async () => {
+        finish();
+        await Promise.resolve();
+        flushAnimationFrames();
+      });
+
+      expect(onTargetRestored.mock.calls).toEqual(
+        rejected ? [] : [[{ dataKey: 'exact-window', messageId: 'source' }]],
+      );
+    },
+  );
 
   test.each([false, true])(
     'reports exact target only after a fulfilled scroll (%s rejected)',
