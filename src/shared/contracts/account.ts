@@ -28,7 +28,9 @@ export type AccountState = Readonly<{
   /** A new installation has seen the sign-in page, whether it signed in or not. */
   hasPrompted: boolean;
   isBusy: boolean;
+  /** Display name; never use it as a stable identity or infer a login name from it. */
   name?: string;
+  maskedIdentifier?: string;
   /** Preselects private sign-in when restoring or switching a private account. */
   privateAddress?: string;
   /** The active cloud organization's display name, when Accounts Portal provided one. */
@@ -51,6 +53,10 @@ export interface AccountModule {
    * again. Another organization reloads the app instead.
    */
   signIn(options?: PrivateSignIn): Promise<boolean>;
+  /** Opens the web space chooser using the current browser sign-in. */
+  switchSpace(): Promise<boolean>;
+  /** Completes live and cold-start callbacks once, then activates the admitted local profile. */
+  receiveRedirect(url: string): Promise<boolean>;
   /** Ends the session. An enterprise or private account returns to the community data. */
   signOut(): Promise<void>;
   /** Continues a new installation without signing in. */

@@ -40,6 +40,7 @@ type Portal = Pick<
   | 'beginSignIn'
   | 'completeSignIn'
   | 'getProductToken'
+  | 'getAccount'
   | 'listProfiles'
   | 'signOut'
 >;
@@ -97,6 +98,8 @@ export class AccountRuntime implements AccountModule {
   private privateRefresh: Promise<string> | undefined;
   private credentialRevision = 0;
   private isPrivateSessionClosed = false;
+  private callback: { url: string; result: Promise<boolean> } | undefined;
+  private redirectRouted = false;
 
   constructor(private readonly options: AccountRuntimeOptions) {
     const { active, portal } = options;
@@ -143,92 +146,115 @@ export class AccountRuntime implements AccountModule {
   readonly signIn = async (options?: PrivateSignIn) =>
     (await this.busy(async () => {
       if (options) return this.signInPrivate(options);
-      const portal = this.requirePortal();
-      const enterpriseAddress = normalizeEnterpriseAddress(this.options.defaultAddress);
-      // An installation that already holds a cloud session is switching or signing in again, so
-      // the portal must ask who signs in instead of returning the remembered browser session.
-      // Until the portal can reuse a session and still show its profile choice, switching asks
-      // for the sign-in again.
-      const { url, redirectUri } = await portal.beginSignIn({
-        forceLogin:
-          portal.getState()._tag === 'signedIn' ||
-          this.state.needsSignIn ||
-          this.options.browserSession.isStale(),
+      return this.openCloudSignIn(true);
+    })) ?? false;
+
+  readonly switchSpace = async () => (await this.busy(() => this.openCloudSignIn(false))) ?? false;
+
+  private async openCloudSignIn(changeAccount: boolean): Promise<boolean> {
+    const portal = this.requirePortal();
+    this.callback = undefined;
+    this.redirectRouted = false;
+    const { url, redirectUri } = await portal.beginSignIn({
+      forceLogin:
+        (changeAccount && portal.getState()._tag === 'signedIn') ||
+        this.state.needsSignIn ||
+        this.options.browserSession.isStale(),
+    });
+    const result = await this.options.openBrowser(url, redirectUri);
+    if (!result) return false;
+    const stayed = await this.finishRedirect(result);
+    // Android may also route the callback. That screen owns navigation in that case.
+    return stayed && !this.redirectRouted;
+  }
+
+  readonly receiveRedirect = (url: string): Promise<boolean> => {
+    this.redirectRouted = true;
+    return this.finishRedirect(url);
+  };
+
+  private finishRedirect(url: string): Promise<boolean> {
+    if (this.callback) {
+      if (this.callback.url === url) return this.callback.result;
+      return Promise.reject(new AccountError('rejected'));
+    }
+    const ownsBusy = !this.state.isBusy;
+    if (ownsBusy) this.update({ isBusy: true });
+    const result = this.completeCloudSignIn(url).finally(() => {
+      if (ownsBusy) this.update({ isBusy: false });
+    });
+    // Keep the result until another sign-in starts; a late browser/deep-link duplicate is consumed once.
+    this.callback = { url, result };
+    return result;
+  }
+
+  private async completeCloudSignIn(url: string): Promise<boolean> {
+    const portal = this.requirePortal();
+    const address = normalizeEnterpriseAddress(this.options.defaultAddress);
+    let target: ActiveProfile | undefined;
+    let proposed: AuthState | undefined;
+    try {
+      const session = await portal.completeSignIn(url, {
+        validate: async (candidate) => {
+          proposed = candidate.state;
+          if (!proposed.subject || !proposed.profile?.profileId) throw new AccountError('rejected');
+          await candidate.getAccount();
+          if (proposed.profile.product === 'cloud') {
+            target = LOCAL_PROFILE;
+            return;
+          }
+          if (proposed.profile.product !== 'enterprise') throw new AccountError('rejected');
+          const api = this.options.createApi(address, {
+            getProductToken: () => candidate.getProductToken(address),
+          });
+          const configuration = ServerIdentitySchema.safeParse(await api.getConfiguration());
+          if (!configuration.success) throw new AccountError('connection');
+          target = this.options.profiles.resolve(
+            {
+              deployment: configuration.data.serverUniqueId,
+              issuer: this.options.issuer,
+              subject: proposed.subject,
+              productProfileId: proposed.profile.profileId,
+            },
+            address,
+          );
+        },
       });
-      const result = await this.options.openBrowser(url, redirectUri);
-      if (!result) return false;
-      const wasOpen = this.state.isSignedIn && !this.state.needsSignIn;
-      // The SDK replaces credentials before it publishes the new identity. Fence the old cloud
-      // profile before that replacement, including failures after the SDK has saved new tokens.
-      if (this.state.isEnterprise && !this.state.privateAddress)
-        this.update({ needsSignIn: true, isSignedIn: false, name: undefined });
-      const session = await portal.completeSignIn(result);
+      if (session._tag !== 'signedIn' || !session.profile || !target)
+        throw new AccountError('rejected');
       this.options.browserSession.setStale(false);
-      this.updateCloudSession(session);
       this.dismissPrompt();
-      if (session._tag !== 'signedIn' || session.profile?.product !== 'enterprise') {
-        // A community account keeps the installation's own local data.
-        if (this.state.isEnterprise) await this.open(LOCAL_PROFILE);
-        return session._tag === 'signedIn';
-      }
-      const choice = session.profile;
-      const isOpenIdentity = this.matchesCloudProfile(session);
-      // The open organization signed in again: lift the fence above instead of reloading.
-      const keepOpenSession = () => {
-        this.update({ needsSignIn: false });
-        this.updateCloudSession(session);
-      };
-      let profile: ActiveProfile;
-      try {
-        const configuration = await this.options
-          .createApi(enterpriseAddress, {
-            getProductToken: () => portal.getProductToken(enterpriseAddress, choice),
-          })
-          .getConfiguration();
-        const server = ServerIdentitySchema.safeParse(configuration);
-        if (!server.success) throw new AccountError('connection');
-        // The display name is presentation only; an unreachable profile list never blocks sign-in.
+      if (target.identity) {
+        // Presentation lookup uses the newly committed account, never the previous account's token.
         const organization = await portal.listProfiles().then(
           ({ profiles }) =>
             profiles.find(
-              (candidate) =>
-                candidate.product === 'enterprise' && candidate.id === choice.profileId,
+              (entry) => entry.product === 'enterprise' && entry.id === session.profile?.profileId,
             )?.displayName,
           () => undefined,
         );
-        profile = this.options.profiles.resolve(
-          {
-            deployment: server.data.serverUniqueId,
-            issuer: this.options.issuer,
-            subject: session.subject,
-            productProfileId: choice.profileId,
-          },
-          enterpriseAddress,
-          organization,
-        );
-      } catch (error) {
-        // Only a network outage may preserve an already admitted identity. A refused or
-        // malformed admission must not reopen its data, including after an earlier rejection.
-        if (isOpenIdentity) {
-          if (
-            wasOpen &&
-            isHttpError(error) &&
-            (error.kind === 'network' || error.kind === 'timeout')
-          )
-            keepOpenSession();
-        } else await this.endCloudSession();
-        if (error instanceof AccountError) throw error;
-        throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
+        if (organization)
+          target = this.options.profiles.resolve(target.identity, address, organization);
       }
-      if (profile.id === this.options.active.id) {
-        keepOpenSession();
+      if (target.id === this.options.active.id) {
+        this.update({ needsSignIn: false });
+        this.updateCloudSession(session);
         return true;
       }
-      await this.open(profile);
+      await this.open(target);
       return false;
-    })) ?? false;
+    } catch (error) {
+      // A refused admission for the open organization is also a refusal of that identity.
+      if (proposed && this.matchesCloudProfile(proposed) && isAuthenticationRejection(error))
+        this.reportRejected();
+      // Other candidate failures leave the old session intact and never lift a prior rejection.
+      if (error instanceof AccountError) throw error;
+      throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
+    }
+  }
 
   readonly signOut = async () => {
+    this.callback = undefined;
     await this.busy(async () => {
       if (this.state.privateAddress) {
         // An in-flight rotation must finish before deletion, so it cannot restore signed-out tokens.
@@ -306,7 +332,13 @@ export class AccountRuntime implements AccountModule {
   };
 
   /** Records a server-side rejection observed by an authenticated enterprise request. */
-  readonly reportRejected = () => this.update({ needsSignIn: true });
+  readonly reportRejected = () =>
+    this.update({
+      needsSignIn: true,
+      isSignedIn: false,
+      name: undefined,
+      maskedIdentifier: undefined,
+    });
 
   /**
    * Confirms the restored session belongs to this profile. Offline launches keep working; only
@@ -366,6 +398,10 @@ export class AccountRuntime implements AccountModule {
       await portal.ready;
       this.updateCloudSession(portal.getState());
       if (active.identity) await this.getProductToken();
+      if (portal.getState()._tag === 'signedIn') {
+        await portal.getAccount();
+        this.updateCloudSession(portal.getState());
+      }
     } catch (error) {
       if (!isAuthenticationRejection(error))
         logger.warn('Could not verify the session', error as Error);
@@ -391,11 +427,12 @@ export class AccountRuntime implements AccountModule {
     // failed enterprise sign-in does not count.
     const matchesProfile = this.state.isEnterprise
       ? this.matchesCloudProfile(session)
-      : session._tag === 'signedIn' && session.profile?.product !== 'enterprise';
+      : session._tag === 'signedIn' && session.profile?.product === 'cloud';
     const isSignedIn = session._tag === 'signedIn' && matchesProfile && !this.state.needsSignIn;
     this.update({
       isSignedIn,
-      name: isSignedIn ? session.name : undefined,
+      name: isSignedIn ? (session.account?.displayName ?? session.name) : undefined,
+      maskedIdentifier: isSignedIn ? session.account?.maskedIdentifier : undefined,
       // Reauthentication reloads the profile. A later SDK notification cannot clear a rejection
       // or reopen the old profile while sign-in admission is still in progress.
       ...(this.state.isEnterprise && !matchesProfile && { needsSignIn: true }),
