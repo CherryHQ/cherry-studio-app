@@ -164,12 +164,19 @@ export class AgentService {
     return rowToAgent(row, await this.getModelName(row.model));
   }
 
-  /** Seeds a fresh installation without recreating an Agent the user deleted. */
+  /**
+   * Seeds the profile's own Agent without recreating one the user deleted. Organization-managed
+   * Agents are not the user's, so they never replace it.
+   */
   async createInitialAgent(dto: CreateAgentDto): Promise<Agent | null> {
     this.validateName(dto.name);
 
     const row = await this.dbService.withWriteTx(async (tx) => {
-      const [existing] = await tx.select({ id: agentTable.id }).from(agentTable).limit(1);
+      const [existing] = await tx
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(isNull(agentTable.managedRemoteId))
+        .limit(1);
       return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
     });
 

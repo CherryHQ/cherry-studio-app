@@ -253,6 +253,8 @@ user-adjustable fields; `agent_list` marks it `isManaged`.
 The UI hides provider creation and configuration, shows default models read-only, marks delivered
 resources with `ManagedBadge`, and never shows a managed Agent's instructions or a managed MCP
 server's headers. Users may still create their own Agents, MCP servers and Skills.
+Every profile seeds the Cherry Agent once, after the first resource sync so it takes the
+organization's default model; delivered Agents do not replace it, and a deleted one is not recreated.
 
 ## Backup
 

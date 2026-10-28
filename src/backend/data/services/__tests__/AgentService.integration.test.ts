@@ -442,6 +442,19 @@ describe('AgentService persistence', () => {
     expect((await agentService.list()).items).toEqual([existing]);
   });
 
+  it('adds the initial Agent beside organization-managed Agents', async () => {
+    const managed = await agentService.create({ name: 'Organization Agent' });
+    sqlite.prepare('UPDATE agent SET managed_remote_id = ? WHERE id = ?').run('7', managed.id);
+
+    const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+
+    expect(initial).toMatchObject({ avatar: '🍒', name: 'Cherry Agent' });
+    expect((await agentService.list()).items.map((agent) => agent.id)).toEqual([
+      managed.id,
+      initial!.id,
+    ]);
+  });
+
   it('does not recreate the initial Agent after the user deletes it', async () => {
     const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
     await agentService.delete(initial!.id);
