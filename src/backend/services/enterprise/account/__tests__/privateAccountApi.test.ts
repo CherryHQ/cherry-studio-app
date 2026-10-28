@@ -61,8 +61,8 @@ describe('private account protocol', () => {
     });
     const api = createPrivateAccountApi('https://private.example.com');
     await expect(api.signIn('Ada', 'secret')).rejects.toMatchObject({
-      code: 'connection',
-      message: 'Account connection',
+      code: 'response',
+      message: 'Account response',
     });
   });
 });

@@ -58,8 +58,10 @@ previews, MCP catalogs, remote attachments, export/staging files and picker copi
 cache-owner marker preserves caches for ordinary restarts of the same profile. Missing ownership
 also clears legacy caches; cleanup failure leaves the old marker and stops startup before readers
 open, so a retry cannot silently reuse another profile's cached content. Documents, databases and
-the installation's diagnostic log history are retained. Unreadable profile registries are preserved
-and refuse writes until a retry can read the original identity mapping.
+the installation's diagnostic log history are retained. Only an absent profile registry selects
+local data. An unreadable registry or an unknown active profile throws at the entry point before
+Router and profile-owned stores load; only our own code writes the registry, so this is a defect to
+fix, not a state to recover from.
 
 Native MCP OAuth and built-in plugin credentials also use profile-scoped keys. Local keys retain
 their released names. Importing data never grants access to another profile's device credentials;
@@ -72,8 +74,9 @@ installation's single Accounts Portal SDK instance, composed natively in
 `src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage, identity claims, refresh and candidate-session admission.
 The runtime also owns private credentials; `privateAccountApi` validates the v2 password exchange
 over the shared HTTP transport. Private sign-in works without Accounts Portal build configuration.
-`isCloudSignInAvailable` controls the cloud login choice only. The profile's account section and
-first-use sign-in remain available for private deployments when Portal configuration is absent.
+Missing Portal configuration does not change the sign-in method page. Requesting cloud sign-in
+reports the configuration error, whose invalid field names are recorded in diagnostics. Community
+sign-in does not require an enterprise service address; only enterprise admission validates it.
 
 The account UI offers sign-in, organization switching, account switching and sign-out. The
 portal lists the community account and organizations to switch between; the app selects a local data profile only after admission succeeds. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
@@ -88,7 +91,8 @@ profile, only a community session counts as signed in.
   switching from the profile, and an expired session. Cloud sign-in opens the portal in the external
   browser, where the user picks the community account or an organization. A private deployment
   enters its server address, username and password on the same page and signs in directly; an
-  expired private session keeps its server and user and asks only for the password.
+  expired private session keeps its server and the server-returned username when known. A missing
+  username remains editable; display names and user IDs never become login names.
 - **Organization name:** cloud enterprise sign-in reads the organization's display name from the
   portal's profile list and records it in the registry; failing to read it never blocks sign-in.
 - **New installation:** `FirstUseGate` shows `/login` before onboarding. Signing in to the community
@@ -145,9 +149,10 @@ profile, only a community session counts as signed in.
   another organization or returning to community reloads into its existing data directory.
   Returning A → B → A reuses A's profile, and community always reuses the installation's single
   local profile.
-- **Switching accounts:** explicitly asks for authentication when a cloud account is already
-  signed in. Community and private accounts first choose a sign-in method. Dismissing the browser
-  preserves the account and data that were open.
+- **Switching accounts:** every account opens the sign-in method page. Community and organization
+  accounts sign in through Accounts Portal, which explicitly asks for authentication; a private
+  deployment uses the page's private sign-in form. Dismissing the browser preserves the account
+  and data that were open.
 - **Sign-out:** a cloud sign-out revokes the refresh token and ends the portal's browser sign-in;
   local tokens, profile choice and product tokens are forgotten even when the server is
   unreachable, which marks the browser session stale for the next sign-in. A private sign-out
@@ -159,6 +164,9 @@ profile, only a community session counts as signed in.
   session and active data selection stay in place. A successful SDK commit followed by a local
   activation/reload failure remains gated when identities differ; it never opens old organization
   data using new credentials.
+- **Errors:** transport failures, invalid responses and credential refusals have separate messages.
+  Other failures retain their original cause in diagnostics and show an account-action failure;
+  persistence and reload failures are never presented as connection failures.
 
 Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Every build
 profile reads them from the environment; the repository has no deployment defaults. Set local
@@ -182,7 +190,9 @@ Portal client, as described above.
   resource observers update after each commit; failed MCP connection invalidations are retried even
   when the next snapshot is unchanged.
 - **Failure:** a configuration fetch failure, an invalid configuration inventory or a database
-  failure leaves the previous resource configuration in place. An Agent whose setup cannot be read
+  failure leaves the previous resource configuration in place. Provider, model, Agent and MCP
+  inventories must be explicit arrays; missing or null values are invalid, while empty arrays
+  mean removal. An Agent's Skill and MCP inventories follow the same rule. An Agent whose setup cannot be read
   or parsed stays as installed, with its bindings and the MCP servers and Skills it binds; the rest
   of the snapshot still applies. A failed Skill download, including a 403, keeps that Skill's
   installed revision and retries on a later sync. Immutable Skill files published before a
@@ -221,6 +231,8 @@ The gateway key from `/configurations` is stored on each enterprise provider lik
 Default models are written to the ordinary preference keys.
 The three organization-owned default-model keys are declared in the shared preference schema;
 ordinary preference writes cannot change them in enterprise profiles.
+An unavailable configured model retains its identity and is shown as unavailable in settings;
+the client never substitutes the first supported model.
 
 ## Read-Only Rules
 

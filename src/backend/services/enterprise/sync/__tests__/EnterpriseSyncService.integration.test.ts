@@ -65,6 +65,8 @@ const configuration = {
     { provider_id: 'openai', type: 'openai', name: 'OpenAI', apiHost: 'https://gw.example.com' },
   ],
   models: [{ id: 'chat', name: 'Chat', provider: 'openai' }],
+  agents: [],
+  mcpServers: [],
   defaultAssistantModel: { id: 'chat', name: 'Chat', provider: 'openai' },
 };
 
@@ -95,6 +97,7 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
         name: 'Analyst',
         model: { model_id: 'chat', provider: { provider_id: 'openai' } },
         libraryItems: [{ id: 7, type: 'agent_skill', status: 'ready' }],
+        mcpServers: [],
       },
       tasks: [{ libraryItemId: 7, type: 'agent_skill', updatedAt: 'revision-1' }],
     });
@@ -125,6 +128,25 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
     setActiveProfile(LOCAL_PROFILE);
     jest.useRealTimers();
   });
+
+  it.each(['providers', 'models', 'agents', 'mcpServers'])(
+    'keeps the installed configuration when the response omits %s',
+    async (key) => {
+      mockApi.getConfiguration.mockResolvedValue({ ...configuration, agents: [{ id: 1 }] });
+      await service.sync();
+      const readInstalled = async () => ({
+        providers: await db.database.select().from(userProviderTable),
+        agents: await db.database.select().from(agentTable),
+        bindings: await db.database.select().from(agentSkillTable),
+        preferences: await db.database.select().from(preferenceTable),
+        state: await db.database.select().from(appStateTable),
+      });
+      const installed = await readInstalled();
+      mockApi.getConfiguration.mockResolvedValue({ ...configuration, [key]: undefined });
+      await expect(service.sync()).rejects.toThrow();
+      expect(await readInstalled()).toEqual(installed);
+    },
+  );
 
   it.each(['defaults', 'commit'])(
     'rolls back resources, defaults, hash and cache after a %s failure, then retries the same snapshot',
@@ -235,6 +257,8 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
           id: 2,
           name: 'Writer',
           model: { model_id: 'chat', provider: { provider_id: 'openai' } },
+          libraryItems: [],
+          mcpServers: [],
         },
         tasks: [],
       };

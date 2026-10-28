@@ -4,20 +4,23 @@ export type AccountErrorCode =
   | 'address'
   | 'connection'
   | 'credentials'
+  | 'failed'
+  | 'response'
   /** The enterprise server rejected the account or organization. */
   | 'rejected';
 
 export class AccountError extends Error {
-  constructor(readonly code: AccountErrorCode) {
-    super(`Account ${code}`);
+  constructor(
+    readonly code: AccountErrorCode,
+    options?: ErrorOptions,
+  ) {
+    super(`Account ${code}`, options);
     this.name = 'AccountError';
   }
 }
 
 /** Installation account state. Tokens and SDK objects never reach the UI. */
 export type AccountState = Readonly<{
-  /** Whether the build supports cloud sign-in. Private sign-in needs no portal configuration. */
-  isCloudSignInAvailable: boolean;
   isSignedIn: boolean;
   /** Whether this runtime serves an enterprise profile rather than local data. */
   isEnterprise: boolean;
@@ -31,8 +34,10 @@ export type AccountState = Readonly<{
   /** Display name; never use it as a stable identity or infer a login name from it. */
   name?: string;
   maskedIdentifier?: string;
-  /** Preselects private sign-in when restoring or switching a private account. */
+  /** Server used when reauthenticating the current private account. */
   privateAddress?: string;
+  /** Actual login name returned by the private server; never inferred from a display name or ID. */
+  privateUsername?: string;
   /** The active cloud organization's display name, when Accounts Portal provided one. */
   organizationName?: string;
 }>;

@@ -12,7 +12,7 @@ import type { ApiClient } from '@/shared/data/api/types';
 import { FirstUseGate } from '../FirstUseGate';
 
 let mockStatus: 'unseen' | 'skipped' | 'completed' = 'unseen';
-let mockAccount = { isCloudSignInAvailable: false, hasPrompted: true };
+let mockAccount = { hasPrompted: true };
 
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data/hooks/useDataApi'),
@@ -82,7 +82,7 @@ describe('first-use admission and chat restoration', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockStatus = 'unseen';
-    mockAccount = { isCloudSignInAvailable: false, hasPrompted: true };
+    mockAccount = { hasPrompted: true };
     latest = undefined;
     chatMountCount = 0;
     chatUnmountCount = 0;
@@ -146,18 +146,15 @@ describe('first-use admission and chat restoration', () => {
     },
   );
 
-  it.each([true, false])(
-    'offers sign-in before onboarding with cloud sign-in available: %s',
-    async (isCloudSignInAvailable) => {
-      mockAccount = { isCloudSignInAvailable, hasPrompted: false };
-      await renderGate();
-      expect(renderer?.root.findByType(Redirect).props.href).toBe('/login');
+  it('offers sign-in before onboarding until the prompt is dismissed', async () => {
+    mockAccount = { hasPrompted: false };
+    await renderGate();
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/login');
 
-      mockAccount = { isCloudSignInAvailable, hasPrompted: true };
-      await renderGate();
-      expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
-    },
-  );
+    mockAccount = { hasPrompted: true };
+    await renderGate();
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
+  });
 
   it('admits an enterprise profile without onboarding, whose setup the organization owns', async () => {
     setActiveProfile({

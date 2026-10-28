@@ -27,7 +27,7 @@ const ConfigSchema = z.object({
   origin: z.string().min(1),
   clientId: z.string().min(1),
   scopes: z.array(z.string()).min(1),
-  enterpriseAddress: z.string(),
+  enterpriseAddress: z.string().optional(),
 });
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
@@ -41,6 +41,11 @@ export function installationAccount(): AccountRuntime {
 
 function createAccount(): AccountRuntime {
   const parsed = ConfigSchema.safeParse(Constants.expoConfig?.extra?.accountsPortal);
+  if (!parsed.success)
+    loggerService.withContext('AccountRuntime').error('Cloud sign-in configuration is invalid', {
+      fields: parsed.error.issues.map((issue) => issue.path.join('.')),
+      operation: 'account.configuration',
+    });
   const config = parsed.success ? parsed.data : undefined;
   const store = createMMKV({ id: 'cherry-installation-account' });
   const redirectUri = nativeCallbackUrl('auth/callback');
@@ -73,7 +78,7 @@ function createAccount(): AccountRuntime {
           fetch: createFetchBridge({
             maxResponseBytes: 1024 * 1024,
             timeoutMs: 20_000,
-            unsupportedMethodError: () => new AccountError('connection'),
+            unsupportedMethodError: () => new AccountError('failed'),
             assertUrl(value) {
               const url = new URL(value);
               const fixed = [

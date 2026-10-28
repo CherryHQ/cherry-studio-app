@@ -106,7 +106,6 @@ export class AccountRuntime implements AccountModule {
     const isCloudProfile = active.identity !== null && !('authentication' in active.identity);
     const isPrivateProfile = active.identity !== null && 'authentication' in active.identity;
     this.state = {
-      isCloudSignInAvailable: portal !== null,
       isSignedIn: false,
       isEnterprise: active.identity !== null,
       isRestoringSession: isPrivateProfile || (portal !== null && isCloudProfile),
@@ -190,7 +189,6 @@ export class AccountRuntime implements AccountModule {
 
   private async completeCloudSignIn(url: string): Promise<boolean> {
     const portal = this.requirePortal();
-    const address = normalizeEnterpriseAddress(this.options.defaultAddress);
     let target: ActiveProfile | undefined;
     let proposed: AuthState | undefined;
     try {
@@ -204,11 +202,13 @@ export class AccountRuntime implements AccountModule {
             return;
           }
           if (proposed.profile.product !== 'enterprise') throw new AccountError('rejected');
+          const address = normalizeEnterpriseAddress(this.options.defaultAddress);
           const api = this.options.createApi(address, {
             getProductToken: () => candidate.getProductToken(address),
           });
           const configuration = ServerIdentitySchema.safeParse(await api.getConfiguration());
-          if (!configuration.success) throw new AccountError('connection');
+          if (!configuration.success)
+            throw new AccountError('response', { cause: configuration.error });
           target = this.options.profiles.resolve(
             {
               deployment: configuration.data.serverUniqueId,
@@ -234,7 +234,7 @@ export class AccountRuntime implements AccountModule {
           () => undefined,
         );
         if (organization)
-          target = this.options.profiles.resolve(target.identity, address, organization);
+          target = this.options.profiles.resolve(target.identity, target.address, organization);
       }
       if (target.id === this.options.active.id) {
         this.update({ needsSignIn: false });
@@ -249,7 +249,9 @@ export class AccountRuntime implements AccountModule {
         this.reportRejected();
       // Other candidate failures leave the old session intact and never lift a prior rejection.
       if (error instanceof AccountError) throw error;
-      throw new AccountError(isAuthenticationRejection(error) ? 'rejected' : 'connection');
+      if (isAuthenticationRejection(error)) throw new AccountError('rejected', { cause: error });
+      if (isConnectionFailure(error)) throw new AccountError('connection', { cause: error });
+      throw error;
     }
   }
 
@@ -263,7 +265,7 @@ export class AccountRuntime implements AccountModule {
         await this.privateRefresh?.catch(() => {});
         await this.options.credentials.delete(this.options.active.id);
         this.privateCredentials = undefined;
-        this.update({ isSignedIn: false, name: undefined });
+        this.update({ isSignedIn: false, name: undefined, privateUsername: undefined });
       } else {
         await this.endCloudSession();
       }
@@ -373,7 +375,8 @@ export class AccountRuntime implements AccountModule {
         this.update({
           isRestoringSession: false,
           isSignedIn: true,
-          name: credentials.user.username ?? active.identity.subject,
+          name: credentials.user.username ?? undefined,
+          privateUsername: credentials.user.username || undefined,
         });
       } catch (error) {
         if (revision !== this.credentialRevision) return;
@@ -382,6 +385,7 @@ export class AccountRuntime implements AccountModule {
           needsSignIn: true,
           isSignedIn: false,
           name: undefined,
+          privateUsername: undefined,
         });
         logger.warn('Could not restore the private session', error as Error);
         return;
@@ -396,13 +400,17 @@ export class AccountRuntime implements AccountModule {
         });
         const user = PrivateUserSchema.safeParse(await api.getUser());
         const server = ServerIdentitySchema.safeParse(await api.getConfiguration());
-        if (!user.success || !server.success) throw new AccountError('connection');
+        if (!user.success) throw new AccountError('response', { cause: user.error });
+        if (!server.success) throw new AccountError('response', { cause: server.error });
         if (
           user.data.id !== active.identity.subject ||
           server.data.serverUniqueId !== active.identity.deployment
         )
           throw new AccountError('rejected');
-        this.update({ name: user.data.username ?? user.data.id });
+        this.update({
+          name: user.data.username ?? undefined,
+          privateUsername: user.data.username || undefined,
+        });
       } catch (error) {
         // The API's own refusals already reached the session through its interceptor.
         if (error instanceof AccountError && error.code === 'rejected') this.reportRejected();
@@ -473,7 +481,8 @@ export class AccountRuntime implements AccountModule {
       });
       const user = PrivateUserSchema.safeParse(await api.getUser());
       const server = ServerIdentitySchema.safeParse(await api.getConfiguration());
-      if (!user.success || !server.success) throw new AccountError('connection');
+      if (!user.success) throw new AccountError('response', { cause: user.error });
+      if (!server.success) throw new AccountError('response', { cause: server.error });
       if (
         user.data.id !== tokens.user.id ||
         (tokens.serverUniqueId && tokens.serverUniqueId !== server.data.serverUniqueId)
@@ -508,7 +517,8 @@ export class AccountRuntime implements AccountModule {
           needsSignIn: false,
           isRestoringSession: false,
           isSignedIn: true,
-          name: user.data.username ?? user.data.id,
+          name: user.data.username ?? undefined,
+          privateUsername: user.data.username || undefined,
         });
         return true;
       }
@@ -516,7 +526,9 @@ export class AccountRuntime implements AccountModule {
       return false;
     } catch (error) {
       if (error instanceof AccountError) throw error;
-      throw new AccountError(isAuthenticationRejection(error) ? 'credentials' : 'connection');
+      if (isAuthenticationRejection(error)) throw new AccountError('credentials', { cause: error });
+      if (isConnectionFailure(error)) throw new AccountError('connection', { cause: error });
+      throw error;
     }
   }
 
@@ -594,4 +606,15 @@ export class AccountRuntime implements AccountModule {
     this.state = { ...this.state, ...patch };
     this.changes.fire();
   }
+}
+
+/** Only transport failures justify asking the user to check connectivity. */
+function isConnectionFailure(error: unknown): boolean {
+  if (isHttpError(error))
+    return error.kind === 'network' || error.kind === 'timeout' || error.kind === 'http';
+  return (
+    error instanceof Error &&
+    error.name === 'AccountsPortalError' &&
+    (error as Error & { code: string }).code === 'network_error'
+  );
 }

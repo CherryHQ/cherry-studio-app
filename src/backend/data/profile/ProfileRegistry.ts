@@ -1,4 +1,3 @@
-import { loggerService } from '@logger';
 import * as z from 'zod';
 
 import {
@@ -7,8 +6,6 @@ import {
   isSameEnterpriseIdentity,
   LOCAL_PROFILE,
 } from '@/shared/data/activeProfile';
-
-const logger = loggerService.withContext('ProfileRegistry');
 
 export const EnterpriseIdentitySchema = z.union([
   z.strictObject({
@@ -54,16 +51,15 @@ export class ProfileRegistry {
   constructor(
     private readonly storage: ProfileRegistryStorage,
     private readonly createId: () => string,
-  ) {
-    this.data = this.load();
-  }
+  ) {}
 
-  /** The profile this launch serves. An unknown active id falls back to local data. */
+  /** The profile this launch serves. An unreadable selection must stop startup. */
   getActive(): ActiveProfile {
-    const { active, profiles } = this.data ?? EMPTY;
+    const { active, profiles } = this.readRegistry();
     if (active === 'local') return LOCAL_PROFILE;
     const profile = profiles.find((candidate) => candidate.id === active);
-    return profile ? Object.freeze({ ...profile }) : LOCAL_PROFILE;
+    if (!profile) throw new Error('The active profile is missing from the profile registry');
+    return Object.freeze({ ...profile });
   }
 
   /**
@@ -72,7 +68,7 @@ export class ProfileRegistry {
    * profile is never adopted by a login.
    */
   resolve(identity: EnterpriseIdentity, address: string, displayName?: string): ActiveProfile {
-    const data = this.writableRegistry();
+    const data = this.readRegistry();
     const parsed = EnterpriseIdentitySchema.parse(identity);
     const existing = data.profiles.find((profile) =>
       isSameEnterpriseIdentity(profile.identity, parsed),
@@ -93,24 +89,14 @@ export class ProfileRegistry {
 
   /** Selects the profile for the next launch. */
   setActive(profile: ActiveProfile): void {
-    this.write({ ...this.writableRegistry(), active: profile.id });
+    this.write({ ...this.readRegistry(), active: profile.id });
   }
 
-  private load(): Registry | undefined {
-    try {
+  private readRegistry(): Registry {
+    if (!this.data) {
       const raw = this.storage.read();
-      return raw === undefined ? EMPTY : RegistrySchema.parse(JSON.parse(raw));
-    } catch (error) {
-      // Keep the original mapping available for a retry or repair. Falling back to local
-      // data must never replace a temporarily unreadable or damaged registry with an empty one.
-      logger.error('Could not read the profile registry; preserving its contents', error as Error);
-      return undefined;
+      this.data = raw === undefined ? EMPTY : RegistrySchema.parse(JSON.parse(raw));
     }
-  }
-
-  private writableRegistry(): Registry {
-    this.data ??= this.load();
-    if (!this.data) throw new Error('The profile registry is unavailable');
     return this.data;
   }
 

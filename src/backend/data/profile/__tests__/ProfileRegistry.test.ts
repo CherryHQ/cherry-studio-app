@@ -2,10 +2,6 @@ import { LOCAL_PROFILE } from '@/shared/data/activeProfile';
 
 import { ProfileRegistry } from '../ProfileRegistry';
 
-jest.mock('@logger', () => ({
-  loggerService: { withContext: () => ({ error: jest.fn() }) },
-}));
-
 const identity = {
   deployment: 'server-1',
   issuer: 'https://auth.example.com',
@@ -55,9 +51,9 @@ describe('ProfileRegistry', () => {
 
   it.each(['{not json', ''])('preserves an unreadable directory (%j) and refuses writes', (raw) => {
     const { registry, stored } = createRegistry(raw);
-    expect(registry.getActive()).toBe(LOCAL_PROFILE);
-    expect(() => registry.resolve(identity, 'https://a.example.com')).toThrow('unavailable');
-    expect(() => registry.setActive(LOCAL_PROFILE)).toThrow('unavailable');
+    expect(() => registry.getActive()).toThrow();
+    expect(() => registry.resolve(identity, 'https://a.example.com')).toThrow();
+    expect(() => registry.setActive(LOCAL_PROFILE)).toThrow();
     expect(stored()).toBe(raw);
   });
 
@@ -73,12 +69,24 @@ describe('ProfileRegistry', () => {
     const write = jest.fn((value: string) => (stored = value));
     const createId = jest.fn();
     const registry = new ProfileRegistry({ read, write }, createId);
-    expect(registry.getActive()).toBe(LOCAL_PROFILE);
+    expect(() => registry.getActive()).toThrow('Storage temporarily unavailable');
     expect(write).not.toHaveBeenCalled();
+    expect(registry.getActive()).toEqual(LOCAL_PROFILE);
     expect(registry.resolve(identity, 'https://moved.example.com').id).toBe(profile.id);
     expect(createId).not.toHaveBeenCalled();
     registry.setActive(profile);
     expect(createRegistry(stored).registry.getActive().id).toBe(profile.id);
+  });
+
+  it('refuses an unknown active profile instead of selecting local data', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      profiles: [],
+      active: '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
+    });
+    const { registry, stored } = createRegistry(raw);
+    expect(() => registry.getActive()).toThrow('active profile is missing');
+    expect(stored()).toBe(raw);
   });
 
   it('isolates private identities from portal identities and retains them across server moves', () => {

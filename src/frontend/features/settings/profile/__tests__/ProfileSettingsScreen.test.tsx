@@ -54,7 +54,6 @@ jest.mock('../../components/SettingsScrollPage', () => ({
 }));
 
 const base: AccountState = {
-  isCloudSignInAvailable: true,
   isSignedIn: false,
   isEnterprise: false,
   isRestoringSession: false,
@@ -123,7 +122,7 @@ describe('ProfileSettingsScreen account card', () => {
     expect(footer).toBe('account.signOutConfirm.description');
   });
 
-  test('switches a cloud organization through the portal and accounts through its login', () => {
+  test('switches a cloud organization through the portal and accounts through the method page', () => {
     const { card, press, switchAccount } = render({
       ...base,
       isEnterprise: true,
@@ -139,8 +138,8 @@ describe('ProfileSettingsScreen account card', () => {
     press();
     expect(mockSwitchSpace).toHaveBeenCalled();
     switchAccount!.onPress();
-    expect(mockSignIn).toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockSignIn).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/login');
   });
 
   test('keeps a community sign-out without the organization footer', () => {

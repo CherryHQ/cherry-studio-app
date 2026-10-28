@@ -1,11 +1,15 @@
 const mockCreatePortal = jest.fn();
 const mockCreateBridge = jest.fn();
+const mockConfigurationError = jest.fn();
 let mockScheme: string | undefined;
+let mockConfiguration: Record<string, unknown>;
 
 jest.mock('@cherryinternal/accounts-portal/client', () => ({
   createAccountsPortal: (options: unknown) => mockCreatePortal(options),
 }));
-jest.mock('@logger', () => ({ loggerService: { withContext: () => ({ error: jest.fn() }) } }));
+jest.mock('@logger', () => ({
+  loggerService: { withContext: () => ({ error: mockConfigurationError }) },
+}));
 jest.mock('expo', () => ({ reloadAppAsync: jest.fn() }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -14,13 +18,7 @@ jest.mock('expo-constants', () => ({
       return {
         scheme: mockScheme,
         extra: {
-          accountsPortal: {
-            issuer: 'https://auth.example.com',
-            origin: 'https://accounts.example.com',
-            clientId: 'mobile',
-            scopes: ['openid'],
-            enterpriseAddress: 'https://enterprise.example.com',
-          },
+          accountsPortal: mockConfiguration,
         },
       };
     },
@@ -37,10 +35,20 @@ jest.mock('@/backend/services/http', () => ({
 jest.mock('../installationProfiles', () => ({ installationProfiles: () => ({}) }));
 jest.mock('../../runtime/diagnosticContext', () => ({ setDiagnosticAccountReader: jest.fn() }));
 
-function compose(scheme?: string) {
+const configuration = {
+  issuer: 'https://auth.example.com',
+  origin: 'https://accounts.example.com',
+  clientId: 'mobile',
+  scopes: ['openid'],
+  enterpriseAddress: 'https://enterprise.example.com',
+};
+
+function compose(scheme?: string, values: Record<string, unknown> = configuration) {
   mockScheme = scheme;
+  mockConfiguration = values;
   mockCreatePortal.mockReset().mockReturnValue({ ready: Promise.resolve() });
   mockCreateBridge.mockClear();
+  mockConfigurationError.mockClear();
   jest.isolateModules(() => {
     const { installationAccount } =
       jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
@@ -65,6 +73,22 @@ test.each([undefined, 'exp'])(
     expect(mockCreatePortal).not.toHaveBeenCalled();
   },
 );
+
+test('does not require enterprise configuration to compose ordinary account sign-in', () => {
+  const { enterpriseAddress: _enterpriseAddress, ...cloudConfiguration } = configuration;
+  compose('cherrystudio', cloudConfiguration);
+  expect(mockCreatePortal).toHaveBeenCalled();
+  expect(mockConfigurationError).not.toHaveBeenCalled();
+});
+
+test('reports invalid configuration fields instead of silently disabling sign-in', () => {
+  compose('cherrystudio', { ...configuration, clientId: '' });
+  expect(mockCreatePortal).not.toHaveBeenCalled();
+  expect(mockConfigurationError).toHaveBeenCalledWith('Cloud sign-in configuration is invalid', {
+    fields: ['clientId'],
+    operation: 'account.configuration',
+  });
+});
 
 test('allows userinfo only on the configured identity issuer', () => {
   compose('cherrystudio-dev');

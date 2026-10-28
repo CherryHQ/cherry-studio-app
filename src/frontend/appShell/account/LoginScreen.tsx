@@ -1,5 +1,6 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button, Image, Input, TextField, useToast } from '@cherrystudio/ui/components';
+import { loggerService } from '@logger';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, type TextInputInstance, View } from 'react-native';
@@ -11,12 +12,15 @@ import { organizationLabel } from './organizationLabel';
 import { useAccount } from './useAccount';
 
 const APP_LOGO = require('@/assets/cherry-studio-logo.png');
+const logger = loggerService.withContext('LoginScreen');
 
 export const ACCOUNT_ERROR_KEYS = {
   unavailable: 'account.error.unavailable',
   address: 'account.error.address',
   connection: 'account.error.connection',
   credentials: 'account.error.credentials',
+  failed: 'account.error.failed',
+  response: 'account.error.response',
   rejected: 'account.error.rejected',
 } as const satisfies Record<AccountErrorCode, string>;
 
@@ -43,21 +47,16 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
   const isExpired = purpose === 'expired';
   // An expired private session signs in again to the same server and, when known, the same user.
   const lockedAddress = isExpired ? state.privateAddress : undefined;
-  const lockedUsername = lockedAddress ? state.name : undefined;
+  const lockedUsername = lockedAddress ? state.privateUsername : undefined;
   // The method page opens on the Cherry Studio account; the private form keeps the last address.
-  const [isPrivate, setIsPrivate] = useState(
-    !state.isCloudSignInAvailable || Boolean(lockedAddress),
-  );
+  const [isPrivate, setIsPrivate] = useState(Boolean(lockedAddress));
   const [address, setAddress] = useState(state.privateAddress ?? '');
   const [username, setUsername] = useState(lockedUsername ?? '');
   const [password, setPassword] = useState('');
   const usernameInput = useRef<TextInputInstance>(null);
   const passwordInput = useRef<TextInputInstance>(null);
   const canSignIn =
-    !state.isBusy &&
-    (isPrivate
-      ? Boolean(address.trim() && username.trim() && password)
-      : state.isCloudSignInAvailable);
+    !state.isBusy && (!isPrivate || Boolean(address.trim() && username.trim() && password));
   const organization = organizationLabel(state);
 
   const signIn = () => {
@@ -68,7 +67,8 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
         if (signedIn) onSignedIn?.();
       })
       .catch((error: unknown) => {
-        const code = error instanceof AccountError ? error.code : 'connection';
+        logger.error('Sign-in failed', error as Error, { operation: 'account.signIn' });
+        const code = error instanceof AccountError ? error.code : 'failed';
         toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
       });
   };
@@ -81,7 +81,7 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
         ? t('account.switch')
         : t('account.login.title');
   const description = isExpired
-    ? lockedAddress
+    ? lockedUsername
       ? t('account.login.expiredPrivateDescription')
       : organization?.kind === 'organization'
         ? t('account.login.expiredOrganizationDescription', { organization: organization.label })
@@ -188,7 +188,7 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
             <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">
               {t(isExpired ? 'account.login.reSignIn' : 'account.login.signIn')}
             </Button>
-            {state.isCloudSignInAvailable && !lockedAddress && !isExpired ? (
+            {!isExpired ? (
               <Button
                 disabled={state.isBusy}
                 onPress={() => {

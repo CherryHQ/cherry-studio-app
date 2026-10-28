@@ -1,4 +1,5 @@
 import { ContentState, useToast } from '@cherrystudio/ui/components';
+import { loggerService } from '@logger';
 import { usePathname } from 'expo-router';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +34,10 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
     <LoginScreen
       onLeave={() =>
         void account.signOut().catch((error: unknown) => {
-          const code = error instanceof AccountError ? error.code : 'connection';
+          loggerService.withContext('AccountSessionGate').error('Sign-out failed', error as Error, {
+            operation: 'account.signOut',
+          });
+          const code = error instanceof AccountError ? error.code : 'failed';
           toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
         })
       }

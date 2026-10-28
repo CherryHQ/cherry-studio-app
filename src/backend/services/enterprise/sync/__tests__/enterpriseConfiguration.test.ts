@@ -50,8 +50,8 @@ describe('enterprise configuration', () => {
     expect(parsed.providerIds).toEqual(['openai', 'azure']);
     expect(parsed.modelIds).toContain('openai::broken@openai');
     expect(parsed.mcpServerRemoteIds).toEqual(['search', 'local']);
-    // An unavailable default falls back to the first chat model.
-    expect(parsed.defaults['agent.default_model_id']).toBe('openai::gpt-4o@openai');
+    // Keep the organization's choice even when this device cannot use it.
+    expect(parsed.defaults['agent.default_model_id']).toBe('azure::gpt-4.1@azure');
     expect(skipped).toEqual(
       expect.arrayContaining([
         'provider azure: unsupported type azure-openai',
@@ -60,6 +60,59 @@ describe('enterprise configuration', () => {
       ]),
     );
   });
+
+  it.each(['providers', 'models', 'agents', 'mcpServers'])(
+    'rejects a missing or null %s inventory instead of treating it as a deletion',
+    (key) => {
+      for (const value of [undefined, null])
+        expect(() => parseConfiguration({ ...configuration, [key]: value }, [])).toThrow();
+    },
+  );
+
+  it('accepts explicit empty inventories as server removals', () => {
+    expect(
+      parseConfiguration(
+        {
+          ...configuration,
+          providers: [],
+          models: [],
+          agents: [],
+          mcpServers: [],
+        },
+        [],
+      ),
+    ).toMatchObject({ providerIds: [], modelIds: [], agentIds: [], mcpServerRemoteIds: [] });
+  });
+
+  it('preserves unavailable defaults for every purpose and rejects malformed references', () => {
+    const selected = { id: 'unavailable', provider: 'azure' };
+    const parsed = parseConfiguration(
+      {
+        ...configuration,
+        defaultAssistantModel: selected,
+        defaultTopicNamingModel: selected,
+        defaultTranslationModel: selected,
+      },
+      [],
+    );
+    expect(Object.values(parsed.defaults)).toEqual(Array(3).fill('azure::unavailable@azure'));
+    expect(() => parseConfiguration({ ...configuration, defaultAssistantModel: {} }, [])).toThrow();
+  });
+
+  it.each(['libraryItems', 'mcpServers'])(
+    'rejects an incomplete Agent %s inventory before its bindings can change',
+    (key) => {
+      const agent = { id: 1, name: 'Agent', libraryItems: [], mcpServers: [] };
+      for (const value of [undefined, null])
+        expect(() =>
+          parseAgentSetup(
+            { agent: { ...agent, [key]: value }, tasks: [] },
+            parseConfiguration(configuration, []),
+            [],
+          ),
+        ).toThrow();
+    },
+  );
 
   it('rejects a snapshot whose remote identity inventory cannot be trusted', () => {
     expect(() =>
@@ -116,7 +169,11 @@ describe('enterprise configuration', () => {
       toolApprovalMode: 'default',
     });
     expect(
-      parseAgentSetup({ agent: { id: 8, name: 'Lost', models: [] }, tasks: [] }, parsed, skipped),
+      parseAgentSetup(
+        { agent: { id: 8, name: 'Lost', models: [], libraryItems: [], mcpServers: [] }, tasks: [] },
+        parsed,
+        skipped,
+      ),
     ).toMatchObject({ remoteId: '8', agent: null });
   });
 });

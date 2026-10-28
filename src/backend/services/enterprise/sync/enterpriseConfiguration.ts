@@ -36,6 +36,7 @@ const ModelSchema = z.object({
   output_price: z.number().finite().nonnegative().nullish(),
   currency: z.enum(['USD', 'CNY']).nullish(),
 });
+const ModelIdentitySchema = ModelSchema.pick({ id: true, provider: true });
 const McpServerSchema = z.object({
   name: z.string().min(1),
   type: z.string().nullish(),
@@ -60,10 +61,10 @@ const AgentSchema = z.object({
       default_permission_mode: z.string().nullish(),
     })
     .nullish(),
-  libraryItems: z
-    .array(z.object({ id: z.number().int().positive(), type: z.string(), status: z.string() }))
-    .nullish(),
-  mcpServers: z.array(z.object({ key: z.string().min(1), config: McpServerSchema })).nullish(),
+  libraryItems: z.array(
+    z.object({ id: z.number().int().positive(), type: z.string(), status: z.string() }),
+  ),
+  mcpServers: z.array(z.object({ key: z.string().min(1), config: McpServerSchema })),
 });
 const SetupSchema = z.object({
   agent: AgentSchema,
@@ -78,10 +79,10 @@ const SetupSchema = z.object({
 const ConfigurationSchema = z.object({
   serverUniqueId: z.string().min(1),
   apiKey: z.string().nullish(),
-  providers: z.array(z.unknown()).nullish(),
-  models: z.array(z.unknown()).nullish(),
-  agents: z.array(z.object({ id: z.number().int().positive() }).loose()).nullish(),
-  mcpServers: z.array(z.unknown()).nullish(),
+  providers: z.array(z.unknown()),
+  models: z.array(z.unknown()),
+  agents: z.array(z.object({ id: z.number().int().positive() }).loose()),
+  mcpServers: z.array(z.unknown()),
   defaultAssistantModel: z.unknown().optional(),
   defaultTopicNamingModel: z.unknown().optional(),
   defaultTranslationModel: z.unknown().optional(),
@@ -201,14 +202,14 @@ export type SkipLog = string[];
 
 export function parseConfiguration(input: unknown, skipped: SkipLog): EnterpriseConfiguration {
   const raw = ConfigurationSchema.parse(input);
-  const providerIds = (raw.providers ?? []).map(
+  const providerIds = raw.providers.map(
     (item) => z.object({ provider_id: z.string().min(1) }).parse(item).provider_id,
   );
-  const modelIdsOnServer = (raw.models ?? []).map((item) => {
-    const model = z.object({ id: z.string().min(1), provider: z.string().min(1) }).parse(item);
+  const modelIdsOnServer = raw.models.map((item) => {
+    const model = ModelIdentitySchema.parse(item);
     return managedModelId(model.provider, model.id);
   });
-  const mcpServersOnServer = (raw.mcpServers ?? []).map((item) => ({
+  const mcpServersOnServer = raw.mcpServers.map((item) => ({
     key: z.object({ id: z.string().min(1) }).parse(item).id,
     config: item,
   }));
@@ -229,21 +230,12 @@ export function parseConfiguration(input: unknown, skipped: SkipLog): Enterprise
   const modelIds = new Set(
     providers.flatMap((provider) => provider.models.map((model) => model.id)),
   );
-  const chatModel = providers
-    .flatMap((provider) => provider.models)
-    .find(
-      (model) =>
-        !model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING) &&
-        !model.capabilities.includes(MODEL_CAPABILITY.RERANK) &&
-        !model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION),
-    );
   const defaultModel = (value: unknown, key: string): UniqueModelId | null => {
-    const model = ModelSchema.safeParse(value);
-    if (!model.success) return null;
-    const id = managedModelId(model.data.provider, model.data.id);
-    if (modelIds.has(id)) return id;
-    skipped.push(`default ${key}: model ${model.data.id} is unavailable`);
-    return chatModel?.id ?? null;
+    if (value == null) return null;
+    const model = ModelIdentitySchema.parse(value);
+    const id = managedModelId(model.provider, model.id);
+    if (!modelIds.has(id)) skipped.push(`default ${key}: model ${model.id} is unavailable`);
+    return id;
   };
   return {
     serverUniqueId: raw.serverUniqueId,
@@ -254,7 +246,7 @@ export function parseConfiguration(input: unknown, skipped: SkipLog): Enterprise
     mcpServerRemoteIds: mcpServersOnServer.map((server) => server.key),
     providers,
     mcpServers: parseMcpServers(mcpServersOnServer, skipped),
-    agentIds: [...new Set((raw.agents ?? []).map((agent) => agent.id))],
+    agentIds: [...new Set(raw.agents.map((agent) => agent.id))],
     defaults: {
       'agent.default_model_id': defaultModel(raw.defaultAssistantModel, 'assistant'),
       'agent.session_naming.model_id': defaultModel(raw.defaultTopicNamingModel, 'naming'),
@@ -278,16 +270,16 @@ export function parseAgentSetup(
     .map((candidate) => managedModelId(candidate.provider.provider_id, candidate.model_id))
     .find((id) => modelIds.has(id));
   if (!model) skipped.push(`agent ${agent.id}: no usable model`);
-  const mcpServers = parseMcpServers(agent.mcpServers ?? [], skipped);
-  const skills = (agent.libraryItems ?? []).flatMap((item) => {
+  const mcpServers = parseMcpServers(agent.mcpServers, skipped);
+  const skills = agent.libraryItems.flatMap((item) => {
     const task = tasks.find((candidate) => candidate.libraryItemId === item.id);
     if (item.type !== 'agent_skill' || item.status !== 'ready' || !task) return [];
     return [{ remoteId: String(item.id), itemId: item.id, updatedAt: task.updatedAt }];
   });
   return {
     remoteId: String(agent.id),
-    skillRemoteIds: (agent.libraryItems ?? []).map((item) => String(item.id)),
-    mcpServerRemoteIds: (agent.mcpServers ?? []).map((server) => server.key),
+    skillRemoteIds: agent.libraryItems.map((item) => String(item.id)),
+    mcpServerRemoteIds: agent.mcpServers.map((server) => server.key),
     agent: model
       ? {
           name: agent.name,
@@ -420,12 +412,12 @@ function parseMcpServers(
 }
 
 function parseItems<T>(
-  items: readonly unknown[] | null | undefined,
+  items: readonly unknown[],
   schema: z.ZodType<T>,
   kind: string,
   skipped: SkipLog,
 ): T[] {
-  return (items ?? []).flatMap((item) => {
+  return items.flatMap((item) => {
     const parsed = schema.safeParse(item);
     if (!parsed.success) skipped.push(`${kind}: malformed entry`);
     return parsed.success ? [parsed.data] : [];

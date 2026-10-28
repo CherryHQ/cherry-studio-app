@@ -39,10 +39,10 @@ export function createPrivateAccountApi(baseUrl: string) {
       maxResponseBytes: 1024 * 1024,
     });
     const parsed = TokenResponseSchema.safeParse(response.data);
-    if (!parsed.success) throw new AccountError('connection');
+    if (!parsed.success) throw new AccountError('response', { cause: parsed.error });
     const value = parsed.data;
     const accessToken = value.accessToken ?? value.access_token;
-    if (!accessToken) throw new AccountError('connection');
+    if (!accessToken) throw new AccountError('response');
     return {
       accessToken,
       refreshToken: value.refreshToken ?? value.refresh_token ?? null,

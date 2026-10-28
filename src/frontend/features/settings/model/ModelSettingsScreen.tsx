@@ -70,7 +70,9 @@ export default function ModelSettingsScreen() {
           disabled: isSaving,
           label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
           onPress: () => setActiveKind(kind),
-          value: item?.model.name ?? t('settings.select.placeholder'),
+          value:
+            item?.model.name ??
+            t(selections[kind] ? 'settings.model.unavailable' : 'settings.select.placeholder'),
           valueLeading: item ? (
             <ModelAvatar model={item.model} provider={item.provider} />
           ) : undefined,

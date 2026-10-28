@@ -75,21 +75,15 @@ export default function ProfileSettingsScreen() {
   }, []);
 
   const reportAccountError = (error: unknown) => {
-    const code = error instanceof AccountError ? error.code : 'connection';
+    logger.error('Account action failed', error as Error, { operation: 'account.action' });
+    const code = error instanceof AccountError ? error.code : 'failed';
     toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
   };
   const openSignIn = () => router.push('/login');
   const isSignedIn = state.isSignedIn || state.isEnterprise;
   // A cloud account switches organization through the portal, reusing its browser sign-in.
-  const canSwitchOrganization = isSignedIn && state.isCloudSignInAvailable && !state.privateAddress;
+  const canSwitchOrganization = isSignedIn && !state.privateAddress;
   const switchOrganization = () => void account.switchSpace().catch(reportAccountError);
-  // Switching accounts asks who signs in: a cloud organization through the portal's login,
-  // community and private accounts through the sign-in method page.
-  const switchAccount = () => {
-    if (state.isEnterprise && !state.privateAddress)
-      void account.signIn().catch(reportAccountError);
-    else openSignIn();
-  };
   /** Resolves whether the sign-out completed; a failure is reported here. */
   const signOut = () =>
     account.signOut().then(
@@ -184,9 +178,7 @@ export default function ProfileSettingsScreen() {
           trailing={
             <Button
               disabled={state.isBusy}
-              onPress={
-                canSwitchOrganization ? switchOrganization : isSignedIn ? switchAccount : openSignIn
-              }
+              onPress={canSwitchOrganization ? switchOrganization : openSignIn}
               size="sm"
               variant={isSignedIn ? 'tonal' : 'default'}
             >
@@ -210,7 +202,7 @@ export default function ProfileSettingsScreen() {
             <Section.Item
               disabled={state.isBusy}
               label={t('account.switch')}
-              onPress={switchAccount}
+              onPress={openSignIn}
             />
           ) : null}
           <Section.Item

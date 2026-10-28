@@ -135,6 +135,28 @@ describe('AccountRuntime', () => {
     expect(runtime.getState().hasPrompted).toBe(true);
   });
 
+  it.each(['', '://invalid'])(
+    'signs into a community account without an enterprise address (%s)',
+    async (defaultAddress) => {
+      const { options } = setup(signedIn('cloud'));
+      const runtime = new AccountRuntime({ ...options, defaultAddress });
+      await expect(runtime.signIn()).resolves.toBe(true);
+      expect(runtime.getState().isSignedIn).toBe(true);
+      expect(options.createApi).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reports missing cloud configuration only when cloud sign-in is requested', async () => {
+    const { options } = setup({ _tag: 'signedOut' });
+    const runtime = new AccountRuntime({ ...options, portal: null });
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+    expect(options.openBrowser).not.toHaveBeenCalled();
+    expect(options.createPrivateApi).not.toHaveBeenCalled();
+    expect(runtime.getState().hasPrompted).toBe(false);
+    runtime.dismissPrompt();
+    expect(runtime.getState().hasPrompted).toBe(true);
+  });
+
   it('opens the chooser without forcing account authentication when switching spaces', async () => {
     const { runtime, options } = setup(signedIn('cloud'));
     await runtime.switchSpace();
@@ -333,7 +355,12 @@ describe('AccountRuntime', () => {
     const { runtime } = setup({ _tag: 'signedOut' }, privateProfile);
     await runtime.verify();
     runtime.reportRejected();
-    expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true, name: 'Ada' });
+    expect(runtime.getState()).toMatchObject({
+      isSignedIn: false,
+      needsSignIn: true,
+      name: 'Ada',
+      privateUsername: 'Ada',
+    });
   });
 
   it('does not reopen a previously refused organization when reauthentication is offline', async () => {
@@ -354,7 +381,7 @@ describe('AccountRuntime', () => {
     const api = options.createApi();
     api.getConfiguration.mockResolvedValue({ serverUniqueId: '' });
     options.createApi.mockReturnValue(api);
-    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'response' });
     expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true });
   });
 
@@ -499,8 +526,9 @@ describe('AccountRuntime', () => {
   it('keeps the old session when the SDK cannot persist its candidate', async () => {
     const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
     await runtime.verify();
-    options.portal.completeSignIn.mockRejectedValue(new Error('Failed saving the new session'));
-    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    const failure = new Error('Failed saving the new session');
+    options.portal.completeSignIn.mockRejectedValue(failure);
+    await expect(runtime.signIn()).rejects.toBe(failure);
     await runtime.verify();
     expect(runtime.getState().needsSignIn).toBe(false);
     await expect(runtime.getProductToken()).resolves.toBe('product-token');
@@ -544,7 +572,6 @@ describe('AccountRuntime', () => {
     options.createPrivateApi.mockReturnValue(api);
     const runtime = new AccountRuntime({ ...options, portal: null });
     expect(runtime.getState()).toMatchObject({
-      isCloudSignInAvailable: false,
       isRestoringSession: false,
     });
     await runtime.signIn({
@@ -598,6 +625,41 @@ describe('AccountRuntime', () => {
     expect(await runtime.getProductToken()).toBe('private-token');
     expect(options.portal.getProductToken).not.toHaveBeenCalled();
   });
+
+  it('does not infer a private login name from the user ID', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    options.credentials.read.mockResolvedValue(
+      JSON.stringify({
+        ...privateCredentials,
+        user: { id: 'user-1' },
+      }),
+    );
+    const api = options.createApi();
+    api.getUser.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
+    options.createApi.mockReturnValue(api);
+    await runtime.verify();
+    runtime.reportRejected();
+    expect(runtime.getState()).toMatchObject({
+      privateAddress: privateProfile.address,
+      privateUsername: undefined,
+      name: undefined,
+      needsSignIn: true,
+    });
+  });
+
+  it.each(['storage', 'reload'] as const)(
+    'preserves a private sign-in %s failure instead of calling it a connection error',
+    async (step) => {
+      const { runtime, options } = setup({ _tag: 'signedOut' });
+      options.profiles.resolve.mockReturnValue(privateProfile);
+      const failure = new Error(`Failed ${step}`);
+      if (step === 'storage') options.credentials.write.mockRejectedValue(failure);
+      else options.reload.mockRejectedValue(failure);
+      await expect(
+        runtime.signIn({ address: privateProfile.address!, username: 'Ada', password: 'secret' }),
+      ).rejects.toBe(failure);
+    },
+  );
 
   it('keeps private data gated until local credentials match, without waiting for the network', async () => {
     const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
@@ -677,11 +739,12 @@ describe('AccountRuntime', () => {
   it('preserves the independent private session after a failed cloud sign-in', async () => {
     const { runtime, options, publish } = setup(signedIn('cloud'), privateProfile);
     await runtime.verify();
+    const failure = new Error('Cloud sign-in failed');
     options.portal.completeSignIn.mockImplementation(async () => {
       publish({ ...signedIn('enterprise'), subject: 'user-2' });
-      throw new Error('Cloud sign-in failed');
+      throw failure;
     });
-    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    await expect(runtime.signIn()).rejects.toBe(failure);
     expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false, name: 'Ada' });
     await expect(runtime.getProductToken()).resolves.toBe('private-token');
   });

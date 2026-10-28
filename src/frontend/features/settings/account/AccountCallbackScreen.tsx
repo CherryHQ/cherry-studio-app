@@ -1,4 +1,5 @@
 import { ContentState, useToast } from '@cherrystudio/ui/components';
+import { loggerService } from '@logger';
 import { clearInitialURL, useLinkingURL } from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
@@ -27,8 +28,13 @@ export function AccountCallbackScreen() {
         if (stayed) router.replace('/');
       },
       (error: unknown) => {
+        loggerService
+          .withContext('AccountCallback')
+          .error('Sign-in callback failed', error as Error, {
+            operation: 'account.callback',
+          });
         toast.show({
-          label: t(ACCOUNT_ERROR_KEYS[error instanceof AccountError ? error.code : 'connection']),
+          label: t(ACCOUNT_ERROR_KEYS[error instanceof AccountError ? error.code : 'failed']),
           variant: 'danger',
         });
         router.replace('/settings/profile');
