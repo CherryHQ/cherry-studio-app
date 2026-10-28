@@ -2036,6 +2036,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "Auf dem PC ist kein verwendbarer API-Schlüssel konfiguriert",
   "settings.provider.desktopSync.unavailable.unreadable": "Die Konfiguration enthält Daten, die diese Version nicht lesen kann",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "Die Authentifizierungsmethode dieses Anbieters wird auf Mobilgeräten nicht unterstützt",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "Auf dem PC ist keine Basis-URL für das Standardprotokoll konfiguriert",
   "settings.provider.disableProvider": "Anbieter deaktivieren",
   "settings.provider.disableProviderNamed": "Anbieter {{name}} deaktivieren",
   "settings.provider.edit.title": "Anbietereinstellungen",

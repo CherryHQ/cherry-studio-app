@@ -2019,6 +2019,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "パソコンに使用可能な API キーが設定されていません",
   "settings.provider.desktopSync.unavailable.unreadable": "設定にこのバージョンでは読み取れないデータが含まれています",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "このプロバイダーの認証方法はモバイルではサポートされていません",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "パソコンでデフォルトのプロトコルにベース URL が設定されていません",
   "settings.provider.disableProvider": "プロバイダーを無効にする",
   "settings.provider.disableProviderNamed": "プロバイダー {{name}} を無効にする",
   "settings.provider.edit.title": "プロバイダー設定",

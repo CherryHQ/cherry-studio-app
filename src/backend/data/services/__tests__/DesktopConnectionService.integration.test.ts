@@ -678,18 +678,20 @@ describe('DesktopConnectionService provider synchronization', () => {
     expect(await testDb.database.select().from(userModelTable)).toEqual(before);
   });
 
-  it('validates new models against synced endpoints and rolls back the whole import', async () => {
+  it('validates custom endpoints inside the import and rolls back the whole import', async () => {
     await importSnapshot(snapshot(provider()));
     const data = snapshot(
       provider('relay', ['missing']),
       provider('new-provider', ['unsupported']),
     );
-    data.providers[1]!.models[0]!.endpointTypes = [ENDPOINT_TYPE.ANTHROPIC_MESSAGES];
+    data.providers[1]!.apiHost = undefined;
     data.providers[0]!.apiKeys = [{ id: 'replacement', key: 'new-secret', isEnabled: true }];
     const beforeProviders = await testDb.database.select().from(userProviderTable);
     const beforeModels = await testDb.database.select().from(userModelTable);
 
-    await expect(importSnapshot(data)).rejects.toThrow('Model endpoint configuration is invalid');
+    await expect(importSnapshot(data)).rejects.toThrow(
+      'Custom provider endpoint configuration is invalid',
+    );
     expect(await testDb.database.select().from(userProviderTable)).toEqual(beforeProviders);
     expect(await testDb.database.select().from(userModelTable)).toEqual(beforeModels);
   });
@@ -847,5 +849,68 @@ describe('DesktopConnectionService provider synchronization', () => {
         expect(row!.apiKeys).toEqual(provider('relay').apiKeys);
       },
     );
+
+    it('routes a model to the first endpoint its custom provider configures', async () => {
+      const data = loose({
+        ...provider('relay', []),
+        models: [
+          {
+            id: 'gemini',
+            apiModelId: 'gemini',
+            providerId: 'relay',
+            name: 'Gemini',
+            endpointTypes: [
+              ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+              ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+            ],
+          },
+        ],
+      });
+      const { providers } = await service.preview(data);
+      expect(providers[0]!.unavailableReason).toBeUndefined();
+      expect(providers[0]!.models.map(({ modelId }) => modelId)).toEqual(['gemini']);
+
+      await importSnapshot(data);
+      const [model] = await testDb.database.select().from(userModelTable);
+      expect(model!.endpointTypes).toEqual([
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      ]);
+    });
+
+    it('leaves behind only the models none of its endpoints can serve', async () => {
+      const data = loose({
+        ...provider('relay', ['chat']),
+        models: [
+          ...provider('relay', ['chat']).models,
+          {
+            id: 'responses',
+            apiModelId: 'responses',
+            providerId: 'relay',
+            name: 'Responses',
+            endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+          },
+        ],
+      });
+      const { providers } = await service.preview(data);
+      expect(providers[0]!.unavailableReason).toBeUndefined();
+      expect(providers[0]!.models.map(({ modelId }) => modelId)).toEqual(['chat']);
+
+      await expect(importSnapshot(data)).resolves.toMatchObject({ modelsAdded: 1 });
+      const models = await testDb.database.select().from(userModelTable);
+      expect(models.map(({ modelId }) => modelId)).toEqual(['chat']);
+    });
+
+    it('disables a custom provider whose chat endpoint has no address with its own reason', async () => {
+      const data = loose({
+        ...provider('relay'),
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://desktop.example.com/v1' },
+        },
+      });
+      const { providers } = await service.preview(data);
+      expect(providers[0]).toMatchObject({ unavailableReason: 'unsupported-endpoint' });
+    });
   });
 });
