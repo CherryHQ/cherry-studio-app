@@ -1,7 +1,8 @@
 import { BottomSheet, Button, Input, Section, TextField } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { ProviderVertexAuth } from '../types';
 import {
@@ -46,13 +47,25 @@ export function ProviderVertexAuthSection({
           showChevron
         />
         {(['project', 'location'] as const).map((field) => (
-          <Section.SelectItem
+          // Free-text values open an editor, so the row navigates rather than selects.
+          <Section.Item
             key={field}
             disabled={disabled}
             label={t(VERTEX_AUTH_LABELS[field])}
             onPress={() => setEdit({ field, text: auth.config[field], touched: false })}
-            value={auth.config[field] || t('settings.provider.config.notSet')}
+            showChevron
             testID={`provider-vertex-${field}`}
+            trailing={
+              <Text
+                className={cn(
+                  'min-w-0 shrink text-right text-base',
+                  auth.config[field] ? 'text-foreground' : 'text-muted-foreground',
+                )}
+                numberOfLines={1}
+              >
+                {auth.config[field] || t('settings.provider.config.notSet')}
+              </Text>
+            }
           />
         ))}
         <Section.Item
