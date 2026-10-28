@@ -777,8 +777,10 @@ clears when the dock unmounts. Pass the page color as
 `backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
 transcript beneath it; it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
-returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
-while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.
+returning `null` outside that screen-local boundary. The dock follows live keyboard geometry,
+or only while an optional `keyboardTracking` shared value is true. The dock reads it on the UI
+thread, so focus can lift the dock on the keyboard's first frame instead of after a React commit.
+Pass the translated `collapseLabel` for its backdrop.
 The expanded dock removes its horizontal gutter and fills through the bottom safe area, keeping
 the footer and controls inside one opaque surface with only the top corners rounded.
 `Composer.Editor` owns the shared compact-to-editing frame, keeping primary actions in one resting

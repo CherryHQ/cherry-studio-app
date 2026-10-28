@@ -22,20 +22,20 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: mockBottomInset, left: 0, right: 0, top: 0 }),
 }));
 
-jest.mock('react-native-keyboard-controller', () => {
-  const React = jest.requireActual('react');
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    KeyboardStickyView: ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement(MockView, { ...props, testID: 'keyboard-sticky-view' }, children),
-  };
-});
+// An open keyboard 300pt tall.
+jest.mock('react-native-keyboard-controller', () => ({
+  useReanimatedKeyboardAnimation: () => ({
+    height: { get: () => -300 },
+    progress: { get: () => 1 },
+  }),
+}));
 
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: jest.requireActual('react-native').View },
   Easing: { bezier: () => 'settle' },
+  useAnimatedReaction: <T,>(prepare: () => T, react: (value: T, previous: T | null) => void) =>
+    react(prepare(), null),
   useAnimatedStyle: (factory: () => object) => factory(),
   useSharedValue: (initialValue: number) => {
     const { useRef } = jest.requireActual('react');
@@ -51,6 +51,17 @@ jest.mock('react-native-reanimated', () => ({
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
 
 type DockLayout = ReturnType<typeof useComposerDockLayout>;
+
+const cell = <T,>(value: T) =>
+  ({
+    value,
+    get() {
+      return this.value;
+    },
+    set(next: T) {
+      this.value = next;
+    },
+  }) as SharedValue<T>;
 
 let dockLayout: DockLayout | undefined;
 
@@ -91,13 +102,14 @@ describe('Composer.Dock', () => {
     });
 
     const container = renderer!.root.findByProps({ pointerEvents: 'box-none' });
-    const stickyView = renderer!.root.findByProps({ testID: 'keyboard-sticky-view' });
     const layoutEvent = { nativeEvent: { layout: { height: 126 } } };
 
     // A stationary native wrapper would clip the lifted input under Android's blur target.
-    expect(renderer!.toJSON()).toMatchObject({ props: { testID: 'keyboard-sticky-view' } });
-    expect(container.props.style).toEqual({ paddingBottom: 38, paddingHorizontal: 16 });
-    expect(stickyView.props.offset).toEqual({ opened: 26 });
+    // The open keyboard lifts the dock by its height less the safe area it already covers.
+    expect(container.props.style).toEqual([
+      { paddingBottom: 38, paddingHorizontal: 16 },
+      { transform: [{ translateY: -274 }] },
+    ]);
 
     act(() => container.props.onLayout(layoutEvent));
 
@@ -139,13 +151,32 @@ describe('Composer.Dock', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({ pointerEvents: 'box-none' }).props.style).toEqual({
-      paddingBottom: 12,
-      paddingHorizontal: 16,
+    expect(renderer!.root.findByProps({ pointerEvents: 'box-none' }).props.style).toEqual([
+      { paddingBottom: 12, paddingHorizontal: 16 },
+      { transform: [{ translateY: -300 }] },
+    ]);
+  });
+
+  it('follows the keyboard only while its tracking cell is on', () => {
+    const keyboardTracking = cell(false);
+    const renderDock = () => (
+      <ComposerDock keyboardTracking={keyboardTracking}>
+        <View />
+      </ComposerDock>
+    );
+    const translateY = () =>
+      renderer!.root.findByProps({ pointerEvents: 'box-none' }).props.style[1].transform[0]
+        .translateY;
+
+    act(() => {
+      renderer = create(renderDock());
     });
-    expect(renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.offset).toEqual({
-      opened: 0,
-    });
+    expect(translateY()).toBe(0);
+
+    keyboardTracking.set(true);
+    // This mock evaluates animated styles on render; on device the UI thread reads the cell.
+    act(() => renderer!.update(renderDock()));
+    expect(translateY()).toBe(-274);
   });
 
   it('can participate in parent flow without measuring its animated height', () => {
@@ -163,16 +194,6 @@ describe('Composer.Dock', () => {
   });
 
   it('publishes overlay space without rerendering and keeps it while the resting background fades', () => {
-    const cell = <T,>(value: T) =>
-      ({
-        value,
-        get() {
-          return this.value;
-        },
-        set(next: T) {
-          this.value = next;
-        },
-      }) as SharedValue<T>;
     const progress = cell(0);
     const recordDockHeight = jest.fn();
     const releaseDock = jest.fn();
@@ -210,10 +231,12 @@ describe('Composer.Dock', () => {
     act(() => {
       renderer = create(renderDock());
     });
+    // A dock without a tracking cell always follows, and the expansion rides the same keyboard.
+    expect(mockExpansion.meta.keyboardTrackingEnabled.get()).toBe(true);
     onRender.mockClear();
     for (const height of [100, 110, 125, 148]) {
       act(() =>
-        renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.onLayout({
+        renderer!.root.findAllByProps({ pointerEvents: 'box-none' })[0].props.onLayout({
           nativeEvent: { layout: { height } },
         }),
       );
@@ -230,7 +253,7 @@ describe('Composer.Dock', () => {
     act(() => renderer!.update(renderDock()));
     expect(restingBackground().props.style).toEqual({ opacity: 0 });
     act(() =>
-      renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.onLayout({
+      renderer!.root.findAllByProps({ pointerEvents: 'box-none' })[0].props.onLayout({
         nativeEvent: { layout: { height: 600 } },
       }),
     );

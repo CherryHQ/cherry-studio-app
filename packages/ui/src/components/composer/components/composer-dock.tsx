@@ -3,15 +3,17 @@ import {
   type RefObject,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
 import { type LayoutChangeEvent, Pressable, View, type ViewInstance } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, {
+  type SharedValue,
+  useAnimatedReaction,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { withUniwind } from 'uniwind';
 
 import {
   composerHorizontalScreenInset,
@@ -20,8 +22,6 @@ import {
 } from '../utils/composer-dock-layout';
 import { useComposerExpansion } from './composer-expansion';
 
-const StyledKeyboardStickyView = withUniwind(KeyboardStickyView);
-
 export type ComposerDockProps = PropsWithChildren<{
   /** Paints the compact dock's whole footprint so an overlaid transcript stays out of sight. */
   backgroundClassName?: string;
@@ -29,8 +29,11 @@ export type ComposerDockProps = PropsWithChildren<{
   /** Expandable overlays publish contentInset instead of reserving parent flow space. */
   layoutMode?: 'floating' | 'flow' | 'expandable' | 'expandable-overlay';
   collapseLabel?: string;
-  /** Stops following keyboard coordinates while another surface owns input. */
-  keyboardTrackingEnabled?: boolean;
+  /**
+   * Follows keyboard coordinates only while true, so another surface can own input. Read on the
+   * UI thread: focus lifts the dock on the keyboard's first frame, not after a React commit.
+   */
+  keyboardTracking?: SharedValue<boolean>;
   onHeightChange?: (height: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
 }>;
@@ -41,11 +44,13 @@ export function ComposerDock({
   containerRef,
   layoutMode = 'floating',
   collapseLabel = 'Collapse editor',
-  keyboardTrackingEnabled = true,
+  keyboardTracking,
   onHeightChange,
   onLayout,
 }: ComposerDockProps) {
   const { bottom } = useSafeAreaInsets();
+  const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  const keyboardOffset = getComposerKeyboardStickyOffset(bottom);
   const bottomPadding = getComposerBottomPadding(bottom);
   const expansion = useComposerExpansion();
   const fallbackRef = useRef<ViewInstance>(null);
@@ -88,9 +93,24 @@ export function ComposerDock({
     };
   }, [dockRef, isExpandable, isPresented, recordCompactHeight]);
 
-  useLayoutEffect(() => {
-    if (isExpandable) tracking?.set(keyboardTrackingEnabled);
-  }, [isExpandable, keyboardTrackingEnabled, tracking]);
+  useAnimatedReaction(
+    () => keyboardTracking?.get() ?? true,
+    (enabled) => {
+      if (isExpandable) tracking?.set(enabled);
+    },
+    [isExpandable, keyboardTracking, tracking],
+  );
+
+  const stickyStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY:
+          (keyboardTracking?.get() ?? true)
+            ? keyboardHeight.get() + keyboardProgress.get() * keyboardOffset
+            : 0,
+      },
+    ],
+  }));
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: isExpandable ? (progress?.get() ?? 0) : 0,
@@ -118,12 +138,10 @@ export function ComposerDock({
   // Move the dock boundary with its content: Android BlurTargetView clips
   // children to their own bounds, so a stationary wrapper hides the lifted input.
   const dock = (
-    <StyledKeyboardStickyView
+    <Animated.View
       ref={dockRef}
       accessibilityViewIsModal={isPresented}
       className={layoutMode === 'flow' ? 'z-10 shrink-0' : 'absolute right-0 bottom-0 left-0 z-10'}
-      enabled={keyboardTrackingEnabled}
-      offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}
       onAccessibilityEscape={isPresented ? expansion?.actions.collapse : undefined}
       onLayout={
         (isExpandable && !isPresented) || onHeightChange || onLayout ? handleLayout : undefined
@@ -131,11 +149,11 @@ export function ComposerDock({
       pointerEvents="box-none"
       style={
         isExpandable
-          ? undefined
-          : {
-              paddingBottom: bottomPadding,
-              paddingHorizontal: composerHorizontalScreenInset,
-            }
+          ? stickyStyle
+          : [
+              { paddingBottom: bottomPadding, paddingHorizontal: composerHorizontalScreenInset },
+              stickyStyle,
+            ]
       }
     >
       {isExpandable ? (
@@ -157,7 +175,7 @@ export function ComposerDock({
       ) : (
         children
       )}
-    </StyledKeyboardStickyView>
+    </Animated.View>
   );
 
   if (!isExpandable) return dock;

@@ -1,12 +1,15 @@
 import type { ComposerInputHandle } from '@cherrystudio/ui/components';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardController, KeyboardEvents } from 'react-native-keyboard-controller';
+import { useSharedValue } from 'react-native-reanimated';
 
 /** Editing belongs to the whole composer, including its menus and pickers. */
 export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle | null>) {
   const [isEditing, setIsEditing] = useState(false);
   const isEditingRef = useRef(false);
-  const [isKeyboardTrackingEnabled, setIsKeyboardTrackingEnabled] = useState(false);
+  // Read by the dock on the UI thread: focus must lift it on the keyboard's first
+  // frame, not after the editing render commits.
+  const keyboardTracking = useSharedValue(false);
   const isDismissPendingRef = useRef(false);
   const activeInputRef = useRef<Pick<ComposerInputHandle, 'blur'> | null>(null);
 
@@ -16,22 +19,22 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
       // coordinates. A newer focus cancels this dismissal before a late hide.
       if (isDismissPendingRef.current) {
         isDismissPendingRef.current = false;
-        setIsKeyboardTrackingEnabled(false);
+        keyboardTracking.set(false);
       }
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [keyboardTracking]);
 
   const activateInput = useCallback(
     (input: Pick<ComposerInputHandle, 'blur'> | null = inputRef.current) => {
       activeInputRef.current = input;
       isEditingRef.current = true;
       isDismissPendingRef.current = false;
+      keyboardTracking.set(true);
       setIsEditing(true);
-      setIsKeyboardTrackingEnabled(true);
     },
-    [inputRef],
+    [inputRef, keyboardTracking],
   );
 
   const dismissInput = useCallback(() => {
@@ -42,10 +45,10 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
     setIsEditing(false);
     isDismissPendingRef.current = KeyboardController.isVisible();
     if (!isDismissPendingRef.current) {
-      setIsKeyboardTrackingEnabled(false);
+      keyboardTracking.set(false);
     }
     (activeInputRef.current ?? inputRef.current)?.blur();
-  }, [inputRef]);
+  }, [inputRef, keyboardTracking]);
 
   const runInputReplacement = useCallback(
     async <TValue>(present: () => Promise<TValue> | TValue): Promise<TValue> => {
@@ -53,7 +56,7 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
       // Activity can otherwise restore stale keyboard coordinates and move
       // the composer away from its hit area.
       isDismissPendingRef.current = false;
-      setIsKeyboardTrackingEnabled(false);
+      keyboardTracking.set(false);
       (activeInputRef.current ?? inputRef.current)?.blur();
 
       try {
@@ -65,13 +68,10 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
 
       return present();
     },
-    [inputRef],
+    [inputRef, keyboardTracking],
   );
 
-  const state = useMemo(
-    () => ({ isEditing, isKeyboardTrackingEnabled }),
-    [isEditing, isKeyboardTrackingEnabled],
-  );
+  const state = useMemo(() => ({ isEditing, keyboardTracking }), [isEditing, keyboardTracking]);
   const actions = useMemo(
     () => ({ activateInput, dismissInput, runInputReplacement }),
     [activateInput, dismissInput, runInputReplacement],

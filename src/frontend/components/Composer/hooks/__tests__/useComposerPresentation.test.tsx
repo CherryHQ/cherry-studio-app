@@ -5,6 +5,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useComposerPresentation } from '../useComposerPresentation';
 
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual('@/frontend/components/Composer/components/__tests__/_sharedValueMock'),
+);
+
 const mockBlur = jest.fn();
 const mockIsKeyboardVisible = KeyboardController.isVisible as jest.MockedFunction<
   typeof KeyboardController.isVisible
@@ -60,13 +64,13 @@ describe('useComposerPresentation', () => {
   });
 
   test('does not follow an already visible global keyboard before its field receives focus', () => {
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+    expectPresentation(false, false);
   });
 
   test("does not blur a resting composer or dismiss another field's keyboard", () => {
     act(() => presentation.actions.dismissInput());
     expect(mockBlur).not.toHaveBeenCalled();
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+    expectPresentation(false, false);
   });
 
   test('dismisses only once per editing session, including before the next React commit', () => {
@@ -79,9 +83,9 @@ describe('useComposerPresentation', () => {
     });
 
     expect(mockBlur).toHaveBeenCalledTimes(1);
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: true });
+    expectPresentation(false, true);
     act(() => emitKeyboardEvent('keyboardDidHide'));
-    expect(presentation.state.isKeyboardTrackingEnabled).toBe(false);
+    expect(presentation.state.keyboardTracking.get()).toBe(false);
 
     act(() => presentation.actions.activateInput());
     act(() => presentation.actions.dismissInput());
@@ -105,10 +109,10 @@ describe('useComposerPresentation', () => {
     act(() => presentation.actions.dismissInput());
     act(() => emitKeyboardEvent('keyboardWillHide'));
 
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: true });
+    expectPresentation(false, true);
 
     act(() => emitKeyboardEvent('keyboardDidHide'));
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+    expectPresentation(false, false);
   });
 
   test('detaches immediately when dismissed with no keyboard visible', () => {
@@ -116,7 +120,7 @@ describe('useComposerPresentation', () => {
     mockIsKeyboardVisible.mockReturnValue(false);
 
     act(() => presentation.actions.dismissInput());
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+    expectPresentation(false, false);
   });
 
   test('handles a hide delivered synchronously by native blur', () => {
@@ -124,7 +128,7 @@ describe('useComposerPresentation', () => {
     mockBlur.mockImplementationOnce(() => emitKeyboardEvent('keyboardDidHide'));
 
     act(() => presentation.actions.dismissInput());
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+    expectPresentation(false, false);
   });
 
   test('keeps a new focus connected when the previous dismissal finishes late', () => {
@@ -133,7 +137,7 @@ describe('useComposerPresentation', () => {
     act(() => presentation.actions.activateInput());
     act(() => emitKeyboardEvent('keyboardDidHide'));
 
-    expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: true });
+    expectPresentation(true, true);
   });
 
   test('removes the keyboard subscription on unmount', () => {
@@ -181,7 +185,7 @@ describe('useComposerPresentation', () => {
         replacement = presentation.actions.runInputReplacement(present).catch((error) => error);
       });
 
-      expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: false });
+      expectPresentation(true, false);
       expect(present).not.toHaveBeenCalled();
 
       await act(async () => {
@@ -189,7 +193,7 @@ describe('useComposerPresentation', () => {
         expect(await replacement).toBe(result === 'failed' ? error : result);
       });
       expect(present).toHaveBeenCalledTimes(1);
-      expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: false });
+      expectPresentation(true, false);
 
       // Search inside the model/file sheet must not end composer editing either.
       act(() => emitKeyboardEvent('keyboardWillHide'));
@@ -211,7 +215,7 @@ describe('useComposerPresentation', () => {
       await replacement;
     });
 
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+    expectPresentation(false, false);
   });
 
   test('reconnects keyboard tracking when the composer field regains focus', async () => {
@@ -223,13 +227,18 @@ describe('useComposerPresentation', () => {
     });
 
     act(() => presentation.actions.activateInput());
-    expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: true });
+    expectPresentation(true, true);
 
     act(() => emitKeyboardEvent('keyboardWillHide'));
     act(() => emitKeyboardEvent('keyboardDidHide'));
     expect(presentation.state.isEditing).toBe(true);
   });
 });
+
+function expectPresentation(isEditing: boolean, isKeyboardTracking: boolean) {
+  expect(presentation.state.isEditing).toBe(isEditing);
+  expect(presentation.state.keyboardTracking.get()).toBe(isKeyboardTracking);
+}
 
 function emitKeyboardEvent(event: KeyboardEventName) {
   keyboardListeners.get(event)?.forEach((listener) => listener());
