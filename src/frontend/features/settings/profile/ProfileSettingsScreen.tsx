@@ -1,26 +1,36 @@
-import { Input, Section, TextField, useAlert, useToast } from '@cherrystudio/ui/components';
+import Building2Icon from '@cherrystudio/app-icons/icons/building-2';
+import ServerIcon from '@cherrystudio/app-icons/icons/server';
+import { Button, Image, Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View, type TextInputInstance } from 'react-native';
+import { Keyboard, TextInput, View, type TextInputInstance } from 'react-native';
 
 import { ACCOUNT_ERROR_KEYS, organizationLabel, useAccount } from '@/frontend/appShell/account';
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { AccountError } from '@/shared/contracts/account';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
+const APP_LOGO = require('@/assets/cherry-studio-logo.png');
 const profileAvatarSize = 96;
 const logger = loggerService.withContext('ProfileSettingsScreen');
 
-function Value({ children }: { children: string }) {
+/** The account kind: the Cherry Studio logo, an organization or a private server. */
+function AccountTile({ kind }: { kind: 'cherry' | 'organization' | 'server' }) {
+  const Icon = kind === 'organization' ? Building2Icon : kind === 'server' ? ServerIcon : null;
   return (
-    <Text className="text-right text-base text-muted-foreground" numberOfLines={1}>
-      {children}
-    </Text>
+    <View className="size-10 items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary">
+      {Icon ? (
+        <Icon className="size-5 text-foreground" />
+      ) : (
+        <Image accessibilityIgnoresInvertColors className="size-10" source={APP_LOGO} />
+      )}
+    </View>
   );
 }
 
@@ -36,6 +46,7 @@ export default function ProfileSettingsScreen() {
   const { account, state } = useAccount();
   const organization = organizationLabel(state);
   const [nameDraft, setNameDraft] = useState(userName);
+  const mutedForegroundColor = useThemeColor('muted-foreground');
   const persistSelectedAvatar = useCallback(
     (sourceUri: string) => profile.persistAvatar(sourceUri),
     [profile],
@@ -104,14 +115,33 @@ export default function ProfileSettingsScreen() {
     });
   };
   const isSignedIn = state.isSignedIn || state.isEnterprise;
+  // One card for every account: what is signed in, and the way to sign in or switch.
+  const card = !isSignedIn
+    ? {
+        kind: 'cherry' as const,
+        title: t('account.notSignedIn'),
+        detail: t('account.signInDescription'),
+      }
+    : state.isEnterprise
+      ? {
+          kind: organization?.kind ?? ('organization' as const),
+          title: organization?.label ?? t('account.organization'),
+          detail: [
+            state.name,
+            t(state.privateAddress ? 'account.kind.private' : 'account.kind.organization'),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }
+      : { kind: 'cherry' as const, title: t('account.cloudAccount'), detail: state.name };
 
   return (
     <SettingsScrollPage
-      contentClassName="gap-8"
+      contentClassName="gap-6"
       headerProps={{ title: t('settings.profile.title') }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="items-center">
+      <View className="items-center gap-3">
         <AvatarImagePicker
           accessibilityLabel={t('settings.profile.changeAvatar')}
           onBeforeOpen={blurInput}
@@ -125,55 +155,45 @@ export default function ProfileSettingsScreen() {
             size={profileAvatarSize}
           />
         </AvatarImagePicker>
-      </View>
-      <TextField>
-        <TextField.Label>{t('settings.profile.userName')}</TextField.Label>
-        <Input
+        <TextInput
           accessibilityLabel={t('settings.profile.userName')}
           autoCorrect={false}
+          className="min-w-40 max-w-full border-b border-border-strong px-2 pb-1.5 text-center font-semibold text-xl text-foreground"
+          cursorColor={mutedForegroundColor}
           onBlur={saveName}
           onChangeText={setNameDraft}
           onSubmitEditing={blurInput}
+          placeholder={t('settings.profile.namePlaceholder')}
+          placeholderTextColor={mutedForegroundColor}
           ref={inputRef}
           returnKeyLabel="done"
           returnKeyType="done"
+          selectionColor={mutedForegroundColor}
           value={nameDraft}
         />
-      </TextField>
+      </View>
       <Section title={t('account.title')}>
-        {!isSignedIn ? (
-          <Section.Item
-            description={t('account.signInDescription')}
-            label={t('account.login.signIn')}
-            onPress={openSignIn}
-          />
-        ) : null}
-        {/* The identity provider may omit the account's name; an empty row says nothing. */}
-        {state.isSignedIn && !state.isEnterprise && state.name ? (
-          <Section.Item label={t('account.cloudAccount')} trailing={<Value>{state.name}</Value>} />
-        ) : null}
-        {organization ? (
-          <Section.Item
-            label={t(organization.kind === 'server' ? 'account.address' : 'account.organization')}
-            trailing={<Value>{organization.label}</Value>}
-          />
-        ) : null}
-        {state.isEnterprise && state.name ? (
-          <Section.Item
-            label={t(state.privateAddress ? 'account.username' : 'account.accountName')}
-            trailing={<Value>{state.name}</Value>}
-          />
-        ) : null}
-        {isSignedIn ? (
-          <Section.Item
-            disabled={state.isBusy}
-            label={t('account.switch')}
-            onPress={switchAccount}
-          />
-        ) : null}
+        <Section.Item
+          description={card.detail || undefined}
+          label={card.title}
+          leading={<AccountTile kind={card.kind} />}
+          trailing={
+            <Button
+              disabled={state.isBusy}
+              onPress={isSignedIn ? switchAccount : openSignIn}
+              size="sm"
+              variant={isSignedIn ? 'tonal' : 'default'}
+            >
+              {t(isSignedIn ? 'account.switch' : 'account.login.signIn')}
+            </Button>
+          }
+        />
       </Section>
       {isSignedIn ? (
-        <Section>
+        <Section
+          // Only an organization's data leaves with its sign-out; a community account keeps it.
+          footer={state.isEnterprise ? t('account.signOutConfirm.description') : undefined}
+        >
           <Section.Item
             destructive
             disabled={state.isBusy}
