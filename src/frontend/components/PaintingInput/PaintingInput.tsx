@@ -66,6 +66,7 @@ type PaintingInputProps = {
   onCancel: () => void;
   onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
   preparePrompt?: PaintingPromptPreparation;
+  onSubmissionSettled?: () => void;
   placeholder?: string;
   painting?: Painting;
   status: 'idle' | 'generating';
@@ -90,6 +91,7 @@ function PaintingInputControls({
   onGenerate,
   onRatioChange,
   preparePrompt,
+  onSubmissionSettled,
   placeholder,
   painting,
   status,
@@ -120,6 +122,7 @@ function PaintingInputControls({
     initialParamValues: selectedModelId === initialModelId ? initialParamValues : undefined,
     onGenerate,
     preparePrompt,
+    onSubmissionSettled,
   });
   const { reference, strategy } = input;
   const openProviderSetup = useOpenProviderSetup(

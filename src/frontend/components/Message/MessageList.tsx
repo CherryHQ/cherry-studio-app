@@ -46,6 +46,7 @@ export function MessageList({
   onLoadNewer,
   onReturnToLatest,
   onReady,
+  onTargetRestored,
   renderMessage,
 }: MessageListProps) {
   const { t } = useTranslation();
@@ -73,6 +74,7 @@ export function MessageList({
     listRef,
     messages,
     onReady,
+    onTargetRestored,
     onReturnToLatest,
   });
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();

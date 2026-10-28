@@ -1,4 +1,5 @@
 import type { MessageListItem } from '@/frontend/components/Message';
+import { withCherryMeta } from '@/shared/data/types/uiParts';
 
 import { messageTranslationSource } from '../messageTranslationSource';
 
@@ -55,4 +56,32 @@ test('changes the source hash when the answer changes but not when metadata chan
       data: { parts: [{ type: 'text', text: 'Edited answer' }] },
     })?.contentHash,
   ).not.toBe(original?.contentHash);
+});
+
+test('quote accessories cannot change original translation text or hash', () => {
+  const plain: MessageListItem = {
+    ...message,
+    data: { parts: [{ type: 'text', text: '# Original' }] },
+  };
+  const quoted: MessageListItem = {
+    ...plain,
+    data: {
+      parts: [
+        withCherryMeta(
+          { type: 'text', text: '# Original' },
+          {
+            quotes: [
+              {
+                id: 'q',
+                sourceMessageId: '00000000-0000-7000-8000-000000000001',
+                text: 'Other source words',
+              },
+            ],
+            quoteAuthor: { role: 'user' },
+          },
+        ),
+      ],
+    },
+  };
+  expect(messageTranslationSource(quoted)).toEqual(messageTranslationSource(plain));
 });

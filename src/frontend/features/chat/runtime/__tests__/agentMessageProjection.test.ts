@@ -1,5 +1,6 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   createAgentMessageListProjectionCache,
@@ -949,4 +950,26 @@ describe('agentMessageProjection', () => {
   test('omits system messages from the chat row projection', () => {
     expect(toAgentMessageListItem(message('system-1', { role: 'system' }))).toBeUndefined();
   });
+});
+
+test('settled and pending quote-only metadata survives the conditional display projection', () => {
+  const fields = {
+    quotes: [
+      { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+    ] as [{ id: string; sourceMessageId: string; text: string }],
+    quoteAuthor: { role: 'user' as const },
+  };
+  const source = message('q', {
+    role: 'user',
+    parts: [{ id: 'p', type: 'text', text: 'Request', state: 'done', ...fields }],
+  });
+  const pending = createPendingChatMessages({
+    userMessageId: 'u',
+    assistantMessageId: 'a',
+    parts: [{ type: 'text', text: 'Request', ...fields }],
+  });
+  const pendingPart = pending[0].data.parts?.[0];
+  expect(pendingPart?.type === 'text' && readCherryMeta(pendingPart)).toMatchObject(fields);
+  const part = toAgentMessageListItem(source)?.data.parts?.[0];
+  expect(part?.type === 'text' && readCherryMeta(part)).toMatchObject(fields);
 });

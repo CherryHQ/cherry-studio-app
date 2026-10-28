@@ -3,6 +3,8 @@ import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import {
   BackgroundPressExclusion,
   ContentState,
+  ContextMenu,
+  ContextMenuExclusion,
   ShimmerText,
   Skeleton,
   Spinner,
@@ -33,11 +35,13 @@ import type { MessageListItem } from '@/frontend/components/Message';
 import { type ModelPickerModelItem, useModelPickerData } from '@/frontend/components/ModelPicker';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
+import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
 import { useAgentAnswers } from '../../../runtime';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { useChatSessionId } from '../context/ChatSessionContext';
 import { measureFrame, useExpandAnswer } from '../context/ExpandAnswerContext';
 import { answerPreview } from '../utils/answerPreview';
+import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
 const CARD_GAP = 8;
 /** How much of the next card shows beside the current one. */
@@ -278,6 +282,12 @@ const AnswerCard = memo(function AnswerCard({
   width: number;
 }) {
   const { t, i18n } = useTranslation();
+  const quoteActions = useChatQuoteActions();
+  const actions = useAssistantMessageActions();
+  const reply =
+    answer && quoteActions?.canReply(answer) && actions.replyToMessage
+      ? () => void actions.replyToMessage?.({ messageId: answer.id })
+      : undefined;
   const cardColor = useThemeColor('card');
   const { backgroundColor: transparentCardColor } = useResolveClassNames('bg-card/0');
   const preview = useMemo(() => answerPreview(answer?.data.parts), [answer?.data.parts]);
@@ -285,8 +295,16 @@ const AnswerCard = memo(function AnswerCard({
   const isFolded = preview.isTruncated || contentHeight > bodyHeight;
   const isRunning = status === 'pending';
 
-  return (
+  const card = (
     <Pressable
+      accessibilityActions={reply ? [{ name: 'reply', label: t('chat.quote.reply') }] : undefined}
+      onAccessibilityAction={
+        reply
+          ? (event) => {
+              if (event.nativeEvent.actionName === 'reply') reply();
+            }
+          : undefined
+      }
       accessibilityHint={t('chat.branch.read')}
       accessibilityLabel={name}
       accessibilityRole="button"
@@ -362,6 +380,30 @@ const AnswerCard = memo(function AnswerCard({
         ) : null}
       </View>
     </Pressable>
+  );
+  if (!reply || !answer) return card;
+  const text = copyAssistantMessageText(answer.data.parts ?? []);
+  return (
+    <ContextMenuExclusion>
+      <ContextMenu
+        items={[
+          { id: 'reply', label: t('chat.quote.reply'), onPress: reply },
+          {
+            id: 'copy',
+            label: t('common.copy'),
+            disabled: !text,
+            onPress: () => actions.copyAssistantMessage({ messageId: answer.id, text }),
+          },
+          {
+            id: 'share',
+            label: t('chat.share.title'),
+            onPress: () => actions.shareAssistantMessage({ messageId: answer.id }),
+          },
+        ]}
+      >
+        {card}
+      </ContextMenu>
+    </ContextMenuExclusion>
   );
 });
 

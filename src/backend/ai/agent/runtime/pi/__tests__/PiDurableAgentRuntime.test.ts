@@ -24,6 +24,7 @@ import {
   buildInitialSkillInstructions,
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
+import { formatMessageQuote } from '../../../host/turnRuntimeInput';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
@@ -182,6 +183,58 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('retained-tool retry has one quoted historical question and a plain continuation after reopen', async () => {
+    const f = fixture();
+    let runtime = f.create();
+    const quoted = formatMessageQuote('Explain', [
+      { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+    ]);
+    await runtime.initialize(f.database, f.ports);
+    try {
+      await runtime.ensureConversation({
+        ...seed,
+        history: {
+          history: [
+            {
+              turnId: 'question',
+              messages: [{ role: 'user', parts: [{ type: 'text', text: quoted }] }],
+            },
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: [],
+        },
+      });
+      await runtime.close();
+      runtime = f.create();
+      await runtime.initialize(f.database, f.ports);
+      await runtime.configure(lane, seed.configuration);
+      await submitAndWait(runtime, {
+        ...input('resume-quote'),
+        input: [{ type: 'text', text: quoted }],
+        resume: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call',
+            toolRef: { source: 'builtin', capabilityId: 'read_file' },
+            providerName: 'read_file',
+            input: {},
+          },
+          {
+            type: 'tool-result',
+            toolCallId: 'call',
+            output: { value: 'Completed tool result', artifacts: [] },
+            isError: false,
+          },
+        ],
+      });
+      expect(JSON.stringify(f.requests.at(-1)).match(/# Referenced messages/g)).toHaveLength(1);
+      expect(JSON.stringify(f.requests.at(-1))).toContain('Continue the interrupted answer');
+      expect(f.ports.resolveTool).not.toHaveBeenCalled();
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('releases late startup storage without opening the engine after cancellation', async () => {
     const f = fixture();
     const storage = deferred<ReopenableMemoryStorage>();
@@ -534,9 +587,19 @@ describe('Persistent Agent facade', () => {
     const firstStream = new AssistantMessageEventStream();
     const started = deferred<void>();
     let calls = 0;
+    const contexts: TranscriptContext[] = [];
+    const quoted = (name: string) =>
+      formatMessageQuote(`Request ${name}`, [
+        {
+          id: name,
+          sourceMessageId: '00000000-0000-7000-8000-000000000001',
+          text: `Snapshot ${name}`,
+        },
+      ]);
     state.dependencies.resolveModel = async (...args) => ({
       ...(await resolveModel(...args)),
-      streamFn: () => {
+      streamFn: (_model, context) => {
+        contexts.push(context);
         calls++;
         if (calls === 1) {
           started.resolve();
@@ -569,9 +632,15 @@ describe('Persistent Agent facade', () => {
         completed.resolve();
     });
     try {
-      await runtime.submit(seed.lane, input('first'));
+      await runtime.submit(seed.lane, {
+        ...input('first'),
+        input: [{ type: 'text', text: quoted('first') }],
+      });
       await started.promise;
-      await runtime.submit(seed.lane, input('second'));
+      await runtime.submit(seed.lane, {
+        ...input('second'),
+        input: [{ type: 'text', text: quoted('second') }],
+      });
       firstStream.push(
         providerErrorEvent(emptyAssistantMessage(wire), {
           message: 'Invalid request',
@@ -585,6 +654,9 @@ describe('Persistent Agent facade', () => {
         ['first', 'failed'],
       ]);
       expect(calls).toBe(2);
+      expect(JSON.stringify(contexts[0]).match(/# Referenced messages/g)).toHaveLength(1);
+      expect(JSON.stringify(contexts[1]).match(/# Referenced messages/g)).toHaveLength(2);
+      expect(JSON.stringify(contexts[1])).toContain('Snapshot second');
     } finally {
       await observed.unsubscribe();
       await runtime.close();

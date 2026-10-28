@@ -1,6 +1,7 @@
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { CompactionEntry, ResetEntry, UserEntry } from '@earendil-works/pi-durable';
 
+import { formatMessageQuote } from '../../../host/turnRuntimeInput';
 import type { RuntimeExecutionRequest } from '../../types';
 import { PI_CONTEXT_CHECKPOINT_KIND } from '../piLegacyCheckpoint';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -131,4 +132,17 @@ describe('Cherry history working-copy import', () => {
     };
     expect(() => createWorkingPiEntries(input, model)).toThrow('split point is missing');
   });
+});
+
+test('checkpoint reconstruction leaves already-materialized quote envelopes byte-identical', () => {
+  const text = formatMessageQuote('Request', [
+    { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+  ]);
+  const input = request();
+  input.contextCheckpoint = createPiContextCheckpoint('summarized', [
+    { role: 'user', content: text, timestamp: 0 },
+  ]);
+  const entries = createWorkingPiEntries(input, model);
+  expect(entries[1]?.model?.[0]).toMatchObject({ content: text });
+  expect(JSON.stringify(entries).match(/# Referenced messages/g)).toHaveLength(1);
 });

@@ -8,12 +8,22 @@ import { MessageAnswerCards } from '../MessageAnswerCards';
 
 const mockSelectBranch = jest.fn();
 const mockExpand = jest.fn();
+let mockQuoteSupported = false;
+jest.mock('../../../../quotes/ChatQuoteContext', () => ({
+  useChatQuoteActions: () =>
+    mockQuoteSupported
+      ? { canReply: (message: MessageListItem) => message.status === 'success' }
+      : undefined,
+}));
 let mockActions: Record<string, jest.Mock | undefined> = {};
 let mockAnswers = new Map<string, MessageListItem>();
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    ContextMenu: ({ children, ...props }: { children: ReactNode }) =>
+      createElement('ContextMenu', props, children),
+    ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
     BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
     ShimmerText: (props: object) => createElement('ShimmerText', props),
     Skeleton: () => createElement('Skeleton'),
@@ -70,6 +80,7 @@ describe('MessageAnswerCards', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockQuoteSupported = false;
     mockSelectBranch.mockResolvedValue(true);
     mockActions = { selectBranch: mockSelectBranch };
     mockAnswers = new Map([
@@ -86,6 +97,22 @@ describe('MessageAnswerCards', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount());
+  });
+
+  test('Reply on a sibling card uses that exact displayed id rather than the selected row', () => {
+    mockQuoteSupported = true;
+    const reply = jest.fn();
+    mockActions.replyToMessage = reply;
+    renderCards();
+    const second = renderer!.root
+      .findAllByType('ContextMenu' as never)
+      .find((menu) => menu.findAll((node) => node.props.testID === 'message-answer-a2').length > 0);
+    expect(second).toBeDefined();
+    act(() => second!.props.items.find((item: { id: string }) => item.id === 'reply').onPress());
+    expect(reply).toHaveBeenCalledWith({ messageId: 'a2' });
+    expect(
+      host((node) => node.props.testID === 'message-answer-a2')[0]?.props.accessibilityActions,
+    ).toEqual([{ name: 'reply', label: 'chat.quote.reply' }]);
   });
 
   test('shows a card per answer, named by model and by its own snapshot once the model is gone', () => {

@@ -24,6 +24,7 @@ import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
@@ -45,6 +46,7 @@ type AssistantMessageActionsState = {
 };
 
 type AssistantMessageActions = {
+  replyToMessage?: (input: { messageId: string }) => Promise<void>;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
@@ -83,6 +85,7 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { alert } = useAlert();
+  const quoteActions = useChatQuoteActions();
   const translationStore = useMessageTranslationStore();
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
@@ -273,6 +276,7 @@ export function AssistantMessageActionsProvider({
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+      onReply={quoteActions?.replyToMessage}
       onShare={share}
       onFork={messages.some((message) => message.actions.fork) ? fork : undefined}
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
@@ -305,6 +309,7 @@ export function AssistantMessageActionsProvider({
 export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
+  onReply: replyToMessage,
   onShare: shareAssistantMessage,
   onFork: forkFromAssistantMessage,
   onDelete: deleteMessageTurn,
@@ -316,6 +321,7 @@ export function ChatMessageActionsProvider({
   retryableMessageIds = EMPTY_MESSAGE_IDS,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
+  onReply?: AssistantMessageActions['replyToMessage'];
   onShare: AssistantMessageActions['shareAssistantMessage'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
   onDelete?: AssistantMessageActions['deleteMessageTurn'];
@@ -387,6 +393,7 @@ export function ChatMessageActionsProvider({
   );
   const actionsValue = useMemo(
     () => ({
+      replyToMessage,
       answerWithModel,
       copyAssistantMessage,
       deleteMessageTurn,
@@ -396,6 +403,7 @@ export function ChatMessageActionsProvider({
       shareAssistantMessage,
     }),
     [
+      replyToMessage,
       answerWithModel,
       copyAssistantMessage,
       deleteMessageTurn,

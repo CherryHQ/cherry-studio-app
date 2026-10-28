@@ -6,6 +6,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import type { AgentQueuedInput } from '@/shared/contracts/agent';
 
+import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
 import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
 
 export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
@@ -54,6 +55,7 @@ function QueuedInputRow({
   const { toast } = useToast();
   const { t } = useTranslation();
   const [isRemoving, setIsRemoving] = useState(false);
+  const quote = input.userMessage.parts.find((part) => part.type === 'text' && part.quotes);
   const text = input.userMessage.parts
     .flatMap((part) => (part.type === 'text' ? [part.text.slice(0, 240)] : []))
     .join('\n')
@@ -82,6 +84,7 @@ function QueuedInputRow({
         {position}
       </Text>
       <View className="min-w-0 flex-1">
+        {quote?.type === 'text' && quote.quotes ? <MessageQuotePreview fields={quote} /> : null}
         <Text className="text-sm text-foreground" numberOfLines={1}>
           {text || attachments || t('chat.queue.message')}
         </Text>

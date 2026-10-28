@@ -28,6 +28,7 @@ import {
   type RuntimeModel,
   type RuntimeTool,
 } from '../runtime';
+import { runtimeUserText } from './turnRuntimeInput';
 
 const logger = loggerService.withContext('AgentImageGeneration');
 const GENERATE_TIMEOUT_MS = 10 * 60_000;
@@ -101,13 +102,18 @@ export function createAgentImageGeneration(dependencies: {
 
       const files = [...resources.inputFiles.values()];
       if (workspaceFolderId) await fileLibraryService.resolveDirectory(workspaceFolderId, '.');
-      const prompt = parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
+      const rawPrompt = parts
+        .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+        .join('\n');
       const prepared = createPaintingGenerationStrategy(selectedModel).prepare({
         images: files,
-        prompt,
+        prompt: rawPrompt,
         mode: settings?.mode,
         paramValues: settings?.paramValues ?? {},
       });
+      const modelPrompt = parts
+        .flatMap((part) => (part.type === 'text' ? [runtimeUserText(part)] : []))
+        .join('\n');
       const capturedSettings = { mode: prepared.mode, paramValues: prepared.paramValues };
       return {
         settings: capturedSettings,
@@ -132,7 +138,14 @@ export function createAgentImageGeneration(dependencies: {
                 dependencies.ai.generateImage({
                   ...capturedSettings,
                   inputImages,
-                  prompt: [instructions.trim(), prompt.trim()].filter(Boolean).join('\n\n'),
+                  prompt: [
+                    instructions.trim(),
+                    parts.some((part) => part.type === 'text' && part.quotes)
+                      ? modelPrompt
+                      : modelPrompt.trim(),
+                  ]
+                    .filter(Boolean)
+                    .join('\n\n'),
                   requestOptions: { signal: requestSignal },
                   uniqueModelId,
                   usageAttribution,
@@ -147,7 +160,7 @@ export function createAgentImageGeneration(dependencies: {
                     folderId: workspaceFolderId ?? null,
                     data: image.base64,
                     mediaType: image.mediaType,
-                    name: readableFilename(prompt, {
+                    name: readableFilename(rawPrompt, {
                       extension: generatedImageExtension(image.mediaType),
                       fallback: 'Image',
                       ordinal: index + 1,

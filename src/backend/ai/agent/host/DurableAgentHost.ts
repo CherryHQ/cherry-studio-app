@@ -7,6 +7,7 @@ import type {
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
+import { messageQuoteSnapshot } from '@/shared/contracts/agent';
 import {
   AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
@@ -88,6 +89,7 @@ import {
   type TurnPreparationDependencies,
 } from './turnPreparation';
 import {
+  runtimeUserText,
   toRuntimeHistory,
   toRuntimeInputParts,
   type RuntimeAttachmentContents,
@@ -497,6 +499,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   startSession(input: AgentStartSessionInput) {
     const parsed = AgentStartSessionInputSchema.parse(input);
+    if (parsed.parts.some((part) => part.type === 'text' && part.quotes))
+      fail('CAPABILITY_UNSUPPORTED', 'A new session cannot quote another session.');
     return this.admit(parsed.sessionId, async (signal) => {
       if (await this.store.getSession(parsed.sessionId))
         fail('SESSION_BUSY', 'This session already exists.');
@@ -532,6 +536,15 @@ export class DurableAgentHost implements AgentProtocol {
     return this.admit(parsed.sessionId, async (signal) => {
       const session = await this.requireSession(parsed.sessionId);
       const current = await this.syncSession(parsed.sessionId);
+      const quote = parsed.parts.find((part) => part.type === 'text' && part.quotes);
+      if (quote?.type === 'text' && quote.quotes) {
+        const source = await this.store.getMessage(
+          parsed.sessionId,
+          quote.quotes[0].sourceMessageId,
+        );
+        if (!source || messageQuoteSnapshot(source) === undefined)
+          fail('CAPABILITY_UNSUPPORTED', 'The quoted source is unavailable or incomplete.');
+      }
       const parent = session.activeNodeId ?? null;
       const answers = replyTargets(parsed);
       const busy = this.busyLanes(parsed.sessionId);
@@ -730,7 +743,7 @@ export class DurableAgentHost implements AgentProtocol {
                 type: 'text' as const,
                 text:
                   part.type === 'text'
-                    ? part.text
+                    ? runtimeUserText(part)
                     : `[Image input: ${part.filename ?? part.fileEntryId}]`,
               }))
             : toRuntimeInputParts(plan.inputParts, plan.resources, attachments[index]!),
@@ -2427,12 +2440,13 @@ function submittedSkills(parts: AgentMessageView['parts']) {
 function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
   return parts.flatMap((part) => {
     // A selection made without typed text is recorded on an empty text part.
-    if (part.type === 'text' && !part.text) return [];
+    if (part.type === 'text' && !part.text && !part.quotes) return [];
     if (part.type === 'text')
       return [
         AgentInputPartSchema.parse({
           type: part.type,
           text: part.text,
+          ...(part.quotes ? { quotes: part.quotes, quoteAuthor: part.quoteAuthor } : {}),
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
           ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),

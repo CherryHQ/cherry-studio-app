@@ -10,6 +10,16 @@ const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
 const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
+let mockQuoteSupported = false;
+const mockReply = jest.fn();
+jest.mock('../../../../quotes/ChatQuoteContext', () => ({
+  useChatQuoteActions: () =>
+    mockQuoteSupported
+      ? { canReply: (message: MessageListItem) => message.status === 'success' }
+      : undefined,
+  useChatQuoteHighlight: () => undefined,
+}));
+
 const mockLocalUsage = jest.fn(() => null);
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -25,6 +35,7 @@ let mockCanSelectBranch = false;
 
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
+    ...(mockQuoteSupported ? { replyToMessage: mockReply } : {}),
     copyAssistantMessage: mockCopyMessage,
     deleteMessageTurn: mockDeleteMessageTurn,
     shareAssistantMessage: mockShareMessage,
@@ -79,11 +90,28 @@ describe('ChatMessage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCanSelectBranch = false;
+    mockQuoteSupported = false;
   });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('local Reply is an accessible menu action carrying the exact user id', () => {
+    mockQuoteSupported = true;
+    act(() => {
+      renderer = create(
+        renderMessage({ ...createMessage('success'), id: 'exact-user', role: 'user' }, true, true),
+      );
+    });
+    const item = mockContextMenu.mock.calls.at(-1)?.[0].items.find((item) => item.id === 'reply');
+    expect(item?.label).toBe('chat.quote.reply');
+    act(() => item?.onPress?.());
+    expect(mockReply).toHaveBeenCalledWith({ messageId: 'exact-user' });
+    expect(
+      renderer!.root.findByProps({ testID: 'user-message-reply' }).props.accessibilityLabel,
+    ).toBe('chat.quote.reply');
   });
 
   test('only displays usage supplied by the conversation owner, without reading the local ledger by default', () => {

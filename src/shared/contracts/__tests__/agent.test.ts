@@ -728,3 +728,75 @@ describe('user question protocol', () => {
     ).toBe(false);
   });
 });
+
+describe('local message quotes', () => {
+  const quote = {
+    id: 'quote-1',
+    sourceMessageId: '00000000-0000-7000-8000-000000000001',
+    text: '\n```ts\nconst source = "complete";\n```\n',
+  };
+  const carrier = {
+    type: 'text',
+    text: 'Explain',
+    quotes: [quote],
+    quoteAuthor: { role: 'assistant', name: 'Captured' },
+  };
+  const submit = (parts: unknown[]) => ({
+    sessionId: 's',
+    userMessageId: 'u',
+    assistantMessageId: 'a',
+    parts,
+  });
+  test('round-trips the exact snapshot and accepts old input without metadata', () => {
+    expect(AgentInputPartSchema.parse(roundTrip(carrier))).toEqual(carrier);
+    expect(AgentSubmitMessageInputSchema.parse(submit([carrier])).parts).toEqual([carrier]);
+    expect(AgentInputPartSchema.parse({ type: 'text', text: 'old' })).toEqual({
+      type: 'text',
+      text: 'old',
+    });
+  });
+  test.each([
+    { ...carrier, quotes: [] },
+    { ...carrier, quotes: [quote, quote] },
+    { ...carrier, quotes: [{ ...quote, id: '' }] },
+    { ...carrier, quotes: [{ ...quote, sourceMessageId: 'not-a-uuid' }] },
+    { ...carrier, quotes: [{ ...quote, text: ' \n ' }] },
+    { ...carrier, quoteAuthor: undefined },
+    { ...carrier, quotes: undefined },
+    { ...carrier, type: 'reasoning', id: 'r', state: 'done' },
+  ])('rejects malformed or orphaned quote fields %#', (part) => {
+    expect(AgentInputPartSchema.safeParse(part).success).toBe(false);
+  });
+  test('checks the entire input, first carrier and attachment-only sendability', () => {
+    expect(AgentSubmitMessageInputSchema.safeParse(submit([carrier, carrier])).success).toBe(false);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse(submit([{ type: 'text', text: 'primary' }, carrier]))
+        .success,
+    ).toBe(false);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse(submit([{ ...carrier, text: '' }])).success,
+    ).toBe(false);
+    const attachment = { type: 'file', fileEntryId: 'file', mediaType: 'image/png' };
+    expect(
+      AgentSubmitMessageInputSchema.safeParse(submit([{ ...carrier, text: '' }, attachment]))
+        .success,
+    ).toBe(true);
+  });
+  test('reasoning keeps its old reference fields but cannot carry a quote', () => {
+    const old = {
+      id: 'r',
+      type: 'reasoning',
+      state: 'done',
+      text: '',
+      pluginReferences: [],
+      skillReferences: [],
+      selectionReferences: [],
+      skillSelections: [],
+    };
+    expect(AgentMessagePartSchema.parse(old)).toEqual(old);
+    expect(
+      AgentMessagePartSchema.safeParse({ ...old, quotes: [quote], quoteAuthor: { role: 'user' } })
+        .success,
+    ).toBe(false);
+  });
+});

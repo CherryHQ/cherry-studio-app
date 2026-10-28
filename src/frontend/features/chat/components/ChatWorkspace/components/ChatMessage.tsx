@@ -12,7 +12,10 @@ import { Text, View } from 'react-native';
 
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
+import { useChatQuoteActions, useChatQuoteHighlight } from '../../../quotes/ChatQuoteContext';
+import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
@@ -150,7 +153,8 @@ function AssistantChatMessage({
       {message.status !== 'pending' ? (
         <BackgroundPressExclusion>
           <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-            <AssistantMessageToolbar message={message} />
+            {/* Cards own Reply by exact sibling; the row id can lag a pending branch choice. */}
+            <AssistantMessageToolbar message={message} isQuoteReplyEnabled={!isGrouped} />
             <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
           </ContextMenuExclusion>
         </BackgroundPressExclusion>
@@ -202,10 +206,16 @@ export const ChatMessage = memo(function ChatMessage({
   accessories,
   renderUsage,
 }: ChatMessageProps) {
+  const highlight = useChatQuoteHighlight();
+  const quotePart = message.data.parts?.find(
+    (part) => part.type === 'text' && readCherryMeta(part)?.quotes,
+  );
+  const quoteFields = quotePart?.type === 'text' ? readCherryMeta(quotePart) : undefined;
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
     message.role === 'user' ? (
       <View className="gap-2">
+        {quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : null}
         <UserMessage attachments={attachments} message={message} />
         {accessories}
       </View>
@@ -220,7 +230,10 @@ export const ChatMessage = memo(function ChatMessage({
     );
 
   return (
-    <View className="w-full gap-3" testID={`chat-message-${message.id}`}>
+    <View
+      className={`w-full gap-3 ${highlight === message.id ? 'bg-secondary' : ''}`}
+      testID={`chat-message-${message.id}`}
+    >
       {createdAt ? (
         <Text
           className="text-center font-mono text-muted-foreground text-xs"
@@ -250,7 +263,9 @@ function ChatMessageContextMenu({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
-  const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
+  const quoteActions = useChatQuoteActions();
+  const { replyToMessage, copyAssistantMessage, shareAssistantMessage } =
+    useAssistantMessageActions();
   // These existing actions and the text projection accept either message role.
   const text =
     message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
@@ -261,6 +276,15 @@ function ChatMessageContextMenu({
     message.status === 'pending'
       ? []
       : [
+          ...(replyToMessage && !message.branch && quoteActions?.canReply(message)
+            ? [
+                {
+                  id: 'reply',
+                  label: t('chat.quote.reply'),
+                  onPress: () => void replyToMessage({ messageId: message.id }),
+                },
+              ]
+            : []),
           {
             disabled: !text,
             id: 'copy',

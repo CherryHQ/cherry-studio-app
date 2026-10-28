@@ -72,6 +72,7 @@ export type MessageListProps = {
   onLoadNewer?: () => Promise<void>;
   onReturnToLatest?: () => void;
   onReady?: () => void;
+  onTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
   renderMessage: MessageRenderer;
 };
 

@@ -4,6 +4,7 @@ import type {
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
 
+import { remoteInput } from '../createRemoteConversationSession';
 import { createRemoteConversationSource } from '../createRemoteConversationSource';
 import type { DraftId } from '../remoteContracts';
 
@@ -666,4 +667,17 @@ it('revalidates history after an epoch reset even when its persisted revision is
   release();
   handle.dispose();
   test.source.dispose();
+});
+
+test('remote input explicitly rejects injected quote and orphan author metadata', () => {
+  const fields = {
+    quotes: [
+      { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+    ] as [{ id: string; sourceMessageId: string; text: string }],
+    quoteAuthor: { role: 'user' as const },
+  };
+  expect(() => remoteInput({ parts: [{ type: 'text', text: 'Request', ...fields }] })).toThrow();
+  expect(() =>
+    remoteInput({ parts: [{ type: 'text', text: 'Request', quoteAuthor: fields.quoteAuthor }] }),
+  ).toThrow();
 });

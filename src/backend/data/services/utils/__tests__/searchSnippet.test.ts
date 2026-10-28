@@ -39,3 +39,24 @@ describe('searchable message text', () => {
     expect(buildSearchSnippet(text, ['<view>'], 'substring')).toBe('<View>hello</View>');
   });
 });
+
+test('quote-only terms never enter the replying row search text', () => {
+  expect(
+    toSearchableText([
+      {
+        id: 'p',
+        type: 'text',
+        state: 'done',
+        text: 'My request',
+        quotes: [
+          {
+            id: 'q',
+            sourceMessageId: '00000000-0000-7000-8000-000000000001',
+            text: 'quoteOnlyNeedle',
+          },
+        ],
+        quoteAuthor: { role: 'user' },
+      },
+    ]),
+  ).toBe('My request');
+});

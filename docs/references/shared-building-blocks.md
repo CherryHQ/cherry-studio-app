@@ -41,6 +41,7 @@ it already exists.
 | PDF text extraction and on-device scanned-page OCR | `modules/pdf-text-extractor`; `src/backend/services/file/pdfText.ts` shares extraction and derived disk results across `documentText.ts` readers; `FileModule.observePdfOcr` reports one file's recognition progress |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
+| Local message quote validation and original snapshot | `src/shared/contracts/agent/messageQuote.ts`; model envelope in `src/backend/ai/agent/host/turnRuntimeInput.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
 | Safe Markdown code fences | `createCodeBlockMarkdown` in `src/shared/utils/createCodeBlockMarkdown.ts` |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |

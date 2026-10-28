@@ -498,6 +498,100 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockLatestListProps?.dataKey).toBe('session-2');
   });
 
+  test.each([false, true])(
+    'reports exact target only after a fulfilled scroll (%s rejected)',
+    async (rejected) => {
+      const onTargetRestored = jest.fn();
+      if (rejected) mockListScrollToIndex.mockRejectedValueOnce(new Error('scroll failed'));
+      act(() => {
+        renderer = create(
+          <MessageList
+            {...listProps([createMessage('source', 'user')], {
+              initialScrollTarget: { messageId: 'source' },
+              onTargetRestored,
+            })}
+          />,
+        );
+      });
+      await loadList();
+      expect(onTargetRestored.mock.calls).toEqual(
+        rejected ? [] : [[{ dataKey: 'session-1', messageId: 'source' }]],
+      );
+    },
+  );
+
+  test('user takeover invalidates a pending exact scroll success', async () => {
+    let finish!: () => void;
+    mockListScrollToIndex.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          finish = () => resolve(undefined);
+        }),
+    );
+    const onTargetRestored = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('source', 'user')], {
+            initialScrollTarget: { messageId: 'source' },
+            onTargetRestored,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    await act(async () => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      finish();
+      await Promise.resolve();
+      flushAnimationFrames();
+    });
+    expect(onTargetRestored).not.toHaveBeenCalled();
+  });
+
+  test('a target removed while its scroll is pending cannot report a successful restore', async () => {
+    let finish!: () => void;
+    mockListScrollToIndex.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          finish = () => resolve(undefined);
+        }),
+    );
+    const onTargetRestored = jest.fn();
+    const options = { initialScrollTarget: { messageId: 'source' }, onTargetRestored };
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('source', 'user')], options)} />);
+    });
+    await loadList();
+    await act(async () => {
+      renderer!.update(<MessageList {...listProps([createMessage('other', 'user')], options)} />);
+    });
+    await act(async () => {
+      finish();
+      await Promise.resolve();
+      flushAnimationFrames();
+    });
+    expect(onTargetRestored).not.toHaveBeenCalled();
+  });
+
+  test('an absent exact target reports no success and never falls back to end', async () => {
+    const onTargetRestored = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('other', 'user')], {
+            initialScrollTarget: { messageId: 'missing' },
+            onTargetRestored,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(onTargetRestored).not.toHaveBeenCalled();
+  });
+
   test('places a search target below the header instead of restoring the saved anchor', async () => {
     const messages = [createMessage('target', 'user'), createMessage('saved', 'assistant')];
     cacheService.set('chat.scroll_anchor.session-1', { key: 'saved', offset: 24 });

@@ -58,6 +58,17 @@ describe('AgentSessionMessageService persistence', () => {
       aroundMessageId: 'a2',
     });
     expect(around.items.map((message) => message.id)).toEqual(['b1', 'q1']);
+    await expect(
+      agentSessionMessageService.listByCursor('session-1', {
+        aroundMessageId: 'a2',
+        aroundMode: 'exact',
+      }),
+    ).rejects.toThrow();
+    expect(
+      (await agentSessionMessageService.listByCursor('session-1', { ids: ['a2'] })).items.map(
+        (item) => item.id,
+      ),
+    ).toEqual(['a2']);
   });
 
   test('merges concurrent languages into message data and returns them with history and selection', async () => {

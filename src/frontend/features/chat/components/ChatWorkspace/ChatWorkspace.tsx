@@ -32,6 +32,9 @@ import { MessageTranslationProvider } from './translation/MessageTranslationProv
 
 type ChatWorkspaceProps = {
   executionSource: 'local' | 'desktop';
+  onQuoteTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
+  onQuoteWindowReady?: () => void;
+  onQuoteTakeover?: () => void;
   enteringUserMessageId?: string;
   pendingSend?: PendingChatSend;
   onPendingSendDisplayed: (userMessageId: string) => void;
@@ -60,6 +63,9 @@ type ChatWorkspaceProps = {
 
 export function ChatWorkspace({
   executionSource,
+  onQuoteTargetRestored,
+  onQuoteWindowReady,
+  onQuoteTakeover,
   snapshot: live,
   messages: mergedMessages,
   onShare,
@@ -265,7 +271,7 @@ export function ChatWorkspace({
   return (
     // No background of its own: the screen paints it, and a layer reaching over the composer leaves
     // the composer visible beneath it.
-    <View className="flex-1">
+    <View className="flex-1" onTouchStart={onQuoteTakeover}>
       <MessageTranslationProvider
         isEnabled={isTranslationEnabled}
         sessionId={listKey ?? ''}
@@ -286,6 +292,8 @@ export function ChatWorkspace({
               <MessageFailureReportProvider onReport={reportMessage}>
                 <ExpandedAnswerProvider messages={listMessages} renderUsage={renderUsage}>
                   <ChatTranscript
+                    onTargetRestored={onQuoteTargetRestored}
+                    onReady={onQuoteWindowReady}
                     requiresInitialLayout={requiresInitialHistoryLayout}
                     isLoadingMore={isLoadingOlder || isLoadingNewer}
                     contentBottomInset={contentBottomInset}

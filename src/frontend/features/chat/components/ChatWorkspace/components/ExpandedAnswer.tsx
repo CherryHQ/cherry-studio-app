@@ -436,7 +436,7 @@ function ExpandedAnswer({
                   >
                     {shown && shown.status !== 'pending' ? (
                       <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-                        <AssistantMessageToolbar message={shown} />
+                        <AssistantMessageToolbar message={shown} onReply={onClosed} />
                         <View className="min-w-0 max-w-full flex-1 items-end">
                           {renderUsage?.(shown)}
                         </View>

@@ -579,6 +579,124 @@ describe('SqliteAgentSessionStore conformance', () => {
     ]);
   });
 
+  test('fork remaps all copied quote sources and deletion preserves surviving snapshots', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'p', type: 'text', text: 'Source secret', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'a', type: 'text', text: 'Original answer', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const fields = {
+      quotes: [
+        { id: 'q', sourceMessageId: first.assistantMessage.id, text: 'Original answer' },
+      ] as [{ id: string; sourceMessageId: string; text: string }],
+      quoteAuthor: { role: 'assistant' as const },
+    };
+    const second = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'p', type: 'text', text: 'Follow-up', state: 'done', ...fields }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: second.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: second.assistantMessage.id,
+    });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    const copy = await store.listMessages(fork.session.id);
+    expect(copy[2].parts[0]).toMatchObject({
+      quotes: [{ ...fields.quotes[0], sourceMessageId: copy[1].id }],
+      quoteAuthor: fields.quoteAuthor,
+    });
+    expect(await store.getMessage(fork.session.id, first.assistantMessage.id)).toBeNull();
+    await store.deleteTurn({ sessionId: session.id, turnId: first.turnId });
+    expect((await store.listMessages(session.id))[0].parts[0]).toMatchObject(fields);
+    expect(await store.getMessage(session.id, first.assistantMessage.id)).toBeNull();
+  });
+
+  test('fork uses a complete source-id map and leaves uncopied sources unresolved', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const laterId = uuidv7();
+    const uncopiedId = uuidv7();
+    const quoted = (sourceMessageId: string): AgentMessagePart => ({
+      id: 'p',
+      type: 'text',
+      state: 'done',
+      text: 'Authored request',
+      quotes: [{ id: 'q', sourceMessageId, text: 'quoteOnlyNeedle' }],
+      quoteAuthor: { role: 'user' },
+    });
+    // Structural historical snapshots do not require the source to precede them in row order.
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [quoted(laterId)],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const last = await store.reserveSubmission({
+      ...messageIds(),
+      userMessageId: laterId,
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [quoted(uncopiedId)],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: last.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: last.assistantMessage.id,
+    });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    const copied = await store.listMessages(fork.session.id);
+    expect(copied[0].parts[0]).toMatchObject({ quotes: [{ sourceMessageId: copied[2].id }] });
+    expect(copied[2].parts[0]).toMatchObject({
+      quotes: [{ sourceMessageId: uncopiedId, text: 'quoteOnlyNeedle' }],
+    });
+    expect(await store.getMessage(fork.session.id, uncopiedId)).toBeNull();
+    expect(
+      harness.raw
+        .prepare(
+          'SELECT rowid FROM agent_session_message_fts WHERE agent_session_message_fts MATCH ?',
+        )
+        .all('quoteOnlyNeedle'),
+    ).toHaveLength(0);
+  });
+
   test('forkSession copies the transcript up to the fork point into an idle Session', async () => {
     const source = await harness.createEmptySession({ agentId, name: 'Maths' });
     for (const text of ['one', 'two', 'three']) {

@@ -211,6 +211,15 @@ describe('ExpandedAnswerProvider', () => {
     expect(title()).toBe('name:a1');
   });
 
+  test('Reply closes the expanded layer while its toolbar keeps the exact displayed sibling', async () => {
+    mockSelectBranch.mockResolvedValue(true);
+    await open('a1');
+    swipeTo(402);
+    expect(toolbar().props.message.id).toBe('a2');
+    act(() => toolbar().props.onReply());
+    expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
+  });
+
   test('closing shrinks the layer away', async () => {
     await open('a1');
 

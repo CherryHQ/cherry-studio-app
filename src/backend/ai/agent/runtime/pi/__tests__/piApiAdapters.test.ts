@@ -10,6 +10,8 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 import type { Model } from '@/shared/data/types/model';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
+import { formatMessageQuote } from '../../../host/turnRuntimeInput';
+import { toPiConversation } from '../modelMessages';
 import {
   bindPiStream,
   resolvePiApiAdapter,
@@ -83,6 +85,124 @@ describe('Pi API adapters', () => {
     jest.restoreAllMocks();
     for (const testCase of CASES) testCase.streamSimple.mockReturnValue(mockStreamResult);
     jest.mocked(mockFetch).mockReset().mockResolvedValue(new Response(null));
+  });
+
+  test('real Responses payload keeps consecutive quoted requests separate across MCP, tools, and image blocks', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_RESPONSES);
+    const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+      '@earendil-works/pi-ai/api/openai-responses',
+    );
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+    const payloads: Record<string, unknown>[] = [];
+    const fetch = jest.fn(async (_url: unknown, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ error: { message: 'captured' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const stream = await bindPiStream(adapter, {
+      apiKey: 'test',
+      fetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 256,
+    });
+    const model = {
+      api: 'openai-responses',
+      provider: 'test',
+      id: 'model',
+      name: 'Model',
+      baseUrl: 'https://provider.test/v1',
+      input: ['text', 'image'],
+      reasoning: false,
+      contextWindow: 4096,
+      maxTokens: 256,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    } as PiModel<SupportedPiApi>;
+    const quoted = (text: string, request: string) =>
+      formatMessageQuote(request, [
+        { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text },
+      ]);
+    const first = quoted('Snapshot one', 'Request one');
+    const second = quoted('Snapshot two', 'Request two');
+    const conversation = toPiConversation(
+      {
+        turnId: 'now',
+        sessionId: 's',
+        instructions: '',
+        model: { providerId: 'test', modelId: 'model' },
+        contextCheckpoint: null,
+        options: {},
+        tools: [],
+        input: [{ type: 'text', text: 'Continue' }],
+        history: [
+          {
+            turnId: 'past',
+            messages: [
+              {
+                role: 'user',
+                parts: [
+                  { type: 'text', text: first },
+                  { type: 'text', text: 'MCP application text' },
+                ],
+              },
+              {
+                role: 'user',
+                parts: [
+                  { type: 'text', text: second },
+                  {
+                    type: 'file',
+                    fileEntryId: 'image',
+                    mediaType: 'image/png',
+                    uri: 'data:image/png;base64,cGl4ZWxz',
+                    name: 'image.png',
+                  },
+                ],
+              },
+              {
+                role: 'assistant',
+                parts: [
+                  {
+                    type: 'tool-call',
+                    toolCallId: 'call',
+                    toolRef: { source: 'builtin', capabilityId: 'read_file' },
+                    providerName: 'read_file',
+                    input: {},
+                  },
+                  {
+                    type: 'tool-result',
+                    toolCallId: 'call',
+                    output: { value: 'Tool result text', artifacts: [] },
+                    isError: false,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      model,
+    );
+    const result = await stream(
+      model,
+      normalizeContext({ messages: [...conversation.history, conversation.prompt] }),
+    );
+    await result.result();
+    expect(payloads).toHaveLength(1);
+    const wire = JSON.stringify(payloads[0]);
+    expect(wire.match(/# Referenced messages/g)).toHaveLength(2);
+    const blocks = payloads[0].input as {
+      role?: string;
+      content?: { text?: string; type?: string }[];
+    }[];
+    const users = blocks.filter((item) => item.role === 'user');
+    expect(JSON.stringify(users[0])).toContain(JSON.stringify(first).slice(1, -1));
+    expect(JSON.stringify(users[0])).not.toContain('Snapshot two');
+    expect(JSON.stringify(users[1])).toContain(JSON.stringify(second).slice(1, -1));
+    expect(wire).toContain('MCP application text');
+    expect(wire).toContain('Tool result text');
+    expect(wire).toContain('data:image/png;base64,cGl4ZWxz');
   });
 
   test.each(CASES)('binds $endpointType to $api', async (testCase) => {

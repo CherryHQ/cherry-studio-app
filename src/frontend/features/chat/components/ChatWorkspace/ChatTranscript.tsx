@@ -11,14 +11,15 @@ import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
 
-type ChatTranscriptProps = Omit<
-  ComponentProps<typeof MessageList>,
-  'contentTopInset' | 'onReady'
-> & { requiresInitialLayout: boolean; isLoadingMore: boolean };
+type ChatTranscriptProps = Omit<ComponentProps<typeof MessageList>, 'contentTopInset'> & {
+  requiresInitialLayout: boolean;
+  isLoadingMore: boolean;
+};
 
 export function ChatTranscript({
   requiresInitialLayout,
   isLoadingMore,
+  onReady,
   ...list
 }: ChatTranscriptProps) {
   const reportedHeaderHeight = useHeaderHeight();
@@ -39,7 +40,10 @@ export function ChatTranscript({
       <MessageList
         {...list}
         contentTopInset={resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight)}
-        onReady={markListLoaded}
+        onReady={() => {
+          markListLoaded();
+          onReady?.();
+        }}
       />
       <ChatInitialRenderCover isVisible={isCoverVisible} />
     </View>

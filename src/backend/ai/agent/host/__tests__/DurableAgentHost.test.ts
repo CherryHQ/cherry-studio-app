@@ -2390,3 +2390,155 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 });
+
+describe('quoted requests through durable execution', () => {
+  const fields = {
+    quotes: [
+      {
+        id: 'quote',
+        sourceMessageId: '00000000-0000-7000-8000-000000000001',
+        text: 'Immutable source snapshot',
+      },
+    ] as [{ id: string; sourceMessageId: string; text: string }],
+    quoteAuthor: { role: 'assistant' as const, name: 'Original author' },
+  };
+  test('recovered image tool preparation keeps the stored snapshot without a source lookup', async () => {
+    const prepare = jest.fn(async () => ({
+      settings: { mode: 'generate' as const, paramValues: {} },
+      execute: async () => [],
+    }));
+    const fileId = uuid();
+    const state = fixture({
+      imageGeneration: { prepare },
+      files: {
+        resolveAvailable: async () =>
+          new Map([
+            [
+              fileId,
+              {
+                fileEntryId: fileId,
+                name: 'image.png',
+                mediaType: 'image/png',
+                size: 10,
+                revision: 1,
+              },
+            ],
+          ]),
+        readAsBytes: async () => undefined,
+        readAsDataUrl: async () => undefined,
+        readDocumentText: async () => undefined,
+      },
+    });
+    const turn = await state.reserve('running', [
+      { id: 'p', type: 'text', state: 'done', text: '', ...fields },
+      {
+        id: 'f',
+        type: 'file',
+        purpose: 'input-attachment',
+        fileEntryId: fileId,
+        filename: 'image.png',
+        mediaType: 'image/png',
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      await state
+        .execution()!
+        .resolveTool(
+          turn.identity,
+          { source: 'builtin', capabilityId: 'image_generation' },
+          new AbortController().signal,
+        );
+      expect(prepare).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parts: [
+            expect.objectContaining({ ...fields, text: '' }),
+            expect.objectContaining({ type: 'file', fileEntryId: fileId }),
+          ],
+        }),
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(['failed', 'completed'] as const)(
+    'retry/answer-with from a %s question keeps a snapshot whose source is gone',
+    async (status) => {
+      const state = fixture();
+      const previous = await state.reserve(status, [
+        { id: 'p', type: 'text', state: 'done', text: 'Explain', ...fields },
+      ]);
+      await state.host.initialize();
+      try {
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: previous.assistantMessageId,
+          modelId: createUniqueModelId('provider', 'second-model'),
+        });
+        const request = jest.mocked(state.conversations.submit).mock.calls.at(-1)![1];
+        expect(request.input).toEqual([
+          {
+            type: 'text',
+            text: expect.stringContaining('[{"index":1,"text":"Immutable source snapshot"}]'),
+          },
+        ]);
+        expect(JSON.stringify(request.input).match(/# Referenced messages/g)).toHaveLength(1);
+        expect(request.metadata.userParts).toEqual([expect.objectContaining(fields)]);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+  test('new and queued admission preserve original metadata and reject foreign sources before reservation', async () => {
+    const state = fixture();
+    const source = await state.reserve('completed');
+    const configure = jest.spyOn(state.conversations, 'configure');
+    jest
+      .spyOn(state.conversations, 'configuration')
+      .mockImplementation(async () => configure.mock.calls.at(-1)?.[1] ?? configuration);
+    await state.host.initialize();
+    try {
+      const quoted = {
+        ...fields,
+        quotes: [
+          { ...fields.quotes[0], sourceMessageId: source.userMessageId },
+        ] as typeof fields.quotes,
+      };
+      for (let index = 0; index < 2; index++) {
+        await state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: `Follow-up ${index}`, ...quoted }],
+        });
+      }
+      const requests = jest.mocked(state.conversations.submit).mock.calls.map((call) => call[1]);
+      expect(requests).toHaveLength(2);
+      for (const request of requests) {
+        expect(request.metadata.userParts).toEqual([expect.objectContaining(quoted)]);
+        expect(JSON.stringify(request.input).match(/# Referenced messages/g)).toHaveLength(1);
+      }
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'foreign', ...fields }],
+        }),
+      ).rejects.toThrow();
+      expect(jest.mocked(state.conversations.submit)).toHaveBeenCalledTimes(2);
+      expect(() =>
+        state.host.startSession({
+          agentId: state.agentId,
+          sessionId: uuid(),
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'foreign', ...fields }],
+        }),
+      ).toThrow();
+    } finally {
+      await state.host.close();
+    }
+  });
+});
