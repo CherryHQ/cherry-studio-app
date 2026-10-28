@@ -61,8 +61,8 @@ export function ComposerDock({
   const isPresented = isExpandable && expansion.state.isPresented;
   const tracking = expansion?.meta.keyboardTrackingEnabled;
   const progress = expansion?.meta.progress;
-  const recordDockHeight = expansion?.actions.recordDockHeight;
-  const releaseDock = expansion?.actions.releaseDock;
+  const compactDockHeight = expansion?.meta.compactDockHeight;
+  const contentInset = expansion?.meta.contentInset;
 
   const recordCompactHeight = useCallback(
     (height: number) => {
@@ -70,15 +70,19 @@ export function ComposerDock({
       if (reservesSpace) {
         setCompactHeight((current) => (current === measuredHeight ? current : measuredHeight));
       }
-      recordDockHeight?.(measuredHeight);
+      compactDockHeight?.set(measuredHeight);
+      contentInset?.set(measuredHeight);
     },
-    [recordDockHeight, reservesSpace],
+    [compactDockHeight, contentInset, reservesSpace],
   );
 
   useEffect(() => {
     if (!isExpandable) return;
-    return () => releaseDock?.();
-  }, [isExpandable, releaseDock]);
+    return () => {
+      compactDockHeight?.set(0);
+      contentInset?.set(0);
+    };
+  }, [compactDockHeight, contentInset, isExpandable]);
 
   useEffect(() => {
     if (!isExpandable || isPresented) return;

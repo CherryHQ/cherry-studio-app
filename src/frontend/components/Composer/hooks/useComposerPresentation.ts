@@ -1,6 +1,10 @@
 import type { ComposerInputHandle } from '@cherrystudio/ui/components';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardController, KeyboardEvents } from 'react-native-keyboard-controller';
+import {
+  KeyboardController,
+  KeyboardEvents,
+  useKeyboardHandler,
+} from 'react-native-keyboard-controller';
 import { useSharedValue } from 'react-native-reanimated';
 
 /** Editing belongs to the whole composer, including its menus and pickers. */
@@ -10,6 +14,7 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
   // Read by the dock on the UI thread: focus must lift it on the keyboard's first
   // frame, not after the editing render commits.
   const keyboardTracking = useSharedValue(false);
+  const inputTag = useSharedValue<number | null>(null);
   const isDismissPendingRef = useRef(false);
   const activeInputRef = useRef<Pick<ComposerInputHandle, 'blur'> | null>(null);
 
@@ -25,6 +30,28 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
 
     return () => subscription.remove();
   }, [keyboardTracking]);
+
+  // A tap focuses the field natively, so iOS starts the keyboard before JS hears
+  // of the focus. Only a dock moved inside this start event rides the keyboard's
+  // own animation; enabling it later from onFocus jumps it to the final height.
+  useKeyboardHandler(
+    {
+      onStart: (event) => {
+        'worklet';
+        if (event.height > 0 && event.target === inputTag.get()) {
+          keyboardTracking.set(true);
+        }
+      },
+    },
+    [inputTag, keyboardTracking],
+  );
+
+  const registerInputTag = useCallback(
+    (tag: number | null) => {
+      inputTag.set(tag);
+    },
+    [inputTag],
+  );
 
   const activateInput = useCallback(
     (input: Pick<ComposerInputHandle, 'blur'> | null = inputRef.current) => {
@@ -73,8 +100,8 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
 
   const state = useMemo(() => ({ isEditing, keyboardTracking }), [isEditing, keyboardTracking]);
   const actions = useMemo(
-    () => ({ activateInput, dismissInput, runInputReplacement }),
-    [activateInput, dismissInput, runInputReplacement],
+    () => ({ activateInput, dismissInput, registerInputTag, runInputReplacement }),
+    [activateInput, dismissInput, registerInputTag, runInputReplacement],
   );
 
   return { actions, state };

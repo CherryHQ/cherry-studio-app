@@ -767,13 +767,10 @@ For a screen that supports manual large-editor presentation, wrap its content an
 `Composer.Expansion` and use `Composer.Dock layoutMode="expandable"`. Its flow placeholder reserves
 only compact input space; expansion stays in the same native subtree above the transcript.
 Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholder, and
-`useComposerExpansion().meta.contentInset` publishes the dock's space for the keyboard list's
-`contentInsetEndAdjustment` without resizing the list viewport or rerendering the screen. It is
-the resting dock height plus the editor's settled growth, never a measured frame of the editor's
-morph: growth that comes with focus or blur arrives on the keyboard's progress, so the transcript
-moves once with the keyboard while the editor morphs on its own curve. Without a keyboard on its
-way, the growth follows the editor's timing. The inset stays fixed through manual expansion and
-clears when the dock unmounts. Pass the page color as
+`useComposerExpansion().meta.contentInset` publishes the dock's measured height for the keyboard
+list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
+without resizing the list viewport or rerendering the screen for every height sample. The inset
+stays fixed through manual expansion and clears when the dock unmounts. Pass the page color as
 `backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
 transcript beneath it; it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
@@ -790,8 +787,11 @@ activating editing. The `field` stays mounted, and `Composer.Input` automaticall
 native layout and action inset to the editor frame, including through app-specific field wrappers.
 `Composer.EditorSecondary` reveals secondary toolbar tools, and
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
-The isolated frame retains the existing 250ms settle motion, interruptibility and system Reduce
-Motion behavior, without fading ancestors of native glass controls.
+The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it
+finishes early in the keyboard's travel, so content behind the dock moves once with a small early
+growth instead of following two overlapping motions. An optional `activeSignal` raises `active` on
+the UI thread, letting the shape start inside the keyboard's first frame. The motion stays
+interruptible, respects system Reduce Motion, and never fades ancestors of native glass controls.
 
 For custom arrangements, compose `Composer.ExpansionMeasure` around accessories that change height
 during expansion, and use `Composer.Input layout="fill"` inside the bounded large editing region.

@@ -83,9 +83,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   automatic reference compact until focus or draft text. The compact accessory is a preview only;
   attachment preview and removal stay in `ComposerAttachmentStrip` above the active field.
 - `ComposerDock` — connects that input-context state to CherryUI's
-  `Composer.Dock`. Chat uses `expandable-overlay`: the message list reserves the dock's settled
-  height as a native content inset, leaving its viewport fixed. Focus growth reaches the list on
-  the keyboard's progress, so the transcript moves once while the editor morphs independently.
+  `Composer.Dock`. Chat uses `expandable-overlay`: the message list reserves the dock's measured
+  height as a native content inset, leaving its viewport fixed through keyboard and editor motion.
   Painting uses `expandable`, with a compact-height flow placeholder. Both keep the same dock
   mounted during manual expansion.
   Other floating surfaces can use CherryUI's `useComposerDockLayout` inset primitive.

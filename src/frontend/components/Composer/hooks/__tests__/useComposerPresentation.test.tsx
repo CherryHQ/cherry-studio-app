@@ -1,6 +1,10 @@
 import type { ComposerInputHandle } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
-import { KeyboardController, KeyboardEvents } from 'react-native-keyboard-controller';
+import {
+  KeyboardController,
+  KeyboardEvents,
+  useKeyboardHandler,
+} from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useComposerPresentation } from '../useComposerPresentation';
@@ -65,6 +69,19 @@ describe('useComposerPresentation', () => {
 
   test('does not follow an already visible global keyboard before its field receives focus', () => {
     expectPresentation(false, false);
+  });
+
+  test("follows the composer's keyboard from its native start, before JS focus", () => {
+    act(() => presentation.actions.registerInputTag(42));
+
+    startKeyboard({ height: 336, target: 7 });
+    expectPresentation(false, false);
+
+    startKeyboard({ height: 0, target: 42 });
+    expectPresentation(false, false);
+
+    startKeyboard({ height: 336, target: 42 });
+    expectPresentation(false, true);
   });
 
   test("does not blur a resting composer or dismiss another field's keyboard", () => {
@@ -238,6 +255,11 @@ describe('useComposerPresentation', () => {
 function expectPresentation(isEditing: boolean, isKeyboardTracking: boolean) {
   expect(presentation.state.isEditing).toBe(isEditing);
   expect(presentation.state.keyboardTracking.get()).toBe(isKeyboardTracking);
+}
+
+function startKeyboard(event: { height: number; target: number }) {
+  const handler = jest.mocked(useKeyboardHandler).mock.lastCall?.[0];
+  handler?.onStart?.({ duration: 250, progress: event.height > 0 ? 1 : 0, ...event });
 }
 
 function emitKeyboardEvent(event: KeyboardEventName) {
