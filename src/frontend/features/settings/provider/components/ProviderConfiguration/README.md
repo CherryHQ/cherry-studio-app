@@ -13,9 +13,13 @@ Sections always appear in one order and hide themselves when they do not apply:
 3. API keys — the first key is typed into the card; later keys toggle in place and open a
    sheet for their label or removal. Two or more keys expose an ordering sheet using CherryUI's
    `ReorderList`; each move is saved immediately, with rollback on failure.
+   Vertex instead exposes a service-account section: paste a Google Cloud JSON key, then edit its
+   project and location. The email and configured-key status are visible; replacing the key uses
+   a new import. Raw JSON is held only while editing, and failed saves preserve the draft.
 4. Connection test — a text model, a labeled key selection when more than one key is enabled, and
    one row that runs the check and shows the result.
-   Shown only for saved providers with an enabled key and a text model.
+   Shown for saved providers with usable API-key, signed-in account, or service-account credentials
+   and a text model. Credential kinds are explicit; service accounts have no API-key picker.
 5. Address — "Advanced" for presets (API address and API format); an address per protocol,
    with the default marked, for custom providers.
 
@@ -46,3 +50,6 @@ and enabled states. Disabled keys stay in the list but are skipped by runtime ro
 Connectivity checks default to the first enabled key and, with several enabled, allow choosing
 another. That choice is ephemeral, overrides credentials only for the probe, and never advances
 rotation or fails over.
+
+An ephemeral connection fingerprint remounts the probe when credentials or routing change, aborting
+an old check and discarding its result without putting raw credentials into React keys.

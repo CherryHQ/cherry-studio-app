@@ -63,7 +63,9 @@ export function applyPiRequestParameters(
 
   const resolvedTemperature = resolveTemperature(parameters.model, temperature);
   const temperaturePath =
-    api === 'google-generative-ai' ? ['config', 'temperature'] : ['temperature'];
+    api === 'google-generative-ai' || api === 'google-vertex'
+      ? ['config', 'temperature']
+      : ['temperature'];
   const thinkingType = isRecord(result.thinking) ? result.thinking.type : undefined;
   if (
     resolvedTemperature === undefined ||
@@ -88,7 +90,10 @@ function toPiReasoningPath(api: SupportedPiApi, target: string): string | undefi
     if (target === 'effort') return 'output_config.effort';
     if (target === 'thinking.budgetTokens') return 'thinking.budget_tokens';
   }
-  if (api === 'google-generative-ai' && target.startsWith('thinkingConfig.')) {
+  if (
+    (api === 'google-generative-ai' || api === 'google-vertex') &&
+    target.startsWith('thinkingConfig.')
+  ) {
     return `config.${target}`;
   }
   return target;

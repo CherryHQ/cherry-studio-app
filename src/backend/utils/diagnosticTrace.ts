@@ -1,8 +1,7 @@
 import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { TraceContext, TraceSpanStatus } from '@/shared/data/types/trace';
-
-import { diagnosticIdentifier } from './diagnosticIdentifier';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 export type TraceAttributes = Record<string, string | number | boolean | undefined>;
 export type TraceEndStatus = Exclude<TraceSpanStatus, 'running'>;

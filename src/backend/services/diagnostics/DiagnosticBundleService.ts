@@ -11,7 +11,6 @@ import {
 } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
 import { readDiagnosticPluginState } from '@/backend/data/services/diagnosticPluginState';
-import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 import {
   DiagnosticError,
@@ -19,12 +18,13 @@ import {
   DIAGNOSTIC_SOURCE_LIMIT_BYTES,
   DIAGNOSTIC_SCREENSHOT_DIRECTORY,
   DIAGNOSTIC_SCREENSHOT_MAX_BYTES,
-  normalizeDiagnosticDescription,
+  diagnosticReportDescription,
   type DiagnosticsModule,
   type DiagnosticReportInput,
   type DiagnosticUploadResult,
 } from '@/shared/contracts/diagnostics';
 import { flushLogWriter, loggerService } from '@/shared/core/logger/LoggerService';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 import { CherryDiagnosticUploadClient } from './CherryDiagnosticUploadClient';
@@ -116,7 +116,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
       try {
         this.abort.signal.throwIfAborted();
         const result = await this.uploader.upload({
-          description: normalizeDiagnosticDescription(parsed.description),
+          description: diagnosticReportDescription(parsed),
           fileName: bundle.fileName,
           filePath: bundle.filePath,
           signal: this.abort.signal,
@@ -265,7 +265,8 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           persistedTracesOnly: true,
         },
         sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
-        feedback: { file: 'feedback.txt', source: 'user' },
+        feedback: { file: 'feedback.txt', source: 'user', ...input.feedback },
+        ...(input.context ? { incident: { source: 'app', ...input.context } } : {}),
         ...(screenshot
           ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
           : {}),
@@ -289,7 +290,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
         destination,
         [
           { name: 'diagnostics.json', content: `${JSON.stringify(manifest, null, 2)}\n` },
-          { name: 'feedback.txt', content: normalizeDiagnosticDescription(input.description) },
+          { name: 'feedback.txt', content: diagnosticReportDescription(input) },
         ],
         [
           ...staged,

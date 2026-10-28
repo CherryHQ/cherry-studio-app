@@ -39,6 +39,10 @@ export interface SystemModelSupport {
 
 export function createSystemModelSupport(language: LanguageServingSupport): SystemModelSupport {
   const isModelSupportedBySystem = (provider: Provider, model: Model): boolean => {
+    // Native service-account support currently belongs to the language binding only.
+    if (provider.authType === 'iam-gcp') {
+      return isTextGenerationModel(model) && language.supportsLanguageModel(provider, model);
+    }
     if (isImageGenerationModel(model) && isImageGenerationSupported(provider, model)) {
       return true;
     }

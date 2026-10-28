@@ -290,9 +290,11 @@ Callers provide stable message item references and only the layout insets and ca
 One list-owned scroll controller owns product-level scroll state. It starts detached while restoring either a saved
 semantic row anchor or the live edge. While following, content and viewport-size changes keep the
 live edge exact. A user drag immediately enters reading mode; streaming, measurement, pagination,
-and virtualizer compensation cannot pull that viewport back. Reaching the bottom, pressing the
-scroll button, or sending a local message re-enters following mode. The scroll button therefore
-means “return to the live edge,” not merely one untracked imperative scroll.
+and virtualizer compensation cannot pull that viewport back. Reaching the bottom or pressing the
+scroll button re-enters following mode. Sending a local message instead positions the new turn once
+in reading mode, so a growing reply does not keep scrolling. This also applies to the first send in
+a draft and a send that waits for initial history. The scroll button means “return to the live edge”
+and explicitly resumes following.
 
 The controller keeps imperative mode reads in a ref for native scroll callbacks and exposes only a
 reactive following boolean to keyboard lift and button rendering. Dataset generations own drag and
@@ -315,7 +317,8 @@ the entire row below the header, with no highlight; an explicit end target retur
 The caller changes `dataKey` for a new navigation request or a replacement history window. A window
 with `hasNewerMessages` remains in reading mode even at its loaded end, requests newer pages through
 `onLoadNewer`, and keeps the return-to-latest control available. `onReturnToLatest` lets the data
-owner replace that window before the controller resumes following; local sends use the same path.
+owner replace that window before the controller resumes following; local sends use the same data
+replacement path but retain their one-time positioning behavior.
 
 Keyboard lift uses `persistent` while following and `never` while reading history. Composer
 expansion must not disable following just because the viewport has already resized when keyboard

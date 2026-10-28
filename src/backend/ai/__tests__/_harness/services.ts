@@ -43,7 +43,7 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
       getImageGenerationSupport: jest.fn(() => model.imageGeneration ?? null),
       listProviderRegistryModels: jest.fn(() => []),
     },
-    vertexAuth: { getAuthorizationHeaders: jest.fn(async () => ({})) },
+    vertexAuth: { getAccessToken: jest.fn(async () => 'vertex-token') },
   } as unknown as AiServiceDependencies;
 
   return {
