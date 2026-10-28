@@ -13,8 +13,6 @@ test('projects failure metadata without copying provider text or request payload
       statusCode: 429,
       modelId: 'vendor/model-1',
       providerId: 'provider-1',
-      requestId: 'req-1',
-      traceId: 'trace-1',
       responseBody: 'private response',
       headers: { authorization: 'Bearer secret' },
     },
@@ -22,8 +20,6 @@ test('projects failure metadata without copying provider text or request payload
   expect(JSON.parse(JSON.stringify(context))).toEqual({
     modelId: 'vendor/model-1',
     providerId: 'provider-1',
-    requestId: 'req-1',
-    traceId: 'trace-1',
     error: {
       code: 'EXECUTION_FAILED',
       sourceCode: 'rate_limit_exceeded',
@@ -44,8 +40,6 @@ test('projects failure metadata without copying provider text or request payload
   ).toEqual({
     modelId: undefined,
     providerId: undefined,
-    requestId: undefined,
-    traceId: undefined,
     error: { code: undefined, sourceCode: undefined, reason: undefined, statusCode: undefined },
   });
 });

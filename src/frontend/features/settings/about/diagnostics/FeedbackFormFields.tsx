@@ -15,7 +15,7 @@ import {
   Switch,
 } from '@cherrystudio/ui/components';
 import type { TFunction } from 'i18next';
-import { useState, type ComponentType } from 'react';
+import { useMemo, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
@@ -102,6 +102,12 @@ export function FeedbackFormFields({
   const mutedForegroundColor = useThemeColor('muted-foreground');
   const [picker, setPicker] = useState<'feature' | 'problem' | 'screenshot'>();
   const isDescriptionInvalid = isDescriptionTooLong || (attempted && !value.description.trim());
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  // The description re-renders the form on every keystroke; the summary depends only on the context.
+  const contextSummary = useMemo(
+    () => (context ? feedbackContextSummary(context, t, language) : undefined),
+    [context, language, t],
+  );
   const placeholder = (
     <Text className="text-base text-muted-foreground">{t('settings.select.placeholder')}</Text>
   );
@@ -165,11 +171,7 @@ export function FeedbackFormFields({
         <Section title={t('settings.about.feedback.attachments')}>
           {context ? (
             <Section.SwitchItem
-              description={feedbackContextSummary(
-                context,
-                t,
-                i18n.resolvedLanguage ?? i18n.language,
-              )}
+              description={contextSummary}
               label={t('settings.about.feedback.context.title')}
               onValueChange={(includeContext) => onChange({ ...value, includeContext })}
               testID="feedback-include-context"

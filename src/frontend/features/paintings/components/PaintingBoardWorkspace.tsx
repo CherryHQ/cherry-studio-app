@@ -668,7 +668,7 @@ function paintingFeedbackContext(node: PaintingBoardNode | undefined): FeedbackC
   return {
     feature: 'paintings',
     executionSource: 'local',
-    ...(failure ? feedbackFailureContext({ ...failure, code: job?.error?.code }) : {}),
+    ...(job?.error ? feedbackFailureContext({ ...failure, code: job.error.code }) : {}),
     paintingId: diagnosticIdentifier(node?.painting?.id),
     jobId: diagnosticIdentifier(job?.id),
     occurredAt: job?.status === 'failed' ? feedbackTimestamp(job.finishedAt) : undefined,

@@ -45,7 +45,7 @@ export function feedbackFailureContext(data: {
   reasonCode?: unknown;
   context?: unknown;
   source?: unknown;
-}): Pick<DiagnosticFeedbackContext, 'error' | 'providerId' | 'modelId' | 'requestId' | 'traceId'> {
+}): Pick<DiagnosticFeedbackContext, 'error' | 'providerId' | 'modelId'> {
   const context = record(data.context);
   const source = record(data.source);
   const reason = AiFailureReasonSchema.safeParse(data.reasonCode);
@@ -53,8 +53,6 @@ export function feedbackFailureContext(data: {
   return {
     providerId: diagnosticIdentifier(context?.providerId),
     modelId: diagnosticIdentifier(context?.modelId),
-    requestId: diagnosticIdentifier(context?.requestId),
-    traceId: diagnosticIdentifier(context?.traceId),
     error: {
       code: diagnosticIdentifier(data.code),
       sourceCode: diagnosticIdentifier(source?.code),

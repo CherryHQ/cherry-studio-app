@@ -93,8 +93,6 @@ export const DiagnosticFeedbackContextSchema = z.strictObject({
   turnId: DiagnosticIdentifierSchema.optional(),
   messageId: DiagnosticIdentifierSchema.optional(),
   messageCreatedAt: z.iso.datetime({ offset: true }).optional(),
-  requestId: DiagnosticIdentifierSchema.optional(),
-  traceId: DiagnosticIdentifierSchema.optional(),
   jobId: DiagnosticIdentifierSchema.optional(),
   paintingId: DiagnosticIdentifierSchema.optional(),
   providerId: DiagnosticIdentifierSchema.optional(),

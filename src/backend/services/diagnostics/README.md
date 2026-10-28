@@ -8,8 +8,8 @@ resolve credentials, refresh tokens, connect plugins or make discovery requests.
 
 Settings → About → Feedback opens a form with required feature, problem type and description.
 Shaking captures the visible page and its available metadata before opening the same form.
-Chat error messages and stopped image generations also offer a direct report action. These entries
-preselect their feature and problem type; users can change either and remove the linked context.
+Chat and image-generation failure details offer a direct report action. These entries
+preselect their feature and problem type; users can change either and turn off the linked context.
 The existing upload API receives the choices as a fixed text header followed by the user description.
 Their combined length is at most 4096 UTF-8 bytes after newline normalization. The user reviews the
 attached-data notice and submits; the same page shows progress, success or a failure. There is no
@@ -29,7 +29,7 @@ Linked context records capture time, feature, entry and available source-local c
 Chat reports retain local versus desktop execution, available Session/Agent/execution/turn/message IDs, the message's
 creation time and captured model. Painting reports retain painting/job IDs and a recorded failure
 time when available. Failure projection keeps only bounded codes, classified reason, HTTP status,
-model/provider and available request/trace IDs. It excludes raw messages, response bodies, names,
+and model/provider. It excludes raw messages, response bodies, names,
 URLs, route parameters and credentials. A message creation time is not a failure time; a capture
 time is not a failure time. Desktop incidents identify a remote execution but this archive still
 contains only the phone's diagnostic sources. Older incidents may predate the retained 24-hour

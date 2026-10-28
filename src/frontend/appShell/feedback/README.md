@@ -10,8 +10,8 @@ the screenshot. Other pages contribute only a fixed feature inferred from their 
 route parameters are never retained. Chat binds an in-flight execution only when the snapshot is
 current and exactly one execution is active. Desktop execution IDs remain distinct from local turn IDs.
 Direct report actions use `useFeedbackActions().openFeedback` with the selected message or job,
-not the most recent unrelated failure. Chat and painting share one entry: Report this problem at the
-bottom of the shared AI failure detail sheet; message rows and failure cards add no extra button. Error and shake entries share navigation admission, so
+not the most recent unrelated failure. Chat and painting share one entry: Report this problem in the
+title row of the shared AI failure detail sheet; message rows and failure cards add no extra button. Error and shake entries share navigation admission, so
 pending capture, repeated presses, route changes and backgrounding cannot open duplicate forms.
 Capture failures still retain metadata for text feedback. Leaving the form clears both the image
 and linked context.
