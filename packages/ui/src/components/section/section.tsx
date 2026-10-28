@@ -236,6 +236,17 @@ function SectionSwitchItem({
   );
 }
 
+/**
+ * A component that always renders exactly one `Section` item, such as a wrapper choosing between
+ * two item kinds, sets `sectionItem = true` (as it would `displayName`) so the group treats it as
+ * its own row: separators follow its press state. It must pass `onPressedChange` through to the
+ * item it renders.
+ */
+export type SectionItemComponent = { sectionItem?: true };
+
+/** What `Section` passes to each row, including custom `sectionItem` rows. */
+export type SectionItemPressProps = { onPressedChange?: (isPressed: boolean) => void };
+
 function isSectionItemElement(
   child: ReactNode,
 ): child is ReactElement<
@@ -254,7 +265,8 @@ function isSectionItemElement(
     (child.type === SectionItem ||
       child.type === SectionRadioItem ||
       child.type === SectionSelectItem ||
-      child.type === SectionSwitchItem)
+      child.type === SectionSwitchItem ||
+      (child.type as SectionItemComponent).sectionItem === true)
   );
 }
 

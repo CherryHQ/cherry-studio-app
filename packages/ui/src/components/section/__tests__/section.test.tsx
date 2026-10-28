@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Section } from '../section';
+import { Section, type SectionItemPressProps } from '../section';
 
 jest.mock('heroui-native/utils', () => {
   const { twMerge } = jest.requireActual('tailwind-merge');
@@ -99,6 +99,28 @@ describe('Section', () => {
     expect(
       tree.root.findByProps({ children: 'Changes apply immediately.' }).props.className,
     ).toContain('mt-2');
+  });
+
+  test('treats a marked wrapper as its own row and passes it the press state', () => {
+    const received: SectionItemPressProps['onPressedChange'][] = [];
+    const Wrapper = Object.assign(
+      function Wrapper(props: { label: string } & SectionItemPressProps) {
+        received.push(props.onPressedChange);
+        return <Section.Item label={props.label} onPressedChange={props.onPressedChange} />;
+      },
+      { sectionItem: true as const },
+    );
+    const Unmarked = ({ label }: { label: string }) => <Section.Item label={label} />;
+
+    render(
+      <Section>
+        <Section.Item label="First" />
+        <Wrapper label="Wrapped" />
+        <Unmarked label="Plain" />
+      </Section>,
+    );
+
+    expect(received.at(-1)).toEqual(expect.any(Function));
   });
 
   test('renders plain rows without a grouped surface or separators', () => {

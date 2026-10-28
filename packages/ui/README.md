@@ -374,6 +374,10 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
+`Section` styles only its own row kinds. A component that always renders exactly one of them, such
+as a wrapper choosing between a selectable and a read-only row, sets the static `sectionItem = true`
+(typed by `SectionItemComponent`) and passes `onPressedChange` through, so its separators follow
+press state like any row.
 
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
