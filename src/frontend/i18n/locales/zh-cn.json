@@ -1930,6 +1930,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "桌面端未配置可用的 API 密钥",
   "settings.provider.desktopSync.unavailable.unreadable": "配置包含当前版本无法识别的内容",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "移动端暂不支持此服务商的认证方式",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "桌面端未给默认协议配置 Base URL",
   "settings.provider.disableProvider": "停用服务商",
   "settings.provider.disableProviderNamed": "停用服务商 {{name}}",
   "settings.provider.edit.title": "服务商设置",

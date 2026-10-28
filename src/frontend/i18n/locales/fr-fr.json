@@ -1964,6 +1964,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "Aucune clé API utilisable n'est configurée sur le PC",
   "settings.provider.desktopSync.unavailable.unreadable": "Sa configuration contient des données que cette version ne peut pas lire",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "La méthode d'authentification de ce fournisseur n'est pas prise en charge sur mobile",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "Aucune URL de base n'est configurée sur le PC pour le protocole par défaut",
   "settings.provider.disableProvider": "Désactiver le fournisseur",
   "settings.provider.disableProviderNamed": "Désactiver le fournisseur {{name}}",
   "settings.provider.edit.title": "Paramètres du fournisseur",

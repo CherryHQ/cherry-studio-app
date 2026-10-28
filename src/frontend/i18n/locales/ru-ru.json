@@ -1981,6 +1981,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "На компьютере не настроен пригодный API-ключ",
   "settings.provider.desktopSync.unavailable.unreadable": "Конфигурация содержит данные, которые эта версия не может прочитать",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "Метод аутентификации этого провайдера не поддерживается на мобильных устройствах",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "На компьютере не настроен базовый URL для протокола по умолчанию",
   "settings.provider.disableProvider": "Отключить провайдера",
   "settings.provider.disableProviderNamed": "Отключить провайдера {{name}}",
   "settings.provider.edit.title": "Настройки провайдера",

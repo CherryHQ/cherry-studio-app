@@ -1947,6 +1947,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "No usable API key configured on the PC",
   "settings.provider.desktopSync.unavailable.unreadable": "Its configuration contains data this version cannot read",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "This provider's authentication method is not supported on mobile",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "No Base URL configured on the PC for the default protocol",
   "settings.provider.disableProvider": "Disable provider",
   "settings.provider.disableProviderNamed": "Disable provider {{name}}",
   "settings.provider.edit.title": "Provider Settings",

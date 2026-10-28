@@ -1947,6 +1947,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "Δεν έχει ρυθμιστεί χρησιμοποιήσιμο κλειδί API στον υπολογιστή",
   "settings.provider.desktopSync.unavailable.unreadable": "Η διαμόρφωση περιέχει δεδομένα που δεν μπορεί να διαβάσει αυτή η έκδοση",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "Η μέθοδος ελέγχου ταυτότητας αυτού του παρόχου δεν υποστηρίζεται σε κινητά",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "Δεν έχει ρυθμιστεί Βασικό URL για το προεπιλεγμένο πρωτόκολλο στον υπολογιστή",
   "settings.provider.disableProvider": "Απενεργοποιήστε τον πάροχο",
   "settings.provider.disableProviderNamed": "Απενεργοποίηση παρόχου {{name}}",
   "settings.provider.edit.title": "Ρυθμίσεις παρόχου",
