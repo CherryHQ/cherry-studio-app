@@ -15,6 +15,9 @@ export {
   useRouteHeaderLeadingAction,
 } from './RouteHeader';
 
-export { MainHeaderView } from './MainHeader/MainHeaderView/MainHeaderView';
+export {
+  MainHeaderView,
+  mainHeaderScreenOptions,
+} from './MainHeader/MainHeaderView/MainHeaderView';
 
 export { MainHeaderAgentPickerSheet } from './MainHeader/MainHeaderAgentPickerSheet';

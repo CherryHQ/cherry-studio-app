@@ -10,6 +10,11 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
 - Expo Router `Stack` / React Navigation native-stack bridges native screen stacks and back animations through `react-native-screens`.
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
+- Whether a route has a native header is declared with the route in its layout, so the first frame
+  already has it. A screen does not create or remove the header as it mounts; `Stack.Screen`
+  options inside a screen set header content, or switch the header for a mode the user enters,
+  such as image editing. Android 0.5.1 left the empty app bar of a chat header removed at mount in
+  place, pushing the whole chat below the window.
 - Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation, and to layers inside a route that Android back dismisses first, such as the file pane, an expanded answer, sidebar selection, or the template stage.
 - Layers inside a route take Android back through `useFocusedBackPress` from
   `src/frontend/appShell/navigation`, so they hold it only while their route is focused. A route
