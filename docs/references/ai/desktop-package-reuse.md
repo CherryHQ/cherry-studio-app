@@ -110,8 +110,8 @@ The `0.2.8` update is consumed through existing owners:
   support and the narrowed DashScope GLM/Kimi search list. Mobile's DeepSeek and Poe endpoint
   corrections remain in `mobileProviderCatalog.ts`.
 
-These paths have regression coverage in the repository; execution and device acceptance of the
-upgrade are still pending.
+These paths have passing regression coverage in the repository; device acceptance of the upgrade
+is still pending.
 
 ### Current migration ledger
 
