@@ -6,21 +6,18 @@ import { DEFAULT_VERTEX_MODEL_PUBLISHERS } from '../listModels/vertex';
 import { AIHubMixModelsResponseSchema } from '../listModelsSchemas';
 import { makeProvider } from './fixtures';
 
-// The fetchers resolve the rotated API key (and, for Vertex, the iam-gcp auth
-// config + signed auth headers) off main-process singletons, then perform the
-// HTTP call through @ai-sdk/provider-utils' getFromApi. Mock all of them at the
-// module boundary: ProviderService / VertexAiService to avoid the DB and signing,
-// and provider-utils' getFromApi to capture the exact { url, headers } passed.
+// Mock credential callbacks and provider-utils' getFromApi to capture request URLs and headers
+// without persistence, signing, or network access.
 const {
   getRotatedApiKeyMock,
   getAuthConfigMock,
-  getAuthHeadersMock,
+  getVertexAccessTokenMock,
   getCopilotTokenMock,
   aiSdkGetFromApiMock,
 } = vi.hoisted(() => ({
   getRotatedApiKeyMock: vi.fn<(providerId: string) => string>(),
   getAuthConfigMock: vi.fn(),
-  getAuthHeadersMock: vi.fn(),
+  getVertexAccessTokenMock: vi.fn(),
   getCopilotTokenMock: vi.fn(),
   aiSdkGetFromApiMock: vi.fn(),
 }));
@@ -48,7 +45,7 @@ function listModels(
       getAuthConfig: getAuthConfigMock,
       getCopilotToken: async (headers) => (await getCopilotTokenMock(null, headers)).token,
       getRotatedApiKey: getRotatedApiKeyMock,
-      getVertexAuthHeaders: getAuthHeadersMock,
+      getVertexAccessToken: getVertexAccessTokenMock,
     },
     signal,
     options,
@@ -257,7 +254,7 @@ describe('listModels — geminiFetcher API key transport', () => {
   });
 });
 
-describe('listModels — openAIFetcher (official OpenAI provider, audio/video filtering)', () => {
+describe('listModels — openAIFetcher (official OpenAI provider, voice model discovery)', () => {
   function makeOpenAIProvider() {
     return makeProvider({
       id: 'openai',
@@ -268,7 +265,7 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
     });
   }
 
-  it('drops audio/video models (tts/whisper/transcribe/audio/realtime/sora), keeping chat, image, embedding, and moderation', async () => {
+  it('includes supported TTS/STT models while keeping realtime, audio chat and video out', async () => {
     aiSdkGetFromApiMock.mockResolvedValue({
       value: {
         data: [
@@ -282,6 +279,9 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
           { id: 'gpt-4o-mini-tts' },
           { id: 'whisper-1' },
           { id: 'gpt-4o-transcribe' },
+          { id: 'gpt-4o-mini-tts-2025-12-15' },
+          { id: 'gpt-4o-mini-transcribe-2025-12-15' },
+          { id: 'gpt-4o-transcribe-diarize' },
           { id: 'gpt-4o-realtime-preview' },
           { id: 'gpt-4o-audio-preview' },
           { id: 'sora-2' },
@@ -298,10 +298,26 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
       'dall-e-3',
       'text-embedding-3-large',
       'omni-moderation-latest',
+      'tts-1',
+      'gpt-4o-mini-tts',
+      'whisper-1',
+      'gpt-4o-transcribe',
+      'gpt-4o-mini-tts-2025-12-15',
+      'gpt-4o-mini-transcribe-2025-12-15',
     ]);
+    expect(models.find((model) => model.apiModelId === 'gpt-4o-mini-tts')).toMatchObject({
+      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
+      inputModalities: ['text'],
+      outputModalities: ['audio'],
+    });
+    expect(models.find((model) => model.apiModelId === 'whisper-1')).toMatchObject({
+      capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+      inputModalities: ['audio'],
+      outputModalities: ['text'],
+    });
   });
 
-  it('applies the audio/video filter to copied OpenAI providers that keep presetProviderId but get a uuid id (REGRESSION)', async () => {
+  it('also discovers voice models for copied OpenAI providers', async () => {
     const copiedOpenAIProvider = makeProvider({
       id: '550e8400-e29b-41d4-a716-446655440000',
       presetProviderId: 'openai',
@@ -318,7 +334,29 @@ describe('listModels — openAIFetcher (official OpenAI provider, audio/video fi
 
     const models = await listModels(copiedOpenAIProvider);
 
-    expect(models.map((m) => m.apiModelId)).toEqual(['gpt-4o']);
+    expect(models.map((m) => m.apiModelId)).toEqual(['gpt-4o', 'tts-1', 'whisper-1']);
+  });
+
+  it('keeps known audio types on compatible gateways without classifying names by loose keywords', async () => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: {
+        data: [{ id: 'openai/gpt-4o-mini-tts' }, { id: 'whisper-1' }, { id: 'speech-chat' }],
+      },
+    });
+    const models = await listModels(
+      makeProvider({
+        id: 'custom-gateway',
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://gateway.invalid/v1' },
+        },
+      }),
+    );
+    expect(models.map((model) => model.capabilities)).toEqual([
+      [MODEL_CAPABILITY.AUDIO_GENERATION],
+      [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
+      [],
+    ]);
   });
 });
 
@@ -891,10 +929,10 @@ describe('listModels — vertexFetcher (per-publisher pagination)', () => {
         client_email: 'svc@my-project.iam.gserviceaccount.com',
       },
     });
-    getAuthHeadersMock.mockResolvedValue({ Authorization: 'Bearer vertex-token' });
+    getVertexAccessTokenMock.mockResolvedValue('vertex-token');
   });
 
-  it('queries every default publisher under the location aiplatform host with the signed headers', async () => {
+  it('queries every default publisher under the location aiplatform host with bearer authentication', async () => {
     aiSdkGetFromApiMock.mockResolvedValue({
       value: {
         publisherModels: [
@@ -927,6 +965,34 @@ describe('listModels — vertexFetcher (per-publisher pagination)', () => {
     expect(models).toHaveLength(1);
     expect(models[0].apiModelId).toBe('gemini-2.0-flash');
     expect(models[0].ownedBy).toBe('google');
+  });
+
+  it('rejects an invalid project URL before exchanging credentials', async () => {
+    const provider = makeVertexProvider();
+    provider.endpointConfigs = {
+      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
+        baseUrl: 'https://gateway.example/v1/projects/another-project/locations/us-central1',
+      },
+    };
+
+    await expect(listModels(provider, undefined, { throwOnError: true })).rejects.toThrow(
+      'project, location or base URL is invalid',
+    );
+    expect(getVertexAccessTokenMock).not.toHaveBeenCalled();
+    expect(aiSdkGetFromApiMock).not.toHaveBeenCalled();
+  });
+
+  it('passes cancellation to the shared token exchange', async () => {
+    const controller = new AbortController();
+    const cancelled = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    getVertexAccessTokenMock.mockRejectedValue(cancelled);
+    controller.abort();
+
+    await expect(
+      listModels(makeVertexProvider(), controller.signal, { throwOnError: true }),
+    ).rejects.toBe(cancelled);
+    expect(getVertexAccessTokenMock).toHaveBeenCalledWith(expect.any(Object), controller.signal);
+    expect(aiSdkGetFromApiMock).not.toHaveBeenCalled();
   });
 
   it('bakes the publisher prefix into MaaS (non-google) model ids so the OpenAI-compatible endpoint gets the right model', async () => {

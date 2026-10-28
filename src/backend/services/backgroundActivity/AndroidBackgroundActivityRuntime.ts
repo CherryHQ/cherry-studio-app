@@ -17,7 +17,6 @@ import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAli
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
 import { parseBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
-import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import type { BackgroundExecutionStatus } from '@/shared/contracts/backgroundExecution';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -26,7 +25,11 @@ import {
   type SystemIntegrationNativeModule,
 } from '../../../../modules/system-integration';
 import type { BackgroundActivityEnvironment } from './BackgroundActivityEnvironment';
-import type { BackgroundActivityPresenter } from './presenter';
+import type {
+  BackgroundActivityPresenter,
+  RemoteConnectionNotification,
+  RemoteConnectionNotices,
+} from './presenter';
 
 // Android 15 gives dataSync six background hours, reset on foreground entry.
 // Leave a minute for the domain's normal cancellation and notification drain.
@@ -61,15 +64,6 @@ type ServiceContent = {
   taskDesc: string;
   linkingURI?: string;
 };
-export type RemoteConnectionNotification = {
-  connectionId: string;
-  key: string;
-  title: string;
-  body: string;
-  url: string;
-  token: string;
-  disconnectLabel: string;
-};
 type ConnectionNotificationRecord = RemoteConnectionNotification & {
   id: number;
   delivered?: string;
@@ -80,7 +74,10 @@ type ConnectionNotificationRecord = RemoteConnectionNotification & {
 @ServicePhase(Phase.PostReady)
 @DependsOn(['BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
-export class AndroidBackgroundActivityRuntime extends BaseService implements KeepAliveSource {
+export class AndroidBackgroundActivityRuntime
+  extends BaseService
+  implements KeepAliveSource, RemoteConnectionNotices
+{
   private readonly activities = new Set<ActivityRecord>();
   private connections: ConnectionNotificationRecord[] = [];
   private readonly leases = new Set<LeaseRecord>();
@@ -161,7 +158,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     await this.native?.dismissCompletedBackgroundTaskNotification?.(deepLinkUrl);
   };
 
-  protected async onInit(): Promise<void> {
+  protected async onInit(signal?: AbortSignal): Promise<void> {
     if (Platform.OS !== 'android') return;
     // Match the other native services' lazy loading so iOS never evaluates
     // these modules and CommonJS test environments can use the native mocks.
@@ -175,24 +172,19 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.native = getSystemIntegration();
     const handleProtectionChanged = () => this.publishStatus();
     background.on('protectionChanged', handleProtectionChanged);
-    this.registerDisposable(() => background.off('protectionChanged', handleProtectionChanged));
+    const protectionChanged = this.registerDisposable(() =>
+      background.off('protectionChanged', handleProtectionChanged),
+    );
     const handleServiceStopped = () => {
       void this.interruptLeases(new KeepAliveInterruptionError('service-stopped')).catch(
         (error: unknown) => logger.warn('Background service interruption failed', { error }),
       );
     };
     background.on('stopped', handleServiceStopped);
-    this.registerDisposable(() => background.off('stopped', handleServiceStopped));
-    notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldPlaySound: AppState.currentState === 'background',
-        shouldSetBadge: false,
-        shouldShowBanner: AppState.currentState === 'background',
-        shouldShowList: AppState.currentState === 'background',
-      }),
-    });
-    this.registerDisposable(() => notifications.setNotificationHandler(null));
-    this.registerAppStateListener((state) => {
+    const serviceStopped = this.registerDisposable(() =>
+      background.off('stopped', handleServiceStopped),
+    );
+    const appState = this.registerAppStateListener((state) => {
       if (state === 'active') {
         this.backgroundStartedAt = undefined;
         this.backgroundLimitReached = false;
@@ -204,14 +196,27 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         this.armDeadline();
       }
     });
-    // The notification bridge creates channels at delivery, after locale initialization.
-    await this.native?.clearBackgroundTaskNotifications?.();
-    // Never restore a dead process's stream or replay paid work.
-    for (const notification of await notifications.getPresentedNotificationsAsync()) {
-      const data = notification.request.content.data;
-      if (data?.owner === BACKGROUND_NOTIFICATION_OWNER && data.terminal !== true) {
-        await notifications.dismissNotificationAsync(notification.request.identifier);
-      }
+    const cancel = () => {
+      this.disposed = true;
+      this.clearDeadline();
+      protectionChanged.dispose();
+      serviceStopped.dispose();
+      appState.dispose();
+      // Startup has not admitted dependent owners. Retire global registrations
+      // now; a late stop must not stop the replacement's native service.
+      this.background = undefined;
+      this.notifications = undefined;
+      this.native = undefined;
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      // Never restore a dead process's stream or replay paid work. The notification bridge
+      // posts every Android task notice, so its sweep covers them; channels are created at
+      // delivery, after locale initialization.
+      await this.native?.clearBackgroundTaskNotifications?.();
+      signal?.throwIfAborted();
+    } finally {
+      signal?.removeEventListener('abort', cancel);
     }
   }
 
@@ -330,6 +335,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   }
 
   protected async onStop(): Promise<void> {
+    if (this.disposed) return;
     this.disposed = true;
     this.clearDeadline();
     this.leases.clear();
@@ -367,7 +373,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         if (this.unprotected) return;
         // Android 12+: start only from a visible Activity, never from a background retry.
         if (AppState.currentState !== 'active' || this.backgroundLimitReached) {
-          this.continueUnprotected(new Error('Background execution was requested while hidden.'));
+          this.continueUnprotected();
           return;
         }
         try {
@@ -412,14 +418,17 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
    * Protection is best effort: work that could not get it keeps running and ends through its
    * own result or a real platform revocation. Returning to the foreground retries admission.
    */
-  private continueUnprotected(cause: unknown): void {
+  private continueUnprotected(cause?: unknown): void {
     this.unprotected = true;
     this.publishStatus();
-    logger.error('Background execution is unprotected', cause as Error, {
+    const context = {
       operation: 'background.start',
       appState: AppState.currentState,
       leaseCount: this.leases.size,
-    });
+    };
+    // A hidden request or a spent platform budget is an expected limit; only a failed start reports.
+    if (cause === undefined) logger.warn('Background execution is unprotected', context);
+    else logger.error('Background execution is unprotected', cause as Error, context);
   }
 
   private async stopService(): Promise<void> {

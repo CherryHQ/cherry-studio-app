@@ -5,7 +5,6 @@ import {
   listHealthDataTypes,
   queryHealthData,
   resolveHealthDataType,
-  shareVerifiableHealthRecords,
   type HealthDataReaderLoader,
 } from '@/backend/services/device';
 import {
@@ -41,8 +40,6 @@ const catalogSchema = z
       'category',
       'characteristic',
       'correlation',
-      'document',
-      'clinical',
       'assessment',
       'workout',
       'activitySummary',
@@ -103,48 +100,14 @@ const recordSchema = z
       .int()
       .min(0)
       .max(Number.MAX_SAFE_INTEGER)
-      .describe(
-        '0 initially, then nextOffset. Series use point offsets; text uses Unicode scalars; attachments use bytes.',
-      ),
-    limit: limit(10_000).describe(
-      'Points, text scalars or attachment bytes per page; 0 uses 1000.',
-    ),
+      .describe('0 initially, then nextOffset. Series use point offsets; attachments use bytes.'),
+    limit: limit(10_000).describe('Points or attachment bytes per page; 0 uses 1000.'),
     attachmentId: z
       .string()
       .max(36)
       .describe(
         'Empty to read the record and list attachments; otherwise an attachment UUID from that record. Attachment data is returned as base64 bytes.',
       ),
-  })
-  .strict();
-
-const verifiableSchema = z
-  .object({
-    recordTypes: z
-      .array(z.enum(['covid19', 'immunization', 'laboratory', 'recovery']))
-      .min(1)
-      .max(4)
-      .describe(
-        'Required credential types, combined with AND; use immunization alone for any immunization, or covid19 plus immunization for COVID-19 immunizations.',
-      ),
-    sourceTypes: z
-      .array(z.enum(['smartHealthCard', 'euDigitalCOVIDCertificate']))
-      .min(1)
-      .max(2),
-    offset: z
-      .number()
-      .int()
-      .min(0)
-      .max(Number.MAX_SAFE_INTEGER)
-      .describe('Selected-record offset; 0 initially.'),
-    limit: limit(50).describe('Records per page; 0 uses 20.'),
-    dataOffset: z
-      .number()
-      .int()
-      .min(0)
-      .max(Number.MAX_SAFE_INTEGER)
-      .describe('Payload byte offset for each selected record; 0 initially.'),
-    dataLimit: limit(10_000).describe('Payload bytes per record; 0 uses 1000.'),
   })
   .strict();
 
@@ -165,7 +128,7 @@ export function createHealthDataTools(deps: DeviceToolDependencies, load?: Healt
       deps,
       displayName: 'Read health data',
       description:
-        'Read any supported HealthKit type after user approval. Empty dates select the last seven days; at most 90 days. Use quantity statistics for totals and heart-rate min/max; samples for curves, sleep stages, nutrition, symptoms, reproductive health, blood-pressure pairs, clinical records, ECG summaries and more. Sample pages are not chronological; continue nextCursor before claiming completeness. Characteristics and the medication list are current values without date filtering; activity rings cover complete calendar days. Percent values are fractions (0.97 = 97%). Clinical FHIR content, CDA documents, ECG voltage, routes, heartbeat and quantity series are read with health_get_record. Empty data cannot distinguish no records from denied read access.',
+        'Read any supported HealthKit type after user approval. Empty dates select the last seven days; at most 90 days. Use quantity statistics for totals and heart-rate min/max; samples for curves, sleep stages, nutrition, symptoms, reproductive health, blood-pressure pairs, ECG summaries and more. Sample pages are not chronological; continue nextCursor before claiming completeness. Characteristics and the medication list are current values without date filtering; activity rings cover complete calendar days. Percent values are fractions (0.97 = 97%). ECG voltage, routes, heartbeat and quantity series are read with health_get_record. Empty data cannot distinguish no records from denied read access.',
       inputSchema: querySchema,
       permissionScopes: (input) => [
         ...healthAuthorizationTypes(resolveHealthDataType(input.type)).map(healthPermissionScope),
@@ -199,32 +162,12 @@ export function createHealthDataTools(deps: DeviceToolDependencies, load?: Healt
       deps,
       displayName: 'Health record details',
       description:
-        'Read details of an authorized HealthKit sample by its type and UUID. Returns paged ECG microvolt measurements, heartbeat timing/gaps, route coordinates, quantity series, clinical FHIR JSON, CDA XML or attachment bytes, plus source metadata. Follow nextOffset until complete. CDA may open Apple’s per-document selection sheet. Never infer a missing value is zero or treat clinical/ECG classifications as a diagnosis.',
+        'Read details of an authorized HealthKit sample by its type and UUID. Returns paged ECG microvolt measurements, heartbeat timing/gaps, route coordinates, quantity series or attachment bytes, plus source metadata. Follow nextOffset until complete. Never infer a missing value is zero or treat ECG classifications as a diagnosis.',
       inputSchema: recordSchema,
       permissionScopes: (input) =>
         healthAuthorizationTypes(resolveHealthDataType(input.type)).map(healthPermissionScope),
       run: (input, signal) =>
         getHealthRecord({ ...input, limit: input.limit || 1000 }, load, signal),
-    }),
-    createDeviceRuntimeTool({
-      capabilityId: 'health_share_verifiable_records',
-      deps,
-      displayName: 'Share verifiable health records',
-      description:
-        'Request one-time user-selected SMART Health Cards or EU Digital COVID Certificates. Requires a separate Apple-approved restricted entitlement in the installed app; ordinary HealthKit authorization is insufficient. Every call opens the system selection sheet, including pagination: select the same records to continue offsets. No date filter. Returns record metadata and paged base64 signed payloads, without verifying signatures or issuer trust. Use only when the user asks to share these credentials.',
-      inputSchema: verifiableSchema,
-      // This query presents its own consent sheet; there is no persistent type-level read grant.
-      permissionScopes: [],
-      run: (input, signal) =>
-        shareVerifiableHealthRecords(
-          {
-            ...input,
-            limit: input.limit || 20,
-            dataLimit: input.dataLimit || 1000,
-          },
-          load,
-          signal,
-        ),
     }),
   ];
 }

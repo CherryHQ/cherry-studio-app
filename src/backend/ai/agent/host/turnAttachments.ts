@@ -157,7 +157,7 @@ export async function resolveManagedInput(
  * when the selected model cannot consume it.
  */
 export function assertAttachmentRequestSupported(
-  runtime: AgentRuntime,
+  runtime: Pick<AgentRuntime, 'descriptor'>,
   input: AgentInputPart[],
   history: AgentMessageView[],
   resources: TurnResourceLedger,
@@ -293,7 +293,10 @@ export async function materializeRuntimeAttachments(input: {
   }
 
   const omitImage = (fileEntryId: string, mediaType: string) => {
-    const text = unsupportedMediaNote(mediaType, NO_IMAGE_MEDIA_CAPABILITIES);
+    const text = unsupportedMediaNote(mediaType, NO_IMAGE_MEDIA_CAPABILITIES, {
+      fileEntryId,
+      name: resources.availableFiles.get(fileEntryId)?.name,
+    });
     if (text) attachments.set(fileEntryId, { type: 'text', text });
   };
   for (const part of inputParts) {

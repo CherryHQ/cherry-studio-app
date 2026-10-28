@@ -1,7 +1,7 @@
 import GaugeIcon from '@cherrystudio/app-icons/icons/gauge';
 import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
-import { View } from 'react-native';
+import { View, type ViewInstance } from 'react-native';
 
 import type { ChatInputEffortFrame } from '../utils/chatInputEffortLayout';
 
@@ -14,7 +14,7 @@ type ChatInputEffortGaugeProps = {
 
 /** Compact effort control using the same gauge glyph as desktop. */
 export function ChatInputEffortGauge({ accessibilityLabel, onPress }: ChatInputEffortGaugeProps) {
-  const footprintRef = useRef<View>(null);
+  const footprintRef = useRef<ViewInstance>(null);
 
   const handlePress = useCallback(() => {
     footprintRef.current?.measureInWindow((left, top, width, height) => {

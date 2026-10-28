@@ -1,24 +1,23 @@
 import MessageCircleIcon from '@cherrystudio/app-icons/icons/message-circle';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { chatHref } from '@/frontend/appShell/navigation/chat';
-import { useAppSearch } from '@/frontend/appShell/search';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { type AppSearchRequest, useAppSearch } from '@/frontend/appShell/search';
+import { useApiClient } from '@/frontend/data';
 
 import { searchSessions, type SessionSearchResult } from './sessionSearch';
 
-export function useSessionSearch() {
+/** The conversation search shared by the `/search` page and the wide sidebar's search column. */
+export function useSessionSearchRequest(): AppSearchRequest<SessionSearchResult> {
   const { t } = useTranslation();
-  const router = useRouter();
   const apiClient = useApiClient();
-  const { open } = useAppSearch();
 
-  return useCallback(() => {
-    void open<SessionSearchResult>({
+  return useMemo(
+    () => ({
       debounceMs: 250,
       emptyText: t('session.search.noResults'),
       getAccessibilityLabel: ({ item, kind }) =>
@@ -49,23 +48,35 @@ export function useSessionSearch() {
           sessions: t('session.search.sessions'),
           messages: t('session.search.messages'),
         }),
-    }).then((outcome) => {
-      if (outcome.type !== 'selected') return;
-      const result = outcome.item;
-      router.navigate(
-        chatHref(
-          result.kind === 'session'
-            ? { kind: 'session', sessionId: result.item.id }
-            : {
-                kind: 'session',
-                sessionId: result.item.sessionId,
-                messageId: result.item.messageId,
-                messageRequestId: Crypto.randomUUID(),
-              },
-        ),
-      );
+    }),
+    [apiClient, t],
+  );
+}
+
+/** The chat a selected result opens; a message result also locates its message again. */
+export function sessionSearchResultHref(result: SessionSearchResult) {
+  return chatHref(
+    result.kind === 'session'
+      ? { kind: 'session', sessionId: result.item.id }
+      : {
+          kind: 'session',
+          sessionId: result.item.sessionId,
+          messageId: result.item.messageId,
+          messageRequestId: Crypto.randomUUID(),
+        },
+  );
+}
+
+export function useSessionSearch() {
+  const router = useRouter();
+  const request = useSessionSearchRequest();
+  const { open } = useAppSearch();
+
+  return useCallback(() => {
+    void open(request).then((outcome) => {
+      if (outcome.type === 'selected') router.navigate(sessionSearchResultHref(outcome.item));
     });
-  }, [apiClient, open, router, t]);
+  }, [open, request, router]);
 }
 
 function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {

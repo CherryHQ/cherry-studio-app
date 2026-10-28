@@ -277,3 +277,26 @@ test('does not resolve credentials for a pre-aborted request', async () => {
   );
   expect(resolveModel).not.toHaveBeenCalled();
 });
+
+test.each([
+  [1_048_576, undefined, 65_536],
+  [1_048_576, 512, 512],
+  [1_048_576, 65_536, 65_536],
+  [1_048_576, 131_072, 131_072],
+  [1_048_576, 2_000_000, 1_048_576],
+  [64_000, undefined, 64_000],
+])('reserves text output for ceiling %i and explicit %s', async (ceiling, explicit, expected) => {
+  const { dependencies, request, resolution, streamFn, source, message } = setup();
+  resolution.model.maxTokens = ceiling;
+  resolution.model.contextWindow = 1_048_576;
+  source.push({ type: 'done', reason: 'stop', message: message('OK') });
+  await generatePiText(dependencies, {
+    ...request,
+    options: { ...request.options, maxOutputTokens: explicit },
+  });
+  expect(streamFn).toHaveBeenCalledWith(
+    resolution.model,
+    expect.anything(),
+    expect.objectContaining({ maxTokens: expected }),
+  );
+});

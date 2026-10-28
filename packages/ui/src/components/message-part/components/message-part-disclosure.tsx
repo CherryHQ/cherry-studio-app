@@ -303,22 +303,29 @@ export function MessagePartSummary({
 
 export function MessagePartDetail({
   children,
+  headerAction,
   onClose,
   sizes,
   testID,
   title,
   variant = 'default',
 }: MessagePartDetailProps) {
-  // TODO(message-part-detail): Replace arbitrary children with controlled detail layouts after the
-  // visual designs for text, structured data, lists, and media are finalized.
+  // Content composes shared sections or specialized source/media renderers inside this one shell.
   const heightProps = sizes ? { sizes } : ({ size: 'large' } as const);
 
   return (
-    <BottomSheet {...heightProps} onClose={onClose} open testID={testID} title={title}>
+    <BottomSheet
+      {...heightProps}
+      headerAction={headerAction}
+      onClose={onClose}
+      open
+      testID={testID}
+      title={title}
+    >
       <ScrollView
         className="flex-1"
         contentContainerClassName={
-          variant === 'source-list' ? 'gap-2.5 px-3 pb-4' : 'gap-2.5 px-4 pb-4'
+          variant === 'source-list' ? 'gap-2.5 px-3 pb-4' : 'gap-6 px-5 pt-2 pb-6'
         }
         showsVerticalScrollIndicator={false}
       >

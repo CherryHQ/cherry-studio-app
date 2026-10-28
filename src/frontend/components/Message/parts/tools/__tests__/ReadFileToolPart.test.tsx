@@ -1,13 +1,24 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { usePdfOcrState } from '@/frontend/hooks/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { isReadFileToolPart, ReadFileToolPart } from '../ReadFileToolPart';
 import type { ToolMessagePart } from '../toolPartState';
 
+jest.mock('@/frontend/hooks/file', () => ({ usePdfOcrState: jest.fn() }));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    MessageDetailText: (props: object) => createElement('TextSection', props),
+    MessageDetailValue: (props: object) => createElement('ValueSection', props),
+  };
+});
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -29,6 +40,31 @@ describe('ReadFileToolPart', () => {
   it('claims only read_file parts', () => {
     expect(isReadFileToolPart(toolPart({ output: {} }))).toBe(true);
     expect(isReadFileToolPart(toolPart({ output: {}, toolName: 'edit_file' }))).toBe(false);
+  });
+
+  it('shows recognition progress of the scanned PDF a running call reads', () => {
+    jest
+      .mocked(usePdfOcrState)
+      .mockImplementation((key) =>
+        key === 'call-1'
+          ? { status: 'recognizing', completedPages: 12, totalPages: 40 }
+          : undefined,
+      );
+    const running = toolPart({ input: { file_entry_id: 'entry-1' }, state: 'input-available' });
+    expect(render(running).root.findByType('GenericToolPart').props.runningStatusText).toBe(
+      'chat.builtinTool.file.recognizing',
+    );
+    const byPath = toolPart({ input: { path: 'docs/scan.pdf' }, state: 'input-available' });
+    expect(render(byPath).root.findByType('GenericToolPart').props.runningStatusText).toBe(
+      'chat.builtinTool.file.recognizing',
+    );
+    jest.mocked(usePdfOcrState).mockReturnValueOnce({ status: 'queued' });
+    expect(render(running).root.findByType('GenericToolPart').props.runningStatusText).toBe(
+      'chat.builtinTool.file.processingQueued',
+    );
+    const done = toolPart({ input: { file_entry_id: 'entry-1' }, output: 'not an object' });
+    expect(render(done).root.findByType('GenericToolPart').props.runningStatusText).toBeUndefined();
+    jest.mocked(usePdfOcrState).mockReset();
   });
 
   it('summarizes the returned line range instead of repeating the text', () => {

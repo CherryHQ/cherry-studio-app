@@ -52,6 +52,29 @@ test('a claimed share arrives as library files and leaves no native staging behi
   await runtime.dispose();
 });
 
+test('a share reports receiving only while its attachments import', async () => {
+  const { runtime, importFiles } = setup();
+  const observed: boolean[] = [];
+  runtime.module.subscribeReceiving(() => observed.push(runtime.module.isReceiving()));
+  let finish!: () => void;
+  importFiles.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve([file]);
+      }),
+  );
+
+  const claim = runtime.module.claimNext();
+  await Promise.resolve();
+  expect(runtime.module.isReceiving()).toBe(true);
+  finish();
+  await claim;
+
+  expect(runtime.module.isReceiving()).toBe(false);
+  expect(observed).toEqual([true, false]);
+  await runtime.dispose();
+});
+
 test('an import failure leaves the share staged for a later claim', async () => {
   const { runtime, native, importFiles } = setup();
   importFiles.mockRejectedValueOnce(new Error('disk full'));
@@ -99,4 +122,27 @@ test('disposal aborts an in-flight import and releases the share', async () => {
   await expect(claim).rejects.toThrow('System share import failed');
   expect(observed?.aborted).toBe(true);
   expect(native.releaseEntry).toHaveBeenCalledWith(id);
+});
+
+test('disposal retains staging even if the last attachment finishes importing successfully', async () => {
+  const { runtime, native, importFiles } = setup();
+  let finish!: () => void;
+  importFiles.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve([file]);
+      }),
+  );
+  const claim = runtime.module.claimNext();
+  const rejected = expect(claim).rejects.toThrow('System share import failed');
+  await Promise.resolve();
+
+  const disposing = runtime.dispose();
+  finish();
+  await rejected;
+  await disposing;
+
+  expect(native.completeEntry).not.toHaveBeenCalled();
+  expect(native.releaseEntry).toHaveBeenCalledWith(id);
+  expect(runtime.module.isReceiving()).toBe(false);
 });

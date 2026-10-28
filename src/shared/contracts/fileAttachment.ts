@@ -16,6 +16,8 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'nul-byte',
     'document-empty',
     'document-invalid',
+    'document-ocr-failed',
+    'document-ocr-unsupported',
     'parser-unavailable',
     'parser-unsupported',
   ]),
@@ -39,6 +41,8 @@ export class FileAttachmentError extends Error {
 export const FileAttachmentReportSchema = z.strictObject({
   mode: z.enum(['image', 'text', 'document-text', 'document-ir']),
   sourceTruncated: z.boolean(),
+  /** One-based PDF pages whose visual content did not yield recognized text. */
+  unrecognizedPages: z.array(z.number().int().positive()).optional(),
   requestTruncated: z.boolean(),
   includedCharacters: z.number().int().nonnegative().optional(),
   parser: z.enum(['anydoc', 'builtin', 'native-pdf']).optional(),
@@ -128,9 +132,13 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
     case 'invalid-utf8':
       return `${name} is not valid UTF-8 text.`;
     case 'document-empty':
-      return `${name} has no extractable text. Scanned documents require OCR.`;
+      return `${name} has no readable text after document extraction and any applicable PDF text recognition.`;
     case 'document-invalid':
       return `${name} could not be parsed. It may be damaged or password-protected.`;
+    case 'document-ocr-failed':
+      return `${name} could not be read because scanned-page text recognition failed. The user can retry, or attach the relevant pages as images.`;
+    case 'document-ocr-unsupported':
+      return `${name} has no text layer, and scanned-page recognition does not support the current app language. The user can attach the relevant pages as images.`;
     case 'parser-unavailable':
       return 'The document parser is unavailable. Rebuild the development client or select the built-in parser.';
     case 'parser-unsupported':

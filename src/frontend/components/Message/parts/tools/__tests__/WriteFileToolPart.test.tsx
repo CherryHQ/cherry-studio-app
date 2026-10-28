@@ -10,6 +10,14 @@ jest.mock('react-i18next', () => ({
 }));
 
 // The real component barrel reaches ESM-only packages Jest cannot parse.
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    MessageDetailText: (props: object) => createElement('TextSection', props),
+    MessageDetailValue: (props: object) => createElement('ValueSection', props),
+  };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {

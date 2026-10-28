@@ -14,3 +14,6 @@ so the hook delivers it through the latest render rather than the effect that st
 while the shell cannot open it, and runs a claim requested meanwhile once the current one settles.
 Delivery seeds the chat in view, or dismisses to chat, which replaces the current page when chat is
 not in the stack.
+
+`useSystemEntryReceiving` reports a claimed share that is still importing, so app-shell surfaces can
+treat that launch as a share before its draft opens.

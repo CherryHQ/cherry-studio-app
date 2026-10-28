@@ -1,22 +1,32 @@
 import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
+import { loggerService } from '@logger';
 import { AppState } from 'react-native';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
+import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
+import type { DiscoveryEvent } from '../DesktopEndpointResolver';
 import {
   DesktopSession,
   DesktopUnreachableError,
   RemoteFailureError,
   RemoteTransportError,
 } from '../DesktopSession';
+import { WebSocketOpeningError } from '../remoteErrors';
 import { openWebSocketStream } from '../remoteSocket';
+
+let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
 jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
 jest.mock('../DesktopDiscovery', () => ({
   DesktopDiscovery: class {
+    constructor(receive: (event: DiscoveryEvent) => void) {
+      mockDiscoveryReceive = receive;
+    }
     setActive() {}
     browse() {
       return () => {};
@@ -225,6 +235,94 @@ describe('DesktopConnectionRuntime', () => {
     await manager._doDestroy();
   });
 
+  it('rejects a missing re-pair target before contacting the desktop or creating a record', async () => {
+    const failure = DataApiErrorFactory.notFound('DesktopConnection', id);
+    store.getRow.mockRejectedValueOnce(failure);
+    const report = jest.fn();
+    const removeReporter = loggerService.setErrorReporter(report);
+    try {
+      await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
+        code: ErrorCode.NOT_FOUND,
+        details: { reason: 'connection-not-found' },
+      });
+      expect(connect).not.toHaveBeenCalled();
+      expect(store.savePair).not.toHaveBeenCalled();
+      // The stale ID's origin is unknown, so the classified failure is still reported once.
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(report).toHaveBeenCalledWith(failure, {
+        module: 'DesktopConnection',
+        operation: 'desktop.pair.load-existing',
+      });
+    } finally {
+      removeReporter();
+    }
+  });
+
+  it('does not turn an unrelated missing resource into a missing pairing target', async () => {
+    const failure = DataApiErrorFactory.notFound('Provider', id);
+    store.getRow.mockRejectedValueOnce(failure);
+    await expect(runtime.pair(pairing, signal())).rejects.toBe(failure);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, id])(
+    'pairs v3 over WSS and learns its endpoint (existing: %s)',
+    async (connectionId) => {
+      const endpoint = { host: 'desktop.example.com', port: 24443, security: 'wss' as const };
+      const session = Object.assign(
+        createSession({
+          'connection.authenticate': () => ({ authorization: { grants } }),
+          'pairing.claim': () => ({
+            claimId: 'claim',
+            verificationCode: '123456',
+            expiresAt: 'later',
+          }),
+          'pairing.get': () => ({
+            status: 'approved',
+            deviceId: row.deviceId,
+            authorization: { grants },
+          }),
+          'connection.endpoints': () => ({
+            desktopIdentity: row.desktopIdentity,
+            endpoints: [endpoint],
+          }),
+        }),
+        { connectionEndpointsVersion: 1 },
+      );
+      connect.mockResolvedValueOnce(session as never);
+      await expect(
+        runtime.pair({ ...pairing, connectionId, v: 3, endpoints: [endpoint] }, signal()),
+      ).resolves.toMatchObject({ status: 'paired' });
+      expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+        'wss://desktop.example.com:24443/v1/remote/connect',
+      ]);
+      expect((await store.getRow()).learnedEndpoints).toEqual([endpoint]);
+      expect((await store.getRow()).grants).toEqual(grants);
+      expect(session.isOpen).toBe(false);
+    },
+  );
+
+  it('retains v3 QR routes for reconnect when the desktop cannot sync addresses', async () => {
+    const endpoint = { host: 'desktop.example.com', port: 443, security: 'wss' as const };
+    const first = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    const next = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    connect.mockResolvedValueOnce(first as never).mockResolvedValueOnce(next as never);
+    await runtime.pair({ ...pairing, v: 3, endpoints: [endpoint] }, signal());
+    const lease = await manager.retain(id, 'configuration', signal());
+    await expect(lease.ready(signal())).resolves.toBe(next);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'wss://desktop.example.com:443/v1/remote/connect',
+      'wss://desktop.example.com:443/v1/remote/connect',
+    ]);
+    expect((await store.getRow()).learnedEndpoints).toEqual([]);
+    expect((await store.getRow()).configuredEndpoints).toEqual(row.configuredEndpoints);
+    lease.release();
+  });
+
   it('saves authenticated desktop addresses before initial pairing completes', async () => {
     const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' };
     const session = Object.assign(
@@ -282,6 +380,41 @@ describe('DesktopConnectionRuntime', () => {
     );
     expect((await store.getRow()).learnedEndpoints).toEqual([]);
     expect(session.isOpen).toBe(false);
+  });
+
+  it('reconnects through ordered v3 endpoints and retains their security and ports', async () => {
+    const endpoints = [
+      { host: 'desktop.example.com', port: 443, security: 'wss' as const },
+      { host: '2001:db8::2', port: 24444, security: 'ws' as const },
+    ];
+    const session = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('Route unavailable'));
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair({ ...pairing, v: 3, endpoints }, signal())).resolves.toEqual(
+      connection,
+    );
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'wss://desktop.example.com:443/v1/remote/connect',
+      'ws://[2001:db8::2]:24444/v1/remote/connect',
+    ]);
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopIdentity: pairing.desktopIdentity }),
+    );
+
+    // QR routes remain temporary hints, but are usable by the next authorized connection.
+    const reconnect = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    connect.mockResolvedValueOnce(reconnect as never);
+    const lease = await manager.retain(id, 'configuration', signal());
+    await lease.ready(signal());
+    expect(jest.mocked(openWebSocketStream).mock.calls.at(-1)?.[0]).toBe(
+      'wss://desktop.example.com:443/v1/remote/connect',
+    );
+    expect((await store.getRow()).learnedEndpoints).toEqual([]);
+    lease.release();
   });
 
   it('verifies exactly the selected address before saving, without exporting provider credentials', async () => {
@@ -512,6 +645,45 @@ describe('DesktopConnectionRuntime', () => {
     expect(session.close).toHaveBeenCalled();
   });
 
+  it('preserves per-address opening failures through pairing for actionable UI errors', async () => {
+    const failure = {
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      kind: 'websocket' as const,
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '403 Forbidden'",
+    };
+    jest.mocked(openWebSocketStream).mockRejectedValue(new WebSocketOpeningError(failure));
+    await expect(runtime.pair(pairing, new AbortController().signal)).rejects.toMatchObject({
+      details: { reason: 'unreachable', connectionFailures: [failure] },
+    });
+  });
+
+  it.each([
+    {
+      kind: 'websocket',
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '403 Forbidden'",
+    },
+    {
+      kind: 'websocket',
+      address: 'ws://192.168.1.2:23333/v1/remote/connect',
+      closeCode: 1006,
+      message: "Expected HTTP 101 response but was '503 Service Unavailable'",
+    },
+    { kind: 'timeout', address: 'ws://192.168.1.2:23333/v1/remote/connect' },
+  ] satisfies DesktopConnectionFailure[])(
+    'preserves opening failure details through configuration preview: $kind $message',
+    async (failure) => {
+      mockDiscoveryReceive({ type: 'unavailable' });
+      jest.mocked(openWebSocketStream).mockRejectedValueOnce(new WebSocketOpeningError(failure));
+      await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+        details: { reason: 'unreachable', connectionFailures: [failure] },
+      });
+      expect(store.preview).not.toHaveBeenCalled();
+    },
+  );
+
   it('maps an invalid invitation and an unreachable desktop to the settings error reasons', async () => {
     const session = createSession({
       'pairing.claim': () => {
@@ -640,6 +812,28 @@ describe('DesktopConnectionRuntime', () => {
     expect((await store.getRow()).deviceId).toBe(row.deviceId);
     expect(store.savePair).not.toHaveBeenCalled();
     expect(session.isOpen).toBe(false);
+  });
+
+  it('forgets an earlier disconnect once the same pairing completes again, and on removal', async () => {
+    const disconnected = new Set<string>();
+    manager.configure(store, {
+      isDisconnected: (connectionId) => disconnected.has(connectionId),
+      setDisconnected: (connectionId, value) => {
+        if (value) disconnected.add(connectionId);
+        else disconnected.delete(connectionId);
+      },
+    });
+    manager.disconnect(id);
+    connect.mockResolvedValueOnce(
+      createSession({ 'connection.authenticate': () => ({ authorization: { grants } }) }) as never,
+    );
+
+    await runtime.pair(pairing, signal());
+    expect(disconnected.has(id)).toBe(false);
+
+    manager.disconnect(id);
+    await runtime.remove(id, signal());
+    expect(disconnected.has(id)).toBe(false);
   });
 
   it.each([

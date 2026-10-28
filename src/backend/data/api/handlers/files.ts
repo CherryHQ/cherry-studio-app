@@ -13,6 +13,7 @@ import type { FileSchemas } from '@/shared/data/api/schemas/files';
 import {
   FileLibraryQuerySchema,
   CreateFileFolderSchema,
+  MoveLibraryFilesSchema,
   UpdateFileFolderSchema,
   UpdateLibraryFileSchema,
 } from '@/shared/data/api/schemas/files';
@@ -29,6 +30,12 @@ export function createFileHandlers(
   return {
     '/files/library': {
       GET: ({ query }) => library.list(FileLibraryQuerySchema.parse(query ?? {})),
+    },
+    '/files/library/move': {
+      POST: ({ body }) => {
+        const input = MoveLibraryFilesSchema.parse(body);
+        return library.moveFiles(input.fileEntryIds, input.folderId);
+      },
     },
     '/files/library/:id': {
       PATCH: ({ params, body }) =>
@@ -55,9 +62,6 @@ export function createFileHandlers(
     '/files/workspace/:id': {
       PATCH: ({ params, body }) =>
         library.bindWorkspace(params.id, z.uuid().nullable().parse(body.folderId)),
-    },
-    '/files/entries': {
-      GET: ({ query }) => entries.listByCursor(query),
     },
     '/files/entries/:id': {
       GET: ({ params }) => entries.getById(FileEntryIdSchema.parse(params.id)),

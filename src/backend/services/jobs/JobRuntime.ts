@@ -175,9 +175,9 @@ function toErrorMessage(reason: unknown): string | undefined {
  *
  * `liveRuntimesByDb`, the WeakMap that used to reject a second runtime over one
  * database, is gone. The container memoizes one instance per host, and
- * `application.install()` disposes the outgoing host to completion before the
- * incoming one starts, so two live runtimes can no longer reach the same
- * ledger. The guard could not have caught the cross-host case anyway once
+ * `application.install()` fences outgoing initialization before the incoming
+ * host starts. Cold-start recovery checks that fence before further work.
+ * The guard could not have caught the cross-host case anyway once
  * `DbService` itself became per-host: two hosts key two different instances.
  */
 @Injectable('JobRuntime')
@@ -261,8 +261,14 @@ export class JobRuntime extends BaseService {
    * The cold-start pump: lazy startup recovery over prior-process leftovers,
    * the terminal-row GC sweep, and whatever is already runnable.
    */
-  protected async onInit(): Promise<void> {
-    await this.pump({ reason: 'cold-start' });
+  protected async onInit(signal?: AbortSignal): Promise<void> {
+    const cancel = () => this.stopDispatch();
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      await this.pump({ reason: 'cold-start' });
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+    }
   }
 
   async enqueue<K extends JobType>(
@@ -418,6 +424,26 @@ export class JobRuntime extends BaseService {
    * recovery.
    */
   protected async onStop(): Promise<void> {
+    this.stopDispatch();
+
+    // Snapshot before awaiting: each task removes itself in its `finally`.
+    // Executions resolve *after* `finalizeJob`; the pump covers a claim or
+    // recovery transaction already in progress when disposal began.
+    const inFlight: Promise<unknown>[] = [...this.inFlightExecuted.values()];
+    if (this.currentLoop) inFlight.push(this.currentLoop);
+    if (inFlight.length === 0) return;
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.allSettled(inFlight),
+      new Promise<void>((resolve) => {
+        drainTimer = setTimeout(resolve, DISPOSE_DRAIN_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(drainTimer);
+  }
+
+  /** Synchronous cancellation also fences a cold-start pump that has not returned yet. */
+  private stopDispatch(): void {
     if (this.disposed) return;
     this.disposed = true;
     if (this.delayedTimer) {
@@ -440,23 +466,6 @@ export class JobRuntime extends BaseService {
     // outcomes across teardown.
     this.finishedResolvers.clear();
     this.pendingTxVerifications.clear();
-
-    // Snapshot before awaiting: each task removes itself in its `finally`.
-    // Executions resolve *after* `finalizeJob`; the pump covers a claim or
-    // recovery transaction already in progress when disposal began. Draining
-    // both is what prevents either path from reaching SQLite after it closes.
-    // Bounded because a handler is allowed to ignore its abort signal entirely.
-    const inFlight: Promise<unknown>[] = [...this.inFlightExecuted.values()];
-    if (this.currentLoop) inFlight.push(this.currentLoop);
-    if (inFlight.length === 0) return;
-    let drainTimer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      Promise.allSettled(inFlight),
-      new Promise<void>((resolve) => {
-        drainTimer = setTimeout(resolve, DISPOSE_DRAIN_TIMEOUT_MS);
-      }),
-    ]);
-    clearTimeout(drainTimer);
   }
 
   // -------------------------------------------------------------------------
@@ -545,7 +554,8 @@ export class JobRuntime extends BaseService {
         claimed += await this.pumpOnce();
       } while (this.pumpDirty && !this.disposed);
     } catch (error) {
-      logger.error('pump loop failed', error as Error);
+      // Disposal fences in-flight writes by throwing; that is shutdown, not failure.
+      if (!this.disposed) logger.error('pump loop failed', error as Error);
     } finally {
       this.pumpRunning = false;
       this.currentLoop = null;
@@ -558,7 +568,9 @@ export class JobRuntime extends BaseService {
     if (this.disposed) return 0;
 
     await this.dbService.withWriteTx(async (tx) => {
+      this.assertNotDisposed();
       await this.verifyPendingTxRows(tx);
+      this.assertNotDisposed();
       await this.jobService.promoteDelayedDueTx(tx, this.now());
     });
 
@@ -610,6 +622,7 @@ export class JobRuntime extends BaseService {
       this.spawnExecute(claim.row, claim.handler, claim.binding);
     }
 
+    if (this.disposed) return claimedCount;
     if (this.gcRequested) {
       this.gcRequested = false;
       await this.runGc();
@@ -636,6 +649,7 @@ export class JobRuntime extends BaseService {
             offset,
           );
           for (const candidate of candidates) {
+            if (this.disposed) return null;
             const handler = this.handlers.get(candidate.type);
             // The SQL filter is derived from the same frozen registry. Keep this
             // defensive check so a malformed test double cannot execute an orphan.
@@ -696,7 +710,8 @@ export class JobRuntime extends BaseService {
     this.recoveryDone ??= this.runRecovery().catch((error) => {
       // Recovery is restartable and every step is fenced; a failure here must
       // not wedge the pump forever.
-      logger.error('startup recovery failed', error as Error, { operation: 'job.recover' });
+      if (!this.disposed)
+        logger.error('startup recovery failed', error as Error, { operation: 'job.recover' });
     });
     return this.recoveryDone;
   }
@@ -704,11 +719,23 @@ export class JobRuntime extends BaseService {
   private async runRecovery(): Promise<void> {
     const repo: RecoveryRepo = {
       cancelByIds: (ids, error) =>
-        this.dbService.withWriteTx((tx) => this.jobService.cancelByIdsTx(tx, ids, error)),
-      getActiveByType: (type) => this.jobService.getActiveByType(type),
-      getStaleActive: () => this.jobService.getStaleActive(),
+        this.dbService.withWriteTx((tx) => {
+          this.assertNotDisposed();
+          return this.jobService.cancelByIdsTx(tx, ids, error);
+        }),
+      getActiveByType: (type) => {
+        this.assertNotDisposed();
+        return this.jobService.getActiveByType(type);
+      },
+      getStaleActive: () => {
+        this.assertNotDisposed();
+        return this.jobService.getStaleActive();
+      },
       resetToPendingByIds: (ids) =>
-        this.dbService.withWriteTx((tx) => this.jobService.resetToPendingByIdsTx(tx, ids)),
+        this.dbService.withWriteTx((tx) => {
+          this.assertNotDisposed();
+          return this.jobService.resetToPendingByIdsTx(tx, ids);
+        }),
     };
     try {
       const stats = await runStartupRecovery(
@@ -731,18 +758,21 @@ export class JobRuntime extends BaseService {
 
   private async runGc(): Promise<void> {
     try {
-      await this.dbService.withWriteTx((tx) =>
-        this.jobService.pruneTerminalOlderThanTx(tx, this.now() - GC_TERMINAL_TTL_MS),
-      );
+      await this.dbService.withWriteTx((tx) => {
+        this.assertNotDisposed();
+        return this.jobService.pruneTerminalOlderThanTx(tx, this.now() - GC_TERMINAL_TTL_MS);
+      });
     } catch (error) {
-      logger.warn('job GC (terminal TTL) failed', error as Error);
+      if (!this.disposed) logger.warn('job GC (terminal TTL) failed', error as Error);
     }
+    if (this.disposed) return;
     try {
-      await this.dbService.withWriteTx((tx) =>
-        this.jobService.pruneTerminalKeepLatestPerTypeTx(tx, GC_KEEP_PER_TYPE),
-      );
+      await this.dbService.withWriteTx((tx) => {
+        this.assertNotDisposed();
+        return this.jobService.pruneTerminalKeepLatestPerTypeTx(tx, GC_KEEP_PER_TYPE);
+      });
     } catch (error) {
-      logger.warn('job GC (keep latest per type) failed', error as Error);
+      if (!this.disposed) logger.warn('job GC (keep latest per type) failed', error as Error);
     }
   }
 

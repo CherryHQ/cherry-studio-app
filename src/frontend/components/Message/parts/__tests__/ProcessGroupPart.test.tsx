@@ -19,6 +19,8 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
+jest.mock('@/frontend/hooks/file', () => ({ usePdfOcrState: () => undefined }));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values: { seconds?: number; count?: number } = {}) =>

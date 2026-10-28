@@ -3,7 +3,7 @@ import { Composer, Spinner, useToast } from '@cherrystudio/ui/components';
 import { useFocusEffect } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
 import { useMcpAppConversation } from '@/frontend/components/McpApp';
@@ -42,7 +42,7 @@ export function ChatInputPromptPopover({
   onClose(): void;
   open: boolean;
   prompts: readonly ChatInputMcpPrompt[];
-  returnFocusRef?: RefObject<View | null>;
+  returnFocusRef?: RefObject<ViewInstance | null>;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -50,7 +50,7 @@ export function ChatInputPromptPopover({
   const files = useBackendModule('file');
   const conversation = useMcpAppConversation();
   const { runInputReplacement } = useComposerPresentationActions();
-  const initialFocusRef = useRef<View>(null);
+  const initialFocusRef = useRef<ViewInstance>(null);
   const selected = useRef<PromptSelection | undefined>(undefined);
   const nextSelectionId = useRef(0);
   const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);

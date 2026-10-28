@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import * as Calendar from 'expo-calendar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -12,6 +13,7 @@ import {
   type DevicePermissionStatus,
   HEALTH_DATA_TYPES,
   type HealthDataType,
+  type HealthPermissionScope,
   healthPermissionScope,
   type PermissionStatuses,
   type PermissionsModule,
@@ -19,6 +21,7 @@ import {
 import { healthRecordSelectionType } from '@/shared/contracts/health';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
 import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
 
@@ -37,8 +40,74 @@ type ExpoPermission = {
   granted: boolean;
   status: string;
   canAskAgain: boolean;
-  accessPrivileges?: 'all' | 'limited' | 'none';
 };
+
+type SystemPermissionScope = Exclude<DevicePermissionScope, HealthPermissionScope>;
+
+/** Every non-Health scope reads and requests its system grant here; the compiler keeps both. */
+const systemPermissions: Record<
+  SystemPermissionScope,
+  { get(): Promise<DevicePermissionStatus>; request(): Promise<unknown> }
+> = {
+  'location.read': {
+    async get() {
+      const [permission, enabled] = await Promise.all([
+        Location.getForegroundPermissionsAsync(),
+        Location.hasServicesEnabledAsync(),
+      ]);
+      if (!enabled) return { state: 'unavailable', canAskAgain: false, reason: 'service-disabled' };
+      const accuracy = permission.ios?.accuracy ?? permission.android?.accuracy;
+      return {
+        ...toPermissionStatus(permission),
+        ...(permission.granted &&
+          accuracy &&
+          accuracy !== 'none' && {
+            accuracy: accuracy === 'full' || accuracy === 'fine' ? 'precise' : 'approximate',
+          }),
+      };
+    },
+    request: () => Location.requestForegroundPermissionsAsync(),
+  },
+  'calendar.read': {
+    get: async () => toPermissionStatus(await Calendar.getCalendarPermissions(false)),
+    request: () => Calendar.requestCalendarPermissions(false),
+  },
+  'calendar.write': {
+    get: async () => toPermissionStatus(await Calendar.getCalendarPermissions(true)),
+    request: () => Calendar.requestCalendarPermissions(true),
+  },
+  'reminders.read': {
+    get: getRemindersStatus,
+    request: () => Calendar.requestRemindersPermissions(),
+  },
+  'reminders.write': {
+    get: getRemindersStatus,
+    request: () => Calendar.requestRemindersPermissions(),
+  },
+  'camera.read': {
+    get: async () => toPermissionStatus(await ImagePicker.getCameraPermissionsAsync()),
+    request: () => ImagePicker.requestCameraPermissionsAsync(),
+  },
+  'photos.write': {
+    // Expo's modern MediaStore writer starts at Android 11; its older writer
+    // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.
+    get: async () =>
+      Platform.OS === 'android' && Number(Platform.Version) >= 30
+        ? { state: 'granted', canAskAgain: false }
+        : toPermissionStatus(await MediaLibrary.getPermissionsAsync(true, ['photo'])),
+    request: () => MediaLibrary.requestPermissionsAsync(true, ['photo']),
+  },
+};
+
+async function getRemindersStatus(): Promise<DevicePermissionStatus> {
+  return Platform.OS === 'ios'
+    ? toPermissionStatus(await Calendar.getRemindersPermissions())
+    : unsupported;
+}
+
+function isSystemPermissionScope(scope: DevicePermissionScope): scope is SystemPermissionScope {
+  return !scope.startsWith('health.');
+}
 
 export class DevicePermissions implements PermissionsModule {
   private requestQueue = Promise.resolve();
@@ -53,16 +122,14 @@ export class DevicePermissions implements PermissionsModule {
     const [healthStatuses, entries] = await Promise.all([
       healthTypes.length ? this.getHealthStatuses(healthTypes) : {},
       Promise.all(
-        unique
-          .filter((scope) => !scope.startsWith('health.'))
-          .map(async (scope) => {
-            try {
-              return [scope, await this.getStatus(scope)] as const;
-            } catch (error) {
-              logger.warn('Permission lookup failed', { scope, error });
-              return [scope, failed] as const;
-            }
-          }),
+        unique.filter(isSystemPermissionScope).map(async (scope) => {
+          try {
+            return [scope, await this.getStatus(scope)] as const;
+          } catch (error) {
+            logger.warn('Permission lookup failed', { scope, error });
+            return [scope, failed] as const;
+          }
+        }),
       ),
     ]);
     return { ...Object.fromEntries(entries), ...healthStatuses };
@@ -90,8 +157,8 @@ export class DevicePermissions implements PermissionsModule {
     }, signal);
   }
 
-  /** Backend-only: serialize native operations that may present a system authorization sheet. */
-  runWithSystemPrompt<TResult>(
+  /** Serialize native operations that may present a system authorization sheet. */
+  private runWithSystemPrompt<TResult>(
     operation: () => Promise<TResult>,
     signal?: AbortSignal,
   ): Promise<TResult> {
@@ -122,52 +189,24 @@ export class DevicePermissions implements PermissionsModule {
     await Linking.openSettings();
   }
 
-  private async getStatus(scope: DevicePermissionScope): Promise<DevicePermissionStatus> {
+  /** The update workflow owns the explanation; this owner serializes the system authorization. */
+  requestPackageInstallAuthorization(): Promise<boolean> {
+    return this.runWithSystemPrompt(async () => {
+      if (Platform.OS !== 'android' || !Application.applicationId) return false;
+      const native = getNativeAppUpdate();
+      if (!native?.isApkInstallationEnabled()) return false;
+      if (native.canInstallPackages()) return true;
+      const { ActivityAction, startActivityAsync } = await import('expo-intent-launcher');
+      await startActivityAsync(ActivityAction.MANAGE_UNKNOWN_APP_SOURCES, {
+        data: `package:${Application.applicationId}`,
+      });
+      return native.canInstallPackages();
+    });
+  }
+
+  private async getStatus(scope: SystemPermissionScope): Promise<DevicePermissionStatus> {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return unsupported;
-    switch (scope) {
-      case 'location.read': {
-        const [permission, enabled] = await Promise.all([
-          Location.getForegroundPermissionsAsync(),
-          Location.hasServicesEnabledAsync(),
-        ]);
-        if (!enabled)
-          return { state: 'unavailable', canAskAgain: false, reason: 'service-disabled' };
-        const accuracy = permission.ios?.accuracy ?? permission.android?.accuracy;
-        return {
-          ...toPermissionStatus(permission),
-          ...(permission.granted &&
-            accuracy &&
-            accuracy !== 'none' && {
-              accuracy: accuracy === 'full' || accuracy === 'fine' ? 'precise' : 'approximate',
-            }),
-        };
-      }
-      case 'calendar.read':
-        return toPermissionStatus(await Calendar.getCalendarPermissions(false));
-      case 'calendar.write':
-        return toPermissionStatus(await Calendar.getCalendarPermissions(true));
-      case 'reminders.read':
-      case 'reminders.write':
-        return Platform.OS === 'ios'
-          ? toPermissionStatus(await Calendar.getRemindersPermissions())
-          : unsupported;
-      case 'camera.read':
-        return toPermissionStatus(await ImagePicker.getCameraPermissionsAsync());
-      case 'photos.read':
-        // Android selection uses the system picker, which grants access to selected URIs.
-        // The app does not browse the library or declare its read permissions.
-        return Platform.OS === 'android'
-          ? unsupported
-          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
-      case 'photos.write':
-        // Expo's modern MediaStore writer starts at Android 11; its older writer
-        // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.
-        return Platform.OS === 'android' && Number(Platform.Version) >= 30
-          ? { state: 'granted', canAskAgain: false }
-          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(true, ['photo']));
-      default:
-        throw new Error(`Unexpected permission scope: ${scope}`);
-    }
+    return systemPermissions[scope].get();
   }
 
   private async requestPermissions(
@@ -191,35 +230,12 @@ export class DevicePermissions implements PermissionsModule {
       if (!health) throw new Error('Health access native module is missing');
       await health.request(healthTypes);
     }
-    for (const scope of requestable.filter((scope) => !scope.startsWith('health.'))) {
+    for (const scope of requestable.filter(isSystemPermissionScope)) {
       signal?.throwIfAborted();
       // An earlier request may have already granted both scopes (calendar/reminders).
       if (!canRequestDevicePermission(await this.getStatus(scope))) continue;
       signal?.throwIfAborted();
-      switch (scope) {
-        case 'location.read':
-          await Location.requestForegroundPermissionsAsync();
-          break;
-        case 'calendar.read':
-          await Calendar.requestCalendarPermissions(false);
-          break;
-        case 'calendar.write':
-          await Calendar.requestCalendarPermissions(true);
-          break;
-        case 'reminders.read':
-        case 'reminders.write':
-          await Calendar.requestRemindersPermissions();
-          break;
-        case 'camera.read':
-          await ImagePicker.requestCameraPermissionsAsync();
-          break;
-        case 'photos.read':
-          await MediaLibrary.requestPermissionsAsync(false, ['photo']);
-          break;
-        case 'photos.write':
-          await MediaLibrary.requestPermissionsAsync(true, ['photo']);
-          break;
-      }
+      await systemPermissions[scope].request();
     }
     signal?.throwIfAborted();
     const statuses = await this.getStatuses(scopes);
@@ -257,14 +273,11 @@ function healthTypesForScopes(scopes: readonly DevicePermissionScope[]): HealthD
 
 function toPermissionStatus(response: ExpoPermission): DevicePermissionStatus {
   return {
-    state:
-      response.accessPrivileges === 'limited'
-        ? 'limited'
-        : response.granted
-          ? 'granted'
-          : response.status === 'undetermined'
-            ? 'undetermined'
-            : 'denied',
+    state: response.granted
+      ? 'granted'
+      : response.status === 'undetermined'
+        ? 'undetermined'
+        : 'denied',
     canAskAgain: response.canAskAgain,
   };
 }

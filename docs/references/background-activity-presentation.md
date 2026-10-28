@@ -71,6 +71,12 @@ generation checks suppress obsolete queued delivery. Tapping the alert opens the
 desktop session, where the existing approval and question controls handle the decision. Opening a
 decision notice never approves a tool or releases execution protection.
 
+Both platforms share one alert rule for a finished round. A failure needs the person, so like a
+decision it alerts whenever the app is in the background, regardless of the completion preference or
+where the round started, and uses the in-app attention channel while the app is open. A completion
+alerts only when its preference is on and the round ended unseen in the background. Cancellations stay
+silent.
+
 Android updates its existing ongoing task notification and alerts once per pending request. On
 Android 16 and newer, an unfinished user-started task requests standard Live Update promotion with
 its current status as the status-chip text. Completed messages and standalone alerts remain ordinary

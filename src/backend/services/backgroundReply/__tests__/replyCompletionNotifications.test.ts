@@ -4,6 +4,7 @@ import {
   requestPermissionsAsync,
   scheduleNotificationAsync,
   setNotificationCategoryAsync,
+  setNotificationHandler,
   type NotificationPermissionsStatus,
 } from 'expo-notifications';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -19,6 +20,7 @@ jest.mock('expo-notifications', () => ({
   scheduleNotificationAsync: jest.fn(
     async ({ identifier }: { identifier?: string }) => identifier ?? '',
   ),
+  setNotificationHandler: jest.fn(),
 }));
 
 const notices = jest.mocked(scheduleNotificationAsync);
@@ -59,6 +61,20 @@ afterEach(() => {
 });
 
 describe('createReplyCompletionNotifier', () => {
+  it('keeps notices that arrive in the foreground out of the open app', async () => {
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    await notifier.notifyTurnFinished(event());
+
+    const handler = jest.mocked(setNotificationHandler).mock.lastCall?.[0];
+    await expect(handler?.handleNotification({} as never)).resolves.toEqual({
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: false,
+      shouldShowList: false,
+    });
+  });
   it('registers background approval and text reply controls with their request token', async () => {
     const notifier = createReplyCompletionNotifier({
       isReplyCompletionNotificationEnabled: enabled,
@@ -180,6 +196,34 @@ describe('createReplyCompletionNotifier', () => {
     await expect(notifier.notifyTurnFinished(event())).resolves.toBe(false);
     enabled.mockReturnValue(true);
     expect(notices).not.toHaveBeenCalled();
+  });
+
+  it('alerts a failure regardless of the completion preference, and in the open app', async () => {
+    const onForegroundAttention = jest.fn();
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+      onForegroundAttention,
+    });
+    enabled.mockReturnValue(false);
+
+    await expect(
+      notifier.notifyTurnFinished(
+        event({ outcome: 'failed', detail: 'Failed', occurredInBackground: false }),
+      ),
+    ).resolves.toBe(true);
+    expect(notices).toHaveBeenCalledTimes(1);
+
+    setAppState('active');
+    await expect(
+      notifier.notifyTurnFinished(event({ outcome: 'failed', detail: 'Failed' })),
+    ).resolves.toBe(false);
+    expect(onForegroundAttention).toHaveBeenCalledWith({
+      detail: 'Failed',
+      phase: 'failed',
+      title: 'First session',
+      url: 'cherrystudio:///?sessionId=session-1',
+    });
+    expect(notices).toHaveBeenCalledTimes(1);
   });
 
   it('stays silent once the user is back at delivery time', async () => {

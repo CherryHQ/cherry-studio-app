@@ -91,7 +91,7 @@ export function PaintingFocusChrome({
     }
     return actions;
   }, [menuItems, t]);
-  const leftActions = useMemo(() => [leadingAction], [leadingAction]);
+  const leftActions = useMemo(() => (leadingAction ? [leadingAction] : []), [leadingAction]);
 
   return (
     <HeaderChrome

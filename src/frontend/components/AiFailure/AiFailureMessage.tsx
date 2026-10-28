@@ -1,7 +1,8 @@
-import { MessagePart } from '@cherrystudio/ui/components';
+import { Button, MessagePart } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 
 import { readAiFailureDetail, type AiFailureData } from './aiFailureDetail';
@@ -48,11 +49,13 @@ export function AiFailureMessage({
   title: fallbackTitle,
   message: fallbackMessage,
   detailTestID = 'error-part-detail',
+  onReport,
 }: {
   data: AiFailureData;
   title?: string;
   message?: string;
   detailTestID?: string;
+  onReport?: () => void;
 }) {
   const { t } = useTranslation();
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -83,6 +86,7 @@ export function AiFailureMessage({
           data={data}
           testID={detailTestID}
           onClose={() => setIsDetailOpen(false)}
+          onReport={onReport}
         />
       ) : null}
     </>
@@ -96,11 +100,14 @@ export function AiFailureMessage({
 export function AiFailureDetailSheet({
   data,
   onClose,
+  onReport,
   testID,
 }: {
   testID: string;
   data: AiFailureData;
   onClose: () => void;
+  /** Opening feedback dismisses this sheet through the shared overlay navigation. */
+  onReport?: () => void;
 }) {
   const { t } = useTranslation();
   const detail = readAiFailureDetail(data);
@@ -108,20 +115,28 @@ export function AiFailureDetailSheet({
 
   return (
     <MessagePart.Detail
+      headerAction={
+        onReport ? (
+          <Button onPress={onReport} size="sm" testID={`${testID}-report`} variant="ghost">
+            <Button.Label>{t('settings.about.feedback.reportProblem')}</Button.Label>
+          </Button>
+        ) : undefined
+      }
       onClose={onClose}
       sizes={DETAIL_SIZES}
       testID={testID}
       title={t('chat.errorPart.detail.title')}
     >
       {detail.message ? (
-        <MessagePart.TextSection
+        <MessageDetailText
+          tone="danger"
           title={t('chat.errorPart.detail.message')}
           value={detail.message}
         />
       ) : null}
       <MessagePart.ValueSection title={t('chat.errorPart.detail.facts')} value={facts} />
       {detail.responseBody ? (
-        <MessagePart.TextSection
+        <MessageDetailText
           title={t('chat.errorPart.detail.responseBody')}
           value={detail.responseBody}
           variant="code"

@@ -34,7 +34,7 @@ module.exports = {
     // architecture rules and the native patch guards that protect every PR.
     ...(process.env.PRCI
       ? [
-          '/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache|androidWindowCompatibility)\\.test\\.ts$)',
+          '/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|enrichedMarkdownMathWidth)\\.test\\.ts$)',
         ]
       : []),
   ],
@@ -58,7 +58,7 @@ module.exports = {
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
     '^@earendil-works/chord$': '<rootDir>/node_modules/@earendil-works/chord/dist/index.js',
-    '^@earendil-works/chord/(context|delta)$':
+    '^@earendil-works/chord/(context|delta|sqlite)$':
       '<rootDir>/node_modules/@earendil-works/chord/dist/$1/index.js',
     '^@earendil-works/chord/output$': '<rootDir>/node_modules/@earendil-works/chord/dist/output.js',
     '^@earendil-works/pi-durable$':

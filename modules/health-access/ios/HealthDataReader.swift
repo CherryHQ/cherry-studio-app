@@ -59,11 +59,11 @@ final class HealthDataReader {
     if options.mode == "statistics" {
       guard let quantityType = type as? HKQuantityType else {
         throw HealthDataException(
-          "Statistics require a quantity type; use samples for categories and clinical records")
+          "Statistics require a quantity type; use samples for other types")
       }
       return try await statistics(
         quantityType, predicate: predicate, start: start, end: end,
-        daily: options.granularity == "day")
+        daily: options.granularity == "day", fixedUnit: options.unit)
     }
     let anchor = try readAnchor(options.cursor, type: type.identifier, options: options)
     let page: ([HKSample], [HKDeletedObject], HKQueryAnchor?) = try await execute { finish in
@@ -125,9 +125,16 @@ final class HealthDataReader {
   }
 
   private func statistics(
-    _ type: HKQuantityType, predicate: NSPredicate, start: Date, end: Date, daily: Bool
+    _ type: HKQuantityType, predicate: NSPredicate, start: Date, end: Date, daily: Bool,
+    fixedUnit: String
   ) async throws -> [String: Any] {
-    guard let unit = try await units(for: [type])[type] else {
+    let resolvedUnit: HKUnit?
+    if fixedUnit.isEmpty {
+      resolvedUnit = try await units(for: [type])[type]
+    } else {
+      resolvedUnit = healthUnit(fixedUnit, compatibleWith: type)
+    }
+    guard let unit = resolvedUnit else {
       throw HealthDataException("HealthKit returned no compatible unit")
     }
     let cumulative = type.aggregationStyle == .cumulative
@@ -347,9 +354,9 @@ final class HealthDataReader {
   }
 
   /// Stops every query on completion or timeout and prevents callbacks from resuming twice.
-  func execute<T>(
-    timeout: TimeInterval = 20, _ makeQuery: (@escaping (Result<T, Error>) -> Void) -> HKQuery
-  ) async throws -> T {
+  func execute<T>(_ makeQuery: (@escaping (Result<T, Error>) -> Void) -> HKQuery)
+    async throws -> T
+  {
     try await withCheckedThrowingContinuation { continuation in
       let lock = NSLock()
       var finished = false
@@ -375,7 +382,7 @@ final class HealthDataReader {
       timer = DispatchWorkItem {
         finish(.failure(HealthDataException("HealthKit query timed out")))
       }
-      if let timer { DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timer) }
+      if let timer { DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: timer) }
       if let query { store.execute(query) }
     }
   }
@@ -385,6 +392,15 @@ func healthISO(_ date: Date) -> String {
   let formatter = ISO8601DateFormatter()
   formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
   return formatter.string(from: date)
+}
+/// Only app-chosen unit strings reach here; an unknown one is rejected instead of raising.
+private let fixedHealthUnits: [String: HKUnit] = [
+  "count": .count(), "count/min": .count().unitDivided(by: .minute()), "kcal": .kilocalorie(),
+  "m": .meter(), "ms": .secondUnit(with: .milli),
+]
+func healthUnit(_ value: String, compatibleWith type: HKQuantityType) -> HKUnit? {
+  guard let unit = fixedHealthUnits[value], type.is(compatibleWith: unit) else { return nil }
+  return unit
 }
 func healthDay(_ date: Date) -> String {
   let formatter = DateFormatter()

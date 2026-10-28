@@ -1,5 +1,7 @@
-import { formatMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
+import { formatMessagePartValue } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
+
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 
 import { isRecord, type ToolMessagePart } from '../toolPartState';
 import { MetaToolFrame } from './MetaToolFrame';
@@ -17,40 +19,37 @@ export function MetaToolExecPart({ part }: { part: ToolMessagePart }) {
   return (
     <MetaToolFrame part={part} toolName="tool_exec">
       {typeof output?.error === 'string' ? (
-        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={output.error} />
+        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={output.error} />
       ) : null}
       {output?.result !== undefined ? (
-        <MessagePart.TextSection
+        <MessageDetailText
           title={t('chat.tool.result')}
-          value={formatMessagePartValue(output.result)}
+          value={formatMessagePartValue(output.result, Number.POSITIVE_INFINITY)}
           variant="code"
         />
       ) : null}
       {part.state === 'output-available' && !output ? (
-        <MessagePart.TextSection
+        <MessageDetailText
           title={t('chat.tool.response')}
-          value={formatMessagePartValue(part.output)}
+          value={formatMessagePartValue(part.output, Number.POSITIVE_INFINITY)}
           variant="code"
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.tool.error')}
-          value={part.errorText}
-        />
+        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
       {code ? (
-        <MessagePart.TextSection title={t('chat.tool.code')} value={code} variant="code" />
+        <MessageDetailText
+          title={t('chat.tool.code')}
+          value={code}
+          variant="code"
+          language="javascript"
+        />
       ) : (
-        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
+        <MessageDetailValue title={t('chat.tool.arguments')} value={input} />
       )}
       {logs.length > 0 ? (
-        <MessagePart.TextSection
-          title={t('chat.tool.logs')}
-          value={logs.join('\n')}
-          variant="code"
-        />
+        <MessageDetailText title={t('chat.tool.logs')} value={logs.join('\n')} variant="code" />
       ) : null}
     </MetaToolFrame>
   );

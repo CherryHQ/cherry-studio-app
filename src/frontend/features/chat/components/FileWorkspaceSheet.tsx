@@ -34,6 +34,7 @@ type WorkspaceListExtraData = {
   isFocused: boolean;
   selectedId: string | null;
   isSaving: boolean;
+  onClose: () => void;
   onSelect: (id: string | null) => Promise<void>;
   onToggle: (id: string) => void;
 };
@@ -106,10 +107,19 @@ export function FileWorkspaceSheet({
       isFocused: focused,
       selectedId: workspace.folderId,
       isSaving: workspace.isSaving,
+      onClose,
       onSelect: selectFolder,
       onToggle: toggleFolder,
     }),
-    [expandedIds, focused, workspace.folderId, workspace.isSaving, selectFolder, toggleFolder],
+    [
+      expandedIds,
+      focused,
+      workspace.folderId,
+      workspace.isSaving,
+      onClose,
+      selectFolder,
+      toggleFolder,
+    ],
   );
   const unavailable = Boolean(
     workspace.folderId && !folders.some((folder) => folder.id === workspace.folderId),
@@ -167,6 +177,7 @@ function renderWorkspaceRow({ item, extraData }: LegendListRenderItemProps<Works
         enabled={data.isFocused}
         folderId={item.folderId}
         hasChildFolders={item.hasChildFolders}
+        onClose={data.onClose}
       />
     );
   }
@@ -281,11 +292,13 @@ function WorkspaceFolderFiles({
   enabled,
   folderId,
   hasChildFolders,
+  onClose,
 }: {
   depth: number;
   enabled: boolean;
   folderId: string;
   hasChildFolders: boolean;
+  onClose: () => void;
 }) {
   const { t } = useTranslation();
   const { openFileEntry } = useOpenFileEntry();
@@ -311,7 +324,10 @@ function WorkspaceFolderFiles({
             disabled={!item.uri}
             key={item.entry.id}
             onPress={() => {
-              if (item.uri) openFileEntry({ entry: item.entry, uri: item.uri });
+              // A file beside chat would sit under this sheet, so the sheet gives way to it.
+              if (item.uri && openFileEntry({ entry: item.entry, uri: item.uri }) === 'pane') {
+                onClose();
+              }
             }}
             testID={`file-workspace-preview-${item.entry.id}`}
           >

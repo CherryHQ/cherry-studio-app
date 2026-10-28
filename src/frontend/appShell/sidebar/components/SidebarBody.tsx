@@ -12,11 +12,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
+import { useFilePane } from '@/frontend/appShell/pane/state';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
+import { useSidebarDestination } from '../hooks/useSidebarDestination';
+import { useSidebarHeaderTop } from '../hooks/useSidebarHeaderTop';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarRecents } from './SidebarRecents';
@@ -36,7 +39,7 @@ export function SidebarBody() {
   const { theme } = useUniwind();
   const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
   const { bottomPadding: dockBottomPadding } = useDockMetrics();
-  const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
+  const headerInset = useSidebarHeaderTop() + appSidebar.headerRowHeight + appSidebar.headerGapY;
   const endReachedHandlerRef = useRef<(() => void) | undefined>(undefined);
   const wasNearEndRef = useRef(false);
   const registerEndReachedHandler = useCallback<RegisterEndReachedHandler>((handler) => {
@@ -86,7 +89,9 @@ function SidebarBodyContent({
   const { t } = useTranslation();
   const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
     useSidebarActions('SidebarBody');
-  const { source } = useChatSource();
+  const { isChatFocused, source } = useChatSource();
+  const pane = useFilePane();
+  const destination = useSidebarDestination();
   const { progress } = useSidebarSelection();
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const navigationStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.get() * 0.45 }));
@@ -102,6 +107,7 @@ function SidebarBodyContent({
             onPress={navigateAgents}
             testID="sidebar-agents"
             disabled={disabled}
+            isSelected={destination === 'agents'}
           />
           <SidebarNavRow
             icon={PaletteIcon}
@@ -109,6 +115,7 @@ function SidebarBodyContent({
             onPress={openPaintings}
             testID="sidebar-paintings"
             disabled={disabled}
+            isSelected={destination === 'paintings'}
           />
           <SidebarNavRow
             icon={BoxesIcon}
@@ -116,6 +123,7 @@ function SidebarBodyContent({
             onPress={openPlugins}
             testID="sidebar-plugins"
             disabled={disabled}
+            isSelected={destination === 'plugins'}
           />
           <SidebarNavRow
             icon={ToolCaseIcon}
@@ -123,6 +131,7 @@ function SidebarBodyContent({
             onPress={openSkills}
             testID="sidebar-skills"
             disabled={disabled}
+            isSelected={destination === 'skills'}
           />
           <SidebarNavRow
             icon={FolderIcon}
@@ -130,6 +139,10 @@ function SidebarBodyContent({
             onPress={openLibrary}
             testID="sidebar-library"
             disabled={disabled}
+            isSelected={
+              destination === 'library' ||
+              Boolean(isChatFocused && pane?.isAvailable && pane.isOpen)
+            }
           />
         </Animated.View>
       ) : null}

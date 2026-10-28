@@ -27,6 +27,7 @@ import { useMessageListScrollController } from './list/useMessageListScrollContr
 import type { MessageListItem, MessageListProps } from './types';
 
 const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
+const FULL_WIDTH = { width: '100%' } as const;
 
 export function MessageList({
   bottomAccessoryHeight,
@@ -245,6 +246,10 @@ export function MessageList({
                 sharedValues={sharedValues}
                 showsVerticalScrollIndicator={false}
                 className="flex-1"
+                // LegendList pins a list measured under 10 points wide to its widest row. A display
+                // switch can briefly squeeze the chat that far, and the pinned width then keeps it
+                // there; an explicit width follows the container again.
+                style={FULL_WIDTH}
               />
             )}
           </ScrollInteractionBoundary>

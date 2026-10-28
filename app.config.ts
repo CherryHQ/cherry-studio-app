@@ -59,6 +59,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
+      [
+        './scripts/withAppUpdates.js',
+        {
+          apkUpdatesEnabled:
+            profile !== 'preview' &&
+            apkUpdatesSetting === 'true' &&
+            process.env.EAS_BUILD_PROFILE !== 'production-google-play',
+        },
+      ] as [string, { apkUpdatesEnabled: boolean }],
       ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),
       ...(config.plugins ?? []),
       '@preeternal/react-native-file-hash',
@@ -75,7 +84,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           return [plugin, { addGeneratedScheme: profile === 'development' }];
         }
         if (plugin === 'expo-localization') {
-          return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
+          return [
+            plugin,
+            {
+              supportedLocales: {
+                // iOS resolves some system prompts, such as location, through this list, so it
+                // must name the `.lproj` directories generated from `locales`.
+                ios: Object.keys(config.locales!),
+                android: APP_LANGUAGES.map(({ value }) => value),
+              },
+            },
+          ];
         }
         if (Array.isArray(plugin) && plugin[0] === 'expo-build-properties') {
           return [
@@ -104,7 +123,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     extra: {
       ...config.extra,
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
-      // Keeping it out of packaged configs keeps it out of their runtime fingerprints.
+      // Native APK installation capability is separately embedded by withAppUpdates.
       isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,

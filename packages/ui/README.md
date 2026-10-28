@@ -5,11 +5,12 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
-`MermaidDiagram` is a presentation-only component for common Mermaid diagrams on Android and iOS.
-Pass existing source; the component owns native layout, theme mapping, and SVG display. `MarkdownText`
-uses it for complete top-level Mermaid code blocks and preserves source fallback for incomplete or
-unsupported input. See [the component contract](./src/components/mermaid-diagram/README.md) and
-[native integration](../../modules/mermaid-renderer/README.md).
+`ReorderList` is a controlled ordering list for small collections. It renders the shared Section
+rows with labeled up/down buttons, disables moves at the first and last positions, and returns
+a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
+optional descriptions, translated action labels, and `onReorder`. The component owns neither
+scrolling nor persistence, so it can sit in a screen or a bottom sheet. No drag gesture or
+animation is required to reorder items.
 
 `OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
 read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
@@ -76,7 +77,8 @@ thumbnail caching. Loading placeholders belong to the caller because it owns the
 A caller may supply `metadata` before file bytes are available; the tile renders the shared type
 card without reading a URI. `disabled` prevents opening unavailable sources. Optional `transfer`
 state draws acknowledged progress around the frame or marks a failure, with a caller-localized
-accessible label. Removing that state restores the ordinary preview. Transfer tasks, retries,
+accessible label. `uploading` and `processing` (local work such as text recognition) share the
+progress stroke and the busy state. Removing that state restores the ordinary preview. Transfer tasks, retries,
 and file acquisition remain caller-owned; CherryUI does not start uploads or downloads.
 
 Rendering is plugin-based and `kind` is an open set. CherryUI ships an `image` renderer and falls
@@ -252,9 +254,26 @@ page for visual debugging.
 `MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
 caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
 
-`MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
+`MessagePart.Section` composes a quiet heading, an optional action, and content. Its `tone="danger"`
+marks the heading with an error indicator while keeping the content readable. `SectionBody` is the
+neutral padded reading surface for prose and fact rows; code renderers with their own surface are
+composed directly below the section heading. `TextSection` and `ValueSection` use these same
+primitives. The app supplies translated copy controls and highlighted code, so the UI package never
+reads the clipboard or imports application preferences.
+
+`MessagePart.Pending` owns the empty-response loader and its stable text-line height. An optional
+`reason` names local work that delays the reply, such as attachment text recognition, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
+
+The pending indicator matches Desktop's
+[`PlaceholderBlock`](https://github.com/CherryHQ/cherry-studio/blob/c40a14ba138255987f6f5019c77e5f51d80bc8d9/src/renderer/components/chat/messages/blocks/PlaceholderBlock.tsx)
+and its `react-spinners` 0.14.1 `BeatLoader`: three 4-point neutral dots with 4-point gaps,
+an 875ms linear cycle, and a 437.5ms delay on the middle dot. Each dot reaches 75% scale and 20%
+opacity halfway through its cycle. Reanimated CSS animations own the native motion; no web loader
+dependency is needed. The indicator exists only while the reply has no visible content, so content
+or cancellation removes it immediately. Backgrounding and Reduce Motion remove the animation and
+leave static dots; the surrounding status row retains its text-line height.
 
 `Surface` is the semantic material boundary for shared product chrome. Callers choose a token-backed
 `tone` and a `shape`, then size and align the content inside it. CherryUI maps that specification to

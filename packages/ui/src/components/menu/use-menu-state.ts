@@ -1,5 +1,5 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { Dimensions, type View } from 'react-native';
+import { Dimensions, type ScaledSize, type ViewInstance } from 'react-native';
 
 import { focusMenuTarget } from './menu-focus';
 import type { MenuAnchor } from './menu.types';
@@ -7,7 +7,7 @@ import type { MenuAnchor } from './menu.types';
 const closedMenu = { anchor: null, isOpen: false } as const;
 
 /** Retains the measured anchor through closing without clearing a reopened menu. */
-export function useMenuState(triggerRef: RefObject<View | null>) {
+export function useMenuState(triggerRef: RefObject<ViewInstance | null>) {
   const [state, setState] = useState<{ anchor: MenuAnchor | null; isOpen: boolean }>(closedMenu);
   const currentAnchor = useRef<MenuAnchor | null>(null);
   const isOpen = useRef(false);
@@ -43,14 +43,17 @@ export function useMenuState(triggerRef: RefObject<View | null>) {
   useEffect(() => {
     if (!state.anchor) return;
     const initialWindow = Dimensions.get('window');
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      if (
-        window.width !== initialWindow.width ||
-        window.height !== initialWindow.height ||
-        window.fontScale !== initialWindow.fontScale
-      )
-        close();
-    });
+    const subscription = Dimensions.addEventListener(
+      'change',
+      ({ window }: { window: ScaledSize }) => {
+        if (
+          window.width !== initialWindow.width ||
+          window.height !== initialWindow.height ||
+          window.fontScale !== initialWindow.fontScale
+        )
+          close();
+      },
+    );
     return () => subscription.remove();
   }, [close, state.anchor]);
   useEffect(

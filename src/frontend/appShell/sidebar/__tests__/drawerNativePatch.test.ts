@@ -7,17 +7,17 @@ const drawerPackageRoot = dirname(
   }),
 );
 
-// Guard the installed dependency's source and compiled entry. Changing aria-hidden
+// Guard the installed dependency's source and compiled entry. Animating aria-hidden
 // must not let Fabric flatten/unflatten the parent of the native chat screen.
 describe('drawer native content patch', () => {
   test.each([
     [
       'src/views/Drawer.native.tsx',
-      /<View\s+collapsable=\{false\}\s+aria-hidden=\{isOpen && drawerType !== 'permanent'\}/,
+      /<Animated\.View\s+collapsable=\{false\}\s+animatedProps=\{contentAnimatedProps\}/,
     ],
     [
       'lib/module/views/Drawer.native.js',
-      /_jsx\(View, \{\s+collapsable: false,\s+"aria-hidden": isOpen && drawerType !== 'permanent'/,
+      /_jsx\(Animated\.View, \{\s+collapsable: false,\s+animatedProps: contentAnimatedProps/,
     ],
   ])('keeps the native content parent stable in %s', (file, contentWrapper) => {
     expect(readFileSync(join(drawerPackageRoot, file), 'utf8')).toMatch(contentWrapper);

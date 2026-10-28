@@ -180,7 +180,6 @@ export type ConversationSnapshot = {
   executions: readonly ConversationExecution[];
   interactions: readonly ConversationInteraction[];
   enteringMessageKey?: string;
-  retryingMessageKey?: string;
   hasHistoryBeforeExecution?: boolean;
 };
 /** One paginated transcript window as the workspace consumes it; each source owns its hook. */

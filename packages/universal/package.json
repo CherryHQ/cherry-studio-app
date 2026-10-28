@@ -19,7 +19,7 @@
     }
   },
   "dependencies": {
-    "@cherrystudio/provider-registry": "0.2.3",
+    "@cherrystudio/provider-registry": "0.2.5",
     "ai": "^6.0.143",
     "zod": "^4.4.3"
   }

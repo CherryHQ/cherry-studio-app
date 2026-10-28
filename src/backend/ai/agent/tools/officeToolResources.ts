@@ -5,7 +5,7 @@ import {
   type OfficeImage,
 } from '@/backend/services/office';
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
-import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 import type { FileEntry, FileEntryProvenance } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
@@ -132,6 +132,15 @@ export async function prepareOfficeImages(
 }
 
 /** A failed call: the model reads the message, and the conversation shows the call as failed. */
+/** The model's filename with the format's extension, or null when it names another format. */
+export function normalizeOfficeFilename(name: string, format: string): string | null {
+  const extension = filenameExtension(name);
+  const filename = extension ? name : `${name}.${format}`;
+  return (extension && extension !== format) || !SafeNameSchema.safeParse(filename).success
+    ? null
+    : filename;
+}
+
 export function officeFailure(message: string): RuntimeToolResult {
   return {
     value: { status: 'error', message },

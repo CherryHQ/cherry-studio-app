@@ -18,7 +18,7 @@ import {
   type RemoteConversationSession,
 } from '@/frontend/appShell/conversation/remote';
 import { conversationRefFromRoute } from '@/frontend/appShell/navigation/chat';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useApiClient } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import {

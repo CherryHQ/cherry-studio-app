@@ -7,7 +7,7 @@ test('keeps the active responder while refreshed callbacks receive the completed
   let callbacks: PanResponderCallbacks | undefined;
   const spy = jest.spyOn(PanResponder, 'create').mockImplementation((next) => {
     callbacks = next;
-    return { panHandlers: {} };
+    return { panHandlers: {} } as unknown as ReturnType<typeof PanResponder.create>;
   });
   const first = jest.fn();
   const refreshed = jest.fn();

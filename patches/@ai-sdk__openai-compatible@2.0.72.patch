@@ -1,100 +1,11 @@
 diff --git a/dist/index.js b/dist/index.js
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -257,7 +257,11 @@
-         messages.push({
-           role: "assistant",
-           content: toolCalls.length > 0 ? text || null : text,
--          ...reasoning.length > 0 ? { reasoning_content: reasoning } : {},
-+          // Thinking-mode dialects (DeepSeek, GLM, Kimi, MiniMax, …) reject a request whose
-+          // assistant turns dropped `reasoning_content` once one performed a tool call. Send the
-+          // key unconditionally — an empty string when the turn produced none, matching
-+          // `@ai-sdk/deepseek`; the field is ignored when the turn did not need it.
-+          reasoning_content: reasoning,
-           tool_calls: toolCalls.length > 0 ? toolCalls : void 0,
-           ...metadata
-         });
-@@ -599,6 +603,17 @@
-         text: reasoning
-       });
-     }
-+    if (choice.message.images) {
-+      for (const image of choice.message.images) {
-+        const match1 = image.image_url.url.match(/^data:([^;]+)/);
-+        const match2 = image.image_url.url.match(/^data:[^;]*;base64,(.+)$/);
-+        content.push({
-+          type: 'file',
-+          mediaType: match1 ? (match1[1] ?? 'image/jpeg') : 'image/jpeg',
-+          data: match2 ? match2[1] : image.image_url.url,
-+        });
-+      }
-+    }
-     if (choice.message.tool_calls != null) {
-       for (const toolCall of choice.message.tool_calls) {
-         const thoughtSignature = (_c = (_b = toolCall.extra_content) == null ? void 0 : _b.google) == null ? void 0 : _c.thought_signature;
-@@ -758,6 +773,17 @@
-                 delta: delta.content
-               });
-             }
-+            if (delta.images) {
-+              for (const image of delta.images) {
-+                const match1 = image.image_url.url.match(/^data:([^;]+)/);
-+                const match2 = image.image_url.url.match(/^data:[^;]*;base64,(.+)$/);
-+                controller.enqueue({
-+                  type: 'file',
-+                  mediaType: match1 ? (match1[1] ?? 'image/jpeg') : 'image/jpeg',
-+                  data: match2 ? match2[1] : image.image_url.url,
-+                });
-+              }
-+            }
-             if (delta.tool_calls != null) {
-               if (isActiveReasoning) {
-                 controller.enqueue({
-@@ -983,6 +1009,14 @@
-               }).nullish()
-             }).nullish()
-           })
-+        ).nullish(),
-+        images: import_v43.z.array(
-+          import_v43.z.object({
-+            type: import_v43.z.literal('image_url'),
-+            image_url: import_v43.z.object({
-+              url: import_v43.z.string(),
-+            })
-+          })
-         ).nullish()
-       }),
-       finish_reason: import_v43.z.string().nullish()
-@@ -1019,6 +1053,14 @@
-               }).nullish()
-             }).nullish()
-           })
-+        ).nullish(),
-+        images: import_v43.z.array(
-+          import_v43.z.object({
-+            type: import_v43.z.literal('image_url'),
-+            image_url: import_v43.z.object({
-+              url: import_v43.z.string(),
-+            })
-+          })
-         ).nullish()
-       }).nullish(),
-       finish_reason: import_v43.z.string().nullish()
-@@ -1577,7 +1619,7 @@
-     return {
-       warnings,
-       embeddings: response.data.map((item) => item.embedding),
--      usage: response.usage ? { tokens: response.usage.prompt_tokens } : void 0,
-+      usage: response.usage ? { tokens: response.usage.prompt_tokens ?? response.usage.total_tokens } : void 0,
-       providerMetadata: response.providerMetadata,
-       response: { headers: responseHeaders, body: rawValue }
-     };
-@@ -1585,13 +1627,23 @@
+@@ -1585,13 +1585,23 @@
  };
  var openaiTextEmbeddingResponseSchema = import_v47.z.object({
    data: import_v47.z.array(import_v47.z.object({ embedding: import_v47.z.array(import_v47.z.number()) })),
--  usage: import_v47.z.object({ prompt_tokens: import_v47.z.number() }).nullish(),
-+  usage: import_v47.z.object({ prompt_tokens: import_v47.z.number().nullish(), total_tokens: import_v47.z.number().nullish() }).nullish(),
+   usage: import_v47.z.object({ prompt_tokens: import_v47.z.number() }).nullish(),
    providerMetadata: import_v47.z.record(import_v47.z.string(), import_v47.z.record(import_v47.z.string(), import_v47.z.any())).optional()
  });
  
@@ -114,7 +25,7 @@ diff --git a/dist/index.js b/dist/index.js
  var OpenAICompatibleImageModel = class {
    constructor(modelId, config) {
      this.modelId = modelId;
-@@ -1667,7 +1719,11 @@
+@@ -1667,7 +1677,11 @@
          fetch: this.config.fetch
        });
        return {
@@ -127,7 +38,7 @@ diff --git a/dist/index.js b/dist/index.js
          warnings,
          response: {
            timestamp: currentDate,
-@@ -1676,7 +1732,7 @@
+@@ -1676,7 +1690,7 @@
          }
        };
      }
@@ -136,7 +47,7 @@ diff --git a/dist/index.js b/dist/index.js
        url: this.config.url({
          path: "/images/generations",
          modelId: this.modelId
-@@ -1687,8 +1743,8 @@
+@@ -1687,8 +1701,8 @@
          prompt,
          n,
          size,
@@ -147,7 +58,7 @@ diff --git a/dist/index.js b/dist/index.js
        },
        failedResponseHandler: (0, import_provider_utils5.createJsonErrorResponseHandler)(
          (_e = this.config.errorStructure) != null ? _e : defaultOpenAICompatibleErrorStructure
-@@ -1699,8 +1755,28 @@
+@@ -1699,8 +1713,28 @@
        abortSignal,
        fetch: this.config.fetch
      });
@@ -177,7 +88,7 @@ diff --git a/dist/index.js b/dist/index.js
        warnings,
        response: {
          timestamp: currentDate,
-@@ -1711,7 +1787,7 @@
+@@ -1711,7 +1745,7 @@
    }
  };
  var openaiCompatibleImageResponseSchema = import_v48.z.object({
@@ -189,104 +100,7 @@ diff --git a/dist/index.js b/dist/index.js
 diff --git a/dist/index.mjs b/dist/index.mjs
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -241,7 +241,11 @@
-         messages.push({
-           role: "assistant",
-           content: toolCalls.length > 0 ? text || null : text,
--          ...reasoning.length > 0 ? { reasoning_content: reasoning } : {},
-+          // Thinking-mode dialects (DeepSeek, GLM, Kimi, MiniMax, …) reject a request whose
-+          // assistant turns dropped `reasoning_content` once one performed a tool call. Send the
-+          // key unconditionally — an empty string when the turn produced none, matching
-+          // `@ai-sdk/deepseek`; the field is ignored when the turn did not need it.
-+          reasoning_content: reasoning,
-           tool_calls: toolCalls.length > 0 ? toolCalls : void 0,
-           ...metadata
-         });
-@@ -585,6 +589,17 @@
-         text: reasoning
-       });
-     }
-+    if (choice.message.images) {
-+      for (const image of choice.message.images) {
-+        const match1 = image.image_url.url.match(/^data:([^;]+)/);
-+        const match2 = image.image_url.url.match(/^data:[^;]*;base64,(.+)$/);
-+        content.push({
-+          type: 'file',
-+          mediaType: match1 ? (match1[1] ?? 'image/jpeg') : 'image/jpeg',
-+          data: match2 ? match2[1] : image.image_url.url,
-+        });
-+      }
-+    }
-     if (choice.message.tool_calls != null) {
-       for (const toolCall of choice.message.tool_calls) {
-         const thoughtSignature = (_c = (_b = toolCall.extra_content) == null ? void 0 : _b.google) == null ? void 0 : _c.thought_signature;
-@@ -744,6 +759,17 @@
-                 delta: delta.content
-               });
-             }
-+            if (delta.images) {
-+              for (const image of delta.images) {
-+                const match1 = image.image_url.url.match(/^data:([^;]+)/);
-+                const match2 = image.image_url.url.match(/^data:[^;]*;base64,(.+)$/);
-+                controller.enqueue({
-+                  type: 'file',
-+                  mediaType: match1 ? (match1[1] ?? 'image/jpeg') : 'image/jpeg',
-+                  data: match2 ? match2[1] : image.image_url.url,
-+                });
-+              }
-+            }
-             if (delta.tool_calls != null) {
-               if (isActiveReasoning) {
-                 controller.enqueue({
-@@ -969,6 +995,14 @@
-               }).nullish()
-             }).nullish()
-           })
-+        ).nullish(),
-+        images: z3.array(
-+          z3.object({
-+            type: z3.literal('image_url'),
-+            image_url: z3.object({
-+              url: z3.string(),
-+            })
-+          })
-         ).nullish()
-       }),
-       finish_reason: z3.string().nullish()
-@@ -1005,6 +1039,14 @@
-               }).nullish()
-             }).nullish()
-           })
-+        ).nullish(),
-+        images: z3.array(
-+          z3.object({
-+            type: z3.literal('image_url'),
-+            image_url: z3.object({
-+              url: z3.string(),
-+            })
-+          })
-         ).nullish()
-       }).nullish(),
-       finish_reason: z3.string().nullish()
-@@ -1581,7 +1623,7 @@
-     return {
-       warnings,
-       embeddings: response.data.map((item) => item.embedding),
--      usage: response.usage ? { tokens: response.usage.prompt_tokens } : void 0,
-+      usage: response.usage ? { tokens: response.usage.prompt_tokens ?? response.usage.total_tokens } : void 0,
-       providerMetadata: response.providerMetadata,
-       response: { headers: responseHeaders, body: rawValue }
-     };
-@@ -1589,7 +1631,7 @@
- };
- var openaiTextEmbeddingResponseSchema = z7.object({
-   data: z7.array(z7.object({ embedding: z7.array(z7.number()) })),
--  usage: z7.object({ prompt_tokens: z7.number() }).nullish(),
-+  usage: z7.object({ prompt_tokens: z7.number().nullish(), total_tokens: z7.number().nullish() }).nullish(),
-   providerMetadata: z7.record(z7.string(), z7.record(z7.string(), z7.any())).optional()
- });
- 
-@@ -1605,6 +1647,16 @@
+@@ -1605,6 +1605,16 @@
    postJsonToApi as postJsonToApi4
  } from "@ai-sdk/provider-utils";
  import { z as z8 } from "zod/v4";
@@ -303,7 +117,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  var OpenAICompatibleImageModel = class {
    constructor(modelId, config) {
      this.modelId = modelId;
-@@ -1680,7 +1732,11 @@
+@@ -1680,7 +1690,11 @@
          fetch: this.config.fetch
        });
        return {
@@ -316,7 +130,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
          warnings,
          response: {
            timestamp: currentDate,
-@@ -1689,7 +1745,7 @@
+@@ -1689,7 +1703,7 @@
          }
        };
      }
@@ -325,7 +139,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
        url: this.config.url({
          path: "/images/generations",
          modelId: this.modelId
-@@ -1700,8 +1756,8 @@
+@@ -1700,8 +1714,8 @@
          prompt,
          n,
          size,
@@ -336,7 +150,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
        },
        failedResponseHandler: createJsonErrorResponseHandler4(
          (_e = this.config.errorStructure) != null ? _e : defaultOpenAICompatibleErrorStructure
-@@ -1712,8 +1768,28 @@
+@@ -1712,8 +1726,28 @@
        abortSignal,
        fetch: this.config.fetch
      });
@@ -366,7 +180,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
        warnings,
        response: {
          timestamp: currentDate,
-@@ -1724,7 +1800,7 @@
+@@ -1724,7 +1758,7 @@
    }
  };
  var openaiCompatibleImageResponseSchema = z8.object({

@@ -171,7 +171,7 @@ export const expoSkillFileSystem: SkillFileSystem = {
   isDirectory: (path) => new Directory(...path).exists,
   list: (path) => new Directory(...path).list().map((entry) => entry.name),
   readBytes: (path) => new File(...path).bytes(),
-  writeBytes: (path, bytes) => new File(...path).write(bytes),
+  writeBytes: (path, bytes) => new File(...path).writeSync(bytes),
   createDirectory: (path) => {
     const directory = new Directory(...path);
     if (!directory.exists) directory.create({ intermediates: true, idempotent: true });

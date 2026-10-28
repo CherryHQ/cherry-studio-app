@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 jest.mock('@sentry/react-native/metro', () => ({
   getSentryExpoConfig: () => ({ resolver: { sourceExts: [], assetExts: [] }, watchFolders: [] }),
@@ -68,3 +68,20 @@ it('preserves the requesting package context for ordinary dependencies', () => {
   );
   expect(resolveRequest).toHaveBeenCalledWith(context, 'react-native', 'ios');
 });
+
+it.each(['ios', 'android'])(
+  'keeps the Vertex SDK on its host-injected auth path on %s',
+  (platform) => {
+    const sdk = resolveFrom(projectOrigin, '@anthropic-ai/vertex-sdk/client');
+    const resolveRequest = jest.fn(() => ({
+      type: 'sourceFile' as const,
+      filePath: '/node-auth.js',
+    }));
+    const context = { originModulePath: sdk, resolveRequest };
+    const result = config.resolver.resolveRequest(context, 'google-auth-library', platform);
+    expect(result.filePath).toBe(join(dirname(sdk), 'google-auth.native.js'));
+    expect(resolveRequest).not.toHaveBeenCalled();
+    const { GoogleAuth } = jest.requireActual<{ GoogleAuth: new () => unknown }>(result.filePath);
+    expect(() => new GoogleAuth()).toThrow('host-provided authClient');
+  },
+);

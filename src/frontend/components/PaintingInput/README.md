@@ -7,6 +7,10 @@ Callers mount `PaintingInputProvider` inside their `ComposerSessionProvider`, ar
 image controls. The provider retains reference intent and per-model/per-mode parameter drafts across
 control switches, and holds the local model selection so switching presentations does not reset it.
 
+`paintingGenerationInput.ts` is a logic-only sub-entry: hooks and their tests import it directly to
+build a generation request without loading the composer UI. It is deliberately not re-exported
+from the module index.
+
 `PaintingInput` is the Agent-chat presentation: attachments above the field, then a toolbar with the
 + menu, the settings action, and the model pill. Agent chat supplies a controlled `modelSelection`,
 which permits switching between text and image models.
@@ -28,7 +32,9 @@ Exact pixel sizes stay in settings rather than the visible shortcut labels.
 The settings sheet is the full parameter surface, one continuous page: the model row
 first, then shape, count, quality, and background, then the remaining registry parameters. Choices
 of up to four options are segmented controls; longer lists open their own page. Ratio cells show the
-ratio and the header adds the selected size's pixels. An unset parameter shows the value the model
+shape and ratio, and pixel sizes add their exact pixels beneath. Pixel sizes read as their nominal
+ratio, since vendors round them (`1664x928` is 16:9). The grid holds up to five columns and drops
+columns, balancing rows, until the widest text fits; text is never truncated or shrunk. An unset parameter shows the value the model
 will use.
 
 A caller that attaches its own reference image passes `adoptSubmittedReference={false}` so a sent

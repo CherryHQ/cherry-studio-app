@@ -196,6 +196,18 @@ it('keeps an earlier reference intact when appending after it', () => {
   ]);
 });
 
+it('adds a whole file once without touching the draft text', () => {
+  const token = createChatSelectionHandoff({ attachment });
+  render({ token });
+  focus();
+  expect(mockDraft).toBe('Keep before and after');
+  expect(mockAttachmentStore.attachments).toEqual([attachment]);
+
+  render({ token: createChatSelectionHandoff({ attachment: { ...attachment, id: 'again' } }) });
+  expect(mockAttachmentStore.attachments).toEqual([attachment]);
+  expect(mockDraft).toBe('Keep before and after');
+});
+
 it('deduplicates its attachment', () => {
   const token = createChatSelectionHandoff({ attachment, selection });
   const existing = { ...attachment, id: 'from-picker' };

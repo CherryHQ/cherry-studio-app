@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, type ViewInstance } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { withUniwind } from 'uniwind';
 
@@ -20,7 +20,7 @@ export type HtmlCaptureRequest = {
 
 export function HtmlCaptureSurface({ request }: { request: HtmlCaptureRequest }) {
   const { id, density, source, session } = request;
-  const wrapper = useRef<View>(null);
+  const wrapper = useRef<ViewInstance>(null);
   const webView = useRef<WebView>(null);
   const nativeLayout = useRef({ width: 0, height: 0 });
   const waiting = useRef<

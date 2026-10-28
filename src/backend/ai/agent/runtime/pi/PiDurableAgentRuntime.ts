@@ -46,7 +46,7 @@ import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { fitPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
-import { createPiDurableModels, piDurableModelKey } from './piDurableModels';
+import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
   detachedJson,
@@ -58,7 +58,7 @@ import {
   readPiSubmission,
   type PiStoredConfiguration,
 } from './piDurableProjection';
-import { PiDurableRuntime } from './PiDurableRuntime';
+import { hasRunnablePiTasks, PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import { PiToolBudget } from './piToolBudget';
@@ -160,21 +160,42 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return Promise.resolve(this.dependencies.preflightModel(model));
   }
 
-  async initialize(database: RuntimeSqlDatabase, ports: RuntimeExecutionPorts): Promise<void> {
+  async initialize(
+    database: RuntimeSqlDatabase,
+    ports: RuntimeExecutionPorts,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (this.runtime) throw new Error('The durable Agent runtime is already initialized.');
     this.ports = ports;
     this.codemodeSandbox = createPiCodemodeSandbox(ports.scriptSandbox);
     let storage: Storage | undefined;
     try {
+      signal?.throwIfAborted();
       storage = await this.createStorage(database);
+      signal?.throwIfAborted();
       this.runtime = await PiDurableRuntime.open(storage, {
         models: this.models.models,
         registry: this.registry,
-        settings: { followUpMode: 'one-at-a-time' },
-        onReport: (error) => {
-          logger.warn('Pi durable extension failed', { error, operation: 'pi.extension' });
+        settings: () => ({
+          followUpMode: 'one-at-a-time',
+          afterFailedRun: 'continue',
+          compaction: { modelOverrides: this.models.compactionOverrides },
+        }),
+        identity: cherryClientIdentity(),
+        onReport: (error, info) => {
+          logger.warn('Pi durable runtime reported a failure', {
+            error,
+            operation: `pi.${info.type}`,
+            ...('task' in info && info.task
+              ? { taskId: Number(info.task.id), taskKind: info.task.kind }
+              : {}),
+            ...('reason' in info ? { reasonCode: info.reason } : {}),
+            ...('extension' in info ? { extension: info.extension } : {}),
+            ...('callback' in info ? { callback: info.callback } : {}),
+          });
         },
       });
+      signal?.throwIfAborted();
       const opened = this.runtime;
       void opened.closed
         .then((end) => {
@@ -190,17 +211,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const lane of await this.unfinishedLanes()) {
+        signal?.throwIfAborted();
         const stored = await this.runtime.configuration(laneKey(lane));
+        signal?.throwIfAborted();
         const configuration = PiConfigurationSchema.parse(stored);
-        const agent = await this.installConfiguration(lane, configuration, true);
+        const agent = await this.installConfiguration(lane, configuration, true, signal);
+        signal?.throwIfAborted();
         if (stored?.version === 1)
           await this.runtime.restoreConfiguration(
             laneKey(lane),
             detachedJson(configuration),
             agent,
           );
+        signal?.throwIfAborted();
         await this.bindProvider(lane);
       }
+      signal?.throwIfAborted();
     } catch (error) {
       try {
         if (this.runtime) await this.runtime.close();
@@ -237,8 +263,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async watchWork(listener: (active: boolean) => void) {
     const watch = await this.requireRuntime().watchWork();
-    const active = Object.keys(watch.value.tasks).length > 0;
-    watch.start(async (value) => listener(Object.keys(value.tasks).length > 0));
+    const active = hasRunnablePiTasks(watch.value);
+    watch.start(async (value) => listener(hasRunnablePiTasks(value)));
     let observing = true;
     void watch.closed.then(() => {
       if (observing) listener(false);
@@ -637,6 +663,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     lane: RuntimeLane,
     configuration: PiStoredConfiguration,
     rehydrating = false,
+    signal?: AbortSignal,
   ): Promise<AgentChange> {
     const key = laneKey(lane);
     try {
@@ -649,6 +676,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       // still preflights strictly, and Pi settles recovered requests with its native no-model result.
       if (!rehydrating) throw error;
     }
+    signal?.throwIfAborted();
     const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
     const extension = createPiDurableToolExtension({
@@ -661,8 +689,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             codemode: createCodemodeExtension({
               sandbox: this.codemodeSandbox,
               models: false,
-              // Keep a few useful signatures for scripts; discover the rest instead of duplicating all schemas.
-              inlineBudget: 600,
+              // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
+              inlineBudget: 0,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [

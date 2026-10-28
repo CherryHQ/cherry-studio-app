@@ -13,7 +13,11 @@ import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ReplyCompletionNotifier } from '../backgroundReply/replyCompletionNotifications';
-import { noopBackgroundActivityPresenter, type BackgroundActivityPresenter } from './presenter';
+import {
+  noopBackgroundActivityPresenter,
+  type BackgroundActivityPresenter,
+  type RemoteConnectionNotices,
+} from './presenter';
 
 const logger = loggerService.withContext('BackgroundActivityEnvironment');
 
@@ -31,6 +35,8 @@ export type BackgroundActivityEnvironmentConfig = {
   isReplyCompletionNotificationEnabled: () => boolean;
   /** iOS completion and decision notices; absent means the platform owns another channel. */
   replyNotifications?: ReplyCompletionNotifier;
+  /** Persistent desktop connection notices; absent where connections stay page-scoped. */
+  connectionNotices?: RemoteConnectionNotices;
   /** Deep link of the focused, foreground task surface. Absent sources never report one. */
   subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
@@ -135,6 +141,10 @@ export class BackgroundActivityEnvironment extends BaseService {
     return this.config.replyNotifications;
   }
 
+  get connectionNotices(): RemoteConnectionNotices | undefined {
+    return this.config.connectionNotices;
+  }
+
   onForegroundAttention = (attention: ForegroundActivityAttention): void => {
     this.config.onForegroundAttention?.(attention);
   };
@@ -154,8 +164,8 @@ export class BackgroundActivityEnvironment extends BaseService {
       }
       const dark = new File(widgetsDirectory, 'cherry-studio-logo-dark.png');
       const light = new File(widgetsDirectory, 'cherry-studio-logo-light.png');
-      dark.write(CHERRY_ACTIVITY_LOGO_DARK_BASE64, { encoding: 'base64' });
-      light.write(CHERRY_ACTIVITY_LOGO_LIGHT_BASE64, { encoding: 'base64' });
+      dark.writeSync(CHERRY_ACTIVITY_LOGO_DARK_BASE64, { encoding: 'base64' });
+      light.writeSync(CHERRY_ACTIVITY_LOGO_LIGHT_BASE64, { encoding: 'base64' });
       return { dark: dark.uri, light: light.uri };
     } catch (error) {
       logger.warn('Background activity logo preparation failed', error as Error);

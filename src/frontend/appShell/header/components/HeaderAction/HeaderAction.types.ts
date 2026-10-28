@@ -1,5 +1,6 @@
 import type { MenuItem } from '@cherrystudio/ui/components';
 import type { ComponentType, ReactElement } from 'react';
+import type { ImageSourcePropType } from 'react-native';
 
 export type HeaderActionIconProps = {
   className?: string;
@@ -19,6 +20,12 @@ export type HeaderToolbarAction =
       accessibilityLabel: string;
       disabled?: boolean;
       icon: ComponentType<HeaderActionIconProps>;
+      /**
+       * The same glyph as a template image. With it, the iOS chat header draws a standard toolbar
+       * button instead of a custom view, which the system can move, such as into an iPhone Duo's
+       * vertical rail.
+       */
+      nativeIcon?: ImageSourcePropType;
       onPress: () => void;
       type: 'icon';
     })

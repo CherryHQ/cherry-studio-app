@@ -1,8 +1,10 @@
 import { File } from 'expo-file-system';
+import { Image } from 'expo-image';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { ResolvedFileUris } from '@/shared/contracts';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
@@ -10,6 +12,7 @@ import { filePreviewDirectory, imageThumbnailCacheKey } from './filePreviewCache
 import {
   createInternalEntry,
   type CreateInternalEntryInput,
+  discardInternalEntries,
   getInternalFileUri,
 } from './fileStorage';
 
@@ -28,12 +31,36 @@ export function resetFilePreviewsForRestore(): void {
 }
 
 export async function createInternalEntryWithPreview(
-  entries: Pick<FileEntryService, 'create'>,
+  entries: Pick<FileEntryService, 'create' | 'delete'>,
   input: CreateInternalEntryInput,
+  signal?: AbortSignal,
 ): Promise<FileEntry> {
-  const entry = await createInternalEntry(entries, input);
-  await resolveFilePreviewUris(entry);
-  return entry;
+  const entry = await createInternalEntry(entries, input, signal);
+  try {
+    signal?.throwIfAborted();
+    const { previewUri, uri } = await resolveFilePreviewUris(entry);
+    signal?.throwIfAborted();
+    if (
+      input.source === 'base64' &&
+      input.provenance === 'generated' &&
+      (!previewUri || previewUri === uri)
+    ) {
+      // A thumbnail failure is harmless only if the renderer can display the original.
+      // Successful thumbnails already decoded the source, so avoid decoding those twice.
+      // A bounded decode proves the bytes are displayable without a full-size bitmap.
+      if (!uri) throw new FileAttachmentError({ code: 'unavailable', fileEntryId: entry.id });
+      const image = await Image.loadAsync(uri, {
+        maxHeight: thumbnailMaxDimension,
+        maxWidth: thumbnailMaxDimension,
+      });
+      image.release();
+    }
+    signal?.throwIfAborted();
+    return entry;
+  } catch (error) {
+    await discardInternalEntries(entries, [entry]);
+    throw error;
+  }
 }
 
 export async function resolveFilePreviewUris(entry: FileEntry): Promise<ResolvedFileUris> {

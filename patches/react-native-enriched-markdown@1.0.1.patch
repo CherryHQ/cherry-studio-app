@@ -498,6 +498,15 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51be
        overScrollMode = View.OVER_SCROLL_NEVER
        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
        addView(
+@@ -252,7 +253,7 @@ class TableContainerView(
+         isClickable = false
+         isLongClickable = false
+         isFocusable = true
+-        isScreenReaderFocusable = true
++        ViewCompat.setScreenReaderFocusable(this, true)
+         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+         contentDescription = description
+         if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
@@ -634,11 +643,202 @@ index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83
    if (linkColor != nil) {
      [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
    }
+diff --git a/ios/attachments/ENRMMathInlineAttachment.h b/ios/attachments/ENRMMathInlineAttachment.h
+index 956792262d7301cbe7a781d8515a8019a5a294d3..b7f582a99b4da075b9e8e8e5ebec6b37bb5457ca 100644
+--- a/ios/attachments/ENRMMathInlineAttachment.h
++++ b/ios/attachments/ENRMMathInlineAttachment.h
+@@ -8,6 +8,9 @@
+ @property (nonatomic, strong) NSString *latex;
+ @property (nonatomic, assign) CGFloat fontSize;
+ @property (nonatomic, strong, nullable) RCTUIColor *mathTextColor;
++/// Cherry Mobile: YES for display math nested in a paragraph or list item (root-level
++/// display math uses the scrolling segment instead). Inline math keeps intrinsic bounds.
++@property (nonatomic, assign) BOOL displayMath;
+ 
+ @property (nonatomic, readonly) CGFloat boxHeight;
+ 
+diff --git a/ios/attachments/ENRMMathInlineAttachment.m b/ios/attachments/ENRMMathInlineAttachment.m
+index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a1f8ead8efe5206078c31d01460ab4554c12fe73 100644
+--- a/ios/attachments/ENRMMathInlineAttachment.m
++++ b/ios/attachments/ENRMMathInlineAttachment.m
+@@ -46,13 +46,54 @@
+   _cachedSize = CGSizeMake(ceil(result.width), ceil(result.totalHeight));
+ }
+ 
++// CHERRY-MATH-FIT-BEGIN
++// Cherry Mobile math-fit geometry. Kept in plain C with no UIKit types so that
++// scripts/__tests__/enrichedMarkdownMathWidth.test.ts can compile and execute this exact
++// block instead of matching its source text.
++static double ENRMMathColumnWidth(double right, double indent, double padding)
++{
++  double columnWidth = right - indent - padding;
++  return columnWidth > 0 ? columnWidth : 0;
++}
++
++static double ENRMMathFitScale(double intrinsicWidth, double columnWidth, int isDisplayMath)
++{
++  if (!isDisplayMath || intrinsicWidth <= 0 || columnWidth <= 0)
++    return 1;
++  double scale = columnWidth / intrinsicWidth;
++  return scale < 1 ? scale : 1;
++}
++// CHERRY-MATH-FIT-END
++
+ - (CGRect)attachmentBoundsForTextContainer:(NSTextContainer *)textContainer
+                       proposedLineFragment:(CGRect)lineFragment
+                              glyphPosition:(CGPoint)position
+                             characterIndex:(NSUInteger)characterIndex
+ {
+   [self prepareIfNeeded];
+-  return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
++  // Cherry Mobile: inline math keeps the unpatched bounds, so TextKit wraps and
++  // moves it down exactly as upstream does, whatever the insertion position.
++  if (!self.displayMath)
++    return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
++  // Display math nested in a paragraph or list item cannot scroll, so it is fitted to
++  // the usable paragraph column — never to what is left of the current line, which would
++  // shrink a formula that merely landed near the end of a line. A formula that fits the
++  // column keeps scale 1 and therefore still wraps; only a formula wider than the column
++  // shrinks. Root-level display math is a different path (its own segment backed by a
++  // scrolling container) and does not come through this attachment.
++  CGFloat availableWidth = _cachedSize.width;
++  if (textContainer) {
++    NSTextStorage *storage = textContainer.layoutManager.textStorage;
++    NSParagraphStyle *style = storage && characterIndex < storage.length
++        ? [storage attribute:NSParagraphStyleAttributeName atIndex:characterIndex effectiveRange:NULL]
++        : nil;
++    CGFloat indent = MAX(style.firstLineHeadIndent, style.headIndent);
++    // UIKit measures a positive tail indent from the leading edge; zero/negative from the trailing edge.
++    CGFloat right = style.tailIndent > 0 ? style.tailIndent : textContainer.size.width + style.tailIndent;
++    availableWidth = ENRMMathColumnWidth(right, indent, textContainer.lineFragmentPadding);
++  }
++  CGFloat scale = ENRMMathFitScale(_cachedSize.width, availableWidth, self.displayMath);
++  return CGRectMake(0, -_mathDescent * scale, _cachedSize.width * scale, _cachedSize.height * scale);
+ }
+ 
+ - (UIImage *)imageForBounds:(CGRect)imageBounds
+@@ -63,22 +104,31 @@
+   if (!_renderResult && !_fallbackSource)
+     return nil;
+ 
++  // Cherry Mobile: rasterize at the negotiated size without changing intrinsic math metrics.
++  if (imageBounds.size.width <= 0 || imageBounds.size.height <= 0 ||
++      _cachedSize.width <= 0 || _cachedSize.height <= 0)
++    return nil;
++  CGFloat scale = MIN(1, MIN(imageBounds.size.width / _cachedSize.width,
++                            imageBounds.size.height / _cachedSize.height));
++  CGSize drawSize = CGSizeMake(_cachedSize.width * scale, _cachedSize.height * scale);
++
+   UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+   format.opaque = NO;
+ 
+-  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:_cachedSize format:format];
++  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:drawSize format:format];
+ 
+   return [renderer imageWithActions:^(UIGraphicsImageRendererContext *rendererContext) {
++    CGContextRef ctx = rendererContext.CGContext;
++    CGContextSaveGState(ctx);
++    CGContextScaleCTM(ctx, scale, scale);
+     if (_renderResult) {
+-      CGContextRef ctx = rendererContext.CGContext;
+-      CGContextSaveGState(ctx);
+       [_renderResult drawIn:ctx];
+-      CGContextRestoreGState(ctx);
+     } else {
+       [_fallbackSource drawWithRect:CGRectMake(0, 0, _cachedSize.width, _cachedSize.height)
+                             options:NSStringDrawingUsesLineFragmentOrigin
+                             context:nil];
+     }
++    CGContextRestoreGState(ctx);
+   }];
+ }
+ 
+diff --git a/ios/renderer/ENRMMathInlineRenderer.h b/ios/renderer/ENRMMathInlineRenderer.h
+index bdfe794b253e7ed92153b7701c4b01b9c2403b34..c49556026bea99a0a01896afae73641e646d6e14 100644
+--- a/ios/renderer/ENRMMathInlineRenderer.h
++++ b/ios/renderer/ENRMMathInlineRenderer.h
+@@ -4,6 +4,9 @@
+ NS_ASSUME_NONNULL_BEGIN
+ 
+ @interface ENRMMathInlineRenderer : BaseRenderer
++/// Cherry Mobile: YES only for display math nested in a paragraph or list item.
++/// Inline math keeps upstream geometry; nested display math is fitted to the usable column.
++@property (nonatomic, assign) BOOL displayMath;
+ @end
+ 
+ NS_ASSUME_NONNULL_END
+diff --git a/ios/renderer/ENRMMathInlineRenderer.m b/ios/renderer/ENRMMathInlineRenderer.m
+index bff00b34db8ff08034871e778a852a00d3490b92..a0c1421213a0ef069ed6156d18d1eeb1a7ed6cd6 100644
+--- a/ios/renderer/ENRMMathInlineRenderer.m
++++ b/ios/renderer/ENRMMathInlineRenderer.m
+@@ -27,6 +27,9 @@
+   attachment.latex = latex;
+   attachment.fontSize = currentFont ? currentFont.pointSize : [_config paragraphFontSize];
+   attachment.mathTextColor = [_config inlineMathColor];
++  // Cherry Mobile: display math nested in a paragraph/list item is fitted to the
++  // usable column; inline math keeps its intrinsic width so TextKit wraps it as before.
++  attachment.displayMath = self.displayMath;
+ 
+ #if TARGET_OS_OSX
+   // On macOS, NSLayoutManager uses self.image/self.bounds rather than calling
+diff --git a/ios/renderer/RendererFactory.m b/ios/renderer/RendererFactory.m
+index 1f4ff795e9d7e155f0b9d89723df37b4a4a055d6..49defb037204a6ac593764d2ea9a62fe97a30ce3 100644
+--- a/ios/renderer/RendererFactory.m
++++ b/ios/renderer/RendererFactory.m
+@@ -112,14 +112,22 @@
+ #if ENRICHED_MARKDOWN_MATH
+     case MarkdownNodeTypeLatexMathInline:
+       return [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
+-    case MarkdownNodeTypeLatexMathDisplay:
++    case MarkdownNodeTypeLatexMathDisplay: {
+       // Display math INSIDE a paragraph (mid-paragraph / softbreak-adjacent
+       // `$$…$$`) previously fell through to the nil-renderer child dump —
+       // the body leaked as plain text with its delimiters silently dropped.
+       // Typeset it as an inline attachment instead; block-level display math
+       // is unaffected (SegmentRenderer intercepts root-level display nodes
+       // before this factory is consulted).
+-      return [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
++      // Cherry Mobile: thread the node kind into the attachment so ordinary inline
++      // math keeps its upstream bounds (and its line wrapping), while display math
++      // nested in a paragraph or list item is fitted to the usable paragraph column.
++      // Root-level display math never reaches this factory — SegmentRenderer
++      // intercepts it and renders it in the scrolling ENRMMathContainerView.
++      ENRMMathInlineRenderer *renderer = [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
++      renderer.displayMath = YES;
++      return renderer;
++    }
+ #endif
+     case MarkdownNodeTypeSpoiler:
+       return [[ENRMSpoilerRenderer alloc] initWithRendererFactory:self config:_config];
 diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
-index 204fc18510d3de0b79c3d3741b1599659a53d4d9..c880049600007ec76f8e533408246f9280aa5599 100644
+index 204fc18510d3de0b79c3d3741b1599659a53d4d9..0c34c0637f57f8ba97ce83d83a70ae3341cd1fd4 100644
 --- a/ios/renderer/ListItemRenderer.m
 +++ b/ios/renderer/ListItemRenderer.m
-@@ -173,10 +173,16 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
+@@ -130,13 +130,19 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
+     NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+     style.firstLineHeadIndent = totalIndent;
+     style.headIndent = totalIndent;
+-    if (lineHeightConfig > 0) {
+-      style.minimumLineHeight = lineHeightConfig;
+-      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
+-    }
++#if TARGET_OS_OSX
++    if (lineHeightConfig > 0) {
++      style.minimumLineHeight = lineHeightConfig;
++      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
++    }
++#endif
+     NSMutableDictionary *attributesToApply = [metadata mutableCopy];
+     attributesToApply[NSParagraphStyleAttributeName] = style;
+     [output addAttributes:attributesToApply range:range];
++#if !TARGET_OS_OSX
++    // Cherry Mobile: reuse the scoped math/block-image height exception while keeping the prose minimum.
++    applyLineHeight(output, range, lineHeightConfig);
++#endif
+   };
+ 
+   NSUInteger pos = itemRange.location;
+@@ -173,10 +179,16 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
      }
    }
  
@@ -1289,3 +1489,139 @@ index 92a4fbe06893243c3768d88b65ee9f65ec108dbb..51c80a4a7879e3d27f6657257d4d2bcc
        mergedStart = MIN(mergedStart, existing.range.location);
        mergedEnd = MAX(mergedEnd, existingEnd);
        [mergeIndexes addIndex:idx];
+diff --git a/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt b/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
+index 4281042795e71a20b0f3d89811505103c5cb2d28..0561f8cf27ae85b37376378f69c9a7493374f8bf 100644
+--- a/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
++++ b/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
+@@ -11,6 +11,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+ import android.widget.FrameLayout
+ import android.widget.HorizontalScrollView
++import androidx.core.view.ViewCompat
+ import com.swmansion.enriched.markdown.accessibility.AccessibilityLabels
+ import com.swmansion.enriched.markdown.spans.MathMeasureHelper
+ import com.swmansion.enriched.markdown.spans.MathMeasureRequest
+@@ -82,7 +83,7 @@ class MathContainerView(
+     addView(scrollView, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+ 
+     isFocusable = true
+-    isScreenReaderFocusable = true
++    ViewCompat.setScreenReaderFocusable(this, true)
+     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+     updateAccessibilityLabel()
+ 
+diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
+index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b0319ab4dee 100644
+--- a/ios/input/ENRMInputTextView.mm
++++ b/ios/input/ENRMInputTextView.mm
+@@ -11,8 +11,60 @@
+ 
+ #if !TARGET_OS_OSX
+ 
++// Item providers load clipboard representations off the UI thread. Completion always
++// returns to the main queue, where selection, undo and Markdown insertion are owned.
++static void ENRMLoadPlainPasteText(NSArray<NSItemProvider *> *providers, void (^completion)(NSString *))
++{
++  for (NSItemProvider *provider in providers) {
++    if ([provider canLoadObjectOfClass:[NSString class]]) {
++      [provider loadObjectOfClass:[NSString class] completionHandler:^(id<NSItemProviderReading> value, NSError *error) {
++        NSString *text = [value isKindOfClass:[NSString class]] ? (NSString *)value : nil;
++        dispatch_async(dispatch_get_main_queue(), ^{ completion(text); });
++      }];
++      return;
++    }
++  }
++  dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
++}
++
++static void ENRMLoadPasteText(NSArray<NSItemProvider *> *providers, void (^completion)(NSString *))
++{
++  for (NSItemProvider *provider in providers) {
++    if ([provider hasItemConformingToTypeIdentifier:kENRMMarkdownPasteboardType]) {
++      // Read the serialized UTF-8 representation without item-provider object coercion.
++      [provider loadDataRepresentationForTypeIdentifier:kENRMMarkdownPasteboardType
++                                     completionHandler:^(NSData *data, NSError *error) {
++                                       NSString *markdown = nil;
++                                       if (data.length > 0) {
++                                         markdown = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
++                                       }
++                                       if (markdown.length > 0) {
++                                         dispatch_async(dispatch_get_main_queue(), ^{ completion(markdown); });
++                                       } else {
++                                         ENRMLoadPlainPasteText(providers, completion);
++                                       }
++                                     }];
++      return;
++    }
++  }
++  ENRMLoadPlainPasteText(providers, completion);
++}
++
+ @implementation ENRMInputTextView {
+   CGFloat _lastLayoutWidth;
++  NSUInteger _pasteGeneration;
++  NSRange _pasteSelection;
++  BOOL _pasteLoading;
++}
++
++- (BOOL)resignFirstResponder
++{
++  BOOL resigned = [super resignFirstResponder];
++  if (resigned) {
++    _pasteGeneration++;
++    _pasteLoading = NO;
++  }
++  return resigned;
+ }
+ 
+ - (void)copy:(id)sender
+@@ -40,29 +92,26 @@ - (void)cut:(id)sender
+ 
+ - (void)paste:(id)sender
+ {
+-  UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+-
+-  NSString *markdown = nil;
+-  id markdownValue = [pasteboard valueForPasteboardType:kENRMMarkdownPasteboardType];
+-  if ([markdownValue isKindOfClass:[NSString class]]) {
+-    markdown = markdownValue;
+-  } else if ([markdownValue isKindOfClass:[NSData class]]) {
+-    markdown = [[NSString alloc] initWithData:markdownValue encoding:NSUTF8StringEncoding];
+-  }
+-
+-  if (markdown.length > 0 && self.markdownTextInput != nil) {
+-    [self.markdownTextInput pasteMarkdown:markdown];
+-    return;
+-  }
+-
+-  // External plain text is treated as markdown so pasted syntax ("- ", "#",
+-  // "**") formats instead of landing literal; syntax-free text is unchanged.
+-  NSString *plainText = pasteboard.string;
+-  if (plainText.length > 0 && self.markdownTextInput != nil) {
+-    [self.markdownTextInput pasteMarkdown:plainText];
+-  } else if (plainText.length > 0) {
+-    [self replaceRange:self.selectedTextRange withText:plainText];
+-  }
++  // A repeated tap while a slow source is still loading repeats the same paste.
++  if (_pasteLoading || !self.isFirstResponder) return;
++  _pasteLoading = YES;
++  _pasteSelection = self.selectedRange;
++  NSUInteger generation = ++_pasteGeneration;
++  __weak ENRMInputTextView *weakSelf = self;
++  // Capture providers only after the user's paste action, never during menu availability checks.
++  ENRMLoadPasteText([UIPasteboard generalPasteboard].itemProviders, ^(NSString *text) {
++    ENRMInputTextView *textView = weakSelf;
++    if (textView == nil || generation != textView->_pasteGeneration) return;
++    textView->_pasteLoading = NO;
++    // Moving the caret or editing while the clipboard loads makes the paste stale.
++    if (text.length == 0 || !NSEqualRanges(textView.selectedRange, textView->_pasteSelection)) return;
++    // External plain text is treated as markdown so pasted syntax formats instead of landing literal.
++    if (textView.markdownTextInput != nil) {
++      [textView.markdownTextInput pasteMarkdown:text];
++    } else {
++      [textView replaceRange:textView.selectedTextRange withText:text];
++    }
++  });
+ }
+ 
+ - (BOOL)canPerformAction:(SEL)action withSender:(id)sender

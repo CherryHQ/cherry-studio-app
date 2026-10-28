@@ -35,6 +35,38 @@ clean install.
   12.2.1 reapplies patches to already patched files.
 - Repeated declarations in a patched file under `node_modules` mean a patch was applied twice.
   Delete that package's directory under `node_modules/.pnpm` and run `pnpm install --force`.
+- Write patches that cannot apply twice. EAS runs another `pnpm install` after prebuild, and any
+  install that is not a no-op re-applies patches in place. A patched file whose every hunk still
+  matches after one application receives the change again, so insert next to lines the patch
+  itself changes or that stay unique, not at the top of a file or between two functions.
+  `scripts/__tests__/patchReapplication.test.ts` checks each registered patch.
+
+### Enriched Markdown Patch
+
+`patches/react-native-enriched-markdown@1.0.1.patch` is the app's largest dependency patch: 35
+files, about half native. Upstream is at 1.1.x and moved Table and Math views from `views/` to
+`segments/`, so an upgrade re-ports every native block below and needs a native rebuild with
+iOS/Android device acceptance of paste, undo, selection, and accessibility. Keep this table current
+when a block is added or retired; a block leaves when upstream ships an equivalent.
+
+| Block | Kind | Source | Upstream | Remove when |
+| --- | --- | --- | --- | --- |
+| Android input null and long-press guards | Bug fix | #973, #1015 | Extends upstream #738; not upstream | Upstream guards the same Sentry crashes |
+| Android input height invalidation and scroll clamp | Bug fix | #1028 | Not upstream | Upstream re-measures after insertion |
+| Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |
+| Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
+| iOS emoji list markers | Bug fix | #606 | Not upstream | Upstream draws emoji markers |
+| Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
+| Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
+| iOS asynchronous clipboard paste keeping Markdown | Bug fix | #1467, #1476 | Not fixed in 1.1.1 | Upstream reads the clipboard asynchronously |
+| Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
+| Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
+| Code block 192 pt viewport, header and divider (gesture arbitration part is a fix) | Product customization | #606 | Not upstream | Never, unless the design changes |
+| Table scrollbar that does not fade | Product customization | #606 | Not upstream | Never, unless the design changes |
+| Generic `linkVariantUtils`, `!TARGET_OS_OSX` guard | Build compatibility | #606 | Not upstream | Upstream builds without them |
+
+`scripts/__tests__/enrichedMarkdown*.test.ts` and `patchReapplication.test.ts` guard the installed
+source text, not behavior.
 
 ### Pi Dependency Upgrades
 

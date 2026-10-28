@@ -1,6 +1,7 @@
 import type { RemoteSocket } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
 
+import { WebSocketOpeningError } from './remoteErrors';
 import { transportLogger } from './transportLogger';
 
 const OPEN_TIMEOUT_MS = 4_000;
@@ -35,6 +36,11 @@ export async function openWebSocketStream(
   signal: AbortSignal,
 ): Promise<MessageStream> {
   const { RemoteSocketStream } = await import('@cherrystudio/remote-transport');
+  const socket = await openWebSocket(url, signal);
+  return new RemoteSocketStream(adapt(socket), transportLogger.forComponent('remote'), 'outbound');
+}
+
+export function openWebSocket(url: string, signal: AbortSignal): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
     const socket = new WebSocket(url);
@@ -47,23 +53,44 @@ export async function openWebSocketStream(
       signal.removeEventListener('abort', abort);
       socket.removeEventListener('open', opened);
       socket.removeEventListener('error', failed);
-      socket.removeEventListener('close', failed);
+      socket.removeEventListener('close', closed);
       if (error) {
         socket.close();
         reject(error);
       } else {
-        resolve(
-          new RemoteSocketStream(adapt(socket), transportLogger.forComponent('remote'), 'outbound'),
-        );
+        resolve(socket);
       }
     };
     const opened = () => finish();
-    const failed = () => finish(new Error(`Could not open ${url}`));
-    const abort = () => finish(new Error('Connection cancelled'));
-    const timer = setTimeout(() => finish(new Error(`Timed out opening ${url}`)), OPEN_TIMEOUT_MS);
+    // React Native dispatches error before close; close carries the native failure reason.
+    const failed = () =>
+      queueMicrotask(() => finish(new WebSocketOpeningError({ address: url, kind: 'websocket' })));
+    const closed = (event: CloseEvent) =>
+      finish(
+        new WebSocketOpeningError({
+          address: url,
+          kind: 'websocket',
+          closeCode: event.code >= 1000 && event.code <= 4999 ? event.code : undefined,
+          message:
+            event.reason
+              ?.replace(/[\r\n\t]/g, ' ')
+              .trim()
+              .slice(0, 400) || undefined,
+        }),
+      );
+    const abort = () =>
+      finish(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('Connection cancelled', 'AbortError'),
+      );
+    const timer = setTimeout(
+      () => finish(new WebSocketOpeningError({ address: url, kind: 'timeout' })),
+      OPEN_TIMEOUT_MS,
+    );
     socket.addEventListener('open', opened);
     socket.addEventListener('error', failed);
-    socket.addEventListener('close', failed);
+    socket.addEventListener('close', closed);
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
   });

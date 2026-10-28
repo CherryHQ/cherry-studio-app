@@ -43,6 +43,8 @@ android {
 
 dependencies {
   implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
+  // Bundled model: recognizes Chinese and Latin offline, including first use.
+  implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
   androidTestImplementation 'androidx.test:runner:1.7.0'
   androidTestImplementation 'androidx.test.ext:junit:1.3.0'
 }

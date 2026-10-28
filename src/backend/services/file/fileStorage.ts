@@ -12,20 +12,18 @@ import {
   type FileEntryId,
   type FileEntryProvenance,
   FileEntryIdSchema,
-  fileEntryUrl,
   filenameExtension,
   MediaTypeSchema,
   SafeExtSchema,
   SafeNameSchema,
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
 import { deleteFilePreview } from './filePreviewCache';
+import { deletePdfTextCache } from './pdfTextCache';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
@@ -139,11 +137,11 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
     const name = SafeNameSchema.parse(input.name ?? `painting-${id}`);
     filename = filenameExtension(name) ? name : `${name}.${ext}`;
     const payload = input.data.includes(',') ? (input.data.split(',', 2)[1] ?? '') : input.data;
-    write = (destination) => destination.write(payload, { encoding: 'base64' });
+    write = (destination) => destination.writeSync(payload, { encoding: 'base64' });
   } else {
     mediaType = resolveMediaType(input.mediaType);
     filename = SafeNameSchema.parse(input.name);
-    write = (destination) => destination.write(input.data);
+    write = (destination) => destination.writeSync(input.data);
   }
 
   const destination = new File(ensureFileDirectory(), `${id}${extSuffix(filename)}`);
@@ -217,43 +215,6 @@ export async function createInternalEntry(
   }
 }
 
-export async function createMessageParts(
-  entries: Pick<FileEntryService, 'create' | 'delete'>,
-  parts: readonly CherryMessagePart[],
-): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> {
-  const createdEntries: FileEntry[] = [];
-  const managedParts: CherryMessagePart[] = [];
-
-  try {
-    for (const part of parts) {
-      if (part.type !== 'file' || readCherryMeta(part)?.fileEntryId) {
-        managedParts.push(part);
-        continue;
-      }
-
-      const entry = await createInternalEntry(entries, {
-        mediaType: part.mediaType,
-        name: part.filename,
-        provenance: 'imported',
-        source: 'uri',
-        uri: part.url,
-      });
-      createdEntries.push(entry);
-      managedParts.push(
-        withCherryMeta(
-          { ...part, mediaType: entry.mediaType, url: fileEntryUrl(entry.id) },
-          { fileEntryId: entry.id },
-        ),
-      );
-    }
-  } catch (error) {
-    await discardInternalEntries(entries, createdEntries);
-    throw error;
-  }
-
-  return { entries: createdEntries, parts: managedParts };
-}
-
 export async function discardInternalEntries(
   entries: Pick<FileEntryService, 'delete'>,
   createdEntries: readonly Pick<FileEntry, 'filename' | 'id' | 'updatedAt'>[],
@@ -268,6 +229,7 @@ export async function discardInternalEntries(
     try {
       deleteInternalFile(entry);
       deleteFilePreview(entry);
+      deletePdfTextCache(entry);
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
@@ -313,7 +275,7 @@ export async function rewriteInternalTextEntry(
     signal?.throwIfAborted();
     // Availability, synchronous bytes and metadata share the deletion write queue.
     // Once bytes change, complete bookkeeping even if the caller cancels.
-    file.write(input.data);
+    file.writeSync(input.data);
     const size = file.size;
     if (!Number.isSafeInteger(size) || size < 0) {
       throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
@@ -358,6 +320,7 @@ export function deleteInternalEntryFiles(entry: FileEntry): void {
   try {
     deleteInternalFile(entry);
     deleteFilePreview(entry);
+    deletePdfTextCache(entry);
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
   }

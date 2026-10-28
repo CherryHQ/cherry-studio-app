@@ -2,7 +2,7 @@ import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
-import type { RuntimeModelPreflight } from '../../types';
+import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
 import type { PiModelResolution } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -28,7 +28,11 @@ const wire: Model<Api> = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
 
-function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
+function setup(
+  traceRequest?: Parameters<typeof createPiDurableModels>[3],
+  modelPreflight = preflight,
+  resolvedModel = wire,
+) {
   const streamFn = jest.fn(() => {
     const stream = new AssistantMessageEventStream();
     const message = { ...emptyAssistantMessage(wire), stopReason: 'stop' as const };
@@ -38,9 +42,10 @@ function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
   });
   const resolveModel = jest.fn(
     async (): Promise<PiModelResolution> => ({
-      model: wire,
+      model: resolvedModel,
       streamFn,
       defaultThinkingLevel: 'off',
+      maxInputTokens: modelPreflight.maxInputTokens,
       redactionValues: [],
       supportsTools: true,
       usageContext: {
@@ -55,10 +60,13 @@ function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
       },
     }),
   );
-  const configuration = jest.fn(async () => ({ maxOutputTokens: 512, temperature: 0.3 }));
+  const configuration = jest.fn<Promise<RuntimeOptions>, []>(async () => ({
+    maxOutputTokens: 512,
+    temperature: 0.3,
+  }));
   const bridge = createPiDurableModels(
     {
-      preflightModel: async () => preflight,
+      preflightModel: async () => modelPreflight,
       resolveModel,
     },
     configuration,
@@ -69,6 +77,72 @@ function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
 }
 
 describe('Pi durable model bridge', () => {
+  test.each([
+    [1_048_576, undefined, undefined, 65_536],
+    [1_048_576, 131_072, undefined, 131_072],
+    [1_048_576, undefined, 131_072, 131_072],
+    [1_048_576, 131_072, 262_144, 131_072],
+    [1_048_576, 1_024, 512, 512],
+    [1_048_576, 13_107, undefined, 13_107],
+    [128_000, undefined, undefined, 128_000],
+  ])(
+    'reserves output for ceiling %i, options %s, selected %s',
+    async (ceiling, options, selected, expected) => {
+      const model = { ...wire, maxTokens: ceiling, contextWindow: 1_048_576 };
+      const bridge = setup(
+        undefined,
+        {
+          ...preflight,
+          contextWindow: model.contextWindow,
+          maxInputTokens: 32_000,
+          maxOutputTokens: ceiling,
+        },
+        model,
+      );
+      bridge.configuration.mockResolvedValueOnce({ maxOutputTokens: selected });
+      await bridge.registerModel(reference);
+      const registered = bridge.getModel(reference)!;
+      expect(registered.maxTokens).toBe(ceiling);
+      expect(registered.contextWindow).toBe(32_000);
+      await bridge.models.completeSimple(registered, { messages: [] }, { maxTokens: options });
+      expect(bridge.streamFn).toHaveBeenCalledWith(
+        model,
+        expect.anything(),
+        expect.objectContaining({ maxTokens: expected }),
+      );
+    },
+  );
+
+  test('fits compaction into small input windows without changing large-window defaults', async () => {
+    for (const contextWindow of [512, 8_192, 131_072]) {
+      const bridge = setup(undefined, {
+        ...preflight,
+        contextWindow,
+        maxInputTokens: contextWindow,
+        maxOutputTokens: 16_384,
+      });
+      await bridge.registerModel(reference);
+      const policy = bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]!;
+      expect(
+        policy.reserveTokens! + policy.keepRecentTokens! + policy.backgroundTokens!,
+      ).toBeLessThan(contextWindow);
+      if (contextWindow === 131_072)
+        expect(policy).toEqual({
+          reserveTokens: 16_384,
+          keepRecentTokens: 20_000,
+          backgroundTokens: 32_768,
+        });
+      await bridge.registerModel(reference, 'image');
+      const image = bridge.getModel(reference, 'image')!;
+      expect(bridge.compactionOverrides[`${image.provider}/${image.id}`]).toEqual({
+        enabled: false,
+      });
+      expect(bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]).toEqual(
+        policy,
+      );
+    }
+  });
+
   test('records configuration failures that happen before resolving the provider transport', async () => {
     const { traces, records } = createTraceRecorder();
     const bridge = setup(async () => traces.startTrace('pi.generate_content'));
@@ -177,6 +251,7 @@ describe('Pi durable request diagnostics', () => {
     { code: 'no_response', retryable: true, category: 'network' },
     { code: 'stream_idle_timeout', retryable: true, category: 'timeout' },
     { code: 'insufficient_quota', status: 429, retryable: false, category: 'quota' },
+    { code: 'insufficient_user_quota', status: 403, retryable: false, category: 'quota' },
     { code: 'rate_limit_exceeded', status: 429, retryable: true, category: 'rate_limit' },
     { code: 'runtime_error', status: 402, retryable: false, category: 'quota' },
     { code: 'runtime_error', status: 401, retryable: false, category: 'auth' },
@@ -219,6 +294,7 @@ describe('Pi durable request diagnostics', () => {
         'error.category': failure.category,
         'error.code': failure.code,
         'error.retryable': failure.retryable,
+        'error.retry_scope': 'automatic',
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');
@@ -321,10 +397,49 @@ describe('Pi durable request diagnostics', () => {
         'gen_ai.provider.id': wire.provider,
         'gen_ai.provider.api': wire.api,
         'gen_ai.response.finish_reason': 'stop',
+        'gen_ai.model.context_window': preflight.contextWindow,
+        'gen_ai.model.max_input_tokens': preflight.maxInputTokens,
+        'gen_ai.model.max_output_tokens': preflight.maxOutputTokens,
+        'gen_ai.request.output_budget_tokens': 512,
+        'gen_ai.request.estimated_input_tokens': 4,
+        'gen_ai.request.estimate_source': 'pi_estimate',
+        'gen_ai.request.message_count': 1,
+        'gen_ai.request.tool_count': 0,
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');
     expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
+  });
+
+  test('labels a usage-based input estimate and records the smaller request output budget', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    await bridge.registerModel(reference);
+    const previous: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      timestamp: 2,
+      stopReason: 'stop',
+      usage: { ...emptyAssistantMessage(wire).usage, input: 100, output: 20, totalTokens: 120 },
+      content: [{ type: 'text', text: 'private response' }],
+    };
+    await bridge.models.completeSimple(
+      bridge.getModel(reference)!,
+      {
+        messages: [
+          { role: 'user', content: 'private question', timestamp: 1 },
+          previous,
+          { role: 'user', content: '1234567', timestamp: 3 },
+        ],
+      },
+      { maxTokens: 128 },
+    );
+    expect(records.at(-1)?.attributes).toMatchObject({
+      'gen_ai.request.output_budget_tokens': 128,
+      'gen_ai.request.estimated_input_tokens': 122,
+      'gen_ai.request.estimate_source': 'pi_usage_and_estimate',
+      'gen_ai.request.message_count': 3,
+    });
+    expect(JSON.stringify(records)).not.toMatch(/private|1234567/);
   });
 
   test('retains provider status and code without copying response diagnostics', async () => {

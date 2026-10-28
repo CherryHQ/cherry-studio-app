@@ -8,8 +8,13 @@ import * as z from 'zod';
  */
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
-import { SafeNameSchema } from '@/shared/data/types/file';
-import type { FileFolder, LibraryFile } from '@/shared/data/types/fileLibrary';
+import { FileEntryIdSchema, SafeNameSchema } from '@/shared/data/types/file';
+import {
+  MAX_FILE_MOVE_BATCH_SIZE,
+  type FileFolder,
+  type FileMoveResult,
+  type LibraryFile,
+} from '@/shared/data/types/fileLibrary';
 
 export const FileLibraryQuerySchema = z.strictObject({
   folderId: z.uuid().nullable().optional(),
@@ -29,17 +34,10 @@ export const UpdateLibraryFileSchema = z.strictObject({
   folderId: z.uuid().nullable().optional(),
   name: SafeNameSchema.optional(),
 });
-
-/**
- * One time-ordered stream of active entries; trash has a separate cursor stream. Media-type filtering is deliberately
- * absent: the library's kind tabs partition what the client has already paged
- * in, so a per-kind cursor walk here would fragment that one stream into three
- * that cannot share their pages.
- */
-export type FileEntryListQuery = {
-  cursor?: string;
-  limit?: number;
-};
+export const MoveLibraryFilesSchema = z.strictObject({
+  fileEntryIds: z.array(FileEntryIdSchema).min(1).max(MAX_FILE_MOVE_BATCH_SIZE),
+  folderId: z.uuid().nullable(),
+});
 
 export type FileSchemas = {
   '/files/library': {
@@ -53,6 +51,12 @@ export type FileSchemas = {
       params: { id: string };
       body: z.infer<typeof UpdateLibraryFileSchema>;
       response: undefined;
+    };
+  };
+  '/files/library/move': {
+    POST: {
+      body: z.infer<typeof MoveLibraryFilesSchema>;
+      response: FileMoveResult[];
     };
   };
   '/files/history': { GET: { query: { id: string }; response: FileEntry[] } };
@@ -74,12 +78,6 @@ export type FileSchemas = {
       params: { id: string };
       body: { folderId: string | null };
       response: FileFolder | null;
-    };
-  };
-  '/files/entries': {
-    GET: {
-      query?: FileEntryListQuery;
-      response: CursorPaginationResponse<FileEntry>;
     };
   };
   '/files/entries/:id': {

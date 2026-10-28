@@ -31,7 +31,7 @@ jest.mock('expo-file-system', () => {
       mockFiles.delete(this.uri);
       mockContents.delete(this.uri);
     }
-    write(content: string) {
+    writeSync(content: string) {
       mockFiles.add(this.uri);
       mockContents.set(this.uri, content);
     }
@@ -95,7 +95,7 @@ test('file trash preserves bytes and previews, hides ordinary reads, and restore
   await expect(runtime.trashFile(fileId)).resolves.toBe(true);
   expect(mockFiles.has(bytes)).toBe(true);
   expect(mockFiles.has(preview)).toBe(true);
-  expect((await files.listByCursor()).items).toEqual([]);
+  await expect(files.findAvailableByIds([fileId])).resolves.toEqual([]);
   await expect(resolveFileEntry(files, fileId)).resolves.toBeNull();
   expect(await files.findTrashedById(fileId, now)).toMatchObject({ id: fileId });
   expect(await files.findTrashedById(fileId, now - 1)).toBeNull();

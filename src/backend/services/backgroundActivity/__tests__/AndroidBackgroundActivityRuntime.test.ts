@@ -3,7 +3,6 @@ import { AppState, type AppStateStatus, Platform } from 'react-native';
 import background from 'react-native-background-actions';
 
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
-import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { AndroidBackgroundActivityRuntime } from '../AndroidBackgroundActivityRuntime';
@@ -25,11 +24,9 @@ jest.mock('expo-notifications', () => ({
   AndroidNotificationVisibility: { PRIVATE: 0 },
   dismissNotificationAsync: jest.fn(async () => {}),
   getPermissionsAsync: jest.fn(),
-  getPresentedNotificationsAsync: jest.fn(async () => []),
   requestPermissionsAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(async ({ identifier }: { identifier: string }) => identifier),
   setNotificationChannelAsync: jest.fn(async () => {}),
-  setNotificationHandler: jest.fn(),
 }));
 
 const mockTaskIds = new Map<string, number>();
@@ -113,7 +110,6 @@ beforeEach(async () => {
     running = false;
   });
   native.updateNotification.mockResolvedValue(undefined);
-  notices.getPresentedNotificationsAsync.mockResolvedValue([]);
   notices.getPermissionsAsync.mockResolvedValue({
     granted: true,
   } as notifications.NotificationPermissionsStatus);
@@ -129,6 +125,47 @@ afterEach(async () => {
   await runtime._doStop();
   jest.useRealTimers();
   jest.restoreAllMocks();
+});
+
+test('retires cancelled startup registrations without stopping or clearing a replacement', async () => {
+  await runtime._doStop();
+  runtime = new AndroidBackgroundActivityRuntime(environment);
+  let finishSweep!: () => void;
+  let markSweeping!: () => void;
+  const sweeping = new Promise<void>((resolve) => {
+    markSweeping = resolve;
+  });
+  mockTaskNative.clearBackgroundTaskNotifications.mockImplementationOnce(() => {
+    markSweeping();
+    return new Promise<void>((resolve) => {
+      finishSweep = resolve;
+    });
+  });
+  const controller = new AbortController();
+  const initializing = runtime._doInit(controller.signal);
+  await sweeping;
+  controller.abort(new Error('Host replaced'));
+  expect(listeners.size).toBe(0);
+  expect(serviceStoppedListeners.size).toBe(0);
+
+  const replacement = new AndroidBackgroundActivityRuntime(environment);
+  try {
+    await replacement._doInit();
+    replacement.acquire('replacement');
+    await flush();
+    expect(running).toBe(true);
+    const stopCalls = native.stop.mock.calls.length;
+    finishSweep();
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await runtime._doStop();
+
+    expect(native.stop).toHaveBeenCalledTimes(stopCalls);
+    expect(running).toBe(true);
+  } finally {
+    finishSweep();
+    await initializing.catch(() => {});
+    await replacement._doStop();
+  }
 });
 
 test('a failed service start leaves work running unprotected and retries after the next foreground entry', async () => {
@@ -278,21 +315,6 @@ test('the service task cannot later auto-stop a replacement when the old service
   expect(native.stop).toHaveBeenCalledTimes(1);
 });
 
-test('cleans abandoned approval notifications while retaining completed and unrelated notices', async () => {
-  await runtime._doStop();
-  notices.getPresentedNotificationsAsync.mockResolvedValue([
-    notice('approval', { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: false }),
-    notice('completed', { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: true }),
-    notice('unrelated', {}),
-  ]);
-  runtime = new AndroidBackgroundActivityRuntime(environment);
-  await runtime._doInit();
-  expect(notices.dismissNotificationAsync).toHaveBeenCalledWith('approval');
-  expect(notices.dismissNotificationAsync).not.toHaveBeenCalledWith('completed');
-  expect(notices.dismissNotificationAsync).not.toHaveBeenCalledWith('unrelated');
-  expect(native.start).not.toHaveBeenCalled();
-});
-
 test('the background deadline drains cancellation before stopping and rejects more background work', async () => {
   let finishCancellation!: () => void;
   const interrupted = jest.fn(
@@ -395,6 +417,31 @@ test('unexpected native destruction interrupts every protected task without rest
   runtime.acquire('new-task');
   await flush();
   expect(native.start).toHaveBeenCalledTimes(2);
+});
+
+test('a hidden admission stays local while a failed service start is reported', async () => {
+  const reporter = jest.fn();
+  const removeReporter = loggerService.setErrorReporter(reporter);
+  try {
+    setAppState('background');
+    const hidden = runtime.acquire('chat');
+    await flush();
+    expect(reporter).not.toHaveBeenCalled();
+    hidden.release();
+    await flush();
+    setAppState('active');
+    native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
+    runtime.acquire('next-task');
+    await flush();
+
+    expect(reporter).toHaveBeenCalledTimes(1);
+    expect(reporter).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ operation: 'background.start' }),
+    );
+  } finally {
+    removeReporter();
+  }
 });
 
 test('expected native interruption does not enter error reporting', async () => {
@@ -604,13 +651,6 @@ function props(phase: BackgroundReplyActivityProps['phase']): BackgroundReplyAct
     icon: 'bubble-ellipsis',
     startedAtEpochMs: 1000,
   };
-}
-
-function notice(identifier: string, data: Record<string, unknown>): notifications.Notification {
-  return {
-    date: 0,
-    request: { identifier, trigger: null, content: { data } },
-  } as notifications.Notification;
 }
 
 function setAppState(state: AppStateStatus): void {

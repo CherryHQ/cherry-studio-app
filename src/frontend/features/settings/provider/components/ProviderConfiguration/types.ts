@@ -1,6 +1,12 @@
 import type { ProviderAccountCapabilities } from '@/shared/contracts/providerAccounts';
 import type { EndpointType, Model } from '@/shared/data/types/model';
-import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+
+export type VertexAuthConfig = Extract<AuthConfig, { type: 'iam-gcp' }>;
+export type ProviderVertexAuth = {
+  config: VertexAuthConfig;
+  save: (config: VertexAuthConfig) => Promise<boolean>;
+};
 
 /** Where requests go: one editable address, a set of protocol addresses, or nothing editable. */
 export type ProviderAddress =
@@ -20,6 +26,7 @@ export type ProviderAddress =
 export type ProviderConfigurationActions = {
   addApiKey: (entry: ApiKeyEntry) => Promise<boolean>;
   removeApiKey: (id: string) => Promise<boolean>;
+  reorderApiKeys: (apiKeys: ApiKeyEntry[]) => Promise<boolean>;
   rename: (name: string) => Promise<boolean>;
   setAvatar: (uri: string | null) => Promise<boolean>;
   setBaseUrl: (baseUrl: string) => Promise<boolean>;
@@ -38,6 +45,9 @@ export type ProviderConfigurationAccount = {
 
 /** What the configuration screen shows and how it changes, independent of persistence. */
 export type ProviderConfigurationValue = {
+  /** Ephemeral fingerprint: a probe result never survives a changed connection or credential. */
+  connectionKey?: string;
+  vertexAuth?: ProviderVertexAuth;
   account?: ProviderConfigurationAccount;
   actions: ProviderConfigurationActions;
   address: ProviderAddress;

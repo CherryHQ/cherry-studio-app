@@ -1,5 +1,14 @@
 import type { RemoteFailure } from '@cherrystudio/remote-protocol';
 
+import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
+
+export class WebSocketOpeningError extends Error {
+  constructor(readonly failure: DesktopConnectionFailure) {
+    super(failure.message ?? `WebSocket opening failed: ${failure.kind}`);
+    this.name = 'WebSocketOpeningError';
+  }
+}
+
 /** A desktop-reported failure; `reason` is the protocol's stable code. */
 export class RemoteFailureError extends Error {
   constructor(readonly failure: RemoteFailure) {
@@ -33,6 +42,7 @@ export class DesktopUnreachableError extends Error {
       | 'no-location'
       | 'discovery-unavailable'
       | 'unsupported-version' = 'unreachable',
+    readonly connectionFailures: DesktopConnectionFailure[] = [],
   ) {
     super(`Could not connect to the desktop (${attempts.join('; ') || 'no address'})`);
     this.name = 'DesktopUnreachableError';

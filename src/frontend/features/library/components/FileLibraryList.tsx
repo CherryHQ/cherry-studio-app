@@ -27,6 +27,7 @@ import { useOpenLibraryFile } from '../hooks/useOpenLibraryFile';
 import { fileLibraryLayout, fileLibrarySelectionScope } from '../utils/constants';
 import { FileLibraryFolderItem } from './FileLibraryFolderItem';
 import { FILE_LIBRARY_ROW_ESTIMATED_SIZE, FileLibraryRow } from './FileLibraryRow';
+import { FileLibrarySelectionControls } from './FileLibrarySelectionControls';
 import { FileLibrarySkeleton } from './FileLibrarySkeleton';
 
 type FileLibraryListProps = {
@@ -85,13 +86,13 @@ export function FileLibraryList({
   );
   const listItems = useMemo<FileLibraryListItem[]>(
     () => [
-      ...(isEditing ? [] : (directory?.folders ?? [])).map((folder) => ({
+      ...(directory?.folders ?? []).map((folder) => ({
         kind: 'folder' as const,
         folder,
       })),
       ...(isLoading ? [] : visibleEntries).map((file) => ({ kind: 'file' as const, file })),
     ],
-    [directory?.folders, isEditing, isLoading, visibleEntries],
+    [directory?.folders, isLoading, visibleEntries],
   );
   const selectionSource = useMemo<SelectionSource>(
     () => ({
@@ -199,32 +200,35 @@ export function FileLibraryList({
   );
 
   return (
-    <LegendList
-      contentContainerStyle={contentContainerStyle}
-      contentInsetAdjustmentBehavior="never"
-      data={listItems}
-      estimatedItemSize={FILE_LIBRARY_ROW_ESTIMATED_SIZE}
-      extraData={listExtraData}
-      keyExtractor={libraryItemKeyExtractor}
-      getItemType={libraryItemType}
-      ListEmptyComponent={listEmpty}
-      ListFooterComponent={
-        directory?.folders.length && !isEditing && visibleEntries.length === 0
-          ? error || isLoading || isLoadingMore
-            ? listEmpty
-            : null
-          : listFooter
-      }
-      maintainVisibleContentPosition={false}
-      onEndReached={loadMore}
-      onEndReachedThreshold={0.7}
-      ItemSeparatorComponent={FileLibraryItemSeparator}
-      recycleItems
-      renderItem={renderLibraryItem}
-      showsVerticalScrollIndicator={false}
-      style={styles.list}
-      testID="file-library-list"
-    />
+    <>
+      <LegendList
+        contentContainerStyle={contentContainerStyle}
+        contentInsetAdjustmentBehavior="never"
+        data={listItems}
+        estimatedItemSize={FILE_LIBRARY_ROW_ESTIMATED_SIZE}
+        extraData={listExtraData}
+        keyExtractor={libraryItemKeyExtractor}
+        getItemType={libraryItemType}
+        ListEmptyComponent={listEmpty}
+        ListFooterComponent={
+          directory?.folders.length && visibleEntries.length === 0
+            ? error || isLoading || isLoadingMore
+              ? listEmpty
+              : null
+            : listFooter
+        }
+        maintainVisibleContentPosition={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.7}
+        ItemSeparatorComponent={FileLibraryItemSeparator}
+        recycleItems
+        renderItem={renderLibraryItem}
+        showsVerticalScrollIndicator={false}
+        style={styles.list}
+        testID="file-library-list"
+      />
+      <FileLibrarySelectionControls refresh={refresh} />
+    </>
   );
 }
 
@@ -241,8 +245,9 @@ function renderLibraryItem({ extraData, item }: LegendListRenderItemProps<FileLi
   if (item.kind === 'folder') {
     return data.directory ? (
       <FileLibraryFolderItem
+        disabled={data.isEditing}
         folder={item.folder}
-        menuItems={data.getMenuItems({ kind: 'folder', folder: item.folder })}
+        menuItems={data.isEditing ? [] : data.getMenuItems({ kind: 'folder', folder: item.folder })}
         modifiedDate={data.dateFormatter.format(item.folder.updatedAt)}
         onOpen={data.directory.onOpen}
       />

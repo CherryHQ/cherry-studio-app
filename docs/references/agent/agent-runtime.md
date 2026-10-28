@@ -88,14 +88,13 @@ and retains the effective system message when compacting a live loop. Pi owns co
 termination; Cherry adds no fixed tool-call count or tool-loop step limit.
 Compaction cancellation passes through Pi's execution Context.
 
-When following an upstream release, update both exact package pins, review the upstream changelogs
-and public message/hook/compaction contracts, and rebase both Pi patches onto the published packages.
-The upstream `pi-ai` entry and model catalog reach authentication code with a computed dynamic
-import, which Metro rejects. The `pi-agent-core` patch therefore imports Pi AI through its utility
-subpaths, and the `pi-ai` patch gives the endpoint adapters a local model-runtime module. The `pi-ai`
-patch also disables Bun's Node filesystem fallback, retains structured provider failures, and
-accelerates partial JSON parsing. Jest runs these modules in Node and cannot detect a Metro failure,
-so the patch guard walks the Runtime's Pi module graph. Before removing any remaining patch, review
+When following an upstream release, update the exact Pi package pins, review the upstream changelogs
+and public message/hook/compaction contracts, and rebase the Pi patches onto the published packages.
+Upstream `pi-ai` authentication reaches code with computed dynamic imports, which Metro rejects. The
+`pi-ai` patch redirects those modules to native variants, retains structured provider failures, and
+accelerates partial JSON parsing. Upstream's Bun-only `node:fs` fallback stays unpatched: its
+`require` sits inside `try`, so Metro treats it as an optional dependency. Jest runs these modules in
+Node and cannot detect a Metro failure, so the patch guard walks the Runtime's Pi module graph. Before removing any remaining patch, review
 that guard and the Runtime regression suites, then bundle the app for a release. Mobile continues to own provider bindings, transport, approvals, application
 budgets, and persistence; adopting upstream releases does not require sharing desktop filesystem
 paths or changing application database fields.
@@ -912,6 +911,10 @@ When the selected Agent model generates images, the Host prepares a direct image
 `agentImageGeneration` before reserving the ordinary Session and message rows. This path validates
 managed image inputs and registry mode support, captures image parameters in the inference snapshot,
 and skips text-model preflight, tool discovery, and opening a Pi session. Pi remains the text engine.
+
+Under [Pi Durable](./pi-durable-migration.md) this turn is no longer outside Pi: the conversation
+submits it like any other, and a Pi image model schedules the Host's single `cherry_generate_image`
+tool (`createImageRequestTool`), which runs the prepared request.
 
 The image capability calls `AiService.generateImage` with the Agent instructions, current prompt,
 explicit reference attachments, and the reserved assistant message's usage attribution. It imports

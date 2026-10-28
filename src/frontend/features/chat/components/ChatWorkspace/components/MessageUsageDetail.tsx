@@ -78,7 +78,7 @@ export function MessageUsageDetail({
       testID="message-usage-detail"
       title={t('chat.messageUsage.title')}
     >
-      <View className="gap-8 px-1 pt-2 pb-4">
+      <View className="gap-8">
         <View className="gap-6">
           {message.model ? (
             <View className="flex-row items-center gap-2.5">

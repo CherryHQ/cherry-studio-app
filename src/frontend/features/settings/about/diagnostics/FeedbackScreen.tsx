@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import { Button, Image, Input, Spinner, Switch, TextField } from '@cherrystudio/ui/components';
+import { Button, Spinner } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { useState } from 'react';
@@ -13,26 +13,36 @@ import { RouteHeader } from '@/frontend/appShell/header';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import {
   diagnosticDescriptionByteLength,
+  diagnosticReportDescription,
   DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
 } from '@/shared/contracts/diagnostics';
 
+import { FeedbackFormFields, type FeedbackFormValue } from './FeedbackFormFields';
 import { useCopyReportId } from './useCopyReportId';
 import { useDiagnosticBundle } from './useDiagnosticBundle';
 
 /** Both manual feedback and shake capture enter this form. */
 export function FeedbackScreen() {
   const router = useRouter();
-  const { screenshot, captureFailed, clearScreenshot } = useFeedbackCapture();
+  const { screenshot, captureFailed, context } = useFeedbackCapture();
   const { t } = useTranslation();
-  const [description, setDescription] = useState('');
+  const [form, setForm] = useState<FeedbackFormValue>(() => ({
+    description: '',
+    feature: context?.feature,
+    problem: context?.entry === 'error' || context?.error ? 'error' : undefined,
+    includeContext: true,
+  }));
   const [attempted, setAttempted] = useState(false);
   const workflow = useDiagnosticBundle(screenshot?.id);
   const { state } = workflow;
   const copyReportId = useCopyReportId(state.status === 'uploaded' ? state.reportId : '');
-  const normalized = description.trim();
-  const bytes = diagnosticDescriptionByteLength(normalized);
+  const normalized = form.description.trim();
+  const feedback =
+    form.feature && form.problem ? { feature: form.feature, problem: form.problem } : undefined;
+  const bytes = diagnosticDescriptionByteLength(
+    diagnosticReportDescription({ description: normalized, feedback }),
+  );
   const isTooLong = bytes > DIAGNOSTIC_DESCRIPTION_MAX_BYTES;
-  const showError = isTooLong || (attempted && normalized.length === 0);
   const isSubmitting = state.status === 'submitting';
   usePreventRemove(isSubmitting, () => {});
   const title =
@@ -53,9 +63,12 @@ export function FeedbackScreen() {
 
   function submit() {
     setAttempted(true);
-    if (!normalized || isTooLong) return;
+    if (!normalized || isTooLong || !feedback) return;
     Keyboard.dismiss();
-    void workflow.submit(normalized);
+    void workflow.submit(normalized, {
+      feedback,
+      context: form.includeContext ? context : undefined,
+    });
   }
 
   return (
@@ -72,87 +85,27 @@ export function FeedbackScreen() {
         mode="layout"
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-5 px-4 py-5">
+        <View className="gap-6 px-4 py-5">
           {state.status === 'editing' ? (
             <>
-              <TextField invalid={showError}>
-                <Input
-                  accessibilityLabel={t('settings.about.diagnostics.description')}
-                  className="min-h-36 ios:shadow-field android:shadow-sm"
-                  invalid={showError}
-                  multiline
-                  onChangeText={setDescription}
-                  placeholder={t('settings.about.diagnostics.descriptionPlaceholder')}
-                  testID="feedback-description"
-                  textAlignVertical="top"
-                  value={description}
-                />
-                {showError && (
-                  <TextField.Error>
-                    {t('settings.about.diagnostics.descriptionError')}
-                  </TextField.Error>
-                )}
-              </TextField>
-              {screenshot && (
-                <View className="gap-2">
-                  <Text className="text-sm font-medium text-foreground">
-                    {t('settings.about.feedback.screenshot')}
-                  </Text>
-                  <Image
-                    source={{ uri: screenshot.uri }}
-                    contentFit="contain"
-                    className="h-56 w-full"
-                    accessibilityLabel={t('settings.about.feedback.screenshot')}
-                  />
-                  <Text
-                    accessibilityLiveRegion="polite"
-                    className="text-xs leading-5 text-muted-foreground"
-                  >
-                    {t('settings.about.feedback.screenshotConsent')}
-                  </Text>
-                  <View className="flex-row items-center justify-between gap-3">
-                    <Text className="flex-1 text-sm text-foreground">
-                      {t('settings.about.feedback.includeScreenshot')}
-                    </Text>
-                    <Switch
-                      accessibilityLabel={t('settings.about.feedback.includeScreenshot')}
-                      value={workflow.isScreenshotIncluded}
-                      onValueChange={workflow.setScreenshotIncluded}
-                      testID="feedback-include-screenshot"
-                    />
-                  </View>
-                  <Button
-                    variant="ghost"
-                    onPress={() => {
-                      workflow.setScreenshotIncluded(false);
-                      clearScreenshot();
-                    }}
-                    testID="feedback-remove-screenshot"
-                  >
-                    {t('common.remove')}
-                  </Button>
-                </View>
-              )}
-              {captureFailed && (
-                <Text className="text-sm text-muted-foreground">
-                  {t('settings.about.feedback.screenshotFailed')}
-                </Text>
-              )}
-              <View className="gap-1">
-                <Text className="text-sm font-medium text-foreground">
-                  {t('settings.about.feedback.attachment')}
-                </Text>
-                <Text className="text-xs leading-5 text-muted-foreground">
-                  {t('settings.about.feedback.consent')}
-                </Text>
-              </View>
-              <View className="gap-2">
+              <FeedbackFormFields
+                attempted={attempted}
+                captureFailed={captureFailed}
+                context={context}
+                isDescriptionTooLong={isTooLong}
+                isScreenshotIncluded={workflow.isScreenshotIncluded}
+                onChange={setForm}
+                onScreenshotIncludedChange={workflow.setScreenshotIncluded}
+                screenshot={screenshot}
+                value={form}
+              />
+              <View className="gap-3">
                 <Button onPress={submit} testID="feedback-submit">
                   {t('settings.about.diagnostics.upload')}
                 </Button>
-                <Button onPress={close} variant="ghost">
-                  {t('common.cancel')}
-                </Button>
+                <Text className="px-2 text-center text-xs text-muted-foreground">
+                  {t('settings.about.feedback.consent')}
+                </Text>
               </View>
             </>
           ) : isSubmitting ? (

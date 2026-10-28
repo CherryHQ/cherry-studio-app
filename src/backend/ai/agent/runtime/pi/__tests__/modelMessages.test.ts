@@ -48,3 +48,13 @@ test('an attached image names its managed file, in the prompt and in rebuilt his
   ]);
   expect(conversation.history[0]).toMatchObject({ role: 'user', content: [label, pixels] });
 });
+
+test('an image omitted for a text-only model still names its managed file', () => {
+  const conversation = toPiConversation(request({ input: [image] }), {
+    input: ['text'],
+  } as unknown as Model<Api>);
+  // generate_image reads the original by id even when the chat model cannot see the pixels.
+  expect(conversation.prompt.content).toBe(
+    '[image attachment omitted: this model does not accept image input] Cherry managed file: {"fileEntryId":"00000000-0000-7000-8000-000000000001","name":"chart.png"}',
+  );
+});

@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "NSCalendarsFullAccessUsageDescription": "Cherry Studio 依照你在聊天中的要求讀取和管理行事曆行程，例如查看今天的安排或調整會議時間，並將相關行程資訊傳送給你選擇的 AI 服務。",
+    "NSCalendarsUsageDescription": "Cherry Studio 依照你在聊天中的要求讀取和管理行事曆行程，例如查看今天的安排或調整會議時間，並將相關行程資訊傳送給你選擇的 AI 服務。",
+    "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio 使用你選擇的 AI 服務提供的詳細資料，新增你在聊天中要求建立的行程，例如明天上午 10 點的會議。",
+    "NSLocationWhenInUseUsageDescription": "Cherry Studio 僅在你使用 App 並提出要求時，將目前位置及按需取得的地址傳送給你選擇的 AI 服務，用於回答尋找附近餐廳等問題。",
+    "NSRemindersFullAccessUsageDescription": "Cherry Studio 依照你在聊天中的要求讀取和管理提醒事項，例如列出今天的任務或新增購物提醒，並將相關提醒事項資訊傳送給你選擇的 AI 服務。",
+    "NSRemindersUsageDescription": "Cherry Studio 依照你在聊天中的要求讀取和管理提醒事項，例如列出今天的任務或新增購物提醒，並將相關提醒事項資訊傳送給你選擇的 AI 服務。"
+  }
+}

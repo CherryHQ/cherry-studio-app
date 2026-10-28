@@ -1,4 +1,5 @@
 export { MessageList } from './MessageList';
+export { MessageFailureReportProvider } from './parts/MessageFailureReportContext';
 export { ToolRendererProvider } from './parts/tools/ToolRendererContext';
 export {
   ToolInputPreviewProvider,

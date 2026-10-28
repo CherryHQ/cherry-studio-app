@@ -109,6 +109,39 @@ describe('JobRuntime', () => {
     expect(pump).toHaveBeenCalledWith({ reason: 'cold-start' });
   });
 
+  it('does not recover or dispatch jobs after cold-start initialization is cancelled', async () => {
+    const recoveryEntered = makeGate();
+    const recoveryGate = makeGate();
+    const execute = jest.fn(async () => 'should-not-run');
+    const { db, jobService, runtime } = await setup([
+      ['internal.echo', makeEchoHandler({ execute, recovery: 'retry' })],
+    ]);
+    await insertJob(db.database, {
+      id: 'interrupted-startup',
+      input: { message: 'leftover' },
+      queue: 'internal.echo',
+      status: 'running',
+      type: 'internal.echo',
+    });
+    const getActiveByType = jobService.getActiveByType.bind(jobService);
+    jest.spyOn(jobService, 'getActiveByType').mockImplementationOnce(async (type) => {
+      const rows = await getActiveByType(type);
+      recoveryEntered.release();
+      await recoveryGate.promise;
+      return rows;
+    });
+    const controller = new AbortController();
+    const initializing = runtime._doInit(controller.signal);
+    await recoveryEntered.promise;
+    controller.abort();
+    recoveryGate.release();
+    await initializing;
+
+    expect((await jobService.getById('interrupted-startup'))?.status).toBe('running');
+    expect(execute).not.toHaveBeenCalled();
+    await expect(runtime.pump({ reason: 'manual' })).resolves.toEqual({ claimed: 0 });
+  });
+
   it('runs an echo job end to end and persists the terminal snapshot', async () => {
     const progressEvents: JobProgress[] = [];
     const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {

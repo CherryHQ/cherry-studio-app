@@ -36,6 +36,27 @@ describe('painting resize admission', () => {
     ]);
   });
 
+  it('reads vendor-rounded pixel sizes as their nominal ratio', () => {
+    const options = paintingResizeOptions({
+      mode: 'generate',
+      definition: {
+        supports: {
+          size: {
+            type: 'enum',
+            options: ['1664x928', '1472x1140', '1328x1328', '1568x1056', '1296x3168'],
+          },
+        },
+      },
+    });
+    expect(options.map(({ ratio, pixels }) => `${ratio} ${pixels}`)).toEqual([
+      '16:9 1664×928',
+      '4:3 1472×1140',
+      '1:1 1328×1328',
+      '3:2 1568×1056',
+      '9:22 1296×3168',
+    ]);
+  });
+
   it('prefers a declared default when two resolutions have the same ratio', () => {
     const options = paintingResizeOptions({
       mode: 'edit',

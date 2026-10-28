@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { Pressable } from 'react-native';
+import { BackHandler, Platform, Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
@@ -9,6 +9,15 @@ import { ExpandedAnswerProvider } from '../ExpandedAnswer';
 
 const mockSelectBranch = jest.fn();
 let mockAnswers = new Map<string, MessageListItem>();
+let mockFocused = true;
+
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const isFocused = mockFocused;
+    useEffect(() => (isFocused ? effect() : undefined), [effect, isFocused]);
+  },
+}));
 
 jest.mock('react-native', () => {
   const React = jest.requireActual('react');
@@ -26,6 +35,14 @@ jest.mock('react-native', () => {
     View: { value: MockView },
   });
 });
+
+// Finishes at once, so opening and closing complete within the test's act.
+const finishAtOnce = (to: unknown, _config: unknown, done?: (finished: boolean) => void) => {
+  done?.(true);
+  return to;
+};
+const mockWithTiming = jest.fn(finishAtOnce);
+const mockWithSpring = finishAtOnce;
 
 jest.mock('react-native-reanimated', () => {
   const { useRef } = jest.requireActual('react');
@@ -47,11 +64,8 @@ jest.mock('react-native-reanimated', () => {
       });
       return ref.current;
     },
-    // Finishes at once, so opening and closing complete within the test's act.
-    withTiming: (to: unknown, _config: unknown, done?: (finished: boolean) => void) => {
-      done?.(true);
-      return to;
-    },
+    withSpring: (...args: Parameters<typeof finishAtOnce>) => mockWithSpring(...args),
+    withTiming: (...args: Parameters<typeof finishAtOnce>) => mockWithTiming(...args),
   };
 });
 
@@ -134,6 +148,7 @@ describe('ExpandedAnswerProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFocused = true;
     mockSelectBranch.mockResolvedValue(true);
     mockAnswers = new Map([
       ['a1', answer('a1')],
@@ -144,6 +159,7 @@ describe('ExpandedAnswerProvider', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   test('opens the answer over the screen with its own actions', async () => {
@@ -152,6 +168,14 @@ describe('ExpandedAnswerProvider', () => {
     expect(title()).toBe('name:a1');
     expect(toolbar().props.message.id).toBe('a1');
     expect(layer().props.style).toEqual({ height: 874, width: 402 });
+  });
+
+  test('the layer grows once its answer has laid out, so mounting it does not skip the motion', async () => {
+    await open('a1', undefined, { layOut: false });
+    expect(mockWithTiming).not.toHaveBeenCalled();
+
+    act(() => content().props.onLayout());
+    expect(mockWithTiming).toHaveBeenCalledWith(1, expect.anything(), expect.any(Function));
   });
 
   test('opening another answer shows it at once, and returns if it could not be shown', async () => {
@@ -191,6 +215,40 @@ describe('ExpandedAnswerProvider', () => {
     await open('a1');
 
     await act(async () => close().props.onPress());
+    // The screen is released first; the layer goes a frame later.
+    await act(() => new Promise(requestAnimationFrame));
+    expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
+  });
+
+  test('Android back closes the layer, but leaves it to a route pushed over the chat', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    // The latest subscription runs first, as on Android.
+    const backListeners: Parameters<typeof BackHandler.addEventListener>[1][] = [];
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, listener) => {
+      backListeners.push(listener);
+      return { remove: () => backListeners.splice(backListeners.indexOf(listener), 1) };
+    });
+    const pressBack = () =>
+      act(async () => {
+        backListeners
+          .toReversed()
+          .some((listener) => listener({ timeStamp: 0, type: 'hardwareBackPress' }));
+      });
+    const navigatorBack = jest.fn(() => true);
+    backListeners.push(navigatorBack);
+    await open('a1');
+
+    mockFocused = false;
+    act(() => renderer!.update(tree([row()])));
+    await pressBack();
+    expect(navigatorBack).toHaveBeenCalledTimes(1);
+    expect(layer()).toBeTruthy();
+
+    mockFocused = true;
+    act(() => renderer!.update(tree([row()])));
+    await pressBack();
+    await act(() => new Promise(requestAnimationFrame));
+    expect(navigatorBack).toHaveBeenCalledTimes(1);
     expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 
@@ -201,7 +259,7 @@ describe('ExpandedAnswerProvider', () => {
     expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 
-  async function open(id: string, selection?: Promise<boolean>) {
+  async function open(id: string, selection?: Promise<boolean>, { layOut = true } = {}) {
     const createWithNodeMock = create as unknown as (
       element: ReactElement,
       options: { createNodeMock: () => unknown },
@@ -220,6 +278,7 @@ describe('ExpandedAnswerProvider', () => {
       (node) => node.props.pointerEvents === 'none' && typeof node.props.onLayout === 'function',
     );
     await act(async () => probe.props.onLayout());
+    if (layOut) act(() => content().props.onLayout());
   }
 
   function tree(messages: MessageListItem[]) {
@@ -238,6 +297,15 @@ describe('ExpandedAnswerProvider', () => {
   function layer() {
     return renderer!.root.find(
       (node) => typeof node.type === 'string' && node.props.testID === 'expanded-answer',
+    );
+  }
+
+  function content() {
+    return renderer!.root.find(
+      (node) =>
+        typeof node.type !== 'string' &&
+        typeof node.props.onLayout === 'function' &&
+        Array.isArray(node.props.style),
     );
   }
 

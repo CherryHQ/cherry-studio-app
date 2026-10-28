@@ -1,6 +1,7 @@
 import { formatMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { AgentToolProgress } from '@/shared/contracts/agent';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
@@ -47,17 +48,22 @@ export function RunJsToolPart({ part }: RunJsToolPartProps) {
       title={t('chat.builtinTool.code.runJs')}
     >
       {run.status === 'error' ? (
-        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={run.message} />
+        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={run.message} />
       ) : null}
       {run.status === 'ok' && run.result !== null ? (
-        <MessagePart.TextSection title={t('chat.tool.result')} value={run.result} variant="code" />
+        <MessageDetailText title={t('chat.tool.result')} value={run.result} variant="code" />
       ) : null}
       {run.calls?.length ? <ToolProgress progress={{ calls: run.calls }} /> : null}
       {code ? (
-        <MessagePart.TextSection title={t('chat.tool.code')} value={code} variant="code" />
+        <MessageDetailText
+          title={t('chat.tool.code')}
+          value={code}
+          variant="code"
+          language="javascript"
+        />
       ) : null}
       {run.logs ? (
-        <MessagePart.TextSection title={t('chat.tool.logs')} value={run.logs} variant="code" />
+        <MessageDetailText title={t('chat.tool.logs')} value={run.logs} variant="code" />
       ) : null}
     </MessagePart.Tool>
   );
@@ -120,7 +126,8 @@ function parseRun(output: unknown): Run | null {
     if (cut !== null) return { status: 'ok', result: cut, logs: '' };
     return {
       status: 'ok',
-      result: 'result' in output ? formatMessagePartValue(output.result) : null,
+      result:
+        'result' in output ? formatMessagePartValue(output.result, Number.POSITIVE_INFINITY) : null,
       logs,
     };
   }

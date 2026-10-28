@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ModelSearchControls, useModelSettingSelections } from '@/frontend/components/ModelPicker';
+import { areAllSelected } from '@/frontend/components/Selection';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -107,8 +108,8 @@ export function ProviderModelPullPreviewContent({
   );
   const sectionSelectedAll = useMemo<PullSectionMap<boolean>>(
     () => ({
-      added: isEverySelected(sectionIds.added, selectedIds),
-      missing: isEverySelected(sectionIds.missing, selectedIds),
+      added: areAllSelected(selectedIds, sectionIds.added),
+      missing: areAllSelected(selectedIds, sectionIds.missing),
     }),
     [sectionIds, selectedIds],
   );
@@ -169,7 +170,11 @@ export function ProviderModelPullPreviewContent({
           value={searchText}
         >
           {showsModelPurposeTabs ? (
-            <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
+            <ProviderModelPurposeTabs
+              counts={modelPurposeCounts}
+              onChange={setModelPurpose}
+              value={effectiveModelPurpose}
+            />
           ) : null}
         </ModelSearchControls>
       }
@@ -203,6 +208,7 @@ function renderPullListItem({
       <PullSectionHeader
         count={listData.sectionCounts[item.section]}
         ids={listData.sectionIds[item.section]}
+        isApplying={listData.isApplying}
         isFirstSection={item.isFirstSection}
         isSelected={listData.sectionSelectedAll[item.section]}
         onToggleAll={listData.onToggleAll}
@@ -224,13 +230,6 @@ function renderPullListItem({
   );
 }
 
-function isEverySelected(
-  ids: readonly UniqueModelId[],
-  selectedIds: ReadonlySet<UniqueModelId>,
-): boolean {
-  return ids.length > 0 && ids.every((id) => selectedIds.has(id));
-}
-
 /**
  * Memoized on the section's own state, so ticking one row leaves both headers
  * alone unless that tick was the one that completed or broke a section.
@@ -242,6 +241,7 @@ function isEverySelected(
 const PullSectionHeader = memo(function PullSectionHeader({
   count,
   ids,
+  isApplying,
   isFirstSection,
   isSelected,
   onToggleAll,
@@ -249,6 +249,7 @@ const PullSectionHeader = memo(function PullSectionHeader({
 }: {
   count: number;
   ids: readonly UniqueModelId[];
+  isApplying: boolean;
   isFirstSection: boolean;
   isSelected: boolean;
   onToggleAll: (ids: readonly UniqueModelId[]) => void;
@@ -256,9 +257,7 @@ const PullSectionHeader = memo(function PullSectionHeader({
 }) {
   const { t } = useTranslation();
   const handleActionPress = useCallback(() => onToggleAll(ids), [ids, onToggleAll]);
-  const actionLabel = t(
-    isSelected ? 'common.selection.deselectAll' : 'settings.provider.models.selection.selectAll',
-  );
+  const actionLabel = t(isSelected ? 'common.selection.deselectAll' : 'common.selection.selectAll');
 
   return (
     <View
@@ -282,7 +281,7 @@ const PullSectionHeader = memo(function PullSectionHeader({
       <View className="shrink-0">
         <Button
           accessibilityLabel={actionLabel}
-          disabled={ids.length === 0}
+          disabled={isApplying || ids.length === 0}
           size="xs"
           variant="ghost"
           onPress={handleActionPress}

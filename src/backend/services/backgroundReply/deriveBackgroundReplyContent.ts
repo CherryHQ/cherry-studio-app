@@ -3,6 +3,7 @@ import type {
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessagePart } from '@/shared/contracts/agent';
+import { getBuiltInToolTitleKey } from '@/shared/data/types/builtInToolTitles';
 
 import type { BackgroundReplyMessage, BackgroundReplyOutcome } from './backgroundReplyTypes';
 
@@ -15,25 +16,6 @@ const WEB_SEARCH_TOOL_NAMES = new Set([
   'provider_web_search',
   'web_search',
 ]);
-const BUILT_IN_TOOL_TITLE_KEYS: Record<string, string> = {
-  calendar_create_event: 'chat.builtinTool.calendar.createEvent',
-  calendar_delete_event: 'chat.builtinTool.calendar.deleteEvent',
-  calendar_list_collections: 'chat.builtinTool.calendar.listCalendars',
-  calendar_list_events: 'chat.builtinTool.calendar.listEvents',
-  calendar_update_event: 'chat.builtinTool.calendar.updateEvent',
-  health_list_data_types: 'chat.builtinTool.health.listDataTypes',
-  health_query_data: 'chat.builtinTool.health.queryData',
-  health_get_record: 'chat.builtinTool.health.getRecord',
-  health_share_verifiable_records: 'chat.builtinTool.health.shareVerifiableRecords',
-  health_get_summary: 'chat.builtinTool.health.summary',
-  health_list_workouts: 'chat.builtinTool.health.listWorkouts',
-  location_get_current: 'chat.builtinTool.location.current',
-  reminder_create_item: 'chat.builtinTool.reminders.create',
-  reminder_delete_item: 'chat.builtinTool.reminders.delete',
-  reminder_list_collections: 'chat.builtinTool.reminders.listLists',
-  reminder_list_items: 'chat.builtinTool.reminders.list',
-  reminder_update_item: 'chat.builtinTool.reminders.update',
-};
 
 type ToolPart = Extract<AgentMessagePart, { type: 'dynamic-tool' }>;
 export type BackgroundReplyTranslate = (key: string) => string;
@@ -138,7 +120,7 @@ function getToolActivityLabel(part: ToolPart, t: BackgroundReplyTranslate): stri
     return t('chat.backgroundReply.tool.webSearch');
   }
 
-  const builtInTitleKey = BUILT_IN_TOOL_TITLE_KEYS[toolName];
+  const builtInTitleKey = getBuiltInToolTitleKey(toolName);
   return builtInTitleKey ? t(builtInTitleKey) : t('chat.backgroundReply.tool.generic');
 }
 

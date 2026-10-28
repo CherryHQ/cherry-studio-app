@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
 
-  s.frameworks = 'PDFKit'
+  s.frameworks = 'PDFKit', 'Vision'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

@@ -98,14 +98,17 @@ async function syncDirectory(
   destinationRoot: string,
   extension: string,
   check: boolean,
+  mobileOnlyFiles: readonly string[] = [],
 ): Promise<void> {
   const entries = await directoryEntries(sourceRoot, destinationRoot, extension);
+  const expectedFiles = entries.map(({ destination }) =>
+    path.relative(destinationRoot, destination),
+  );
+  const destinationFiles = (await listFiles(destinationRoot, extension).catch(() => [])).filter(
+    (file) => !mobileOnlyFiles.includes(file) || expectedFiles.includes(file),
+  );
 
   if (check) {
-    const destinationFiles = await listFiles(destinationRoot, extension).catch(() => []);
-    const expectedFiles = entries.map(({ destination }) =>
-      path.relative(destinationRoot, destination),
-    );
     if (destinationFiles.join('\n') !== expectedFiles.join('\n')) {
       throw new Error(
         `[design-sync] file set differs: ${path.relative(repoRoot, destinationRoot)}`,
@@ -117,7 +120,9 @@ async function syncDirectory(
     return;
   }
 
-  await rm(destinationRoot, { recursive: true, force: true });
+  for (const file of destinationFiles) {
+    if (!expectedFiles.includes(file)) await rm(path.join(destinationRoot, file));
+  }
   for (const { destination, source } of entries) {
     await mkdir(path.dirname(destination), { recursive: true });
     await copyFile(source, destination);
@@ -348,6 +353,8 @@ async function main() {
       path.join(mobileIcons, group),
       '.svg',
       check,
+      // Requesty is supplied by Mobile's provider catalog, not the desktop catalog.
+      group === 'providers' ? ['light/requesty.svg'] : [],
     );
   }
 

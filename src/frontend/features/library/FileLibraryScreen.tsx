@@ -15,7 +15,6 @@ import {
 } from '@/frontend/components/FileFolderBreadcrumbs';
 import { FileFolderPicker, useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import {
-  SelectionControls,
   SelectionProvider,
   useSelectionActions,
   useSelectionState,
@@ -25,7 +24,7 @@ import { useQuery } from '@/frontend/data/hooks';
 import { FileLibraryList } from './components/FileLibraryList';
 import type { FileLibraryFilter } from './hooks/useFileEntries';
 import { useFileLibraryItemActions } from './hooks/useFileLibraryItemActions';
-import { fileLibrarySelectionScope, type FileLibraryBrowseMode } from './utils/constants';
+import type { FileLibraryBrowseMode } from './utils/constants';
 
 const filterOrder: readonly FileLibraryFilter[] = ['all', 'image', 'document', 'sharing'];
 const filterLabelKeys: Record<FileLibraryFilter, string> = {
@@ -66,7 +65,7 @@ function FileLibraryScreenBody() {
   const { left, right } = useSafeAreaInsets();
   const [filter, setFilter] = useState<FileLibraryFilter>('all');
   const { enterEditing, exitEditing } = useSelectionActions();
-  const { isDeletionPending, isEditing } = useSelectionState();
+  const { isEditing, selectedIds } = useSelectionState();
 
   const openFolder = useCallback(
     (id: string | null) => {
@@ -109,31 +108,16 @@ function FileLibraryScreenBody() {
     ],
     [enterEditing, isBrowsingFolders, isCreating, requestCreate, router, t],
   );
-  const doneActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.done'),
-        disabled: isDeletionPending,
-        key: 'finish-selecting-files',
-        label: t('common.done'),
-        onPress: exitEditing,
-        type: 'label',
-      },
-    ],
-    [exitEditing, isDeletionPending, t],
-  );
-
   return (
     <>
       <RouteHeader
         onBack={
-          isEditing
-            ? exitEditing
-            : isBrowsingFolders && folderId
-              ? () => setFolderId(currentFolder?.parentId ?? null)
-              : undefined
+          isBrowsingFolders && folderId
+            ? () => setFolderId(currentFolder?.parentId ?? null)
+            : undefined
         }
-        rightActions={isEditing ? doneActions : rightActions}
+        rightActions={rightActions}
+        selection={isEditing ? { onExit: exitEditing, selectedCount: selectedIds.size } : undefined}
         title={isBrowsingFolders ? (currentFolder?.name ?? t('library.title')) : t('library.title')}
       />
       <View
@@ -217,7 +201,6 @@ function FileLibraryScreenBody() {
           getMenuItems={itemActions.getMenuItems}
           filter={filter}
         />
-        <SelectionControls scope={fileLibrarySelectionScope} />
       </View>
       {moving ? (
         <FileFolderPicker

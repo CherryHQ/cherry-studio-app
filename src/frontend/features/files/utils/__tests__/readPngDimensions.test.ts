@@ -3,7 +3,7 @@ import { readPngDimensions } from '../readPngDimensions';
 const mockReadBytes = jest.fn();
 const mockClose = jest.fn();
 jest.mock('expo-file-system', () => ({
-  File: jest.fn(() => ({ open: () => ({ readBytes: mockReadBytes, close: mockClose }) })),
+  File: jest.fn(() => ({ open: () => ({ readBytesSync: mockReadBytes, close: mockClose }) })),
   FileMode: { ReadOnly: 'r' },
 }));
 

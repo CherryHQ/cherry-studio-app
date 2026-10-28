@@ -110,7 +110,6 @@ const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set
   'claude-code',
   // Require credential fields and adapters that Mobile does not support yet.
   'azure-openai',
-  'vertexai',
   'aws-bedrock',
   // Embedding/rerank catalogs have no consuming Mobile feature yet.
   'jina',

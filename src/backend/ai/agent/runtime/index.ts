@@ -61,6 +61,7 @@ export type {
   FakeRuntimeProgram,
 } from './FakeRuntime';
 export {
+  DURABLE_IMAGE_TOOL_NAME,
   LANES_PER_SESSION,
   laneKey,
   parseLaneKey,
@@ -75,4 +76,5 @@ export {
   createDeniedToolResult,
   createErrorToolResult,
   createInterruptedToolResult,
+  createImageRequestErrorToolResult,
 } from './toolResults';

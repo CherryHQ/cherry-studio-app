@@ -55,6 +55,8 @@ export type MessagePartToolGroupProps = {
 
 export type MessagePartDetailProps = {
   children: ReactNode;
+  /** A title-row action; it stays visible at every sheet height. */
+  headerAction?: ReactNode;
   onClose: () => void;
   sizes?: BottomSheetSizes;
   testID?: string;
@@ -64,6 +66,8 @@ export type MessagePartDetailProps = {
 
 export type MessagePartPendingProps = {
   accessibilityLabel: string;
+  /** Why the reply has not started, such as local attachment work. */
+  reason?: string;
   testID?: string;
 };
 
@@ -119,6 +123,12 @@ export type MessagePartTranslationProps = {
 
 export type MessagePartSectionTitleProps = {
   title: string;
+};
+
+export type MessagePartSectionProps = MessagePartSectionTitleProps & {
+  action?: ReactNode;
+  children: ReactNode;
+  tone?: Extract<MessagePartTone, 'danger'>;
 };
 
 export type MessagePartTextSectionProps = MessagePartSectionTitleProps & {

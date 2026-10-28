@@ -404,6 +404,9 @@ export function createPendingChatMessages(
   >,
 ): readonly [MessageListItem, MessageListItem] {
   const createdAt = new Date().toISOString();
+  const inputFileEntryIds = input.parts.flatMap((part) =>
+    part.type === 'file' ? [part.fileEntryId] : [],
+  );
   const parts = input.parts.map(
     (part, index): AgentMessagePart =>
       part.type === 'file'
@@ -423,6 +426,7 @@ export function createPendingChatMessages(
       data: { parts: [] },
       id: input.assistantMessageId,
       ...(input.imageGeneration ? { imageGeneration: input.imageGeneration } : {}),
+      ...(inputFileEntryIds.length > 0 ? { inputFileEntryIds } : {}),
       role: 'assistant',
       status: 'pending',
     },
@@ -469,29 +473,6 @@ export function mergeAgentMessageViews(
   }
   merged.push(...newLive.slice(liveIndex));
   return merged;
-}
-
-/**
- * Show an answer awaiting its replacement turn the way a just-sent message
- * looks: empty and pending. Admission is too slow to leave the replaced answer
- * standing, and an empty pending row is the one state the list already renders
- * as "working on it". The Host's reserved view takes over as soon as it lands,
- * restoring any prefix the retry keeps.
- */
-export function projectRetryingMessage(
-  messages: readonly AgentMessageView[],
-  retryingMessageId: string | undefined,
-): readonly AgentMessageView[] {
-  if (!retryingMessageId) {
-    return messages;
-  }
-  const index = messages.findIndex((message) => message.id === retryingMessageId);
-  if (index < 0) {
-    return messages;
-  }
-  const projected = [...messages];
-  projected[index] = { ...messages[index], status: 'pending', parts: [] };
-  return projected;
 }
 
 export function toAgentMessageListItems(

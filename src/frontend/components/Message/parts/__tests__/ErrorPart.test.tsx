@@ -4,14 +4,23 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { ErrorPart } from '../ErrorPart';
+import { MessageFailureReportProvider } from '../MessageFailureReportContext';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    MessageDetailText: (props: object) => createElement('MessagePartTextSection', props),
+  };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    Button: (props: object) => createElement('Button', props),
     ContextMenuExclusion: (props: object) => createElement('View', props),
     MessagePart: {
       Detail: (props: object) => createElement('MessagePartDetail', props),
@@ -147,6 +156,30 @@ describe('ErrorPart', () => {
 
     act(() => detail.props.onClose());
     expect(renderer.root.findAllByType('MessagePartDetail')).toHaveLength(0);
+  });
+
+  test('reports the failed message from its detail sheet only when the host supports it', () => {
+    const failure = errorPart({
+      code: 'EXECUTION_FAILED',
+      message: 'timeout',
+      reasonCode: 'timeout',
+      retryable: true,
+    });
+    const onReport = jest.fn();
+    const renderer = render(
+      <MessageFailureReportProvider onReport={onReport}>
+        <ErrorPart messageId="message-1" part={failure} />
+      </MessageFailureReportProvider>,
+    );
+    act(() => renderer.root.findByType('MessagePartError').props.onPress());
+    const action = renderer.root.findByType('MessagePartDetail').props.headerAction;
+    expect(action.props.testID).toBe('error-part-detail-report');
+    act(() => action.props.onPress());
+    expect(onReport).toHaveBeenCalledWith('message-1');
+
+    const standalone = render(<ErrorPart messageId="message-1" part={failure} />);
+    act(() => standalone.root.findByType('MessagePartError').props.onPress());
+    expect(standalone.root.findByType('MessagePartDetail').props.headerAction).toBeUndefined();
   });
 
   test('never uses raw names or codes as the title', () => {

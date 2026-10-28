@@ -11,6 +11,7 @@ import { querit } from '@cherrystudio/web-search/providers/querit';
 import { searxng } from '@cherrystudio/web-search/providers/searxng';
 import { serply } from '@cherrystudio/web-search/providers/serply';
 import { tavily } from '@cherrystudio/web-search/providers/tavily';
+import { yuanbao } from '@cherrystudio/web-search/providers/yuanbao';
 import { zhipu } from '@cherrystudio/web-search/providers/zhipu';
 
 import type { WebSearchProviderId } from '@/shared/data/types/webSearch';
@@ -21,6 +22,7 @@ export const REMOTE_WEB_SEARCH_PROVIDERS = {
   searxng,
   exa,
   'exa-mcp': exaMcp,
+  yuanbao,
   bocha,
   querit,
   deepseek,

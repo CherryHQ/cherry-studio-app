@@ -101,7 +101,7 @@ export type TurnPreparationDependencies = {
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
   /** The Host keeps the engine binding; preparation consumes that local Runtime. */
-  runtime: AgentRuntime;
+  runtime: Pick<AgentRuntime, 'descriptor' | 'preflightModel'>;
   runtimeTools: AgentRuntimeToolResolver;
   /** Optional so tests and hosts without a Skill library prepare turns unchanged. */
   skills?: SkillScopeSource;
@@ -202,7 +202,7 @@ function createTurnUsageAttribution(
 /**
  * Where a turn sits in the message tree and what it may do. `through` is the
  * message the new question follows (null for a first question); omitted, the
- * Session's selected leaf. A multi-model answer limits its tools to automatic reads.
+ * Session's selected leaf. A multi-model answer limits its tools to reads.
  */
 export type TurnScope = { through?: string | null; readOnlyTools?: boolean };
 
@@ -631,7 +631,7 @@ export async function prepareResolvedTurn(
     if (dependencies.skillWorkflow && dependencies.skills) {
       skillTools = [
         ...skillTools,
-        createSkillCreationTool(dependencies.skillWorkflow),
+        createSkillCreationTool(dependencies.skillWorkflow, { deferred: !skills.create }),
         ...createSkillManagementTools({
           workflow: dependencies.skillWorkflow,
           source: dependencies.skills,
@@ -646,10 +646,14 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
-  // Parallel answers share one real world: only reads that need no approval
-  // (so no answer stops to ask the user) run beside each other.
+  // Parallel answers run side by side, so they only use tools declared read-only. Connected
+  // reads keep the Agent's approval mode; a built-in read that still asks after it is a consent,
+  // such as location or health data, and stays out.
   if (scope.readOnlyTools)
-    tools = tools.filter((tool) => tool.effect === 'read' && tool.approval === 'auto');
+    tools = tools.filter(
+      (tool) =>
+        tool.effect === 'read' && (tool.ref.source !== 'builtin' || tool.approval === 'auto'),
+    );
   let workflowInstructions: TurnPlan['workflowInstructions'] = [];
   if (pluginGuides.length > 0) {
     const workflows = getPluginWorkflows(pluginGuides);

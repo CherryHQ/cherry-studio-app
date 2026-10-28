@@ -15,10 +15,13 @@ export type FileEntryKind = 'document' | 'html' | 'image' | 'markdown' | 'text';
 const kindByMediaType = new Map<string, FileEntryKind>([
   ['text/html', 'html'],
   ['text/markdown', 'markdown'],
+  // iOS reports Markdown picked from Files under its legacy type.
+  ['text/x-markdown', 'markdown'],
   ['application/json', 'text'],
   ['application/xml', 'text'],
   ['application/yaml', 'text'],
   ['application/x-yaml', 'text'],
+  ['text/rtf', 'document'],
 ]);
 
 /** One product vocabulary for file surfaces and their opening policy. */
@@ -37,12 +40,14 @@ export function fileEntryPreviewKind(entry: Pick<FileEntry, 'mediaType'>): FileE
 
 const inAppDocumentMediaTypes = new Set([
   'application/pdf',
+  'application/rtf',
+  'text/rtf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
-/** PDF and Office Open XML documents open in the app's document viewer; other documents open with the system. */
+/** PDF, RTF and Office Open XML documents open in the app; other documents open with the system. */
 export function canPreviewDocument(entry: Pick<FileEntry, 'mediaType'>): boolean {
   return inAppDocumentMediaTypes.has(entry.mediaType.split(';')[0]?.trim().toLowerCase() ?? '');
 }

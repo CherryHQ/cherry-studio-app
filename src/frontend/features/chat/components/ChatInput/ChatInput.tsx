@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View } from 'react-native';
+import { useWindowDimensions, View, type ViewInstance } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
@@ -57,6 +57,8 @@ import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
+
+type ChatInputPicker = 'plugin' | 'prompt' | 'skill';
 
 type ChatInputProps = {
   agentId?: string;
@@ -237,38 +239,35 @@ function TextChatInput({
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
-  const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
-  const [isPromptPickerOpen, setIsPromptPickerOpen] = useState(false);
+  // One picker at a time; each closes only itself, so a late close never hides the next one.
+  const [openPicker, setOpenPicker] = useState<ChatInputPicker | null>(null);
   const prompts = useChatInputMcpPrompts(mode === 'standard' ? agentId : undefined);
   const [pickerAgentId, setPickerAgentId] = useState(agentId);
   if (pickerAgentId !== agentId) {
     setPickerAgentId(agentId);
-    setIsSkillPickerOpen(false);
-    setIsPromptPickerOpen(false);
+    if (openPicker === 'skill' || openPicker === 'prompt') setOpenPicker(null);
   }
-  const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
   const pluginCatalog = usePluginCatalog();
   const pluginConnections = usePluginConnections();
   const connectedPlugins =
     pluginCatalog.isError || pluginConnections.isError
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
-  const pluginMenuRef = useRef<View>(null);
-  const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
-  const closeSkillPicker = useCallback(() => setIsSkillPickerOpen(false), []);
-  const closePromptPicker = useCallback(() => setIsPromptPickerOpen(false), []);
-  const isPluginPickerVisible = mode === 'standard' && isPluginPickerOpen && !isApprovalPending;
-  const isSkillPickerVisible =
-    mode === 'standard' && isSkillPickerOpen && Boolean(agentId) && !isApprovalPending;
-  const isPromptPickerVisible =
-    mode === 'standard' && isPromptPickerOpen && prompts.length > 0 && !isApprovalPending;
+  const pluginMenuRef = useRef<ViewInstance>(null);
+  const closePicker = useCallback(
+    (picker: ChatInputPicker) => setOpenPicker((current) => (current === picker ? null : current)),
+    [],
+  );
+  const closePluginPicker = useCallback(() => closePicker('plugin'), [closePicker]);
+  const closeSkillPicker = useCallback(() => closePicker('skill'), [closePicker]);
+  const closePromptPicker = useCallback(() => closePicker('prompt'), [closePicker]);
+  const isPickerAvailable = mode === 'standard' && !isApprovalPending;
+  const isPluginPickerVisible = isPickerAvailable && openPicker === 'plugin';
+  const isSkillPickerVisible = isPickerAvailable && openPicker === 'skill' && Boolean(agentId);
+  const isPromptPickerVisible = isPickerAvailable && openPicker === 'prompt' && prompts.length > 0;
   const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible || isPromptPickerVisible;
-  if (isPromptPickerOpen && prompts.length === 0) setIsPromptPickerOpen(false);
-  if (isApprovalPending || mode === 'minimal') {
-    if (isPluginPickerOpen) setIsPluginPickerOpen(false);
-    if (isSkillPickerOpen) setIsSkillPickerOpen(false);
-    if (isPromptPickerOpen) setIsPromptPickerOpen(false);
-  }
+  if (openPicker && (!isPickerAvailable || (openPicker === 'prompt' && prompts.length === 0)))
+    setOpenPicker(null);
   const { fontScale } = useWindowDimensions();
   const inputTextStyle = useResolveClassNames('text-base');
   const compactInputStyle = {
@@ -290,9 +289,7 @@ function TextChatInput({
   }, [closeModelPicker, openProviderSetup]);
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
-      setIsPluginPickerOpen(false);
-      setIsSkillPickerOpen(false);
-      setIsPromptPickerOpen(false);
+      setOpenPicker(null);
       const plugins =
         mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
       // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
@@ -431,29 +428,17 @@ function TextChatInput({
                           media={mode === 'minimal' ? 'images' : 'all'}
                           onPickSkills={
                             mode === 'standard' && agentId && !isParallel
-                              ? () => {
-                                  setIsPluginPickerOpen(false);
-                                  setIsPromptPickerOpen(false);
-                                  setIsSkillPickerOpen(true);
-                                }
+                              ? () => setOpenPicker('skill')
                               : undefined
                           }
                           onPickPlugins={
                             mode === 'standard' && !isParallel
-                              ? () => {
-                                  setIsSkillPickerOpen(false);
-                                  setIsPromptPickerOpen(false);
-                                  setIsPluginPickerOpen(true);
-                                }
+                              ? () => setOpenPicker('plugin')
                               : undefined
                           }
                           onPickPrompts={
                             mode === 'standard' && prompts.length > 0
-                              ? () => {
-                                  setIsPluginPickerOpen(false);
-                                  setIsSkillPickerOpen(false);
-                                  setIsPromptPickerOpen(true);
-                                }
+                              ? () => setOpenPicker('prompt')
                               : undefined
                           }
                           triggerRef={pluginMenuRef}

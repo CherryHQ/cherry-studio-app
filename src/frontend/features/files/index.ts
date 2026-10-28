@@ -1,1 +1,1 @@
-export { FileViewerScreen } from './FileViewerScreen';
+export { FileViewerPane, FileViewerScreen } from './FileViewerScreen';

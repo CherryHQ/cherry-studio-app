@@ -22,6 +22,9 @@ import type {
   RuntimeWebTools,
 } from './types';
 
+/** Provider name of the Host tool that runs an explicitly submitted image request. */
+export const DURABLE_IMAGE_TOOL_NAME = 'cherry_generate_image';
+
 /** Portable storage capability supplied by composition; no Expo, data service, or Pi types. */
 export type RuntimeSqlValue = null | number | bigint | string | Uint8Array;
 export interface RuntimeSqlExecutor {
@@ -201,6 +204,8 @@ export type RuntimeDurableTurn = {
   hasAssistant: boolean;
   /** A provider attempt failed and the engine is retrying it automatically. */
   isRetrying?: boolean;
+  /** Repeated process interruptions paused execution; the input is still durable. */
+  isPaused?: boolean;
 };
 
 export type RuntimeConversationSnapshot = {
@@ -220,7 +225,11 @@ export interface DurableAgentRuntime {
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
-  initialize(database: RuntimeSqlDatabase, ports: RuntimeExecutionPorts): Promise<void>;
+  initialize(
+    database: RuntimeSqlDatabase,
+    ports: RuntimeExecutionPorts,
+    signal?: AbortSignal,
+  ): Promise<void>;
   /** Enable scheduling only after business identities and capabilities have been reconstructed. */
   resume(): void;
   /** Native task demand, including background compaction; observing does not schedule work. */

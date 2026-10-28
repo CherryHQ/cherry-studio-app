@@ -2,6 +2,8 @@ import type { ReactElement } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { PaneChromeProvider } from '@/frontend/appShell/layout';
+
 import { RouteHeader } from './RouteHeader';
 import { RouteHeaderProvider } from './RouteHeaderProvider';
 
@@ -44,7 +46,9 @@ jest.mock('../components/HeaderChrome', () =>
 );
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, values?: { count: number }) => (values ? `${key}:${values.count}` : key),
+  }),
 }));
 
 describe('RouteHeader.android', () => {
@@ -129,6 +133,90 @@ describe('RouteHeader.android', () => {
     expect(headerRight().props.actions[0]?.items).toBe(menuItems);
   });
 
+  it('replaces page chrome with one selection exit and restores it when selection ends', async () => {
+    const exitSelection = jest.fn();
+    const pageProps = {
+      rightActions: [
+        { key: 'create', label: 'Create', onPress: jest.fn(), type: 'label' as const },
+      ],
+      title: 'Models',
+      titleElement: <Text>Tabs</Text>,
+    };
+
+    await renderRouteHeader(
+      <RouteHeader {...pageProps} selection={{ onExit: exitSelection, selectedCount: 2 }} />,
+      'drawer',
+    );
+
+    expect(getOptions().title).toBe('common.selection.count:2');
+    expect(getOptions().headerTitle).toBeUndefined();
+    expect(getOptions().headerRight).toBeUndefined();
+    expect(getLeadingAction().accessibilityLabel).toBe('common.cancel');
+    getLeadingAction().onPress();
+    expect(exitSelection).toHaveBeenCalledTimes(1);
+
+    await renderRouteHeader(<RouteHeader {...pageProps} />, 'drawer');
+
+    expect(getLeadingAction().accessibilityLabel).toBe('navigation.openMenu');
+    expect(getOptions().headerTitle).toEqual(expect.any(Function));
+    expect(getOptions().headerRight).toEqual(expect.any(Function));
+  });
+
+  it('renders inline in a pane, leading with the pane exit unless the page declares a back step', async () => {
+    const paneExit = {
+      accessibilityLabel: 'common.close',
+      icon: () => null,
+      key: 'pane-exit',
+      onPress: jest.fn(),
+      type: 'icon' as const,
+    };
+    const folderUp = jest.fn();
+    const inPane = (element: ReactElement) => (
+      <PaneChromeProvider leadingAction={paneExit}>{element}</PaneChromeProvider>
+    );
+
+    await renderRouteHeader(inPane(<RouteHeader title="Files" />), 'drawer');
+
+    expect(renderer!.root.findAllByType('StackScreen')).toHaveLength(0);
+    expect(getInlineActions()[0]).toBe(paneExit);
+
+    await renderRouteHeader(inPane(<RouteHeader onBack={folderUp} title="Folder" />), 'drawer');
+
+    const back = getInlineActions()[0]!;
+    expect(back.accessibilityLabel).toBe('navigation.back');
+    back.onPress();
+    expect(folderUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('places the pane control before the page actions', async () => {
+    const paneExit = {
+      key: 'pane-exit',
+      label: 'Back',
+      onPress: jest.fn(),
+      type: 'label' as const,
+    };
+    const expand = { key: 'expand', label: 'Expand', onPress: jest.fn(), type: 'label' as const };
+    const share = { key: 'share', label: 'Share', onPress: jest.fn(), type: 'label' as const };
+
+    await renderRouteHeader(
+      <PaneChromeProvider headerAction={expand} leadingAction={paneExit}>
+        <RouteHeader rightActions={[share]} title="Report.pdf" />
+      </PaneChromeProvider>,
+      'close',
+    );
+
+    expect(getInlineActions()).toEqual([paneExit, expand, share]);
+  });
+
+  function getInlineActions() {
+    return renderer!.root
+      .findAllByType('HeaderAction' as never)
+      .map(
+        (node) =>
+          (node.props as { action: { accessibilityLabel?: string; onPress: () => void } }).action,
+      );
+  }
+
   async function renderRouteHeader(
     element: ReactElement,
     rootAction: 'back' | 'close' | 'drawer' = 'back',
@@ -146,7 +234,7 @@ describe('RouteHeader.android', () => {
 
   function getLeadingAction() {
     const headerLeft = getOptions().headerLeft as () => ReactElement<{
-      actions: readonly { accessibilityLabel?: string }[];
+      actions: readonly { accessibilityLabel?: string; onPress: () => void }[];
     }>;
     const action = headerLeft().props.actions[0];
 

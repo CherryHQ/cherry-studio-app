@@ -51,6 +51,7 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockDisposeSkills = jest.fn(async () => {});
+const mockDisposeAppUpdate = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -59,6 +60,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
   disposeSkills: mockDisposeSkills,
+  disposeAppUpdate: mockDisposeAppUpdate,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -76,6 +78,9 @@ jest.mock('@/backend/services/backup/restoreStartup', () => ({
 }));
 jest.mock('@/backend/services/file/filePreviewStorage', () => ({
   resetFilePreviewsForRestore: jest.fn(),
+}));
+jest.mock('@/backend/services/file/pdfTextCache', () => ({
+  resetPdfTextCacheForRestore: jest.fn(),
 }));
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),

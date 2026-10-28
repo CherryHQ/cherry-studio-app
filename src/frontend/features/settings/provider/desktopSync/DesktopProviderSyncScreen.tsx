@@ -328,11 +328,12 @@ function ProviderSelection({
       <Section>
         {loadedPreview.preview.providers.map((provider) => {
           const isUnavailable = Boolean(provider.unavailableReason);
+          const isDisabled = isUnavailable || isImporting;
           const isSelected = selectedProviderIds.has(provider.id);
           return (
             <Section.Item
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: isSelected, disabled: isUnavailable }}
+              accessibilityState={{ checked: isSelected, disabled: isDisabled }}
               description={
                 provider.unavailableReason
                   ? t(UNAVAILABLE_KEYS[provider.unavailableReason])
@@ -343,13 +344,17 @@ function ProviderSelection({
                       count: provider.models.length,
                     })
               }
-              disabled={isUnavailable}
+              disabled={isDisabled}
               key={provider.id}
               label={provider.name}
               leading={<ProviderAvatar providerId={provider.id} providerName={provider.name} />}
               onPress={isUnavailable ? undefined : () => onToggleProvider(provider.id)}
               showChevron={false}
-              trailing={isUnavailable ? undefined : <SelectionIndicator selected={isSelected} />}
+              trailing={
+                isUnavailable ? undefined : (
+                  <SelectionIndicator disabled={isDisabled} selected={isSelected} />
+                )
+              }
             />
           );
         })}

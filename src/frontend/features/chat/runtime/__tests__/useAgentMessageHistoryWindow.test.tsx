@@ -6,7 +6,10 @@ import { queryKeys } from '@/frontend/data';
 import { useAgentMessageHistoryWindow } from '../useAgentMessageHistoryWindow';
 
 const mockGet = jest.fn(async () => ({ items: [] }));
-jest.mock('@/frontend/data/DataApiProvider', () => ({ useApiClient: () => ({ get: mockGet }) }));
+jest.mock('@/frontend/data', () => ({
+  ...jest.requireActual('@/frontend/data'),
+  useApiClient: () => ({ get: mockGet }),
+}));
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 

@@ -14,6 +14,10 @@ export function createApiKeyEntry(): ApiKeyEntry {
   return { id: Crypto.randomUUID(), isEnabled: true, key: '' };
 }
 
+export function getProviderApiKeyLabel(entry: ApiKeyEntry, unnamedLabel: string): string {
+  return entry.label?.trim() || unnamedLabel;
+}
+
 /** Keep short credentials fully hidden and expose only a small suffix for recognition. */
 export function maskProviderApiKey(key: string): string {
   const trimmedKey = key.trim();

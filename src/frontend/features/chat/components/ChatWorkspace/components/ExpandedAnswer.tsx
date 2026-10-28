@@ -5,7 +5,7 @@ import {
   ContextMenuExclusion,
   Skeleton,
 } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
+import { duration, easing, spring } from '@cherrystudio/ui/motion';
 import {
   type PropsWithChildren,
   type ReactNode,
@@ -17,7 +17,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  BackHandler,
   Keyboard,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -26,6 +25,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ScrollViewInstance,
+  type ViewInstance,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -36,10 +37,12 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem } from '@/frontend/components/Message';
 
@@ -48,7 +51,7 @@ import {
   ConversationAttachments,
   ConversationMessageContent,
 } from '../../ConversationMessageContent';
-import { useFullScreenLayer } from '../../FullScreenLayer';
+import { useFullScreenLayer, useFullScreenLayerProgress } from '../../FullScreenLayer';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
 import { useChatSessionId } from '../context/ChatSessionContext';
@@ -69,6 +72,11 @@ const CARD_RADIUS = 16;
  * it returns them, so they come and go inside the motion instead of after it.
  */
 const COVER_PROGRESS = 0.5;
+/**
+ * Android draws its header and composer in the app, so the layer covers them from the start: the
+ * header fades and the composer dims under it, and nothing re-lays out mid-motion.
+ */
+const COVERS_FROM_START = Platform.OS === 'android';
 /** How far past the top an iOS reader pulls before letting go closes the layer. */
 const PULL_CLOSE_DISTANCE = 72;
 /** Within this distance of the end, a running answer keeps its newest text in view. */
@@ -175,17 +183,19 @@ function ExpandedAnswer({
   // throughout so its content never re-lays out mid-motion.
   const size = host ? { height: windowHeight - host.top, width: host.width } : undefined;
   const [isSettled, setIsSettled] = useState(false);
-  const progress = useSharedValue(0);
+  const localProgress = useSharedValue(0);
+  const progress = useFullScreenLayerProgress() ?? localProgress;
   const origin = useSharedValue<AnswerFrame | null>(null);
   const width = size?.width ?? 0;
   const height = size?.height ?? 0;
   const isClosing = useRef(false);
-  const rootRef = useRef<View>(null);
-  const pagerRef = useRef<ScrollView>(null);
-  const [isCovering, setIsCovering] = useState(false);
-  useFullScreenLayer(isCovering);
+  const rootRef = useRef<ViewInstance>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
+  const [isCovering, setIsCovering] = useState(COVERS_FROM_START);
+  const [isClosed, setIsClosed] = useState(false);
+  useFullScreenLayer(isCovering && !isClosed);
   useAnimatedReaction(
-    () => progress.get() > COVER_PROGRESS,
+    () => COVERS_FROM_START || progress.get() > COVER_PROGRESS,
     (covering, previous) => {
       if (covering !== previous) runOnJS(setIsCovering)(covering);
     },
@@ -232,34 +242,39 @@ function ExpandedAnswer({
     isClosing.current = true;
     const shrink = (frame: AnswerFrame | undefined) => {
       origin.set(frame ?? null);
+      const done = (finished?: boolean) => {
+        'worklet';
+        if (finished) runOnJS(setIsClosed)(true);
+      };
       progress.set(
-        withTiming(
-          0,
-          { duration: frame ? duration.base : duration.fast, easing: easing.settle },
-          (finished) => {
-            if (finished) runOnJS(onClosed)();
-          },
-        ),
+        frame
+          ? withSpring(0, spring.settle, done)
+          : withTiming(0, { duration: duration.fast, easing: easing.settle }, done),
       );
     };
     if (reduceMotion || !shownId) shrink(undefined);
     else void measureCard(shownId).then(shrink);
-  }, [measureCard, onClosed, origin, progress, reduceMotion, shownId]);
+  }, [measureCard, origin, progress, reduceMotion, shownId]);
+  // The screen is released before the layer goes, so its region shrinks back under a layer that has
+  // already finished; together they would show the transcript out of place for a frame.
+  useEffect(() => {
+    if (!isClosed) return;
+    const frame = requestAnimationFrame(onClosed);
+    return () => cancelAnimationFrame(frame);
+  }, [isClosed, onClosed]);
+
+  // The screen's chrome follows the progress; a layer removed mid-motion must not leave it hidden.
+  useEffect(() => () => progress.set(0), [progress]);
 
   // The group is gone once its turn is deleted or the Session changes underneath.
   useEffect(() => {
     if (!row?.branch) onClosed();
   }, [onClosed, row?.branch]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      close();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [close]);
+  // A route pushed over the chat keeps back for itself; the layer stays open underneath.
+  useFocusedBackPress(close);
 
+  const openDuration = useRef<number>(undefined);
   const handleHostLayout = () => {
     const isOpening = !host;
     void Promise.all([
@@ -270,16 +285,19 @@ function ExpandedAnswer({
       setHost(frame);
       if (!isOpening) return;
       origin.set(card ?? null);
-      progress.set(
-        withTiming(
-          1,
-          { duration: card ? duration.slow : duration.fast, easing: easing.settle },
-          (finished) => {
-            if (finished) runOnJS(setIsSettled)(true);
-          },
-        ),
-      );
+      openDuration.current = card ? duration.slow : duration.fast;
     });
+  };
+  // Grows once the answer has laid out, so mounting it does not use up the motion's first frames.
+  const handleContentLayout = () => {
+    const ms = openDuration.current;
+    if (ms === undefined) return;
+    openDuration.current = undefined;
+    progress.set(
+      withTiming(1, { duration: ms, easing: easing.settle }, (finished) => {
+        if (finished) runOnJS(setIsSettled)(true);
+      }),
+    );
   };
 
   // The shown answer's page stays in view: after a new answer, a refused selection or a rotation.
@@ -302,7 +320,7 @@ function ExpandedAnswer({
     };
   });
   const contentStyle = useAnimatedStyle(() => ({
-    opacity: origin.get() ? interpolate(progress.get(), [0.35, 1], [0, 1], Extrapolation.CLAMP) : 1,
+    opacity: origin.get() ? interpolate(progress.get(), [0.2, 1], [0, 1], Extrapolation.CLAMP) : 1,
   }));
   const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.get() }));
   // Once a horizontal swipe wins, the drawer must not take over the same touch.
@@ -346,7 +364,10 @@ function ExpandedAnswer({
             <BackgroundPressExclusion className="absolute inset-0">
               <Animated.View className="absolute overflow-hidden bg-card" style={frameStyle}>
                 {/* Laid out at the final size, so growing clips the layer instead of re-laying it out. */}
-                <Animated.View style={[{ height, width }, contentStyle]}>
+                <Animated.View
+                  onLayout={handleContentLayout}
+                  style={[{ height, width }, contentStyle]}
+                >
                   <View
                     className="flex-row items-center gap-2 px-4 pb-1"
                     style={{ paddingTop: insets.top + 4 }}
@@ -441,7 +462,7 @@ function AnswerPage({
   onPullClose: () => void;
 }) {
   const row = useChatMessageRow(answer?.id ?? '');
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const isAtEnd = useRef(true);
   const isRunning = answer?.status === 'pending';
 

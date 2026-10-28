@@ -38,9 +38,16 @@ describe('chat model connection probe', () => {
       },
       { type: 'completed' },
     ]);
-    await expect(checkChatModel(probe.runtime, model, probe)).resolves.toMatchObject({
+    const clock = jest
+      .spyOn(performance, 'now')
+      .mockReturnValueOnce(100.25)
+      .mockReturnValueOnce(2312.6);
+    // Latency is displayed as whole milliseconds.
+    await expect(checkChatModel(probe.runtime, model, probe)).resolves.toEqual({
       status: 'success',
+      latency: 2212,
     });
+    clock.mockRestore();
     expect(probe.requests).toHaveLength(1);
     expect(probe.requests[0]).toMatchObject({
       model: { modelId: 'chat', providerId: 'provider' },

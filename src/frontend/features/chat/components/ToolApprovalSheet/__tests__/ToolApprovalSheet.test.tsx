@@ -14,6 +14,15 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+jest.mock('@/frontend/components/MessageDetail', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+  return {
+    MessageDetailValue: ({ value }: { value: unknown }) => (
+      <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
+    ),
+  };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
@@ -55,7 +64,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-const allowLabel = 'chat.tool.approval.allow';
+const approveLabel = 'chat.tool.approval.continue';
 const denyLabel = 'chat.tool.approval.deny';
 
 function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingToolApproval {
@@ -131,7 +140,7 @@ describe('ToolApprovalSheet', () => {
   test('approves the call the sheet is showing', async () => {
     const { onRespond } = render();
 
-    await press(allowLabel);
+    await press(approveLabel);
 
     // Each source resolves the pending tool using this approval identity.
     expect(onRespond).toHaveBeenCalledWith({
@@ -177,7 +186,7 @@ describe('ToolApprovalSheet', () => {
     render();
 
     expect(findButton(denyLabel)?.props.variant).toBe('secondary');
-    expect(findButton(allowLabel)?.props.variant).toBe('default');
+    expect(findButton(approveLabel)?.props.variant).toBe('default');
   });
 
   test('ignores a second decision while the first is still in flight', async () => {
@@ -190,11 +199,11 @@ describe('ToolApprovalSheet', () => {
     });
 
     await act(async () => {
-      findButton(allowLabel)?.props.onPress();
+      findButton(approveLabel)?.props.onPress();
       await Promise.resolve();
     });
 
-    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(approveLabel)?.props.disabled).toBe(true);
     expect(findButton(denyLabel)?.props.disabled).toBe(true);
 
     // Disabled is what the user sees; the guard in `submit` is what actually
@@ -207,7 +216,7 @@ describe('ToolApprovalSheet', () => {
     await act(async () => {
       settle();
     });
-    expect(findButton(allowLabel)?.props.disabled).toBe(false);
+    expect(findButton(approveLabel)?.props.disabled).toBe(false);
   });
 
   test('keeps the decided request on screen while the sheet closes', () => {
@@ -231,10 +240,10 @@ describe('ToolApprovalSheet', () => {
     });
 
     await act(async () => {
-      findButton(allowLabel)?.props.onPress();
+      findButton(approveLabel)?.props.onPress();
       await Promise.resolve();
     });
-    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(approveLabel)?.props.disabled).toBe(true);
 
     rerender([
       makeApproval({
@@ -243,7 +252,7 @@ describe('ToolApprovalSheet', () => {
       }),
     ]);
 
-    expect(findButton(allowLabel)?.props.disabled).toBe(false);
+    expect(findButton(approveLabel)?.props.disabled).toBe(false);
     await act(async () => settle());
   });
 
@@ -287,18 +296,18 @@ describe('ToolApprovalSheet', () => {
   test('blocks unavailable decisions', async () => {
     const { onRespond } = render({ canRespond: false });
 
-    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(approveLabel)?.props.disabled).toBe(true);
     expect(findButton(denyLabel)?.props.disabled).toBe(true);
-    await press(allowLabel);
+    await press(approveLabel);
     await press(denyLabel);
     expect(onRespond).not.toHaveBeenCalled();
   });
 
   test('keeps denial available while health sharing consent cannot be granted', async () => {
     const { onRespond } = render({ canApprove: false });
-    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(approveLabel)?.props.disabled).toBe(true);
     expect(findButton(denyLabel)?.props.disabled).toBe(false);
-    await press(allowLabel);
+    await press(approveLabel);
     expect(onRespond).not.toHaveBeenCalled();
     await press(denyLabel);
     expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: false });

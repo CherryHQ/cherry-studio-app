@@ -7,6 +7,7 @@ import type {
 } from '@earendil-works/pi-ai';
 import type { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import type { TraceSpan } from '../../../observability';
 import type {
   RuntimeModel,
   RuntimeModelPreflight,
@@ -19,7 +20,7 @@ import type { PiNativeWebTools } from './piWebTools';
 export type PiStreamFn = (
   model: Model<Api>,
   context: TranscriptContext,
-  options?: SimpleStreamOptions,
+  options?: SimpleStreamOptions & { trace?: TraceSpan },
 ) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
 
 export type PiModelResolution = {

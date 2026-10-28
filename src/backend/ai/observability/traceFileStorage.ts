@@ -63,12 +63,12 @@ export const traceFileStorage: TraceFileStorage = {
         // Isolate an interrupted final line so it cannot consume the next valid record.
         if (latest.size) {
           handle.offset = latest.size - 1;
-          if (handle.readBytes(1)[0] !== 0x0a) handle.writeBytes(new Uint8Array([0x0a]));
+          if (handle.readBytesSync(1)[0] !== 0x0a) handle.writeBytesSync(new Uint8Array([0x0a]));
         }
         const size = handle.size;
         if (size === null) throw new Error('Trace file is not writable');
         handle.offset = size;
-        handle.writeBytes(bytes);
+        handle.writeBytesSync(bytes);
       } finally {
         handle.close();
       }
@@ -79,7 +79,7 @@ export const traceFileStorage: TraceFileStorage = {
     let committed = false;
     try {
       temporary.create();
-      temporary.write(bytes);
+      temporary.writeSync(bytes);
       await temporary.move(destination);
       committed = true;
     } finally {
@@ -131,7 +131,7 @@ export const traceFileStorage: TraceFileStorage = {
       }
       const manifest = new File(directory, 'manifest.json');
       manifest.create();
-      manifest.write(
+      manifest.writeSync(
         JSON.stringify({
           schemaVersion: 1,
           capture: 'metadata',

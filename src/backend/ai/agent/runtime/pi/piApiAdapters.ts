@@ -3,12 +3,15 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { CacheRetention, FetchFunction, ProviderHeaders } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
+import type { VertexAnthropicOptions } from './piVertexAnthropic';
 
 export type SupportedPiApi =
   | 'anthropic-messages'
   | 'google-generative-ai'
+  | 'google-vertex'
   | 'openai-completions'
   | 'openai-responses'
   | 'openai-codex-responses'
@@ -84,6 +87,30 @@ export function resolvePiApiAdapter(
   endpointType: PiLanguageEndpointType,
   adapterFamily?: string,
 ): PiApiAdapter {
+  if (
+    endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES &&
+    adapterFamily === 'google-vertex-anthropic'
+  ) {
+    return {
+      api: 'anthropic-messages',
+      authHeaderNames: ['authorization', 'x-goog-api-key', 'x-api-key', 'api-key'],
+      formatBaseUrl: (baseUrl) => baseUrl,
+      loadStreamSimple: async () =>
+        (await import('./piVertexAnthropic')).streamVertexAnthropic as PiStreamFn,
+      supportsCustomFetch: true,
+    };
+  }
+  if (endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT && adapterFamily === 'google-vertex') {
+    return {
+      api: 'google-vertex',
+      authHeaderNames: ['authorization', 'x-goog-api-key', 'x-api-key', 'api-key'],
+      formatBaseUrl: (baseUrl) => baseUrl,
+      loadStreamSimple: async () =>
+        (await import('@earendil-works/pi-ai/api/google-vertex'))
+          .streamSimple as unknown as PiStreamFn,
+      supportsCustomFetch: true,
+    };
+  }
   if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'openai-codex') {
     return {
       api: 'openai-codex-responses',
@@ -102,6 +129,8 @@ export function resolvePiApiAdapter(
 }
 
 type PiStreamBinding = {
+  accessToken?: string;
+  vertex?: VertexAnthropicOptions['vertex'];
   apiKey?: string;
   fetch: FetchFunction;
   headers: Record<string, string>;
@@ -172,6 +201,7 @@ export async function bindPiStream(
   const fetch = adapter.supportsCustomFetch ? withRetryableBodyFailure(binding.fetch) : undefined;
 
   return (model, context, options) => {
+    const { trace, ...providerOptions } = options ?? {};
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
     const headers: ProviderHeaders = { ...options?.headers, ...binding.headers };
@@ -186,8 +216,10 @@ export async function bindPiStream(
       }
     }
     const streamOptions = {
-      ...options,
+      ...providerOptions,
       apiKey: binding.apiKey === '' ? 'unused' : binding.apiKey,
+      ...(binding.accessToken ? { accessToken: binding.accessToken } : {}),
+      ...(binding.vertex ? { vertex: binding.vertex } : {}),
       cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
       sessionId: binding.sessionId ?? options?.sessionId,
       ...(adapter.api === 'openai-codex-responses' ? { transport: 'sse' } : {}),
@@ -201,7 +233,7 @@ export async function bindPiStream(
       onPayload: async (payload, requestModel) => {
         const previous = await options?.onPayload?.(payload, requestModel);
         const resolvedPayload = previous === undefined ? payload : previous;
-        return binding.requestParameters
+        const requestPayload = binding.requestParameters
           ? applyPiRequestParameters(
               resolvedPayload,
               adapter.api,
@@ -210,6 +242,8 @@ export async function bindPiStream(
               temperature,
             )
           : resolvedPayload;
+        trace?.setAttributes(piModelPayloadAttributes(requestPayload, adapter.api));
+        return requestPayload;
       },
       signal: options?.signal,
       temperature,

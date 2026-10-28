@@ -1,8 +1,11 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
+
 import { GenericToolPart } from './GenericToolPart';
 import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
+import { useReadFileOcrStatus } from './useReadFileOcrStatus';
 
 const READ_FILE_TOOL_NAME = 'read_file';
 
@@ -19,9 +22,10 @@ export function ReadFileToolPart({ part }: ReadFileToolPartProps) {
   const { t } = useTranslation();
   const read = part.state === 'output-available' ? parseRead(part.output) : null;
   const rejection = part.state === 'output-available' ? parseRejection(part.output) : null;
+  const ocrStatus = useReadFileOcrStatus(part);
 
   if (read === null && rejection === null) {
-    return <GenericToolPart part={part} />;
+    return <GenericToolPart part={part} runningStatusText={ocrStatus} />;
   }
 
   if (read !== null) {
@@ -52,7 +56,7 @@ export function ReadFileToolPart({ part }: ReadFileToolPartProps) {
       testID="read-file-tool-part"
       title={t('chat.builtinTool.file.read')}
     >
-      <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={rejection ?? ''} />
+      <MessageDetailText tone="danger" title={t('chat.tool.error')} value={rejection ?? ''} />
     </MessagePart.Tool>
   );
 }

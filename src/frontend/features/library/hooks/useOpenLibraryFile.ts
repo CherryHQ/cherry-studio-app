@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 
 import { isComposerImageMediaType } from '@/frontend/components/Composer/utils/composerAttachments';
 import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useApiClient } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 /**

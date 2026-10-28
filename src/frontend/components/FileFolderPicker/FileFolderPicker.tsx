@@ -17,12 +17,14 @@ export function FileFolderPicker({
   excludedFolderId,
   selectedFolderId,
   isSaving = false,
+  status,
   onClose,
   onSelect,
 }: {
   excludedFolderId?: string;
   selectedFolderId?: string | null;
   isSaving?: boolean;
+  status?: string;
   onClose: () => void;
   onSelect: (folderId: string | null) => void;
 }) {
@@ -36,39 +38,47 @@ export function FileFolderPicker({
     (folder) => folder.parentId === folderId && folder.id !== excludedFolderId,
   );
   const isUnavailable = query.isLoading || Boolean(query.error);
-  const isCurrentLocation = folderId === (selectedFolderId ?? null);
+  const isCurrentLocation = selectedFolderId !== undefined && folderId === selectedFolderId;
 
   return (
     <BottomSheet
       backAction={
-        folderId
+        folderId && !isSaving
           ? {
               accessibilityLabel: t('navigation.back'),
               onPress: () => setFolderId(currentFolder?.parentId ?? null),
             }
           : undefined
       }
+      dismissible={!isSaving}
       footer={
-        <View className="flex-row gap-3">
-          <View className="flex-1">
-            <Button
-              disabled={isSaving || isCreating || isUnavailable}
-              onPress={requestCreate}
-              testID="file-folder-picker-create"
-              variant="secondary"
-            >
-              {t('library.folders.create')}
-            </Button>
-          </View>
-          <View className="flex-1">
-            <Button
-              disabled={isCreating || isUnavailable || isCurrentLocation}
-              loading={isSaving}
-              onPress={() => onSelect(folderId)}
-              testID="file-folder-picker-confirm"
-            >
-              {t(isCurrentLocation ? 'library.alreadyHere' : 'library.moveHere')}
-            </Button>
+        <View className="gap-3">
+          {status ? (
+            <Text accessibilityLiveRegion="polite" className="text-sm text-muted-foreground">
+              {status}
+            </Text>
+          ) : null}
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <Button
+                disabled={isSaving || isCreating || isUnavailable}
+                onPress={requestCreate}
+                testID="file-folder-picker-create"
+                variant="secondary"
+              >
+                {t('library.folders.create')}
+              </Button>
+            </View>
+            <View className="flex-1">
+              <Button
+                disabled={isSaving || isCreating || isUnavailable || isCurrentLocation}
+                loading={isSaving}
+                onPress={() => onSelect(folderId)}
+                testID="file-folder-picker-confirm"
+              >
+                {t(isCurrentLocation ? 'library.alreadyHere' : 'library.moveHere')}
+              </Button>
+            </View>
           </View>
         </View>
       }

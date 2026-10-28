@@ -3,7 +3,7 @@
 Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.2` and
 `@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.2.3` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.2.5` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -16,10 +16,11 @@ must fit one of Mobile's existing execution boundaries.
 
 Mobile has two AI execution paths:
 
-- Conversation turns run on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
-  `src/backend/ai/agent/runtime/pi`.
-- Non-conversation text generation, SDK-only probes, model listing, and image generation run through
-  `AiService` and the AI SDK.
+- All text generation runs on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
+  `src/backend/ai/agent/runtime/pi`: conversation turns, product model checks, translation, and
+  session naming.
+- Model listing and image generation run through `AiService` and the AI SDK. AI SDK patches keep
+  only hunks on those two paths.
 
 Desktop code is admitted only when all of the following are true:
 
@@ -77,7 +78,7 @@ by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.2.3` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.2.5` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.

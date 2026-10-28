@@ -36,7 +36,8 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `packages/universal/src/{types,utils}` | Portable desktop-mirrored types and pure helpers (`@cherrystudio/universal/{types,utils}`) |
 
 Only `bootstrap` may import both frontend and backend. Frontend resource data uses typed Data API
-hooks and `@/shared/data/api`; preferences use the separate
+hooks and `@/shared/data/api`; imperative resource work and custom Query lifetimes may use the public
+`useApiClient` from `@/frontend/data`. Preferences use the separate
 `@/shared/data/preference` client; workflows use `useBackendModule(key)` and
 `@/shared/contracts`. Frontend never imports SQLite, Drizzle, AI SDK, or concrete device and
 persistence implementations. ESLint enforces these directions.
@@ -47,8 +48,9 @@ a narrow dependency interface, and bootstrap supplies the concrete implementatio
 
 `app` imports only bootstrap, frontend, and shared modules. Backend does not import React UI, Expo
 Router, TanStack Query, translations, or toast implementations. Shared modules do not import upper
-layers. The layout follows Cherry Desktop vocabulary where responsibilities match without copying
-its process topology, lifecycle framework, or dependency-injection container.
+layers. The layout follows Cherry Desktop vocabulary where responsibilities match. Mobile adapts
+its lifecycle framework and service container to replaceable hosts and `Gate` / `PostReady` phases;
+Electron's process topology and readiness phases do not apply.
 
 Direct Cherry Desktop counterparts retain their `Service` names and public methods. Mobile-only
 workflow and lifecycle code is named by ownership as `Module`, `Runtime`, `Session`, `Client`,
@@ -57,7 +59,9 @@ workflow and lifecycle code is named by ownership as `Module`, `Runtime`, `Sessi
 ## Frontend Interfaces
 
 - Resource CRUD and pagination use typed React Query hooks backed by `ApiClient` from
-  `@/shared/data/api`.
+  `@/shared/data/api`. Request callbacks, retained resource consumers, and custom Query windows may
+  use `useApiClient` from `@/frontend/data`; their owners handle cancellation, cache keys, and refresh
+  participation as described in [Frontend Data](../../src/frontend/data/README.md).
 - Preference reads, writes, and subscriptions use `PreferenceClient` from
   `@/shared/data/preference`.
 - Multi-step workflows, app-owned runtime projections, and caller-owned sessions use
@@ -93,8 +97,9 @@ compatibility adapter or generic frontend selector for persistence services.
 ## Current Baseline
 
 - `AppBootstrapProvider` owns one `AppBootstrapRuntime`; its context exposes startup status only.
-- `DataApiProvider` supplies `ApiClient` only to endpoint hooks; resource callers use
-  `useQuery`/`useMutation`/`useInfiniteQuery`.
+- `DataApiProvider` supplies `ApiClient` to endpoint hooks and the public `useApiClient` entry.
+  Ordinary resource callers use `useQuery`/`useMutation`/`useInfiniteQuery`; direct provider imports
+  remain private to injection, data internals, and client-injecting tests.
 - `PreferenceProvider` supplies the separate `PreferenceClient` only to preference hooks.
 - `BackendProvider` holds the workflow-only `Backend` and exposes `useBackendModule(key)`.
 - `frontend/data` owns these providers, `QueryProvider`, endpoint query keys, data/preference/cache

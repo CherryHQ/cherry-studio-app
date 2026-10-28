@@ -1,7 +1,7 @@
 import { HttpError } from '@/backend/services/http';
 import { PluginError } from '@/shared/contracts/plugins';
 
-import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
+import { trackNativeAbortSignals } from '../../../authorization/__tests__/_nativeAbortSignal';
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';
 import { createFeishuClient } from '../createFeishuClient';
@@ -455,7 +455,7 @@ it.each([false, true])(
   'releases settled discovery/call listeners and timers while the client remains open (caller: %s)',
   async (withCaller) => {
     jest.useFakeTimers();
-    const tracked = trackExpoAbortSignals();
+    const tracked = trackNativeAbortSignals();
     try {
       await client.listTools({ options: { signal: new AbortController().signal } });
       expect(tracked.timers.size).toBe(0);

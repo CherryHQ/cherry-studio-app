@@ -15,7 +15,7 @@ import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
 } from '../../sessionStore/AgentSessionStore';
-import type { StoredSkillActivation } from '../../sessionStore/skillActivations';
+import type { StoredSkillActivation } from '../../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
@@ -296,6 +296,42 @@ describe('turn preparation', () => {
     ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
     expect(execute).not.toHaveBeenCalled();
   });
+
+  test.each(['auto', 'default'] as const)(
+    'parallel replies keep only reads, with connected reads under the %s approval mode',
+    async (toolApprovalMode) => {
+      const harness = createHarness();
+      harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
+      const mcp = (name: string, effect?: RuntimeTool['effect']): RuntimeTool => ({
+        ...tool(name, 'ask'),
+        ref: { source: 'mcp', serverId: 'server-1', rawToolName: name },
+        ...(effect ? { effect } : {}),
+      });
+      harness.getSystemTools.mockResolvedValueOnce([
+        { ...tool('builtin_read', 'auto'), effect: 'read' },
+        { ...tool('builtin_gated_read', 'ask'), effect: 'read', autoApprovalEligible: false },
+        { ...tool('builtin_write', 'auto'), effect: 'write' },
+      ]);
+      harness.resolveRuntimeTools.mockResolvedValueOnce({
+        tools: [mcp('search', 'read'), mcp('lookup'), mcp('plugin_write', 'write')],
+        pluginGuides: [],
+      });
+
+      const plan = await prepareDurableTurn(
+        harness.dependencies,
+        textInput(),
+        [],
+        new AbortController().signal,
+        { readOnlyTools: true },
+      );
+
+      // Unknown and write effects stay out; a read asks only when the Agent's mode says so.
+      expect(plan.tools.map((entry) => [entry.providerName, entry.approval])).toEqual([
+        ['builtin_read', 'auto'],
+        ['search', toolApprovalMode === 'auto' ? 'auto' : 'ask'],
+      ]);
+    },
+  );
 
   test.each(['existing', 'initial'] as const)(
     'freezes the parser before %s preparation yields and shares it with read_file',
@@ -833,6 +869,28 @@ describe('Skill turn preparation', () => {
     expect(plan.skills.active?.get(otherId)?.instructions).toBe('b'.repeat(24_000));
     expect(readInstructions).toHaveBeenCalledTimes(2);
   });
+
+  test.each([
+    [undefined, true],
+    ['create' as const, false],
+  ])(
+    'offers create_skill upfront only for the explicit workflow (%s)',
+    async (action, deferred) => {
+      const harness = createHarness();
+      harness.dependencies.skills = { resolve: async () => scope };
+      harness.dependencies.skillWorkflow = {
+        create: jest.fn(),
+      } as unknown as NonNullable<typeof harness.dependencies.skillWorkflow>;
+      const plan = await prepareTurn(
+        harness.dependencies,
+        { ...textInput(), ...(action ? { skillAction: action } : {}) },
+        new AbortController().signal,
+      );
+      expect(plan.tools.find((tool) => tool.providerName === 'create_skill')?.deferred).toBe(
+        deferred,
+      );
+    },
+  );
 
   test('persists explicit selection receipts and rejects out-of-scope selection', async () => {
     const harness = createHarness();

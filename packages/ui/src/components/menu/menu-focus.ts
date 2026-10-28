@@ -1,6 +1,6 @@
-import { AccessibilityInfo, Platform, type View } from 'react-native';
+import { AccessibilityInfo, Platform, type ViewInstance } from 'react-native';
 
-export function focusMenuTarget(target: View | null) {
+export function focusMenuTarget(target: ViewInstance | null) {
   if (target) {
     if (Platform.OS === 'web') {
       target.focus();

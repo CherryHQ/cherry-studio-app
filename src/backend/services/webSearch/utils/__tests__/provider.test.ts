@@ -226,5 +226,30 @@ describe('webSearch provider utils', () => {
         'capability_unsupported',
       );
     });
+
+    it.each<[string, string[], string]>([
+      ['https://api.crawl4ai.com', [], 'api_key_missing'],
+      ['https://crawl4ai.com', ['  '], 'api_key_missing'],
+      ['https://api.crawl4ai.com', ['cloud-key'], 'ready'],
+      ['http://192.168.1.2:11235', [], 'ready'],
+      ['https://crawl.example.com', [], 'ready'],
+      ['https://crawl4ai.com.example.com', [], 'ready'],
+    ])(
+      'requires a key for Crawl4AI Cloud while allowing anonymous self-hosting: %s',
+      (apiHost, apiKeys, expected) => {
+        expect(
+          readinessCode(
+            createProvider({
+              id: 'crawl4ai',
+              apiKeys,
+              capabilities: [
+                { ...capability, feature: 'fetchUrls', apiHost, requiresApiKey: false },
+              ],
+            }),
+            'fetchUrls',
+          ),
+        ).toBe(expected);
+      },
+    );
   });
 });

@@ -1,7 +1,7 @@
+import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { TraceContext, TraceSpanStatus } from '@/shared/data/types/trace';
-
-import { diagnosticIdentifier } from './diagnosticIdentifier';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 export type TraceAttributes = Record<string, string | number | boolean | undefined>;
 export type TraceEndStatus = Exclude<TraceSpanStatus, 'running'>;
@@ -57,19 +57,30 @@ const PLUGIN_REASONS = new Set([
 
 const SENSITIVE_KEY =
   /authorization|cookie|credential|password|secret|api.?key|access.?token|refresh.?token|prompt|input|output|body|header/i;
+const MAX_TRACE_ATTRIBUTES = 24;
 
 export function sanitizeTraceAttributes(
   attributes: TraceAttributes = {},
 ): Record<string, string | number | boolean> {
   const result: Record<string, string | number | boolean> = {};
-  for (const [key, value] of Object.entries(attributes).slice(0, 24)) {
+  let count = 0;
+  for (const [key, value] of Object.entries(attributes)) {
     if (SENSITIVE_KEY.test(key) && !(typeof value === 'number' && /tokens|count|bytes/i.test(key)))
       continue;
+    let safe: string | number | boolean;
     if (typeof value === 'string') {
       const identifier = diagnosticIdentifier(value);
-      if (identifier) result[key.slice(0, 64)] = identifier;
+      if (!identifier) continue;
+      safe = identifier;
     } else if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))
-      result[key.slice(0, 64)] = value;
+      safe = value;
+    else continue;
+    if (count === MAX_TRACE_ATTRIBUTES) {
+      result['trace.attributes_truncated'] = true;
+      break;
+    }
+    result[key.slice(0, 64)] = safe;
+    count += 1;
   }
   return result;
 }
@@ -79,17 +90,22 @@ export function traceErrorAttributes(error: unknown): TraceAttributes {
   try {
     if (!error || typeof error !== 'object') return {};
     const source = error as Record<string, unknown>;
-    const context =
-      source.context && typeof source.context === 'object'
-        ? (source.context as Record<string, unknown>)
-        : undefined;
+    // Agent errors wrap the product reason and original provider facts in a failure snapshot.
+    const failure = record(source.failure);
+    const failureSource = record(failure?.source);
+    const productReason = failure ? AiFailureReasonSchema.safeParse(failure.reasonCode) : undefined;
+    const context = record(source.context) ?? record(failure?.context);
+    const name = source.name ?? failureSource?.name;
+    const origin = source.origin ?? failureSource?.layer;
     return sanitizeTraceAttributes({
-      'error.type': typeof source.name === 'string' ? source.name : undefined,
+      'error.type': typeof name === 'string' ? name : undefined,
       'error.code':
         typeof source.code === 'string' || typeof source.code === 'number'
           ? source.code
           : undefined,
-      'error.origin': typeof source.origin === 'string' ? source.origin : undefined,
+      'error.source.code': typeof failureSource?.code === 'string' ? failureSource.code : undefined,
+      'error.product_reason': productReason?.success ? productReason.data : undefined,
+      'error.origin': typeof origin === 'string' ? origin : undefined,
       'error.retryable': typeof source.retryable === 'boolean' ? source.retryable : undefined,
       'plugin.error.reason':
         error instanceof PluginError
@@ -111,4 +127,10 @@ export function traceErrorAttributes(error: unknown): TraceAttributes {
   } catch {
     return {};
   }
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

@@ -6,21 +6,34 @@ resolve credentials, refresh tokens, connect plugins or make discovery requests.
 
 ## Feedback flow
 
-Settings → About → Feedback opens the feedback form page. Shaking captures the visible page first
-and opens the same form. The user writes a required description
-(at most 4096 UTF-8 bytes after newline normalization), reviews the attached-data notice, and
-confirms submission. The same page shows indeterminate progress, then success or a failure.
-There is no range selector or file-save step. Desktop's current report
-form and IPC schema accept only a description, so Mobile does not invent issue categories.
+Settings → About → Feedback opens a form with required feature, problem type and description.
+Shaking captures the visible page and its available metadata before opening the same form.
+Chat and image-generation failure details offer a direct report action. These entries
+preselect their feature and problem type; users can change either and turn off the linked context.
+The existing upload API receives the choices as a fixed text header followed by the user description.
+Their combined length is at most 4096 UTF-8 bytes after newline normalization. The user reviews the
+attached-data notice and submits; the same page shows progress, success or a failure. There is no
+range selector or file-save step.
 
 Submission uses the last 24 hours with logs and traces included. The description draft survives
 failure and returning to the form; leaving the form discards it. Submission blocks navigation
 back until the operation settles. Retrying from the form creates a fresh archive.
 
-`uploadBundle` takes `DiagnosticReportInput`, which carries the description and optional selected
-screenshot ID; the backend validates it. The 24-hour range and the log/trace selection are service constants, recorded in the
-manifest. Archives include `feedback.txt` beside the manifest. Description text stays separate from
-technical metadata.
+`uploadBundle` takes `DiagnosticReportInput`, which carries the description, optional form choices,
+linked context and selected screenshot ID; the backend validates all fields. The 24-hour range and
+the log/trace selection remain service constants. `feedback.txt` contains the same normalized text
+as the upload's description field. The manifest's `feedback` also retains the choices as fixed enum
+values; `incident` contains app-authored metadata separately from the user description.
+
+Linked context records capture time, feature, entry and available source-local correlation IDs.
+Chat reports retain local versus desktop execution, available Session/Agent/execution/turn/message IDs, the message's
+creation time and captured model. Painting reports retain painting/job IDs and a recorded failure
+time when available. Failure projection keeps only bounded codes, classified reason, HTTP status,
+and model/provider. It excludes raw messages, response bodies, names,
+URLs, route parameters and credentials. A message creation time is not a failure time; a capture
+time is not a failure time. Desktop incidents identify a remote execution but this archive still
+contains only the phone's diagnostic sources. Older incidents may predate the retained 24-hour
+window. Retries retain the original incident while collecting a fresh archive.
 
 Desktop's current Doctor dialog owns checks, local export, and report submission. Its report flow
 also has a report URL, server processing status, and local submission history. Mobile implements
@@ -82,6 +95,10 @@ and a stable WebView source prevent status writes from reloading the page.
   payloads are not diagnostic sources. See [AI Diagnostic Tracing](../../ai/observability/README.md).
   Archives retain model failure stage/category/retryability and fixed tool business outcomes, so
   returned errors, partial failures and requests for user choice remain distinguishable.
+  Archives also retain the product's closed failure reason, explicit automatic/user retry scope,
+  model limits, request output budgets, serialized output caps, transcript token estimates and
+  observed compaction lifecycle facts. Estimates are labeled by source and are not exact provider
+  counts. Product reasons remain separate from classifications based only on provider codes/status.
 - System summary: app/build/runtime version, device model, OS and locale. No device name or unique
   hardware identifier is read. Plugin configuration includes server/plugin identifiers, enabled
   state, authorization method and disabled-tool count; no names, accounts, endpoints or credentials.
@@ -95,10 +112,11 @@ existing [Sentry integration](../../../frontend/appShell/observability/README.md
 
 The process-owned logger and JS exception/rejection observer are installed before router imports.
 They preserve React Native's existing handlers and persist projected warning/error metadata plus
-the fixed `Startup` / `Startup stage` info event. Other info logs remain excluded. Startup events
+the fixed `Startup` / `Startup stage` and `PiDurableObserver` / `Pi durable context compaction`
+info events. Other info logs remain excluded. Lifecycle events
 use the same local retention and submission path; they do not add an external reporting channel.
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
-Startup events retain separate records without repetition aggregation, preserving retry timings.
+Lifecycle events retain separate records without repetition aggregation, preserving retry timings.
 They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
 the buffer limit, or on explicit flush. Database stages run synchronously and would block the
 timer, so each flushes its start before running. Warning/error writes first drain preceding startup events
@@ -121,6 +139,8 @@ boundary. The 512-file guard remains for legacy files and exceptional histories.
 and copies stable trace snapshots, then releases them on success, failure or cancellation.
 Collection projects every record again through an explicit field allowlist and filters by the last
 24 hours. A terminal span uses its end timestamp; a running span uses its start.
+New budget/count fields must remain nonnegative finite numbers; product reasons, retry scopes,
+estimate sources and serialized cap field names are validated again during export.
 The 50 MiB source budget favors representation of both sources, then recent files. The manifest
 reports unreadable/malformed/changed sources, size omissions and trace storage loss counters.
 

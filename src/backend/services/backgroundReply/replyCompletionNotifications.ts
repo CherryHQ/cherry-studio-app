@@ -76,8 +76,19 @@ export function createReplyCompletionNotifier(
   // Lazy native-module load matches the other native services so CommonJS test
   // environments keep their mocks and unsupported platforms never load it.
   const loadNotifications = (): Notifications => {
+    if (notifications) return notifications;
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
-    notifications ??= require('expo-notifications') as Notifications;
+    notifications = require('expo-notifications') as Notifications;
+    // Every notice is for a hidden app. Expo presents foreground arrivals unless a handler
+    // declines, so a notice that lands as the user returns stays out of the open app.
+    notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      }),
+    });
     return notifications;
   };
 
@@ -183,12 +194,25 @@ export function createReplyCompletionNotifier(
   };
 
   const notifyTurnFinished = async (event: ReplyCompletionNotificationEvent): Promise<boolean> => {
-    // User-initiated cancellations stay silent; the preference gates the channel.
+    // User-initiated cancellations stay silent. A failure needs the user, so like a decision it
+    // ignores the completion preference and surfaces in the open app too; completions follow the
+    // preference and only an ending the user did not see.
     if (event.outcome === 'cancelled') return false;
-    if (!environment.isReplyCompletionNotificationEnabled()) return false;
+    const failed = event.outcome === 'failed';
+    if (failed && isForeground()) {
+      environment.onForegroundAttention?.({
+        detail: event.detail,
+        phase: 'failed',
+        title: event.title,
+        url: event.deepLinkUrl,
+      });
+      return false;
+    }
+    if (!failed && !environment.isReplyCompletionNotificationEnabled()) return false;
     // A background ending must still be unseen at delivery: a queued notice
     // must not alert once the user is back.
-    if (!event.occurredInBackground || AppState.currentState !== 'background') return false;
+    if ((!failed && !event.occurredInBackground) || AppState.currentState !== 'background')
+      return false;
     if (!isNotificationAllowed(await loadNotifications().getPermissionsAsync())) return false;
     if (event.isCurrent?.() === false || AppState.currentState !== 'background') return false;
     // Retire the existing activity before posting its replacement, never stack both.

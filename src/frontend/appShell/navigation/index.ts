@@ -14,4 +14,5 @@ export {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
 } from './rootStackPlatform/rootStackPlatform';
+export { useFocusedBackPress } from './useFocusedBackPress';
 export { useOpenProviderSetup } from './useOpenProviderSetup';

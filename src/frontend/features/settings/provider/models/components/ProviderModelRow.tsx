@@ -1,7 +1,7 @@
 import { SelectionIndicator } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View, type AccessibilityProps } from 'react-native';
+import { Pressable, Text, View, type AccessibilityProps, type ViewProps } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import type { Model } from '@/shared/data/types/model';
@@ -20,6 +20,8 @@ export const providerModelRowEstimatedHeights = {
 const providerModelBadgeLabelKeys = {
   free: 'models.capability.free',
   vision: 'models.capability.imageRecognition',
+  speech: 'settings.provider.models.classification.speech',
+  transcription: 'settings.provider.models.classification.transcription',
 } as const satisfies Record<ProviderModelBadge, string>;
 
 /**
@@ -56,7 +58,7 @@ export function ProviderModelRow({
   disabled?: boolean;
   statusLabel?: string;
   accessibilityActions?: AccessibilityProps['accessibilityActions'];
-  onAccessibilityAction?: AccessibilityProps['onAccessibilityAction'];
+  onAccessibilityAction?: ViewProps['onAccessibilityAction'];
   provider: Provider | undefined;
   /**
    * Given only while the list is selecting. The row then draws a checkbox and
@@ -69,11 +71,13 @@ export function ProviderModelRow({
   };
   /** `struck` reads as "on its way out", the way the pull screen marks a model absent from the latest response. */
   tone?: 'default' | 'struck';
-  /** Management shows decision-useful badges; synchronization stays visually quiet. */
+  /** Synchronization keeps voice types visible while omitting general chat traits. */
   variant: ProviderModelRowVariant;
 }) {
   const { t } = useTranslation();
-  const badges = variant === 'management' ? getProviderModelBadges(model) : [];
+  const badges = getProviderModelBadges(model).filter(
+    (badge) => variant === 'management' || badge === 'speech' || badge === 'transcription',
+  );
   const accessibilityDetails = badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
   const accessibilityLabel = [model.name, statusLabel, ...accessibilityDetails]
     .filter(Boolean)

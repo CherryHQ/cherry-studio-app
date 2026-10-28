@@ -1,9 +1,8 @@
-import type { CategoryDataPoint, HealthKit } from 'react-native-nitro-healthkit';
-
-import { HEALTH_SUMMARY_METRICS } from '@/shared/contracts/health';
+import { HEALTH_SUMMARY_METRICS, type HealthDataType } from '@/shared/contracts/health';
 import { HEALTH_ENUM_VALUES } from '@/shared/contracts/healthValues';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import type { HealthQueryOptions } from '../../../../modules/health-access';
 import { loadHealthDataReader, type HealthDataReaderLoader } from './healthData';
 import { normalizeOptionalDateRange, withNativeToolTimeout } from './utils';
 
@@ -12,8 +11,10 @@ const ASLEEP_VALUES = new Set([1, 3, 4, 5]);
 export const healthMetricNames = HEALTH_SUMMARY_METRICS;
 type MetricState = 'available' | 'no-data' | 'error';
 export type HealthMetricName = (typeof healthMetricNames)[number];
-export type HealthKitLoader = () => Promise<HealthKit>;
+type HealthDataReader = Awaited<ReturnType<HealthDataReaderLoader>>;
+type SleepSample = { value: number; startDate: string; endDate: string };
 type SleepInterval = { start: number; end: number };
+const SLEEP_PAGE_SIZE = 200;
 const SLEEP_STAGES = {
   inBed: 0,
   asleepUnspecified: 1,
@@ -33,40 +34,30 @@ const emptySleepStages = (): SleepStages => ({
   rem: null,
 });
 
+/**
+ * Summary metrics read in fixed units, whatever the person's display units are. `unit` is the label
+ * the result reports; `hkUnit` is the HealthKit unit the statistics are read in.
+ */
 const quantityMetrics: Record<
   Exclude<HealthMetricName, 'sleep'>,
-  { aggregation: 'average' | 'sum'; identifier: string; unit: string }
+  {
+    aggregation: 'average' | 'sum';
+    hkUnit: NonNullable<HealthQueryOptions['unit']>;
+    type: HealthDataType;
+    unit: string;
+  }
 > = {
-  activeEnergy: {
-    aggregation: 'sum',
-    identifier: 'HKQuantityTypeIdentifierActiveEnergyBurned',
-    unit: 'kcal',
-  },
-  distance: {
-    aggregation: 'sum',
-    identifier: 'HKQuantityTypeIdentifierDistanceWalkingRunning',
-    unit: 'm',
-  },
-  heartRate: {
-    aggregation: 'average',
-    identifier: 'HKQuantityTypeIdentifierHeartRate',
-    unit: 'bpm',
-  },
-  hrv: {
-    aggregation: 'average',
-    identifier: 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-    unit: 'ms',
-  },
+  activeEnergy: { aggregation: 'sum', hkUnit: 'kcal', type: 'activeEnergy', unit: 'kcal' },
+  distance: { aggregation: 'sum', hkUnit: 'm', type: 'distance', unit: 'm' },
+  heartRate: { aggregation: 'average', hkUnit: 'count/min', type: 'heartRate', unit: 'bpm' },
+  hrv: { aggregation: 'average', hkUnit: 'ms', type: 'hrv', unit: 'ms' },
   restingHeartRate: {
     aggregation: 'average',
-    identifier: 'HKQuantityTypeIdentifierRestingHeartRate',
+    hkUnit: 'count/min',
+    type: 'restingHeartRate',
     unit: 'bpm',
   },
-  steps: {
-    aggregation: 'sum',
-    identifier: 'HKQuantityTypeIdentifierStepCount',
-    unit: 'count',
-  },
+  steps: { aggregation: 'sum', hkUnit: 'count', type: 'steps', unit: 'count' },
 };
 
 export async function getHealthSummary(
@@ -76,17 +67,17 @@ export async function getHealthSummary(
     metrics?: HealthMetricName[];
     startDate?: string;
   },
-  loadHealthKit: HealthKitLoader = loadHealthKitModule,
+  load: HealthDataReaderLoader = loadHealthDataReader,
   signal?: AbortSignal,
 ) {
   const range = normalizeOptionalDateRange(input.startDate, input.endDate);
-  const healthKit = await loadHealthKit();
+  const reader = await load();
   signal?.throwIfAborted();
   const metrics = [...new Set(input.metrics?.length ? input.metrics : healthMetricNames)];
   const result =
     input.granularity === 'day'
-      ? await getDailyHealthData(healthKit, metrics, range.start, range.end, signal)
-      : await getRangeHealthSummary(healthKit, metrics, range.start, range.end);
+      ? await getDailyHealthData(reader, metrics, range.start, range.end, signal)
+      : await getRangeHealthSummary(reader, metrics, range.start, range.end, signal);
   return {
     ...result,
     endDate: range.end.toISOString(),
@@ -124,16 +115,12 @@ export async function listHealthWorkouts(
   };
 }
 
-async function loadHealthKitModule(): Promise<HealthKit> {
-  const { getHealthKit } = await import('react-native-nitro-healthkit');
-  return getHealthKit();
-}
-
 async function getRangeHealthSummary(
-  healthKit: HealthKit,
+  reader: HealthDataReader,
   metrics: HealthMetricName[],
   start: Date,
   end: Date,
+  signal?: AbortSignal,
 ) {
   const metricStates: Partial<Record<HealthMetricName, MetricState>> = {};
   const metricErrors: Partial<Record<HealthMetricName, string>> = {};
@@ -142,10 +129,7 @@ async function getRangeHealthSummary(
       const unit = metric === 'sleep' ? 'hours' : quantityMetrics[metric].unit;
       try {
         if (metric === 'sleep') {
-          const samples = await withNativeToolTimeout(
-            healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
-            'Sleep query',
-          );
+          const samples = await readSleepSamples(reader, start, end, signal);
           const intervals = sleepIntervals(samples, start, end);
           metricStates[metric] = intervals.length ? 'available' : 'no-data';
           return [
@@ -157,7 +141,8 @@ async function getRangeHealthSummary(
             },
           ] as const;
         }
-        const value = await readQuantity(healthKit, metric, start, end);
+        const [statistics] = await readStatistics(reader, metric, start, end, 'summary');
+        const value = statisticsValue(metric, statistics);
         metricStates[metric] = value === null ? 'no-data' : 'available';
         return [metric, { unit, value }] as const;
       } catch (error) {
@@ -172,7 +157,7 @@ async function getRangeHealthSummary(
 }
 
 async function getDailyHealthData(
-  healthKit: HealthKit,
+  reader: HealthDataReader,
   metrics: HealthMetricName[],
   start: Date,
   end: Date,
@@ -185,11 +170,7 @@ async function getDailyHealthData(
     metrics.map(async (metric) => {
       try {
         if (metric === 'sleep') {
-          const samples = await withNativeToolTimeout(
-            healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
-            'Sleep query',
-          );
-          signal?.throwIfAborted();
+          const samples = await readSleepSamples(reader, start, end, signal);
           const intervals = sleepIntervals(samples, start, end);
           metricStates[metric] = intervals.length ? 'available' : 'no-data';
           applyDailySleep(daily, intervals);
@@ -197,16 +178,14 @@ async function getDailyHealthData(
         } else {
           const { unit } = quantityMetrics[metric];
           let found = false;
-          // One aggregate per day instead of one raw fetch for the whole range:
-          // the native per-day value is what the caller asked for, and the range
-          // fetch it replaces is what made dense metrics exceed the timeout.
-          for (const day of localDays(start, end)) {
-            signal?.throwIfAborted();
-            const value = await readQuantity(healthKit, metric, day.start, day.end);
-            if (value === null) continue;
+          // One native collection query yields every local day; a day without samples is null.
+          for (const day of await readStatistics(reader, metric, start, end, 'day')) {
+            const value = statisticsValue(metric, day);
+            if (value === null || typeof day.date !== 'string') continue;
             found = true;
-            daily.set(day.key, { ...daily.get(day.key), [metric]: { unit, value } });
+            daily.set(day.date, { ...daily.get(day.date), [metric]: { unit, value } });
           }
+          signal?.throwIfAborted();
           metricStates[metric] = found ? 'available' : 'no-data';
         }
       } catch (error) {
@@ -226,31 +205,78 @@ async function getDailyHealthData(
   };
 }
 
-/**
- * The native aggregate reports an empty range as zero, so a zero result alone
- * cannot tell a measured zero from a missing record. Settle it with a raw
- * existence query, which is cheap exactly when it runs: a zero aggregate means
- * the range holds few or no samples. Probing first instead would fetch every
- * sample in the range, and dense metrics such as heart rate or step count
- * exceed the native timeout long before that completes on a real device.
- */
-async function readQuantity(
-  healthKit: HealthKit,
+type HealthStatistics = Record<string, unknown> & { date?: unknown };
+
+/** Native statistics tell a measured zero from a range without samples, which reads as null. */
+async function readStatistics(
+  reader: HealthDataReader,
   metric: Exclude<HealthMetricName, 'sleep'>,
   start: Date,
   end: Date,
-): Promise<number | null> {
+  granularity: HealthQueryOptions['granularity'],
+): Promise<HealthStatistics[]> {
   const config = quantityMetrics[metric];
-  const value = await withNativeToolTimeout(
-    healthKit.getAggregatedQuantity(config.identifier, start, end, config.aggregation, false),
+  const result = await withNativeToolTimeout(
+    reader.query(config.type, {
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      limit: 1,
+      cursor: '',
+      mode: 'statistics',
+      granularity,
+      workoutId: '',
+      unit: config.hkUnit,
+    }),
     `${metric} query`,
   );
-  if (value !== 0) return value;
-  const samples = await withNativeToolTimeout(
-    healthKit.getQuantityData(config.identifier, start, end, null, false),
-    `${metric} availability query`,
-  );
-  return samples.length ? 0 : null;
+  const data = result.data;
+  if (Array.isArray(data)) return data as HealthStatistics[];
+  return data && typeof data === 'object' ? [data as HealthStatistics] : [];
+}
+
+function statisticsValue(
+  metric: Exclude<HealthMetricName, 'sleep'>,
+  statistics: HealthStatistics | undefined,
+): number | null {
+  const value = statistics?.[quantityMetrics[metric].aggregation];
+  return typeof value === 'number' ? value : null;
+}
+
+/** Sleep stages need raw category samples; the anchored query pages them in HealthKit order. */
+async function readSleepSamples(
+  reader: HealthDataReader,
+  start: Date,
+  end: Date,
+  signal?: AbortSignal,
+): Promise<SleepSample[]> {
+  const samples: SleepSample[] = [];
+  let cursor = '';
+  for (;;) {
+    signal?.throwIfAborted();
+    const page = await withNativeToolTimeout(
+      reader.query('sleep', {
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        limit: SLEEP_PAGE_SIZE,
+        cursor,
+        mode: 'samples',
+        granularity: 'summary',
+        workoutId: '',
+      }),
+      'Sleep query',
+    );
+    for (const row of Array.isArray(page.data) ? page.data : []) {
+      const sample = row as Partial<SleepSample>;
+      if (
+        typeof sample.value === 'number' &&
+        typeof sample.startDate === 'string' &&
+        typeof sample.endDate === 'string'
+      )
+        samples.push({ value: sample.value, startDate: sample.startDate, endDate: sample.endDate });
+    }
+    if (page.hasMore !== true || typeof page.nextCursor !== 'string') return samples;
+    cursor = page.nextCursor;
+  }
 }
 
 /**
@@ -307,7 +333,7 @@ function sumSleepHours(intervals: SleepInterval[]) {
 
 /** HealthKit returns overlapping, untrimmed samples, including records from multiple sources. */
 function sleepIntervals(
-  samples: CategoryDataPoint[],
+  samples: SleepSample[],
   start: Date,
   end: Date,
   values = ASLEEP_VALUES,
@@ -335,12 +361,7 @@ function sleepIntervals(
   return merged;
 }
 
-function sleepDetails(
-  samples: CategoryDataPoint[],
-  start: Date,
-  end: Date,
-  asleep: SleepInterval[],
-) {
+function sleepDetails(samples: SleepSample[], start: Date, end: Date, asleep: SleepInterval[]) {
   const stages = emptySleepStages();
   for (const [stage, value] of Object.entries(SLEEP_STAGES)) {
     const intervals = sleepIntervals(samples, start, end, new Set([value]));
@@ -355,7 +376,7 @@ function sleepDetails(
 
 function applyDailySleepStages(
   daily: Map<string, Record<string, HealthMetricValue>>,
-  samples: CategoryDataPoint[],
+  samples: SleepSample[],
   start: Date,
   end: Date,
 ) {

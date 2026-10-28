@@ -1,5 +1,4 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import { defaultDatabaseDirectory } from 'expo-sqlite';
 
 import { BackupError, type RestoreOutcome } from '@/shared/contracts/backup';
 
@@ -67,8 +66,9 @@ export function storageDirectory(id = getStorageBoot().storageId): Directory {
 }
 
 export function databaseDirectory(id = getStorageBoot().storageId): string {
+  // expo-sqlite's default directory, as the file URI that FileSystem requires.
   return id === 'legacy'
-    ? defaultDatabaseDirectory
+    ? new Directory(Paths.document, 'SQLite').uri
     : new Directory(storageDirectory(id), 'database').uri;
 }
 
@@ -174,7 +174,7 @@ export function cleanupStorageAfterBoot(): void {
       'pi-agent.db-wal',
       'pi-agent.db-shm',
     ]) {
-      const file = new File(Paths.document, 'SQLite', name);
+      const file = new File(databaseDirectory('legacy'), name);
       if (file.exists) file.delete();
     }
     for (const parts of [

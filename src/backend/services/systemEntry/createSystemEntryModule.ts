@@ -21,6 +21,7 @@ export function createSystemEntryModule(dependencies: Dependencies): {
 } {
   const native = dependencies.native === undefined ? getSystemIntegration() : dependencies.native;
   const claims = new Set<{ controller: AbortController; settled: Promise<void> }>();
+  const receivingListeners = new Set<() => void>();
   let disposed = false;
 
   return {
@@ -28,6 +29,13 @@ export function createSystemEntryModule(dependencies: Dependencies): {
       subscribePending(listener) {
         const subscription = native?.addListener('onPending', listener);
         return () => subscription?.remove();
+      },
+      isReceiving: () => claims.size > 0,
+      subscribeReceiving(listener) {
+        receivingListeners.add(listener);
+        return () => {
+          receivingListeners.delete(listener);
+        };
       },
       async claimNext(): Promise<SystemAction | null> {
         if (!native || disposed) return null;
@@ -70,8 +78,10 @@ export function createSystemEntryModule(dependencies: Dependencies): {
       }),
     };
     claims.add(claim);
+    publishReceiving();
     try {
       const files = await dependencies.importFiles(entry, controller.signal);
+      controller.signal.throwIfAborted();
       // Staging has no further role once every attachment belongs to the library.
       await native!.completeEntry(entry.id);
       return { kind: 'share.receive', text: entry.text, files };
@@ -82,7 +92,12 @@ export function createSystemEntryModule(dependencies: Dependencies): {
       throw new Error('System share import failed');
     } finally {
       claims.delete(claim);
+      publishReceiving();
       settle();
     }
+  }
+
+  function publishReceiving() {
+    for (const listener of receivingListeners) listener();
   }
 }
