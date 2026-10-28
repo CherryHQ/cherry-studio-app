@@ -122,6 +122,11 @@ profile, only a community session counts as signed in.
 - **Expiry:** a refused session, an Accounts Portal `signed_out`, or a session that no longer
   matches replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the
   device; the page offers sign-in again or sign-out.
+- **Credential admission:** in an enterprise profile, resolving a provider key waits for the stored
+  session to be restored and refuses a closed one (`AccountRuntime.admit`, injected into
+  `managedResources.ts` by bootstrap), so no model request can start without a session. When the
+  session is refused, bootstrap interrupts the Agent Host as background expiry does; interrupted
+  turns reopen with the host and fail admission until the user signs in again.
 - **Switching:** a cloud organization switches directly through the portal; community and private
   accounts open the sign-in method page first. A browser sign-in forces the portal's login page
   whenever the installation already holds a cloud session, has a refused session, or could not end

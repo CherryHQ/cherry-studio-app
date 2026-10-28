@@ -31,7 +31,7 @@ import {
 } from '@/shared/data/types/provider';
 import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
-import { assertProvidersEditable } from './managedResources';
+import { assertEnterpriseSessionAdmitted, assertProvidersEditable } from './managedResources';
 import {
   assertCustomProviderEndpointConfiguration,
   getRemovedConfiguredChatEndpoints,
@@ -543,6 +543,7 @@ export class ProviderService {
 
   /** Select a serving key and capture its non-secret identity atomically. */
   async resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey> {
+    await assertEnterpriseSessionAdmitted();
     const row = await this.getRowByProviderId(providerId);
 
     if (!row) {

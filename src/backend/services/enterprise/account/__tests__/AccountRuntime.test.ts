@@ -640,6 +640,27 @@ describe('AccountRuntime', () => {
     await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
   });
 
+  it('admits credential use only after restoration, and never for a refused session', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    options.credentials.read.mockResolvedValue(null);
+    // A missing credential is discovered by restoration; work queued before it must not pass.
+    const admission = runtime.admit();
+    await runtime.verify();
+    await expect(admission).rejects.toMatchObject({ code: 'rejected' });
+
+    const { runtime: restored, options: restoredOptions } = setup(
+      { _tag: 'signedOut' },
+      privateProfile,
+    );
+    restoredOptions.profiles.resolve.mockReturnValue(privateProfile);
+    await restored.verify();
+    await expect(restored.admit()).resolves.toBeUndefined();
+    restored.reportRejected();
+    await expect(restored.admit()).rejects.toMatchObject({ code: 'rejected' });
+    await restored.signIn({ address: privateProfile.address!, username: 'Ada', password: 'new' });
+    await expect(restored.admit()).resolves.toBeUndefined();
+  });
+
   it('asks a private account to sign in again when its stored credentials are missing', async () => {
     const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
     options.credentials.read.mockResolvedValue(null);

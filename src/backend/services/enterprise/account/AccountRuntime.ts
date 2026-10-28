@@ -305,6 +305,22 @@ export class AccountRuntime implements AccountModule {
     await this.privateRefresh;
   };
 
+  /**
+   * Admits work that spends the organization's credentials. It waits for the stored session to
+   * be restored, so a missing credential cannot slip through at startup, and refuses a closed one.
+   */
+  readonly admit = async (): Promise<void> => {
+    if (this.state.isRestoringSession)
+      await new Promise<void>((resolve) => {
+        const subscription = this.changes.event(() => {
+          if (this.state.isRestoringSession) return;
+          subscription.dispose();
+          resolve();
+        });
+      });
+    if (this.state.needsSignIn || this.isPrivateSessionClosed) throw new AccountError('rejected');
+  };
+
   /** Records a server-side rejection observed by an authenticated enterprise request. */
   readonly reportRejected = () => this.update({ needsSignIn: true });
 

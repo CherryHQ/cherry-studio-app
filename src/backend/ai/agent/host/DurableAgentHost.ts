@@ -435,7 +435,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
-  private suspend(reason = new Error('Background execution expired.')): Promise<void> {
+  suspend(reason = new Error('Background execution expired.')): Promise<void> {
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;

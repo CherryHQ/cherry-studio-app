@@ -15,6 +15,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { configureEnterpriseSessionAdmission } from '@/backend/data/services/managedResources';
 import {
   cleanupStorageAfterBoot,
   commitStorageBoot,
@@ -58,6 +59,7 @@ import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingAct
 import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
+import { AccountError } from '@/shared/contracts/account';
 import { BackupError } from '@/shared/contracts/backup';
 import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
@@ -165,6 +167,22 @@ export function createAppBootstrapRuntime(
     refuseProductToken: account.refuseProductToken,
     reportRejected: account.reportRejected,
   });
+  configureEnterpriseSessionAdmission(account.admit);
+  // A refused session stops spending the organization's credentials at once. Interrupted turns
+  // reopen with the Agent Host and fail admission until the user signs in again.
+  let isSessionRefused = account.getState().needsSignIn;
+  const unsubscribeAccount = account.subscribe(() => {
+    const { needsSignIn } = account.getState();
+    if (needsSignIn && !isSessionRefused)
+      void agent
+        .interrupt(new AccountError('rejected'))
+        .catch((error: unknown) =>
+          loggerService
+            .withContext('Account')
+            .warn('Could not interrupt Agent work after the session was refused', error as Error),
+        );
+    isSessionRefused = needsSignIn;
+  });
   const services = createBackendServices({
     agent,
     ai,
@@ -260,6 +278,7 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
+        unsubscribeAccount();
         await Promise.all([
           disposeSystemEntry(),
           disposeSkills(),

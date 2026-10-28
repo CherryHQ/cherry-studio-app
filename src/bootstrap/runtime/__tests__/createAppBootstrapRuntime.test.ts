@@ -8,7 +8,12 @@ const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
-const mockAgent = { kind: 'agent', quiesce: jest.fn(), hasPendingStorageWork: () => false };
+const mockAgent = {
+  kind: 'agent',
+  quiesce: jest.fn(),
+  interrupt: jest.fn(async (_reason: Error) => {}),
+  hasPendingStorageWork: () => false,
+};
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
@@ -21,7 +26,18 @@ const mockEnterpriseSync = {
   hasPendingStorageWork: jest.fn(() => false),
   stop: jest.fn(async () => {}),
 };
-const mockEnterpriseAccount = { kind: 'enterprise-account', verify: jest.fn(async () => {}) };
+const mockAccountState = { isEnterprise: true, needsSignIn: false };
+const mockAccountListeners = new Set<() => void>();
+const mockEnterpriseAccount = {
+  kind: 'enterprise-account',
+  verify: jest.fn(async () => {}),
+  admit: jest.fn(async () => {}),
+  getState: () => mockAccountState,
+  subscribe: (listener: () => void) => {
+    mockAccountListeners.add(listener);
+    return () => mockAccountListeners.delete(listener);
+  },
+};
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
 const mockFailStorageBoot = jest.fn();
@@ -168,6 +184,7 @@ const createRuntime = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAccountListeners.clear();
   mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false });
 });
 
@@ -356,6 +373,24 @@ describe('createAppBootstrapRuntime', () => {
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
     expect(runtime.preference).toBe(mockPreference);
+  });
+
+  test('interrupts Agent work once when the enterprise session is refused', async () => {
+    const runtime = createRuntime();
+    const notify = () => mockAccountListeners.forEach((listener) => listener());
+    mockAccountState.needsSignIn = true;
+    notify();
+    notify();
+    expect(mockAgent.interrupt).toHaveBeenCalledTimes(1);
+    expect(mockAgent.interrupt.mock.calls[0]![0]).toMatchObject({ code: 'rejected' });
+    mockAccountState.needsSignIn = false;
+    notify();
+    await runtime.dispose();
+    expect(mockAccountListeners.size).toBe(0);
+    mockAccountState.needsSignIn = true;
+    notify();
+    expect(mockAgent.interrupt).toHaveBeenCalledTimes(1);
+    mockAccountState.needsSignIn = false;
   });
 
   test('applies the shared presentation switch only to iOS Live Activities', () => {
