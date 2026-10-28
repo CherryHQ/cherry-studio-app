@@ -22,6 +22,7 @@ import type {
 } from '@/frontend/appShell/conversation';
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
+import { useModelChoice } from '@/frontend/components/Policy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
@@ -89,6 +90,7 @@ export function AssistantMessageActionsProvider({
   const sharing = useRef(false);
   // The answer whose question the model picker adds an answer to.
   const [answeringMessageId, setAnsweringMessageId] = useState<string>();
+  const { isLocked: isModelLocked } = useModelChoice();
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -279,7 +281,10 @@ export function AssistantMessageActionsProvider({
       onRetry={retryableMessageIds.size ? retry : undefined}
       onSelectBranch={messages.some((message) => message.actions.select) ? selectBranch : undefined}
       onAnswerWithModel={
-        messages.some((message) => message.actions.answerWith) ? answerWithModel : undefined
+        // A model scope with one model leaves no other model to answer with.
+        !isModelLocked && messages.some((message) => message.actions.answerWith)
+          ? answerWithModel
+          : undefined
       }
       isDeleteDisabled={isBusy}
       isRetryDisabled={isBusy}

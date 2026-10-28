@@ -4,8 +4,8 @@ import { eq } from 'drizzle-orm';
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from '@/backend/data/db/schemas';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
 import {
   ENTERPRISE_DEFAULT_MODEL_KEYS,
   type EnterpriseDefaultModels,
@@ -148,8 +148,9 @@ export class PreferenceService extends BaseService implements PreferenceClient {
     updates: PreferenceUpdates<K>,
     options: PreferenceUpdateOptions = defaultUpdateOptions,
   ) {
+    // The organization owns an enterprise profile's default models; only its sync writes them.
     if (
-      isEnterpriseProfile() &&
+      !editionCapabilities().modelSettings &&
       ENTERPRISE_DEFAULT_MODEL_KEYS.some(
         (key) => (updates as PreferenceUpdateMap)[key] !== undefined,
       )

@@ -165,7 +165,8 @@ describe('enterprise configuration', () => {
       name: 'Analyst',
       instructions: 'Secret prompt',
       avatar: null,
-      model: 'openai::gpt-4o@openai',
+      defaultModelId: 'openai::gpt-4o@openai',
+      allowedModelIds: ['openai::gpt-4o@openai'],
       toolApprovalMode: 'default',
     });
     expect(

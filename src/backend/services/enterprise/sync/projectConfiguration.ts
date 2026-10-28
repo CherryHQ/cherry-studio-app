@@ -15,7 +15,7 @@ import {
 import type { InsertAgentGlobalSkillRow } from '@/backend/data/db/schemas/agentGlobalSkill';
 import { inferCustomModelReasoning } from '@/backend/data/services/ProviderRegistryService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
-import { MODEL_CAPABILITY } from '@/shared/data/types/model';
+import { MODEL_CAPABILITY, type UniqueModelId } from '@/shared/data/types/model';
 
 import type {
   AgentSetup,
@@ -276,6 +276,8 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
       .update(agentTable)
       .set({
         managedRemoteId: null,
+        defaultModelId: null,
+        allowedModelIds: null,
         instructions: '',
         updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
       })
@@ -285,7 +287,11 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
   }
   for (const { agent, remoteId, skillRemoteIds, mcpServerRemoteIds } of agents) {
     const [existing] = await tx
-      .select({ id: agentTable.id, model: agentTable.model })
+      .select({
+        id: agentTable.id,
+        model: agentTable.model,
+        defaultModelId: agentTable.defaultModelId,
+      })
       .from(agentTable)
       .where(eq(agentTable.managedRemoteId, remoteId));
     if (!agent) {
@@ -319,17 +325,32 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
       );
       continue;
     }
-    const locked = { name: agent.name, instructions: agent.instructions, avatar: agent.avatar };
+    const locked = {
+      name: agent.name,
+      instructions: agent.instructions,
+      avatar: agent.avatar,
+      defaultModelId: agent.defaultModelId,
+      allowedModelIds: agent.allowedModelIds,
+    };
+    const defaultModel = agent.defaultModelId;
     let id = existing?.id;
     if (id) {
-      // Model, mode, approval and capability choices are the user's; only fill a lost model.
+      // Mode, approval and capability choices are the user's. So is a model picked from the pool,
+      // as on the desktop (`resolveSelectedModel`): a withdrawn pick, or a previous default left
+      // in place, follows the server's default.
+      const current = existing!.model as UniqueModelId | null;
+      const previousDefault = existing!.defaultModelId ?? defaultModel;
+      const keepsModel =
+        current !== null &&
+        agent.allowedModelIds.includes(current) &&
+        !(current === previousDefault && current !== defaultModel);
       await tx
         .update(agentTable)
         .set({
           ...locked,
           deletedAt: null,
           updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
-          ...(existing!.model ? {} : { model: agent.model }),
+          ...(keepsModel ? {} : { model: defaultModel }),
         })
         .where(eq(agentTable.id, id));
     } else {
@@ -340,7 +361,7 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
         {
           ...locked,
           id,
-          model: agent.model,
+          model: defaultModel,
           toolApprovalMode: agent.toolApprovalMode,
           managedRemoteId: remoteId,
         },

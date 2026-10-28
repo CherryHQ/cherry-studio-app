@@ -10,7 +10,7 @@ import {
   useDesktopConnection,
   useDesktopConnectionActions,
 } from '@/frontend/hooks/useDesktopConnections';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
@@ -70,7 +70,7 @@ export function DeviceConnectionDetailScreen() {
   const canOpenHome = connection.capabilities.includes('agent');
   // Enterprise providers come from the organization, never from a desktop.
   const canSyncConfiguration =
-    connection.capabilities.includes('configuration') && !isEnterpriseProfile();
+    connection.capabilities.includes('configuration') && editionCapabilities().desktopConfigImport;
 
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>

@@ -19,6 +19,7 @@ import {
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import { type AgentSkillUpdate, ReplaceAgentSkillsSchema } from '@/shared/data/api/schemas/skills';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 import {
   type Agent,
   CHERRY_AGENT_AVATAR,
@@ -29,7 +30,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
 import { agentGlobalSkillService } from './AgentGlobalSkillService';
-import { assertManagedAgentUpdate, assertUserOwned } from './managedResources';
+import { assertAgentUpdate, denyUnless, guardMethods } from './managedResources';
 import { modelService } from './ModelService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -50,6 +51,9 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     id: row.id,
     instructions: row.instructions,
     isManaged: row.managedRemoteId !== null,
+    ...(row.managedRemoteId !== null && {
+      allowedModelIds: (row.allowedModelIds ?? []) as UniqueModelId[],
+    }),
     mode: row.mode,
     model: row.model as UniqueModelId | null,
     modelName,
@@ -227,10 +231,10 @@ export class AgentService {
             value !== undefined && !deepEqual(value, current[field as keyof AgentRow]),
         ),
       ) as Partial<typeof agentTable.$inferInsert>;
-      assertManagedAgentUpdate(current.managedRemoteId !== null, [
-        ...Object.keys(updates),
-        ...(skillUpdates?.length ? ['skills'] : []),
-      ]);
+      assertAgentUpdate(current, {
+        ...updates,
+        ...(skillUpdates?.length ? { skills: skillUpdates } : {}),
+      });
       if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
         return { row: current, changed: false };
       }
@@ -291,7 +295,6 @@ export class AgentService {
    * point the column at an arbitrary string.
    */
   async setAvatar(id: string, avatar: string): Promise<Agent> {
-    assertUserOwned((await this.getById(id)).isManaged, 'agent.setAvatar');
     const row = await this.dbService.withWriteTx(async (tx) => {
       const [updated] = await tx
         .update(agentTable)
@@ -317,7 +320,6 @@ export class AgentService {
    * (docs/references/agent/agent-persistence.md).
    */
   async delete(id: string): Promise<DeleteAgentResult> {
-    assertUserOwned((await this.getById(id, { includeDeleted: true })).isManaged, 'agent.delete');
     const deleted = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentTable)
@@ -454,5 +456,16 @@ export class AgentService {
     }
   }
 }
+
+// The organization owns a delivered Agent's avatar and its existence.
+guardMethods(AgentService, {
+  async setAvatar(id) {
+    denyUnless(agentPolicy(await this.getById(id)).canEdit('avatar'), 'agent.setAvatar');
+  },
+  async delete(id) {
+    const agent = await this.getById(id, { includeDeleted: true });
+    denyUnless(agentPolicy(agent).canDelete, 'agent.delete');
+  },
+});
 
 export const agentService = new AgentService();

@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { withPolicy } from '@/frontend/components/Policy';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -32,7 +33,7 @@ type AgentToolsSectionProps = {
   servers: readonly McpServer[];
 };
 
-export function AgentToolsSection({
+function ToolsSection({
   bindings,
   onChange,
   originalBindings,
@@ -94,6 +95,9 @@ export function AgentToolsSection({
       return [serverId, catalog] as const;
     }),
   );
+
+  // Nothing bound and nothing to add: a locked Agent, or no MCP server yet.
+  if (bindings.length === 0 && (readOnly || servers.length === 0)) return null;
 
   return (
     <View className="gap-6">
@@ -227,3 +231,8 @@ function statusCaption(
 function toolBindingKey(binding: McpToolBindingDraft): string {
   return JSON.stringify([binding.serverId, binding.rawToolName]);
 }
+
+/** A managed Agent's bindings belong to the organization, so its section is read-only. */
+export const AgentToolsSection = withPolicy(ToolsSection, (policy) => ({
+  readOnly: !policy.canBind,
+}));

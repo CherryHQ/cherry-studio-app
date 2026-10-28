@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { withPolicy } from '@/frontend/components/Policy';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
@@ -24,7 +25,7 @@ type AgentSkillsSectionProps = {
  * linked from the footer. A managed Agent's bindings belong to the enterprise server, so it shows
  * them read-only.
  */
-export function AgentSkillsSection({
+function SkillsSection({
   agentId,
   bindings,
   onChange,
@@ -33,6 +34,8 @@ export function AgentSkillsSection({
 }: AgentSkillsSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  // A locked Agent without bound Skills has nothing to show.
+  if (readOnly && !skills.some((skill) => bindings.get(skill.id) === true)) return null;
 
   return (
     <Section footer={t('agent.skills.usageHint')} title={t('agent.skills.section')}>
@@ -79,3 +82,8 @@ export function AgentSkillsSection({
     </Section>
   );
 }
+
+/** A managed Agent's bindings belong to the organization, so its section is read-only. */
+export const AgentSkillsSection = withPolicy(SkillsSection, (policy) => ({
+  readOnly: !policy.canBind,
+}));

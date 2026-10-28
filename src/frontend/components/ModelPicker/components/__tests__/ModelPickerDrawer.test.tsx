@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { PolicyScope } from '@/frontend/components/Policy';
+import { agentPolicy } from '@/shared/data/managedPolicy';
+
 import type { ModelPickerGroup } from '../../utils/modelPickerData';
 import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
@@ -159,6 +162,46 @@ describe('ModelPickerDrawer', () => {
         .map((item) => item.item.modelId),
     ).toEqual(['provider::compatible']);
     expect(mockListProps?.emptyText).toBe('No compatible models');
+  });
+
+  test('offers only the models of an enclosing scope', () => {
+    act(() => renderer.unmount());
+    mockGroups = [
+      {
+        items: [
+          { key: 'pooled', modelId: 'provider::pooled' } as never,
+          { key: 'other', modelId: 'provider::other' } as never,
+        ],
+        key: 'provider',
+        provider: {} as never,
+        title: 'Provider',
+      },
+    ];
+
+    act(() => {
+      renderer = create(
+        <PolicyScope
+          policy={agentPolicy({
+            isManaged: true,
+            allowedModelIds: ['provider::pooled', 'provider::elsewhere'],
+          })}
+        >
+          <ModelPickerDrawer
+            modelType="text"
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+          />
+        </PolicyScope>,
+      );
+    });
+
+    expect(
+      mockListProps?.listItems
+        .filter((item) => item.type === 'model')
+        .map((item) => item.item.modelId),
+    ).toEqual(['provider::pooled']);
   });
 
   test('offers a multi-select mode entered and left from the header', () => {

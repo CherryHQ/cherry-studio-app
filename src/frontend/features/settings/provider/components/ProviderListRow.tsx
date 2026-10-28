@@ -5,19 +5,22 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
+import { withPolicy } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderAccountBadge } from './ProviderAccountBadge';
 
-export const ProviderListRow = memo(function ProviderListRow({
+const ProviderListRowView = memo(function ProviderListRow({
+  canSignIn = true,
   isEnabled,
   isPending,
   onOpen,
   onToggle,
   provider,
 }: {
+  /** Offers the provider's account sign-in where it has one. */
+  canSignIn?: boolean;
   isEnabled: boolean;
   isPending: boolean;
   onOpen: (provider: Provider) => void;
@@ -27,8 +30,7 @@ export const ProviderListRow = memo(function ProviderListRow({
 }) {
   const { t } = useTranslation();
   const accounts = useBackendModule('providers').accounts;
-  // Enterprise credentials come from the organization; there is no account to sign in to.
-  const supportsSignIn = !isEnterpriseProfile() && accounts.getCapabilities(provider).signIn;
+  const supportsSignIn = canSignIn && accounts.getCapabilities(provider).signIn;
   const statusLabel = t(
     isEnabled ? 'settings.provider.status.enabled' : 'settings.provider.status.disabled',
   );
@@ -91,3 +93,8 @@ export const ProviderListRow = memo(function ProviderListRow({
     />
   );
 });
+
+/** Organization providers have no account to sign in to and no switch to flip. */
+export const ProviderListRow = withPolicy(ProviderListRowView, (policy) =>
+  policy.canEdit('provider') ? {} : { canSignIn: false, onToggle: undefined },
+);

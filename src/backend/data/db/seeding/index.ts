@@ -1,4 +1,4 @@
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
 
 import type { DbService } from '../DbService';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
@@ -11,8 +11,8 @@ export async function seedDatabase(dbService: DbService) {
 }
 
 function createSeeders(): DatabaseSeeder[] {
-  // Enterprise profiles get their providers from the enterprise server only.
-  return isEnterpriseProfile()
-    ? [new PreferenceSeeder()]
-    : [new PreferenceSeeder(), new PresetProviderSeeder()];
+  // Without provider settings, providers come from the enterprise server only.
+  return editionCapabilities().providerSettings
+    ? [new PreferenceSeeder(), new PresetProviderSeeder()]
+    : [new PreferenceSeeder()];
 }

@@ -267,6 +267,33 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('lets the user pick a managed Agent model only from a pool of several', async () => {
+    insertUserModel(sqlite, 'openai', 'gpt-4');
+    insertUserModel(sqlite, 'claude', 'sonnet');
+    insertUserModel(sqlite, 'gemini', 'pro');
+    const agent = await agentService.create({ name: 'Managed', model: 'openai::gpt-4' });
+    const setPool = (pool: string[]) =>
+      sqlite
+        .prepare("UPDATE agent SET managed_remote_id = '7', allowed_model_ids = ? WHERE id = ?")
+        .run(JSON.stringify(pool), agent.id);
+
+    setPool(['openai::gpt-4', 'claude::sonnet']);
+    await expect(agentService.getById(agent.id)).resolves.toMatchObject({
+      allowedModelIds: ['openai::gpt-4', 'claude::sonnet'],
+    });
+    await expect(agentService.update(agent.id, { model: 'claude::sonnet' })).resolves.toMatchObject(
+      { model: 'claude::sonnet' },
+    );
+    await expect(agentService.update(agent.id, { model: 'gemini::pro' })).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+
+    setPool(['claude::sonnet']);
+    await expect(agentService.update(agent.id, { model: 'openai::gpt-4' })).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+  });
+
   it.each([false, true])(
     'checks current ownership and locked values inside the write transaction (already managed: %s)',
     async (alreadyManaged) => {

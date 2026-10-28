@@ -15,6 +15,7 @@ import {
 } from '@/backend/data/db/schemas';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { type AgentSetup, type ManagedAgent, parseConfiguration } from '../enterpriseConfiguration';
 import { type PublishedSkill, projectConfiguration } from '../projectConfiguration';
@@ -38,9 +39,12 @@ const raw = {
   ],
 };
 
+const GPT = 'openai::gpt-4o@openai' as UniqueModelId;
+const SONNET = 'claude::sonnet@claude' as UniqueModelId;
+
 const agent = (
   remoteId: string,
-  model = 'openai::gpt-4o@openai',
+  models: UniqueModelId[] = [GPT],
 ): AgentSetup & { agent: ManagedAgent } => ({
   remoteId,
   skillRemoteIds: [],
@@ -49,7 +53,8 @@ const agent = (
     name: `Agent ${remoteId}`,
     instructions: 'Hidden prompt',
     avatar: null,
-    model: model as ManagedAgent['model'],
+    defaultModelId: models[0]!,
+    allowedModelIds: [...models].sort(),
     toolApprovalMode: 'default',
   },
   skills: [],
@@ -114,18 +119,36 @@ describe('projectConfiguration', () => {
   });
 
   it('keeps the user’s choices on a managed Agent across syncs', async () => {
-    await project(raw, [agent('1')]);
+    await project(raw, [agent('1', [GPT, SONNET])]);
     await db.database
       .update(agentTable)
-      .set({ model: 'claude::sonnet@claude', toolApprovalMode: 'auto' })
+      .set({ model: SONNET, toolApprovalMode: 'auto' })
       .where(eq(agentTable.managedRemoteId, '1'));
-    await project(raw, [{ ...agent('1'), agent: { ...agent('1').agent, name: 'Renamed' } }]);
+    const renamed = agent('1', [GPT, SONNET]);
+    await project(raw, [{ ...renamed, agent: { ...renamed.agent, name: 'Renamed' } }]);
     const [row] = await db.database.select().from(agentTable);
     expect(row).toMatchObject({
       name: 'Renamed',
-      model: 'claude::sonnet@claude',
+      model: SONNET,
+      defaultModelId: GPT,
+      allowedModelIds: [SONNET, GPT],
       toolApprovalMode: 'auto',
     });
+  });
+
+  it('moves a managed Agent to the server default as the desktop does', async () => {
+    const modelOf = async () => (await db.database.select().from(agentTable))[0]!.model;
+    await project(raw, [agent('1', [GPT, SONNET])]);
+    expect(await modelOf()).toBe(GPT);
+
+    // A previous default left in place follows the new default.
+    await project(raw, [agent('1', [SONNET, GPT])]);
+    expect(await modelOf()).toBe(SONNET);
+
+    // A pick withdrawn from the pool falls back to the default.
+    await db.database.update(agentTable).set({ model: GPT });
+    await project(raw, [agent('1', [SONNET])]);
+    expect(await modelOf()).toBe(SONNET);
   });
 
   it('deletes removed resources and detaches a removed Agent into a user Agent', async () => {

@@ -1,1 +1,0 @@
-export { ManagedBadge } from './ManagedBadge';

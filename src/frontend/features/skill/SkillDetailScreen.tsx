@@ -7,12 +7,18 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { RouteHeaderProps } from '@/frontend/appShell/header';
-import { ManagedBadge } from '@/frontend/components/ManagedBadge';
+import {
+  ManagedBadge,
+  PolicyManaged,
+  usePermittedItems,
+  withResourcePolicy,
+} from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { isSkillsError } from '@/shared/contracts/skills';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
 import { SkillDocumentPage } from './SkillDocumentPage';
@@ -52,7 +58,7 @@ export function SkillDetailScreen() {
   return <SkillDetail key={skill.id} skill={skill} />;
 }
 
-function SkillDetail({ skill }: { skill: SkillListItem }) {
+function SkillDetailView({ skill }: { skill: SkillListItem }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
@@ -98,9 +104,16 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
   }
 
   // The enterprise server owns a managed Skill's installation, so only its source stays reachable.
-  const menuItems = [
-    ...(skill.sourceUrl && !skill.isManaged
-      ? [{ id: 'skill-update', label: t('skills.detail.update'), onPress: () => void update() }]
+  const menuItems = usePermittedItems([
+    ...(skill.sourceUrl
+      ? [
+          {
+            id: 'skill-update',
+            label: t('skills.detail.update'),
+            onPress: () => void update(),
+            requires: 'change' as const,
+          },
+        ]
       : []),
     ...(skill.sourceUrl
       ? [
@@ -111,24 +124,21 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           },
         ]
       : []),
-    ...(skill.isManaged
-      ? []
-      : [
-          {
-            destructive: true,
-            id: 'skill-uninstall',
-            label: t('skills.detail.uninstall'),
-            onPress: () =>
-              alert.confirm({
-                confirmLabel: t('skills.detail.uninstall'),
-                description: t('skills.detail.uninstallMessage'),
-                onConfirm: () => void uninstall(),
-                role: 'destructive',
-                title: t('skills.detail.uninstallTitle', { name: skill.name }),
-              }),
-          },
-        ]),
-  ];
+    {
+      destructive: true,
+      id: 'skill-uninstall',
+      label: t('skills.detail.uninstall'),
+      onPress: () =>
+        alert.confirm({
+          confirmLabel: t('skills.detail.uninstall'),
+          description: t('skills.detail.uninstallMessage'),
+          onConfirm: () => void uninstall(),
+          role: 'destructive',
+          title: t('skills.detail.uninstallTitle', { name: skill.name }),
+        }),
+      requires: 'delete' as const,
+    },
+  ]);
   const headerProps: RouteHeaderProps = {
     rightActions:
       menuItems.length > 0
@@ -148,11 +158,11 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
 
   const feedback = (
     <>
-      {skill.isManaged ? (
+      <PolicyManaged>
         <View className="flex-row">
           <ManagedBadge />
         </View>
-      ) : null}
+      </PolicyManaged>
       {skill.isPackageMissing ? (
         <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
       ) : null}
@@ -192,3 +202,8 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
     </SkillPage>
   );
 }
+
+/** The detail follows its Skill's policy. */
+const SkillDetail = withResourcePolicy(SkillDetailView, ({ skill }) =>
+  managedResourcePolicy(skill),
+);

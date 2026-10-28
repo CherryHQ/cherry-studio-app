@@ -17,8 +17,8 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
-import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
+import { ManagedBadge, PolicyEditable, PolicyScope } from '@/frontend/components/Policy';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import {
@@ -30,6 +30,7 @@ import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import { McpAuthorizationError, McpRedirectError } from '@/shared/contracts/mcp';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import { PluginPage } from '../components/PluginPage';
@@ -100,12 +101,20 @@ export function McpServerScreen() {
     );
   }
 
-  if (server?.isManaged) {
-    return <ManagedMcpServerDetail server={server} />;
-  }
-
+  // A delivered server opens read-only.
   return (
-    <McpServerEditor key={server?.id ?? NEW_SERVER_SENTINEL} server={server} serverId={serverId} />
+    <PolicyScope policy={managedResourcePolicy(server)}>
+      <PolicyEditable
+        field="server"
+        fallback={server ? <ManagedMcpServerDetail server={server} /> : null}
+      >
+        <McpServerEditor
+          key={server?.id ?? NEW_SERVER_SENTINEL}
+          server={server}
+          serverId={serverId}
+        />
+      </PolicyEditable>
+    </PolicyScope>
   );
 }
 
@@ -159,7 +168,7 @@ function McpServerIdentity({
           >
             {server.name}
           </Text>
-          {server.origin !== 'builtin' && server.isManaged ? <ManagedBadge /> : null}
+          <ManagedBadge />
         </View>
         <Text className="text-sm text-muted-foreground">
           <Text

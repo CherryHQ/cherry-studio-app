@@ -168,7 +168,9 @@ export type ManagedAgent = Readonly<{
   name: string;
   instructions: string;
   avatar: string | null;
-  model: UniqueModelId;
+  /** As on the desktop: the default model and the sorted pool that contains it. */
+  defaultModelId: UniqueModelId;
+  allowedModelIds: UniqueModelId[];
   toolApprovalMode: 'default' | 'auto';
 }>;
 
@@ -265,11 +267,12 @@ export function parseAgentSetup(
   const modelIds = new Set(
     configuration.providers.flatMap((provider) => provider.models.map((model) => model.id)),
   );
-  // Mobile runs one model per Agent; plan/small models and turn limits have no equivalent.
-  const model = [...(agent.models ?? []), ...(agent.model ? [agent.model] : [])]
+  // The primary model is the default; an unusable one yields to the first usable pool model.
+  // Plan/small models and turn limits have no Mobile equivalent.
+  const models = [...(agent.model ? [agent.model] : []), ...(agent.models ?? [])]
     .map((candidate) => managedModelId(candidate.provider.provider_id, candidate.model_id))
-    .find((id) => modelIds.has(id));
-  if (!model) skipped.push(`agent ${agent.id}: no usable model`);
+    .filter((id) => modelIds.has(id));
+  if (!models.length) skipped.push(`agent ${agent.id}: no usable model`);
   const mcpServers = parseMcpServers(agent.mcpServers, skipped);
   const skills = agent.libraryItems.flatMap((item) => {
     const task = tasks.find((candidate) => candidate.libraryItemId === item.id);
@@ -280,12 +283,13 @@ export function parseAgentSetup(
     remoteId: String(agent.id),
     skillRemoteIds: agent.libraryItems.map((item) => String(item.id)),
     mcpServerRemoteIds: agent.mcpServers.map((server) => server.key),
-    agent: model
+    agent: models.length
       ? {
           name: agent.name,
           instructions: agent.instructions ?? '',
           avatar: emojiAvatar(agent.configuration?.avatar),
-          model,
+          defaultModelId: models[0]!,
+          allowedModelIds: [...new Set(models)].sort(),
           // Anything but explicit bypass keeps Mobile's ask-first default.
           toolApprovalMode:
             agent.configuration?.default_permission_mode === 'bypassPermissions'

@@ -38,6 +38,8 @@ export const AgentSchema = z.strictObject({
   instructions: z.string(),
   /** Owned by the enterprise server: read-only except for the managed-Agent field allowlist. */
   isManaged: z.boolean().optional(),
+  /** A managed Agent's model pool, default first; the user picks among them only when there are several. */
+  allowedModelIds: z.array(UniqueModelIdSchema).optional(),
   mode: AgentModeSchema,
   model: UniqueModelIdSchema.nullable(),
   /** Read-time projection of the model's display name; edits go through `model` */

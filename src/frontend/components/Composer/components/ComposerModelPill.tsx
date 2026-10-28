@@ -3,6 +3,8 @@ import { type PropsWithChildren, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
+import { useModelChoice } from '@/frontend/components/Policy';
+
 import { useComposerPresentationActions } from '../context/ComposerProvider';
 
 type ComposerModelPillProps = PropsWithChildren<{
@@ -19,6 +21,8 @@ type ComposerModelPillProps = PropsWithChildren<{
 export function ComposerModelPill({ children, icon, label, onPress }: ComposerModelPillProps) {
   const { t } = useTranslation();
   const { runInputReplacement } = useComposerPresentationActions();
+  // A scope with one allowed model leaves the pill showing it, with nothing to open.
+  const { isLocked } = useModelChoice();
 
   const handlePress = useCallback(() => {
     void runInputReplacement(onPress);
@@ -26,7 +30,11 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
 
   if (!label) {
     return (
-      <Composer.Pill accessibilityLabel={t('chat.model.select')} onPress={handlePress}>
+      <Composer.Pill
+        accessibilityLabel={t('chat.model.select')}
+        disabled={isLocked}
+        onPress={handlePress}
+      >
         <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
           {t('chat.model.select')}
         </Text>
@@ -37,6 +45,7 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
   return (
     <Composer.Pill
       accessibilityLabel={label}
+      disabled={isLocked}
       icon={
         icon ?? (
           <Text className="font-semibold text-foreground text-sm">

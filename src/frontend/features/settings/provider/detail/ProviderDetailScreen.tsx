@@ -9,9 +9,9 @@ import { Text, View } from 'react-native';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { withCapability } from '@/frontend/components/Policy';
 import { SelectionToolbar } from '@/frontend/components/Selection';
 import { useBackendModule, useQuery } from '@/frontend/data';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -46,16 +46,15 @@ export default function ProviderDetailSettingsScreen() {
     return <Redirect href="/settings/provider" />;
   }
 
-  if (isEnterpriseProfile()) {
-    return (
-      <ManagedProviderDetail key={providerId} providerId={providerId} providerName={providerName} />
-    );
-  }
-
-  return (
-    <ProviderDetailSettings key={providerId} providerId={providerId} providerName={providerName} />
-  );
+  return <ProviderDetail key={providerId} providerId={providerId} providerName={providerName} />;
 }
+
+/** Organization providers open read-only. */
+const ProviderDetail = withCapability(
+  'providerSettings',
+  ProviderDetailSettings,
+  ManagedProviderDetail,
+);
 
 function ProviderDetailSettings({
   providerId,

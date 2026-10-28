@@ -5,7 +5,6 @@ import {
   DEFAULT_AGENT_MODE,
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   type AgentToolApprovalMode,
-  MANAGED_AGENT_EDITABLE_FIELDS,
 } from '@/shared/data/types/agent';
 import {
   type AgentCapability,
@@ -48,13 +47,6 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
     name: agent?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
-}
-
-/** A managed Agent accepts changes only to the fields its enterprise allowlist leaves to the user. */
-export function canEditAgentField(agent: Agent | undefined, field: keyof Agent): boolean {
-  return (
-    !agent?.isManaged || (MANAGED_AGENT_EDITABLE_FIELDS as readonly (keyof Agent)[]).includes(field)
-  );
 }
 
 export function setAgentCapabilityEnabled(

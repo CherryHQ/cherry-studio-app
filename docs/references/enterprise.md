@@ -208,16 +208,19 @@ its previously installed row; it is not treated as server deletion. An unsupport
 its definition and history, while bindings absent from its validated setup are removed even when
 other Agents still receive those resources. An invalid configuration identity inventory rejects the
 snapshot. Unsupported items are logged: unknown provider types,
-endpoints or capabilities, non-HTTP MCP transports, and Agents without a usable model. An Agent keeps its first
-usable model; plan/small models and turn limits are ignored. Any permission mode other than bypass
+endpoints or capabilities, non-HTTP MCP transports, and Agents without a usable model. As on the
+desktop, an Agent's default model is its primary model (or, when that is unusable, its first usable
+pool model) and its allowed models are the sorted usable pool including the default. Plan/small models and turn limits are ignored. Any permission mode
+other than bypass
 maps to the default ask-first approval mode. Skills are installed whether or not Mobile can run
 them.
 
 ## Ownership
 
 Core tables gain one nullable column, `managed_remote_id`, on `agent`, `mcp_server` and
-`agent_global_skill`. A non-null value is the server id of a delivered resource. Providers and
-models need no marker: enterprise profiles skip preset provider seeding, users cannot create
+`agent_global_skill`. A non-null value is the server id of a delivered resource. A delivered Agent
+also stores `default_model_id` and `allowed_model_ids`, the desktop's names. Providers and models need no marker: enterprise
+profiles skip preset provider seeding, users cannot create
 providers, and every provider comes from the server.
 
 | Resource | Server removal |
@@ -225,7 +228,7 @@ providers, and every provider comes from the server.
 | Provider, model | Deleted |
 | MCP server | Deleted with its Agent bindings |
 | Skill | Deleted with its bindings |
-| Agent | Detached: `managed_remote_id` and instructions are cleared, Skill and MCP bindings removed, conversations kept; it becomes an ordinary user Agent |
+| Agent | Detached: `managed_remote_id`, `default_model_id`, `allowed_model_ids` and instructions are cleared, Skill and MCP bindings removed, conversations kept; it becomes an ordinary user Agent |
 
 The gateway key from `/configurations` is stored on each enterprise provider like any API key.
 Default models are written to the ordinary preference keys.
@@ -236,23 +239,40 @@ the client never substitutes the first supported model.
 
 ## Read-Only Rules
 
-Services enforce the rules (`src/backend/data/services/managedResources.ts`). The enterprise sync
-writes through its own transaction:
+One rule table, `src/shared/data/managedPolicy.ts`, answers what the user may change; data
+services enforce it and screens read it, so neither side asks which edition is running.
+`editionCapabilities()` holds the profile-wide settings, named as on the desktop: provider settings,
+model settings, provider onboarding and desktop configuration import are all off in an enterprise
+profile. `agentPolicy()` and `managedResourcePolicy()` describe one resource: whether it is managed,
+which fields it accepts, whether it can be deleted or rebound, whether its secrets show, and the
+models it allows.
 
 - In an enterprise profile, every provider and model mutation is rejected.
 - A managed Agent accepts only `MANAGED_AGENT_EDITABLE_FIELDS` (model, mode, tool approval mode,
   capability toggles). Its other fields, Skill and tool bindings, avatar and deletion are rejected.
-- Managed MCP servers and Skills cannot be updated, deleted or uninstalled.
+  The model must come from `allowed_model_ids`, and only several allowed models leave a choice. As
+  on the desktop, sync keeps the user's pick while the pool still holds it; a withdrawn pick, or a
+  previous default left in place, moves to the server's default.
+- Managed MCP servers and Skills cannot be updated, deleted, uninstalled or authorized.
 
-OAuth save/disconnect and provider-account key replacement enforce the same rules as ordinary
-resource edits. Agent updates compare and authorize submitted fields inside their write transaction,
-so a stale full form cannot overwrite a concurrently changed organization-owned field.
-The Agent management tools refuse to read or change a managed Agent at all, including its
-user-adjustable fields; `agent_list` marks it `isManaged`.
+Services apply the table at their write boundaries (`src/backend/data/services/managedResources.ts`).
+A check that needs nothing from the method's transaction wraps the method: `guardMethods` runs it
+before the original body, which stays free of policy. A check that must read the row in the same
+write transaction stays in the method: Agent updates, Skill and tool bindings, Skill edits and MCP
+OAuth saves. Agent updates compare and authorize submitted fields there, so a stale full form cannot
+overwrite a concurrently changed organization-owned field. The enterprise sync writes through its
+own transaction. The Agent management tools refuse to read or change a managed Agent at all,
+including its user-adjustable fields; `agent_list` marks it `isManaged`.
 
-The UI hides provider creation and configuration, shows default models read-only, marks delivered
-resources with `ManagedBadge`, and never shows a managed Agent's instructions or a managed MCP
-server's headers. Users may still create their own Agents, MCP servers and Skills.
+The UI applies the same table through `src/frontend/components/Policy`. A screen declares the
+resource it shows with `PolicyScope` (or `withResourcePolicy` for list rows and
+`capabilityPolicy` for profile-owned settings pages); wrapped standard components then lock
+fields (`PolicyEditable`, `PolicySelectItem`), hide secrets and delete actions (`PolicySecret`,
+`PolicyDeletable`), mark ownership (`ManagedBadge`) and hide unavailable entries
+(`withCapability`). Model pickers offer only the scope's allowed models, and with one model the
+composer pill, the editor's model row and "answer with another model" stay closed. Business screens
+do not branch on the edition or on `isManaged`. Users may still create their own Agents, MCP servers
+and Skills.
 Every profile seeds the Cherry Agent once, after the first resource sync so it takes the
 organization's default model; delivered Agents do not replace it, and a deleted one is not recreated.
 
@@ -280,7 +300,8 @@ unresolved authorization references and are disabled until the user authorizes t
 
 Enterprise implementation lives in `src/backend/services/enterprise`. Only bootstrap and
 `serviceRegistry.ts` import it (ESLint `enterpriseIsolation`). Shared rules live with their owners:
-the column in the core schemas, guards in data services, `ManagedBadge` in `src/frontend/components`.
+the column in the core schemas, the rule table in `src/shared/data/managedPolicy.ts`, its enforcement
+in data services, and its UI application in `src/frontend/components/Policy`.
 `CODEOWNERS` names the enterprise implementation and the installation profile bootstrap.
 Enterprise import allow/deny cases live in `scripts/__tests__/architectureBoundaries.test.ts`;
 resource and account regressions stay with their owning services.

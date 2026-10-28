@@ -11,9 +11,10 @@ import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-r
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
+import { PolicyManaged, withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsGroupedSeparator } from '../components/SettingsServiceRow';
@@ -38,15 +39,17 @@ type ProviderListItem =
       isPending: boolean;
     };
 
+// Adding or importing providers is not offered when the organization supplies them.
+const ProviderListHeader = withPolicy(RouteHeader, (policy) =>
+  policy.canEdit('provider') ? {} : { rightActions: undefined },
+);
 const keyExtractor = (item: ProviderListItem) => `${item.kind}:${item.id}`;
 const getItemType = (item: ProviderListItem) => item.kind;
 
-export default function ProviderListScreen() {
+function ProviderListView() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
-  // The organization configures every provider of an enterprise profile; rows only open details.
-  const isManaged = isEnterpriseProfile();
   const { isPreparing, openSetup } = useProviderSetup();
   const reducedMotion = useReducedMotion();
   const isNavigatingRef = useRef(false);
@@ -201,12 +204,12 @@ export default function ProviderListScreen() {
             isEnabled={item.isEnabled}
             isPending={item.isPending}
             onOpen={openProvider}
-            onToggle={isManaged ? undefined : toggleProviderEnabled}
+            onToggle={toggleProviderEnabled}
             provider={item.provider}
           />
         </View>
       ),
-    [isManaged, openProvider, toggleProviderEnabled],
+    [openProvider, toggleProviderEnabled],
   );
   const loadMoreProviders = useCallback(() => {
     if (!isFiltering && !hasPendingProviderUpdate) {
@@ -259,16 +262,13 @@ export default function ProviderListScreen() {
 
   return (
     <>
-      <RouteHeader
-        rightActions={isManaged ? undefined : rightActions}
-        title={t('settings.pages.provider.title')}
-      />
+      <ProviderListHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
       <InlineSearch onChangeText={setQuery} value={query} />
-      {isManaged ? (
+      <PolicyManaged>
         <Text className="px-7 pt-2 pb-1 text-muted-foreground text-sm">
           {t('enterprise.providers.notice')}
         </Text>
-      ) : null}
+      </PolicyManaged>
       <View className="flex-1 px-4 pb-5">
         {providerItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">
@@ -316,3 +316,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+/** The organization configures every provider of an enterprise profile; rows only open details. */
+export default withResourcePolicy(ProviderListView, () => capabilityPolicy('providerSettings'));

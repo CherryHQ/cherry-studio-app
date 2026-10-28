@@ -7,7 +7,8 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { AgentSummary, useConversationAgents } from '@/frontend/appShell/conversation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
-import { ManagedBadge } from '@/frontend/components/ManagedBadge';
+import { ManagedBadge, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 
 type MainHeaderAgentPickerSheetProps = {
   currentAgentId?: string;
@@ -110,7 +111,7 @@ export function MainHeaderAgentPickerSheet({
   );
 }
 
-function AgentPickerRow({
+function AgentPickerRowView({
   agent,
   onEdit,
   onSelect,
@@ -122,13 +123,12 @@ function AgentPickerRow({
   selected: boolean;
 }) {
   const { t } = useTranslation();
+  const accessibilityLabel = useManagedLabel(agent.name);
 
   return (
     <View className="min-w-0 flex-row items-center gap-2">
       <Pressable
-        accessibilityLabel={
-          agent.isManaged ? `${agent.name}, ${t('enterprise.managed.badge')}` : agent.name
-        }
+        accessibilityLabel={accessibilityLabel}
         accessibilityRole="radio"
         accessibilityState={{ checked: selected }}
         className="min-w-0 flex-1 flex-row items-center gap-3 rounded-xl py-1 active:opacity-60"
@@ -144,7 +144,7 @@ function AgentPickerRow({
         <View className="min-w-0 flex-1 gap-0.5">
           <View className="min-w-0 flex-row items-center gap-2">
             <Text className="shrink font-semibold text-base text-foreground">{agent.name}</Text>
-            {agent.isManaged ? <ManagedBadge /> : null}
+            <ManagedBadge />
           </View>
           {agent.modelName || agent.configuration !== 'unknown' ? (
             <Text className="text-muted-foreground text-xs" numberOfLines={1}>
@@ -168,3 +168,6 @@ function AgentPickerRow({
     </View>
   );
 }
+
+/** Each row follows its own Agent's policy. */
+const AgentPickerRow = withResourcePolicy(AgentPickerRowView, ({ agent }) => agentPolicy(agent));

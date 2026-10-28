@@ -277,6 +277,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "default_model_id": {
+          "name": "default_model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "allowed_model_ids": {
+          "name": "allowed_model_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "order_key": {
           "name": "order_key",
           "type": "text",

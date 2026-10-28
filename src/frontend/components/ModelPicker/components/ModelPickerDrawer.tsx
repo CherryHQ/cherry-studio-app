@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { useModelChoice } from '@/frontend/components/Policy';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import {
@@ -183,22 +184,26 @@ function ModelPickerDrawerContent({
           }),
     [groups, selectedBadge],
   );
+  const { allowedModelIds } = useModelChoice();
   const visibleGroups = useMemo(
     () =>
-      isModelVisible
+      isModelVisible || allowedModelIds
         ? filteredGroups.flatMap((group) => {
-            const items = group.items.filter(isModelVisible);
+            const items = group.items.filter(
+              (item) =>
+                (allowedModelIds?.has(item.modelId) ?? true) && (isModelVisible?.(item) ?? true),
+            );
             return items.length > 0 ? [{ ...group, items }] : [];
           })
         : filteredGroups,
-    [filteredGroups, isModelVisible],
+    [allowedModelIds, filteredGroups, isModelVisible],
   );
   const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
   const hasSearch = deferredSearchText.trim().length > 0;
   const hasActiveFilters = selectedBadge !== null;
   const emptyAction =
     // Enterprise providers come from the organization and cannot be added here.
-    !hasSearch && !hasActiveFilters && onAddProvider && !isEnterpriseProfile()
+    !hasSearch && !hasActiveFilters && onAddProvider && editionCapabilities().providerSettings
       ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
       : undefined;
 

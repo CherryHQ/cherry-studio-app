@@ -850,6 +850,8 @@ describe('bundled SQLite migrations', () => {
         'tool_approval_mode',
         'mode',
         'managed_remote_id',
+        'default_model_id',
+        'allowed_model_ids',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',

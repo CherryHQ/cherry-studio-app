@@ -31,7 +31,11 @@ import {
 } from '@/shared/data/types/provider';
 import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
-import { assertEnterpriseSessionAdmitted, assertProvidersEditable } from './managedResources';
+import {
+  assertEnterpriseSessionAdmitted,
+  guardMethods,
+  providerSettingsChecks,
+} from './managedResources';
 import {
   assertCustomProviderEndpointConfiguration,
   getRemovedConfiguredChatEndpoints,
@@ -588,7 +592,6 @@ export class ProviderService {
   }
 
   async create(input: CreateProviderInput): Promise<Provider> {
-    assertProvidersEditable('provider.create');
     const values = toInsert(input);
     const row = (await this.dbService.withWriteTx((tx) => {
       if (values.presetProviderId === null) {
@@ -607,7 +610,6 @@ export class ProviderService {
   }
 
   async update(providerId: string, input: UpdateProviderInput): Promise<Provider> {
-    assertProvidersEditable('provider.update');
     const updates: Partial<InsertUserProviderRow> = {};
 
     if (input.apiKeys !== undefined) {
@@ -718,7 +720,6 @@ export class ProviderService {
   }
 
   async replaceApiKeys(providerId: string, apiKeys: ApiKeyEntry[]): Promise<Provider> {
-    assertProvidersEditable('provider.replaceApiKeys');
     const normalizedApiKeys = normalizeApiKeys(apiKeys);
     const [row] = await this.dbService.withWriteTx((tx) =>
       tx
@@ -740,7 +741,6 @@ export class ProviderService {
     keyId: string,
     updates: UpdateApiKeyInput,
   ): Promise<Provider> {
-    assertProvidersEditable('provider.updateApiKey');
     const row = await this.getRowByProviderId(providerId);
 
     if (!row) {
@@ -769,7 +769,6 @@ export class ProviderService {
   }
 
   async delete(providerId: string): Promise<void> {
-    assertProvidersEditable('provider.delete');
     await this.dbService.withWriteTx(async (tx) => {
       const providerModelIds = tx
         .select({ id: userModelTable.id })
@@ -794,7 +793,6 @@ export class ProviderService {
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {
-    assertProvidersEditable('provider.batchUpsert');
     if (inputs.length === 0) {
       return;
     }
@@ -802,6 +800,19 @@ export class ProviderService {
     await this.dbService.withWriteTx((tx) => batchUpsertProviders(tx, inputs));
   }
 }
+
+// The organization supplies an enterprise profile's providers.
+guardMethods(
+  ProviderService,
+  providerSettingsChecks<ProviderService>('provider', [
+    'create',
+    'update',
+    'replaceApiKeys',
+    'updateApiKey',
+    'delete',
+    'batchUpsert',
+  ]),
+);
 
 export const providerService = new ProviderService();
 

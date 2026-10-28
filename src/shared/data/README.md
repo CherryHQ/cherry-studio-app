@@ -23,6 +23,8 @@ deliberate omission, not a gap.
 - `cache`: cache schemas and pure cache-key helpers; concrete cache implementations remain with
   their runtime owner.
 - `presets`: seed catalog data for web search providers.
+- `managedPolicy.ts`: what the user may change in the active profile — edition capabilities and
+  the policy of organization-delivered resources — enforced by data services and read by screens.
 
 Database tables, Drizzle row types, and migrations are not shared contracts; they stay under
 `src/backend/data/db`. Workflow-only contracts live in `src/shared/contracts`.

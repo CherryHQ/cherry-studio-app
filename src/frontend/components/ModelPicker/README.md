@@ -26,6 +26,7 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Organization
 
-- `components/` contains the model selection sheet, metadata, and filtering UI.
+- `components/` contains the model selection sheet, metadata, and filtering UI. Inside a
+  `PolicyScope` the sheet offers only the policy's allowed models (`useModelChoice`).
 - `hooks/` owns model picker data and preference-backed model selection state.
 - `utils/` contains pure model setting and model type helpers and tests.

@@ -11,7 +11,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
-import { ManagedBadge } from '@/frontend/components/ManagedBadge';
+import {
+  ManagedBadge,
+  useManagedLabel,
+  withPolicy,
+  withResourcePolicy,
+} from '@/frontend/components/Policy';
 import {
   SelectionControls,
   SelectionProvider,
@@ -23,6 +28,7 @@ import {
   useSelectionState,
 } from '@/frontend/components/Selection';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent } from '@/shared/data/types/agent';
 
 const agentSelectionScope = 'agents';
@@ -74,8 +80,9 @@ function AgentListScreenBody() {
       deleteSelected: async (ids) => {
         await deleteAgents(ids);
       },
-      // Agents the enterprise server manages cannot be deleted, so selection skips them.
-      getAllIds: () => listedAgents.flatMap((agent) => (agent.isManaged ? [] : [agent.id])),
+      // Selection deletes, so it skips Agents the user cannot delete.
+      getAllIds: () =>
+        listedAgents.flatMap((agent) => (agentPolicy(agent).canDelete ? [agent.id] : [])),
     }),
     [deleteAgents, listedAgents],
   );
@@ -234,22 +241,24 @@ type AgentListRowProps = {
   agent: Agent;
   isEditing: boolean;
   isSelected: boolean;
+  /** Selection deletes, so only a deletable Agent joins it. */
+  isSelectable?: boolean;
   onEdit: (agentId: string) => void;
   onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
 };
 
-const AgentListRow = memo(function AgentListRow({
+const AgentListRowView = memo(function AgentListRow({
   agent,
   isEditing,
+  isSelectable = true,
   isSelected,
   onEdit,
   onStartSelection,
   onToggle,
 }: AgentListRowProps) {
   const { t } = useTranslation();
-  // A managed Agent cannot be deleted, so it never joins a selection.
-  const isSelectable = !agent.isManaged;
+  const accessibilityLabel = useManagedLabel(agent.name);
 
   // Keep the press target and long-press handler mounted when selection starts,
   // so releasing that same touch cannot also toggle the row or open the editor.
@@ -260,9 +269,7 @@ const AgentListRow = memo(function AgentListRow({
           ? undefined
           : [{ name: 'longpress', label: t('agent.selection.start') }]
       }
-      accessibilityLabel={
-        agent.isManaged ? `${agent.name}, ${t('enterprise.managed.badge')}` : agent.name
-      }
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
       accessibilityState={isEditing ? { checked: isSelected, disabled: !isSelectable } : undefined}
       className="w-full active:bg-foreground/5"
@@ -289,7 +296,7 @@ const AgentListRow = memo(function AgentListRow({
             <Text className="shrink text-base text-foreground" numberOfLines={1}>
               {agent.name}
             </Text>
-            {agent.isManaged ? <ManagedBadge /> : null}
+            <ManagedBadge />
           </View>
           <Text className="text-muted-foreground text-sm" numberOfLines={1}>
             {agent.modelName ?? t('agent.model.none')}
@@ -304,6 +311,12 @@ const AgentListRow = memo(function AgentListRow({
     </Pressable>
   );
 });
+
+/** Each row follows its own Agent's policy. */
+const AgentListRow = withResourcePolicy(
+  withPolicy(AgentListRowView, (policy) => ({ isSelectable: policy.canDelete })),
+  ({ agent }) => agentPolicy(agent),
+);
 
 const styles = StyleSheet.create({
   cardSlice: { borderCurve: 'continuous' },

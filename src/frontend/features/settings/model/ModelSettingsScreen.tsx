@@ -1,7 +1,7 @@
 import { Section, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
@@ -15,14 +15,15 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/ModelPicker';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { PolicyManaged, PolicySelectItem, withResourcePolicy } from '@/frontend/components/Policy';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
 // 快速模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
 const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter((kind) => kind !== 'fast');
 
-export default function ModelSettingsScreen() {
+function ModelSettingsView() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { saveSelections, selections } = useModelSettingSelections();
@@ -81,34 +82,22 @@ export default function ModelSettingsScreen() {
     [imageModelPickerData, isSaving, selections, t, textModelPickerData],
   );
   const selectedModelId = activeKind ? selections[activeKind] : null;
-  // Enterprise sync writes these preferences; the organization owns the choice.
-  const isManaged = isEnterpriseProfile();
 
   return (
     <>
       <SettingsScrollPage headerProps={{ title: t('settings.pages.model.title') }}>
-        <Section footer={isManaged ? t('enterprise.providers.notice') : undefined}>
-          {items.map(({ key, ...item }) =>
-            isManaged ? (
-              <Section.Item
-                key={key}
-                label={item.label}
-                trailing={
-                  <View className="min-w-0 flex-row items-center justify-end gap-1">
-                    {item.valueLeading}
-                    <Text
-                      className="min-w-0 shrink text-right text-base text-foreground"
-                      numberOfLines={1}
-                    >
-                      {item.value}
-                    </Text>
-                  </View>
-                }
-              />
-            ) : (
-              <Section.SelectItem key={key} {...item} />
-            ),
-          )}
+        <Section
+          footer={
+            <PolicyManaged>
+              <Text className="mt-2 px-3 text-sm text-muted-foreground">
+                {t('enterprise.providers.notice')}
+              </Text>
+            </PolicyManaged>
+          }
+        >
+          {items.map(({ key, ...item }) => (
+            <PolicySelectItem field="defaultModel" key={key} {...item} />
+          ))}
         </Section>
       </SettingsScrollPage>
       {activeKind ? (
@@ -125,3 +114,6 @@ export default function ModelSettingsScreen() {
     </>
   );
 }
+
+/** Enterprise sync writes these preferences; the organization owns the choice. */
+export default withResourcePolicy(ModelSettingsView, () => capabilityPolicy('modelSettings'));

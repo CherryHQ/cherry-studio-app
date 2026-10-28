@@ -20,13 +20,22 @@ import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/heade
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/Avatar';
-import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
+import {
+  ManagedBadge,
+  PolicyDeletable,
+  PolicyEditable,
+  PolicyManaged,
+  PolicyScope,
+  PolicySecret,
+  PolicySelectItem,
+  withCapability,
+} from '@/frontend/components/Policy';
 import { usePreference } from '@/frontend/data/hooks';
 import {
   useAgentApiById,
@@ -39,20 +48,15 @@ import { useAgentSkillsApi } from '@/frontend/hooks/skill';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent, AgentMode } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import {
-  type AgentFormState,
-  buildAgentDto,
-  canEditAgentField,
-  createAgentFormState,
-} from './agentForm';
+import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentCapabilitiesSection } from './components/AgentCapabilitiesSection';
@@ -63,6 +67,8 @@ import { useAgentAutoSave } from './useAgentAutoSave';
 const agentFormAvatarSize = 96;
 const agentFormContentPadding = 12;
 const logger = loggerService.withContext('AgentEditScreen');
+// Organization providers cannot be added from here.
+const AddProviderButton = withCapability('providerSettings', Button);
 const MODE_LABEL_KEYS = {
   standard: 'agent.mode.standard.label',
   minimal: 'agent.mode.minimal.label',
@@ -132,15 +138,18 @@ export default function AgentEditScreen() {
   }
 
   return (
-    <AgentEditForm
-      key={agentId ?? 'new'}
-      agent={agent}
-      agentId={agentId}
-      originalToolBindings={bindings}
-      servers={servers}
-      shouldStartChat={!agentId && getSingleRouteParam(params.startChat) === 'true'}
-      skills={skills}
-    />
+    // An organization Agent's fields, bindings and model pool follow its policy.
+    <PolicyScope policy={agentPolicy(agent)}>
+      <AgentEditForm
+        key={agentId ?? 'new'}
+        agent={agent}
+        agentId={agentId}
+        originalToolBindings={bindings}
+        servers={servers}
+        shouldStartChat={!agentId && getSingleRouteParam(params.startChat) === 'true'}
+        skills={skills}
+      />
+    </PolicyScope>
   );
 }
 
@@ -200,11 +209,6 @@ function AgentEditForm({
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isSettingAvatar;
   const isNameInvalid = isEditing && !form.name.trim();
-  // The enterprise server owns a managed Agent's identity, instructions and bindings; the user
-  // keeps the allowlisted run settings. Its instructions are confidential, so they never render.
-  const isManaged = agent?.isManaged === true;
-  const canEditAvatar = canEditAgentField(agent, 'avatar');
-  const canEditName = canEditAgentField(agent, 'name');
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -426,7 +430,17 @@ function AgentEditForm({
         {/* The hero is the one primary object: who this Agent is. Create and edit
             share it, so a new Agent is filled in exactly where it will later be read. */}
         <View className="items-center gap-4 pb-2">
-          {canEditAvatar ? (
+          <PolicyEditable
+            field="avatar"
+            fallback={
+              <AgentAvatar
+                avatar={agent?.avatar}
+                name={form.name}
+                size={agentFormAvatarSize}
+                uri={form.avatarUri}
+              />
+            }
+          >
             <AvatarImagePicker
               accessibilityLabel={t('agent.form.setAvatar')}
               onBeforeOpen={Keyboard.dismiss}
@@ -447,59 +461,51 @@ function AgentEditForm({
                 </View>
               </View>
             </AvatarImagePicker>
-          ) : (
-            <AgentAvatar
-              avatar={agent?.avatar}
-              name={form.name}
-              size={agentFormAvatarSize}
-              uri={form.avatarUri}
-            />
-          )}
+          </PolicyEditable>
           <View className="items-center gap-1 self-stretch">
-            {canEditName ? (
-              <>
-                {/* The underline marks the name as a field, as on a provider. */}
-                <TextInput
-                  accessibilityLabel={t('agent.form.name')}
-                  autoCorrect={false}
-                  className={cn(
-                    'min-w-40 max-w-full border-b px-2 pb-1.5 text-center font-semibold text-2xl text-foreground',
-                    isNameInvalid ? 'border-error' : 'border-border-strong',
-                  )}
-                  cursorColor={mutedForegroundColor}
-                  onBlur={flush}
-                  onChangeText={(value) => updateForm('name', value)}
-                  placeholder={t('agent.form.namePlaceholder')}
-                  placeholderTextColor={mutedForegroundColor}
-                  returnKeyType="done"
-                  selectionColor={mutedForegroundColor}
-                  value={form.name}
-                />
-                {isNameInvalid ? (
-                  <Text accessibilityLiveRegion="polite" className="text-error text-sm">
-                    {t('agent.form.nameRequired')}
-                  </Text>
-                ) : null}
-              </>
-            ) : (
-              <Text
-                accessibilityRole="header"
-                className="max-w-full px-2 text-center font-semibold text-2xl text-foreground"
-              >
-                {form.name}
-              </Text>
-            )}
-            {isManaged ? (
-              <>
-                <ManagedBadge />
-                <Text className="text-center text-sm text-muted-foreground">
-                  {t('enterprise.managed.agentNotice')}
+            <PolicyEditable
+              field="name"
+              fallback={
+                <Text
+                  accessibilityRole="header"
+                  className="max-w-full px-2 text-center font-semibold text-2xl text-foreground"
+                >
+                  {form.name}
                 </Text>
-              </>
-            ) : null}
+              }
+            >
+              {/* The underline marks the name as a field, as on a provider. */}
+              <TextInput
+                accessibilityLabel={t('agent.form.name')}
+                autoCorrect={false}
+                className={cn(
+                  'min-w-40 max-w-full border-b px-2 pb-1.5 text-center font-semibold text-2xl text-foreground',
+                  isNameInvalid ? 'border-error' : 'border-border-strong',
+                )}
+                cursorColor={mutedForegroundColor}
+                onBlur={flush}
+                onChangeText={(value) => updateForm('name', value)}
+                placeholder={t('agent.form.namePlaceholder')}
+                placeholderTextColor={mutedForegroundColor}
+                returnKeyType="done"
+                selectionColor={mutedForegroundColor}
+                value={form.name}
+              />
+              {isNameInvalid ? (
+                <Text accessibilityLiveRegion="polite" className="text-error text-sm">
+                  {t('agent.form.nameRequired')}
+                </Text>
+              ) : null}
+            </PolicyEditable>
+            <ManagedBadge />
+            <PolicyManaged>
+              <Text className="text-center text-sm text-muted-foreground">
+                {t('enterprise.managed.agentNotice')}
+              </Text>
+            </PolicyManaged>
           </View>
         </View>
-        {isManaged ? null : (
+        <PolicySecret>
           <Section title={t('agent.form.instructions')}>
             <TextInput
               accessibilityLabel={t('agent.form.instructions')}
@@ -517,7 +523,7 @@ function AgentEditForm({
               value={form.instructions}
             />
           </Section>
-        )}
+        </PolicySecret>
         <View className="gap-3">
           <Section
             footer={
@@ -531,7 +537,8 @@ function AgentEditForm({
               onPress={openModePicker}
               value={t(MODE_LABEL_KEYS[form.mode])}
             />
-            <Section.SelectItem
+            <PolicySelectItem
+              field="model"
               label={t('agent.form.model')}
               onPress={openModelSelect}
               value={selectedModel?.model.name ?? t('agent.model.none')}
@@ -556,13 +563,10 @@ function AgentEditForm({
               />
             ) : null}
           </Section>
-          {/* Enterprise providers come from the organization and cannot be added here. */}
-          {!modelPickerData.isLoading &&
-          modelPickerData.modelItems.length === 0 &&
-          !isEnterpriseProfile() ? (
-            <Button onPress={handleAddProvider} size="sm" variant="secondary">
+          {!modelPickerData.isLoading && modelPickerData.modelItems.length === 0 ? (
+            <AddProviderButton onPress={handleAddProvider} size="sm" variant="secondary">
               {t('modelPicker.addProvider')}
-            </Button>
+            </AddProviderButton>
           ) : null}
         </View>
         {/* Capability groups gate which built-in tools a turn may offer; the
@@ -573,24 +577,19 @@ function AgentEditForm({
             onChange={(next) => updateForm('disabledCapabilities', next)}
           />
         ) : null}
-        {form.mode === 'standard' &&
-        (toolBindings.length > 0 || (!isManaged && servers.length > 0)) ? (
+        {form.mode === 'standard' ? (
           <AgentToolsSection
             bindings={toolBindings}
             onChange={handleToolBindingsChange}
             originalBindings={originalToolBindings}
-            readOnly={isManaged}
             servers={servers}
           />
         ) : null}
-        {isEditing &&
-        form.mode === 'standard' &&
-        (!isManaged || skills.some((skill) => skillBindings.get(skill.id) === true)) ? (
+        {isEditing && form.mode === 'standard' ? (
           <AgentSkillsSection
             agentId={agentId}
             bindings={skillBindings}
             onChange={saveSkillBindings}
-            readOnly={isManaged}
             skills={skills}
           />
         ) : null}
@@ -599,16 +598,18 @@ function AgentEditForm({
             {t('agent.actions.retry')}
           </Button>
         ) : null}
-        {agentId && !isManaged ? (
-          <Section>
-            <Section.Item
-              destructive
-              label={t('agent.actions.delete')}
-              onPress={() => confirmDelete(agentId)}
-              showChevron={false}
-              testID="agent-delete"
-            />
-          </Section>
+        {agentId ? (
+          <PolicyDeletable>
+            <Section>
+              <Section.Item
+                destructive
+                label={t('agent.actions.delete')}
+                onPress={() => confirmDelete(agentId)}
+                showChevron={false}
+                testID="agent-delete"
+              />
+            </Section>
+          </PolicyDeletable>
         ) : null}
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (

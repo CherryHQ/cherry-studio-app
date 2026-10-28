@@ -19,6 +19,7 @@ import {
   UpdateMcpServerSchema,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import {
   McpOAuthReferenceSchema,
   McpServerSchema,
@@ -26,7 +27,7 @@ import {
   type RemoteMcpServer,
 } from '@/shared/data/types/mcpServer';
 
-import { assertUserOwned } from './managedResources';
+import { denyUnless, guardMethods, managedRowPolicy } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 export type ListMcpServersQuery = {
@@ -135,7 +136,6 @@ export class McpServerService {
 
   async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
     const existing = await this.getById(id);
-    assertUserOwned(existing.origin !== 'builtin' && existing.isManaged, 'mcp.update');
     const parsed = UpdateMcpServerSchema.parse(dto);
     if (
       existing.origin === 'builtin' &&
@@ -206,7 +206,7 @@ export class McpServerService {
           .select()
           .from(mcpServerTable)
           .where(eq(mcpServerTable.id, previous.id));
-        assertUserOwned(current?.managedRemoteId != null, 'mcp.saveOAuthConnection');
+        denyUnless(managedRowPolicy(current).canEdit('oauth'), 'mcp.saveOAuthConnection');
         if (
           !current ||
           current.origin !== 'remote' ||
@@ -246,7 +246,7 @@ export class McpServerService {
         .select({ managedRemoteId: mcpServerTable.managedRemoteId })
         .from(mcpServerTable)
         .where(eq(mcpServerTable.id, id));
-      assertUserOwned(current?.managedRemoteId != null, 'mcp.disconnectOAuth');
+      denyUnless(managedRowPolicy(current).canEdit('oauth'), 'mcp.disconnectOAuth');
       return tx
         .update(mcpServerTable)
         .set({ oauth: null, isEnabled: false })
@@ -262,7 +262,6 @@ export class McpServerService {
     if (existing.origin === 'builtin') {
       throw DataApiErrorFactory.validation({ origin: ['Disconnect this connection from Plugins'] });
     }
-    assertUserOwned(existing.isManaged, 'mcp.delete');
     await this.dbService.withWriteTx(async (tx) => {
       await tx
         .update(agentToolBindingTable)
@@ -315,5 +314,15 @@ export class McpServerService {
     }
   }
 }
+
+// A delivered MCP server is read-only.
+guardMethods(McpServerService, {
+  async update(id) {
+    denyUnless(managedResourcePolicy(await this.getById(id)).canEdit('server'), 'mcp.update');
+  },
+  async delete(id) {
+    denyUnless(managedResourcePolicy(await this.getById(id)).canDelete, 'mcp.delete');
+  },
+});
 
 export const mcpServerService = new McpServerService();

@@ -1,11 +1,6 @@
 import type { Agent } from '@/shared/data/types/agent';
 
-import {
-  buildAgentDto,
-  canEditAgentField,
-  createAgentFormState,
-  setAgentCapabilityEnabled,
-} from '../agentForm';
+import { buildAgentDto, createAgentFormState, setAgentCapabilityEnabled } from '../agentForm';
 
 const baseForm = createAgentFormState();
 
@@ -129,17 +124,5 @@ describe('setAgentCapabilityEnabled', () => {
       'agents',
     ]);
     expect(setAgentCapabilityEnabled(['agents'], 'agents', false)).toEqual(['agents']);
-  });
-});
-
-describe('canEditAgentField', () => {
-  it('locks a managed Agent outside its allowlist and leaves a user-owned Agent editable', () => {
-    const managed = { isManaged: true } as Agent;
-    expect(canEditAgentField(managed, 'model')).toBe(true);
-    expect(canEditAgentField(managed, 'disabledCapabilities')).toBe(true);
-    expect(canEditAgentField(managed, 'name')).toBe(false);
-    expect(canEditAgentField(managed, 'avatar')).toBe(false);
-    expect(canEditAgentField({ isManaged: false } as Agent, 'name')).toBe(true);
-    expect(canEditAgentField(undefined, 'instructions')).toBe(true);
   });
 });

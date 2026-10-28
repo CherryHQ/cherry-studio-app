@@ -1,10 +1,9 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { Button, Section } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ManagedBadge } from '@/frontend/components/ManagedBadge';
+import { ManagedBadge, useManagedLabel } from '@/frontend/components/Policy';
 
 const STATUS_CLASS_NAMES = {
   danger: 'shrink-0 text-sm text-error',
@@ -19,14 +18,13 @@ export type PluginRowAddAction = { accessibilityLabel: string; onPress: () => vo
 /**
  * A navigable entry shared by every group on the plugins page. Text is clamped to one line each so
  * rows keep one height. The trailing column holds either the entry's status or, for something not
- * yet added, a round add button that starts adding it directly. An entry the enterprise server
- * delivers carries the managed badge beside its title.
+ * yet added, a round add button that starts adding it directly. Inside an organization-owned
+ * resource's policy scope the entry carries the managed badge beside its title.
  */
 export function PluginRow({
   addAction,
   description,
   icon,
-  isManaged = false,
   onPress,
   status,
   testID,
@@ -35,23 +33,15 @@ export function PluginRow({
   addAction?: PluginRowAddAction;
   description?: string;
   icon: ReactNode;
-  isManaged?: boolean;
   onPress: () => void;
   status?: PluginRowStatus;
   testID?: string;
   title: string;
 }) {
-  const { t } = useTranslation();
+  const managedTitle = useManagedLabel(title);
   return (
     <Section.Item
-      accessibilityLabel={[
-        title,
-        isManaged ? t('enterprise.managed.badge') : undefined,
-        status?.label,
-        description,
-      ]
-        .filter(Boolean)
-        .join(', ')}
+      accessibilityLabel={[managedTitle, status?.label, description].filter(Boolean).join(', ')}
       description={
         description ? (
           <Text className="text-sm text-muted-foreground" numberOfLines={1}>
@@ -64,7 +54,7 @@ export function PluginRow({
           <Text className="shrink text-base font-medium text-foreground" numberOfLines={1}>
             {title}
           </Text>
-          {isManaged ? <ManagedBadge /> : null}
+          <ManagedBadge />
         </View>
       }
       leading={icon}

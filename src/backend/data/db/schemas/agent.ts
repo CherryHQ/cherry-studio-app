@@ -54,6 +54,9 @@ export const agentTable = sqliteTable(
     disabledCapabilities: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
     // Enterprise remote id when the enterprise server owns this definition; NULL for user data.
     managedRemoteId: text(),
+    // Enterprise default model and model pool, as the desktop names them; NULL for user data.
+    defaultModelId: text(),
+    allowedModelIds: text({ mode: 'json' }).$type<string[]>(),
     ...orderKeyColumns,
     ...createUpdateDeleteTimestamps,
   },

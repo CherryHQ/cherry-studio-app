@@ -5,7 +5,7 @@ import { userProviderTable } from '@/backend/data/db/schemas';
 import { ProviderAccountError } from '@/shared/contracts';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
-import { assertProvidersEditable } from './managedResources';
+import { guardMethods, providerSettingsChecks } from './managedResources';
 
 /** Updates account-owned keys without overwriting concurrent edits to manual keys. */
 export class ProviderAccountService {
@@ -34,7 +34,6 @@ export class ProviderAccountService {
     nextKeys: ApiKeyEntry[],
   ) {
     return this.db.withWriteTx(async (tx) => {
-      assertProvidersEditable('providerAccount.replaceKeys');
       const identity = and(
         eq(userProviderTable.providerId, providerId),
         eq(userProviderTable.createdAt, createdAt),
@@ -54,3 +53,9 @@ export class ProviderAccountService {
     });
   }
 }
+
+// The organization supplies an enterprise profile's provider keys.
+guardMethods(
+  ProviderAccountService,
+  providerSettingsChecks<ProviderAccountService>('providerAccount', ['replaceKeys']),
+);

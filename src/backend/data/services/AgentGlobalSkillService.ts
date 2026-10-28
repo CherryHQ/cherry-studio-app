@@ -33,7 +33,7 @@ import {
   type SkillSourceKind,
 } from '@/shared/data/types/skill';
 
-import { assertUserOwned } from './managedResources';
+import { agentRowPolicy, denyUnless, managedRowPolicy } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 /** Persisted facts the installer commits; timestamps and ids are allocated here. */
@@ -394,7 +394,7 @@ export class AgentGlobalSkillService {
     record: SkillInstallRecord,
     expectedContentHash?: string,
   ): Promise<Skill> {
-    await this.assertSkillWritable(tx, skillId, 'skill.update');
+    denyUnless((await this.skillPolicy(tx, skillId)).canEdit('skill'), 'skill.update');
     const [row] = await tx
       .update(agentGlobalSkillTable)
       .set({
@@ -424,7 +424,7 @@ export class AgentGlobalSkillService {
 
   /** Deletes the installation and its bindings; startup reconciliation removes the bytes. */
   async deleteTx(tx: Database, skillId: string): Promise<void> {
-    await this.assertSkillWritable(tx, skillId, 'skill.delete');
+    denyUnless((await this.skillPolicy(tx, skillId)).canDelete, 'skill.delete');
     await tx.delete(agentSkillTable).where(eq(agentSkillTable.skillId, skillId));
     const [row] = await tx
       .delete(agentGlobalSkillTable)
@@ -468,15 +468,15 @@ export class AgentGlobalSkillService {
     if (!agent) {
       throw DataApiErrorFactory.notFound('Agent', agentId);
     }
-    assertUserOwned(agent.managedRemoteId !== null, 'agent.skills');
+    denyUnless(agentRowPolicy(agent).canBind, 'agent.skills');
   }
 
-  private async assertSkillWritable(tx: Database, skillId: string, operation: string) {
+  private async skillPolicy(tx: Database, skillId: string) {
     const [skill] = await tx
       .select({ managedRemoteId: agentGlobalSkillTable.managedRemoteId })
       .from(agentGlobalSkillTable)
       .where(eq(agentGlobalSkillTable.id, skillId));
-    assertUserOwned(Boolean(skill?.managedRemoteId), operation);
+    return managedRowPolicy(skill);
   }
 }
 

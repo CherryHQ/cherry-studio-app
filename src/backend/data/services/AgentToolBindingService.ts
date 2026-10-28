@@ -29,7 +29,7 @@ import {
   ResolvedAgentMcpToolBindingSchema,
 } from '@/shared/data/types/agentToolBinding';
 
-import { assertUserOwned } from './managedResources';
+import { agentRowPolicy, denyUnless } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 const ResolveAgentMcpToolBindingInputSchema = z.strictObject({
@@ -177,7 +177,7 @@ export class AgentToolBindingService {
     if (!agent) {
       throw DataApiErrorFactory.notFound('Agent', agentId);
     }
-    if (!options.read) assertUserOwned(agent.managedRemoteId !== null, 'agent.toolBindings');
+    if (!options.read) denyUnless(agentRowPolicy(agent).canBind, 'agent.toolBindings');
   }
 
   private readRows(tx: Database, agentId: string): Promise<AgentToolBindingRow[]> {
