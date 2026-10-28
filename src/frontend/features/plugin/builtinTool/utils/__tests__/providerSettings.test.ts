@@ -21,6 +21,7 @@ describe('web search provider settings', () => {
     expect(sectionTypes('tavily')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('deepseek')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('yuanbao')).toEqual(['apiKeys', 'apiHost']);
+    expect(sectionTypes('searchapi')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('deepseek', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('firecrawl', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
     expect(sectionTypes('crawl4ai', 'fetchUrls')).toEqual(['apiKeys', 'apiHost']);
@@ -48,6 +49,7 @@ describe('web search provider settings', () => {
     expect(placement('tavily', 'searchKeywords')).toBe('apiKeys');
     expect(placement('deepseek', 'searchKeywords')).toBe('apiKeys');
     expect(placement('yuanbao', 'searchKeywords')).toBe('apiKeys');
+    expect(placement('searchapi', 'searchKeywords')).toBe('apiKeys');
     expect(placement('deepseek', 'fetchUrls')).toBe('apiKeys');
     expect(placement('jina', 'fetchUrls')).toBe('apiKeys');
     expect(placement('crawl4ai', 'fetchUrls')).toBe('apiKeys');
