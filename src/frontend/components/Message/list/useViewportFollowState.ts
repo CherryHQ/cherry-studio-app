@@ -1,13 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-export type FollowingReason =
-  | 'local-send'
-  | 'restored-bottom'
-  | 'scroll-to-bottom'
-  | 'user-reached-bottom';
+export type FollowingReason = 'restored-bottom' | 'scroll-to-bottom' | 'user-reached-bottom';
 
 export type ReadingReason =
   | 'initializing'
+  | 'local-send'
   | 'navigation'
   | 'restored-anchor'
   | 'user-scrolled-up'
