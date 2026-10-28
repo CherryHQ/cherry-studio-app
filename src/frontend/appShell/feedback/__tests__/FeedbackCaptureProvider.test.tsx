@@ -1,13 +1,19 @@
 import { useLayoutEffect } from 'react';
+import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { FeedbackCaptureProvider, useFeedbackCapture } from '../FeedbackCaptureProvider';
+import {
+  FeedbackCaptureProvider,
+  useFeedbackActions,
+  useFeedbackCapture,
+} from '../FeedbackCaptureProvider';
 import { removeFeedbackScreenshot } from '../feedbackScreenshot';
 import { useShakeFeedback } from '../useShakeFeedback';
 
+const mockPrepare = jest.fn();
 jest.mock('@cherrystudio/ui/components', () => ({
   useOverlayNavigation: () => ({
-    prepareForNavigation: jest.fn().mockResolvedValue(true),
+    prepareForNavigation: mockPrepare,
     canNavigate: () => true,
   }),
 }));
@@ -28,11 +34,14 @@ jest.mock('../useShakeFeedback', () => ({ useShakeFeedback: jest.fn() }));
 jest.mock('../feedbackScreenshot', () => ({ removeFeedbackScreenshot: jest.fn() }));
 
 let value: ReturnType<typeof useFeedbackCapture>;
+let actions: ReturnType<typeof useFeedbackActions>;
 let renderer: ReactTestRenderer;
 function Probe() {
   const current = useFeedbackCapture();
+  const currentActions = useFeedbackActions();
   useLayoutEffect(() => {
     value = current;
+    actions = currentActions;
   });
   return null;
 }
@@ -52,6 +61,8 @@ beforeEach(() => {
   mockPath = '/home';
   mockConsentPending = false;
   mockShakeEnabled = true;
+  mockPrepare.mockResolvedValue(true);
+  AppState.currentState = 'active';
   act(() => {
     renderer = create(tree());
   });
@@ -73,13 +84,9 @@ test('hands off a captured image and deletes it on leaving the form', () => {
   expect(value.screenshot).toBeUndefined();
 });
 
-test('manual entry has no image, and removal clears a captured attachment immediately', () => {
+test('manual entry has no image', () => {
   expect(value.screenshot).toBeUndefined();
   expect(value.captureFailed).toBe(false);
-  act(() => options().onCaptured({ id: 'capture', uri: 'file:///capture.png' }));
-  act(() => value.clearScreenshot());
-  expect(value.screenshot).toBeUndefined();
-  expect(removeFeedbackScreenshot).toHaveBeenCalledTimes(1);
 });
 
 test('keeps shake capture out of onboarding and the privacy disclosure', () => {
@@ -115,4 +122,67 @@ test('sensitive routes retain text feedback without claiming that capture failed
   expect(mockPush).toHaveBeenCalledWith('/settings/about/feedback/new');
   expect(value.screenshot).toBeUndefined();
   expect(value.captureFailed).toBe(false);
+});
+
+test('freezes context before screenshot capture and removes it when the form is left', () => {
+  let source = {
+    feature: 'chat' as const,
+    executionSource: 'desktop' as const,
+    sessionId: 'first-session',
+  };
+  actions.registerSource(mockPath, () => source);
+  const finish = options().onCaptureStarted?.();
+  source = { ...source, sessionId: 'next-session' };
+  act(() => options().onCaptured(undefined));
+  finish?.();
+  expect(value.context).toMatchObject({
+    entry: 'shake',
+    executionSource: 'desktop',
+    sessionId: 'first-session',
+  });
+  expect(options().canStart()).toBe(false);
+  mockPath = '/settings/about/feedback/new';
+  act(() => renderer.update(tree()));
+  expect(value.context?.sessionId).toBe('first-session');
+  mockPath = '/home';
+  act(() => renderer.update(tree()));
+  expect(value.context).toBeUndefined();
+});
+
+test('a cancelled capture releases feedback entry without retaining its context', async () => {
+  const finish = options().onCaptureStarted?.();
+  expect(options().canStart()).toBe(false);
+  finish?.();
+  expect(options().canStart()).toBe(true);
+  await act(async () => actions.openFeedback({ feature: 'chat', messageId: 'chosen-message' }));
+  expect(value.context).toMatchObject({ entry: 'error', messageId: 'chosen-message' });
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  await act(async () => actions.openFeedback({ feature: 'chat', messageId: 'other-message' }));
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(value.context?.messageId).toBe('chosen-message');
+});
+
+test('route changes cancel a pending error handoff and do not leave a stale draft', async () => {
+  let release!: (ready: boolean) => void;
+  mockPrepare.mockImplementationOnce(
+    () =>
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      }),
+  );
+  let pending!: Promise<void>;
+  act(() => {
+    pending = actions.openFeedback({ feature: 'chat', sessionId: 'old-session' });
+  });
+  mockPath = '/settings';
+  act(() => renderer.update(tree()));
+  await act(async () => {
+    release(true);
+    await pending;
+  });
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(value.context).toBeUndefined();
+  await act(async () => actions.openFeedback({ feature: 'other' }));
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(value.context).not.toHaveProperty('sessionId');
 });

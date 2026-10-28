@@ -16,6 +16,7 @@ export function useShakeFeedback({
   prepareForNavigation,
   canStart,
   captureScreenshot,
+  onCaptureStarted,
 }: {
   enabled: boolean;
   captureScreenshot: boolean;
@@ -23,10 +24,12 @@ export function useShakeFeedback({
   route: string;
   prepareForNavigation: (signal: AbortSignal) => Promise<boolean>;
   onCaptured: (screenshot: FeedbackScreenshot | undefined) => void;
+  onCaptureStarted?: () => (() => void) | undefined;
 }) {
   const canBegin = useEffectEvent(canStart);
   const captured = useEffectEvent(onCaptured);
   const prepare = useEffectEvent(prepareForNavigation);
+  const captureStarted = useEffectEvent(() => onCaptureStarted?.());
   useEffect(() => {
     if (!enabled) return;
     let disposed = false;
@@ -39,33 +42,38 @@ export function useShakeFeedback({
     async function capture() {
       if (pending || disposed || AppState.currentState !== 'active' || !canBegin()) return;
       pending = true;
+      const finishCapture = captureStarted();
       const started = generation;
       const controller = new AbortController();
       handoff = controller;
       let screenshot: FeedbackScreenshot | undefined;
       try {
-        if (captureScreenshot) screenshot = await captureFeedbackScreenshot();
-      } catch {
-        // A failed capture still allows text feedback; the form explains the missing image.
+        try {
+          if (captureScreenshot) screenshot = await captureFeedbackScreenshot();
+        } catch {
+          // A failed capture still allows text feedback; the form explains the missing image.
+        }
+        if (disposed || generation !== started || AppState.currentState !== 'active') {
+          if (screenshot) removeFeedbackScreenshot(screenshot);
+          pending = false;
+          return;
+        }
+        let ready = false;
+        try {
+          ready = await prepare(controller.signal);
+        } catch {
+          // Preserve the current surface if it cannot safely yield to navigation.
+        }
+        if (!ready || disposed || generation !== started || AppState.currentState !== 'active') {
+          if (screenshot) removeFeedbackScreenshot(screenshot);
+          pending = false;
+          return;
+        }
+        // Keep admission closed until the route changes, even if navigation takes a frame.
+        captured(screenshot);
+      } finally {
+        finishCapture?.();
       }
-      if (disposed || generation !== started || AppState.currentState !== 'active') {
-        if (screenshot) removeFeedbackScreenshot(screenshot);
-        pending = false;
-        return;
-      }
-      let ready = false;
-      try {
-        ready = await prepare(controller.signal);
-      } catch {
-        // Preserve the current surface if it cannot safely yield to navigation.
-      }
-      if (!ready || disposed || generation !== started || AppState.currentState !== 'active') {
-        if (screenshot) removeFeedbackScreenshot(screenshot);
-        pending = false;
-        return;
-      }
-      // Keep admission closed until the route changes, even if navigation takes a frame.
-      captured(screenshot);
     }
 
     function updateSubscription() {

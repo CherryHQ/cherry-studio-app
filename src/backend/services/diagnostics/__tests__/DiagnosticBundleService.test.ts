@@ -174,6 +174,34 @@ test('uploads feedback with the last 24 hours of logs, traces and metadata', asy
   expect(mockDeletedPaths[0]).toMatch(/^file:\/\/\/cache/);
 });
 
+test('keeps the selected incident in the archive and sends form choices through the existing upload API', async () => {
+  const context = {
+    feature: 'chat',
+    entry: 'error',
+    executionSource: 'desktop',
+    capturedAt: '2026-10-27T12:00:00Z',
+    sessionId: 'session-1',
+    messageId: 'message-2',
+    error: { code: 'EXECUTION_FAILED', reason: 'network' },
+  } as const;
+  await service().uploadBundle({
+    description: 'Reply stopped',
+    feedback: { feature: 'chat', problem: 'error' },
+    context,
+  });
+  expect(manifest().incident).toEqual({ source: 'app', ...context });
+  expect(manifest().feedback).toEqual({
+    file: 'feedback.txt',
+    source: 'user',
+    feature: 'chat',
+    problem: 'error',
+  });
+  expect(mockUpload.mock.calls[0][0].description).toBe(
+    'Feature: chat\r\nProblem: error\r\n\r\nReply stopped',
+  );
+  expect(mockWriteZip.mock.calls[0][1][1].content).toBe(mockUpload.mock.calls[0][0].description);
+});
+
 test.each([
   [
     { status: 'uploaded', reportId: 'report-1' },

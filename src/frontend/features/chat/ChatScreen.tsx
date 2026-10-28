@@ -245,6 +245,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 </View>
               ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
                 <ChatWorkspace
+                  executionSource="local"
                   feedbackHintBottomOffset={composerHeight}
                   isTranslationEnabled
                   renderUsage={renderLocalUsage}

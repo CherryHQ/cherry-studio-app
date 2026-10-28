@@ -1,7 +1,7 @@
-import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { TraceSpanRecordSchema } from '@/shared/data/types/trace';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 const LOG_MESSAGES = new Set([
   'Startup stage',

@@ -47,6 +47,7 @@ it already exists.
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
+| Bounded diagnostic identifiers | `diagnosticIdentifier` in `src/shared/utils/diagnosticIdentifier.ts`, shared by trace export and feedback context |
 | Startup stage timing and milestones | `src/shared/core/logger/startupDiagnostics.ts`, exported through the diagnostic log allowlist |
 
 Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScript), `expo-crypto`
@@ -66,6 +67,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
+| Feedback entry and context handoff | `useFeedbackActions`, `useFeedbackSource` and safe failure projection in `src/frontend/appShell/feedback`; settings owns the form |
 | Target-language menus for text translation | `useTranslationLanguageMenu` in `src/frontend/hooks/useTranslationLanguageMenu.ts`, rendered by CherryUI `ActionMenu` |
 | List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy; management pages use `RouteHeader.selection` for the count and single exit |
 | Opening external links | `openExternalUrl` in `src/frontend/utils/openExternalUrl.ts` |

@@ -211,6 +211,7 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
+                executionSource="desktop"
                 feedbackHintBottomOffset={composerHeight}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
