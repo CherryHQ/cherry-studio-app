@@ -193,7 +193,10 @@ async function createServiceAccountAssertion(
   serviceAccount: VertexAuthInput['serviceAccount'],
   now: number,
 ): Promise<string> {
-  const { subtle } = await import('react-native-quick-crypto');
+  // Lazy: the native module must not load with the service registry.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
+  const { subtle } =
+    require('react-native-quick-crypto') as typeof import('react-native-quick-crypto');
   const issuedAt = Math.floor(now / 1000);
   const encodedHeader = encodeBase64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const encodedClaims = encodeBase64Url(

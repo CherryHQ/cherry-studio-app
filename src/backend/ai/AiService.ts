@@ -15,7 +15,7 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { application } from '@/backend/core/application/Application';
-import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import {
   aiUsageRecordService,
   type AiUsageCaptureContext,
@@ -155,10 +155,10 @@ function createProviderCallHandler(
  * Mobile keeps the desktop service name but does not register IPC handlers
  * or depend on Electron main-process lifecycle services.
  *
- * Data collaborators are module singletons; Vertex authentication is shared with pi-durable.
+ * It declares no `@DependsOn`: the container would inject dependencies as `overrides`. Data
+ * collaborators are module singletons, and Vertex authentication is resolved per call.
  */
 @Injectable('AiService')
-@DependsOn(['VertexAuthClient'])
 @ServicePhase(Phase.PostReady)
 export class AiService extends BaseService {
   /** Every entry is optional so the container can construct this with no arguments. */

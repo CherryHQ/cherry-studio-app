@@ -278,9 +278,9 @@ describe('provider API service form helpers', () => {
   it('only allows endpoint editing for URL-based provider auth types', () => {
     expect(canEditProviderEndpoint({ authType: 'api-key' } as never)).toBe(true);
     expect(canEditProviderEndpoint({ authType: 'iam-azure' } as never)).toBe(true);
+    expect(canEditProviderEndpoint({ authType: 'iam-gcp' } as never)).toBe(true);
     expect(canEditProviderEndpoint({ authType: 'api-key-aws' } as never)).toBe(false);
     expect(canEditProviderEndpoint({ authType: 'iam-aws' } as never)).toBe(false);
-    expect(canEditProviderEndpoint({ authType: 'iam-gcp' } as never)).toBe(false);
     expect(canEditProviderEndpoint({ authType: 'oauth' } as never)).toBe(false);
   });
 });

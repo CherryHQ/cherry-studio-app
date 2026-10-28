@@ -9,6 +9,8 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 import type { Model } from '@/shared/data/types/model';
 
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
+import type { PiStreamFn } from '../piModelTypes';
+import { streamVertexAnthropic } from '../piVertexAnthropic';
 
 const model: PiModel<'anthropic-messages'> = {
   api: 'anthropic-messages',
@@ -44,26 +46,28 @@ const context = normalizeContext({
 });
 
 async function bind(fetch: FetchFunction) {
-  return bindPiStream(
-    resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'google-vertex-anthropic'),
-    {
-      accessToken: 'host-token',
-      vertex: { projectId: 'project-id', location: 'us-east5' },
-      fetch,
-      headers: { Authorization: 'wrong-token', 'X-Goog-Api-Key': 'wrong-key', 'X-App': 'Cherry' },
-      maxRetries: 0,
-      maxTokens: 4096,
-      temperature: 0.5,
-      requestParameters: {
-        model: {
-          modelId: model.id,
-          reasoning: { selectableEfforts: ['high'], thinkingTokenLimits: { min: 1024, max: 8192 } },
-        } as Model,
-        profile: selectFormatWire(REASONING_FORMAT_PROFILES.anthropic, 'budget'),
-        selection: 'high',
-      },
+  const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'google-vertex-anthropic');
+  // Jest cannot evaluate the adapter's lazy import; Metro bundles it.
+  jest
+    .spyOn(adapter, 'loadStreamSimple')
+    .mockResolvedValue(streamVertexAnthropic as unknown as PiStreamFn);
+  return bindPiStream(adapter, {
+    accessToken: 'host-token',
+    vertex: { projectId: 'project-id', location: 'us-east5' },
+    fetch,
+    headers: { Authorization: 'wrong-token', 'X-Goog-Api-Key': 'wrong-key', 'X-App': 'Cherry' },
+    maxRetries: 0,
+    maxTokens: 4096,
+    temperature: 0.5,
+    requestParameters: {
+      model: {
+        modelId: model.id,
+        reasoning: { selectableEfforts: ['high'], thinkingTokenLimits: { min: 1024, max: 8192 } },
+      } as Model,
+      profile: selectFormatWire(REASONING_FORMAT_PROFILES.anthropic, 'budget'),
+      selection: 'high',
     },
-  );
+  });
 }
 
 describe('Vertex Claude official SDK integration', () => {

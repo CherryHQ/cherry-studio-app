@@ -51,6 +51,6 @@ export function streamVertexAnthropic(
     toolChoice: options?.toolChoice,
     // Cherry's existing onPayload mapping owns the exact reasoning parameters. This flag also
     // lets Pi select the appropriate thinking beta headers without duplicating its converter.
-    thinkingEnabled: options?.reasoning !== undefined && options.reasoning !== 'off',
+    thinkingEnabled: Boolean(options?.reasoning),
   });
 }
