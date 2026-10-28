@@ -14,7 +14,7 @@ import {
   assertBackupBelongsToActiveProfile,
   readBackupSchema,
   restoreDeviceState,
-  stampBackupProfile,
+  prepareEnterpriseBackup,
 } from '../backupDatabase';
 
 function database() {
@@ -241,29 +241,70 @@ describe('enterprise backups', () => {
     address: 'https://enterprise.example.com',
   });
   const managedData = `
-    INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at) VALUES ('openai', 'OpenAI', 'a0', 1, 1);
-    UPDATE agent SET managed_remote_id = '7', instructions = 'Organization prompt';
+    INSERT INTO user_provider (provider_id, name, api_keys, order_key, created_at, updated_at)
+      VALUES ('openai', 'OpenAI', '[{"id":"enterprise-gateway","key":"gateway-secret","isEnabled":true}]', 'a0', 1, 1);
+    INSERT INTO user_model (id, provider_id, model_id, preset_model_id, order_key, created_at, updated_at)
+      VALUES ('openai::gpt', 'openai', 'gpt', 'gpt', 'a0', 1, 1);
+    UPDATE agent SET managed_remote_id = '7', instructions = 'Organization prompt', model = 'openai::gpt';
+    UPDATE agent_session_message SET model_id = 'openai::gpt';
+    INSERT INTO mcp_server (id, name, base_url, headers, managed_remote_id, created_at, updated_at)
+      VALUES ('managed-mcp', 'Org tools', 'https://tools', '{"Authorization":"Bearer tool-secret"}', '3', 1, 1),
+             ('own-mcp', 'My tools', 'https://mine', NULL, NULL, 1, 1);
+    INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, created_at, updated_at)
+      VALUES ('managed-binding', 'agent', 'mcp', 'managed-mcp', 1, 1), ('own-binding', 'agent', 'mcp', 'own-mcp', 1, 1);
+    INSERT INTO agent_global_skill (id, name, folder_name, source, content_hash, manifest, profile, managed_remote_id, created_at, updated_at)
+      VALUES ('managed-skill', 'Org skill', 'org', 'enterprise', 'h', '[]', '{}', '5', 1, 1);
+    INSERT INTO agent_skill (agent_id, skill_id, created_at, updated_at) VALUES ('agent', 'managed-skill', 1, 1);
+    INSERT INTO preference (key, value, created_at, updated_at) VALUES ('agent.default_model_id', '"openai::gpt"', 1, 1);
     INSERT INTO app_state (key, value, created_at, updated_at) VALUES ('enterprise.sync', '{"hash":"h","syncIntervalMinutes":10,"skills":{}}', 1, 1);
   `;
+  const count = (raw: DatabaseSync, sql: string) =>
+    (raw.prepare(`SELECT COUNT(*) AS count FROM ${sql}`).get() as { count: number }).count;
 
   afterEach(() => setActiveProfile(LOCAL_PROFILE));
 
-  test('restores into its own identity with every organization marker and the sync state', async () => {
+  test('keeps conversations and Agents but no organization credentials or other delivered resources', async () => {
     const { raw, adapter } = database();
     try {
       raw.exec(managedData);
       setActiveProfile(profile(identity));
-      await stampBackupProfile(adapter);
+      await prepareEnterpriseBackup(adapter);
+      expect(raw.prepare('SELECT api_keys FROM user_provider').get()).toEqual({ api_keys: '[]' });
+      // Agents and messages keep their model references; the sync rewrites the rows after restore.
+      expect(raw.prepare('SELECT model FROM agent').get()).toEqual({ model: 'openai::gpt' });
+      expect(count(raw, "agent_session_message WHERE model_id = 'openai::gpt'")).toBe(2);
+      expect(raw.prepare('SELECT id FROM mcp_server ORDER BY id').all()).toEqual([
+        { id: 'mcp' },
+        { id: 'own-mcp' },
+      ]);
+      expect(raw.prepare('SELECT id FROM agent_tool_binding').all()).toEqual([
+        { id: 'own-binding' },
+      ]);
+      expect(count(raw, 'agent_global_skill')).toBe(0);
+      expect(count(raw, 'agent_skill')).toBe(0);
+      expect(count(raw, "preference WHERE key = 'agent.default_model_id'")).toBe(0);
+      expect(raw.prepare('SELECT key FROM app_state').all()).toEqual([{ key: 'backup.profile' }]);
+
       await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
       await restoreDeviceState(adapter, []);
       expect(raw.prepare('SELECT managed_remote_id, instructions FROM agent').get()).toEqual({
         managed_remote_id: '7',
         instructions: 'Organization prompt',
       });
-      expect(raw.prepare('SELECT provider_id FROM user_provider').all()).toEqual([
-        { provider_id: 'openai' },
-      ]);
-      expect(raw.prepare('SELECT key FROM app_state').all()).toEqual([{ key: 'enterprise.sync' }]);
+      // Without a sync state, the restored profile syncs before it opens.
+      expect(count(raw, 'app_state')).toBe(0);
+    } finally {
+      raw.close();
+    }
+  });
+
+  test('leaves local data untouched', async () => {
+    const { raw, adapter } = database();
+    try {
+      raw.exec(managedData);
+      await prepareEnterpriseBackup(adapter);
+      expect(count(raw, 'mcp_server')).toBe(3);
+      expect(count(raw, "user_provider WHERE api_keys LIKE '%gateway-secret%'")).toBe(1);
     } finally {
       raw.close();
     }
@@ -280,7 +321,7 @@ describe('enterprise backups', () => {
     const { raw, adapter } = database();
     try {
       setActiveProfile(profile(identity));
-      await stampBackupProfile(adapter);
+      await prepareEnterpriseBackup(adapter);
       setActiveProfile(target);
       await expect(assertBackupBelongsToActiveProfile(adapter)).rejects.toMatchObject({
         code: 'other-account',
@@ -294,7 +335,7 @@ describe('enterprise backups', () => {
     const { raw, adapter } = database();
     try {
       raw.exec(managedData);
-      await stampBackupProfile(adapter);
+      await prepareEnterpriseBackup(adapter);
       setActiveProfile(profile(identity));
       await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
       await restoreDeviceState(adapter, []);
