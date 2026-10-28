@@ -27,6 +27,9 @@ ships it as a Metro asset and loads it with `source={{ html }}`. Run
   source are kept.
 - **Fonts.** The page uses system fonts. The display WebView draws with the same fonts, so labels
   fit the shapes measured here.
+- **Gantt layout.** The default layout width is 1200 pixels, independent of the hidden WebView's
+  narrow viewport, so the time axis has room for date labels. A diagram's own `gantt.useWidth`
+  configuration can override it. Preview and viewer pages scale the resulting SVG to fit.
 - **Limits.** Sources above 32,768 characters and SVG above 1 MiB count as failures.
 
 ## Bridge Protocol

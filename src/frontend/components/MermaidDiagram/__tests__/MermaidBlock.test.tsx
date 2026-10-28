@@ -30,10 +30,11 @@ const fallback = <Text testID="code-block">source</Text>;
 function settle(source: string, result: 'rendered' | 'failed') {
   const page = { send: jest.fn(), reset: jest.fn() };
   mermaidRenderer.attach(page);
-  mermaidRenderer.receive({ type: 'ready' });
+  mermaidRenderer.receive(page, { type: 'ready' });
   void mermaidRenderer.render(source, false);
   const [{ id }] = page.send.mock.calls.at(-1)!;
   mermaidRenderer.receive(
+    page,
     result === 'rendered'
       ? { type: 'rendered', id, svg: '<svg/>', width: 100, height: 50 }
       : { type: 'failed', id },

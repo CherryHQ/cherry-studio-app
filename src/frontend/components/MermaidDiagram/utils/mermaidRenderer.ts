@@ -16,6 +16,7 @@ export type MermaidRendererPage = {
 };
 
 const FAILED: MermaidRenderResult = { status: 'failed' };
+const PAGE_READY_TIMEOUT_MS = 10_000;
 const RENDER_TIMEOUT_MS = 10_000;
 const PAGE_IDLE_MS = 60_000;
 const CACHE_ENTRIES = 48;
@@ -38,6 +39,7 @@ export class MermaidRenderer {
   private page: MermaidRendererPage | undefined;
   private pageReady = false;
   private active = false;
+  private readyTimer: ReturnType<typeof setTimeout> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private nextId = 1;
 
@@ -78,6 +80,7 @@ export class MermaidRenderer {
   attach(page: MermaidRendererPage): void {
     this.page = page;
     this.pageReady = false;
+    if (this.active) this.waitForPage();
   }
 
   detach(page: MermaidRendererPage): void {
@@ -90,10 +93,14 @@ export class MermaidRenderer {
       this.queue.unshift(this.current.job);
       this.current = undefined;
     }
+    if (this.active) this.waitForPage();
   }
 
-  receive(message: MermaidPageMessage): void {
+  receive(page: MermaidRendererPage, message: MermaidPageMessage): void {
+    if (this.page !== page) return;
     if (message.type === 'ready') {
+      clearTimeout(this.readyTimer);
+      this.readyTimer = undefined;
       this.pageReady = true;
       this.pump();
       return;
@@ -112,27 +119,41 @@ export class MermaidRenderer {
   }
 
   /** The page crashed, failed to load, or stopped answering. */
-  fail(): void {
-    this.failCurrent();
+  fail(page: MermaidRendererPage): void {
+    if (this.page !== page) return;
+    // Initialization failures belong to the page, not a particular diagram. Stop the
+    // whole batch instead of repeatedly replacing a page that never became ready.
+    if (!this.pageReady) {
+      this.unavailable();
+      return;
+    }
+    this.page = undefined;
     this.pageReady = false;
-    this.page?.reset();
+    this.waitForPage();
+    this.failCurrent();
+    page.reset();
   }
 
   /** The page cannot be loaded; queued diagrams keep their code blocks until the next request. */
   unavailable(): void {
-    for (const job of this.queue.splice(0)) this.settle(job, FAILED);
-    this.failCurrent();
+    clearTimeout(this.readyTimer);
+    this.readyTimer = undefined;
     clearTimeout(this.idleTimer);
     this.idleTimer = undefined;
+    this.page = undefined;
+    this.pageReady = false;
     this.active = false;
+    for (const job of this.queue.splice(0)) this.settle(job, FAILED);
+    this.failCurrent();
     this.notify();
   }
 
   private failCurrent(): void {
     if (!this.current) return;
-    clearTimeout(this.current.timer);
-    this.settle(this.current.job, FAILED);
+    const { job, timer } = this.current;
+    clearTimeout(timer);
     this.current = undefined;
+    this.settle(job, FAILED);
   }
 
   private pump(): void {
@@ -142,8 +163,9 @@ export class MermaidRenderer {
       this.scheduleIdle();
       return;
     }
-    this.current = { job, timer: setTimeout(() => this.fail(), RENDER_TIMEOUT_MS) };
-    this.page.send(job.request);
+    const page = this.page;
+    this.current = { job, timer: setTimeout(() => this.fail(page), RENDER_TIMEOUT_MS) };
+    page.send(job.request);
   }
 
   private settle(job: Job, result: MermaidRenderResult): void {
@@ -167,9 +189,17 @@ export class MermaidRenderer {
   private activate(): void {
     clearTimeout(this.idleTimer);
     this.idleTimer = undefined;
+    if (!this.pageReady) this.waitForPage();
     if (this.active) return;
     this.active = true;
     this.notify();
+  }
+
+  private waitForPage(): void {
+    // Start before the host reads its HTML asset, and keep the deadline across mounts
+    // and additional requests. Only ready or a terminal failure ends this wait.
+    if (this.readyTimer) return;
+    this.readyTimer = setTimeout(() => this.unavailable(), PAGE_READY_TIMEOUT_MS);
   }
 
   private scheduleIdle(): void {

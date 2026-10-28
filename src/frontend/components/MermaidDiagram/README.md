@@ -25,9 +25,15 @@ transcript therefore never parses SVG on the JavaScript thread or mounts a nativ
 Results are cached by source and theme, up to 48 entries and 8 MiB of SVG, and read synchronously
 on mount. Changing the theme renders the diagram again.
 
-A failure stays cached like a result, so the diagram is not retried while the entry remains: invalid syntax, an oversized source, a page
-that crashes or stops answering for 10 seconds, or a page that cannot load. The crashed or hung page
-is replaced and continues with the next diagram, so one bad source fails once instead of in a loop.
+A failure stays cached like a result, so the diagram is not retried while the entry remains: invalid
+syntax, an oversized source, or a page that cannot load, crashes, or stops answering. Initialization
+has a 10-second deadline starting with the first waiting request, including HTML asset loading and
+the page's ready message. An initialization error or timeout fails the waiting batch and releases
+the page without retrying; a new uncached request can start it again.
+
+Once ready, each diagram has its own 10-second rendering deadline. A crashed or hung page fails its
+current diagram and is replaced to continue with the next one. The replacement has the same bounded
+initialization wait, and messages from retired pages are ignored.
 
 ## Presentation
 

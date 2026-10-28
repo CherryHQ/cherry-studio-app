@@ -2,7 +2,7 @@ import type { MermaidPageRequest } from '@cherrystudio/mermaid-webview/protocol'
 
 import { MermaidRenderer, type MermaidRendererPage } from '../utils/mermaidRenderer';
 
-function attachPage(renderer: MermaidRenderer) {
+function attachLoadingPage(renderer: MermaidRenderer) {
   const sent: MermaidPageRequest[] = [];
   const page: MermaidRendererPage & { resets: number } = {
     resets: 0,
@@ -12,8 +12,13 @@ function attachPage(renderer: MermaidRenderer) {
     },
   };
   renderer.attach(page);
-  renderer.receive({ type: 'ready' });
   return { page, sent };
+}
+
+function attachPage(renderer: MermaidRenderer) {
+  const attached = attachLoadingPage(renderer);
+  renderer.receive(attached.page, { type: 'ready' });
+  return attached;
 }
 
 function rendered(id: number, svg = `<svg>${id}</svg>`) {
@@ -34,12 +39,12 @@ describe('MermaidRenderer', () => {
     const first = renderer.render('graph TD; A-->B', false);
     const second = renderer.render('graph TD; C-->D', false);
     expect(renderer.isActive()).toBe(true);
-    const { sent } = attachPage(renderer);
+    const { page, sent } = attachPage(renderer);
 
     expect(sent.map((request) => request.source)).toEqual(['graph TD; A-->B']);
-    renderer.receive(rendered(sent[0].id));
+    renderer.receive(page, rendered(sent[0].id));
     expect(sent.map((request) => request.source)).toEqual(['graph TD; A-->B', 'graph TD; C-->D']);
-    renderer.receive({ type: 'failed', id: sent[1].id });
+    renderer.receive(page, { type: 'failed', id: sent[1].id });
 
     await expect(first).resolves.toEqual({
       status: 'rendered',
@@ -63,10 +68,10 @@ describe('MermaidRenderer', () => {
 
   test('ignores answers that do not belong to the current request', () => {
     const renderer = new MermaidRenderer();
-    const { sent } = attachPage(renderer);
+    const { page, sent } = attachPage(renderer);
     void renderer.render('graph TD; A-->B', false);
 
-    renderer.receive(rendered(sent[0].id + 1));
+    renderer.receive(page, rendered(sent[0].id + 1));
     expect(renderer.peek('graph TD; A-->B', false)).toBeUndefined();
   });
 
@@ -93,7 +98,7 @@ describe('MermaidRenderer', () => {
     const { page } = attachPage(renderer);
     const crashed = renderer.render('graph TD; A-->B', false);
 
-    renderer.fail();
+    renderer.fail(page);
 
     await expect(crashed).resolves.toEqual({ status: 'failed' });
     expect(page.resets).toBe(1);
@@ -120,11 +125,144 @@ describe('MermaidRenderer', () => {
     expect(renderer.isActive()).toBe(false);
   });
 
+  test('fails waiting diagrams even when the HTML asset never finishes loading', async () => {
+    const renderer = new MermaidRenderer();
+    const waiting = renderer.render('graph TD; A-->B', false);
+
+    jest.advanceTimersByTime(10_000);
+
+    await expect(waiting).resolves.toEqual({ status: 'failed' });
+    expect(renderer.isActive()).toBe(false);
+    // Remounting the same diagram reads the failure instead of restarting the page.
+    await expect(renderer.render('graph TD; A-->B', false)).resolves.toEqual({ status: 'failed' });
+    expect(renderer.isActive()).toBe(false);
+  });
+
+  test('keeps the initialization deadline across more requests and page mounts', async () => {
+    const renderer = new MermaidRenderer();
+    const first = renderer.render('graph TD; A-->B', false);
+    jest.advanceTimersByTime(5_000);
+    const second = renderer.render('graph TD; C-->D', false);
+    const old = attachLoadingPage(renderer);
+    jest.advanceTimersByTime(4_999);
+    renderer.detach(old.page);
+    const next = attachLoadingPage(renderer);
+
+    expect(renderer.peek('graph TD; A-->B', false)).toBeUndefined();
+    jest.advanceTimersByTime(1);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { status: 'failed' },
+      { status: 'failed' },
+    ]);
+    expect(renderer.isActive()).toBe(false);
+    expect(next.sent).toHaveLength(0);
+    expect(next.page.resets).toBe(0);
+  });
+
+  test('fails the whole batch on a page error before ready without resetting it', async () => {
+    const renderer = new MermaidRenderer();
+    const first = renderer.render('graph TD; A-->B', false);
+    const second = renderer.render('graph TD; C-->D', false);
+    const { page } = attachLoadingPage(renderer);
+
+    renderer.fail(page);
+    renderer.fail(page);
+    jest.advanceTimersByTime(10_000);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { status: 'failed' },
+      { status: 'failed' },
+    ]);
+    expect(renderer.isActive()).toBe(false);
+    expect(page.resets).toBe(0);
+  });
+
+  test('clears the initialization deadline and gives rendering its own timeout', async () => {
+    const renderer = new MermaidRenderer();
+    const waiting = renderer.render('graph TD; A-->B', false);
+    const { page, sent } = attachLoadingPage(renderer);
+    jest.advanceTimersByTime(9_000);
+    renderer.receive(page, { type: 'ready' });
+
+    jest.advanceTimersByTime(9_999);
+    expect(renderer.peek('graph TD; A-->B', false)).toBeUndefined();
+    expect(sent).toHaveLength(1);
+    expect(page.resets).toBe(0);
+    jest.advanceTimersByTime(1);
+
+    await expect(waiting).resolves.toEqual({ status: 'failed' });
+    expect(page.resets).toBe(1);
+  });
+
+  test.each(['timeout', 'error'])(
+    'stops when a replacement page fails to initialize: %s',
+    async (failure) => {
+      const renderer = new MermaidRenderer();
+      const first = renderer.render('graph TD; A-->B', false);
+      const second = renderer.render('graph TD; C-->D', false);
+      const old = attachPage(renderer);
+      renderer.fail(old.page);
+      const next = attachLoadingPage(renderer);
+
+      if (failure === 'error') renderer.fail(next.page);
+      jest.advanceTimersByTime(10_000);
+
+      await expect(Promise.all([first, second])).resolves.toEqual([
+        { status: 'failed' },
+        { status: 'failed' },
+      ]);
+      expect(renderer.isActive()).toBe(false);
+      expect(old.page.resets).toBe(1);
+      expect(next.page.resets).toBe(0);
+      expect(next.sent).toHaveLength(0);
+    },
+  );
+
+  test('can render a new source after initialization fails and ignores the retired page', async () => {
+    const renderer = new MermaidRenderer();
+    void renderer.render('graph TD; A-->B', false);
+    const old = attachLoadingPage(renderer);
+    renderer.fail(old.page);
+    const waiting = renderer.render('graph TD; C-->D', false);
+    const next = attachLoadingPage(renderer);
+
+    renderer.receive(old.page, { type: 'ready' });
+    renderer.fail(old.page);
+    renderer.detach(old.page);
+    expect(next.sent).toHaveLength(0);
+    expect(renderer.isActive()).toBe(true);
+
+    renderer.receive(next.page, { type: 'ready' });
+    expect(next.sent.map((request) => request.source)).toEqual(['graph TD; C-->D']);
+    renderer.receive(next.page, rendered(next.sent[0].id));
+
+    await expect(waiting).resolves.toMatchObject({ status: 'rendered' });
+    jest.advanceTimersByTime(10_000);
+    expect(renderer.isActive()).toBe(true);
+    expect(next.page.resets).toBe(0);
+  });
+
+  test('ignores a detached page result even when the same request is sent again', async () => {
+    const renderer = new MermaidRenderer();
+    const waiting = renderer.render('graph TD; A-->B', false);
+    const old = attachPage(renderer);
+    renderer.detach(old.page);
+    const next = attachPage(renderer);
+    expect(next.sent[0].id).toBe(old.sent[0].id);
+
+    renderer.receive(old.page, rendered(old.sent[0].id, '<svg>old</svg>'));
+    expect(renderer.peek('graph TD; A-->B', false)).toBeUndefined();
+    renderer.receive(next.page, rendered(next.sent[0].id, '<svg>new</svg>'));
+
+    await expect(waiting).resolves.toMatchObject({ status: 'rendered', svg: '<svg>new</svg>' });
+  });
+
   test('keeps the page for a minute after the last diagram', () => {
     const renderer = new MermaidRenderer();
-    const { sent } = attachPage(renderer);
+    const { page, sent } = attachPage(renderer);
     void renderer.render('graph TD; A-->B', false);
-    renderer.receive(rendered(sent[0].id));
+    renderer.receive(page, rendered(sent[0].id));
 
     jest.advanceTimersByTime(59_999);
     expect(renderer.isActive()).toBe(true);
@@ -143,11 +281,11 @@ describe('MermaidRenderer', () => {
 
   test('evicts the least recently used results beyond the SVG budget', () => {
     const renderer = new MermaidRenderer();
-    const { sent } = attachPage(renderer);
+    const { page, sent } = attachPage(renderer);
     const large = 'x'.repeat(3 * 1024 * 1024);
     for (const source of ['a', 'b', 'c']) {
       void renderer.render(source, false);
-      renderer.receive(rendered(sent.at(-1)!.id, large));
+      renderer.receive(page, rendered(sent.at(-1)!.id, large));
     }
 
     expect(renderer.peek('a', false)).toBeUndefined();

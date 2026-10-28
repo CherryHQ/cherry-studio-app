@@ -52,6 +52,9 @@ function configure(dark: boolean) {
   if (configuredTheme === theme) return;
   mermaid.initialize({
     fontFamily: FONT_FAMILY,
+    // Gantt otherwise lays out its time axis at the hidden WebView's narrow width.
+    // Diagram-level configuration can override this default before rendering.
+    gantt: { useWidth: 1200 },
     maxTextSize: MERMAID_SOURCE_LIMIT,
     // Strict mode encodes label HTML and disables click callbacks and links.
     securityLevel: 'strict',

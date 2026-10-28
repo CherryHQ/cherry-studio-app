@@ -1,7 +1,15 @@
 import { parseMermaidPageMessage } from '@cherrystudio/mermaid-webview/protocol';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { withUniwind } from 'uniwind';
@@ -59,20 +67,20 @@ function RendererPage() {
 function RendererPageView({ html, onReset }: { html: string; onReset: () => void }) {
   const webView = useRef<WebView>(null);
   const source = useMemo(() => ({ html }), [html]);
+  const [page] = useState<MermaidRendererPage>(() => ({
+    send: (request) =>
+      webView.current?.injectJavaScript(
+        `window.cherryMermaid&&window.cherryMermaid.render(${JSON.stringify(request)});true;`,
+      ),
+    reset: onReset,
+  }));
 
-  useEffect(() => {
-    const page: MermaidRendererPage = {
-      send: (request) =>
-        webView.current?.injectJavaScript(
-          `window.cherryMermaid&&window.cherryMermaid.render(${JSON.stringify(request)});true;`,
-        ),
-      reset: onReset,
-    };
+  useLayoutEffect(() => {
     mermaidRenderer.attach(page);
     return () => mermaidRenderer.detach(page);
-  }, [onReset]);
+  }, [page]);
 
-  const fail = () => mermaidRenderer.fail();
+  const fail = () => mermaidRenderer.fail(page);
 
   return (
     <View
@@ -92,7 +100,7 @@ function RendererPageView({ html, onReset }: { html: string; onReset: () => void
         onError={fail}
         onMessage={({ nativeEvent }) => {
           const message = parseMermaidPageMessage(nativeEvent.data);
-          if (message) mermaidRenderer.receive(message);
+          if (message) mermaidRenderer.receive(page, message);
         }}
         onRenderProcessGone={fail}
         onShouldStartLoadWithRequest={({ url, isTopFrame }) =>
