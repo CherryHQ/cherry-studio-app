@@ -6,6 +6,11 @@
     "node": "24.x"
   },
   "expo": {
+    "install": {
+      "exclude": [
+        "react-native-keyboard-controller"
+      ]
+    },
     "autolinking": {
       "android": {
         "buildFromSource": [
@@ -179,7 +184,7 @@
     "react-native-chart-kit": "7.0.2",
     "react-native-enriched-markdown": "1.0.1",
     "react-native-gesture-handler": "~3.3.0",
-    "react-native-keyboard-controller": "1.22.7",
+    "react-native-keyboard-controller": "1.22.9",
     "react-native-mmkv": "4.3.2",
     "react-native-nitro-modules": "0.36.4",
     "react-native-nitro-theme-transition": "^1.0.0",

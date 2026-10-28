@@ -1,5 +1,5 @@
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/index.js b/lib/commonjs/components/KeyboardChatScrollView/index.js
-index 0b78ff38d8f0a2360632df3d9988c0c32bd56b99..883f9603ba13676de04c65c519d37be57b5845da 100644
+index 0b78ff3..883f960 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/index.js
 +++ b/lib/commonjs/components/KeyboardChatScrollView/index.js
 @@ -42,6 +42,7 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
@@ -19,10 +19,10 @@ index 0b78ff38d8f0a2360632df3d9988c0c32bd56b99..883f9603ba13676de04c65c519d37be5
      scroll,
      layout,
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
-index 6481228c59b02fe9efea538bcf094701006a5970..38e3dbe10e990d2b61273ae1e74e323187520bc6 100644
+index 8ac5904..22fd79e 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
 +++ b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
-@@ -93,9 +93,12 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -101,9 +101,12 @@ function useChatKeyboard(scrollViewRef, options) {
          return;
        }
  
@@ -39,10 +39,10 @@ index 6481228c59b02fe9efea538bcf094701006a5970..38e3dbe10e990d2b61273ae1e74e3231
          prevAbsorption.value = minimumPaddingAbsorbed;
          if (inverted) {
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
-index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddda5ef4bbd 100644
+index b23f1f5..025f95c 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
 +++ b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
-@@ -39,6 +39,9 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -40,6 +40,9 @@ function useChatKeyboard(scrollViewRef, options) {
    const closing = (0, _reactNativeReanimated.useSharedValue)(false);
    const minimumPaddingFractionOnOpen = (0, _reactNativeReanimated.useSharedValue)(0);
    const actualOpenShift = (0, _reactNativeReanimated.useSharedValue)(0);
@@ -52,7 +52,7 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddd
    const {
      layout,
      size,
-@@ -97,8 +100,11 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -103,8 +106,11 @@ function useChatKeyboard(scrollViewRef, options) {
            // blankSpace fully absorbs the keyboard — guard for inverted
            offsetBeforeScroll.value = scroll.value;
          }
@@ -64,7 +64,7 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddd
          if (inverted) {
            offsetBeforeScroll.value = scroll.value;
          } else {
-@@ -203,7 +209,7 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -209,7 +215,7 @@ function useChatKeyboard(scrollViewRef, options) {
            (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, Math.min(keepAt, maxScroll), false);
            return;
          }
@@ -73,7 +73,7 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddd
          (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, target, false);
  
          // Track actual (clamped) displacement during open for symmetric close
-@@ -221,8 +227,21 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -227,8 +233,21 @@ function useChatKeyboard(scrollViewRef, options) {
        const effective = (0, _helpers.getEffectiveHeight)(e.height, targetKeyboardHeight.value, offset);
        padding.value = effective;
  
@@ -95,9 +95,9 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddd
 +      } else if (effective > 0 && offsetBeforeScroll.value !== -1) {
 +        // Record actual scroll displacement so close can be symmetric
          actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
-       }
-     }
-@@ -231,6 +250,7 @@ function useChatKeyboard(scrollViewRef, options) {
+       } else if (effective === 0) {
+         // Fully closed: a later close event (Android sends one when a Modal
+@@ -241,6 +260,7 @@ function useChatKeyboard(scrollViewRef, options) {
      padding,
      currentHeight,
      contentOffsetY: undefined,
@@ -106,18 +106,10 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddd
      layout,
      size,
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js b/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js
-index 827436c43cec5c53ca4b213b30872c68fd4bde21..41a53a1f2bcd04ec0deff6633c06d012a3133e77 100644
+index 1c2912e..e8e55db 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js
 +++ b/lib/commonjs/components/KeyboardChatScrollView/useExtraContentPadding/index.js
-@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", {
- exports.useExtraContentPadding = useExtraContentPadding;
- var _react = require("react");
- var _reactNative = require("react-native");
-+var _reactNativeReanimated = require("react-native-reanimated");
- var _architecture = require("../../../architecture");
- var _reanimated = require("../../../reanimated");
- var _safeScrollTo = require("../../utils/safeScrollTo");
-@@ -31,6 +32,7 @@ function useExtraContentPadding(options) {
+@@ -32,6 +32,7 @@ function useExtraContentPadding(options) {
      scrollViewRef,
      extraContentPadding,
      keyboardPadding,
@@ -125,54 +117,17 @@ index 827436c43cec5c53ca4b213b30872c68fd4bde21..41a53a1f2bcd04ec0deff6633c06d012
      blankSpace,
      scroll,
      layout,
-@@ -40,9 +42,13 @@ function useExtraContentPadding(options) {
-     keyboardLiftBehavior,
-     freeze
-   } = options;
-+  const lastCommanded = (0, _reactNativeReanimated.useSharedValue)(null);
-+  const lastObservedScroll = (0, _reactNativeReanimated.useSharedValue)(0);
-   const scrollToTarget = (0, _react.useCallback)(target => {
-     "worklet";
- 
-+    lastCommanded.value = target;
-+    lastObservedScroll.value = scroll.value;
-     if (contentOffsetY && _architecture.IS_FABRIC) {
-       // eslint-disable-next-line react-compiler/react-compiler
-       contentOffsetY.value = target;
-@@ -55,9 +61,9 @@ function useExtraContentPadding(options) {
-     } else {
-       (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, target, false);
+@@ -65,7 +66,7 @@ function useExtraContentPadding(options) {
      }
--  }, [scrollViewRef, contentOffsetY]);
-+  }, [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll]);
+   }, [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll]);
    (0, _reanimated.useAnimatedReaction)(() => extraContentPadding.value, (current, previous) => {
 -    if (freeze.value || previous === null) {
 +    if (freeze.value || previous === null || keyboardPinnedToEnd?.value) {
        return;
      }
      const rawDelta = current - previous;
-@@ -82,15 +88,17 @@ function useExtraContentPadding(options) {
-     if (!(0, _helpers.shouldShiftContent)(keyboardLiftBehavior, atEnd)) {
-       return;
-     }
-+    // Accumulate pending commands until a native scroll event takes ownership.
-+    const base = lastCommanded.value !== null && scroll.value === lastObservedScroll.value ? lastCommanded.value : scroll.value;
-     if (inverted) {
--      const target = Math.max(scroll.value - effectiveDelta, -currentTotal);
-+      const target = Math.max(base - effectiveDelta, -currentTotal);
-       scrollToTarget(target);
-     } else {
-       const maxScroll = Math.max(size.value.height - layout.value.height + currentTotal, 0);
-       // Clamp at 0 as well: when the content is shorter than the viewport a
-       // shrinking padding makes `effectiveDelta` negative while `scroll.value`
-       // is already 0, so the target would go below the top of the content.
--      const target = Math.max(Math.min(scroll.value + effectiveDelta, maxScroll), 0);
-+      const target = Math.max(Math.min(base + effectiveDelta, maxScroll), 0);
-       scrollToTarget(target);
-     }
-   }, [inverted, keyboardLiftBehavior]);
 diff --git a/lib/module/components/KeyboardChatScrollView/index.js b/lib/module/components/KeyboardChatScrollView/index.js
-index e0c83918d9569e2ff541e45d31460121c73ec225..ebf73a0e0793fc859d9a39d8971d02d47f077086 100644
+index e0c8391..ebf73a0 100644
 --- a/lib/module/components/KeyboardChatScrollView/index.js
 +++ b/lib/module/components/KeyboardChatScrollView/index.js
 @@ -35,6 +35,7 @@ const KeyboardChatScrollView = /*#__PURE__*/forwardRef(({
@@ -192,10 +147,10 @@ index e0c83918d9569e2ff541e45d31460121c73ec225..ebf73a0e0793fc859d9a39d8971d02d4
      scroll,
      layout,
 diff --git a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
-index 043b97382c551d9e47557f3e175a42668ce5cef3..33a14d37e9536f8d657c13ec80dc901f6c7bc28b 100644
+index 6a941e8..4a1f6e0 100644
 --- a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
 +++ b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
-@@ -86,9 +86,12 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -94,9 +94,12 @@ function useChatKeyboard(scrollViewRef, options) {
          return;
        }
  
@@ -212,10 +167,10 @@ index 043b97382c551d9e47557f3e175a42668ce5cef3..33a14d37e9536f8d657c13ec80dc901f
          prevAbsorption.value = minimumPaddingAbsorbed;
          if (inverted) {
 diff --git a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
-index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf82041c4168d9 100644
+index 8ccd123..f4c7fa8 100644
 --- a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
 +++ b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
-@@ -32,6 +32,9 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -33,6 +33,9 @@ function useChatKeyboard(scrollViewRef, options) {
    const closing = useSharedValue(false);
    const minimumPaddingFractionOnOpen = useSharedValue(0);
    const actualOpenShift = useSharedValue(0);
@@ -225,7 +180,7 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf8204
    const {
      layout,
      size,
-@@ -90,8 +93,11 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -96,8 +99,11 @@ function useChatKeyboard(scrollViewRef, options) {
            // blankSpace fully absorbs the keyboard — guard for inverted
            offsetBeforeScroll.value = scroll.value;
          }
@@ -237,7 +192,7 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf8204
          if (inverted) {
            offsetBeforeScroll.value = scroll.value;
          } else {
-@@ -196,7 +202,7 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -202,7 +208,7 @@ function useChatKeyboard(scrollViewRef, options) {
            safeScrollTo(scrollViewRef, 0, Math.min(keepAt, maxScroll), false);
            return;
          }
@@ -246,7 +201,7 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf8204
          safeScrollTo(scrollViewRef, 0, target, false);
  
          // Track actual (clamped) displacement during open for symmetric close
-@@ -214,8 +220,21 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -220,8 +226,21 @@ function useChatKeyboard(scrollViewRef, options) {
        const effective = getEffectiveHeight(e.height, targetKeyboardHeight.value, offset);
        padding.value = effective;
  
@@ -268,9 +223,9 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf8204
 +      } else if (effective > 0 && offsetBeforeScroll.value !== -1) {
 +        // Record actual scroll displacement so close can be symmetric
          actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
-       }
-     }
-@@ -224,6 +243,7 @@ function useChatKeyboard(scrollViewRef, options) {
+       } else if (effective === 0) {
+         // Fully closed: a later close event (Android sends one when a Modal
+@@ -234,6 +253,7 @@ function useChatKeyboard(scrollViewRef, options) {
      padding,
      currentHeight,
      contentOffsetY: undefined,
@@ -279,17 +234,10 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf8204
      layout,
      size,
 diff --git a/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js b/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js
-index 3c90439c50d525d996a9ff8f61ba38b76bf60f3e..d562ae4590eb4c7c9d4059e4f06948ba355ec789 100644
+index 458bced..44b5897 100644
 --- a/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js
 +++ b/lib/module/components/KeyboardChatScrollView/useExtraContentPadding/index.js
-@@ -1,5 +1,6 @@
- import { useCallback } from "react";
- import { Platform } from "react-native";
-+import { useSharedValue } from "react-native-reanimated";
- import { IS_FABRIC } from "../../../architecture";
- import { useAnimatedReaction } from "../../../reanimated";
- import { safeScrollTo } from "../../utils/safeScrollTo";
-@@ -25,6 +26,7 @@ function useExtraContentPadding(options) {
+@@ -26,6 +26,7 @@ function useExtraContentPadding(options) {
      scrollViewRef,
      extraContentPadding,
      keyboardPadding,
@@ -297,72 +245,17 @@ index 3c90439c50d525d996a9ff8f61ba38b76bf60f3e..d562ae4590eb4c7c9d4059e4f06948ba
      blankSpace,
      scroll,
      layout,
-@@ -34,9 +36,13 @@ function useExtraContentPadding(options) {
-     keyboardLiftBehavior,
-     freeze
-   } = options;
-+  const lastCommanded = useSharedValue(null);
-+  const lastObservedScroll = useSharedValue(0);
-   const scrollToTarget = useCallback(target => {
-     "worklet";
- 
-+    lastCommanded.value = target;
-+    lastObservedScroll.value = scroll.value;
-     if (contentOffsetY && IS_FABRIC) {
-       // eslint-disable-next-line react-compiler/react-compiler
-       contentOffsetY.value = target;
-@@ -49,9 +55,9 @@ function useExtraContentPadding(options) {
-     } else {
-       safeScrollTo(scrollViewRef, 0, target, false);
+@@ -59,7 +60,7 @@ function useExtraContentPadding(options) {
      }
--  }, [scrollViewRef, contentOffsetY]);
-+  }, [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll]);
+   }, [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll]);
    useAnimatedReaction(() => extraContentPadding.value, (current, previous) => {
 -    if (freeze.value || previous === null) {
 +    if (freeze.value || previous === null || keyboardPinnedToEnd?.value) {
        return;
      }
      const rawDelta = current - previous;
-@@ -76,15 +82,17 @@ function useExtraContentPadding(options) {
-     if (!shouldShiftContent(keyboardLiftBehavior, atEnd)) {
-       return;
-     }
-+    // Accumulate pending commands until a native scroll event takes ownership.
-+    const base = lastCommanded.value !== null && scroll.value === lastObservedScroll.value ? lastCommanded.value : scroll.value;
-     if (inverted) {
--      const target = Math.max(scroll.value - effectiveDelta, -currentTotal);
-+      const target = Math.max(base - effectiveDelta, -currentTotal);
-       scrollToTarget(target);
-     } else {
-       const maxScroll = Math.max(size.value.height - layout.value.height + currentTotal, 0);
-       // Clamp at 0 as well: when the content is shorter than the viewport a
-       // shrinking padding makes `effectiveDelta` negative while `scroll.value`
-       // is already 0, so the target would go below the top of the content.
--      const target = Math.max(Math.min(scroll.value + effectiveDelta, maxScroll), 0);
-+      const target = Math.max(Math.min(base + effectiveDelta, maxScroll), 0);
-       scrollToTarget(target);
-     }
-   }, [inverted, keyboardLiftBehavior]);
-diff --git a/lib/typescript/components/KeyboardStickyView/index.d.ts b/lib/typescript/components/KeyboardStickyView/index.d.ts
-index b4a94bb87b92d8119ebfaab8d3bc6cbd9653b5de..89b33d10f90e32d25e4c0f087b0ac8dd949e999d 100644
---- a/lib/typescript/components/KeyboardStickyView/index.d.ts
-+++ b/lib/typescript/components/KeyboardStickyView/index.d.ts
-@@ -1,5 +1,5 @@
- import React from "react";
--import type { View, ViewProps } from "react-native";
-+import type { ViewInstance, ViewProps } from "react-native";
- export type KeyboardStickyViewProps = {
-     /**
-      * Specify additional offset to the view for given keyboard state.
-@@ -48,5 +48,5 @@ declare const KeyboardStickyView: React.ForwardRefExoticComponent<{
-     enabled?: boolean;
- } & ViewProps & {
-     children?: React.ReactNode | undefined;
--} & React.RefAttributes<View>>;
-+} & React.RefAttributes<ViewInstance>>;
- export default KeyboardStickyView;
 diff --git a/src/components/KeyboardChatScrollView/index.tsx b/src/components/KeyboardChatScrollView/index.tsx
-index 935bc71dabad6cd5c82bab77f64b5b6e1e5dc9b6..0e6fa506a8adce8d0fac6fa13094b42ea7299ef1 100644
+index 935bc71..0e6fa50 100644
 --- a/src/components/KeyboardChatScrollView/index.tsx
 +++ b/src/components/KeyboardChatScrollView/index.tsx
 @@ -52,6 +52,7 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
@@ -382,10 +275,10 @@ index 935bc71dabad6cd5c82bab77f64b5b6e1e5dc9b6..0e6fa506a8adce8d0fac6fa13094b42e
        scroll,
        layout,
 diff --git a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
-index 1ae9b811d26d1b1fa043c7f7a41fbeb5509afa03..73f5e0fea0a1930c480f20a072b47fbbb87e06d2 100644
+index f67fc0d..ed985dd 100644
 --- a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
 +++ b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
-@@ -154,10 +154,21 @@ function useChatKeyboard(
+@@ -164,10 +164,21 @@ function useChatKeyboard(
            return;
          }
  
@@ -411,10 +304,10 @@ index 1ae9b811d26d1b1fa043c7f7a41fbeb5509afa03..73f5e0fea0a1930c480f20a072b47fbb
            atEnd
          ) {
 diff --git a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
-index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9712e712b 100644
+index 314eb35..3a38e10 100644
 --- a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
 +++ b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
-@@ -51,6 +51,10 @@ function useChatKeyboard(
+@@ -52,6 +52,10 @@ function useChatKeyboard(
    const closing = useSharedValue(false);
    const minimumPaddingFractionOnOpen = useSharedValue(0);
    const actualOpenShift = useSharedValue(0);
@@ -425,7 +318,7 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9
    const {
      layout,
      size,
-@@ -150,8 +154,16 @@ function useChatKeyboard(
+@@ -157,8 +161,16 @@ function useChatKeyboard(
              // blankSpace fully absorbs the keyboard — guard for inverted
              offsetBeforeScroll.value = scroll.value;
            }
@@ -442,7 +335,7 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9
            if (inverted) {
              offsetBeforeScroll.value = scroll.value;
            } else {
-@@ -322,13 +334,18 @@ function useChatKeyboard(
+@@ -329,13 +341,18 @@ function useChatKeyboard(
              return;
            }
  
@@ -468,7 +361,7 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9
  
            safeScrollTo(scrollViewRef, 0, target, false);
  
-@@ -353,8 +370,34 @@ function useChatKeyboard(
+@@ -360,8 +377,34 @@ function useChatKeyboard(
  
          padding.value = effective;
  
@@ -503,9 +396,9 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9
 +        } else if (effective > 0 && offsetBeforeScroll.value !== -1) {
 +          // Record actual scroll displacement so close can be symmetric
            actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
-         }
-       },
-@@ -366,6 +409,7 @@ function useChatKeyboard(
+         } else if (effective === 0) {
+           // Fully closed: a later close event (Android sends one when a Modal
+@@ -377,6 +420,7 @@ function useChatKeyboard(
      padding,
      currentHeight,
      contentOffsetY: undefined,
@@ -514,7 +407,7 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9
      layout,
      size,
 diff --git a/src/components/KeyboardChatScrollView/useChatKeyboard/types.ts b/src/components/KeyboardChatScrollView/useChatKeyboard/types.ts
-index f89b7c81f4ac0e85e98b790c75309b7203be1fb2..2e8f231c990aa2c35b904f6a14344365ab8b2946 100644
+index f89b7c8..2e8f231 100644
 --- a/src/components/KeyboardChatScrollView/useChatKeyboard/types.ts
 +++ b/src/components/KeyboardChatScrollView/useChatKeyboard/types.ts
 @@ -22,6 +22,8 @@ type UseChatKeyboardReturn = {
@@ -527,17 +420,10 @@ index f89b7c81f4ac0e85e98b790c75309b7203be1fb2..2e8f231c990aa2c35b904f6a14344365
    scroll: SharedValue<number>;
    /** Visible viewport dimensions. */
 diff --git a/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts b/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts
-index e7584ed67dfe1411f30801583d0c1272cd87d5d8..1d07c8aa6dbdd54cd090fc90ee7424d8e9d9ac2a 100644
+index 78fe7cf..40f9875 100644
 --- a/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts
 +++ b/src/components/KeyboardChatScrollView/useExtraContentPadding/index.ts
-@@ -1,5 +1,6 @@
- import { useCallback } from "react";
- import { Platform } from "react-native";
-+import { useSharedValue } from "react-native-reanimated";
- 
- import { IS_FABRIC } from "../../../architecture";
- import { useAnimatedReaction } from "../../../reanimated";
-@@ -15,6 +16,8 @@ type UseExtraContentPaddingOptions = {
+@@ -16,6 +16,8 @@ type UseExtraContentPaddingOptions = {
    extraContentPadding: SharedValue<number>;
    /** Keyboard-only padding from useChatKeyboard — used to compute total padding for clamping. */
    keyboardPadding: SharedValue<number>;
@@ -546,7 +432,7 @@ index e7584ed67dfe1411f30801583d0c1272cd87d5d8..1d07c8aa6dbdd54cd090fc90ee7424d8
    /** Minimum inset floor — used to absorb keyboard and extraContentPadding changes. */
    blankSpace: SharedValue<number>;
    /** Current vertical scroll offset. */
-@@ -51,6 +54,7 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
+@@ -52,6 +54,7 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
      scrollViewRef,
      extraContentPadding,
      keyboardPadding,
@@ -554,31 +440,7 @@ index e7584ed67dfe1411f30801583d0c1272cd87d5d8..1d07c8aa6dbdd54cd090fc90ee7424d8
      blankSpace,
      scroll,
      layout,
-@@ -60,11 +64,16 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
-     keyboardLiftBehavior,
-     freeze,
-   } = options;
-+  const lastCommanded = useSharedValue<number | null>(null);
-+  const lastObservedScroll = useSharedValue(0);
- 
-   const scrollToTarget = useCallback(
-     (target: number) => {
-       "worklet";
- 
-+      lastCommanded.value = target;
-+      lastObservedScroll.value = scroll.value;
-+
-       if (contentOffsetY && IS_FABRIC) {
-         // eslint-disable-next-line react-compiler/react-compiler
-         contentOffsetY.value = target;
-@@ -78,13 +87,13 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
-         safeScrollTo(scrollViewRef, 0, target, false);
-       }
-     },
--    [scrollViewRef, contentOffsetY],
-+    [scrollViewRef, contentOffsetY, scroll, lastCommanded, lastObservedScroll],
-   );
- 
+@@ -93,7 +96,7 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
    useAnimatedReaction(
      () => extraContentPadding.value,
      (current, previous) => {
@@ -586,30 +448,4 @@ index e7584ed67dfe1411f30801583d0c1272cd87d5d8..1d07c8aa6dbdd54cd090fc90ee7424d8
 +      if (freeze.value || previous === null || keyboardPinnedToEnd?.value) {
          return;
        }
- 
-@@ -130,8 +139,15 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
-         return;
-       }
- 
-+      // Native scroll events can trail inset frames. Accumulate pending commands,
-+      // but let a newly observed offset (including a user drag) take ownership.
-+      const base =
-+        lastCommanded.value !== null && scroll.value === lastObservedScroll.value
-+          ? lastCommanded.value
-+          : scroll.value;
-+
-       if (inverted) {
--        const target = Math.max(scroll.value - effectiveDelta, -currentTotal);
-+        const target = Math.max(base - effectiveDelta, -currentTotal);
- 
-         scrollToTarget(target);
-       } else {
-@@ -143,7 +159,7 @@ function useExtraContentPadding(options: UseExtraContentPaddingOptions): void {
-         // shrinking padding makes `effectiveDelta` negative while `scroll.value`
-         // is already 0, so the target would go below the top of the content.
-         const target = Math.max(
--          Math.min(scroll.value + effectiveDelta, maxScroll),
-+          Math.min(base + effectiveDelta, maxScroll),
-           0,
-         );
  

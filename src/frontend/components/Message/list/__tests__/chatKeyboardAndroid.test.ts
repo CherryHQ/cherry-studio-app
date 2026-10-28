@@ -269,10 +269,14 @@ describe('Android keyboard with a growing composer', () => {
         if (order === 'composer first') resize();
         mockHandlers.onMove({ height: keyboard, duration: 250 });
         if (order === 'keyboard first') resize();
-        expect(mockScrollState.offset.value).toBeCloseTo(800 + keyboard + composer);
+        // The inset reaction scrolls by whole-pixel totals, as native offsets are.
+        expect(Math.abs(mockScrollState.offset.value - (800 + keyboard + composer))).toBeLessThan(
+          1,
+        );
       }
       mockHandlers.onEnd({ height: 0, duration: 250 });
-      expect(mockScrollState.offset.value).toBeCloseTo(800 + closed);
+      // Whole-pixel rounding leaves at most half a point.
+      expect(mockScrollState.offset.value).toBeCloseTo(800 + closed, 0);
     },
   );
 

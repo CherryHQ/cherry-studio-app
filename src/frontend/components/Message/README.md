@@ -22,9 +22,7 @@ history, message rows and parts, viewport following, and scroll restoration.
   opens, so the keyboard-controller patch keeps a list that was at its end there: on Android the
   keyboard frames include the composer inset and the inset reaction yields to them until the
   keyboard settles. Closing rewinds only the keyboard's share of that pinned shift, so composer
-  growth during the open never pulls the list below its end. It also backports
-  [upstream #1605](https://github.com/kirillzyusko/react-native-keyboard-controller/pull/1605),
-  accumulating inset-driven scroll commands until native scroll events catch up.
+  growth during the open never pulls the list below its end.
 - `AssistantMessage` owns standard assistant content: the pending placeholder and structured parts.
   Optional per-message `imageGeneration` settings select the shared image loader and its dimensions;
   completed generated images use the same managed file renderer as other assistant artifacts.
