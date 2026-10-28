@@ -40,7 +40,12 @@ import { createSelectionMention } from './components/ChatInput/utils/selectionMe
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
-import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import {
+  AssistantMessageUsage,
+  ChatComposerClearance,
+  ChatEmptyState,
+  ChatWorkspace,
+} from './components/ChatWorkspace';
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
@@ -238,16 +243,18 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             {/* Native background taps yield to scrolling and excluded message content. */}
             <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
               {sessionId && session.error ? (
-                <View className="flex-1 justify-center px-8 py-16">
-                  <ContentState.Error
-                    primaryAction={{
-                      children: t('agent.actions.retry'),
-                      onPress: () => void session.refetch(),
-                    }}
-                    prominence="prominent"
-                    title={t('navigation.chatsLoadFailed')}
-                  />
-                </View>
+                <ChatComposerClearance className="flex-1">
+                  <View className="flex-1 justify-center px-8 py-16">
+                    <ContentState.Error
+                      primaryAction={{
+                        children: t('agent.actions.retry'),
+                        onPress: () => void session.refetch(),
+                      }}
+                      prominence="prominent"
+                      title={t('navigation.chatsLoadFailed')}
+                    />
+                  </View>
+                </ChatComposerClearance>
               ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
                 <ChatWorkspace
                   feedbackHintBottomOffset={composerHeight}
@@ -278,7 +285,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           {/* The transcript keeps its viewport; the keyboard adapter reserves the dock inset. */}
           {!hasComposer && sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="expandable-overlay" onHeightChange={setComposerHeight}>
+            <ComposerDock
+              backgroundClassName="bg-chat-background"
+              layoutMode="expandable-overlay"
+              onHeightChange={setComposerHeight}
+            >
               <View>
                 {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
                 <ChatInput

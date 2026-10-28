@@ -23,6 +23,8 @@ import { useComposerExpansion } from './composer-expansion';
 const StyledKeyboardStickyView = withUniwind(KeyboardStickyView);
 
 export type ComposerDockProps = PropsWithChildren<{
+  /** Paints the compact dock's whole footprint so an overlaid transcript stays out of sight. */
+  backgroundClassName?: string;
   containerRef?: RefObject<ViewInstance | null>;
   /** Expandable overlays publish contentInset instead of reserving parent flow space. */
   layoutMode?: 'floating' | 'flow' | 'expandable' | 'expandable-overlay';
@@ -34,6 +36,7 @@ export type ComposerDockProps = PropsWithChildren<{
 }>;
 
 export function ComposerDock({
+  backgroundClassName,
   children,
   containerRef,
   layoutMode = 'floating',
@@ -96,6 +99,9 @@ export function ComposerDock({
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: isExpandable ? (progress?.get() ?? 0) : 0,
   }));
+  const restingBackgroundStyle = useAnimatedStyle(() => ({
+    opacity: 1 - (progress?.get() ?? 0),
+  }));
   const dockStyle = useAnimatedStyle(() => ({
     paddingBottom: bottomPadding,
     paddingHorizontal:
@@ -138,6 +144,13 @@ export function ComposerDock({
     >
       {isExpandable ? (
         <Animated.View pointerEvents="box-none" style={dockStyle}>
+          {backgroundClassName ? (
+            <Animated.View
+              className={`absolute inset-0 ${backgroundClassName}`}
+              pointerEvents="none"
+              style={restingBackgroundStyle}
+            />
+          ) : null}
           <Animated.View
             className="absolute inset-0 rounded-t-4xl bg-popover"
             pointerEvents="none"

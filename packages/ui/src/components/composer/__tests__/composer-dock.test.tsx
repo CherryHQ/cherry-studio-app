@@ -162,7 +162,7 @@ describe('Composer.Dock', () => {
     expect(container.props.onLayout).toBeUndefined();
   });
 
-  it('publishes overlay space without rerendering and holds it during manual expansion', () => {
+  it('publishes overlay space without rerendering and keeps it while the resting background fades', () => {
     const cell = <T,>(value: T) =>
       ({
         value,
@@ -174,6 +174,7 @@ describe('Composer.Dock', () => {
         },
       }) as SharedValue<T>;
     const contentInset = cell(0);
+    const progress = cell(0);
     mockExpansion = {
       state: { isExpanded: false, isPresented: false },
       actions: { expand: jest.fn(), collapse: jest.fn(), resizeContent: jest.fn() },
@@ -182,14 +183,18 @@ describe('Composer.Dock', () => {
         contentInset,
         extraHeight: cell(0),
         keyboardTrackingEnabled: cell(false),
-        progress: cell(0),
+        progress,
       },
     };
     const onRender = jest.fn();
     const onHeightChange = jest.fn();
     const renderDock = () => (
       <Profiler id="dock" onRender={onRender}>
-        <ComposerDock layoutMode="expandable-overlay" onHeightChange={onHeightChange}>
+        <ComposerDock
+          backgroundClassName="bg-chat-background"
+          layoutMode="expandable-overlay"
+          onHeightChange={onHeightChange}
+        >
           <View testID="editor" />
         </ComposerDock>
       </Profiler>
@@ -207,9 +212,15 @@ describe('Composer.Dock', () => {
     }
     expect(contentInset.get()).toBe(148);
     expect(onRender).not.toHaveBeenCalled();
+    const restingBackground = () =>
+      renderer!.root.findByProps({ className: 'absolute inset-0 bg-chat-background' });
+    // The compact dock hides the transcript it overlays.
+    expect(restingBackground().props.style).toEqual({ opacity: 1 });
 
     mockExpansion.state = { isExpanded: true, isPresented: true };
+    progress.set(1);
     act(() => renderer!.update(renderDock()));
+    expect(restingBackground().props.style).toEqual({ opacity: 0 });
     act(() =>
       renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.onLayout({
         nativeEvent: { layout: { height: 600 } },

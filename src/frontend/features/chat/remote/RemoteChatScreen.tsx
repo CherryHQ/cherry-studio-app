@@ -232,7 +232,11 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="expandable-overlay" onHeightChange={setComposerHeight}>
+          <ComposerDock
+            backgroundClassName="bg-chat-background"
+            layoutMode="expandable-overlay"
+            onHeightChange={setComposerHeight}
+          >
             <View>
               <ConversationStatus
                 availability={availability}

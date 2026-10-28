@@ -1,9 +1,9 @@
-import { useComposerExpansion } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { AgentAvatar } from '@/frontend/components/Avatar';
+
+import { ChatComposerClearance } from './ChatComposerClearance';
 
 type ChatDraftStateProps = {
   assistantAvatar?: null | string;
@@ -22,13 +22,12 @@ export function ChatDraftState({
   contentBottomInset,
 }: ChatDraftStateProps) {
   const { t } = useTranslation();
-  const composerInset = useComposerExpansion()?.meta.contentInset;
-  const style = useAnimatedStyle(() => ({
-    paddingBottom: contentBottomInset + (composerInset?.get() ?? 0),
-  }));
 
   return (
-    <Animated.View className="flex-1 items-center justify-center px-8" style={style}>
+    <ChatComposerClearance
+      className="flex-1 items-center justify-center px-8"
+      contentBottomInset={contentBottomInset}
+    >
       <View className="items-center gap-6">
         {assistantName ? (
           <AgentAvatar
@@ -43,6 +42,6 @@ export function ChatDraftState({
           {t('chat.draft.greeting')}
         </Text>
       </View>
-    </Animated.View>
+    </ChatComposerClearance>
   );
 }

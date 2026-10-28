@@ -54,7 +54,6 @@ describe('animated composer inset', () => {
       keyboardLiftBehavior: 'persistent',
       freeze: { value: false },
     };
-    createInsetHarness(options);
   });
 
   function resize(height: number) {
@@ -64,6 +63,7 @@ describe('animated composer inset', () => {
   }
 
   test('accumulates all height changes while native scroll events lag behind', () => {
+    createInsetHarness(options);
     for (const height of [4, 9, 14, 19, 22]) resize(height);
     expect(options.contentOffsetY.value).toBe(622);
 
@@ -72,6 +72,7 @@ describe('animated composer inset', () => {
   });
 
   test('rebases on the observed position after a native scroll event', () => {
+    createInsetHarness(options);
     resize(10);
     options.scroll.value = 550;
     resize(20);
@@ -82,6 +83,7 @@ describe('animated composer inset', () => {
 
   test('leaves a reader in place while the composer grows', () => {
     options.keyboardLiftBehavior = 'never';
+    createInsetHarness(options);
     for (const height of [10, 20, 30]) resize(height);
     expect(options.contentOffsetY.value).toBe(600);
   });

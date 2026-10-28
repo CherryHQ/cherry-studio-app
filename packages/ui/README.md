@@ -761,7 +761,9 @@ Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholde
 `useComposerExpansion().meta.contentInset` publishes the measured compact space for the keyboard
 list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
 without resizing the list viewport or rerendering the screen for every height sample. The inset
-stays fixed through manual expansion and clears when the dock unmounts.
+stays fixed through manual expansion and clears when the dock unmounts. Pass the page color as
+`backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
+transcript beneath it; it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
 returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
 while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.
