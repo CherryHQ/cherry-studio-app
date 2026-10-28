@@ -24,7 +24,7 @@ function Value({ children }: { children: string }) {
   );
 }
 
-/** The person's avatar, nickname and account: sign in, switch accounts or sign out. */
+/** Local avatar/nickname and the current account, with distinct space and account switching. */
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -68,8 +68,7 @@ export default function ProfileSettingsScreen() {
     toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
   };
   const openSignIn = () => router.push('/login');
-  // A cloud organization switches through the portal's choice; community and private accounts
-  // pick a sign-in method first.
+  // Account switching asks for authentication; space switching reuses the browser sign-in.
   const switchAccount = () => {
     if (state.isEnterprise && !state.privateAddress)
       void account.signIn().catch(reportAccountError);
@@ -104,6 +103,8 @@ export default function ProfileSettingsScreen() {
     });
   };
   const isSignedIn = state.isSignedIn || state.isEnterprise;
+  const accountLabel = state.name || state.maskedIdentifier || t('account.signedIn');
+  const identifier = state.maskedIdentifier !== accountLabel ? state.maskedIdentifier : undefined;
 
   return (
     <SettingsScrollPage
@@ -148,20 +149,29 @@ export default function ProfileSettingsScreen() {
             onPress={openSignIn}
           />
         ) : null}
-        {/* The identity provider may omit the account's name; an empty row says nothing. */}
-        {state.isSignedIn && !state.isEnterprise && state.name ? (
-          <Section.Item label={t('account.cloudAccount')} trailing={<Value>{state.name}</Value>} />
-        ) : null}
-        {organization ? (
+        {isSignedIn ? (
           <Section.Item
-            label={t(organization.kind === 'server' ? 'account.address' : 'account.organization')}
-            trailing={<Value>{organization.label}</Value>}
+            label={t(organization?.kind === 'server' ? 'account.address' : 'account.space')}
+            trailing={
+              <Value>
+                {organization?.label ??
+                  t(state.isEnterprise ? 'account.enterprise' : 'account.community')}
+              </Value>
+            }
           />
         ) : null}
-        {state.isEnterprise && state.name ? (
+        {state.isSignedIn ? (
           <Section.Item
-            label={t(state.privateAddress ? 'account.username' : 'account.accountName')}
-            trailing={<Value>{state.name}</Value>}
+            description={identifier}
+            label={t(state.privateAddress ? 'account.username' : 'account.cloudAccount')}
+            trailing={<Value>{accountLabel}</Value>}
+          />
+        ) : null}
+        {isSignedIn && state.isCloudSignInAvailable ? (
+          <Section.Item
+            disabled={state.isBusy}
+            label={t('account.switchSpace')}
+            onPress={() => void account.switchSpace().catch(reportAccountError)}
           />
         ) : null}
         {isSignedIn ? (

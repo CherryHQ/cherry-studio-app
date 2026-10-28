@@ -41,7 +41,9 @@ function compose(scheme?: string) {
   mockCreatePortal.mockReset().mockReturnValue({ ready: Promise.resolve() });
   mockCreateBridge.mockClear();
   jest.isolateModules(() => {
-    require('../installationAccount').installationAccount();
+    const { installationAccount } =
+      jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
+    installationAccount();
   });
 }
 
