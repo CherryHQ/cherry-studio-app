@@ -426,8 +426,9 @@ export class AgentService {
       return null;
     }
 
-    const model = await modelService.getById(modelId);
-    return model?.name ?? null;
+    // Startup needs only a label. Organization defaults can arrive before the public catalog.
+    const names = await modelService.getNamesByUniqueIds([modelId]);
+    return names.get(modelId) ?? null;
   }
 
   private async modelExistsTx(tx: TxLike, modelId: string): Promise<boolean> {
