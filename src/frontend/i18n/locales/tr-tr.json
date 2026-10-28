@@ -1982,6 +1982,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "Bilgisayarda kullanılabilir bir API anahtarı yapılandırılmamış",
   "settings.provider.desktopSync.unavailable.unreadable": "Yapılandırması bu sürümün okuyamadığı veriler içeriyor",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "Bu sağlayıcının kimlik doğrulama yöntemi mobil cihazlarda desteklenmiyor",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "Bilgisayarda varsayılan protokol için bir temel URL yapılandırılmamış",
   "settings.provider.disableProvider": "Sağlayıcıyı devre dışı bırak",
   "settings.provider.disableProviderNamed": "{{name}} sağlayıcısını devre dışı bırak",
   "settings.provider.edit.title": "Sağlayıcı Ayarları",

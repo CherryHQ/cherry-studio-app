@@ -1999,6 +1999,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "No hay ninguna clave de API utilizable configurada en el PC",
   "settings.provider.desktopSync.unavailable.unreadable": "Su configuración contiene datos que esta versión no puede leer",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "El método de autenticación de este proveedor no es compatible con dispositivos móviles",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "No hay ninguna URL base configurada en el PC para el protocolo predeterminado",
   "settings.provider.disableProvider": "Deshabilitar proveedor",
   "settings.provider.disableProviderNamed": "Deshabilitar proveedor {{name}}",
   "settings.provider.edit.title": "Configuración del proveedor",

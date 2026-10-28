@@ -5,6 +5,7 @@ import {
   directEndpointUrl,
   type DirectEndpoint,
 } from '@cherrystudio/remote-protocol';
+import { loggerService } from '@logger';
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'expo-crypto';
 
@@ -38,14 +39,18 @@ import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 import { createUniqueModelId, ENDPOINT_TYPE, type EndpointType } from '@/shared/data/types/model';
 import type { EndpointConfig, EndpointConfigs } from '@/shared/data/types/provider';
 import { resolveAuthOptional } from '@/shared/utils/providerAuth';
+import { isChatEndpointType } from '@/shared/utils/providerEndpoints';
 
 import { buildModelInsertValues, type CreateModelInput } from './ModelService';
 import {
   assertCustomProviderEndpointConfiguration,
   assertCustomProviderModelEndpointTypes,
+  hasConfiguredChatEndpoint,
 } from './providerModelEndpointIntegrity';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
+
+const logger = loggerService.withContext('DesktopConnectionService');
 
 function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
@@ -161,33 +166,60 @@ function getProviderImportRejection(
   return authOptional || hasUsableKey ? undefined : 'missing-api-key';
 }
 
+/**
+ * The PC lists every endpoint a model supports, but Mobile routes on the first entry. Lead with the
+ * first one this provider can serve, and leave behind a model it cannot serve at all.
+ */
+function routeCustomProviderModels(
+  models: DesktopProviderModel[],
+  endpointConfigs: EndpointConfigs | null | undefined,
+): DesktopProviderModel[] {
+  return models.flatMap((model) => {
+    const endpointTypes = model.endpointTypes ?? [];
+    if (endpointTypes.length === 0) return [model];
+    const routed = endpointTypes.find(
+      (endpointType) =>
+        !isChatEndpointType(endpointType) ||
+        hasConfiguredChatEndpoint(endpointConfigs, endpointType),
+    );
+    if (!routed) return [];
+    return [
+      { ...model, endpointTypes: [routed, ...endpointTypes.filter((type) => type !== routed)] },
+    ];
+  });
+}
+
 /** Run the real mapping up front so a provider that cannot be written is disabled, not attempted. */
-function getProviderImportUnavailableReason(
+function planProviderImport(
   provider: DesktopProviderSnapshot,
   existingEndpointConfigs: EndpointConfigs | null | undefined,
   account?: ProviderAccountCapabilities,
-): DesktopImportUnavailableReason | undefined {
+): { models: DesktopProviderModel[]; unavailableReason?: DesktopImportUnavailableReason } {
   const rejection = getProviderImportRejection(provider, account);
-  if (rejection) return rejection;
+  if (rejection) return { models: provider.models, unavailableReason: rejection };
+  let configuration: ReturnType<typeof mapProvider>;
   try {
-    const configuration = mapProvider(provider, account);
-    if (configuration.presetProviderId) return undefined;
-    const endpointConfigs = { ...existingEndpointConfigs, ...configuration.endpointConfigs };
-    assertCustomProviderEndpointConfiguration({
-      defaultChatEndpoint: configuration.defaultChatEndpoint,
-      endpointConfigs,
-    });
-    for (const model of provider.models) {
-      assertCustomProviderModelEndpointTypes({
-        defaultChatEndpoint: configuration.defaultChatEndpoint,
-        endpointConfigs,
-        endpointTypes: model.endpointTypes ?? [],
-      });
-    }
-    return undefined;
+    configuration = mapProvider(provider, account);
   } catch {
-    return 'unreadable';
+    return { models: provider.models, unavailableReason: 'unreadable' };
   }
+  if (configuration.presetProviderId) return { models: provider.models };
+  const endpointConfigs = { ...existingEndpointConfigs, ...configuration.endpointConfigs };
+  if (!hasConfiguredChatEndpoint(endpointConfigs, configuration.defaultChatEndpoint)) {
+    logger.warn('Desktop provider has no address for its chat endpoint', {
+      defaultChatEndpoint: configuration.defaultChatEndpoint,
+      providerId: provider.id,
+    });
+    return { models: provider.models, unavailableReason: 'unsupported-endpoint' };
+  }
+  const models = routeCustomProviderModels(provider.models, endpointConfigs);
+  if (models.length < provider.models.length) {
+    logger.warn('Desktop models have no endpoint this provider configures', {
+      count: provider.models.length - models.length,
+      providerId: provider.id,
+    });
+  }
+  return { models };
 }
 
 function getEnabledDesktopProviders(snapshot: DesktopProvidersSnapshot) {
@@ -510,7 +542,7 @@ export class DesktopConnectionService {
     return {
       providers: getEnabledDesktopProviders(snapshot).map((provider) => {
         const account = this.accountCapabilities?.(provider);
-        const unavailableReason = getProviderImportUnavailableReason(
+        const { models, unavailableReason } = planProviderImport(
           provider,
           existingProviders.get(provider.id),
           account,
@@ -518,7 +550,7 @@ export class DesktopConnectionService {
         return {
           action: existingProviders.has(provider.id) ? 'update' : 'add',
           id: provider.id,
-          models: provider.models.map((model) => ({
+          models: models.map((model) => ({
             action: existingModels.has(createUniqueModelId(provider.id, model.modelId))
               ? 'skip'
               : 'add',
@@ -622,10 +654,13 @@ export class DesktopConnectionService {
               .where(eq(userModelTable.providerId, providerId))
           ).map((row) => row.id),
         );
-        const missingModels = provider.models.filter(
+        const models = configuration.presetProviderId
+          ? provider.models
+          : routeCustomProviderModels(provider.models, configuration.endpointConfigs);
+        const missingModels = models.filter(
           (model) => !existingModelIds.has(createUniqueModelId(providerId, model.modelId)),
         );
-        result.modelsSkipped += provider.models.length - missingModels.length;
+        result.modelsSkipped += models.length - missingModels.length;
         const newModels = missingModels.map((model) => mapModel(provider, model, configuration));
         for (const model of missingModels) {
           if (!configuration.presetProviderId) {

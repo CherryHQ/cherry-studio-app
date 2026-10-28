@@ -1965,6 +1965,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "桌面端未配置可用的 API 金鑰",
   "settings.provider.desktopSync.unavailable.unreadable": "配置包含當前版本無法識別的內容",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "移動端暫不支持此供應商的認證方式",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "桌面端未給預設協議配置 Base URL",
   "settings.provider.disableProvider": "停用供應商",
   "settings.provider.disableProviderNamed": "停用供應商 {{name}}",
   "settings.provider.edit.title": "供應商設定",

@@ -1965,6 +1965,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "Chưa có khóa API khả dụng nào được cấu hình trên máy tính",
   "settings.provider.desktopSync.unavailable.unreadable": "Cấu hình chứa dữ liệu mà phiên bản này không đọc được",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "Phương thức xác thực của nhà cung cấp này không được hỗ trợ trên thiết bị di động",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "Chưa có URL cơ sở nào được cấu hình trên máy tính cho giao thức mặc định",
   "settings.provider.disableProvider": "Vô hiệu hóa nhà cung cấp",
   "settings.provider.disableProviderNamed": "Vô hiệu hóa nhà cung cấp {{name}}",
   "settings.provider.edit.title": "Cài đặt nhà cung cấp",

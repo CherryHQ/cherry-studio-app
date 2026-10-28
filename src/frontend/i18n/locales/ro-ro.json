@@ -1999,6 +1999,7 @@
   "settings.provider.desktopSync.unavailable.missing-api-key": "Nicio cheie API utilizabilă nu este configurată pe PC",
   "settings.provider.desktopSync.unavailable.unreadable": "Configurația conține date pe care această versiune nu le poate citi",
   "settings.provider.desktopSync.unavailable.unsupported-auth": "Metoda de autentificare a acestui furnizor nu este acceptată pe mobil",
+  "settings.provider.desktopSync.unavailable.unsupported-endpoint": "Niciun URL de bază nu este configurat pe PC pentru protocolul implicit",
   "settings.provider.disableProvider": "Dezactivează furnizorul",
   "settings.provider.disableProviderNamed": "Dezactivează furnizorul {{name}}",
   "settings.provider.edit.title": "Setări furnizor",
