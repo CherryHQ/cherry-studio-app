@@ -1,1 +1,1 @@
-export { MainHeaderView } from './MainHeaderView.android';
+export { MainHeaderView, mainHeaderScreenOptions } from './MainHeaderView.android';

@@ -1,7 +1,7 @@
 import { readDiagnosticContext } from '@/backend/utils/diagnosticContext';
-import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
 import type { TraceContext, TraceSpanRecord } from '@/shared/data/types/trace';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 import type { TraceAttributes, TraceEndStatus, TraceSpan } from './types';
 

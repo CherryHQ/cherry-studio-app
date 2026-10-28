@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "engines": {
     "node": "24.x"
   },
@@ -75,6 +75,7 @@
     "@ai-sdk/provider-utils": "4.0.58",
     "@ai-sdk/togetherai": "^2.0.53",
     "@ai-sdk/xai": "3.0.126",
+    "@anthropic-ai/vertex-sdk": "0.22.0",
     "@babel/runtime": "^7.29.2",
     "@cherryinternal/accounts-portal": "0.1.0",
     "@cherrystudio/ai-core": "2.4.2",

@@ -16,6 +16,7 @@ export function PaintingGenerationFailure({
   height,
   message,
   onRetry,
+  onReport,
   prompt,
   status,
   width,
@@ -24,6 +25,7 @@ export function PaintingGenerationFailure({
   height: number;
   message?: string;
   onRetry?: () => Promise<void>;
+  onReport: () => void;
   prompt: string | undefined;
   status: 'failed' | 'interrupted';
   width: number;
@@ -115,6 +117,7 @@ export function PaintingGenerationFailure({
             message: message?.trim() ? message : t('painting.errorDetail.unavailable'),
           }}
           onClose={() => setIsDetailOpen(false)}
+          onReport={onReport}
           testID="painting-error-detail"
         />
       ) : null}

@@ -37,8 +37,12 @@ The two share their matching rules through `@/frontend/utils/search` and nothing
   renders the request's full data set. Recent items share result grouping and selection behavior.
 - A result press always closes the route. The close button, Android system back, and the iOS pop
   gesture cancel. The promise resolves only after the native exit transition finishes.
+- `AppSearchPanel` is the route's body without the route lifecycle. The wide sidebar renders it in
+  the left column with the same request: a press reports the item and the panel stays open, the
+  close button returns the column to the sidebar, and `isSelected` marks the result open beside it.
 - The caller alone decides what a selected item means. The search route never writes preferences,
-  navigates to a business destination, toggles selection, or keeps itself open after a press.
+  navigates to a business destination, toggles selection, or keeps itself open after a press; only
+  the panel's caller keeps the panel open.
 
 Sessions live in memory and the route's `searchSessionId` param carries only the search-session id;
 callbacks, data, and rendered items are never serialized into navigation state. Only one app-search

@@ -43,6 +43,7 @@ import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
+import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -144,6 +145,7 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionRuntime',
   );
   const providerAccounts = host.container.get<ProviderAccountRuntime>('ProviderAccountRuntime');
+  const vertexAuth = host.container.get<VertexAuthClient>('VertexAuthClient');
   const desktopConnectionManager = host.container.get<DesktopConnectionManager>(
     'DesktopConnectionManager',
   );
@@ -264,7 +266,12 @@ export function createAppBootstrapRuntime(
       providers: services.provider,
       skillAvailability: dataApiDependencies.skillAvailability,
       skillInstructions: dataApiDependencies.skillInstructions,
-      providerAccounts,
+      providerAccounts: {
+        forget: async (id) => {
+          await providerAccounts.forget(id);
+          vertexAuth.forget(id);
+        },
+      },
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
   );

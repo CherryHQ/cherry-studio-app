@@ -1,6 +1,7 @@
 import {
   DiagnosticReportInputSchema,
   diagnosticDescriptionByteLength,
+  diagnosticReportDescription,
   normalizeDiagnosticDescription,
   DiagnosticFeedbackRecordSchema,
   DiagnosticProcessingStatusSchema,
@@ -46,6 +47,55 @@ describe('diagnostic wire inputs', () => {
       DiagnosticReportInputSchema.safeParse({ description: `${'a'.repeat(4094)}\nb` }).success,
     ).toBe(false);
   });
+});
+
+test('form choices count toward the upload byte limit and remain separate from user text', () => {
+  const feedback = { feature: 'chat', problem: 'unexpected_result' } as const;
+  const description = 'Expected one answer.\nReceived two.';
+  const report = DiagnosticReportInputSchema.parse({ description, feedback });
+  expect(report.description).toBe(description);
+  expect(diagnosticReportDescription(report)).toBe(
+    'Feature: chat\r\nProblem: unexpected_result\r\n\r\nExpected one answer.\r\nReceived two.',
+  );
+  expect(
+    DiagnosticReportInputSchema.safeParse({ description: 'a'.repeat(4096), feedback }).success,
+  ).toBe(false);
+  expect(
+    DiagnosticReportInputSchema.safeParse({
+      description,
+      feedback: { feature: 'unknown-feature', problem: 'error' },
+    }).success,
+  ).toBe(false);
+});
+
+test('incident metadata rejects raw payloads and credentials while retaining correlation IDs', () => {
+  const context = {
+    entry: 'error',
+    feature: 'chat',
+    executionSource: 'desktop',
+    capturedAt: '2026-10-27T12:00:00Z',
+    sessionId: 'session-1',
+    executionId: 'execution-2',
+    messageId: 'message-3',
+    error: { code: 'EXECUTION_FAILED', sourceCode: '429', statusCode: 429, reason: 'rate_limit' },
+  };
+  expect(
+    DiagnosticReportInputSchema.parse({ description: 'Request failed', context }).context,
+  ).toEqual(context);
+  for (const extra of [
+    { responseBody: 'private response' },
+    { message: 'private error' },
+    { modelId: 'https://secret.example/model' },
+    { providerId: 'sk-secret-token' },
+    { error: { ...context.error, message: 'private error' } },
+  ]) {
+    expect(
+      DiagnosticReportInputSchema.safeParse({
+        description: 'Request failed',
+        context: { ...context, ...extra },
+      }).success,
+    ).toBe(false);
+  }
 });
 
 test('screenshot attachments accept opaque IDs, never arbitrary paths', () => {

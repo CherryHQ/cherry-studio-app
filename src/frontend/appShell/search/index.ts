@@ -13,6 +13,7 @@ export type {
   AppSearchInput,
   AppSearchOutcome,
   AppSearchPage,
+  AppSearchPanelProps,
   AppSearchRequest,
 } from './types';
 export { useAppSearch } from './useAppSearch';

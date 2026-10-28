@@ -64,8 +64,20 @@ describe('provider form values', () => {
 
   it('offers no endpoints at all when the auth type has no editable URL', () => {
     expect(
-      resolveProviderConfigurationEndpointTypes(createTestProvider({ authType: 'iam-gcp' })),
+      resolveProviderConfigurationEndpointTypes(createTestProvider({ authType: 'iam-aws' })),
     ).toEqual([]);
+  });
+
+  it('allows a Vertex preset to override its derived service address', () => {
+    expect(
+      resolveProviderConfigurationEndpointTypes(
+        createTestProvider({
+          authType: 'iam-gcp',
+          presetProviderId: 'vertexai',
+          defaultChatEndpoint: 'google-generate-content',
+        }),
+      ),
+    ).toEqual(['google-generate-content']);
   });
 
   it('reports a draft as clean until a field actually changes', () => {

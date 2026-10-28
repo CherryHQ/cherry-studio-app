@@ -2,7 +2,11 @@ import type { ReactElement } from 'react';
 
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 
-export type RouteHeaderRootAction = 'back' | 'close' | 'drawer';
+/**
+ * What leads the root screen of a route stack. `none` leaves it empty: the persistent sidebar beside
+ * a wide window already navigates between first-level pages.
+ */
+export type RouteHeaderRootAction = 'back' | 'close' | 'drawer' | 'none';
 
 export type RouteHeaderProps = {
   /** Replaces back navigation for modes that own their own exit behavior. */

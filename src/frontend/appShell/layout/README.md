@@ -1,8 +1,8 @@
 # Page Layout
 
 The app shell owns screen-level width constraints and horizontal safe areas. `FormContentFrame`
-limits forms and management pages to 720 logical points; `ReadingContentFrame` limits conversations
-and their composers to 800. Both fill smaller parent regions and retain the same component tree
+limits forms and management pages and `ReadingContentFrame` limits conversations and their
+composers, both to 720 logical points. Both fill smaller parent regions and retain the same component tree
 while the window changes size. Existing headers, scroll views, and composers keep top, bottom, and
 keyboard inset ownership.
 
@@ -15,12 +15,14 @@ Frames may serve as a native Stack's `screenLayout`, or wrap a page's content be
 They do not choose routes, create device-specific page trees, or reset page state. Galleries and
 full-screen media own their available region rather than using a reading-width constraint.
 
-`useWindowClass` resolves the window to `compact`, `medium`, or `expanded`. It subtracts the left
-and right safe areas independently and divides by the rendered text scale, so larger text reaches a
-narrower class sooner. The thresholds come from the narrowest readable regions in `windowClass.ts`:
-a 360-point file pane beside a 440-point conversation needs 800 points, and a 280-point sidebar
-beside both needs 1080. Layout owners read the class; pages and components never branch on device
-names. `useIsSidebarPersistent` is the shell's single rule for keeping the sidebar beside chat.
+`useWindowClass` resolves the window to `compact` or `wide`. It subtracts the left and right safe
+areas independently and divides by the rendered text scale, so larger text reaches the compact class
+sooner. The threshold comes from the narrowest readable regions in `windowClass.ts`: a 360-point file
+pane beside a 440-point conversation needs 800 points. A wide window keeps one left column (the
+280-point sidebar, the file pane, or search) beside one content region, so fitting the widest left
+column also fits the sidebar. Layout owners read the class; pages and components never branch on
+device names. `useIsSidebarPersistent` is the shell's single rule for keeping the sidebar beside the
+content region.
 `resolveFilePaneWidth` gives a pane 43% of the content width, kept between 360 and 520 points.
 
 On a foldable, `FoldRegionProvider` shares the fold reported by
@@ -29,6 +31,11 @@ On a foldable, `FoldRegionProvider` shares the fold reported by
 down the window places the pane on its leading side while the device is partly folded; flat, the
 regular widths apply. A fold running across the window stacks the pane above the chat whether or not
 the device is folded. The fold itself stays empty, and a fold at the host's edge is ignored.
+
+`WindowFoldRegion` observes the fold across the whole window for layouts that size regions to it,
+read through `useWindowFoldRegion`. The sidebar column uses it rather than the split snapshot: that
+reporter sees only folds inside its own host, so a column grown to the fold would move the host past
+it and lose the fold it was sized to.
 
 `useFoldRegionLayout` exposes the complete native snapshot: host bounds, horizontal safe areas,
 window dimensions, and fold. `FilePaneHost` supplies `resolvePaneSplit` with that host and fold,
@@ -50,4 +57,7 @@ actions.
 
 `ChatDockLayoutProvider` shares the height measured by `ChatDockFooter`, including its top gap,
 across the chat and drawer. The sidebar adds this space to the composer's action-center offset so
-its floating controls stay aligned when footer text wraps or scales.
+its floating controls stay aligned when footer text wraps or scales. It also shares the chat's native header height,
+published by the iOS chat header, so the sidebar's title row can sit level with the header's
+controls where the header does not start below the top safe area, as on an iPhone Duo's inner
+display.

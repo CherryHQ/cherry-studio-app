@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useBackendModule } from '@/frontend/data';
 import {
   DiagnosticError,
+  type DiagnosticReportInput,
   type DiagnosticUploadFailureReason,
   type DiagnosticUploadResult,
 } from '@/shared/contracts/diagnostics';
@@ -44,13 +45,17 @@ export function useDiagnosticBundle(screenshotId?: string) {
     };
   }, []);
 
-  async function submit(description: string) {
+  async function submit(
+    description: string,
+    details?: Pick<DiagnosticReportInput, 'feedback' | 'context'>,
+  ) {
     if (busy.current) return;
     busy.current = true;
     setState({ status: 'submitting' });
     try {
       const result = await module.uploadBundle({
         description,
+        ...details,
         ...(isScreenshotIncluded ? { screenshotId } : {}),
       });
       if (result.status === 'uploaded') {

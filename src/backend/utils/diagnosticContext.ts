@@ -2,8 +2,7 @@ import {
   DiagnosticEventContextSchema,
   type DiagnosticEventContext,
 } from '@/shared/data/types/diagnostics';
-
-import { diagnosticIdentifier } from './diagnosticIdentifier';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 let readContext: (() => DiagnosticEventContext) | undefined;
 

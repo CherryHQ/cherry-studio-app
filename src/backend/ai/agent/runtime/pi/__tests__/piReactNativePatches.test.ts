@@ -99,6 +99,7 @@ describe('Pi React Native patches', () => {
       '@earendil-works/pi-codemode/native',
       '@earendil-works/pi-ai/api/anthropic-messages',
       '@earendil-works/pi-ai/api/azure-openai-responses',
+      '@earendil-works/pi-ai/api/google-vertex',
       '@earendil-works/pi-ai/api/lazy',
       '@earendil-works/pi-ai/api/openai-completions',
       '@earendil-works/pi-ai/api/openai-responses',

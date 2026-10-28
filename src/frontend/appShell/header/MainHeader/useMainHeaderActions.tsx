@@ -9,6 +9,8 @@ import {
   useRouteHeaderLeadingKind,
 } from '../RouteHeader/useRouteHeaderLeadingAction';
 
+const NEW_CHAT_NATIVE_ICON = require('@/assets/header-toolbar/new-chat.png');
+
 /** Resolves the platform-independent MainHeader action lists for both adapters. */
 export function useMainHeaderActions(
   openNewSession: () => void,
@@ -29,6 +31,7 @@ export function useMainHeaderActions(
           accessibilityLabel: t('navigation.newChat'),
           icon: NewConversationIcon,
           key: 'new-chat',
+          nativeIcon: NEW_CHAT_NATIVE_ICON,
           onPress: openNewSession,
           testID: 'main-header-new-chat',
           type: 'icon',

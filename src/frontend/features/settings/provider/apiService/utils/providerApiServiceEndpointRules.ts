@@ -29,7 +29,7 @@ export type CustomProviderCreationPayload = {
 };
 
 const defaultChatEndpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
-const ENDPOINT_EDITABLE_AUTH_TYPES = new Set<AuthType>(['api-key', 'iam-azure']);
+const ENDPOINT_EDITABLE_AUTH_TYPES = new Set<AuthType>(['api-key', 'iam-azure', 'iam-gcp']);
 
 export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
   return provider?.defaultChatEndpoint ?? defaultChatEndpoint;

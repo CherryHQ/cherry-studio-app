@@ -60,6 +60,7 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
+  '@anthropic-ai/vertex-sdk@0.22.0': patches/@anthropic-ai__vertex-sdk@0.22.0.patch
   '@earendil-works/pi-durable@1.4.0': patches/@earendil-works__pi-durable@1.4.0.patch
   '@earendil-works/pi-codemode@1.4.0': patches/@earendil-works__pi-codemode@1.4.0.patch
   '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
@@ -91,6 +92,7 @@ patchedDependencies:
   '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
+  '@google/genai@2.21.0': patches/@google__genai@2.21.0.patch
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
   nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
   '@cherryinternal/accounts-portal@0.1.0': patches/@cherryinternal__accounts-portal@0.1.0.patch

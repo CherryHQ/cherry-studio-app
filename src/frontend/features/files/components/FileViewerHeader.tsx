@@ -43,7 +43,7 @@ export function FileViewerHeader({
 
   return (
     <HeaderChrome
-      leftActions={[leadingAction]}
+      leftActions={leadingAction ? [leadingAction] : []}
       rightActions={[
         {
           accessibilityLabel: t('common.more'),

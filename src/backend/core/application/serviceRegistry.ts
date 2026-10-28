@@ -28,6 +28,7 @@ import { IosBackgroundExecutionSource } from '@/backend/services/keepAlive/IosBa
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
+import { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -59,6 +60,7 @@ export const services = {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
   ProviderAccountRuntime,
+  VertexAuthClient,
   RemoteAgentRuntime,
   DocumentExportRuntime,
   PreferenceService,

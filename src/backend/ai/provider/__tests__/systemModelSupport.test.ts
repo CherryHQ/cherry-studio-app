@@ -13,6 +13,20 @@ function supportWith(
 }
 
 describe('createSystemModelSupport', () => {
+  it('opens Vertex text serving without admitting its unsupported image and voice capabilities', () => {
+    const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(true));
+    const provider = createProvider({ authType: 'iam-gcp' });
+    expect(isModelSupportedBySystem(provider, createModel())).toBe(true);
+    for (const capability of [
+      MODEL_CAPABILITY.IMAGE_GENERATION,
+      MODEL_CAPABILITY.AUDIO_GENERATION,
+      MODEL_CAPABILITY.EMBEDDING,
+    ]) {
+      expect(isModelSupportedBySystem(provider, createModel({ capabilities: [capability] }))).toBe(
+        false,
+      );
+    }
+  });
   it.each([
     ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/multimodal-generation/generation'],
     ['ppio', 'seedream-4-0', '/v3/seedream-4.0'],

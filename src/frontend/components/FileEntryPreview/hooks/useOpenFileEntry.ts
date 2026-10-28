@@ -79,8 +79,9 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
       replaceImage && canEditFileImage(file.entry.mediaType)
         ? requestImageEdit(file.entry.id, replaceImage)
         : undefined;
-    // Beside chat, a file opens in the pane instead of covering the conversation.
-    if (pane?.isAvailable) {
+    // Beside chat, a file opens in the pane instead of covering the conversation. Pages above the
+    // chat share its drawer but not its pane, so they keep opening files on their own page.
+    if (pane?.isAvailable && pathname === '/') {
       pane.openFile({ entryId: file.entry.id, imageEditRequestId });
       return 'pane';
     }

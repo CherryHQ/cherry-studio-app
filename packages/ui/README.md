@@ -266,6 +266,15 @@ reads the clipboard or imports application preferences.
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
 
+The pending indicator matches Desktop's
+[`PlaceholderBlock`](https://github.com/CherryHQ/cherry-studio/blob/c40a14ba138255987f6f5019c77e5f51d80bc8d9/src/renderer/components/chat/messages/blocks/PlaceholderBlock.tsx)
+and its `react-spinners` 0.14.1 `BeatLoader`: three 4-point neutral dots with 4-point gaps,
+an 875ms linear cycle, and a 437.5ms delay on the middle dot. Each dot reaches 75% scale and 20%
+opacity halfway through its cycle. Reanimated CSS animations own the native motion; no web loader
+dependency is needed. The indicator exists only while the reply has no visible content, so content
+or cancellation removes it immediately. Backgrounding and Reduce Motion remove the animation and
+leave static dots; the surrounding status row retains its text-line height.
+
 `Surface` is the semantic material boundary for shared product chrome. Callers choose a token-backed
 `tone` and a `shape`, then size and align the content inside it. CherryUI maps that specification to
 the complete non-glass fallback and, where supported, the matching Liquid Glass tint and radius:
