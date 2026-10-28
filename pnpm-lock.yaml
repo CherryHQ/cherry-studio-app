@@ -244,8 +244,8 @@ importers:
         specifier: workspace:*
         version: link:packages/mcp-app-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.2.5
-        version: 0.2.5(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(zod@4.4.3)
       '@cherrystudio/remote-protocol':
         specifier: 0.7.0
         version: 0.7.0(zod@4.4.3)
@@ -259,8 +259,8 @@ importers:
         specifier: workspace:*
         version: link:packages/universal
       '@cherrystudio/web-search':
-        specifier: 0.3.0
-        version: 0.3.0
+        specifier: 0.4.0
+        version: 0.4.0
       '@e965/xlsx':
         specifier: 0.20.3
         version: 0.20.3
@@ -557,7 +557,7 @@ importers:
         version: 12.3.1
       react-native-streamdown:
         specifier: 0.2.0
-        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(b6e4d5746c31a1086af4fd9b3d1371f6)
+        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(ec01259235cef53530245045507e985d)
       react-native-svg:
         specifier: 15.16.0
         version: 15.16.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -770,8 +770,8 @@ importers:
         specifier: 0.1.9
         version: 0.1.9(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.2.5
-        version: 0.2.5(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -939,7 +939,7 @@ importers:
         version: 5.10.1(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-streamdown:
         specifier: '*'
-        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(b6e4d5746c31a1086af4fd9b3d1371f6)
+        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(ec01259235cef53530245045507e985d)
       react-native-svg:
         specifier: 15.16.0
         version: 15.16.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -957,8 +957,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.2.5
-        version: 0.2.5(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3)
@@ -1777,8 +1777,8 @@ packages:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.2.5':
-    resolution: {integrity: sha512-KX8RQCRA5GMQbri/ebPZ7fTaW3MWXyztzTVMtddDklZb51sGGip1YaHbXbILxf60q/7ZXCfrjto3eGFQRoz53A==}
+  '@cherrystudio/provider-registry@0.2.8':
+    resolution: {integrity: sha512-1TMcRGQxYncQvMGeg+FegCWOcinimeauhQeLZgX/+htiMH+ppBgY9sSRQ5wFRAJ5+nXyC8vN6nNHaYuP1xBhlA==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -1790,8 +1790,8 @@ packages:
   '@cherrystudio/remote-transport@0.2.5':
     resolution: {integrity: sha512-5V1gxwUM2JG5s66Z2zSCSquxVUpxPGZIAav/oIyZMiXCStC+w7ARbuED/m0vdwp17A+fUO1uSefMOD9puHBrOQ==}
 
-  '@cherrystudio/web-search@0.3.0':
-    resolution: {integrity: sha512-LhCWxxYEo5ONSNhOkh0Wpqf7/M4Z3O+easvYjPXT7amax2jjVlYxg/gtgnpQqnFARcz9Coxz/js9gBM51/bgFA==}
+  '@cherrystudio/web-search@0.4.0':
+    resolution: {integrity: sha512-YAuU7+T/nI8PNJpzE6jvx8eSTeP//zKWlMZxaMzj15tFgTKJWL2g6jxvfSttNEJhQn6llpH/QeUGjxvLrxlOIQ==}
 
   '@craftzdog/react-native-buffer@6.1.2':
     resolution: {integrity: sha512-KV1HitN05FHLLDG7Zb/yftDsa+mKBYBzFMQ0PMldvUicq6vWOtAvz9mDavt7Fzozh+WNqORE+yFDkkdWysZ/SA==}
@@ -11539,7 +11539,7 @@ snapshots:
       react-dom: 19.3.0(react@19.3.0)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.2.5(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.2.8(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
@@ -11561,7 +11561,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@cherrystudio/web-search@0.3.0':
+  '@cherrystudio/web-search@0.4.0':
     dependencies:
       eventsource-parser: 3.1.1
       js-base64: 3.7.7
@@ -19555,7 +19555,7 @@ snapshots:
 
   react-native-skia-apple-tvos@154.0.0: {}
 
-  react-native-streamdown@0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(b6e4d5746c31a1086af4fd9b3d1371f6):
+  react-native-streamdown@0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(ec01259235cef53530245045507e985d):
     dependencies:
       react: 19.3.0
       react-native: 0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)

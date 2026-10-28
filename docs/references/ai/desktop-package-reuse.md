@@ -3,7 +3,7 @@
 Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.2` and
 `@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.2.5` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.2.8` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -78,7 +78,7 @@ by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.2.5` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.2.8` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -94,6 +94,24 @@ readable. The published package models native search through `serverTools`; the 
 the bundled declarations and eligibility as described in [Web Search](../web-search.md). Mobile
 excludes `ultra` from selectable reasoning efforts and rejects
 `adaptive-between-tools` entries until the native runtime supports them.
+
+The `0.2.8` update is consumed through existing owners:
+
+- DeepSeek's bundled Responses reasoning mappings and downloaded V4 Flash endpoint contracts flow
+  through `ProviderRegistryService` into the shared reasoning interpreter and Pi request adapter.
+- GPT-6.1 Terra model metadata and provider overrides arrive through normal remote catalog updates;
+  upgrading the package alone does not replace a saved model snapshot. API-key providers consume
+  these records. Codex account requests still require an entry in Pi's official model catalog;
+  pinned Pi `1.4.0` does not include Terra, so its Codex account path remains unsupported pending a
+  separate Pi catalog adaptation or upgrade tracked in
+  [#1513](https://github.com/CherryHQ/cherry-studio-app/issues/1513). The materialization regression
+  covers registry data, not account-call availability.
+- Native-tool eligibility follows the package's trusted declarations, including GPT-6.1 Terra
+  support and the narrowed DashScope GLM/Kimi search list. Mobile's DeepSeek and Poe endpoint
+  corrections remain in `mobileProviderCatalog.ts`.
+
+These paths have regression coverage in the repository; execution and device acceptance of the
+upgrade are still pending.
 
 ### Current migration ledger
 

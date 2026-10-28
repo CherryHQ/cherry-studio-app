@@ -9,7 +9,7 @@ sideEffectsCacheReadonly: true
 # fingerprint. See docs/guides/development.md#dependencies.
 verifyDepsBeforeRun: warn
 
-minimumReleaseAge: 1440
+minimumReleaseAge: 0
 trustPolicy: no-downgrade
 
 # 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
@@ -95,18 +95,3 @@ patchedDependencies:
   '@google/genai@2.21.0': patches/@google__genai@2.21.0.patch
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
   nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
-
-minimumReleaseAgeExclude:
-  # Pi 1.4.0 is upgraded as one release, including its internal dependencies.
-  - '@earendil-works/chord@1.4.0'
-  - '@earendil-works/pi-ai@1.4.0'
-  - '@earendil-works/pi-durable@1.4.0'
-  - '@earendil-works/pi-codemode@1.4.0'
-  - '@earendil-works/pi-telemetry@1.4.0'
-  - '@cherrystudio/ai-core@2.4.2'
-  - '@cherrystudio/ai-sdk-provider@0.1.9'
-  - '@expo/fingerprint@0.20.1'
-  - '@expo/inline-modules@0.1.1'
-  - react-native-enriched-markdown@1.0.1
-  - '@legendapp/list@3.3.3'
-  - '@cherrystudio/analytics-client@1.4.0'
