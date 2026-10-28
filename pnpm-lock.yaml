@@ -151,7 +151,7 @@ patchedDependencies:
   react-native-background-actions@4.1.0: 6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970
   react-native-drawer-layout@4.2.12: 54e51ac742c1f6c04271d72b99f35ef356244455ecab0ea84b88eea4cf3291a2
   react-native-enriched-markdown@1.0.1: ba7e8d6522706a6cc98d2cc01195b82e313647253da3c55ff2075e78ab3df8b6
-  react-native-keyboard-controller@1.22.7: 7921b0c20a1458ad4ce3a04d46d6723702f566b51525e907df1e6d11eb4945ec
+  react-native-keyboard-controller@1.22.7: cedabaa6011f0365f6095df6dff45631d7cbf2a54f2405876e656ae9cfff77ff
   react-native-nitro-modules@0.36.4: 1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421
   react-native-reanimated@4.7.1: 3c2dff311c8f3f482f98169829798437b3ec53d58888938956d428322017f8e6
   react-native-screens@4.30.0: 48847e93400db50be49d89ff317468368d36e0d533b8de58d89930aea910bbdf
@@ -522,7 +522,7 @@ importers:
         version: 3.3.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-keyboard-controller:
         specifier: 1.22.7
-        version: 1.22.7(patch_hash=7921b0c20a1458ad4ce3a04d46d6723702f566b51525e907df1e6d11eb4945ec)(ecfe864ea21d16b3e2d0c7792850037d)
+        version: 1.22.7(patch_hash=cedabaa6011f0365f6095df6dff45631d7cbf2a54f2405876e656ae9cfff77ff)(ecfe864ea21d16b3e2d0c7792850037d)
       react-native-mmkv:
         specifier: 4.3.2
         version: 4.3.2(react-native-nitro-modules@0.36.4(patch_hash=1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0))(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -922,7 +922,7 @@ importers:
         version: 3.3.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-keyboard-controller:
         specifier: '*'
-        version: 1.22.7(patch_hash=7921b0c20a1458ad4ce3a04d46d6723702f566b51525e907df1e6d11eb4945ec)(ecfe864ea21d16b3e2d0c7792850037d)
+        version: 1.22.7(patch_hash=cedabaa6011f0365f6095df6dff45631d7cbf2a54f2405876e656ae9cfff77ff)(ecfe864ea21d16b3e2d0c7792850037d)
       react-native-nitro-modules:
         specifier: '*'
         version: 0.36.4(patch_hash=1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -19458,7 +19458,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
 
-  react-native-keyboard-controller@1.22.7(patch_hash=7921b0c20a1458ad4ce3a04d46d6723702f566b51525e907df1e6d11eb4945ec)(ecfe864ea21d16b3e2d0c7792850037d):
+  react-native-keyboard-controller@1.22.7(patch_hash=cedabaa6011f0365f6095df6dff45631d7cbf2a54f2405876e656ae9cfff77ff)(ecfe864ea21d16b3e2d0c7792850037d):
     dependencies:
       react: 19.3.0
       react-native: 0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)

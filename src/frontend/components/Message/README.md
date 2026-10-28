@@ -21,7 +21,8 @@ history, message rows and parts, viewport following, and scroll restoration.
   The viewport remains fixed while the composer grows. The composer's focus growth arrives on the
   keyboard's progress, and the keyboard-controller patch keeps a list that was at its end there:
   on Android the keyboard frames include the composer inset and the inset reaction yields to them
-  until the keyboard settles. It also backports
+  until the keyboard settles. Closing rewinds only the keyboard's share of that pinned shift, so
+  composer growth during the open never pulls the list below its end. It also backports
   [upstream #1605](https://github.com/kirillzyusko/react-native-keyboard-controller/pull/1605),
   accumulating inset-driven scroll commands until native scroll events catch up.
 - `AssistantMessage` owns standard assistant content: the pending placeholder and structured parts.

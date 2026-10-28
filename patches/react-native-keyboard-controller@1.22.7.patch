@@ -39,30 +39,32 @@ index 6481228c59b02fe9efea538bcf094701006a5970..38e3dbe10e990d2b61273ae1e74e3231
          prevAbsorption.value = minimumPaddingAbsorbed;
          if (inverted) {
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
-index 43da849708f16051f4b0d3c0cdbca57823036a41..eac4691e4f2612327e4d2a02546f946d8b58c400 100644
+index 43da849708f16051f4b0d3c0cdbca57823036a41..eb96185a93478d3a740430d994bd8ddda5ef4bbd 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
 +++ b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
-@@ -39,6 +39,8 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -39,6 +39,9 @@ function useChatKeyboard(scrollViewRef, options) {
    const closing = (0, _reactNativeReanimated.useSharedValue)(false);
    const minimumPaddingFractionOnOpen = (0, _reactNativeReanimated.useSharedValue)(0);
    const actualOpenShift = (0, _reactNativeReanimated.useSharedValue)(0);
 +  // An opening keyboard keeps a list that was at its end there.
 +  const pinnedToEnd = (0, _reactNativeReanimated.useSharedValue)(false);
++  const extraPaddingOnOpen = (0, _reactNativeReanimated.useSharedValue)(0);
    const {
      layout,
      size,
-@@ -97,8 +99,10 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -97,8 +100,11 @@ function useChatKeyboard(scrollViewRef, options) {
            // blankSpace fully absorbs the keyboard — guard for inverted
            offsetBeforeScroll.value = scroll.value;
          }
 +        pinnedToEnd.value = !inverted && atEnd && offsetBeforeScroll.value !== -1 && (0, _helpers.shouldShiftContent)(keyboardLiftBehavior, atEnd);
++        extraPaddingOnOpen.value = extraContentPadding.value;
        } else {
          // Android: keyboard closing — re-capture scroll position
 +        pinnedToEnd.value = false;
          if (inverted) {
            offsetBeforeScroll.value = scroll.value;
          } else {
-@@ -203,7 +207,7 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -203,7 +209,7 @@ function useChatKeyboard(scrollViewRef, options) {
            (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, Math.min(keepAt, maxScroll), false);
            return;
          }
@@ -71,10 +73,12 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eac4691e4f2612327e4d2a02546f946d
          (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, target, false);
  
          // Track actual (clamped) displacement during open for symmetric close
-@@ -221,6 +225,17 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -221,8 +227,21 @@ function useChatKeyboard(scrollViewRef, options) {
        const effective = (0, _helpers.getEffectiveHeight)(e.height, targetKeyboardHeight.value, offset);
        padding.value = effective;
  
+-      // Record actual scroll displacement so close can be symmetric
+-      if (effective > 0 && offsetBeforeScroll.value !== -1) {
 +      // Reconcile the final range even when onMove did not observe the final height.
 +      if (!inverted && closing.value) {
 +        clampScrollIfNeeded(effective, Math.max(blankSpace.value, effective + extraContentPadding.value));
@@ -83,13 +87,17 @@ index 43da849708f16051f4b0d3c0cdbca57823036a41..eac4691e4f2612327e4d2a02546f946d
 +      // Padding that changed after the last onMove still belongs to the end.
 +      if (pinnedToEnd.value) {
 +        pinnedToEnd.value = false;
-+        (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, Math.max(size.value.height - layout.value.height + Math.max(blankSpace.value, effective + extraContentPadding.value), 0), false);
-+      }
-+
-       // Record actual scroll displacement so close can be symmetric
-       if (effective > 0 && offsetBeforeScroll.value !== -1) {
++        const end = Math.max(size.value.height - layout.value.height + Math.max(blankSpace.value, effective + extraContentPadding.value), 0);
++        (0, _safeScrollTo.safeScrollTo)(scrollViewRef, 0, end, false);
++        // Closing rewinds only the keyboard's share; padding that grew
++        // during the pin is still there and keeps its scroll.
++        actualOpenShift.value = end - offsetBeforeScroll.value - (extraContentPadding.value - extraPaddingOnOpen.value);
++      } else if (effective > 0 && offsetBeforeScroll.value !== -1) {
++        // Record actual scroll displacement so close can be symmetric
          actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
-@@ -231,6 +246,7 @@ function useChatKeyboard(scrollViewRef, options) {
+       }
+     }
+@@ -231,6 +250,7 @@ function useChatKeyboard(scrollViewRef, options) {
      padding,
      currentHeight,
      contentOffsetY: undefined,
@@ -204,30 +212,32 @@ index 043b97382c551d9e47557f3e175a42668ce5cef3..33a14d37e9536f8d657c13ec80dc901f
          prevAbsorption.value = minimumPaddingAbsorbed;
          if (inverted) {
 diff --git a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
-index 1c5ac7c425d33de165d21d997aac65141cc95a9b..0eab742e903fce6f0fd07ed3f787f8016f232834 100644
+index 1c5ac7c425d33de165d21d997aac65141cc95a9b..3216eff43ff1fbc2fe903ccc0abf82041c4168d9 100644
 --- a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
 +++ b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
-@@ -32,6 +32,8 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -32,6 +32,9 @@ function useChatKeyboard(scrollViewRef, options) {
    const closing = useSharedValue(false);
    const minimumPaddingFractionOnOpen = useSharedValue(0);
    const actualOpenShift = useSharedValue(0);
 +  // An opening keyboard keeps a list that was at its end there.
 +  const pinnedToEnd = useSharedValue(false);
++  const extraPaddingOnOpen = useSharedValue(0);
    const {
      layout,
      size,
-@@ -90,8 +92,10 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -90,8 +93,11 @@ function useChatKeyboard(scrollViewRef, options) {
            // blankSpace fully absorbs the keyboard — guard for inverted
            offsetBeforeScroll.value = scroll.value;
          }
 +        pinnedToEnd.value = !inverted && atEnd && offsetBeforeScroll.value !== -1 && shouldShiftContent(keyboardLiftBehavior, atEnd);
++        extraPaddingOnOpen.value = extraContentPadding.value;
        } else {
          // Android: keyboard closing — re-capture scroll position
 +        pinnedToEnd.value = false;
          if (inverted) {
            offsetBeforeScroll.value = scroll.value;
          } else {
-@@ -196,7 +200,7 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -196,7 +202,7 @@ function useChatKeyboard(scrollViewRef, options) {
            safeScrollTo(scrollViewRef, 0, Math.min(keepAt, maxScroll), false);
            return;
          }
@@ -236,10 +246,12 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..0eab742e903fce6f0fd07ed3f787f801
          safeScrollTo(scrollViewRef, 0, target, false);
  
          // Track actual (clamped) displacement during open for symmetric close
-@@ -214,6 +218,17 @@ function useChatKeyboard(scrollViewRef, options) {
+@@ -214,8 +220,21 @@ function useChatKeyboard(scrollViewRef, options) {
        const effective = getEffectiveHeight(e.height, targetKeyboardHeight.value, offset);
        padding.value = effective;
  
+-      // Record actual scroll displacement so close can be symmetric
+-      if (effective > 0 && offsetBeforeScroll.value !== -1) {
 +      // Reconcile the final range even when onMove did not observe the final height.
 +      if (!inverted && closing.value) {
 +        clampScrollIfNeeded(effective, Math.max(blankSpace.value, effective + extraContentPadding.value));
@@ -248,13 +260,17 @@ index 1c5ac7c425d33de165d21d997aac65141cc95a9b..0eab742e903fce6f0fd07ed3f787f801
 +      // Padding that changed after the last onMove still belongs to the end.
 +      if (pinnedToEnd.value) {
 +        pinnedToEnd.value = false;
-+        safeScrollTo(scrollViewRef, 0, Math.max(size.value.height - layout.value.height + Math.max(blankSpace.value, effective + extraContentPadding.value), 0), false);
-+      }
-+
-       // Record actual scroll displacement so close can be symmetric
-       if (effective > 0 && offsetBeforeScroll.value !== -1) {
++        const end = Math.max(size.value.height - layout.value.height + Math.max(blankSpace.value, effective + extraContentPadding.value), 0);
++        safeScrollTo(scrollViewRef, 0, end, false);
++        // Closing rewinds only the keyboard's share; padding that grew
++        // during the pin is still there and keeps its scroll.
++        actualOpenShift.value = end - offsetBeforeScroll.value - (extraContentPadding.value - extraPaddingOnOpen.value);
++      } else if (effective > 0 && offsetBeforeScroll.value !== -1) {
++        // Record actual scroll displacement so close can be symmetric
          actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
-@@ -224,6 +239,7 @@ function useChatKeyboard(scrollViewRef, options) {
+       }
+     }
+@@ -224,6 +243,7 @@ function useChatKeyboard(scrollViewRef, options) {
      padding,
      currentHeight,
      contentOffsetY: undefined,
@@ -395,20 +411,21 @@ index 1ae9b811d26d1b1fa043c7f7a41fbeb5509afa03..73f5e0fea0a1930c480f20a072b47fbb
            atEnd
          ) {
 diff --git a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
-index 9a40a85ec86e0e36b05218077d510f73daae8a48..346789619257813f0e72a4fa1e17536ddf5274cc 100644
+index 9a40a85ec86e0e36b05218077d510f73daae8a48..095f6016274c4fd2fc249c78159ffef9712e712b 100644
 --- a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
 +++ b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
-@@ -51,6 +51,9 @@ function useChatKeyboard(
+@@ -51,6 +51,10 @@ function useChatKeyboard(
    const closing = useSharedValue(false);
    const minimumPaddingFractionOnOpen = useSharedValue(0);
    const actualOpenShift = useSharedValue(0);
 +  // An opening keyboard keeps a list that was at its end there, including
 +  // `extraContentPadding` that changes in the same frames.
 +  const pinnedToEnd = useSharedValue(false);
++  const extraPaddingOnOpen = useSharedValue(0);
    const {
      layout,
      size,
-@@ -150,8 +153,15 @@ function useChatKeyboard(
+@@ -150,8 +154,16 @@ function useChatKeyboard(
              // blankSpace fully absorbs the keyboard — guard for inverted
              offsetBeforeScroll.value = scroll.value;
            }
@@ -418,13 +435,14 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..346789619257813f0e72a4fa1e17536d
 +            atEnd &&
 +            offsetBeforeScroll.value !== -1 &&
 +            shouldShiftContent(keyboardLiftBehavior, atEnd);
++          extraPaddingOnOpen.value = extraContentPadding.value;
          } else {
            // Android: keyboard closing — re-capture scroll position
 +          pinnedToEnd.value = false;
            if (inverted) {
              offsetBeforeScroll.value = scroll.value;
            } else {
-@@ -322,13 +332,18 @@ function useChatKeyboard(
+@@ -322,13 +334,18 @@ function useChatKeyboard(
              return;
            }
  
@@ -450,10 +468,12 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..346789619257813f0e72a4fa1e17536d
  
            safeScrollTo(scrollViewRef, 0, target, false);
  
-@@ -353,6 +368,31 @@ function useChatKeyboard(
+@@ -353,8 +370,34 @@ function useChatKeyboard(
  
          padding.value = effective;
  
+-        // Record actual scroll displacement so close can be symmetric
+-        if (effective > 0 && offsetBeforeScroll.value !== -1) {
 +        // The final animation frame can arrive only in onEnd. Reconcile the
 +        // reduced range even when onMove did not observe the final height.
 +        if (!inverted && closing.value) {
@@ -466,23 +486,26 @@ index 9a40a85ec86e0e36b05218077d510f73daae8a48..346789619257813f0e72a4fa1e17536d
 +        // Padding that changed after the last onMove still belongs to the end.
 +        if (pinnedToEnd.value) {
 +          pinnedToEnd.value = false;
-+          safeScrollTo(
-+            scrollViewRef,
++          const end = Math.max(
++            size.value.height -
++              layout.value.height +
++              Math.max(blankSpace.value, effective + extraContentPadding.value),
 +            0,
-+            Math.max(
-+              size.value.height -
-+                layout.value.height +
-+                Math.max(blankSpace.value, effective + extraContentPadding.value),
-+              0,
-+            ),
-+            false,
 +          );
-+        }
 +
-         // Record actual scroll displacement so close can be symmetric
-         if (effective > 0 && offsetBeforeScroll.value !== -1) {
++          safeScrollTo(scrollViewRef, 0, end, false);
++          // Closing rewinds only the keyboard's share; padding that grew
++          // during the pin is still there and keeps its scroll.
++          actualOpenShift.value =
++            end -
++            offsetBeforeScroll.value -
++            (extraContentPadding.value - extraPaddingOnOpen.value);
++        } else if (effective > 0 && offsetBeforeScroll.value !== -1) {
++          // Record actual scroll displacement so close can be symmetric
            actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
-@@ -366,6 +406,7 @@ function useChatKeyboard(
+         }
+       },
+@@ -366,6 +409,7 @@ function useChatKeyboard(
      padding,
      currentHeight,
      contentOffsetY: undefined,

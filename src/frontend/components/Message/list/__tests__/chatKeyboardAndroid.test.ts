@@ -240,6 +240,42 @@ describe('Android keyboard with a growing composer', () => {
     expect(mockScrollState.offset.value).toBe(1_270);
   });
 
+  // Closing rewinds only the keyboard's share of the pinned open; the composer's growth is padding.
+  test.each([
+    ['keeps its editing height', 150, 'keyboard first'],
+    ['shrinks with the keyboard', 100, 'keyboard first'],
+    ['shrinks with the keyboard', 100, 'composer first'],
+  ] as const)(
+    'stays at the end on close while the composer %s (%s, %s)',
+    (_case, closed, order) => {
+      mountList();
+      mockHandlers.onStart({ height: 300, duration: 250 });
+      for (const [keyboard, composer] of [
+        [150, 125],
+        [300, 150],
+      ]) {
+        mockHandlers.onMove({ height: keyboard, duration: 250 });
+        growComposer(composer);
+      }
+      mockHandlers.onEnd({ height: 300, duration: 250 });
+      expect(mockScrollState.offset.value).toBe(1_250);
+
+      mockHandlers.onStart({ height: 0, duration: 250 });
+      for (const keyboard of [290, 200, 100, 0]) {
+        const composer = closed + ((150 - closed) * keyboard) / 300;
+        const resize = () => {
+          if (composer !== options.extraContentPadding.value) growComposer(composer);
+        };
+        if (order === 'composer first') resize();
+        mockHandlers.onMove({ height: keyboard, duration: 250 });
+        if (order === 'keyboard first') resize();
+        expect(mockScrollState.offset.value).toBeCloseTo(800 + keyboard + composer);
+      }
+      mockHandlers.onEnd({ height: 0, duration: 250 });
+      expect(mockScrollState.offset.value).toBeCloseTo(800 + closed);
+    },
+  );
+
   test('leaves a reader in place', () => {
     mockScrollState.offset.value = 300;
     options.keyboardLiftBehavior = 'never';
@@ -262,5 +298,6 @@ describe('Android keyboard with a growing composer', () => {
       );
     expect(read(view)).toContain('keyboardPinnedToEnd: pinnedToEnd');
     expect(read(keyboard)).toMatch(/const target = pinnedToEnd\.value\s*\?/);
+    expect(read(keyboard)).toContain('extraPaddingOnOpen.value = extraContentPadding.value');
   });
 });
