@@ -270,6 +270,7 @@ describe('enterprise backups', () => {
       setActiveProfile(profile(identity));
       await prepareEnterpriseBackup(adapter);
       expect(raw.prepare('SELECT api_keys FROM user_provider').get()).toEqual({ api_keys: '[]' });
+      expect(raw.prepare('SELECT instructions FROM agent').get()).toEqual({ instructions: '' });
       // Agents and messages keep their model references; the sync rewrites the rows after restore.
       expect(raw.prepare('SELECT model FROM agent').get()).toEqual({ model: 'openai::gpt' });
       expect(count(raw, "agent_session_message WHERE model_id = 'openai::gpt'")).toBe(2);
@@ -287,9 +288,9 @@ describe('enterprise backups', () => {
 
       await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
       await restoreDeviceState(adapter, []);
-      expect(raw.prepare('SELECT managed_remote_id, instructions FROM agent').get()).toEqual({
+      // The marker survives; the next sync delivers the instructions again.
+      expect(raw.prepare('SELECT managed_remote_id FROM agent').get()).toEqual({
         managed_remote_id: '7',
-        instructions: 'Organization prompt',
       });
       // Without a sync state, the restored profile syncs before it opens.
       expect(count(raw, 'app_state')).toBe(0);
@@ -331,18 +332,16 @@ describe('enterprise backups', () => {
     }
   });
 
-  test('restores local data into an enterprise profile, whose providers come from the next sync', async () => {
+  test('keeps local data out of an enterprise profile', async () => {
     const { raw, adapter } = database();
     try {
-      raw.exec(managedData);
       await prepareEnterpriseBackup(adapter);
       setActiveProfile(profile(identity));
-      await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
-      await restoreDeviceState(adapter, []);
-      expect(raw.prepare('SELECT COUNT(*) AS count FROM user_provider').get()).toEqual({
-        count: 0,
+      await expect(assertBackupBelongsToActiveProfile(adapter)).rejects.toMatchObject({
+        code: 'other-account',
       });
-      expect(raw.prepare('SELECT COUNT(*) AS count FROM app_state').get()).toEqual({ count: 0 });
+      setActiveProfile(LOCAL_PROFILE);
+      await expect(assertBackupBelongsToActiveProfile(adapter)).resolves.toBeUndefined();
     } finally {
       raw.close();
     }

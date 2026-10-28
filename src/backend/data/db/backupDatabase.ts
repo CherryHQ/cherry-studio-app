@@ -84,10 +84,10 @@ export async function captureBackupDatabase(source: SQLiteDatabase, target: File
 
 /**
  * An enterprise copy records whose data it is, so only the same identity can restore it. It keeps
- * conversations and Agents, delivered ones included, but none of the organization's other
- * resources: providers stay only as the model references Agents and messages hold, without keys;
- * delivered MCP servers, Skills and default models are left out. Without a sync state, a restore
- * opens only after the first sync has delivered them again.
+ * conversations and Agents, delivered ones included, but none of the organization's own content:
+ * providers stay only as the model references Agents and messages hold, without keys; delivered
+ * Agents lose their instructions; delivered MCP servers, Skills and default models are left out.
+ * Without a sync state, a restore opens only after the first sync has delivered them again.
  */
 export async function prepareEnterpriseBackup(db: SQLiteDatabase): Promise<void> {
   // Restore always removes the stamp, so a live database never carries one.
@@ -97,6 +97,7 @@ export async function prepareEnterpriseBackup(db: SQLiteDatabase): Promise<void>
   await db.execAsync('PRAGMA foreign_keys = ON; BEGIN IMMEDIATE');
   try {
     await db.runAsync("UPDATE user_provider SET api_keys = '[]'");
+    await db.runAsync("UPDATE agent SET instructions = '' WHERE managed_remote_id IS NOT NULL");
     await db.runAsync(
       'DELETE FROM agent_tool_binding WHERE mcp_server_id IN (SELECT id FROM mcp_server WHERE managed_remote_id IS NOT NULL)',
     );
@@ -136,11 +137,11 @@ async function readBackupProfile(db: SQLiteDatabase) {
   }
 }
 
-/** An enterprise backup restores only into its own identity; local data restores into any profile. */
+/** A backup restores only into the data it came from: local data or the same enterprise identity. */
 export async function assertBackupBelongsToActiveProfile(db: SQLiteDatabase): Promise<void> {
   const source = await readBackupProfile(db);
   const { identity } = getActiveProfile();
-  if (source && !(identity && isSameEnterpriseIdentity(source, identity)))
+  if (source ? !(identity && isSameEnterpriseIdentity(source, identity)) : identity)
     throw new BackupError('other-account');
 }
 
@@ -296,12 +297,6 @@ export async function restoreDeviceState(
       'UPDATE agent_session SET workspace_folder_id = NULL WHERE workspace_folder_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_folder WHERE id = agent_session.workspace_folder_id)',
     );
     await db.runAsync('DELETE FROM desktop_connection');
-    // An enterprise backup carries no sync state, so its first launch syncs before opening.
-    // Local data restored into an enterprise profile also gets its providers from that sync.
-    if (!(await readBackupProfile(db)) && getActiveProfile().identity) {
-      await db.runAsync('DELETE FROM user_provider');
-      await db.runAsync('DELETE FROM app_state WHERE key = ?', ENTERPRISE_SYNC_STATE_KEY);
-    }
     await db.runAsync('DELETE FROM app_state WHERE key = ?', BACKUP_PROFILE_KEY);
     await db.runAsync(
       "UPDATE agent_session_message SET status = 'interrupted', updated_at = ? WHERE status IN ('pending','streaming')",

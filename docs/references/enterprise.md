@@ -227,18 +227,23 @@ server's headers. Users may still create their own Agents, MCP servers and Skill
 
 ## Backup
 
+Signing out keeps an organization's data on the device, so switching accounts never needs a
+backup. An enterprise backup only moves that data to another device or across a reinstall.
+
 An enterprise export keeps conversations and Agents, including delivered Agents with their
-`managed_remote_id` markers and instructions. It carries none of the organization's credentials
-or other delivered resources: provider rows remain only as the model references Agents and messages
-hold, with their keys removed; delivered MCP servers with their tool bindings, delivered Skills,
-the organization's default models and the sync state are left out. The copy is vacuumed so removed
+`managed_remote_id` markers. It carries none of the organization's own content: provider rows remain
+only as the model references Agents and messages hold, with their keys removed; delivered Agents
+lose their instructions; delivered MCP servers with their tool bindings, delivered Skills, the
+organization's default models and the sync state are left out. The copy is vacuumed so removed
 values do not survive in free pages. It records the enterprise identity it came from (`app_state`
-key `backup.profile`), and only that identity can restore it; any other profile refuses the archive
-before confirmation. Without a sync state, the restored profile runs the blocking first sync before
-it opens, so a restore that cannot reach the server rolls back. Local data restores into any
-profile; restoring it into an enterprise profile deletes its providers and clears the sync state
-the same way. Restored remote OAuth MCP connections retain their client configuration but receive
-fresh, unresolved authorization references and are disabled until the user authorizes them again.
+key `backup.profile`).
+
+A backup restores only into the data it came from: local data into the local profile, an enterprise
+backup into the same identity. Any other combination is refused before confirmation. Without a sync
+state, a restored enterprise profile runs the blocking first sync before it opens, so a restore that
+cannot reach the server, or whose session is refused, rolls back; the confirmation says so.
+Restored remote OAuth MCP connections retain their client configuration but receive fresh,
+unresolved authorization references and are disabled until the user authorizes them again.
 
 ## Code Placement
 

@@ -5,7 +5,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { formatStorageSize, useBackupErrorReporter } from '@/frontend/appShell/backup';
+import {
+  backupContentNoticeKey,
+  formatStorageSize,
+  useBackupErrorReporter,
+} from '@/frontend/appShell/backup';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { useBackupState } from '@/frontend/hooks/useBackupState';
 
@@ -55,7 +59,7 @@ export function DataScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.data.title') }}>
       <Section
         title={t('backup.title')}
-        footer={t(available ? 'backup.sensitive' : 'backup.unavailable')}
+        footer={t(available ? backupContentNoticeKey() : 'backup.unavailable')}
       >
         <Section.Item
           label={t('backup.create')}
