@@ -75,7 +75,7 @@ over the shared HTTP transport. Private sign-in works without Accounts Portal bu
 `isCloudSignInAvailable` controls the cloud login choice only. The profile's account section and
 first-use sign-in remain available for private deployments when Portal configuration is absent.
 
-The account UI offers sign-in, space switching, account switching and sign-out. Space choices
+The account UI offers sign-in, workspace switching, account switching and sign-out. Workspace choices
 live in the portal; the app selects a local data profile only after admission succeeds. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
 community account, the organization name or the private server host, and opens the profile page,
 which holds the account rows, switching and sign-out. Signing out of an organization asks for
@@ -109,7 +109,7 @@ profile, only a community session counts as signed in.
   Until admission succeeds, the old session stays usable. Candidate failure never signs out the
   old account. A refusal of the currently open organization blocks it; a previously refused
   session stays blocked even when reauthentication fails offline. Private sessions are independent
-  of cloud notifications. Missing space selections are rejected instead of becoming community.
+  of cloud notifications. Missing workspace selections are rejected instead of becoming community.
 - **Identity display:** SDK `account.displayName` is a presentation field, not an identity key.
   `maskedIdentifier` supplies a phone/email fallback; `username` is never displayed as a substitute
   for a missing name. The SDK supplements ID-token claims with issuer-bound, subject-checked
@@ -133,7 +133,7 @@ profile, only a community session counts as signed in.
 - **Expiry:** a refused session, an Accounts Portal `signed_out`, or a session that no longer
   matches replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the
   device; the page offers sign-in again or sign-out.
-- **Switching spaces:** opens the portal chooser using the existing browser session; the user
+- **Switching workspaces:** opens the portal chooser using the existing browser session; the user
   chooses community or an organization there. Refused sessions and a previously unsuccessful
   browser logout still force authentication. Choosing the open identity keeps the app in place;
   another organization or returning to community reloads into its existing data directory.
