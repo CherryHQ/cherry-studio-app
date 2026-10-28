@@ -128,6 +128,7 @@ patchedDependencies:
   '@ai-sdk/google@3.0.132': e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e
   '@ai-sdk/openai-compatible@2.0.72': 8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69
   '@ai-sdk/openai@3.0.109': 2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f
+  '@cherryinternal/accounts-portal@0.1.0': 861220664d0c0085c302ca0ea3f5541fcc7d1f2a0e5ec79a130ec72bb824059f
   '@earendil-works/chord@1.4.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
   '@earendil-works/pi-ai@1.4.0': 8189049548942c28ea0ed34ab15064ba48d43a9f0c0534b9d3e52d606565b5d4
   '@earendil-works/pi-codemode@1.4.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
@@ -216,7 +217,7 @@ importers:
         version: 7.29.7
       '@cherryinternal/accounts-portal':
         specifier: 0.1.0
-        version: 0.1.0
+        version: 0.1.0(patch_hash=861220664d0c0085c302ca0ea3f5541fcc7d1f2a0e5ec79a130ec72bb824059f)
       '@cherrystudio/ai-core':
         specifier: 2.4.2
         version: 2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
@@ -11490,7 +11491,7 @@ snapshots:
     dependencies:
       '@chainsafe/is-ip': 2.1.0
 
-  '@cherryinternal/accounts-portal@0.1.0': {}
+  '@cherryinternal/accounts-portal@0.1.0(patch_hash=861220664d0c0085c302ca0ea3f5541fcc7d1f2a0e5ec79a130ec72bb824059f)': {}
 
   '@cherrystudio/ai-core@2.4.2(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
     dependencies:
