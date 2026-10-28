@@ -170,6 +170,21 @@ jest.mock('../components/ChatWorkspace', () => ({
   },
 }));
 
+jest.mock('../quotes/ChatQuoteProvider', () => ({
+  ChatQuoteProvider: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
+jest.mock('../quotes/useChatQuoteNavigation', () => ({
+  useChatQuoteNavigation: () => ({
+    navigation: undefined,
+    highlight: undefined,
+    openQuote: jest.fn(),
+    onTargetRestored: jest.fn(),
+    onReady: jest.fn(),
+    cancel: jest.fn(),
+  }),
+}));
+
 describe('ChatScreen composer dock wiring', () => {
   let renderer: ReactTestRenderer | undefined;
 
