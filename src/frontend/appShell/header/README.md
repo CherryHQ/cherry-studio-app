@@ -38,7 +38,10 @@ This module owns Expo Router header adapters used by the app screens.
   newer sample the chat surface through Expo Blur; older releases fall back to the material tint.
   The Android blur fades to fully transparent at the lower edge so it does not split the header and
   message canvas into separate visual surfaces. Both adapters mount the same action lists from
-  `useMainHeaderActions`, so platform files only own how the surface is mounted.
+  `useMainHeaderActions`, so platform files only own how the surface is mounted. Each adapter also
+  exports `mainHeaderScreenOptions`, which the chat stack declares with its routes: Android never
+  creates the native toolbar, and iOS starts with the transparent one. The Android view sets no
+  screen options, and the iOS view only toggles that transparent toolbar for `hidden`.
 - `headerScreenOptions` owns native top-header invariants. Top headers are separator-free on both
   platforms, and self-drawn headers do not add bottom borders or elevation.
 - Top-bar controls share one Cherry action size and grouping contract. iOS lets the native toolbar
