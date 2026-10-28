@@ -6,6 +6,7 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
+import type { VertexAnthropicOptions } from './piVertexAnthropic';
 
 export type SupportedPiApi =
   | 'anthropic-messages'
@@ -86,6 +87,19 @@ export function resolvePiApiAdapter(
   endpointType: PiLanguageEndpointType,
   adapterFamily?: string,
 ): PiApiAdapter {
+  if (
+    endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES &&
+    adapterFamily === 'google-vertex-anthropic'
+  ) {
+    return {
+      api: 'anthropic-messages',
+      authHeaderNames: ['authorization', 'x-goog-api-key', 'x-api-key', 'api-key'],
+      formatBaseUrl: (baseUrl) => baseUrl,
+      loadStreamSimple: async () =>
+        (await import('./piVertexAnthropic')).streamVertexAnthropic as PiStreamFn,
+      supportsCustomFetch: true,
+    };
+  }
   if (endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT && adapterFamily === 'google-vertex') {
     return {
       api: 'google-vertex',
@@ -116,6 +130,7 @@ export function resolvePiApiAdapter(
 
 type PiStreamBinding = {
   accessToken?: string;
+  vertex?: VertexAnthropicOptions['vertex'];
   apiKey?: string;
   fetch: FetchFunction;
   headers: Record<string, string>;
@@ -204,6 +219,7 @@ export async function bindPiStream(
       ...providerOptions,
       apiKey: binding.apiKey === '' ? 'unused' : binding.apiKey,
       ...(binding.accessToken ? { accessToken: binding.accessToken } : {}),
+      ...(binding.vertex ? { vertex: binding.vertex } : {}),
       cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
       sessionId: binding.sessionId ?? options?.sessionId,
       ...(adapter.api === 'openai-codex-responses' ? { transport: 'sse' } : {}),

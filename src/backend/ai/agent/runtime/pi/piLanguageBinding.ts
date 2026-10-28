@@ -58,11 +58,14 @@ export function resolvePiLanguageBinding(
     connection.endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES &&
     provider.authType === 'iam-azure';
   const supportsVertex =
-    connection.adapterFamily === 'google-vertex' &&
-    connection.endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT &&
     provider.authType === 'iam-gcp' &&
     !isVertexMaasModelId(connection.wireModelId) &&
-    /^(?:google\/)?gemini[\w.@-]*$/i.test(connection.wireModelId);
+    ((connection.adapterFamily === 'google-vertex' &&
+      connection.endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT &&
+      /^(?:google\/)?gemini[\w.@-]*$/i.test(connection.wireModelId)) ||
+      (connection.adapterFamily === 'google-vertex-anthropic' &&
+        connection.endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES &&
+        /^(?:anthropic\/)?claude[\w.@-]*$/i.test(connection.wireModelId)));
 
   if (
     connection.adapterFamily &&

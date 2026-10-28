@@ -101,7 +101,9 @@ export function createPiModelResolver(
         provider,
       } = await resolveConfiguredPiModel(runtimeModel);
 
-      let vertex: { accessToken: string; baseUrl: string } | undefined;
+      let vertex:
+        | { accessToken: string; baseUrl: string; projectId: string; location: string }
+        | undefined;
       if (provider.authType === 'iam-gcp') {
         if (apiKeyOverride !== undefined) {
           throw new PiModelResolutionError(
@@ -117,22 +119,25 @@ export function createPiModelResolver(
           );
         }
         const { privateKey, clientEmail } = normalizeVertexCredentials(auth.credentials);
-        const baseUrl = resolveVertexUrls(
-          connection.baseUrl,
-          auth.project.trim(),
-          auth.location.trim(),
-        ).resourceUrl;
+        const projectId = auth.project.trim();
+        const location = auth.location.trim();
+        const urls = resolveVertexUrls(connection.baseUrl, projectId, location);
         const accessToken = await (
           vertexAuth ?? application.get('VertexAuthClient')
         ).getAccessToken(
           {
             providerId: provider.id,
-            projectId: auth.project.trim(),
+            projectId,
             serviceAccount: { privateKey: privateKey!, clientEmail: clientEmail! },
           },
           signal,
         );
-        vertex = { accessToken, baseUrl };
+        vertex = {
+          accessToken,
+          baseUrl: configuredAdapter.api === 'anthropic-messages' ? urls.apiUrl : urls.resourceUrl,
+          projectId,
+          location,
+        };
       }
       const oauth =
         !vertex && apiKeyOverride === undefined
@@ -265,7 +270,7 @@ export function createPiModelResolver(
         contextWindow: preflight.contextWindow,
         cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
         headers,
-        id: vertex ? modelId.replace(/^google\//, '') : modelId,
+        id: vertex ? modelId.replace(/^(?:google|anthropic)\//, '') : modelId,
         input: preflight.inputModalities,
         maxTokens: preflight.maxOutputTokens,
         name: model.name,
@@ -301,6 +306,9 @@ export function createPiModelResolver(
               ? selectedApiKey.value
               : '',
         accessToken: vertex?.accessToken,
+        ...(vertex && adapter.api === 'anthropic-messages'
+          ? { vertex: { projectId: vertex.projectId, location: vertex.location } }
+          : {}),
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
         fetch: expoFetch as unknown as FetchFunction,
@@ -493,6 +501,7 @@ function resolveWebDialect(
   provider: Provider,
   wireModelId: string,
 ): PiWebDialect | undefined {
+  if (provider.authType === 'iam-gcp') return undefined;
   const preset = provider.presetProviderId ?? provider.id;
   switch (api) {
     case 'openai-responses':

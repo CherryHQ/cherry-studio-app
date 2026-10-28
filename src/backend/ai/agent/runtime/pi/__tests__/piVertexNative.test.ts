@@ -15,13 +15,14 @@ describe('native Vertex adapter patches', () => {
     ).toBe('ok');
   });
 
-  it.each(['@earendil-works/pi-ai@1.4.0', '@google/genai@2.21.0'])(
-    'pins %s to its versioned patch and lockfile hash',
-    (name) => {
-      const path = `patches/${name.replace('/', '__')}.patch`;
-      const hash = createHash('sha256').update(readFileSync(path)).digest('hex');
-      expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(`'${name}': ${path}`);
-      expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(`  '${name}': ${hash}\n`);
-    },
-  );
+  it.each([
+    '@earendil-works/pi-ai@1.4.0',
+    '@google/genai@2.21.0',
+    '@anthropic-ai/vertex-sdk@0.22.0',
+  ])('pins %s to its versioned patch and lockfile hash', (name) => {
+    const path = `patches/${name.replace('/', '__')}.patch`;
+    const hash = createHash('sha256').update(readFileSync(path)).digest('hex');
+    expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(`'${name}': ${path}`);
+    expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(`  '${name}': ${hash}\n`);
+  });
 });

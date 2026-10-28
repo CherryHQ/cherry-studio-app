@@ -37,6 +37,7 @@ describe('Vertex connection facts', () => {
     (baseUrl, location, serviceUrl) => {
       expect(resolveVertexUrls(baseUrl, 'project-id', location)).toEqual({
         serviceUrl,
+        apiUrl: `${serviceUrl}/v1`,
         resourceUrl: `${serviceUrl}/v1/projects/project-id/locations/${location}`,
       });
     },
@@ -54,10 +55,16 @@ describe('Vertex connection facts', () => {
 
   it('preserves an explicit beta version and the existing no-version marker', () => {
     expect(
-      resolveVertexUrls('https://gateway.example/v1beta1', 'project-id', 'global').resourceUrl,
-    ).toBe('https://gateway.example/v1beta1/projects/project-id/locations/global');
+      resolveVertexUrls('https://gateway.example/v1beta1', 'project-id', 'global'),
+    ).toMatchObject({
+      apiUrl: 'https://gateway.example/v1beta1',
+      resourceUrl: 'https://gateway.example/v1beta1/projects/project-id/locations/global',
+    });
     expect(
-      resolveVertexUrls('https://gateway.example/vertex#', 'project-id', 'global').resourceUrl,
-    ).toBe('https://gateway.example/vertex/projects/project-id/locations/global');
+      resolveVertexUrls('https://gateway.example/vertex#', 'project-id', 'global'),
+    ).toMatchObject({
+      apiUrl: 'https://gateway.example/vertex',
+      resourceUrl: 'https://gateway.example/vertex/projects/project-id/locations/global',
+    });
   });
 });

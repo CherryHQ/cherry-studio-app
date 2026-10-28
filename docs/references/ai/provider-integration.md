@@ -26,7 +26,7 @@ Providers declaring optional API-key authentication can use these endpoints with
 The Pi adapter supplies the SDK-only placeholder and suppresses generated credentials while
 preserving explicitly configured authentication headers.
 
-Vertex AI Gemini uses the same model resolver with `iam-gcp` service-account credentials. The
+Vertex AI Gemini and Claude use the same model resolver with `iam-gcp` service-account credentials. The
 configuration form imports a Google Cloud JSON key, edits project/location, and can override the
 derived service URL. `VertexAuthClient` owns native RS256 signing, bounded token exchange over the
 shared HTTP client, and a memory-only cache per provider and credential fingerprint. Model discovery
@@ -41,10 +41,21 @@ auth headers. The pinned Pi AI and Google GenAI Web patches expose instance-scop
 fetch injection, preserving upstream Google conversion and streaming. Ordinary API-key and Node
 ADC paths keep their existing behavior.
 
-This first Vertex implementation admits Gemini text models only. Claude, MaaS, image, audio and
+Gemini uses Pi AI's `google-vertex` adapter. Claude uses Pi AI's public Anthropic `stream()` client
+injection with the official `@anthropic-ai/vertex-sdk`: Pi owns message conversion, tool calls,
+thinking signatures and stream parsing; the SDK owns Vertex publisher URLs and request shaping.
+The SDK receives a host-owned `authClient` and instance fetch. Its versioned browser-map patch only
+keeps Node Google auth out of the native graph and requires explicit credentials. Cherry's existing
+payload parameter resolver still owns reasoning selection; no second converter or conversation
+loop is introduced. The shared URL resolver supplies the versioned API root for Claude and the
+project collection for Gemini, preserving regional, multi-region and custom gateway addresses.
+
+Vertex currently admits Gemini and Claude text models. MaaS, image, audio and
 embedding models remain unavailable through the system capability gate. Provider-native web tools
 are not enabled for Vertex; application and MCP function tools retain the pi-durable loop. Adding
 other Vertex protocols requires explicit protocol adapters, not just opening the catalog filter.
+Pi AI's image-generation interface currently has only an OpenRouter implementation; it does not
+provide a direct Vertex image adapter. Image capabilities retain the separate service path below.
 
 Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
 Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,

@@ -1,0 +1,25 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -6,6 +6,9 @@
+   "types": "./index.d.ts",
+   "main": "./index.js",
+   "type": "commonjs",
++  "browser": {
++    "google-auth-library": "./google-auth.native.js"
++  },
+   "repository": "github:anthropics/anthropic-sdk-typescript",
+   "license": "MIT",
+   "private": false,
+diff --git a/google-auth.native.js b/google-auth.native.js
+new file mode 100644
+--- /dev/null
++++ b/google-auth.native.js
+@@ -0,0 +1,7 @@
++"use strict";
++// Vertex's request shaping stays upstream; native callers supply authClient explicitly.
++exports.GoogleAuth = class GoogleAuth {
++    constructor() {
++        throw new Error("Anthropic Vertex on native requires a host-provided authClient.");
++    }
++};

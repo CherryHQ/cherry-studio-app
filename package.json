@@ -76,6 +76,7 @@
     "@ai-sdk/provider-utils": "4.0.58",
     "@ai-sdk/togetherai": "^2.0.53",
     "@ai-sdk/xai": "3.0.126",
+    "@anthropic-ai/vertex-sdk": "0.22.0",
     "@babel/runtime": "^7.29.2",
     "@cherrystudio/ai-core": "2.4.2",
     "@cherrystudio/ai-runtime": "workspace:*",

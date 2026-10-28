@@ -36,6 +36,31 @@ describe('resolvePiLanguageBinding', () => {
       );
     }
   });
+  it.each(['claude-sonnet-4-5@20250929', 'anthropic/claude-opus-4-6'])(
+    'admits %s only through the Vertex Anthropic protocol and service account',
+    (wireModelId) => {
+      const provider = createProvider({ authType: 'iam-gcp' });
+      const connection = {
+        adapterFamily: 'google-vertex-anthropic',
+        baseUrl: '',
+        endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        headers: {},
+        wireModelId,
+      };
+      expect(resolvePiLanguageBinding(provider, connection)).toEqual({
+        endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        status: 'supported',
+      });
+      for (const unsupported of [
+        { ...connection, wireModelId: 'gemini-2.5-pro' },
+        { ...connection, wireModelId: 'meta/llama-4-maas' },
+        { ...connection, endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT },
+      ]) {
+        expect(resolvePiLanguageBinding(provider, unsupported).status).toBe('unsupported');
+      }
+      expect(resolvePiLanguageBinding(createProvider(), connection).status).toBe('unsupported');
+    },
+  );
   it('accepts Azure Responses with Azure IAM credentials', () => {
     const provider = createProvider({
       authMethods: undefined,

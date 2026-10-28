@@ -64,8 +64,6 @@ export function resolveVertexUrls(baseUrl: string, project: string, location: st
     collection?.[2] ??
     /\/(v1(?:beta1)?)$/.exec(path)?.[1] ??
     (baseUrl.trim().endsWith('#') ? '' : 'v1');
-  return {
-    serviceUrl,
-    resourceUrl: `${serviceUrl}${apiVersion ? `/${apiVersion}` : ''}${resourcePath}`,
-  };
+  const apiUrl = `${serviceUrl}${apiVersion ? `/${apiVersion}` : ''}`;
+  return { serviceUrl, apiUrl, resourceUrl: `${apiUrl}${resourcePath}` };
 }
