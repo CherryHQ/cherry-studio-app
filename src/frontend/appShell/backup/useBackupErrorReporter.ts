@@ -1,4 +1,4 @@
-import { useToast } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +22,7 @@ const ERROR_KEYS: Record<BackupErrorCode, string> = {
 export function useBackupErrorReporter() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { alert } = useAlert();
   return useCallback(
     (error: unknown) => {
       if (
@@ -29,9 +30,17 @@ export function useBackupErrorReporter() {
         (error.code === 'cancelled' || error.code === 'restart-required')
       )
         return;
+      // The user picked the wrong file and must act elsewhere, so this one waits to be read.
+      if (error instanceof BackupError && error.code === 'other-account') {
+        alert.show({
+          title: t('backup.error.otherAccountTitle'),
+          description: t('backup.error.otherAccount'),
+        });
+        return;
+      }
       const key = error instanceof BackupError ? ERROR_KEYS[error.code] : 'backup.error.storage';
       toast.show({ label: t(key), variant: 'danger' });
     },
-    [t, toast],
+    [alert, t, toast],
   );
 }
