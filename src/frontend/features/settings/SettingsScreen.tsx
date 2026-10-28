@@ -30,9 +30,11 @@ export default function SettingsScreen() {
   const organization = organizationLabel(account);
   const accountDetail = organization
     ? { label: organization.label, icon: organization.kind }
-    : account.isSignedIn && account.name
-      ? { label: account.name }
-      : undefined;
+    : account.isSignedIn
+      ? { label: account.name || account.maskedIdentifier || t('account.signedIn') }
+      : account.isEnterprise
+        ? { label: t('account.enterprise') }
+        : undefined;
   const { openProviderList, prepareProviderList } = useProviderListNavigation();
 
   const openProfileSettings = useCallback(() => {

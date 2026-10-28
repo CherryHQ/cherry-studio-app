@@ -1,4 +1,5 @@
 import { ContentState, useToast } from '@cherrystudio/ui/components';
+import { usePathname } from 'expo-router';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -13,7 +14,10 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { account, state } = useAccount();
-  if (state.isRestoringSession)
+  const pathname = usePathname();
+  // The callback contains no enterprise data and must be able to repair a missing session.
+  if (pathname === '/auth/callback') return children;
+  if (state.isRestoringSession || (state.isEnterprise && state.needsSignIn && state.isBusy))
     return (
       <View className="flex-1 justify-center">
         <ContentState.Loading />

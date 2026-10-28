@@ -1,12 +1,13 @@
-import type { AuthState } from '@cherryinternal/accounts-portal/client';
+import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-portal/client';
 
+import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
 import { type ActiveProfile, LOCAL_PROFILE } from '@/shared/data/activeProfile';
 
 import { AccountRuntime } from '../AccountRuntime';
 
 jest.mock('@logger', () => ({
-  loggerService: { withContext: () => ({ warn: jest.fn() }) },
+  loggerService: { withContext: () => ({ warn: jest.fn(), error: jest.fn() }) },
 }));
 
 const enterpriseProfile: ActiveProfile = {
@@ -37,12 +38,25 @@ function setup(
   active: ActiveProfile = LOCAL_PROFILE,
   ready = Promise.resolve(),
 ) {
+  let candidateSession = session;
   const portal = {
     ready,
     getState: jest.fn(() => session),
     subscribe: jest.fn((_listener: (state: AuthState) => void) => () => {}),
     beginSignIn: jest.fn(async () => ({ url: 'https://portal/sign-in', redirectUri: 'cb://' })),
-    completeSignIn: jest.fn(async () => session),
+    completeSignIn: jest.fn(async (_url: string, options?: CompleteSignInOptions) => {
+      if (candidateSession._tag !== 'signedIn') throw new Error('Missing callback session');
+      await options?.validate?.({
+        state: candidateSession,
+        getProductToken: portal.getProductToken,
+        getAccount: async () =>
+          candidateSession._tag === 'signedIn' ? (candidateSession.account ?? {}) : {},
+      });
+      session = candidateSession;
+      portal.subscribe.mock.calls.at(-1)![0](session);
+      return session;
+    }),
+    getAccount: jest.fn(async () => (session._tag === 'signedIn' ? (session.account ?? {}) : {})),
     getProductToken: jest.fn(async () => 'product-token'),
     listProfiles: jest.fn(async () => ({
       profiles: [
@@ -96,6 +110,9 @@ function setup(
   return {
     runtime: new AccountRuntime(options),
     options,
+    select(next: AuthState) {
+      candidateSession = next;
+    },
     publish(next: AuthState) {
       session = next;
       portal.subscribe.mock.calls.at(-1)![0](next);
@@ -116,6 +133,98 @@ describe('AccountRuntime', () => {
     await expect(runtime.signIn()).resolves.toBe(true);
     expect(options.reload).not.toHaveBeenCalled();
     expect(runtime.getState().hasPrompted).toBe(true);
+  });
+
+  it('opens the chooser without forcing account authentication when switching spaces', async () => {
+    const { runtime, options } = setup(signedIn('cloud'));
+    await runtime.switchSpace();
+    expect(options.portal.beginSignIn).toHaveBeenCalledWith({ forceLogin: false });
+    await runtime.signIn();
+    expect(options.portal.beginSignIn).toHaveBeenLastCalledWith({ forceLogin: true });
+  });
+
+  it('restores a cold callback without opening a browser and consumes duplicate delivery once', async () => {
+    const { runtime, options } = setup(signedIn('enterprise'));
+    await Promise.all([
+      runtime.receiveRedirect('cb://?code=1'),
+      runtime.receiveRedirect('cb://?code=1'),
+    ]);
+    await runtime.receiveRedirect('cb://?code=1');
+    expect(options.openBrowser).not.toHaveBeenCalled();
+    expect(options.portal.beginSignIn).not.toHaveBeenCalled();
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+    expect(options.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the callback route own navigation when the live browser also receives the result', async () => {
+    const { runtime, options } = setup(signedIn('cloud'));
+    options.openBrowser.mockImplementationOnce(async () => {
+      await expect(runtime.receiveRedirect('cb://?code=1')).resolves.toBe(true);
+      return 'cb://?code=1';
+    });
+    await expect(runtime.switchSpace()).resolves.toBe(false);
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects callbacks without a selected space instead of treating them as community', async () => {
+    const { runtime, options, select } = setup(signedIn('cloud'));
+    select({ _tag: 'signedIn', subject: 'user-2', name: undefined, profile: undefined });
+    await expect(runtime.receiveRedirect('cb://?code=1')).rejects.toMatchObject({
+      code: 'rejected',
+    });
+    expect(options.portal.getState()).toEqual(signedIn('cloud'));
+    expect(options.profiles.setActive).not.toHaveBeenCalled();
+  });
+
+  it('keeps the account visible without a display name and never substitutes the raw username', async () => {
+    const { runtime } = setup({
+      ...signedIn('cloud'),
+      name: undefined,
+      account: { username: '+8613800008000', maskedIdentifier: '+861****8000' },
+    });
+    await runtime.verify();
+    expect(runtime.getState()).toMatchObject({
+      isSignedIn: true,
+      name: undefined,
+      maskedIdentifier: '+861****8000',
+    });
+  });
+
+  it('reuses organization data through A → B → A → community without creating community profiles', async () => {
+    let stored: string | undefined;
+    const ids = ['8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60', '9b2e5f0d-3c8e-4d2b-8f4a-2e3d4c5b6a71'];
+    const createId = jest.fn(() => ids.shift()!);
+    const registry = new ProfileRegistry(
+      {
+        read: () => stored,
+        write: (value) => {
+          stored = value;
+        },
+      },
+      createId,
+    );
+    const visited: string[] = [];
+    for (const selected of [
+      signedIn('enterprise'),
+      {
+        ...signedIn('enterprise'),
+        profile: { product: 'enterprise' as const, profileId: 'org-2' },
+      },
+      signedIn('enterprise'),
+      signedIn('cloud'),
+    ]) {
+      const { options } = setup(selected, registry.getActive());
+      const runtime = new AccountRuntime({ ...options, profiles: registry });
+      await runtime.switchSpace();
+      visited.push(registry.getActive().id);
+    }
+    expect(visited).toEqual([
+      '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
+      '9b2e5f0d-3c8e-4d2b-8f4a-2e3d4c5b6a71',
+      '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
+      'local',
+    ]);
+    expect(createId).toHaveBeenCalledTimes(2);
   });
 
   it('shows community data as signed in only for a community session', async () => {
@@ -151,6 +260,7 @@ describe('AccountRuntime', () => {
 
   it('asks the portal who signs in when the installation already holds a cloud session', async () => {
     const signedOut = setup({ _tag: 'signedOut' });
+    signedOut.select(signedIn('cloud'));
     await signedOut.runtime.signIn();
     expect(signedOut.options.portal.beginSignIn).toHaveBeenCalledWith({ forceLogin: false });
     // Otherwise the remembered browser session returns at once and switching is impossible.
@@ -174,13 +284,13 @@ describe('AccountRuntime', () => {
     expect(options.portal.beginSignIn).toHaveBeenLastCalledWith({ forceLogin: false });
   });
 
-  it('ends a session it could not take into another organization', async () => {
+  it('keeps the old session when the target organization cannot be reached', async () => {
     const { runtime, options } = setup(signedIn('enterprise'));
     const api = options.createApi();
     api.getConfiguration.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
     options.createApi.mockReturnValue(api);
     await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
-    expect(options.portal.signOut).toHaveBeenCalledTimes(1);
+    expect(options.portal.signOut).not.toHaveBeenCalled();
     expect(options.reload).not.toHaveBeenCalled();
   });
 
@@ -230,9 +340,10 @@ describe('AccountRuntime', () => {
     expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true });
   });
 
-  it('does not treat malformed admission as permission to reopen the same organization', async () => {
+  it('does not treat malformed admission as permission to reopen a refused organization', async () => {
     const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
     await runtime.verify();
+    runtime.reportRejected();
     const api = options.createApi();
     api.getConfiguration.mockResolvedValue({ serverUniqueId: '' });
     options.createApi.mockReturnValue(api);
@@ -247,7 +358,6 @@ describe('AccountRuntime', () => {
     expect(options.profiles.resolve).toHaveBeenCalledWith(
       expect.objectContaining({ productProfileId: 'org-1' }),
       'https://cse.example.com',
-      undefined,
     );
     expect(options.reload).toHaveBeenCalled();
   });
@@ -310,7 +420,10 @@ describe('AccountRuntime', () => {
     ['subject', { ...signedIn('enterprise'), subject: 'user-2' }],
     [
       'organization',
-      { ...signedIn('enterprise'), profile: { product: 'enterprise', profileId: 'org-2' } },
+      {
+        ...signedIn('enterprise'),
+        profile: { product: 'enterprise' as const, profileId: 'org-2' },
+      },
     ],
     ['product', { ...signedIn('cloud'), profile: { product: 'cloud', profileId: 'org-1' } }],
     ['signed-out session', { _tag: 'signedOut' }],
@@ -356,41 +469,34 @@ describe('AccountRuntime', () => {
     await expect(runtime.getProductToken()).resolves.toBe('product-token');
   });
 
-  it('keeps the old cloud profile blocked when replacement succeeds but configuration admission fails', async () => {
-    const { runtime, options, publish } = setup(signedIn('enterprise'), enterpriseProfile);
+  it('keeps the old cloud session usable when another account fails admission', async () => {
+    const { runtime, options, select } = setup(signedIn('enterprise'), enterpriseProfile);
     await runtime.verify();
-    options.portal.getProductToken.mockClear();
-    const replacement = { ...signedIn('enterprise'), subject: 'user-2', name: 'Other' };
-    options.portal.completeSignIn.mockImplementation(async () => {
-      expect(runtime.getState().needsSignIn).toBe(true);
-      await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
-      publish(replacement);
-      return replacement;
-    });
+    select({ ...signedIn('enterprise'), subject: 'user-2', name: 'Other' });
     const api = options.createApi();
-    api.getConfiguration.mockRejectedValue(new HttpError('Offline', { kind: 'network' }));
+    api.getConfiguration.mockRejectedValue(new HttpError('Refused', { kind: 'http', status: 403 }));
     options.createApi.mockReturnValue(api);
-
-    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'rejected' });
     expect(runtime.getState()).toMatchObject({
       isBusy: false,
-      isSignedIn: false,
-      needsSignIn: true,
-      name: undefined,
+      isSignedIn: true,
+      needsSignIn: false,
+      name: 'Ada',
     });
-    await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
-    expect(options.portal.getProductToken).not.toHaveBeenCalled();
+    await expect(runtime.getProductToken()).resolves.toBe('product-token');
+    expect(options.portal.getState()).toEqual(signedIn('enterprise'));
+    expect(options.portal.signOut).not.toHaveBeenCalled();
     expect(options.profiles.setActive).not.toHaveBeenCalled();
   });
 
-  it('keeps the old cloud profile blocked if credential replacement throws before publishing', async () => {
+  it('keeps the old session when the SDK cannot persist its candidate', async () => {
     const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
     await runtime.verify();
     options.portal.completeSignIn.mockRejectedValue(new Error('Failed saving the new session'));
-    await expect(runtime.signIn()).rejects.toThrow('Failed saving the new session');
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
     await runtime.verify();
-    expect(runtime.getState().needsSignIn).toBe(true);
-    await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
+    expect(runtime.getState().needsSignIn).toBe(false);
+    await expect(runtime.getProductToken()).resolves.toBe('product-token');
   });
 
   it('keeps the active enterprise session usable when the browser is dismissed', async () => {
@@ -568,7 +674,7 @@ describe('AccountRuntime', () => {
       publish({ ...signedIn('enterprise'), subject: 'user-2' });
       throw new Error('Cloud sign-in failed');
     });
-    await expect(runtime.signIn()).rejects.toThrow('Cloud sign-in failed');
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'connection' });
     expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false, name: 'Ada' });
     await expect(runtime.getProductToken()).resolves.toBe('private-token');
   });

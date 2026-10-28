@@ -79,8 +79,12 @@ export default function ProfileSettingsScreen() {
     toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
   };
   const openSignIn = () => router.push('/login');
-  // A cloud organization switches through the portal's choice; community and private accounts
-  // pick a sign-in method first.
+  const isSignedIn = state.isSignedIn || state.isEnterprise;
+  // A cloud account switches organization through the portal, reusing its browser sign-in.
+  const canSwitchOrganization = isSignedIn && state.isCloudSignInAvailable && !state.privateAddress;
+  const switchOrganization = () => void account.switchSpace().catch(reportAccountError);
+  // Switching accounts asks who signs in: a cloud organization through the portal's login,
+  // community and private accounts through the sign-in method page.
   const switchAccount = () => {
     if (state.isEnterprise && !state.privateAddress)
       void account.signIn().catch(reportAccountError);
@@ -114,7 +118,7 @@ export default function ProfileSettingsScreen() {
           : t('account.signOutConfirm.title'),
     });
   };
-  const isSignedIn = state.isSignedIn || state.isEnterprise;
+  const accountName = state.name || state.maskedIdentifier;
   // One card for every account: what is signed in, and the way to sign in or switch.
   const card = !isSignedIn
     ? {
@@ -127,13 +131,13 @@ export default function ProfileSettingsScreen() {
           kind: organization?.kind ?? ('organization' as const),
           title: organization?.label ?? t('account.organization'),
           detail: [
-            state.name,
+            accountName,
             t(state.privateAddress ? 'account.kind.private' : 'account.kind.organization'),
           ]
             .filter(Boolean)
             .join(' · '),
         }
-      : { kind: 'cherry' as const, title: t('account.cloudAccount'), detail: state.name };
+      : { kind: 'cherry' as const, title: t('account.cloudAccount'), detail: accountName };
 
   return (
     <SettingsScrollPage
@@ -180,11 +184,19 @@ export default function ProfileSettingsScreen() {
           trailing={
             <Button
               disabled={state.isBusy}
-              onPress={isSignedIn ? switchAccount : openSignIn}
+              onPress={
+                canSwitchOrganization ? switchOrganization : isSignedIn ? switchAccount : openSignIn
+              }
               size="sm"
               variant={isSignedIn ? 'tonal' : 'default'}
             >
-              {t(isSignedIn ? 'account.switch' : 'account.login.signIn')}
+              {t(
+                canSwitchOrganization
+                  ? 'account.switchOrganization'
+                  : isSignedIn
+                    ? 'account.switch'
+                    : 'account.login.signIn',
+              )}
             </Button>
           }
         />
@@ -194,6 +206,13 @@ export default function ProfileSettingsScreen() {
           // Only an organization's data leaves with its sign-out; a community account keeps it.
           footer={state.isEnterprise ? t('account.signOutConfirm.description') : undefined}
         >
+          {canSwitchOrganization ? (
+            <Section.Item
+              disabled={state.isBusy}
+              label={t('account.switch')}
+              onPress={switchAccount}
+            />
+          ) : null}
           <Section.Item
             destructive
             disabled={state.isBusy}

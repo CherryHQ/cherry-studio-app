@@ -41,6 +41,16 @@ clean install.
   itself changes or that stay unique, not at the top of a file or between two functions.
   `scripts/__tests__/patchReapplication.test.ts` checks each registered patch.
 
+### Accounts Portal SDK Patch
+
+`patches/@cherryinternal__accounts-portal@0.1.0.patch` contains the compiled SDK fixes from
+[accounts-portal #17](https://github.com/CherryInternal/accounts-portal/pull/17), commit `798c757`.
+It bridges the unpublished SDK 0.2.0 so this PR installs without a local path or an unpublished
+registry version. The patch adds session admission, callback recovery guards, stale-result
+rejection, and distinct account display fields. `accountsPortalPatch.test.ts` pins the reviewed
+runtime/type artifacts; `patchReapplication.test.ts` protects reinstallation. Remove the patch and
+its hash guard when SDK 0.2.0 with these fixes is published, then update the dependency and lockfile.
+
 ### Enriched Markdown Patch
 
 `patches/react-native-enriched-markdown@1.0.1.patch` is the app's largest dependency patch: 35

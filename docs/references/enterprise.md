@@ -69,14 +69,14 @@ restore replaces authorization references before the imported database opens.
 
 `AccountRuntime` (`src/backend/services/enterprise/account`, exposed as `Backend.account`) owns the
 installation's single Accounts Portal SDK instance, composed natively in
-`src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage and refresh.
+`src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage, identity claims, refresh and candidate-session admission.
 The runtime also owns private credentials; `privateAccountApi` validates the v2 password exchange
 over the shared HTTP transport. Private sign-in works without Accounts Portal build configuration.
 `isCloudSignInAvailable` controls the cloud login choice only. The profile's account section and
 first-use sign-in remain available for private deployments when Portal configuration is absent.
 
-The account UI offers only sign-in, account switching and sign-out; users never choose a data
-profile. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
+The account UI offers sign-in, organization switching, account switching and sign-out. The
+portal lists the community account and organizations to switch between; the app selects a local data profile only after admission succeeds. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
 community account, the organization name or the private server host, and opens the profile page,
 which holds the account rows, switching and sign-out. Signing out of an organization asks for
 confirmation; a community sign-out does not. A community account uses the installation's own data whether or not it is signed in;
@@ -104,12 +104,23 @@ profile, only a community session counts as signed in.
 - **Cloud identity changes:** the account gate waits for stored cloud credentials to finish
   restoring before showing enterprise data. Session notifications and product-token reads compare
   issuer, subject, product and organization against the active profile; token reads check again
-  after awaiting the SDK. Browser completion fences the old cloud profile before the SDK can replace
-  its credentials. A failed switch remains behind sign-in until a profile reload; dismissing the
-  browser leaves the current session usable. Private sessions are independent of cloud notifications.
-  Reauthentication of the same cloud identity preserves an already admitted session only on a
-  network error or timeout. A refusal, invalid admission response or previously rejected session
-  never reopens its data through this offline fallback.
+  after awaiting the SDK. The SDK validates a candidate session before replacing credentials:
+  the runtime obtains its product token, reads `/configurations` and resolves its data profile.
+  Until admission succeeds, the old session stays usable. Candidate failure never signs out the
+  old account. A refusal of the currently open organization blocks it; a previously refused
+  session stays blocked even when reauthentication fails offline. Private sessions are independent
+  of cloud notifications. A sign-in without a portal choice is rejected instead of becoming community.
+- **Identity display:** SDK `account.displayName` is a presentation field, not an identity key.
+  `maskedIdentifier` supplies a phone/email fallback; `username` is never displayed as a substitute
+  for a missing name. The SDK supplements ID-token claims with issuer-bound, subject-checked
+  userinfo. The profile's local nickname and avatar remain independent.
+- **Callback recovery:** `receiveRedirect` is the one completion entry for the live auth browser
+  and the callback route, including cold starts. The SDK restores pending PKCE state from secure
+  storage; duplicate browser/deep-link delivery shares one completion and one activation. Native
+  callback URLs use the installed scheme: `cherrystudio://auth/callback`,
+  `cherrystudio-dev://auth/callback` or `cherrystudio-preview://auth/callback`. Register each URL on
+  the corresponding IdP client before testing that build; a production-only redirect cannot open
+  an Android development package. Unrecognized schemes disable cloud sign-in.
 - **Session refusal:** the enterprise API client (`enterpriseApi.ts`) attaches the product token and
   its HTTP error interceptor decides whether the server refused the session. Only a 401, or a 403 on
   `/configurations`, refuses it. A 403 on any other path denies one resource, such as an Agent setup
@@ -127,12 +138,16 @@ profile, only a community session counts as signed in.
   `managedResources.ts` by bootstrap), so no model request can start without a session. When the
   session is refused, bootstrap interrupts the Agent Host as background expiry does; interrupted
   turns reopen with the host and fail admission until the user signs in again.
-- **Switching:** a cloud organization switches directly through the portal; community and private
-  accounts open the sign-in method page first. A browser sign-in forces the portal's login page
-  whenever the installation already holds a cloud session, has a refused session, or could not end
-  the portal session at sign-out, so a remembered browser sign-in never returns silently. Until
-  the portal can reuse a session and still show its profile choice, switching asks for the
-  sign-in again. Choosing the open identity again keeps the app in place without reloading.
+- **Switching organizations:** a cloud account opens the portal chooser using the existing browser
+  session; the user chooses community or an organization there. Private accounts have no portal
+  choice and switch accounts instead. Refused sessions and a previously unsuccessful
+  browser logout still force authentication. Choosing the open identity keeps the app in place;
+  another organization or returning to community reloads into its existing data directory.
+  Returning A → B → A reuses A's profile, and community always reuses the installation's single
+  local profile.
+- **Switching accounts:** explicitly asks for authentication when a cloud account is already
+  signed in. Community and private accounts first choose a sign-in method. Dismissing the browser
+  preserves the account and data that were open.
 - **Sign-out:** a cloud sign-out revokes the refresh token and ends the portal's browser sign-in;
   local tokens, profile choice and product tokens are forgotten even when the server is
   unreachable, which marks the browser session stale for the next sign-in. A private sign-out
@@ -140,9 +155,10 @@ profile, only a community session counts as signed in.
   enterprise or private sign-out keeps the profile's data on the device and returns to the
   community data. Signing in again to the same identity, matched by server, issuer, subject and
   organization (or server, user and password sign-in), reopens that data.
-- **Failed entry:** when a cloud sign-in cannot enter a different organization, the session just
-  received is signed out instead of lingering; the open organization signing in again keeps its
-  session.
+- **Failed entry:** the SDK discards the candidate and revokes its refresh token; the previous
+  session and active data selection stay in place. A successful SDK commit followed by a local
+  activation/reload failure remains gated when identities differ; it never opens old organization
+  data using new credentials.
 
 Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Non-production
 builds default to the cn-dev staging deployment. Production has no default. Every build uses the

@@ -14,6 +14,7 @@ import {
   createPrivateAccountApi,
 } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
+import { nativeCallbackUrl } from '@/backend/utils/oauth';
 import { AccountError } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
@@ -28,9 +29,6 @@ const ConfigSchema = z.object({
   scopes: z.array(z.string()).min(1),
   enterpriseAddress: z.string(),
 });
-// The only registered callback. iOS auth sessions capture it in any build; Android development
-// builds cannot receive it, which is accepted.
-const REDIRECT_URI = 'cherrystudio://auth/callback';
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
 let account: AccountRuntime | undefined;
@@ -45,53 +43,56 @@ function createAccount(): AccountRuntime {
   const parsed = ConfigSchema.safeParse(Constants.expoConfig?.extra?.accountsPortal);
   const config = parsed.success ? parsed.data : undefined;
   const store = createMMKV({ id: 'cherry-installation-account' });
-  const portal = config
-    ? createAccountsPortal({
-        issuer: config.issuer,
-        origin: config.origin,
-        clientId: config.clientId,
-        redirectUri: REDIRECT_URI,
-        scopes: config.scopes,
-        storage: {
-          get: (key) => SecureStore.getItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
-          set: (key, value) =>
-            SecureStore.setItemAsync(`accounts-portal.${key}`, value, STORAGE_OPTIONS),
-          delete: (key) => SecureStore.deleteItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
-        },
-        crypto: {
-          randomBytes: Crypto.getRandomBytes,
-          sha256: async (value) =>
-            new Uint8Array(
-              await Crypto.digest(
-                Crypto.CryptoDigestAlgorithm.SHA256,
-                new TextEncoder().encode(value),
-              ),
-            ),
-        },
-        // Only the SDK's own endpoints, its profile list and an enterprise product entry, so tokens
-        // go nowhere else.
-        fetch: createFetchBridge({
-          maxResponseBytes: 1024 * 1024,
-          timeoutMs: 20_000,
-          unsupportedMethodError: () => new AccountError('connection'),
-          assertUrl(value) {
-            const url = new URL(value);
-            const fixed = [
-              `${config.issuer}/oauth/v2/token`,
-              `${config.issuer}/oauth/v2/revoke`,
-              `${config.origin}/api/v1/logout`,
-              `${config.origin}/api/v1/profiles`,
-            ];
-            if (
-              !fixed.includes(url.toString()) &&
-              !(url.pathname.endsWith('/accounts-portal/v1/enter') && !url.search && !url.hash)
-            )
-              throw new AccountError('address');
-            return url;
+  const redirectUri = nativeCallbackUrl('auth/callback');
+  const portal =
+    config && redirectUri
+      ? createAccountsPortal({
+          issuer: config.issuer,
+          origin: config.origin,
+          clientId: config.clientId,
+          redirectUri,
+          scopes: config.scopes,
+          storage: {
+            get: (key) => SecureStore.getItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
+            set: (key, value) =>
+              SecureStore.setItemAsync(`accounts-portal.${key}`, value, STORAGE_OPTIONS),
+            delete: (key) => SecureStore.deleteItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
           },
-        }),
-      })
-    : null;
+          crypto: {
+            randomBytes: Crypto.getRandomBytes,
+            sha256: async (value) =>
+              new Uint8Array(
+                await Crypto.digest(
+                  Crypto.CryptoDigestAlgorithm.SHA256,
+                  new TextEncoder().encode(value),
+                ),
+              ),
+          },
+          // Only the SDK's own endpoints, its profile list and an enterprise product entry, so tokens
+          // go nowhere else.
+          fetch: createFetchBridge({
+            maxResponseBytes: 1024 * 1024,
+            timeoutMs: 20_000,
+            unsupportedMethodError: () => new AccountError('connection'),
+            assertUrl(value) {
+              const url = new URL(value);
+              const fixed = [
+                `${config.issuer}/oauth/v2/token`,
+                `${config.issuer}/oauth/v2/revoke`,
+                `${config.issuer}/oidc/v1/userinfo`,
+                `${config.origin}/api/v1/logout`,
+                `${config.origin}/api/v1/profiles`,
+              ];
+              if (
+                !fixed.includes(url.toString()) &&
+                !(url.pathname.endsWith('/accounts-portal/v1/enter') && !url.search && !url.hash)
+              )
+                throw new AccountError('address');
+              return url;
+            },
+          }),
+        })
+      : null;
   void portal?.ready.catch((error: unknown) => {
     loggerService
       .withContext('AccountRuntime')

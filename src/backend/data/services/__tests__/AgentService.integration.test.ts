@@ -12,6 +12,7 @@ import { subscribeDataApiChanges } from '../../dataApiChanges';
 import type { PreferenceService } from '../../PreferenceService';
 import { agentGlobalSkillService } from '../AgentGlobalSkillService';
 import { agentService } from '../AgentService';
+import { providerRegistryService } from '../ProviderRegistryService';
 import { applyMigrations } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
@@ -71,6 +72,20 @@ describe('AgentService persistence', () => {
     await uninstallTestHost();
     jest.restoreAllMocks();
     sqlite.close();
+  });
+
+  it('seeds an organization default before the public model catalog is available', async () => {
+    insertUserModel(sqlite, 'organization', 'default-model');
+    preferenceGet.mockResolvedValue('organization::default-model');
+    providerRegistryService.clearRemoteSnapshot();
+
+    const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+    expect(initial).toMatchObject({
+      model: 'organization::default-model',
+      modelName: 'default-model',
+    });
+    expect(providerRegistryService.isReady()).toBe(false);
+    await expect(agentService.createInitialAgent({ name: 'Duplicate' })).resolves.toBeNull();
   });
 
   it('creates with definition defaults and inherits the default-model preference', async () => {

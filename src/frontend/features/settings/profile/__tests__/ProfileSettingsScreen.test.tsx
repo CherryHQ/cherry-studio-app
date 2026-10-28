@@ -7,6 +7,7 @@ import ProfileSettingsScreen from '../ProfileSettingsScreen';
 
 let mockState: AccountState;
 const mockSignIn = jest.fn(async () => true);
+const mockSwitchSpace = jest.fn(async () => true);
 const mockPush = jest.fn();
 
 jest.mock('@logger', () => ({
@@ -36,7 +37,10 @@ jest.mock('@/frontend/appShell/account', () => ({
   ACCOUNT_ERROR_KEYS: {},
   organizationLabel: jest.requireActual('@/frontend/appShell/account/organizationLabel')
     .organizationLabel,
-  useAccount: () => ({ account: { signIn: mockSignIn, signOut: jest.fn() }, state: mockState }),
+  useAccount: () => ({
+    account: { signIn: mockSignIn, signOut: jest.fn(), switchSpace: mockSwitchSpace },
+    state: mockState,
+  }),
 }));
 jest.mock('@/frontend/components/Avatar', () => ({
   AvatarImagePicker: ({ children }: { children: ReactNode }) => children,
@@ -65,11 +69,18 @@ function render(state: AccountState) {
   act(() => {
     renderer = create(<ProfileSettingsScreen />);
   });
-  const [card, signOut] = renderer.root.findAllByType('SectionItem' as never);
+  const [card, ...rows] = renderer.root.findAllByType('SectionItem' as never);
   const sections = renderer.root.findAllByType('Section' as never);
+  const row = (label: string) =>
+    rows.find((item) => (item.props as { label: string }).label === label)?.props as
+      | { onPress: () => void }
+      | undefined;
   return {
     card: card.props as { label: string; description?: string; trailing: { props: object } },
-    signOut,
+    press: () =>
+      (card.props as { trailing: { props: { onPress: () => void } } }).trailing.props.onPress(),
+    switchAccount: row('account.switch'),
+    signOut: row('account.signOut'),
     footer: (sections[1]?.props as { footer?: string } | undefined)?.footer,
   };
 }
@@ -78,7 +89,7 @@ describe('ProfileSettingsScreen account card', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('offers sign-in without a sign-out row when no account is signed in', () => {
-    const { card, signOut } = render(base);
+    const { card, press, signOut } = render(base);
     expect(card).toMatchObject({
       label: 'account.notSignedIn',
       description: 'account.signInDescription',
@@ -87,13 +98,13 @@ describe('ProfileSettingsScreen account card', () => {
       children: 'account.login.signIn',
       variant: 'default',
     });
-    (card.trailing.props as { onPress: () => void }).onPress();
+    press();
     expect(mockPush).toHaveBeenCalledWith('/login');
     expect(signOut).toBeUndefined();
   });
 
   test('names a private deployment by its host and user, and switches through sign-in', () => {
-    const { card, footer } = render({
+    const { card, press, switchAccount, footer } = render({
       ...base,
       isEnterprise: true,
       isSignedIn: true,
@@ -104,31 +115,44 @@ describe('ProfileSettingsScreen account card', () => {
       label: 'ai.acme.internal',
       description: 'alice · account.kind.private',
     });
-    (card.trailing.props as { onPress: () => void }).onPress();
+    // A private deployment has no portal choice; its card switches accounts directly.
+    expect(card.trailing.props).toMatchObject({ children: 'account.switch' });
+    expect(switchAccount).toBeUndefined();
+    press();
     expect(mockPush).toHaveBeenCalledWith('/login');
     expect(footer).toBe('account.signOutConfirm.description');
   });
 
-  test('names a cloud organization and switches through the portal', () => {
-    const { card } = render({
+  test('switches a cloud organization through the portal and accounts through its login', () => {
+    const { card, press, switchAccount } = render({
       ...base,
       isEnterprise: true,
       isSignedIn: true,
-      name: 'Ada Zhang',
+      maskedIdentifier: 'ad***@acme.com',
       organizationName: 'Acme',
     });
     expect(card).toMatchObject({
       label: 'Acme',
-      description: 'Ada Zhang · account.kind.organization',
+      description: 'ad***@acme.com · account.kind.organization',
     });
-    (card.trailing.props as { onPress: () => void }).onPress();
+    expect(card.trailing.props).toMatchObject({ children: 'account.switchOrganization' });
+    press();
+    expect(mockSwitchSpace).toHaveBeenCalled();
+    switchAccount!.onPress();
     expect(mockSignIn).toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
   test('keeps a community sign-out without the organization footer', () => {
-    const { card, signOut, footer } = render({ ...base, isSignedIn: true, name: 'ada@cherry.ai' });
-    expect(card).toMatchObject({ label: 'account.cloudAccount', description: 'ada@cherry.ai' });
+    const { card, switchAccount, signOut, footer } = render({
+      ...base,
+      isSignedIn: true,
+      name: 'Ada',
+    });
+    expect(card).toMatchObject({ label: 'account.cloudAccount', description: 'Ada' });
+    expect(card.trailing.props).toMatchObject({ children: 'account.switchOrganization' });
+    switchAccount!.onPress();
+    expect(mockPush).toHaveBeenCalledWith('/login');
     expect(signOut).toBeDefined();
     expect(footer).toBeUndefined();
   });
