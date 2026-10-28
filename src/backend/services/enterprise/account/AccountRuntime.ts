@@ -352,8 +352,9 @@ export class AccountRuntime implements AccountModule {
     this.update({
       needsSignIn: true,
       isSignedIn: false,
-      name: undefined,
       maskedIdentifier: undefined,
+      // The private sign-in page keeps the user and asks only for the password.
+      ...(!this.state.privateAddress && { name: undefined }),
     });
 
   /**

@@ -17,7 +17,12 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
   const pathname = usePathname();
   // The callback contains no enterprise data and must be able to repair a missing session.
   if (pathname === '/auth/callback') return children;
-  if (state.isRestoringSession || (state.isEnterprise && state.needsSignIn && state.isBusy))
+  // A cloud sign-in completes in the browser; a private one stays on the form so a failed
+  // password keeps what was entered.
+  if (
+    state.isRestoringSession ||
+    (state.isEnterprise && state.needsSignIn && state.isBusy && !state.privateAddress)
+  )
     return (
       <View className="flex-1 justify-center">
         <ContentState.Loading />

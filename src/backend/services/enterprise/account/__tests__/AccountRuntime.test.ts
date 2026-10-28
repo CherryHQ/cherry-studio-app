@@ -329,6 +329,13 @@ describe('AccountRuntime', () => {
     },
   );
 
+  it('keeps a refused private user for the password-only sign-in page', async () => {
+    const { runtime } = setup({ _tag: 'signedOut' }, privateProfile);
+    await runtime.verify();
+    runtime.reportRejected();
+    expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true, name: 'Ada' });
+  });
+
   it('does not reopen a previously refused organization when reauthentication is offline', async () => {
     const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
     await runtime.verify();
