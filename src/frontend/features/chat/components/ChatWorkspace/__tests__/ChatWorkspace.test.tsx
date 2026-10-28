@@ -39,6 +39,9 @@ let mockAgentChatSession: {
 jest.mock('../hooks/useConversationFeedbackHint', () => ({
   useConversationFeedbackHint: jest.fn(),
 }));
+jest.mock('../hooks/useConversationFeedback', () => ({
+  useConversationFeedback: () => undefined,
+}));
 
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
@@ -112,6 +115,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/Message', () => ({
+  MessageFailureReportProvider: ({ children }: { children: ReactNode }) => children,
   AssistantMessage: ({ children, message }: { children: ReactNode; message: MessageListItem }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('AssistantMessage', { message }, children);
@@ -197,7 +201,10 @@ function project(message: AgentMessageView): ConversationMessage {
 }
 // Feed the same scenarios through the public consumption views, preserving the existing assertions.
 function ChatWorkspace(
-  props: Omit<ComponentProps<typeof Workspace>, 'snapshot' | 'messageWindow' | 'messages'> & {
+  props: Omit<
+    ComponentProps<typeof Workspace>,
+    'snapshot' | 'messageWindow' | 'messages' | 'executionSource'
+  > & {
     messageWindow: Omit<
       ComponentProps<typeof Workspace>['messageWindow'],
       'messages' | 'dataKey' | 'hasOlderMessages'
@@ -228,6 +235,7 @@ function ChatWorkspace(
   return (
     <Workspace
       {...props}
+      executionSource="local"
       snapshot={snapshot}
       messages={merged}
       messageWindow={{

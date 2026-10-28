@@ -1,5 +1,5 @@
 /**
- * Bounded identifiers, excluding free text, URLs, absolute paths and recognizable credentials.
+ * Bounded diagnostic identifiers, excluding free text, URLs, paths and recognizable credentials.
  * `|` joins the call and item ids of OpenAI Responses tool calls.
  */
 export function diagnosticIdentifier(value: unknown): string | undefined {

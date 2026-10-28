@@ -20,6 +20,13 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  feedbackFailureContext,
+  feedbackTimestamp,
+  useFeedbackActions,
+  useFeedbackSource,
+  type FeedbackContextInput,
+} from '@/frontend/appShell/feedback';
+import {
   ComposerDock,
   ComposerSessionProvider,
   useComposerActions,
@@ -36,7 +43,8 @@ import { useMutation } from '@/frontend/data';
 import { paintingJobParamValues } from '@/frontend/data/paintings/usePaintingJobs';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
-import { isUniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 import { type ImageParamDraft, imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import { usePaintingAnnotationDraft } from '../hooks/usePaintingAnnotationDraft';
@@ -108,6 +116,7 @@ function PaintingBoardContent({
   onReceipt: (paintingId: string | undefined) => void;
 }) {
   const { t } = useTranslation();
+  const { openFeedback } = useFeedbackActions();
   const isScreenFocused = useIsFocused();
   const { alert } = useAlert();
   const { toast } = useToast();
@@ -149,6 +158,7 @@ function PaintingBoardContent({
   const previewNode = previewNodeId ? board.nodes.get(previewNodeId) : undefined;
   const shownImage = previewNode?.images[0] ?? focusedImage;
   const focusedPainting = focusedNode?.painting;
+  useFeedbackSource(() => paintingFeedbackContext(mode === 'focus' ? focusedNode : undefined));
   const isGenerating = isAwaitingNode || focusedNode?.status.kind === 'generating';
   // On the canvas the selection is what the composer edits; clearing it starts a new branch.
   const selectedNodeId =
@@ -443,6 +453,7 @@ function PaintingBoardContent({
             key={focusedNode.id}
             message={focusedNode.status.job?.error?.message}
             onRetry={canRetry ? retryFocused : undefined}
+            onReport={() => void openFeedback(paintingFeedbackContext(focusedNode))}
             prompt={focusedPainting?.brief ?? focusedPainting?.prompt}
             status={focusedNode.status.reason}
             width={loaderWidth}
@@ -648,4 +659,26 @@ function stoppedFailure(node: PaintingBoardNode): AiFailureSnapshot | undefined 
   if (node.status.kind !== 'stopped') return undefined;
   const parsed = AiFailureSnapshotSchema.safeParse(node.status.job?.error?.params?.failure);
   return parsed.success ? parsed.data : undefined;
+}
+
+function paintingFeedbackContext(node: PaintingBoardNode | undefined): FeedbackContextInput {
+  const job = node && node.status.kind !== 'ready' ? node.status.job : undefined;
+  const failure = node ? stoppedFailure(node) : undefined;
+  const modelId = node?.painting?.modelId;
+  return {
+    feature: 'paintings',
+    executionSource: 'local',
+    ...(failure ? feedbackFailureContext({ ...failure, code: job?.error?.code }) : {}),
+    paintingId: diagnosticIdentifier(node?.painting?.id),
+    jobId: diagnosticIdentifier(job?.id),
+    occurredAt: job?.status === 'failed' ? feedbackTimestamp(job.finishedAt) : undefined,
+    providerId:
+      diagnosticIdentifier(node?.painting?.providerId) ??
+      diagnosticIdentifier(failure?.context?.providerId),
+    modelId:
+      diagnosticIdentifier(failure?.context?.modelId) ??
+      diagnosticIdentifier(
+        modelId && isUniqueModelId(modelId) ? parseUniqueModelId(modelId).modelId : modelId,
+      ),
+  };
 }

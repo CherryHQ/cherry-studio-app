@@ -303,6 +303,7 @@ export function MessagePartSummary({
 
 export function MessagePartDetail({
   children,
+  headerAction,
   onClose,
   sizes,
   testID,
@@ -313,7 +314,14 @@ export function MessagePartDetail({
   const heightProps = sizes ? { sizes } : ({ size: 'large' } as const);
 
   return (
-    <BottomSheet {...heightProps} onClose={onClose} open testID={testID} title={title}>
+    <BottomSheet
+      {...heightProps}
+      headerAction={headerAction}
+      onClose={onClose}
+      open
+      testID={testID}
+      title={title}
+    >
       <ScrollView
         className="flex-1"
         contentContainerClassName={

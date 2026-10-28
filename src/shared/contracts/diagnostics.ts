@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+
+import { AiFailureReasonSchema } from './aiFailure';
+
 export const DIAGNOSTIC_SOURCE_LIMIT_BYTES = 50 * 1024 * 1024;
 export const DIAGNOSTIC_DESCRIPTION_MAX_BYTES = 4096;
 export const DIAGNOSTIC_SCREENSHOT_DIRECTORY = 'FeedbackScreenshots';
@@ -51,14 +55,90 @@ export function diagnosticDescriptionByteLength(value: string): number {
   return new TextEncoder().encode(normalizeDiagnosticDescription(value)).byteLength;
 }
 
-export const DiagnosticReportInputSchema = z.strictObject({
-  screenshotId: z.uuidv4().optional(),
-  description: z
-    .string()
-    .trim()
-    .min(1)
-    .refine((value) => diagnosticDescriptionByteLength(value) <= DIAGNOSTIC_DESCRIPTION_MAX_BYTES),
+export const DiagnosticFeedbackFeatureSchema = z.enum([
+  'chat',
+  'agents',
+  'providers',
+  'plugins',
+  'paintings',
+  'files',
+  'desktop',
+  'backup',
+  'other',
+]);
+export type DiagnosticFeedbackFeature = z.infer<typeof DiagnosticFeedbackFeatureSchema>;
+export const DiagnosticFeedbackProblemSchema = z.enum([
+  'error',
+  'performance',
+  'interface',
+  'unexpected_result',
+  'suggestion',
+  'other',
+]);
+export type DiagnosticFeedbackProblem = z.infer<typeof DiagnosticFeedbackProblemSchema>;
+
+const DiagnosticIdentifierSchema = z
+  .string()
+  .refine((value) => diagnosticIdentifier(value) === value);
+/** Only app-owned metadata crosses this boundary; error messages and response bodies never do. */
+export const DiagnosticFeedbackContextSchema = z.strictObject({
+  entry: z.enum(['error', 'shake']),
+  feature: DiagnosticFeedbackFeatureSchema,
+  capturedAt: z.iso.datetime({ offset: true }),
+  occurredAt: z.iso.datetime({ offset: true }).optional(),
+  executionSource: z.enum(['local', 'desktop']).optional(),
+  sessionId: DiagnosticIdentifierSchema.optional(),
+  agentId: DiagnosticIdentifierSchema.optional(),
+  executionId: DiagnosticIdentifierSchema.optional(),
+  turnId: DiagnosticIdentifierSchema.optional(),
+  messageId: DiagnosticIdentifierSchema.optional(),
+  messageCreatedAt: z.iso.datetime({ offset: true }).optional(),
+  requestId: DiagnosticIdentifierSchema.optional(),
+  traceId: DiagnosticIdentifierSchema.optional(),
+  jobId: DiagnosticIdentifierSchema.optional(),
+  paintingId: DiagnosticIdentifierSchema.optional(),
+  providerId: DiagnosticIdentifierSchema.optional(),
+  modelId: DiagnosticIdentifierSchema.optional(),
+  error: z
+    .strictObject({
+      code: DiagnosticIdentifierSchema.optional(),
+      sourceCode: DiagnosticIdentifierSchema.optional(),
+      reason: AiFailureReasonSchema.optional(),
+      statusCode: z.number().int().min(100).max(599).optional(),
+    })
+    .optional(),
 });
+export type DiagnosticFeedbackContext = z.infer<typeof DiagnosticFeedbackContextSchema>;
+
+const DiagnosticFeedbackSchema = z.strictObject({
+  feature: DiagnosticFeedbackFeatureSchema,
+  problem: DiagnosticFeedbackProblemSchema,
+});
+
+/** The existing upload API receives the form choices alongside the user's own description. */
+export function diagnosticReportDescription(input: {
+  description: string;
+  feedback?: z.infer<typeof DiagnosticFeedbackSchema>;
+}): string {
+  const header = input.feedback
+    ? `Feature: ${input.feedback.feature}\nProblem: ${input.feedback.problem}\n\n`
+    : '';
+  return normalizeDiagnosticDescription(`${header}${input.description.trim()}`);
+}
+
+export const DiagnosticReportInputSchema = z
+  .strictObject({
+    screenshotId: z.uuidv4().optional(),
+    description: z.string().trim().min(1),
+    feedback: DiagnosticFeedbackSchema.optional(),
+    context: DiagnosticFeedbackContextSchema.optional(),
+  })
+  .refine(
+    (input) =>
+      diagnosticDescriptionByteLength(diagnosticReportDescription(input)) <=
+      DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
+    { path: ['description'] },
+  );
 export type DiagnosticReportInput = z.infer<typeof DiagnosticReportInputSchema>;
 
 export type DiagnosticUploadFailureReason =

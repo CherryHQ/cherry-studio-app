@@ -1,8 +1,28 @@
 # Shake Feedback
 
-The app shell owns foreground motion observation and the temporary screenshot handoff. The
-settings page owns the feedback form and submission. Manual entries use the same `/settings/about/feedback/new`
-route, without taking a screenshot.
+The app shell owns foreground motion observation, temporary screenshots and feedback context
+handoff. The settings page owns the form and submission. Manual entries use the same
+`/settings/about/feedback/new` route, without taking a screenshot.
+
+`useFeedbackSource` lets the focused chat or painting page supply metadata on demand, without
+publishing streamed page state to the app shell. A shake snapshots that metadata before taking
+the screenshot. Other pages contribute only a fixed feature inferred from their route family;
+route parameters are never retained. Chat binds an in-flight execution only when the snapshot is
+current and exactly one execution is active. Desktop execution IDs remain distinct from local turn IDs.
+Direct report actions use `useFeedbackActions().openFeedback` with the selected message or job,
+not the most recent unrelated failure. Chat and painting share one entry: Report this problem at the
+bottom of the shared AI failure detail sheet; message rows and failure cards add no extra button. Error and shake entries share navigation admission, so
+pending capture, repeated presses, route changes and backgrounding cannot open duplicate forms.
+Capture failures still retain metadata for text feedback. Leaving the form clears both the image
+and linked context.
+
+Every entry opens the same form, laid out like other settings pages: a grouped section selects the
+fixed feature and problem type through option sheets, then the user's description. Error entries
+preselect the known values and shake entries preselect the feature. Linked context and the
+screenshot appear as switch rows under Attachments only when present. The context row summarizes
+local/desktop execution, model, and message, occurrence or capture time; turning it off omits the
+context without clearing the chosen categories, and it can be turned back on. The form never
+prefills chat text or raw provider error text into the description.
 
 Settings → Privacy → Shake to give feedback controls the device-local preference
 `app.feedback.shake_enabled`, which defaults to false. Enabling waits for the preference write to
@@ -53,12 +73,11 @@ text-only feedback, including their sheets and masked credential fields. The rou
 also excludes list pages in those families and does not attempt to redact arbitrary chat content.
 
 The screenshot is copied from view-shot's temporary file to a UUID-named PNG under the app cache.
-Only the ID crosses the diagnostics contract. The form previews the screenshot, explains that its
-visible content may be sensitive, and allows removal. The capture notice says the image is local;
-each new report defaults Include screenshot to off. Only selecting it and pressing Submit attaches
-the image; otherwise the request omits its ID. Retries preserve the selection, removal clears it,
-and a replacement image requires a new selection. Removal, leaving the form, or app-shell disposal
-deletes the draft image. Backend preparation copies the chosen
+Only the ID crosses the diagnostics contract. The screenshot row shows a thumbnail that opens a
+full preview and notes that visible content may be sensitive; each new report defaults its switch
+to off. Only turning it on and pressing Submit attaches the image; otherwise the request omits its
+ID. Retries preserve the selection, and a replacement image requires a new selection. Leaving the
+form or app-shell disposal deletes the draft image. Backend preparation copies the chosen
 image before collecting diagnostics; each upload attempt deletes its own staged copy. A failed
 submission keeps the draft image for an explicit retry.
 
@@ -72,7 +91,7 @@ details with the service owner; this client change does not establish or publish
 ## Device acceptance
 
 Native changes require a rebuilt custom client. Device acceptance must cover actual shakes,
-capture-before-navigation, repeat shakes, foreground/background, cancel/back, image removal,
+capture-before-navigation, repeat shakes, foreground/background, back, screenshot preview,
 submission/retry, and light/dark form layout on both platforms. In development builds, turn off the
 Expo developer menu's shake gesture before testing so it does not cover the captured page; production
 builds do not contain that menu. Simulator menu commands that simulate UIKit shake events do not

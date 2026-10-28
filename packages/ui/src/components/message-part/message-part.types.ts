@@ -55,6 +55,8 @@ export type MessagePartToolGroupProps = {
 
 export type MessagePartDetailProps = {
   children: ReactNode;
+  /** A title-row action; it stays visible at every sheet height. */
+  headerAction?: ReactNode;
   onClose: () => void;
   sizes?: BottomSheetSizes;
   testID?: string;
