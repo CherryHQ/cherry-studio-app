@@ -5,7 +5,7 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 import { createTurnResourceLedger } from '../../resources/managedFileResolver';
-import { createAgentImageGeneration, createImageRequestTool } from '../agentImageGeneration';
+import { createAgentImageGeneration } from '../agentImageGeneration';
 
 const ENTRY = FileEntrySchema.parse({
   id: '00000000-0000-7000-8000-000000000001',
@@ -84,40 +84,6 @@ function input(withImage = false) {
 }
 
 describe('Agent image generation', () => {
-  test('cached preparation resolves committed authored prompt when the image tool executes', async () => {
-    const { capability, ai, files } = harness();
-    const settings = {
-      mode: 'generate' as const,
-      paramValues: { aspectRatio: '16:9', numImages: 1 },
-    };
-    const plan = await capability.prepare({ ...input(true), settings });
-    if (!plan) throw new Error('Missing plan');
-    let committed = 'A cherry';
-    const tool = createImageRequestTool(
-      plan,
-      () => ATTRIBUTION,
-      async () => committed,
-    );
-    expect(files.readAsDataUrl).not.toHaveBeenCalled();
-    committed = 'Edited cherry';
-    await tool.execute({
-      signal: new AbortController().signal,
-      toolCallId: 'image',
-      turnId: 'turn',
-      input: {},
-    });
-    expect(ai.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: 'Use watercolor.\n\nEdited cherry',
-        ...settings,
-        uniqueModelId: MODEL.id,
-        inputImages: ['data:image/png;base64,reference'],
-      }),
-    );
-    expect(plan.settings).toEqual(settings);
-    expect(files.readAsDataUrl).toHaveBeenCalledTimes(1);
-  });
-
   test('uses the selected model, Agent instructions, explicit reference, and captured parameters', async () => {
     const { capability, ai, storage } = harness();
     const settings = {

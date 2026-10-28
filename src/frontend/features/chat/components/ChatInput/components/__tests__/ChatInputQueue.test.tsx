@@ -1,65 +1,97 @@
+import { type ReactNode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { AgentProtocolError, type AgentQueuedInput } from '@/shared/contracts/agent';
+import { ComposerTestProvider } from '@/frontend/components/Composer/components/__tests__/_composerTestProvider';
+import { ComposerSurface } from '@/frontend/components/Composer/components/ComposerSurface';
+import {
+  useComposerActions,
+  useComposerState,
+} from '@/frontend/components/Composer/context/ComposerProvider';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { AgentQueuedInput } from '@/shared/contracts/agent';
+import { FileEntrySchema } from '@/shared/data/types/file';
 
+import { toAgentInputParts } from '../../utils/agentInputParts';
 import { ChatInputQueue } from '../ChatInputQueue';
 
 const mockToast = jest.fn();
 const mockCancel = jest.fn();
-const mockEdit = jest.fn();
-const mockMove = jest.fn();
-const mockSetDraft = jest.fn();
-const mockAddAttachments = jest.fn();
-const mockRemoveAttachment = jest.fn();
-const mockBeginSendAttempt = jest.fn();
-const mockOtherComposerAction = jest.fn();
-let mockInputs: AgentQueuedInput[] = [];
-let mockMutationId = 0;
-jest.mock('uuid', () => ({ v7: () => `mutation-${++mockMutationId}` }));
-jest.mock('../../../../runtime', () => ({
-  useAgentChatClient: () => ({
-    client: { cancelQueuedInput: mockCancel, editQueuedInput: mockEdit, moveQueuedInput: mockMove },
+const mockSubmit = jest.fn();
+const mockStop = jest.fn();
+const mockOpenFile = jest.fn();
+let mockInputs: AgentQueuedInput[];
+let composer: ReturnType<typeof useComposerState>;
+let actions: ReturnType<typeof useComposerActions>;
+const mockFile = {
+  entry: FileEntrySchema.parse({
+    id: '00000000-0000-4000-8000-000000000001',
+    filename: 'photo.png',
+    mediaType: 'image/png',
+    size: 123,
+    provenance: 'imported',
+    createdAt: 0,
+    updatedAt: 0,
   }),
+  uri: 'file:///photo.png',
+};
+const existingAttachment: ComposerAttachmentReady = {
+  id: 'existing',
+  kind: 'image',
+  mediaType: 'image/png',
+  name: 'existing.png',
+  fileEntryId: 'existing-entry',
+  status: 'ready',
+  uri: 'file:///existing.png',
+};
+
+jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+jest.mock('../../../../runtime', () => ({
+  useAgentChatClient: () => ({ client: { cancelQueuedInput: mockCancel } }),
   useAgentQueuedInputs: () => mockInputs,
 }));
-jest.mock('@/frontend/components/Composer', () => ({
-  useComposerActions: () => ({
-    setDraft: mockSetDraft,
-    addAttachments: mockAddAttachments,
-    removeAttachment: mockRemoveAttachment,
-    beginSendAttempt: mockBeginSendAttempt,
-    endSendAttempt: mockOtherComposerAction,
-    clearAttachments: mockOtherComposerAction,
-    setAttachments: mockOtherComposerAction,
-    replaceAttachment: mockOtherComposerAction,
-  }),
+jest.mock('@/frontend/components/Composer', () =>
+  jest.requireActual('@/frontend/components/Composer/context/ComposerProvider'),
+);
+jest.mock('@/frontend/components/Composer/hooks/useComposerPresentation', () => ({
+  useComposerPresentation: () => ({ state: {}, actions: { dismissInput: jest.fn() } }),
 }));
-jest.mock('@/frontend/components/FileEntryPreview/FileEntryPreview', () => ({
-  FileEntryPreview: (props: { entryId: string; variant?: string }) =>
-    jest.requireActual<typeof import('react')>('react').createElement('Attachment', props),
+jest.mock('@/frontend/components/Composer/hooks/useComposerSendError', () => ({
+  useComposerSendError: () => jest.fn(),
+}));
+jest.mock('@/frontend/components/FileEntryPreview', () => ({
+  ...jest.requireActual('@/frontend/components/FileEntryPreview/FileEntryPreview'),
+  ...jest.requireMock('@/frontend/components/FileEntryPreview/hooks/useResolvedFile'),
+  ...jest.requireMock('@/frontend/components/FileEntryPreview/hooks/useOpenFileEntry'),
+}));
+jest.mock('@/frontend/components/FileEntryPreview/hooks/useResolvedFile', () => ({
+  useResolvedFile: () => ({ data: mockFile, isLoading: false }),
+}));
+jest.mock('@/frontend/components/FileEntryPreview/hooks/useOpenFileEntry', () => ({
+  useOpenFileEntry: () => ({ openFileEntry: mockOpenFile }),
+}));
+jest.mock('@/frontend/components/FileEntryPreview/FileEntryImage', () => ({
+  FileEntryImage: () => null,
+}));
+jest.mock('@/frontend/components/FileEntryPreview/FileEntrySkeleton', () => ({
+  FileEntrySkeleton: () => null,
+  FileEntryAttachmentSkeleton: () => null,
 }));
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual<typeof import('react')>('react');
   const host = (name: string) =>
-    function MockControl({ children, ...props }: { children?: React.ReactNode }) {
+    function MockControl({ children, ...props }: { children?: ReactNode }) {
       return React.createElement(name, props, children);
     };
-  const Field = Object.assign(host('Field'), { Label: host('Label'), Error: host('FieldError') });
   return {
-    ActionMenu: host('QueueMenu'),
+    Alert: host('QueueAlert'),
     Button: host('QueueButton'),
     Surface: host('Surface'),
-    Input: host('QueueField'),
-    TextField: Field,
-    BottomSheet: ({
-      children,
-      footer,
-      ...props
-    }: {
-      children?: React.ReactNode;
-      footer?: React.ReactNode;
-    }) => React.createElement('Sheet', props, children, footer),
+    Composer: host('NormalComposer'),
+    FilePreview: host('FilePreview'),
+    BottomSheet: ({ children, footer, ...props }: { children?: ReactNode; footer?: ReactNode }) =>
+      React.createElement('Sheet', props, children, footer),
     useToast: () => ({ toast: { show: mockToast } }),
+    useComposerExpansion: () => null,
   };
 });
 jest.mock('react-i18next', () => ({
@@ -73,12 +105,11 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-const longText = `${'Long authored text. '.repeat(300)}TAIL_SENTINEL`;
+const longText = `${'Full queued text. '.repeat(300)}TAIL_SENTINEL`;
 function input(turnId = 'turn-1'): AgentQueuedInput {
   return {
     turnId,
     assistantMessageId: `assistant-${turnId}`,
-    moveTargets: { earlier: null, later: 'assistant-next' },
     userMessage: {
       id: `user-${turnId}`,
       sessionId: 'session-1',
@@ -86,400 +117,343 @@ function input(turnId = 'turn-1'): AgentQueuedInput {
       turnId,
       role: 'user',
       status: 'pending',
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: '2026-10-27T00:00:00.000Z',
+      updatedAt: '2026-10-27T00:00:00.000Z',
       parts: [
         { id: 'text-1', type: 'text', text: longText, state: 'done' },
         {
           id: 'file-1',
           type: 'file',
-          fileEntryId: 'entry-1',
+          fileEntryId: mockFile.entry.id,
           mediaType: 'image/png',
+          filename: 'photo.png',
           purpose: 'input-attachment',
         },
-        {
-          id: 'text-2',
-          type: 'text',
-          text: 'After attachment\n  preserved whitespace ',
-          state: 'done',
-        },
-        {
-          id: 'file-2',
-          type: 'file',
-          fileEntryId: 'entry-2',
-          mediaType: 'application/pdf',
-          purpose: 'input-attachment',
-        },
+        { id: 'text-2', type: 'text', text: ' After attachment\n  whitespace ', state: 'done' },
       ],
-      modelId: null,
-      inferenceSnapshot: {
-        status: 'supported',
-        snapshot: {
-          version: 1,
-          model: {
-            uniqueModelId: 'provider::model',
-            providerId: 'provider',
-            modelId: 'model',
-            name: 'Captured model',
-          },
-          parameters: { temperature: 0.4, maxOutputTokens: 1024 },
-          tools: [],
-        },
-      },
-      stats: null,
-      createdAt: '2026-10-27T00:00:00.000Z',
-      updatedAt: '2026-10-27T00:00:00.000Z',
     },
   };
 }
+const restoredText = `${longText}\n After attachment\n  whitespace `;
 let tree: ReactTestRenderer;
-function menu() {
-  return tree.root.findByType('QueueMenu' as never).props.items;
+function Probe() {
+  const state = useComposerState();
+  const composerActions = useComposerActions();
+  useEffect(() => {
+    composer = state;
+    actions = composerActions;
+  }, [state, composerActions]);
+  return null;
 }
-function action(id: string) {
-  act(() =>
-    menu()
-      .find((item: { id: string }) => item.id === id)
-      .onPress(),
+function Harness({
+  initialDraft = '',
+  initialAttachments = [],
+}: {
+  initialDraft?: string;
+  initialAttachments?: ComposerAttachmentReady[];
+}) {
+  return (
+    <ComposerTestProvider initialDraft={initialDraft} initialAttachments={initialAttachments}>
+      <Probe />
+      <ChatInputQueue sessionId="session-1" />
+      <ComposerSurface
+        streaming
+        onStop={mockStop}
+        onSend={async (payload) => {
+          await mockSubmit(toAgentInputParts(payload));
+          mockInputs = [
+            ...mockInputs,
+            {
+              ...input('resent'),
+              userMessage: {
+                ...input('resent').userMessage,
+                parts: [{ id: 'resent-text', type: 'text', state: 'done', text: payload.text }],
+              },
+            },
+          ];
+        }}
+      />
+    </ComposerTestProvider>
   );
 }
-function fields() {
-  return tree.root.findAllByType('QueueField' as never);
-}
-function change(index: number, text: string) {
-  act(() => fields()[index]!.props.onChangeText(text));
-}
-async function save() {
-  await act(async () => {
-    tree.root
-      .findAllByType('QueueButton' as never)
-      .find((button) => button.props.children === 'Save')!
-      .props.onPress();
+function render(initialDraft = '', initialAttachments: ComposerAttachmentReady[] = []) {
+  act(() => {
+    tree = create(<Harness initialDraft={initialDraft} initialAttachments={initialAttachments} />);
   });
 }
-function rerender(sessionId = 'session-1') {
-  act(() => tree.update(<ChatInputQueue sessionId={sessionId} />));
+function open() {
+  act(() => tree.root.findByProps({ testID: 'queue-preview-turn-1' }).props.onPress());
 }
-function renderedText() {
+async function press(testID: string) {
+  await act(async () => tree.root.findByProps({ testID }).props.onPress());
+}
+function alert() {
+  return tree.root.findByType('QueueAlert' as never);
+}
+function text() {
   return tree.root
     .findAll((node) => typeof node.props.children === 'string')
     .map((node) => node.props.children as string)
     .join('\n');
 }
-
-afterEach(() => {
-  act(() => tree?.unmount());
-  for (const untouched of [
-    mockSetDraft,
-    mockAddAttachments,
-    mockRemoveAttachment,
-    mockBeginSendAttempt,
-    mockOtherComposerAction,
-  ])
-    expect(untouched).not.toHaveBeenCalled();
-});
+function queueCount() {
+  return String(
+    tree.root.findByProps({
+      className: 'text-xs font-medium tabular-nums text-muted-foreground',
+    }).props.children,
+  );
+}
+function refresh() {
+  act(() => tree.update(<Harness />));
+}
 beforeEach(() => {
   jest.clearAllMocks();
-  mockMutationId = 0;
-  mockInputs = [input()];
-  mockCancel.mockResolvedValue('withdrawn');
-  mockEdit.mockResolvedValue({ status: 'updated' });
-  mockMove.mockResolvedValue({ status: 'moved' });
-  act(() => {
-    tree = create(<ChatInputQueue sessionId="session-1" />);
+  mockInputs = [input(), input('turn-2')];
+  mockCancel.mockImplementation(async (_sessionId: string, turnId: string) => {
+    mockInputs = mockInputs.filter((queued) => queued.turnId !== turnId);
+    return 'withdrawn';
   });
 });
-
-it('offers ordered actions, lane boundaries, an accessible position and a real menu target', () => {
-  expect(
-    menu().map(
-      ({
-        label,
-        disabled,
-        destructive,
-      }: {
-        label: string;
-        disabled: boolean;
-        destructive?: boolean;
-      }) => ({ label, disabled, destructive }),
-    ),
-  ).toEqual([
-    { label: 'Edit', disabled: false },
-    { label: 'Move earlier', disabled: true },
-    { label: 'Move later', disabled: false },
-    { label: 'Remove', disabled: false, destructive: true },
-  ]);
-  const trigger = tree.root.findByType('QueueButton' as never);
-  expect(trigger.props).toMatchObject({
-    accessibilityRole: 'button',
-    accessibilityLabel: 'Actions for queued message 1',
-    accessibilityState: { disabled: false, busy: false },
-    size: 'lg',
-  });
-  mockInputs = [{ ...input(), moveTargets: { earlier: 'previous', later: null } }];
-  rerender();
-  expect(menu()[1].disabled).toBe(false);
-  expect(menu()[2].disabled).toBe(true);
+afterEach(() => {
+  act(() => tree?.unmount());
 });
 
-it('keeps Remove on the cancellation API and disables every action while the row is pending', async () => {
-  let finish!: (outcome: string) => void;
+it('opens all full text without changing count, positions or queue, and closing changes nothing', () => {
+  render();
+  const before = JSON.stringify(mockInputs);
+  expect(queueCount()).toBe('2');
+  expect(text()).not.toContain('TAIL_SENTINEL');
+  open();
+  expect(text()).toContain(longText);
+  expect(text()).toContain(' After attachment\n  whitespace ');
+  for (const position of [1, 2]) {
+    expect(
+      tree.root.findByProps({ accessibilityLabel: `Preview queued message ${position}` }),
+    ).toBeTruthy();
+  }
+  expect(queueCount()).toBe('2');
+  act(() => tree.root.findByType('Sheet' as never).props.onClose());
+  expect(queueCount()).toBe('2');
+  expect(JSON.stringify(mockInputs)).toBe(before);
+  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockSubmit).not.toHaveBeenCalled();
+});
+
+it('opens a supported attachment through the existing FileEntryPreview path without withdrawing or sending', () => {
+  render();
+  open();
+  const before = JSON.stringify(mockInputs);
+  act(() =>
+    tree.root.findByProps({ testID: `queue-attachment-${mockFile.entry.id}` }).props.onPress(),
+  );
+  expect(mockOpenFile).toHaveBeenCalledWith(mockFile);
+  expect(JSON.stringify(mockInputs)).toBe(before);
+  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockSubmit).not.toHaveBeenCalled();
+});
+
+it.each(['chat-input-queue-remove-turn-1', 'queue-detail-remove'])(
+  'preserves Remove via %s',
+  async (testID) => {
+    render();
+    if (testID === 'queue-detail-remove') open();
+    await press(testID);
+    expect(mockCancel).toHaveBeenCalledWith('session-1', 'turn-1');
+    expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-2']);
+    refresh();
+    expect(queueCount()).toBe('1');
+    expect(composer.draft).toBe('');
+    expect(composer.attachments).toEqual([]);
+  },
+);
+
+it('restores text and ready attachment references only after confirmed withdrawal', async () => {
+  render();
+  open();
+  let finish!: (value: string) => void;
   mockCancel.mockReturnValue(
     new Promise((resolve) => {
       finish = resolve;
     }),
   );
-  action('remove');
-  expect(mockCancel).toHaveBeenCalledWith('session-1', 'turn-1');
-  expect(menu().every((item: { disabled: boolean }) => item.disabled)).toBe(true);
-  expect(tree.root.findByType('QueueButton' as never).props.accessibilityState).toEqual({
-    disabled: true,
-    busy: true,
+  await press('queue-take-back');
+  expect(composer.draft).toBe('');
+  expect(composer.attachments).toEqual([]);
+  await act(async () => {
+    mockInputs = mockInputs.slice(1);
+    finish('withdrawn');
   });
-  await act(async () => finish('already-started'));
-  expect(mockToast).toHaveBeenCalledWith({ label: 'This message has already started.' });
-});
-
-it('previews every authored text part without a 4000-character cap and every openable attachment', () => {
-  act(() => tree.root.findByProps({ testID: 'queue-preview-turn-1' }).props.onPress());
-  expect(renderedText()).toContain(longText);
-  expect(renderedText()).toContain('TAIL_SENTINEL');
-  expect(tree.root.findAllByType('Attachment' as never).map((file) => file.props)).toEqual([
-    { entryId: 'entry-1', variant: 'attachment' },
-    { entryId: 'entry-2', variant: 'attachment' },
-  ]);
-  const textNodes = tree.root.findAll((node) => node.props.selectable === true);
-  expect(textNodes.some((node) => node.props.children === longText)).toBe(true);
-});
-
-it('saves exact authored slots around attachments using opening CAS values and no settings or files', async () => {
-  action('edit');
-  expect(fields()).toHaveLength(2);
-  expect(renderedText()).toContain('Attachments and execution settings are read-only.');
-  expect(renderedText()).toContain('Captured model');
-  change(0, ' First changed\n');
-  change(1, 'Second changed ');
-  await save();
-  expect(mockEdit).toHaveBeenCalledWith('session-1', {
-    turnId: 'turn-1',
-    assistantMessageId: 'assistant-turn-1',
-    mutationId: 'mutation-1',
-    parts: [
-      { partId: 'text-1', expectedText: longText, text: ' First changed\n' },
-      {
-        partId: 'text-2',
-        expectedText: 'After attachment\n  preserved whitespace ',
-        text: 'Second changed ',
-      },
-    ],
-  });
-  expect(tree.root.findAllByType('Sheet' as never)).toHaveLength(0);
-  expect(mockToast).toHaveBeenCalledWith({ label: 'Queued message saved.', variant: 'success' });
-});
-
-it('retains a dirty buffer on incoming updates, stale conflict and closing/reopening; shows confirmed text', async () => {
-  action('edit');
-  change(0, 'My unsaved buffer');
-  const changed = input();
-  changed.userMessage.parts[0] = {
-    id: 'text-1',
-    type: 'text',
-    text: 'Latest confirmed content',
-    state: 'done',
-  };
-  mockInputs = [changed];
-  rerender();
-  expect(fields()[0]!.props.value).toBe('My unsaved buffer');
-  mockEdit.mockResolvedValue({ status: 'conflict', reason: 'stale-text' });
-  await save();
-  expect(renderedText()).toContain(
-    'The queue changed. Your edits are kept. Review the latest confirmed text below.',
-  );
-  expect(renderedText()).toContain('Latest confirmed content');
-  expect(fields()[0]!.props.value).toBe('My unsaved buffer');
-  act(() => tree.root.findByType('Sheet' as never).props.onClose());
-  action('edit');
-  expect(fields()[0]!.props.value).toBe('My unsaved buffer');
-  expect(mockEdit.mock.calls[0][1].parts[0].expectedText).toBe(longText);
-});
-
-it('offers a working retry with the identical buffer and a fresh mutation ID on a retryable rejection', async () => {
-  action('edit');
-  change(0, 'Retry this exact text');
-  mockEdit.mockRejectedValueOnce(
-    new AgentProtocolError({
-      code: 'EXECUTION_FAILED',
-      message: 'DO_NOT_RENDER_DIAGNOSTIC',
-      retryable: true,
+  expect(mockCancel).toHaveBeenCalledTimes(1);
+  expect(composer.draft).toBe(restoredText);
+  expect(composer.attachments).toEqual([
+    expect.objectContaining({
+      id: 'file-1',
+      fileEntryId: mockFile.entry.id,
+      status: 'ready',
+      kind: 'image',
     }),
-  );
-  await save();
-  const feedback = mockToast.mock.calls.at(-1)![0];
-  expect(feedback).toMatchObject({
-    variant: 'danger',
-    actions: [{ label: 'Retry', onPress: expect.any(Function) }],
-  });
-  expect(fields()[0]!.props.value).toBe('Retry this exact text');
-  expect(renderedText()).not.toContain('DO_NOT_RENDER_DIAGNOSTIC');
-  await act(async () => feedback.actions[0].onPress());
-  expect(mockEdit.mock.calls[1][1]).toEqual({
-    ...mockEdit.mock.calls[0][1],
-    mutationId: 'mutation-2',
-  });
+  ]);
+  expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-2']);
+  expect(tree.root.findAllByType('Sheet' as never)).toHaveLength(0);
+  expect(mockSubmit).not.toHaveBeenCalled();
+  expect(mockStop).not.toHaveBeenCalled();
 });
 
-it('keeps the editor usable and its buffer after admission empties the queue and returns already-started', async () => {
-  action('edit');
-  change(0, 'Keep after admission');
-  mockInputs = [];
-  rerender();
-  expect(fields()[0]!.props.value).toBe('Keep after admission');
-  mockEdit.mockResolvedValue({ status: 'already-started' });
-  await save();
-  expect(fields()[0]!.props.value).toBe('Keep after admission');
-  expect(fields()[0]!.props.disabled).toBe(false);
-  change(0, 'Still editable');
-  expect(fields()[0]!.props.value).toBe('Still editable');
-  expect(mockToast).toHaveBeenCalledWith({ label: 'This message has already started.' });
-});
-
-it('keeps buffers separate by session and turn after reordering and reopening', () => {
-  action('edit');
-  change(0, 'Session one text');
-  act(() => tree.root.findByType('Sheet' as never).props.onClose());
-  rerender('session-2');
-  action('edit');
-  expect(fields()[0]!.props.value).toBe(longText);
-  change(0, 'Session two text');
-  act(() => tree.root.findByType('Sheet' as never).props.onClose());
-  mockInputs = [input('turn-other'), input()];
-  rerender();
-  act(() => tree.root.findAllByType('QueueMenu' as never)[1]!.props.items[0].onPress());
-  expect(fields()[0]!.props.value).toBe('Session one text');
-});
-
-it('blocks an empty message inline before making a request', async () => {
-  mockInputs = [input()];
-  mockInputs[0]!.userMessage.parts = mockInputs[0]!.userMessage.parts.filter(
-    (part) => part.type === 'text',
-  );
-  rerender();
-  action('edit');
-  change(0, '  ');
-  change(1, '\n');
-  await save();
-  expect(mockEdit).not.toHaveBeenCalled();
-  expect(renderedText()).toContain('Enter some text or keep an attachment.');
-});
-
-it.each(['authored-text-unlocatable', 'invalid-text-layout', 'reference-conflict', 'not-found'])(
-  'preserves edits and translates %s',
-  async (reason) => {
-    action('edit');
-    change(0, 'Preserved');
-    mockEdit.mockResolvedValue(
-      reason === 'not-found' ? { status: reason } : { status: 'conflict', reason },
+it.each(['text', 'attachments', 'both'])(
+  'keeps %s byte-identical when conflict is kept, cancelled or dismissed',
+  async (content) => {
+    render(
+      content === 'attachments' ? '' : '  Existing\n draft ',
+      content === 'text' ? [] : [existingAttachment],
     );
-    await save();
-    expect(fields()[0]!.props.value).toBe('Preserved');
-    expect(mockToast.mock.calls.at(-1)![0].label).toBe(
-      reason === 'reference-conflict'
-        ? 'The message’s references changed. Your edits are kept.'
-        : reason === 'not-found'
-          ? 'This message is no longer in the queue.'
-          : 'This message cannot be edited safely. Remove it and resend it.',
-    );
+    open();
+    const before = JSON.stringify({ composer, inputs: mockInputs });
+    for (const choice of [1, 2, 'dismiss'] as const) {
+      await press('queue-take-back');
+      expect(alert().props.isOpen).toBe(true);
+      expect(alert().props.actions.map((action: { label: string }) => action.label)).toEqual([
+        'Replace composer content',
+        'Keep composer content and cancel',
+        'Cancel take-back',
+      ]);
+      act(() => {
+        if (choice === 'dismiss') alert().props.onOpenChange(false);
+        else alert().props.actions[choice].onPress();
+      });
+      expect(JSON.stringify({ composer, inputs: mockInputs })).toBe(before);
+      expect(mockCancel).not.toHaveBeenCalled();
+    }
   },
 );
 
-it.each(['moved', 'already-applied', 'stale-neighbor', 'boundary', 'different-lane'])(
-  'moves with the confirmed neighbor and reports %s without optimistic changes',
-  async (reason) => {
-    mockMove.mockResolvedValue(
-      reason === 'moved'
-        ? { status: 'moved' }
-        : reason === 'already-applied'
-          ? { status: 'unchanged', reason }
-          : { status: 'conflict', reason },
-    );
-    await act(async () => menu()[2].onPress());
-    expect(mockMove).toHaveBeenCalledWith('session-1', {
-      turnId: 'turn-1',
-      assistantMessageId: 'assistant-turn-1',
-      mutationId: 'mutation-1',
-      direction: 'later',
-      expectedNeighborAssistantMessageId: 'assistant-next',
-    });
-    expect(mockToast.mock.calls.at(-1)![0].label).toBe(
-      ['moved', 'already-applied'].includes(reason)
-        ? 'Queued message moved.'
-        : 'The queue order changed or this move is unavailable. Try again from the message menu.',
-    );
-    expect(mockInputs[0]!.turnId).toBe('turn-1');
+it('resolves replacement before withdrawing and replaces both text and attachments', async () => {
+  render('existing', [existingAttachment]);
+  open();
+  await press('queue-take-back');
+  expect(mockCancel).not.toHaveBeenCalled();
+  await act(async () => alert().props.actions[0].onPress());
+  expect(mockCancel).toHaveBeenCalledTimes(1);
+  expect(composer.draft).toBe(restoredText);
+  expect(composer.attachments.map((attachment) => attachment.id)).toEqual(['file-1']);
+});
+
+it.each([
+  ['already-started', 'This message has already started.'],
+  ['not-found', 'This message is no longer in the queue.'],
+])(
+  'preserves the composer for %s and explains the result without success',
+  async (result, label) => {
+    render('existing', [existingAttachment]);
+    open();
+    const before = JSON.stringify(composer);
+    mockCancel.mockResolvedValue(result);
+    await press('queue-take-back');
+    await act(async () => alert().props.actions[0].onPress());
+    expect(JSON.stringify(composer)).toBe(before);
+    expect(mockToast).toHaveBeenCalledWith({ label });
+    expect(mockToast.mock.calls.some(([feedback]) => feedback.variant === 'success')).toBe(false);
+    expect(mockStop).not.toHaveBeenCalled();
   },
 );
 
-it.each(['same-text', 'already-applied'])(
-  'closes the editor successfully for unchanged %s',
-  async (reason) => {
-    action('edit');
-    mockEdit.mockResolvedValue({ status: 'unchanged', reason });
-    await save();
-    expect(tree.root.findAllByType('Sheet' as never)).toHaveLength(0);
-    expect(mockToast).toHaveBeenCalledWith({ label: 'Queued message saved.', variant: 'success' });
-  },
-);
-
-it('retains cancellation failure copy', async () => {
+it('preserves the composer and explains a rejected withdrawal', async () => {
+  render('existing', [existingAttachment]);
+  open();
+  const before = JSON.stringify(composer);
   mockCancel.mockRejectedValue(new Error('private diagnostic'));
-  await act(async () => menu()[3].onPress());
+  await press('queue-take-back');
+  await act(async () => alert().props.actions[0].onPress());
+  expect(JSON.stringify(composer)).toBe(before);
   expect(mockToast).toHaveBeenCalledWith({
-    label: "Couldn't remove the queued message.",
+    label: "Couldn't take back the queued message. Your draft is unchanged.",
     variant: 'danger',
   });
 });
 
-it('disables the row actions and editor fields during an edit and retains the buffer after not-found', async () => {
-  let finish!: (result: unknown) => void;
-  mockEdit.mockReturnValue(
+it('allows one in-flight cancellation for repeated take-back and Remove taps', async () => {
+  render();
+  open();
+  let finish!: (value: string) => void;
+  mockCancel.mockReturnValue(
     new Promise((resolve) => {
       finish = resolve;
     }),
   );
-  action('edit');
-  change(0, 'Pending buffer');
-  await save();
-  expect(menu().every((item: { disabled: boolean }) => item.disabled)).toBe(true);
-  expect(fields().every((field) => field.props.disabled)).toBe(true);
-  await act(async () => finish({ status: 'not-found' }));
-  expect(fields()[0]!.props.value).toBe('Pending buffer');
-  expect(fields()[0]!.props.disabled).toBe(false);
-});
-
-it('retries moves with the same neighbor precondition and a new mutation ID', async () => {
-  mockMove.mockRejectedValueOnce(
-    new AgentProtocolError({ code: 'EXECUTION_UNAVAILABLE', message: 'private', retryable: true }),
-  );
-  await act(async () => menu()[2].onPress());
-  const feedback = mockToast.mock.calls.at(-1)![0];
-  expect(feedback).toMatchObject({ variant: 'danger', actions: [{ label: 'Retry' }] });
-  await act(async () => feedback.actions[0].onPress());
-  expect(mockMove.mock.calls[1][1]).toEqual({
-    ...mockMove.mock.calls[0][1],
-    mutationId: 'mutation-2',
+  const takeBack = tree.root.findByProps({ testID: 'queue-take-back' }).props.onPress;
+  const remove = tree.root.findByProps({ testID: 'chat-input-queue-remove-turn-1' }).props.onPress;
+  act(() => {
+    takeBack();
+    takeBack();
+    remove();
   });
+  expect(mockCancel).toHaveBeenCalledTimes(1);
+  expect(tree.root.findByProps({ testID: 'queue-take-back' }).props.disabled).toBe(true);
+  await act(async () => finish('withdrawn'));
+  act(() => {
+    takeBack();
+    remove();
+  });
+  expect(mockCancel).toHaveBeenCalledTimes(1);
 });
 
-it('shows attachment-only inputs read-only without sending an invalid empty part list', () => {
-  mockInputs[0]!.userMessage.parts = mockInputs[0]!.userMessage.parts.filter(
-    (part) => part.type === 'file',
+it('resends through the normal composer send path and appends after waiting messages', async () => {
+  render();
+  open();
+  await press('queue-take-back');
+  expect(mockSubmit).not.toHaveBeenCalled();
+  act(() => actions.setDraft('Edited in the normal composer'));
+  await act(async () => tree.root.findByType('NormalComposer' as never).props.onSend());
+  refresh();
+  expect(mockSubmit).toHaveBeenCalledTimes(1);
+  expect(mockSubmit.mock.calls[0][0]).toEqual([
+    { type: 'text', text: 'Edited in the normal composer' },
+    { type: 'file', fileEntryId: mockFile.entry.id, mediaType: 'image/png', filename: 'photo.png' },
+  ]);
+  expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-2', 'resent']);
+  expect(composer.draft).toBe('');
+  expect(composer.attachments).toEqual([]);
+  expect(mockStop).not.toHaveBeenCalled();
+});
+
+it('closes the detail sheet when the existing preview opens beside chat', () => {
+  render();
+  open();
+  mockOpenFile.mockReturnValueOnce('pane');
+  const before = JSON.stringify(mockInputs);
+  act(() =>
+    tree.root.findByProps({ testID: `queue-attachment-${mockFile.entry.id}` }).props.onPress(),
   );
-  rerender();
-  action('edit');
-  expect(fields()).toHaveLength(0);
-  expect(tree.root.findAllByType('Attachment' as never)).toHaveLength(2);
-  expect(
-    tree.root
-      .findAllByType('QueueButton' as never)
-      .find((button) => button.props.children === 'Save')!.props.disabled,
-  ).toBe(true);
-  expect(mockEdit).not.toHaveBeenCalled();
+  expect(tree.root.findAllByType('Sheet' as never)).toHaveLength(0);
+  expect(JSON.stringify(mockInputs)).toBe(before);
+  expect(mockCancel).not.toHaveBeenCalled();
+});
+
+it('preserves newer composer content during withdrawal and can restore later without another cancel', async () => {
+  render();
+  open();
+  let finish!: (value: string) => void;
+  mockCancel.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  await press('queue-take-back');
+  act(() => actions.setDraft('Newer draft'));
+  await act(async () => {
+    mockInputs = mockInputs.slice(1);
+    finish('withdrawn');
+  });
+  expect(composer.draft).toBe('Newer draft');
+  expect(mockToast).toHaveBeenCalledWith({
+    label: expect.stringContaining('your draft changed'),
+    variant: 'danger',
+  });
+  await press('queue-take-back');
+  expect(alert().props.isOpen).toBe(true);
+  await act(async () => alert().props.actions[0].onPress());
+  expect(composer.draft).toBe(restoredText);
+  expect(mockCancel).toHaveBeenCalledTimes(1);
 });

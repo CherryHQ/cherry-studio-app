@@ -27,14 +27,12 @@ export type SqliteStoreHarness = {
 };
 
 /** The durable store over a real migrated in-memory database. */
-export function createSqliteStoreHarness(
-  options: { path?: string; existing?: boolean } = {},
-): SqliteStoreHarness {
-  const sqlite = new DatabaseSync(options.path ?? ':memory:');
+export function createSqliteStoreHarness(): SqliteStoreHarness {
+  const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys = ON');
-  if (!options.existing) {
-    applyMigrations(sqlite);
-    for (const statement of customSqlStatements) sqlite.exec(statement);
+  applyMigrations(sqlite);
+  for (const statement of customSqlStatements) {
+    sqlite.exec(statement);
   }
   const database = drizzle(
     async (sql, params, method) => {

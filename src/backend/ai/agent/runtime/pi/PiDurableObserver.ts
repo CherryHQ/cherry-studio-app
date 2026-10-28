@@ -18,7 +18,6 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
   laneKey,
-  sameLane,
   type RuntimeConversationEvent,
   type RuntimeConversationSnapshot,
   type RuntimeLane,
@@ -33,8 +32,6 @@ const logger = loggerService.withContext('PiDurableObserver');
 
 /** A disposable presentation mount. Stopping it releases observation and preserves execution. */
 export class PiDurableObserver {
-  private orderedInbox: SubmissionId[] = [];
-  private publication: Promise<void> = Promise.resolve();
   private stream: AgentEventStream | undefined;
   private workWatch: TaskGraphWatch | undefined;
   private tasks: TaskGraph = { tasks: {} };
@@ -69,7 +66,7 @@ export class PiDurableObserver {
       this.tasks = workWatch.value;
       await this.loadSnapshot(stream.snapshot);
       const snapshot = this.snapshot();
-      stream.start((events) => this.serialize(() => this.advance(events)));
+      stream.start(async (events) => this.advance(events));
       workWatch.start(async (tasks) => {
         const previous = this.tasks;
         this.tasks = tasks;
@@ -94,7 +91,6 @@ export class PiDurableObserver {
     await Promise.all([stream?.stop(), workWatch?.stop()]);
     this.tasks = { tasks: {} };
     this.inputs.clear();
-    this.orderedInbox = [];
     this.entries.clear();
     this.toolStates.clear();
     this.nestedTools.clear();
@@ -105,47 +101,7 @@ export class PiDurableObserver {
     this.compactionFailed = false;
   }
 
-  observes(lane: RuntimeLane): boolean {
-    return sameLane(this.lane, lane);
-  }
-
-  private serialize(action: () => Promise<void>): Promise<void> {
-    const result = this.publication.then(action);
-    this.publication = result.catch(() => {});
-    return result;
-  }
-
-  reconcileQueue(): Promise<void> {
-    return this.serialize(async () => {
-      await this.refreshQueue();
-      this.listener({ type: 'queue.updated', queue: this.queue() });
-    });
-  }
-
-  private async refreshQueue() {
-    const queue = await this.runtime.readQueuedInputs(laneKey(this.lane));
-    this.orderedInbox = [];
-    for (const input of queue) {
-      const current = this.inputs.get(input.record.id);
-      // Authoritative queue reads never downgrade a lifecycle frame already observed as placed.
-      if (current && current.record.status !== 'queued') {
-        current.metadata = input.metadata;
-        continue;
-      }
-      this.inputs.set(input.record.id, input);
-      this.orderedInbox.push(input.record.id);
-    }
-  }
-
-  private queue() {
-    return this.orderedInbox.flatMap((id) => {
-      const input = this.inputs.get(id);
-      return input?.record.status === 'queued' ? [this.project(input)] : [];
-    });
-  }
-
   private async loadSnapshot(snapshot: SnapshotEvent) {
-    const previousInputs = new Map(this.inputs);
     this.inputs.clear();
     this.entries.clear();
     this.toolStates.clear();
@@ -163,28 +119,24 @@ export class PiDurableObserver {
     for (const input of await this.runtime.submissions([...this.run, ...queued])) {
       if (input.record.type !== 'input') continue;
       // Read immutable identity after attachment, but preserve the lifecycle at the attached frame.
-      const known = previousInputs.get(input.record.id);
-      const record: SubmissionRecord =
-        queued.has(input.record.id) && known && known.record.status !== 'queued'
-          ? known.record
-          : queued.has(input.record.id) && input.record.entry === undefined
-            ? {
-                id: input.record.id,
-                conversationId: input.record.conversationId,
-                requestId: input.record.requestId,
-                type: 'input',
-                status: 'queued',
-              }
-            : input.record.entry !== undefined
-              ? {
-                  id: input.record.id,
-                  conversationId: input.record.conversationId,
-                  requestId: input.record.requestId,
-                  type: 'input',
-                  status: 'placed',
-                  entry: input.record.entry,
-                }
-              : input.record;
+      const record: SubmissionRecord = queued.has(input.record.id)
+        ? {
+            id: input.record.id,
+            conversationId: input.record.conversationId,
+            requestId: input.record.requestId,
+            type: 'input',
+            status: 'queued',
+          }
+        : input.record.entry !== undefined
+          ? {
+              id: input.record.id,
+              conversationId: input.record.conversationId,
+              requestId: input.record.requestId,
+              type: 'input',
+              status: 'placed',
+              entry: input.record.entry,
+            }
+          : input.record;
       this.inputs.set(record.id, { ...input, record });
       if (!queued.has(record.id))
         for (const entry of await this.runtime.turnEntries(
@@ -201,7 +153,6 @@ export class PiDurableObserver {
         this.toolStates.set(tool.callId, tool.status === 'running' ? 'running' : 'input-available');
       else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
     }
-    await this.refreshQueue();
     for (const tool of snapshot.nestedTools)
       this.nestedTools.set(tool.callId, {
         parentCallId: tool.parentCallId,
@@ -226,12 +177,17 @@ export class PiDurableObserver {
     }
     const touched = new Set(this.run);
     const previousContextStatus = this.contextStatus();
-    const wasQueue = JSON.stringify(this.queue());
+    const wasQueue = [...this.inputs.values()]
+      .filter((input) => input.record.status === 'queued')
+      .map((input) => input.record.id)
+      .join(',');
+    // Immutable input metadata commits before admission. Resolve it once per new visible submission.
     for (const event of events) {
       if (event.type !== 'submission' || event.record.type !== 'input') continue;
+      const existing = this.inputs.get(event.record.id);
       this.inputs.set(event.record.id, {
         record: event.record,
-        metadata: await this.runtime.submissionMetadata(event.record),
+        metadata: existing?.metadata ?? (await this.runtime.submissionMetadata(event.record)),
       });
       touched.add(event.record.id);
     }
@@ -382,10 +338,9 @@ export class PiDurableObserver {
       const input = this.inputs.get(id);
       if (input) this.listener({ type: 'turn.updated', turn: this.project(input) });
     }
-    if (events.some((event) => event.type === 'inbox_update' || event.type === 'submission'))
-      await this.refreshQueue();
-    const queue = this.queue();
-    if (wasQueue !== JSON.stringify(queue)) this.listener({ type: 'queue.updated', queue });
+    const queue = [...this.inputs.values()].filter((input) => input.record.status === 'queued');
+    if (wasQueue !== queue.map((input) => input.record.id).join(','))
+      this.listener({ type: 'queue.updated', queue: queue.map((input) => this.project(input)) });
     // The observer holds only current presentation. Finished history is read from native entries.
     for (const [id, input] of this.inputs)
       if (input.record.status === 'done' || input.record.status === 'unanswered')
@@ -403,7 +358,9 @@ export class PiDurableObserver {
     return {
       activeTurn: active ? this.project(active) : null,
       contextStatus: this.contextStatus(),
-      queue: this.queue(),
+      queue: [...this.inputs.values()]
+        .filter((input) => input.record.status === 'queued')
+        .map((input) => this.project(input)),
     };
   }
 

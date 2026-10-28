@@ -43,10 +43,6 @@ export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 export const AgentContextStatusSchema = z.enum(['compacting', 'compaction-failed']).nullable();
 
 export const AgentQueuedInputSchema = z.strictObject({
-  moveTargets: z.strictObject({
-    earlier: z.string().min(1).nullable(),
-    later: z.string().min(1).nullable(),
-  }),
   turnId: z.string().min(1),
   userMessage: AgentMessageViewSchema,
   assistantMessageId: z.string().min(1),

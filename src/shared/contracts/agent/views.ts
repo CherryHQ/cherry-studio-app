@@ -437,57 +437,6 @@ export const AgentMessageViewSchema = z.strictObject({
 });
 export type AgentMessageView = z.infer<typeof AgentMessageViewSchema>;
 
-/** UTF-16 half-open authored ranges; content bounds are checked against the inbox at use. */
-const AuthoredTextSpanSchema = z.strictObject({
-  partId: z.string().min(1),
-  start: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  end: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-});
-export const AuthoredTextLayoutV1Schema = z
-  .discriminatedUnion('contentKind', [
-    z.strictObject({
-      version: z.literal(1),
-      renderer: z.enum(['runtime-user-text-v1', 'plain-v1']),
-      contentKind: z.literal('string'),
-      spans: z.array(AuthoredTextSpanSchema).min(1),
-    }),
-    z.strictObject({
-      version: z.literal(1),
-      renderer: z.enum(['runtime-user-text-v1', 'plain-v1']),
-      contentKind: z.literal('blocks'),
-      spans: z
-        .array(
-          AuthoredTextSpanSchema.extend({
-            blockIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-          }),
-        )
-        .min(1),
-    }),
-  ])
-  .refine(
-    (layout) => {
-      const ids = new Set<string>();
-      let block = -1;
-      let end = 0;
-      return layout.spans.every((span) => {
-        const index = 'blockIndex' in span ? Number(span.blockIndex) : 0;
-        if (
-          ids.has(span.partId) ||
-          span.end < span.start ||
-          index < block ||
-          (index === block && span.start < end)
-        )
-          return false;
-        ids.add(span.partId);
-        block = index;
-        end = span.end;
-        return true;
-      });
-    },
-    { message: 'Authored spans must have unique IDs and ordered non-overlapping bounds.' },
-  );
-export type AuthoredTextLayoutV1 = z.infer<typeof AuthoredTextLayoutV1Schema>;
-
 export const AgentInputPartSchema = z.union([
   z
     .strictObject({

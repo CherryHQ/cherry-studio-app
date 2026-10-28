@@ -1,32 +1,60 @@
-import { BottomSheet, Button, Input, TextField } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { useIsFocused } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { FileEntryPreview } from '@/frontend/components/FileEntryPreview/FileEntryPreview';
+import {
+  FileEntryPreview,
+  useOpenFileEntry,
+  useResolvedFile,
+} from '@/frontend/components/FileEntryPreview';
 import type { AgentQueuedInput } from '@/shared/contracts/agent';
-
-export type QueuedInputBuffer = {
-  sessionId: string;
-  input: AgentQueuedInput;
-  parts: { partId: string; expectedText: string; text: string }[];
-  error?: string;
-};
+import type { FileEntryId } from '@/shared/data/types/file';
 
 export function QueuedInputPreview({
   input,
+  pending,
   onClose,
+  onRemove,
+  onTakeBack,
 }: {
   input: AgentQueuedInput;
+  pending: boolean;
   onClose: () => void;
+  onRemove: () => void;
+  onTakeBack: () => void;
 }) {
   const { t } = useTranslation();
+  const focused = useIsFocused();
   return (
     <BottomSheet
-      open
+      open={focused}
       size="large"
       title={t('chat.queue.preview')}
       onClose={onClose}
       closeAction={{ accessibilityLabel: t('common.close') }}
+      footer={
+        <View className="gap-2">
+          <Button
+            accessibilityLabel={t('chat.queue.takeBack')}
+            disabled={pending}
+            loading={pending}
+            onPress={onTakeBack}
+            testID="queue-take-back"
+          >
+            {t('chat.queue.takeBack')}
+          </Button>
+          <Button
+            accessibilityLabel={t('common.remove')}
+            disabled={pending}
+            onPress={onRemove}
+            variant="ghost"
+            testID="queue-detail-remove"
+          >
+            {t('common.remove')}
+          </Button>
+        </View>
+      }
     >
       <ScrollView contentContainerClassName="gap-4 p-5" keyboardShouldPersistTaps="handled">
         {input.userMessage.parts.map((part) =>
@@ -35,7 +63,7 @@ export function QueuedInputPreview({
               {part.text}
             </Text>
           ) : part.type === 'file' ? (
-            <FileEntryPreview key={part.id} entryId={part.fileEntryId} variant="attachment" />
+            <QueuedInputAttachment key={part.id} entryId={part.fileEntryId} onClose={onClose} />
           ) : null,
         )}
       </ScrollView>
@@ -43,92 +71,35 @@ export function QueuedInputPreview({
   );
 }
 
-export function QueuedInputEditor({
-  buffer,
-  latest,
-  pending,
-  onChange,
-  onSave,
+function QueuedInputAttachment({
+  entryId,
   onClose,
 }: {
-  buffer: QueuedInputBuffer;
-  latest?: AgentQueuedInput;
-  pending: boolean;
-  onChange: (partId: string, text: string) => void;
-  onSave: () => void;
+  entryId: FileEntryId;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const snapshot = buffer.input.userMessage.inferenceSnapshot;
+  const { data } = useResolvedFile(entryId);
+  const { openFileEntry } = useOpenFileEntry();
   return (
-    <BottomSheet
-      open
-      avoidKeyboard
-      size="large"
-      title={t('chat.queue.edit')}
-      onClose={onClose}
-      closeAction={{ accessibilityLabel: t('common.close') }}
-      footer={
-        <Button disabled={pending || buffer.parts.length === 0} loading={pending} onPress={onSave}>
-          {t('common.save')}
-        </Button>
-      }
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('chat.queue.previewAttachment', {
+        name: data?.entry.filename ?? t('chat.queue.message'),
+      })}
+      disabled={!data}
+      onPress={() => {
+        if (data && openFileEntry(data) === 'pane') onClose();
+      }}
+      testID={`queue-attachment-${entryId}`}
     >
-      <ScrollView contentContainerClassName="gap-4 p-5" keyboardShouldPersistTaps="handled">
-        {buffer.error ? (
-          <Text accessibilityLiveRegion="polite" className="text-destructive">
-            {t(buffer.error)}
-          </Text>
-        ) : null}
-        {buffer.input.userMessage.parts.map((part) => {
-          if (part.type === 'file')
-            return (
-              <FileEntryPreview key={part.id} entryId={part.fileEntryId} variant="attachment" />
-            );
-          if (part.type !== 'text') return null;
-          const field = buffer.parts.find(({ partId }) => partId === part.id)!;
-          return (
-            <TextField key={part.id} invalid={buffer.error === 'chat.queue.emptyMessage'}>
-              <TextField.Label>{t('chat.queue.message')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('chat.queue.message')}
-                multiline
-                disabled={pending}
-                testID={`queue-edit-${part.id}`}
-                value={field.text}
-                onChangeText={(text) => onChange(part.id, text)}
-              />
-              {buffer.error === 'chat.queue.emptyMessage' ? (
-                <TextField.Error>{t('chat.queue.emptyMessage')}</TextField.Error>
-              ) : null}
-            </TextField>
-          );
-        })}
-        {buffer.error === 'chat.queue.staleText' && latest ? (
-          <View className="gap-2">
-            <Text className="text-sm font-medium text-muted-foreground">
-              {t('chat.queue.latestText')}
-            </Text>
-            {latest.userMessage.parts.map((part) =>
-              part.type === 'text' ? (
-                <Text key={part.id} selectable className="text-base text-foreground">
-                  {part.text}
-                </Text>
-              ) : null,
-            )}
-          </View>
-        ) : null}
-        <View className="gap-2">
-          <Text className="text-sm font-medium text-muted-foreground">
-            {t('chat.queue.readOnly')}
-          </Text>
-          <Text selectable className="text-sm text-muted-foreground">
-            {snapshot?.status === 'supported'
-              ? JSON.stringify(snapshot.snapshot, null, 2)
-              : t('chat.queue.settingsUnavailable')}
-          </Text>
-        </View>
-      </ScrollView>
-    </BottomSheet>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+      >
+        <FileEntryPreview entryId={entryId} variant="attachment" />
+      </View>
+    </Pressable>
   );
 }

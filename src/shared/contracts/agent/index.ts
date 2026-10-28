@@ -31,14 +31,6 @@ export {
   type AgentSessionSnapshot,
 } from './events';
 export {
-  AgentEditQueuedInputInputSchema,
-  type AgentEditQueuedInputInput,
-  AgentEditQueuedInputResultSchema,
-  type AgentEditQueuedInputResult,
-  AgentMoveQueuedInputInputSchema,
-  type AgentMoveQueuedInputInput,
-  AgentMoveQueuedInputResultSchema,
-  type AgentMoveQueuedInputResult,
   AgentAdditionalRepliesSchema,
   AgentAdditionalReplySchema,
   AgentCancelSubmissionInputSchema,
@@ -74,8 +66,6 @@ export {
   AgentInferenceSnapshotV1Schema,
   AgentInferenceSnapshotViewSchema,
   AgentInputPartSchema,
-  AuthoredTextLayoutV1Schema,
-  type AuthoredTextLayoutV1,
   AgentMessagePartSchema,
   AgentMessageSiblingSchema,
   AgentMessageToolRefSchema,

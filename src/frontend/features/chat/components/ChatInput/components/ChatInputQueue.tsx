@@ -1,174 +1,125 @@
-import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { ActionMenu, Button, Surface, useToast } from '@cherrystudio/ui/components';
-import { useRef, useState } from 'react';
+import XIcon from '@cherrystudio/app-icons/icons/x';
+import { Alert, Button, Surface, useToast } from '@cherrystudio/ui/components';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { v7 as uuidv7 } from 'uuid';
 
-import { AgentProtocolError } from '@/shared/contracts/agent';
-import type {
-  AgentEditQueuedInputResult,
-  AgentMoveQueuedInputResult,
-  AgentQueuedInput,
-} from '@/shared/contracts/agent';
+import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
+import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { AgentQueuedInput } from '@/shared/contracts/agent';
+import { fileEntryUrl } from '@/shared/data/types/file';
 
 import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
-import { QueuedInputEditor, QueuedInputPreview, type QueuedInputBuffer } from './QueuedInputSheets';
-
-const conflictKeys = {
-  'stale-text': 'chat.queue.staleText',
-  'authored-text-unlocatable': 'chat.queue.resend',
-  'invalid-text-layout': 'chat.queue.resend',
-  'reference-conflict': 'chat.queue.referencesChanged',
-  'empty-message': 'chat.queue.emptyMessage',
-  'mutation-id-reused': 'chat.queue.mutationFailed',
-  'stale-neighbor': 'chat.queue.moveChanged',
-  boundary: 'chat.queue.moveChanged',
-  'different-lane': 'chat.queue.moveChanged',
-} as const;
-const inputKey = (sessionId: string, turnId: string) => JSON.stringify([sessionId, turnId]);
+import { QueuedInputPreview } from './QueuedInputSheets';
 
 export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   const inputs = useAgentQueuedInputs(sessionId);
+  const { t } = useTranslation();
   const { client } = useAgentChatClient();
   const { toast } = useToast();
-  const { t } = useTranslation();
-  // This owner remains mounted even when admission empties the row list.
-  const [buffers, setBuffers] = useState<Record<string, QueuedInputBuffer>>({});
-  const [editorKey, setEditorKey] = useState<string>();
+  const composer = useComposerState();
+  const { setDraft, setAttachments } = useComposerActions();
   const [preview, setPreview] = useState<AgentQueuedInput>();
+  const [conflict, setConflict] = useState(false);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const locks = useRef(new Set<string>());
-  const buffer = editorKey ? buffers[editorKey] : undefined;
-  const changeBuffer = (key: string, change: Partial<QueuedInputBuffer>) =>
-    setBuffers((previous) => ({ ...previous, [key]: { ...previous[key]!, ...change } }));
-
-  async function run(key: string, operation: () => Promise<void>) {
-    if (locks.current.has(key)) return;
-    locks.current.add(key);
-    setPending((previous) => ({ ...previous, [key]: true }));
-    try {
-      await operation();
-    } finally {
-      locks.current.delete(key);
-      setPending((previous) => ({ ...previous, [key]: false }));
-    }
-  }
-  function outcome(result: AgentEditQueuedInputResult | AgentMoveQueuedInputResult) {
-    if (result.status === 'already-started') return 'chat.queue.alreadyStarted';
-    if (result.status === 'not-found') return 'chat.queue.notFound';
-    if (result.status === 'conflict') return conflictKeys[result.reason];
-    return undefined;
-  }
-  function save(key: string, saved: QueuedInputBuffer) {
-    if (saved.parts.length === 0) return;
-    const hasFile = saved.input.userMessage.parts.some((part) => part.type === 'file');
-    if (!hasFile && saved.parts.every((part) => !part.text.trim())) {
-      changeBuffer(key, { error: 'chat.queue.emptyMessage' });
-      return;
-    }
-    void run(key, async () => {
-      try {
-        const result = await client.editQueuedInput(saved.sessionId, {
-          turnId: saved.input.turnId,
-          assistantMessageId: saved.input.assistantMessageId,
-          mutationId: uuidv7(),
-          parts: saved.parts,
-        });
-        const error = outcome(result);
-        if (error) {
-          changeBuffer(key, { error });
-          toast.show({ label: t(error) });
-        } else {
-          setEditorKey((current) => (current === key ? undefined : current));
-          setBuffers((previous) => {
-            const next = { ...previous };
-            delete next[key];
-            return next;
-          });
-          toast.show({ label: t('chat.queue.saved'), variant: 'success' });
-        }
-      } catch (error) {
-        changeBuffer(key, { error: 'chat.queue.mutationFailed' });
-        toast.show({
-          label: t('chat.queue.mutationFailed'),
-          variant: 'danger',
-          actions:
-            error instanceof AgentProtocolError && error.view.retryable
-              ? [{ label: t('common.retry'), onPress: () => save(key, saved) }]
-              : undefined,
-        });
-      }
-    });
-  }
-  function edit(input: AgentQueuedInput) {
-    if (!sessionId) return;
-    const key = inputKey(sessionId, input.turnId);
-    setBuffers((previous) =>
-      previous[key]
-        ? previous
-        : {
-            ...previous,
-            [key]: {
-              sessionId,
-              input,
-              parts: input.userMessage.parts.flatMap((part) =>
-                part.type === 'text'
-                  ? [{ partId: part.id, expectedText: part.text, text: part.text }]
-                  : [],
-              ),
-            },
-          },
-    );
-    setEditorKey(key);
-  }
-  function move(input: AgentQueuedInput, direction: 'earlier' | 'later') {
-    if (!sessionId || input.moveTargets[direction] === null) return;
-    const targetSession = sessionId;
-    const key = inputKey(targetSession, input.turnId);
-    const request = {
-      turnId: input.turnId,
-      assistantMessageId: input.assistantMessageId,
-      direction,
-      expectedNeighborAssistantMessageId: input.moveTargets[direction],
+  const withdrawn = useRef(new Set<string>());
+  const latest = useRef({ composer, sessionId, mounted: true });
+  useLayoutEffect(() => {
+    latest.current = { composer, sessionId, mounted: true };
+    return () => {
+      latest.current.mounted = false;
     };
-    const attempt = () =>
-      void run(key, async () => {
-        try {
-          const result = await client.moveQueuedInput(targetSession, {
-            ...request,
-            mutationId: uuidv7(),
-          });
-          const error = outcome(result);
-          toast.show({
-            label: t(error ?? 'chat.queue.moved'),
-            variant: error ? undefined : 'success',
-          });
-        } catch (error) {
-          toast.show({
-            label: t('chat.queue.mutationFailed'),
-            variant: 'danger',
-            actions:
-              error instanceof AgentProtocolError && error.view.retryable
-                ? [{ label: t('common.retry'), onPress: attempt }]
-                : undefined,
-          });
-        }
-      });
-    attempt();
+  }, [composer, sessionId]);
+  const [previewSession, setPreviewSession] = useState(sessionId);
+  if (previewSession !== sessionId) {
+    setPreviewSession(sessionId);
+    setPreview(undefined);
+    setConflict(false);
   }
-  function remove(input: AgentQueuedInput) {
-    if (!sessionId) return;
+
+  async function withdraw(input: AgentQueuedInput, restore: boolean) {
+    if (!sessionId || (restore && latest.current.composer.isSubmitting)) return;
     const targetSession = sessionId;
-    void run(inputKey(targetSession, input.turnId), async () => {
-      try {
-        const result = await client.cancelQueuedInput(targetSession, input.turnId);
-        if (result === 'already-started') toast.show({ label: t('chat.queue.alreadyStarted') });
-      } catch {
-        toast.show({ label: t('chat.queue.removeFailed'), variant: 'danger' });
+    const key = JSON.stringify([targetSession, input.turnId]);
+    if (locks.current.has(key) || (!restore && withdrawn.current.has(key))) return;
+    locks.current.add(key);
+    setPending((previous) => ({ ...previous, [input.turnId]: true }));
+    const before = latest.current.composer;
+    let completed = false;
+    try {
+      // If newer composer content delayed restoration, retry only that local restoration.
+      const result = withdrawn.current.has(key)
+        ? 'withdrawn'
+        : await client.cancelQueuedInput(targetSession, input.turnId);
+      if (result !== 'withdrawn') {
+        toast.show({
+          label: t(
+            result === 'already-started' ? 'chat.queue.alreadyStarted' : 'chat.queue.notFound',
+          ),
+        });
+        return;
       }
-    });
+      withdrawn.current.add(key);
+      if (restore) {
+        // A late result must never replace another Session's draft or newer composer content.
+        const current = latest.current;
+        if (!current.mounted || current.sessionId !== targetSession) return;
+        if (
+          current.composer.draft !== before.draft ||
+          current.composer.attachments !== before.attachments
+        ) {
+          toast.show({ label: t('chat.queue.draftChanged'), variant: 'danger' });
+          return;
+        }
+        const attachments = input.userMessage.parts.flatMap<ComposerAttachmentDraft>((part) =>
+          part.type === 'file'
+            ? [
+                {
+                  id: part.id,
+                  fileEntryId: part.fileEntryId,
+                  kind: part.mediaType.startsWith('image/') ? 'image' : 'file',
+                  mediaType: part.mediaType,
+                  name: part.filename ?? t('chat.queue.message'),
+                  status: 'ready',
+                  uri: fileEntryUrl(part.fileEntryId),
+                },
+              ]
+            : [],
+        );
+        setDraft(
+          input.userMessage.parts
+            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+            .join('\n'),
+        );
+        setAttachments(attachments);
+      }
+      completed = true;
+      if (latest.current.sessionId === targetSession) {
+        setPreview((current) => (current?.turnId === input.turnId ? undefined : current));
+      }
+    } catch {
+      toast.show({
+        label: t(restore ? 'chat.queue.takeBackFailed' : 'chat.queue.removeFailed'),
+        variant: 'danger',
+      });
+    } finally {
+      // Keep completed actions locked until their rows disappear from the subscription.
+      if (!completed) locks.current.delete(key);
+      setPending((previous) => ({ ...previous, [input.turnId]: false }));
+    }
   }
+
+  function takeBack() {
+    if (!preview || composer.isSubmitting || pending[preview.turnId]) return;
+    if (locks.current.has(JSON.stringify([sessionId, preview.turnId]))) return;
+    if (composer.draft.length > 0 || composer.attachments.length > 0) {
+      setConflict(true);
+    } else {
+      void withdraw(preview, true);
+    }
+  }
+
   return (
     <>
       {sessionId && inputs.length > 0 ? (
@@ -187,7 +138,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
                 </Text>
               </View>
             </View>
-            {/* Native ScrollView cancels body taps on drag. Only sheet text is selectable. */}
+            {/* Native scrolling cancels row taps; only detail text is selectable. */}
             <ScrollView
               className="max-h-40"
               keyboardShouldPersistTaps="handled"
@@ -198,11 +149,9 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
                   key={input.turnId}
                   input={input}
                   position={index + 1}
-                  pending={!!pending[inputKey(sessionId, input.turnId)]}
+                  pending={!!pending[input.turnId]}
                   onPreview={() => setPreview(input)}
-                  onEdit={() => edit(input)}
-                  onMove={(direction) => move(input, direction)}
-                  onRemove={() => remove(input)}
+                  onRemove={() => void withdraw(input, false)}
                 />
               ))}
             </ScrollView>
@@ -210,29 +159,35 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
         </Surface>
       ) : null}
       {preview ? (
-        <QueuedInputPreview input={preview} onClose={() => setPreview(undefined)} />
-      ) : null}
-      {buffer && editorKey ? (
-        <QueuedInputEditor
-          buffer={buffer}
-          latest={
-            buffer.sessionId === sessionId
-              ? inputs.find((input) => input.turnId === buffer.input.turnId)
-              : undefined
-          }
-          pending={!!pending[editorKey]}
-          onClose={() => setEditorKey(undefined)}
-          onChange={(partId, text) =>
-            changeBuffer(editorKey, {
-              parts: buffer.parts.map((part) =>
-                part.partId === partId ? { ...part, text } : part,
-              ),
-              error: undefined,
-            })
-          }
-          onSave={() => save(editorKey, buffer)}
+        <QueuedInputPreview
+          input={preview}
+          pending={!!pending[preview.turnId] || composer.isSubmitting}
+          onClose={() => setPreview(undefined)}
+          onRemove={() => void withdraw(preview, false)}
+          onTakeBack={takeBack}
         />
       ) : null}
+      <Alert
+        isOpen={conflict}
+        onOpenChange={setConflict}
+        title={t('chat.queue.draftConflict')}
+        actions={[
+          {
+            label: t('chat.queue.replaceDraft'),
+            role: 'destructive',
+            onPress: () => {
+              setConflict(false);
+              if (preview) void withdraw(preview, true);
+            },
+          },
+          { label: t('chat.queue.keepDraft'), onPress: () => setConflict(false) },
+          {
+            label: t('chat.queue.cancelTakeBack'),
+            role: 'cancel',
+            onPress: () => setConflict(false),
+          },
+        ]}
+      />
     </>
   );
 }
@@ -242,16 +197,12 @@ function QueuedInputRow({
   position,
   pending,
   onPreview,
-  onEdit,
-  onMove,
   onRemove,
 }: {
   input: AgentQueuedInput;
   position: number;
   pending: boolean;
   onPreview: () => void;
-  onEdit: () => void;
-  onMove: (direction: 'earlier' | 'later') => void;
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
@@ -273,7 +224,7 @@ function QueuedInputRow({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('chat.queue.openPreview', { position })}
-        className="min-h-11 min-w-0 flex-1 justify-center"
+        className="min-w-0 flex-1"
         onPress={onPreview}
         testID={`queue-preview-${input.turnId}`}
       >
@@ -286,42 +237,17 @@ function QueuedInputRow({
           </Text>
         ) : null}
       </Pressable>
-      <ActionMenu
-        items={[
-          { id: 'edit', label: t('common.edit'), disabled: pending, onPress: onEdit },
-          {
-            id: 'earlier',
-            label: t('chat.queue.moveEarlier'),
-            disabled: pending || input.moveTargets.earlier === null,
-            onPress: () => onMove('earlier'),
-          },
-          {
-            id: 'later',
-            label: t('chat.queue.moveLater'),
-            disabled: pending || input.moveTargets.later === null,
-            onPress: () => onMove('later'),
-          },
-          {
-            id: 'remove',
-            label: t('common.remove'),
-            disabled: pending,
-            destructive: true,
-            onPress: onRemove,
-          },
-        ]}
-      >
-        <Button
-          accessibilityRole="button"
-          accessibilityLabel={t('chat.queue.actions', { position })}
-          accessibilityState={{ disabled: pending, busy: pending }}
-          disabled={pending}
-          icon={<EllipsisIcon className="text-muted-foreground" />}
-          shape="pill"
-          size="lg"
-          variant="ghost"
-          testID={`queue-actions-${input.turnId}`}
-        />
-      </ActionMenu>
+      <Button
+        accessibilityLabel={t('chat.queue.remove', { position })}
+        disabled={pending}
+        icon={<XIcon className="text-muted-foreground" />}
+        loading={pending}
+        onPress={onRemove}
+        shape="pill"
+        size="xs"
+        variant="ghost"
+        testID={`chat-input-queue-remove-${input.turnId}`}
+      />
     </View>
   );
 }

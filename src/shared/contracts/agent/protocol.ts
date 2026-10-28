@@ -5,10 +5,6 @@
 
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
-  AgentEditQueuedInputInput,
-  AgentEditQueuedInputResult,
-  AgentMoveQueuedInputInput,
-  AgentMoveQueuedInputResult,
   AgentDeleteTurnInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
@@ -84,9 +80,6 @@ export interface AgentProtocol {
   ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
 
   cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>;
-
-  editQueuedInput(input: AgentEditQueuedInputInput): Promise<AgentEditQueuedInputResult>;
-  moveQueuedInput(input: AgentMoveQueuedInputInput): Promise<AgentMoveQueuedInputResult>;
 
   /** Withdraw only waiting input; never abort a run that won the admission race. */
   cancelQueuedInput(input: {

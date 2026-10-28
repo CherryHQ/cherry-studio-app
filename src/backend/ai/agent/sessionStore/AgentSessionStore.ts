@@ -164,16 +164,6 @@ export type FinalizeAssistantMessageInput = {
  * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
-  reconcileDurableInput(
-    inputs: readonly {
-      sessionId: string;
-      turnId: string;
-      userMessageId: string;
-      assistantMessageId: string;
-      parts: AgentMessagePart[];
-      parentMessageId?: string | null;
-    }[],
-  ): Promise<void>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   getRuntimeRevision(sessionId: string): Promise<number | null>;
   renameSession(sessionId: string, name: string): Promise<AgentSessionView | null>;
