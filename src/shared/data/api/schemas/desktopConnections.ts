@@ -301,7 +301,11 @@ export function parseSupportedAuthConfig(value: unknown) {
 }
 
 export type DesktopImportMode = 'provider' | 'provider-models';
-export type DesktopImportUnavailableReason = 'unsupported-auth' | 'missing-api-key' | 'unreadable';
+export type DesktopImportUnavailableReason =
+  | 'unsupported-auth'
+  | 'missing-api-key'
+  | 'unsupported-endpoint'
+  | 'unreadable';
 
 export const DesktopImportSelectionsSchema = z.strictObject({
   selections: z

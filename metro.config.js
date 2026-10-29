@@ -37,6 +37,14 @@ const browserRedirect = (context, moduleName) => {
 };
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // The nested web/package.json only declares `module`, which Metro's native main fields omit.
+  // Resolve this explicit web entry through the parent package's exports instead.
+  if (moduleName === '@google/genai/web' && (platform === 'android' || platform === 'ios')) {
+    return {
+      type: 'sourceFile',
+      filePath: require.resolve(moduleName, { paths: [path.dirname(context.originModulePath)] }),
+    };
+  }
   // Native fetch has no browser CORS, and Hermes needs a validator without dynamic codegen.
   if (
     moduleName === '@modelcontextprotocol/client/_shims' &&

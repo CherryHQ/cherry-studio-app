@@ -153,7 +153,7 @@ patchedDependencies:
   react-native-background-actions@4.1.0: 6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970
   react-native-drawer-layout@4.2.12: 54e51ac742c1f6c04271d72b99f35ef356244455ecab0ea84b88eea4cf3291a2
   react-native-enriched-markdown@1.0.1: a023d14d447e7ffc4b2951aa44d1a202e7b3b6f0471e1407572530eb48bd3457
-  react-native-keyboard-controller@1.22.7: 1f80a55c5ddeb95e2d44e61b9cbbab6487fabd990ae3d492a037db8a99a138a4
+  react-native-keyboard-controller@1.22.9: fcefd856c7edcf8595c96f35f13fea7ba2abf3ab6d88ad68161b81f5492da5a4
   react-native-nitro-modules@0.36.4: 1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421
   react-native-reanimated@4.7.1: 3c2dff311c8f3f482f98169829798437b3ec53d58888938956d428322017f8e6
   react-native-screens@4.30.0: 48847e93400db50be49d89ff317468368d36e0d533b8de58d89930aea910bbdf
@@ -247,8 +247,8 @@ importers:
         specifier: workspace:*
         version: link:packages/mermaid-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.2.5
-        version: 0.2.5(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(zod@4.4.3)
       '@cherrystudio/remote-protocol':
         specifier: 0.7.0
         version: 0.7.0(zod@4.4.3)
@@ -262,8 +262,8 @@ importers:
         specifier: workspace:*
         version: link:packages/universal
       '@cherrystudio/web-search':
-        specifier: 0.3.0
-        version: 0.3.0
+        specifier: 0.4.0
+        version: 0.4.0
       '@e965/xlsx':
         specifier: 0.20.3
         version: 0.20.3
@@ -529,8 +529,8 @@ importers:
         specifier: ~3.3.0
         version: 3.3.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-keyboard-controller:
-        specifier: 1.22.7
-        version: 1.22.7(patch_hash=1f80a55c5ddeb95e2d44e61b9cbbab6487fabd990ae3d492a037db8a99a138a4)(ecfe864ea21d16b3e2d0c7792850037d)
+        specifier: 1.22.9
+        version: 1.22.9(patch_hash=fcefd856c7edcf8595c96f35f13fea7ba2abf3ab6d88ad68161b81f5492da5a4)(ecfe864ea21d16b3e2d0c7792850037d)
       react-native-mmkv:
         specifier: 4.3.2
         version: 4.3.2(react-native-nitro-modules@0.36.4(patch_hash=1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0))(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -773,8 +773,8 @@ importers:
         specifier: 0.1.9
         version: 0.1.9(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.2.5
-        version: 0.2.5(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -948,7 +948,7 @@ importers:
         version: 3.3.0(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-keyboard-controller:
         specifier: '*'
-        version: 1.22.7(patch_hash=1f80a55c5ddeb95e2d44e61b9cbbab6487fabd990ae3d492a037db8a99a138a4)(ecfe864ea21d16b3e2d0c7792850037d)
+        version: 1.22.9(patch_hash=fcefd856c7edcf8595c96f35f13fea7ba2abf3ab6d88ad68161b81f5492da5a4)(ecfe864ea21d16b3e2d0c7792850037d)
       react-native-nitro-modules:
         specifier: '*'
         version: 0.36.4(patch_hash=1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421)(react-native@0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -978,8 +978,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.2.5
-        version: 0.2.5(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3)
@@ -1804,8 +1804,8 @@ packages:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.2.5':
-    resolution: {integrity: sha512-KX8RQCRA5GMQbri/ebPZ7fTaW3MWXyztzTVMtddDklZb51sGGip1YaHbXbILxf60q/7ZXCfrjto3eGFQRoz53A==}
+  '@cherrystudio/provider-registry@0.2.8':
+    resolution: {integrity: sha512-1TMcRGQxYncQvMGeg+FegCWOcinimeauhQeLZgX/+htiMH+ppBgY9sSRQ5wFRAJ5+nXyC8vN6nNHaYuP1xBhlA==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -1817,8 +1817,8 @@ packages:
   '@cherrystudio/remote-transport@0.2.5':
     resolution: {integrity: sha512-5V1gxwUM2JG5s66Z2zSCSquxVUpxPGZIAav/oIyZMiXCStC+w7ARbuED/m0vdwp17A+fUO1uSefMOD9puHBrOQ==}
 
-  '@cherrystudio/web-search@0.3.0':
-    resolution: {integrity: sha512-LhCWxxYEo5ONSNhOkh0Wpqf7/M4Z3O+easvYjPXT7amax2jjVlYxg/gtgnpQqnFARcz9Coxz/js9gBM51/bgFA==}
+  '@cherrystudio/web-search@0.4.0':
+    resolution: {integrity: sha512-YAuU7+T/nI8PNJpzE6jvx8eSTeP//zKWlMZxaMzj15tFgTKJWL2g6jxvfSttNEJhQn6llpH/QeUGjxvLrxlOIQ==}
 
   '@chevrotain/cst-dts-gen@13.2.0':
     resolution: {integrity: sha512-bA9dvWlhAUcHkNwU+8w9yiUxJPlj/Lm3VqS7MD+NbIR/7LmpNLuK/AWNFdCo/T3SK5ND0/UHf3IJvl/Jn/i6yg==}
@@ -9506,8 +9506,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  react-native-keyboard-controller@1.22.7:
-    resolution: {integrity: sha512-IBR9z6Nl/iDLRfiv1zN9QQroOXAwYMugeAjVDb+CFbRBNC8fayXlHTBbshVcWc4j95Itsv+1/FgwfxKnIn1Vmg==}
+  react-native-keyboard-controller@1.22.9:
+    resolution: {integrity: sha512-nLoXvTbIy/9cI4p/bAXUP7Vfi6Mf2Q7g/gsh2H29C7hgUSQQLdoQjl8inhKC25oxaEibB0CMR++h3HP/k/+BVw==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -11949,7 +11949,7 @@ snapshots:
       react-dom: 19.3.0(react@19.3.0)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.2.5(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.2.8(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
@@ -11971,7 +11971,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@cherrystudio/web-search@0.3.0':
+  '@cherrystudio/web-search@0.4.0':
     dependencies:
       eventsource-parser: 3.1.1
       js-base64: 3.7.7
@@ -20312,7 +20312,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
 
-  react-native-keyboard-controller@1.22.7(patch_hash=1f80a55c5ddeb95e2d44e61b9cbbab6487fabd990ae3d492a037db8a99a138a4)(ecfe864ea21d16b3e2d0c7792850037d):
+  react-native-keyboard-controller@1.22.9(patch_hash=fcefd856c7edcf8595c96f35f13fea7ba2abf3ab6d88ad68161b81f5492da5a4)(ecfe864ea21d16b3e2d0c7792850037d):
     dependencies:
       react: 19.3.0
       react-native: 0.88.0(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)

@@ -19,6 +19,22 @@ import {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
+  test('materializes downloaded GPT-6.1 Terra with its Codex limits and reasoning defaults', () => {
+    const [model] = providerRegistryService.resolveModels('openai-codex', ['gpt-6.1-terra']);
+    expect(model).toMatchObject({
+      apiModelId: 'gpt-6.1-terra',
+      presetModelId: 'gpt-6-1-terra',
+      contextWindow: 500_000,
+      maxInputTokens: 372_000,
+      maxOutputTokens: 128_000,
+      supportsFastMode: true,
+      reasoning: {
+        selectableEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'low',
+      },
+    });
+  });
+
   test('projects downloaded GPT-6.1 Sol efforts for GGAPI without changing its API model id', () => {
     const loader = new MobileRegistryLoader();
     loader.installRemoteSnapshot(

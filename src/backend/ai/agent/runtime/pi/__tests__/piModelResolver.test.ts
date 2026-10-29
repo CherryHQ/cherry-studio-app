@@ -1232,6 +1232,7 @@ describe('Pi model resolver', () => {
 
   test.each([
     ['anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'claude-sonnet-4-5', 'anthropic', true],
+    ['openai', ENDPOINT_TYPE.OPENAI_RESPONSES, 'gpt-6.1-terra', 'openai-responses', false],
     ['deepseek', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-v4-pro', 'anthropic', false],
     // DeepSeek ignores the tool on Responses, so that endpoint keeps the external service.
     ['deepseek', ENDPOINT_TYPE.OPENAI_RESPONSES, 'deepseek-v4-pro', undefined, false],
@@ -1241,6 +1242,10 @@ describe('Pi model resolver', () => {
     ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen3-max', 'openai-responses', false],
     ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen-plus', undefined, false],
     ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'qwen-plus', 'dashscope', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-2', 'dashscope', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'kimi-k3', 'dashscope', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-3', undefined, false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'kimi-k2-5', undefined, false],
     ['zhipu', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-2', 'zhipu', false],
     ['openrouter', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'vendor/any-model', 'openrouter', false],
     ['perplexity', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'sonar-pro', 'perplexity', false],

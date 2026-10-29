@@ -33,6 +33,7 @@ const UNAVAILABLE_KEYS = {
   'missing-api-key': 'settings.provider.desktopSync.unavailable.missing-api-key',
   unreadable: 'settings.provider.desktopSync.unavailable.unreadable',
   'unsupported-auth': 'settings.provider.desktopSync.unavailable.unsupported-auth',
+  'unsupported-endpoint': 'settings.provider.desktopSync.unavailable.unsupported-endpoint',
 } as const satisfies Record<DesktopImportUnavailableReason, string>;
 
 type LoadedPreview = {

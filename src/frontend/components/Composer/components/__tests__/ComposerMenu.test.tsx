@@ -19,7 +19,7 @@ type MockMenuItemProps = {
 
 type MockDockProps = {
   children?: ReactNode;
-  keyboardTrackingEnabled?: boolean;
+  keyboardTracking?: { get: () => boolean };
 };
 
 const mockBlur = jest.fn();
@@ -42,6 +42,10 @@ const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
 >;
 let mockComposerState: ReturnType<typeof useComposerState> | undefined;
 let mockDockProps: MockDockProps | undefined;
+
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual('@/frontend/components/Composer/components/__tests__/_sharedValueMock'),
+);
 
 jest.mock('@cherrystudio/app-icons/icons/camera', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/file', () => () => null);
@@ -137,7 +141,7 @@ describe('ComposerMenu', () => {
 
     expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
     expect(mockBlur).toHaveBeenCalledTimes(1);
-    expect(mockDockProps?.keyboardTrackingEnabled).toBe(false);
+    expect(mockDockProps?.keyboardTracking?.get()).toBe(false);
     expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -217,7 +221,7 @@ describe('ComposerMenu', () => {
     ]);
     expect(mockBlur).toHaveBeenCalledTimes(1);
     expect(mockFocus).not.toHaveBeenCalled();
-    expect(mockDockProps?.keyboardTrackingEnabled).toBe(false);
+    expect(mockDockProps?.keyboardTracking?.get()).toBe(false);
   });
 
   it('does not open the camera after a denial that can still be requested again', async () => {
