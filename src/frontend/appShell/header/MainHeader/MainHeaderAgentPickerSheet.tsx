@@ -7,7 +7,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { AgentSummary, useConversationAgents } from '@/frontend/appShell/conversation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
-import { ManagedBadge, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
+import { ManagedMark, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
 type MainHeaderAgentPickerSheetProps = {
@@ -144,7 +144,7 @@ function AgentPickerRowView({
         <View className="min-w-0 flex-1 gap-0.5">
           <View className="min-w-0 flex-row items-center gap-2">
             <Text className="shrink font-semibold text-base text-foreground">{agent.name}</Text>
-            <ManagedBadge />
+            <ManagedMark />
           </View>
           {agent.modelName || agent.configuration !== 'unknown' ? (
             <Text className="text-muted-foreground text-xs" numberOfLines={1}>

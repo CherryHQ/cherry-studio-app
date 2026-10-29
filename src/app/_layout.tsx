@@ -23,7 +23,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
-import { AccountSessionGate } from '@/frontend/appShell/account';
+import { AccountSessionGate, OrganizationLockAppearance } from '@/frontend/appShell/account';
 import { AppUpdateObserver, AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
@@ -71,31 +71,33 @@ function RootLayout() {
                           {/* Inside the reporter so a failed first render still lays out and ends startup. */}
                           <AppErrorBoundary>
                             <NavigationThemeProvider>
-                              <AppAlertProvider>
-                                <BottomSheetProvider>
-                                  <RouteHeaderProvider rootAction="back">
-                                    <AppUpdateProvider>
-                                      <AppUpdateObserver />
-                                      <BackgroundActivityBridge />
-                                      <LanguagePreferenceObserver />
-                                      <SystemEntryBridge />
-                                      <FeedbackCaptureProvider>
-                                        <FeedbackHintProvider>
-                                          <AccountSessionGate>
-                                            <ConversationProvider>
-                                              <RootStack />
-                                            </ConversationProvider>
-                                          </AccountSessionGate>
-                                        </FeedbackHintProvider>
-                                      </FeedbackCaptureProvider>
-                                      <PrivacyConsentGate />
-                                      <RestoreOutcomeNotice />
-                                      <BackupDialog />
-                                      <McpInteractionDialog />
-                                    </AppUpdateProvider>
-                                  </RouteHeaderProvider>
-                                </BottomSheetProvider>
-                              </AppAlertProvider>
+                              <OrganizationLockAppearance>
+                                <AppAlertProvider>
+                                  <BottomSheetProvider>
+                                    <RouteHeaderProvider rootAction="back">
+                                      <AppUpdateProvider>
+                                        <AppUpdateObserver />
+                                        <BackgroundActivityBridge />
+                                        <LanguagePreferenceObserver />
+                                        <SystemEntryBridge />
+                                        <FeedbackCaptureProvider>
+                                          <FeedbackHintProvider>
+                                            <AccountSessionGate>
+                                              <ConversationProvider>
+                                                <RootStack />
+                                              </ConversationProvider>
+                                            </AccountSessionGate>
+                                          </FeedbackHintProvider>
+                                        </FeedbackCaptureProvider>
+                                        <PrivacyConsentGate />
+                                        <RestoreOutcomeNotice />
+                                        <BackupDialog />
+                                        <McpInteractionDialog />
+                                      </AppUpdateProvider>
+                                    </RouteHeaderProvider>
+                                  </BottomSheetProvider>
+                                </AppAlertProvider>
+                              </OrganizationLockAppearance>
                             </NavigationThemeProvider>
                           </AppErrorBoundary>
                         </StartupRouteReadyReporter>

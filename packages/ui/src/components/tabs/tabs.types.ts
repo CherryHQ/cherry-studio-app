@@ -26,6 +26,8 @@ export type TabsProps<TValue extends string> = {
   accessibilityLabel?: string;
   items: readonly TabsItem<TValue>[];
   layout?: TabsLayout;
+  /** The choice belongs to someone else: every option stays visible, none can be picked. */
+  locked?: boolean;
   onValueChange: (value: TValue) => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;

@@ -126,7 +126,6 @@ function ToolsSection({
                   {canEnable || readOnly ? (
                     <Switch
                       accessibilityLabel={accessibilityLabel}
-                      disabled={readOnly}
                       onValueChange={(enabled) =>
                         onChange(setAgentMcpServerEnabled(bindings, option, enabled))
                       }
@@ -232,7 +231,10 @@ function toolBindingKey(binding: McpToolBindingDraft): string {
   return JSON.stringify([binding.serverId, binding.rawToolName]);
 }
 
-/** A managed Agent's bindings belong to the organization, so its section is read-only. */
-export const AgentToolsSection = withPolicy(ToolsSection, (policy) => ({
-  readOnly: !policy.canBind,
-}));
+/**
+ * A managed Agent's bindings belong to the organization: the editor shows them read-only inside its
+ * locked group, so the editable section stays away.
+ */
+export const AgentToolsSection = withPolicy(ToolsSection, (policy, { readOnly }) =>
+  readOnly || policy.canBind ? {} : null,
+);

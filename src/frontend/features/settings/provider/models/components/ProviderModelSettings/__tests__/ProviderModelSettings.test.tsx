@@ -92,19 +92,23 @@ function render(policy: Parameters<typeof PolicyScope>[0]['policy']) {
 
 describe('ProviderModelSettings', () => {
   test('opens every editor for a user-owned model', () => {
-    const { pressable, selects, switches } = render(OPEN_POLICY);
+    const { pressable, selects } = render(OPEN_POLICY);
 
     expect(pressable).toContain('settings.provider.models.detail.name');
     expect(selects).toHaveLength(2);
-    expect(switches.every((row) => !row.props.readOnly)).toBe(true);
+    expect(selects.every((row) => row.props.locked === undefined)).toBe(true);
   });
 
-  test("shows an organization's model read-only, keeping only the ID copy", () => {
-    const { pressable, selects, switches } = render(managedResourcePolicy({ isManaged: true }));
+  // The locked group around an organization's model locks its editing rows; only the ID copy,
+  // which changes nothing, opts out.
+  test("locks an organization's choices and keeps the ID copy live", () => {
+    const { selects } = render(managedResourcePolicy({ isManaged: true }));
+    const modelIdRow = renderer.root.find(
+      (node) => node.props.testID === 'model-setting-modelId' && typeof node.type === 'string',
+    );
 
-    expect(pressable).toEqual(['settings.provider.models.detail.modelId']);
-    expect(selects).toHaveLength(0);
-    expect(switches.length).toBeGreaterThan(0);
-    expect(switches.every((row) => row.props.readOnly)).toBe(true);
+    expect(selects).toHaveLength(2);
+    expect(selects.every((row) => row.props.locked === true)).toBe(true);
+    expect(modelIdRow.props.locked).toBe(false);
   });
 });

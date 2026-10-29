@@ -83,4 +83,4 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |
-| Applying what the user may change (organization-owned resources, profile capabilities) to UI, including the managed badge | `PolicyScope`, `withPolicy` and the gates in `src/frontend/components/Policy` |
+| Applying what the user may change (organization-owned resources, profile capabilities) to UI: locked groups, locked controls and the organization mark | `PolicyScope`, `PolicyGroup`, `withPolicy` and the gates in `src/frontend/components/Policy`, over CherryUI `LockedGroup` and the components' `locked` variants |

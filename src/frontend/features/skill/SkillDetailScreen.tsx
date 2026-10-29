@@ -4,15 +4,10 @@ import { loggerService } from '@logger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import type { RouteHeaderProps } from '@/frontend/appShell/header';
-import {
-  ManagedBadge,
-  PolicyManaged,
-  usePermittedItems,
-  withResourcePolicy,
-} from '@/frontend/components/Policy';
+import { usePermittedItems, withResourcePolicy } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
@@ -158,11 +153,6 @@ function SkillDetailView({ skill }: { skill: SkillListItem }) {
 
   const feedback = (
     <>
-      <PolicyManaged>
-        <View className="flex-row">
-          <ManagedBadge />
-        </View>
-      </PolicyManaged>
       {skill.isPackageMissing ? (
         <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
       ) : null}

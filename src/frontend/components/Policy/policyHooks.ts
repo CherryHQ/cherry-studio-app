@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 
 import { usePolicy } from './PolicyScope';
 
-/** A row's accessibility label, naming the managed badge it shows. */
+/** A row's accessibility label, naming the organization mark it shows. */
 export function useManagedLabel(label: string): string {
   const { t } = useTranslation();
-  return usePolicy().managed ? `${label}, ${t('enterprise.managed.badge')}` : label;
+  return usePolicy().managed ? `${label}, ${t('enterprise.managed.label')}` : label;
 }
 
 /**

@@ -27,13 +27,15 @@ import {
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
 import {
-  ManagedBadge,
+  ManagedMark,
   PolicyDeletable,
   PolicyEditable,
+  PolicyGroup,
   PolicyManaged,
   PolicyScope,
   PolicySecret,
   PolicySelectItem,
+  useModelChoice,
   withCapability,
 } from '@/frontend/components/Policy';
 import { usePreference } from '@/frontend/data/hooks';
@@ -413,6 +415,26 @@ function AgentEditForm({
     [handleSave, isSaving, t],
   );
 
+  // With one allowed model there is nothing to choose: the row joins the organization's group.
+  const { isLocked: isModelLocked } = useModelChoice();
+  const modelRow = (
+    <PolicySelectItem
+      field="model"
+      label={t('agent.form.model')}
+      onPress={openModelSelect}
+      value={selectedModel?.model.name ?? t('agent.model.none')}
+      valueLeading={
+        selectedModel ? (
+          <ModelPickerIcon
+            model={selectedModel.model}
+            provider={selectedModel.provider}
+            size={20}
+          />
+        ) : undefined
+      }
+    />
+  );
+
   return (
     <>
       <RouteHeader rightActions={isEditing ? undefined : saveActions} title={title} />
@@ -466,12 +488,15 @@ function AgentEditForm({
             <PolicyEditable
               field="name"
               fallback={
-                <Text
-                  accessibilityRole="header"
-                  className="max-w-full px-2 text-center font-semibold text-2xl text-foreground"
-                >
-                  {form.name}
-                </Text>
+                <View className="max-w-full flex-row items-center gap-1.5 px-2">
+                  <Text
+                    accessibilityRole="header"
+                    className="shrink text-center font-semibold text-2xl text-foreground"
+                  >
+                    {form.name}
+                  </Text>
+                  <ManagedMark />
+                </View>
               }
             >
               {/* The underline marks the name as a field, as on a provider. */}
@@ -497,14 +522,44 @@ function AgentEditForm({
                 </Text>
               ) : null}
             </PolicyEditable>
-            <ManagedBadge />
-            <PolicyManaged>
-              <Text className="text-center text-sm text-muted-foreground">
-                {t('enterprise.managed.agentNotice')}
-              </Text>
-            </PolicyManaged>
           </View>
         </View>
+        {/* What the organization decides sits together in one locked group; the rest stays
+            editable below it. */}
+        <PolicyManaged>
+          <PolicyGroup>
+            <Section>
+              <Section.Item
+                label={t('agent.form.instructions')}
+                locked
+                trailing={
+                  <Text className="text-base text-muted-foreground">
+                    {t('enterprise.managed.hidden')}
+                  </Text>
+                }
+              />
+              {isModelLocked ? modelRow : null}
+            </Section>
+            {form.mode === 'standard' ? (
+              <AgentToolsSection
+                bindings={toolBindings}
+                onChange={handleToolBindingsChange}
+                originalBindings={originalToolBindings}
+                readOnly
+                servers={servers}
+              />
+            ) : null}
+            {isEditing && form.mode === 'standard' ? (
+              <AgentSkillsSection
+                agentId={agentId}
+                bindings={skillBindings}
+                onChange={saveSkillBindings}
+                readOnly
+                skills={skills}
+              />
+            ) : null}
+          </PolicyGroup>
+        </PolicyManaged>
         <PolicySecret>
           <Section title={t('agent.form.instructions')}>
             <TextInput
@@ -537,21 +592,7 @@ function AgentEditForm({
               onPress={openModePicker}
               value={t(MODE_LABEL_KEYS[form.mode])}
             />
-            <PolicySelectItem
-              field="model"
-              label={t('agent.form.model')}
-              onPress={openModelSelect}
-              value={selectedModel?.model.name ?? t('agent.model.none')}
-              valueLeading={
-                selectedModel ? (
-                  <ModelPickerIcon
-                    model={selectedModel.model}
-                    provider={selectedModel.provider}
-                    size={20}
-                  />
-                ) : undefined
-              }
-            />
+            {isModelLocked ? null : modelRow}
             {form.mode === 'standard' ? (
               <Section.SelectItem
                 accessibilityHint={t(

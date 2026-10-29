@@ -1,4 +1,4 @@
-import { Composer } from '@cherrystudio/ui/components';
+import { Composer, LockedMark, LockedTrigger } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
@@ -42,7 +42,7 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
     );
   }
 
-  return (
+  const pill = (
     <Composer.Pill
       accessibilityLabel={label}
       disabled={isLocked}
@@ -60,6 +60,9 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
         {label}
       </Text>
       {children}
+      {isLocked ? <LockedMark className="size-3.5" /> : null}
     </Composer.Pill>
   );
+  // The organization chose the only model: pressing explains that instead of opening a picker.
+  return isLocked ? <LockedTrigger accessibilityLabel={label}>{pill}</LockedTrigger> : pill;
 }

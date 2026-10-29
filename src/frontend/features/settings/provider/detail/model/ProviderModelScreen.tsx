@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { PolicyDeletable, withResourcePolicy } from '@/frontend/components/Policy';
+import { PolicyDeletable, PolicyGroup, withResourcePolicy } from '@/frontend/components/Policy';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -75,7 +75,9 @@ function ModelDetailsView({ model, provider }: { model: Model; provider: Provide
         ) : null}
       </View>
 
-      <ProviderModelSettings value={settings} />
+      <PolicyGroup>
+        <ProviderModelSettings value={settings} />
+      </PolicyGroup>
 
       <PolicyDeletable>
         <Section>
@@ -93,7 +95,7 @@ function ModelDetailsView({ model, provider }: { model: Model; provider: Provide
   );
 }
 
-/** An organization's models open read-only. */
+/** An organization's models open locked. */
 const ModelDetails = withResourcePolicy(ModelDetailsView, () =>
   capabilityPolicy('providerSettings'),
 );

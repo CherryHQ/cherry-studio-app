@@ -15,15 +15,15 @@ type AgentSkillsSectionProps = {
   /** Draft binding state keyed by Skill id; absent means unbound. */
   bindings: ReadonlyMap<string, boolean>;
   onChange: (updates: AgentSkillUpdate[]) => void;
-  /** Lists only the bound Skills, without switches or the library link. */
+  /** Lists only the bound Skills, without descriptions or the library link. */
   readOnly?: boolean;
 };
 
 /**
  * Per-Agent Skill bindings. The switch expresses the user's intent; the caption
  * reports a missing package. Installation and updates live in the Skill library,
- * linked from the footer. A managed Agent's bindings belong to the enterprise server, so it shows
- * them read-only.
+ * linked from the footer. A managed Agent's bindings belong to the enterprise server; its editor
+ * lists them read-only inside a locked group, where the switches render locked.
  */
 function SkillsSection({
   agentId,
@@ -51,20 +51,11 @@ function SkillsSection({
             ) : null}
           </View>
         );
-        if (readOnly) {
-          return isEnabled ? (
-            <Section.Item
-              accessibilityLabel={skill.name}
-              description={description}
-              key={skill.id}
-              label={skill.name}
-            />
-          ) : null;
-        }
+        if (readOnly && !isEnabled) return null;
         return (
           <Section.SwitchItem
             accessibilityLabel={skill.name}
-            description={description}
+            description={readOnly ? undefined : description}
             key={skill.id}
             label={skill.name}
             onValueChange={(value) => onChange([{ isEnabled: value, skillId: skill.id }])}
@@ -83,7 +74,7 @@ function SkillsSection({
   );
 }
 
-/** A managed Agent's bindings belong to the organization, so its section is read-only. */
-export const AgentSkillsSection = withPolicy(SkillsSection, (policy) => ({
-  readOnly: !policy.canBind,
-}));
+/** Only the read-only listing appears once the organization owns the bindings. */
+export const AgentSkillsSection = withPolicy(SkillsSection, (policy, { readOnly }) =>
+  readOnly || policy.canBind ? {} : null,
+);

@@ -24,8 +24,7 @@ const ProviderListRowView = memo(function ProviderListRow({
   isEnabled: boolean;
   isPending: boolean;
   onOpen: (provider: Provider) => void;
-  /** Omitted when the provider is managed elsewhere and cannot be switched here. */
-  onToggle?: (provider: Provider, isEnabled: boolean) => void;
+  onToggle: (provider: Provider, isEnabled: boolean) => void;
   provider: Provider;
 }) {
   const { t } = useTranslation();
@@ -53,6 +52,8 @@ const ProviderListRowView = memo(function ProviderListRow({
           {supportsSignIn ? <ProviderAccountBadge /> : null}
         </View>
       }
+      // Opening the details only reads them, so the row stays live inside a locked group.
+      locked={false}
       leading={
         <ProviderAvatar
           presetProviderId={provider.presetProviderId}
@@ -67,20 +68,18 @@ const ProviderListRowView = memo(function ProviderListRow({
       testID={`provider-row-${provider.id}`}
       trailing={
         <View className="flex-row items-center gap-2">
-          {onToggle ? (
-            <Switch
-              accessibilityLabel={t(
-                isEnabled
-                  ? 'settings.provider.disableProviderNamed'
-                  : 'settings.provider.enableProviderNamed',
-                { name: provider.name },
-              )}
-              disabled={isPending}
-              onValueChange={(value) => onToggle(provider, value)}
-              testID={`provider-enabled-switch-${provider.id}`}
-              value={isEnabled}
-            />
-          ) : null}
+          <Switch
+            accessibilityLabel={t(
+              isEnabled
+                ? 'settings.provider.disableProviderNamed'
+                : 'settings.provider.enableProviderNamed',
+              { name: provider.name },
+            )}
+            disabled={isPending}
+            onValueChange={(value) => onToggle(provider, value)}
+            testID={`provider-enabled-switch-${provider.id}`}
+            value={isEnabled}
+          />
           <View className="size-5 items-center justify-center">
             {isPending ? (
               <Spinner accessibilityLabel={t('settings.provider.status.updating')} size="sm" />
@@ -94,7 +93,7 @@ const ProviderListRowView = memo(function ProviderListRow({
   );
 });
 
-/** Organization providers have no account to sign in to and no switch to flip. */
+/** Organization providers have no account to sign in to; their switch renders locked. */
 export const ProviderListRow = withPolicy(ProviderListRowView, (policy) =>
-  policy.canEdit('provider') ? {} : { canSignIn: false, onToggle: undefined },
+  policy.canEdit('provider') ? {} : { canSignIn: false },
 );

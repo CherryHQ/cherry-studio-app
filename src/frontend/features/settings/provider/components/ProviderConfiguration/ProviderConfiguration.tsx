@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
+import { PolicyEditable, PolicyGroup } from '@/frontend/components/Policy';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
 import { ProviderAccountSection } from './components/ProviderAccountSection';
@@ -55,44 +56,7 @@ export function ProviderConfiguration({
         {header}
         {value ? (
           <View className="gap-6 px-4 pt-3 pb-8">
-            <ProviderIdentitySection value={value} />
-            {value.account ? (
-              <ProviderAccountSection
-                account={value.account}
-                providerId={value.providerId}
-                providerName={value.name}
-              />
-            ) : null}
-            {value.apiKeys ? (
-              <ProviderApiKeysSection apiKeys={value.apiKeys} value={value} />
-            ) : null}
-            {value.vertexAuth ? (
-              <ProviderVertexAuthSection auth={value.vertexAuth} disabled={value.isBusy} />
-            ) : null}
-            {value.models && (value.apiKeys || value.account?.signedIn || value.vertexAuth) ? (
-              <ProviderConnectionTestSection
-                key={`${value.providerId}:${value.connectionKey ?? ''}`}
-                credentials={
-                  value.vertexAuth
-                    ? {
-                        kind: 'service-account',
-                        ready: isVertexAuthConfigured(value.vertexAuth.config),
-                      }
-                    : value.account?.signedIn
-                      ? { kind: 'account' }
-                      : {
-                          kind: 'api-key',
-                          keys: value.apiKeys ?? [],
-                          optional: value.provider?.authOptional ?? false,
-                        }
-                }
-                disabled={value.isBusy}
-                models={value.models}
-                providerId={value.providerId}
-              />
-            ) : null}
-            <ProviderAddressSection value={value} />
-            {footer}
+            <ProviderSections footer={footer} value={value} />
           </View>
         ) : (
           <View className="items-center py-10">
@@ -102,6 +66,80 @@ export function ProviderConfiguration({
       </KeyboardAwareScrollView>
       {bottomAction}
     </View>
+  );
+}
+
+/**
+ * The sections in their fixed order. An organization's provider gathers what it owns, the keys and
+ * addresses, into one locked group; checking the connection stays outside because it changes
+ * nothing.
+ */
+function ProviderSections({
+  footer,
+  value,
+}: {
+  footer?: ReactNode;
+  value: ProviderConfigurationValue;
+}) {
+  const identity = <ProviderIdentitySection value={value} />;
+  const apiKeys = value.apiKeys ? (
+    <ProviderApiKeysSection apiKeys={value.apiKeys} value={value} />
+  ) : null;
+  const vertexAuth = value.vertexAuth ? (
+    <ProviderVertexAuthSection auth={value.vertexAuth} disabled={value.isBusy} />
+  ) : null;
+  const address = <ProviderAddressSection value={value} />;
+  const connectionTest =
+    value.models && (value.apiKeys || value.account?.signedIn || value.vertexAuth) ? (
+      <ProviderConnectionTestSection
+        key={`${value.providerId}:${value.connectionKey ?? ''}`}
+        credentials={
+          value.vertexAuth
+            ? { kind: 'service-account', ready: isVertexAuthConfigured(value.vertexAuth.config) }
+            : value.account?.signedIn
+              ? { kind: 'account' }
+              : {
+                  kind: 'api-key',
+                  keys: value.apiKeys ?? [],
+                  optional: value.provider?.authOptional ?? false,
+                }
+        }
+        disabled={value.isBusy}
+        models={value.models}
+        providerId={value.providerId}
+      />
+    ) : null;
+
+  return (
+    <PolicyEditable
+      fallback={
+        <>
+          {identity}
+          <PolicyGroup>
+            {apiKeys}
+            {vertexAuth}
+            {address}
+          </PolicyGroup>
+          {connectionTest}
+          {footer}
+        </>
+      }
+      field="provider"
+    >
+      {identity}
+      {value.account ? (
+        <ProviderAccountSection
+          account={value.account}
+          providerId={value.providerId}
+          providerName={value.name}
+        />
+      ) : null}
+      {apiKeys}
+      {vertexAuth}
+      {connectionTest}
+      {address}
+      {footer}
+    </PolicyEditable>
   );
 }
 

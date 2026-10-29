@@ -2,6 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import {
   Button,
   ContextMenu,
+  LockedGroupSlice,
   ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
@@ -41,6 +42,8 @@ export type ProviderModelListContentProps = {
   management?: ReturnType<typeof useProviderModelManagement>;
   ListEmptyComponent?: ReactElement;
   isEndpointSelectionDisabled?: boolean;
+  /** Draws the list inside one locked group: an organization supplies these models. */
+  locked?: boolean;
   models: readonly Model[];
   onEndpointPress?: (model: Model) => void;
   provider: Provider | undefined;
@@ -62,6 +65,7 @@ export function ProviderModelListContent({
   supportedModelIds,
   isEndpointSelectionDisabled = false,
   ListEmptyComponent,
+  locked = false,
   models,
   onEndpointPress,
   provider,
@@ -91,7 +95,7 @@ export function ProviderModelListContent({
       updatingModelId,
     ],
   );
-  const renderItem = useCallback(
+  const renderListItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
       if (item.type === 'section') {
         return (
@@ -157,6 +161,20 @@ export function ProviderModelListContent({
       );
     },
     [t],
+  );
+  const lastIndex = listItems.length - 1;
+  const renderItem = useCallback(
+    (props: LegendListRenderItemProps<ProviderModelListItem>) =>
+      locked ? (
+        <View className="mx-4">
+          <LockedGroupSlice isFirst={props.index === 0} isLast={props.index === lastIndex}>
+            {renderListItem(props)}
+          </LockedGroupSlice>
+        </View>
+      ) : (
+        renderListItem(props)
+      ),
+    [lastIndex, locked, renderListItem],
   );
 
   return (

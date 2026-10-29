@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+import { LockedAppearanceProvider, LockedGroup } from '../../locked';
 import { Section, type SectionItemPressProps } from '../section';
 
 jest.mock('heroui-native/utils', () => {
@@ -30,6 +31,22 @@ jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
   const { View } = jest.requireActual('react-native');
   return function MockChevronRightIcon(props: object) {
     return React.createElement(View, { ...props, testID: 'section-chevron' });
+  };
+});
+
+jest.mock('@cherrystudio/app-icons/icons/lock', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return function MockLockIcon(props: object) {
+    return React.createElement(View, { ...props, testID: 'locked-mark-icon' });
+  };
+});
+jest.mock('../../info-popover', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return {
+    InfoPopover: ({ children, ...props }: { children: React.ReactNode }) =>
+      React.createElement(View, { ...props, mockComponent: 'info-popover' }, children),
   };
 });
 
@@ -478,24 +495,71 @@ describe('Section', () => {
     expect(onValueChange).toHaveBeenCalledWith(false);
   });
 
-  test('shows a read-only switch at full contrast without a press target', () => {
+  test('shows a locked switch at full contrast, explaining instead of toggling', () => {
+    const onValueChange = jest.fn();
+    const tree = render(
+      <LockedAppearanceProvider value={{ icon: () => null, reason: 'Managed by Acme' }}>
+        <Section>
+          <Section.SwitchItem label="Reasoning" locked onValueChange={onValueChange} value />
+        </Section>
+      </LockedAppearanceProvider>,
+    );
+    const host = (match: (node: ReactTestInstance) => boolean) =>
+      tree.root.findAll((node) => typeof node.type === 'string' && match(node));
+
+    expect(host((node) => node.props.mockComponent === 'info-popover')[0]?.props).toMatchObject({
+      accessibilityLabel: 'Reasoning, Managed by Acme',
+      text: 'Managed by Acme',
+    });
+    expect(host((node) => node.props.mockComponent === 'switch-control')).toHaveLength(0);
+    expect(host((node) => String(node.props.className ?? '').includes('opacity-40'))).toHaveLength(
+      0,
+    );
+    expect(host((node) => typeof node.props.onPress === 'function')).toHaveLength(0);
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  test('marks a locked row on its own in place of its chevron', () => {
     const tree = render(
       <Section>
-        <Section.SwitchItem label="Reasoning" onValueChange={jest.fn()} readOnly value />
+        <Section.Item label="Import" locked onPress={jest.fn()} />
       </Section>,
     );
-    const row = tree.root.find(
-      (node) =>
-        node.props.accessibilityLabel === 'Reasoning' && typeof node.props.className === 'string',
-    );
-    const indicator = tree.root.find(
-      (node) => node.props.mockComponent === 'switch-control' && typeof node.type === 'string',
-    );
+    const host = (match: (node: ReactTestInstance) => boolean) =>
+      tree.root.findAll((node) => typeof node.type === 'string' && match(node));
 
-    expect(row.props.onPress).toBeUndefined();
-    expect(row.props.className).not.toContain('opacity-40');
-    expect(row.props.accessibilityState).toEqual({ checked: true, disabled: true });
-    expect(indicator.props).toMatchObject({ disabled: false, value: true });
+    expect(host((node) => node.props.testID === 'section-locked-mark')).toHaveLength(1);
+    expect(host((node) => node.props.testID === 'section-chevron')).toHaveLength(0);
+  });
+
+  test('locks the editing rows of a locked group and flattens its sections', () => {
+    const onEdit = jest.fn();
+    const onCopy = jest.fn();
+    const tree = render(
+      <LockedGroup>
+        <Section footer="Footer" title="Address">
+          <Section.Item label="Base URL" onPress={onEdit} trailing="api.example" />
+          <Section.Item label="Protocol" trailing="OpenAI" />
+          <Section.Item label="Model ID" locked={false} onPress={onCopy} showChevron={false} />
+          <Section.SelectItem label="Model" onPress={onEdit} value="GPT" />
+        </Section>
+      </LockedGroup>,
+    );
+    const host = (match: (node: ReactTestInstance) => boolean) =>
+      tree.root.findAll((node) => typeof node.type === 'string' && match(node));
+
+    // Only the group header carries the mark; its rows just lose their edit affordances.
+    expect(host((node) => node.props.testID === 'locked-mark-icon')).toHaveLength(1);
+    expect(host((node) => node.props.testID === 'section-locked-mark')).toHaveLength(0);
+    expect(host((node) => node.props.testID === 'section-chevron')).toHaveLength(0);
+    expect(host((node) => node.props.testID === 'section-select-chevron')).toHaveLength(0);
+    const pressables = tree.root.findAll((node) => typeof node.props.className === 'string');
+    expect(pressables.filter((node) => node.props.onPress === onCopy)).toHaveLength(1);
+    expect(pressables.filter((node) => node.props.onPress === onEdit)).toHaveLength(0);
+    expect(host((node) => node.props.children === 'Footer')).toHaveLength(0);
+    expect(
+      host((node) => String(node.props.className ?? '').includes('rounded-2xl bg-card')),
+    ).toHaveLength(0);
   });
 
   test('supports custom row content while preserving item layout', () => {

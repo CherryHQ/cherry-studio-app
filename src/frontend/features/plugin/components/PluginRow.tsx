@@ -3,7 +3,7 @@ import { Button, Section } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
-import { ManagedBadge, useManagedLabel } from '@/frontend/components/Policy';
+import { ManagedMark, useManagedLabel } from '@/frontend/components/Policy';
 
 const STATUS_CLASS_NAMES = {
   danger: 'shrink-0 text-sm text-error',
@@ -54,7 +54,7 @@ export function PluginRow({
           <Text className="shrink text-base font-medium text-foreground" numberOfLines={1}>
             {title}
           </Text>
-          <ManagedBadge />
+          <ManagedMark />
         </View>
       }
       leading={icon}

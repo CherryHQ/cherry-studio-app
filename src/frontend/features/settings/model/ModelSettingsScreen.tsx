@@ -1,7 +1,6 @@
 import { Section, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
@@ -15,7 +14,7 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/ModelPicker';
-import { PolicyManaged, PolicySelectItem, withResourcePolicy } from '@/frontend/components/Policy';
+import { PolicyGroup, PolicySelectItem, withResourcePolicy } from '@/frontend/components/Policy';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
@@ -69,6 +68,7 @@ function ModelSettingsView() {
         return {
           key: kind,
           disabled: isSaving,
+          empty: !selections[kind],
           label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
           onPress: () => setActiveKind(kind),
           value:
@@ -86,19 +86,13 @@ function ModelSettingsView() {
   return (
     <>
       <SettingsScrollPage headerProps={{ title: t('settings.pages.model.title') }}>
-        <Section
-          footer={
-            <PolicyManaged>
-              <Text className="mt-2 px-3 text-sm text-muted-foreground">
-                {t('enterprise.providers.notice')}
-              </Text>
-            </PolicyManaged>
-          }
-        >
-          {items.map(({ key, ...item }) => (
-            <PolicySelectItem field="defaultModel" key={key} {...item} />
-          ))}
-        </Section>
+        <PolicyGroup>
+          <Section>
+            {items.map(({ key, ...item }) => (
+              <PolicySelectItem field="defaultModel" key={key} {...item} />
+            ))}
+          </Section>
+        </PolicyGroup>
       </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer

@@ -1,17 +1,23 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { type MenuItem, Section, Spinner, useToast } from '@cherrystudio/ui/components';
+import {
+  LockedGroupSlice,
+  type MenuItem,
+  Section,
+  Spinner,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { cn } from '@cherrystudio/ui/utils';
 import { AnimatedLegendList } from '@legendapp/list/reanimated';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
-import { PolicyManaged, withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
+import { withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
@@ -37,12 +43,58 @@ type ProviderListItem =
       isFirst: boolean;
       isLast: boolean;
       isPending: boolean;
+      /** The list's final row, which closes an organization's locked group. */
+      endsList?: boolean;
     };
 
 // Adding or importing providers is not offered when the organization supplies them.
 const ProviderListHeader = withPolicy(RouteHeader, (policy) =>
   policy.canEdit('provider') ? {} : { rightActions: undefined },
 );
+/**
+ * One item's share of its card, so the list can stay virtualized. An organization's providers share
+ * one locked group instead of a card per section.
+ */
+function ProviderListSliceView({
+  children,
+  item,
+  managed = false,
+}: {
+  children: ReactNode;
+  item: ProviderListItem;
+  managed?: boolean;
+}) {
+  if (managed) {
+    return (
+      <View className="mx-4">
+        <LockedGroupSlice
+          isFirst={item.kind === 'header' && item.isFirst}
+          isLast={item.kind === 'provider' && item.endsList === true}
+        >
+          {item.kind === 'header' ? <View className="px-4">{children}</View> : children}
+        </LockedGroupSlice>
+      </View>
+    );
+  }
+  return item.kind === 'header' ? (
+    // Mirrors a titled `Section`: the title sits 12pt inside the card edge, 4pt above it.
+    <View className={cn('px-7 pb-1', item.isFirst ? 'pt-2' : 'pt-6')}>{children}</View>
+  ) : (
+    <View
+      className={cn(
+        'mx-4 overflow-hidden bg-card',
+        item.isFirst && 'rounded-t-2xl',
+        item.isLast && 'rounded-b-2xl',
+      )}
+      style={styles.cardSlice}
+    >
+      {children}
+    </View>
+  );
+}
+const ProviderListSlice = withPolicy(ProviderListSliceView, (policy) => ({
+  managed: policy.managed,
+}));
 const keyExtractor = (item: ProviderListItem) => `${item.kind}:${item.id}`;
 const getItemType = (item: ProviderListItem) => item.kind;
 
@@ -180,25 +232,18 @@ function ProviderListView() {
         });
       });
     }
+    const last = items.at(-1);
+    if (last?.kind === 'provider') last.endsList = true;
     return items;
   }, [listedProviders, pendingProviderStates, t]);
   const renderProviderItem = useCallback(
     ({ item }: { item: ProviderListItem }) =>
       item.kind === 'header' ? (
-        // Mirrors a titled `Section`: the title sits 12pt inside the card edge, 4pt above it.
-        <View className={cn('px-7 pb-1', item.isFirst ? 'pt-2' : 'pt-6')}>
+        <ProviderListSlice item={item}>
           <Section.Header accessibilityRole="header" title={item.title} />
-        </View>
+        </ProviderListSlice>
       ) : (
-        // Each row draws its slice of the group's card, so the list can stay virtualized.
-        <View
-          className={cn(
-            'mx-4 overflow-hidden bg-card',
-            item.isFirst && 'rounded-t-2xl',
-            item.isLast && 'rounded-b-2xl',
-          )}
-          style={styles.cardSlice}
-        >
+        <ProviderListSlice item={item}>
           {item.isFirst ? null : <SettingsGroupedSeparator />}
           <ProviderListRow
             isEnabled={item.isEnabled}
@@ -207,7 +252,7 @@ function ProviderListView() {
             onToggle={toggleProviderEnabled}
             provider={item.provider}
           />
-        </View>
+        </ProviderListSlice>
       ),
     [openProvider, toggleProviderEnabled],
   );
@@ -264,11 +309,6 @@ function ProviderListView() {
     <>
       <ProviderListHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
       <InlineSearch onChangeText={setQuery} value={query} />
-      <PolicyManaged>
-        <Text className="px-7 pt-2 pb-1 text-muted-foreground text-sm">
-          {t('enterprise.providers.notice')}
-        </Text>
-      </PolicyManaged>
       <View className="flex-1 px-4 pb-5">
         {providerItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">
@@ -317,5 +357,5 @@ const styles = StyleSheet.create({
   },
 });
 
-/** The organization configures every provider of an enterprise profile; rows only open details. */
+/** The organization configures every provider of an enterprise profile; rows still open details. */
 export default withResourcePolicy(ProviderListView, () => capabilityPolicy('providerSettings'));

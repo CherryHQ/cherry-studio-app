@@ -12,7 +12,7 @@ import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/heade
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import {
-  ManagedBadge,
+  ManagedMark,
   useManagedLabel,
   withPolicy,
   withResourcePolicy,
@@ -296,14 +296,14 @@ const AgentListRowView = memo(function AgentListRow({
             <Text className="shrink text-base text-foreground" numberOfLines={1}>
               {agent.name}
             </Text>
-            <ManagedBadge />
+            <ManagedMark />
           </View>
           <Text className="text-muted-foreground text-sm" numberOfLines={1}>
             {agent.modelName ?? t('agent.model.none')}
           </Text>
         </View>
         {isEditing ? (
-          <SelectionIndicator disabled={!isSelectable} selected={isSelected} />
+          <SelectionIndicator locked={!isSelectable} selected={isSelected} />
         ) : (
           <ChevronRightIcon className="size-5 text-muted-foreground" />
         )}

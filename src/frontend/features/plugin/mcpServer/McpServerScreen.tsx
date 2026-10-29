@@ -18,7 +18,7 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
-import { ManagedBadge, PolicyEditable, PolicyScope } from '@/frontend/components/Policy';
+import { PolicyEditable, PolicyGroup, PolicyScope } from '@/frontend/components/Policy';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import {
@@ -119,8 +119,9 @@ export function McpServerScreen() {
 }
 
 /**
- * A server the enterprise server delivers is read-only. Its headers can carry credentials, so the
- * page shows only the endpoint's origin, and the tool list stays viewable with locked switches.
+ * A server the enterprise server delivers, laid out like the editor with everything locked. Its
+ * headers can carry credentials, so they stay withheld and the address shows only its origin.
+ * Nothing on the page can change, so there is no save action or menu.
  */
 function ManagedMcpServerDetail({ server }: { server: RemoteMcpServer }) {
   const { t } = useTranslation();
@@ -132,18 +133,40 @@ function ManagedMcpServerDetail({ server }: { server: RemoteMcpServer }) {
       <RouteHeader title={server.name} />
       <PluginPage testID="mcp-server">
         <McpServerIdentity server={server} summary={summaries[server.id]} />
-        <FormField label={t('settings.mcp.fields.endpointUrl')}>
-          <Text className="text-base text-foreground" selectable>
-            {getEndpointOrigin(server.endpointUrl)}
-          </Text>
-        </FormField>
-        <McpToolsSection isDisabled onToggleTool={ignoreToolToggle} server={server} />
+        <PolicyGroup>
+          <View className="gap-4 px-4 pt-3 pb-2">
+            <FormField label={t('settings.mcp.oauth.authentication')}>
+              <Tabs
+                items={[
+                  { value: 'headers', label: t('settings.mcp.fields.headers') },
+                  { value: 'oauth', label: 'OAuth' },
+                ]}
+                onValueChange={ignoreChange}
+                value={server.oauth ? 'oauth' : 'headers'}
+              />
+            </FormField>
+            <FormField label={t('settings.mcp.fields.endpointUrl')}>
+              <Input
+                accessibilityLabel={t('settings.mcp.fields.endpointUrl')}
+                value={getEndpointOrigin(server.endpointUrl)}
+              />
+            </FormField>
+            <FormField label={t('settings.mcp.fields.headers')}>
+              <Input
+                accessibilityLabel={t('settings.mcp.fields.headers')}
+                placeholder={t('enterprise.managed.hidden')}
+                value=""
+              />
+            </FormField>
+          </View>
+          <McpToolsSection onToggleTool={ignoreChange} server={server} />
+        </PolicyGroup>
       </PluginPage>
     </>
   );
 }
 
-function ignoreToolToggle() {}
+function ignoreChange() {}
 
 function McpServerIdentity({
   server,
@@ -168,7 +191,6 @@ function McpServerIdentity({
           >
             {server.name}
           </Text>
-          <ManagedBadge />
         </View>
         <Text className="text-sm text-muted-foreground">
           <Text

@@ -22,6 +22,12 @@ type SectionItemBaseProps = AccessibilityProps &
     density?: SectionItemDensity;
     destructive?: boolean;
     disabled?: boolean;
+    /**
+     * Shows the value at full contrast without its edit affordance, which the owner's mark replaces
+     * outside a `LockedGroup`, and explains the lock when pressed. Rows that edit lock by default
+     * inside a `LockedGroup`.
+     */
+    locked?: boolean;
     onPress?: () => void;
     onPressIn?: PressableProps['onPressIn'];
     onPressOut?: PressableProps['onPressOut'];
@@ -70,8 +76,6 @@ export type SectionSwitchItemProps = Omit<
   label: ReactNode;
   leading?: ReactNode;
   onValueChange: (value: boolean) => void;
-  /** Shows the value at full contrast without letting it change, unlike `disabled`. */
-  readOnly?: boolean;
   value: boolean;
 };
 

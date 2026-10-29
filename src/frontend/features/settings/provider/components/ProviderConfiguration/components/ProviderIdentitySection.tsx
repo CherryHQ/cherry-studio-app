@@ -10,6 +10,7 @@ import {
   BrandAvatarPhoto,
   ProviderBrandAvatar,
 } from '@/frontend/components/Avatar';
+import { withPolicy } from '@/frontend/components/Policy';
 
 import { ProviderValueSheet } from '../../ProviderValueSheet';
 import type { ProviderConfigurationValue } from '../types';
@@ -17,8 +18,33 @@ import type { ProviderConfigurationValue } from '../types';
 const IDENTITY_AVATAR_SIZE = 56;
 const logger = loggerService.withContext('ProviderIdentitySection');
 
-/** The provider at a glance: its mark and name. Tapping either edits it in place. */
-export function ProviderIdentitySection({ value }: { value: ProviderConfigurationValue }) {
+function IdentityAvatar({ value }: { value: ProviderConfigurationValue }) {
+  return value.avatarUri ? (
+    <BrandAvatar label={value.name} size={IDENTITY_AVATAR_SIZE}>
+      <BrandAvatarPhoto uri={value.avatarUri} />
+    </BrandAvatar>
+  ) : (
+    <ProviderBrandAvatar
+      presetProviderId={value.presetProviderId}
+      providerId={value.providerId}
+      // The generated initial comes from the real name, never the placeholder.
+      providerName={value.name}
+      size={IDENTITY_AVATAR_SIZE}
+    />
+  );
+}
+
+/**
+ * The provider at a glance: its mark and name. Tapping either edits it in place, unless the
+ * organization names the provider.
+ */
+function IdentitySection({
+  editable = true,
+  value,
+}: {
+  editable?: boolean;
+  value: ProviderConfigurationValue;
+}) {
   const { t } = useTranslation();
   const [renameDraft, setRenameDraft] = useState<{ open: boolean; text: string } | null>(null);
   const trimmedDraft = renameDraft?.text.trim() ?? '';
@@ -35,6 +61,17 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
     closeRename();
   };
 
+  if (!editable) {
+    return (
+      <View className="flex-row items-center gap-4 px-1">
+        <IdentityAvatar value={value} />
+        <Text className="min-w-0 shrink text-xl font-semibold text-foreground" numberOfLines={1}>
+          {displayName}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <>
       {/* Bottom-aligned so the name's underline meets the avatar's lower edge. */}
@@ -47,19 +84,7 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
           size={IDENTITY_AVATAR_SIZE}
         >
           <View>
-            {value.avatarUri ? (
-              <BrandAvatar label={value.name} size={IDENTITY_AVATAR_SIZE}>
-                <BrandAvatarPhoto uri={value.avatarUri} />
-              </BrandAvatar>
-            ) : (
-              <ProviderBrandAvatar
-                presetProviderId={value.presetProviderId}
-                providerId={value.providerId}
-                // The generated initial comes from the real name, never the placeholder.
-                providerName={value.name}
-                size={IDENTITY_AVATAR_SIZE}
-              />
-            )}
+            <IdentityAvatar value={value} />
             <View className="absolute -right-1 -bottom-1 size-6 items-center justify-center rounded-full border border-border bg-card">
               <CameraIcon className="size-3.5 text-muted-foreground" />
             </View>
@@ -103,3 +128,7 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
     </>
   );
 }
+
+export const ProviderIdentitySection = withPolicy(IdentitySection, (policy) => ({
+  editable: policy.canEdit('provider'),
+}));

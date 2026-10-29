@@ -13,6 +13,9 @@ import {
 import { Pressable, Text, View } from 'react-native';
 
 import { cn } from '../../utils';
+import { useIsInLockedGroup, useLocked } from '../locked/locked-context';
+import { LockedMark } from '../locked/locked-mark';
+import { LockedTrigger } from '../locked/locked-trigger';
 import { SwitchIndicator } from '../switch/switch-indicator';
 import type {
   SectionHeaderProps,
@@ -25,6 +28,8 @@ import type {
 } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
+  /** A locked row whose trailing control already carries the lock mark, such as a switch. */
+  marksItself?: boolean;
   onPressedChange?: (isPressed: boolean) => void;
 };
 
@@ -51,10 +56,19 @@ function renderTextSlot(content: ReactNode, className?: string, numberOfLines?: 
 }
 
 function SectionHeader({ children, title, ...viewProps }: SectionHeaderProps) {
+  const nested = useIsInLockedGroup();
   return (
-    <View className="min-h-10 flex-row items-center gap-3" {...viewProps}>
+    <View
+      className={cn('min-h-10 flex-row items-center gap-3', nested && 'min-h-8 pt-2')}
+      {...viewProps}
+    >
       <View className="min-w-0 flex-1">
-        {renderTextSlot(title, 'text-base font-semibold text-foreground')}
+        {renderTextSlot(
+          title,
+          nested
+            ? 'text-sm font-medium text-foreground-tertiary'
+            : 'text-base font-semibold text-foreground',
+        )}
       </View>
       {children !== undefined ? (
         <View className="shrink-0 items-center justify-center">{children}</View>
@@ -82,6 +96,8 @@ function SectionItem({
   disabled = false,
   label,
   leading,
+  locked,
+  marksItself = false,
   onAccessibilityAction,
   onPress,
   onPressIn,
@@ -91,7 +107,12 @@ function SectionItem({
   testID,
   trailing,
 }: InternalSectionItemProps) {
-  const shouldShowChevron = showChevron ?? (Boolean(onPress) && trailing == null);
+  // A scope locks only rows that edit something; rows without a press action just show a value.
+  const isLocked = useLocked(locked) && (locked === true || onPress !== undefined);
+  // A locked group names its owner once in its header, so its rows carry no mark of their own.
+  const inLockedGroup = useIsInLockedGroup();
+  const showsLockMark = isLocked && !marksItself && !inLockedGroup;
+  const shouldShowChevron = !isLocked && (showChevron ?? (Boolean(onPress) && trailing == null));
   const resolvedAccessibilityLabel =
     accessibilityLabel ?? (typeof label === 'string' ? label : undefined);
   const resolvedAccessibilityState = {
@@ -131,8 +152,21 @@ function SectionItem({
             <ChevronRightIcon className="size-5 text-muted-foreground" />
           </View>
         ) : null}
+        {showsLockMark ? (
+          <View className="shrink-0" testID="section-locked-mark">
+            <LockedMark />
+          </View>
+        ) : null}
       </>
     );
+
+  if (isLocked) {
+    return (
+      <LockedTrigger accessibilityLabel={resolvedAccessibilityLabel} testID={testID}>
+        <View className={rowClassName}>{content}</View>
+      </LockedTrigger>
+    );
+  }
 
   if (onPress) {
     return (
@@ -194,9 +228,11 @@ function SectionSelectItem({
   valueLeading,
   ...props
 }: InternalSectionSelectItemProps) {
+  const isLocked = useLocked(props.locked);
   return (
     <SectionItem
       {...props}
+      locked={isLocked}
       onPressedChange={onPressedChange}
       showChevron={false}
       trailing={
@@ -205,10 +241,12 @@ function SectionSelectItem({
             <View className="shrink-0 items-center justify-center">{valueLeading}</View>
           ) : null}
           {renderTextSlot(value, 'min-w-0 shrink text-right text-base text-foreground', 1)}
-          <ChevronDownIcon
-            className="size-5 shrink-0 text-muted-foreground"
-            testID="section-select-chevron"
-          />
+          {isLocked ? null : (
+            <ChevronDownIcon
+              className="size-5 shrink-0 text-muted-foreground"
+              testID="section-select-chevron"
+            />
+          )}
         </View>
       }
     />
@@ -217,22 +255,25 @@ function SectionSelectItem({
 
 function SectionSwitchItem({
   disabled = false,
+  locked,
   onPressedChange,
   onValueChange,
-  readOnly = false,
   value,
   ...props
 }: InternalSectionSwitchItemProps) {
+  const isLocked = useLocked(locked);
   return (
     <SectionItem
       {...props}
       accessibilityRole="switch"
-      accessibilityState={{ checked: value, ...(readOnly && { disabled: true }) }}
+      accessibilityState={{ checked: value, ...(isLocked && { disabled: true }) }}
       disabled={disabled}
-      onPress={readOnly ? undefined : () => onValueChange(!value)}
+      locked={isLocked}
+      marksItself
+      onPress={() => onValueChange(!value)}
       onPressedChange={onPressedChange}
       showChevron={false}
-      trailing={<SwitchIndicator disabled={disabled} value={value} />}
+      trailing={<SwitchIndicator disabled={disabled} locked={isLocked} value={value} />}
     />
   );
 }
@@ -289,17 +330,23 @@ function SectionRoot({
   );
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
   const hasLeading = rows.some((row) => isSectionItemElement(row) && Boolean(row.props.leading));
+  // Inside a locked group the group's card holds every section, so a section adds only its rows.
+  const nested = useIsInLockedGroup();
 
   return (
-    <View className={cn('gap-1', className)} {...viewProps}>
+    <View className={cn(nested ? 'pt-1' : 'gap-1', className)} {...viewProps}>
       {title !== undefined || headers.length > 0 ? (
-        <View className="px-3">
+        <View className={nested ? 'px-4' : 'px-3'}>
           {title !== undefined ? <SectionHeader title={title} /> : headers}
         </View>
       ) : null}
       <View
         className={cn(
-          variant === 'grouped' ? 'overflow-hidden rounded-2xl bg-card' : 'bg-transparent',
+          nested
+            ? 'bg-transparent'
+            : variant === 'grouped'
+              ? 'overflow-hidden rounded-2xl bg-card'
+              : 'bg-transparent',
           contentClassName,
         )}
         style={{ borderCurve: 'continuous' }}
@@ -331,7 +378,7 @@ function SectionRoot({
           );
         })}
       </View>
-      {footer
+      {footer && !nested
         ? renderTextSlot(
             footer,
             cn('mt-2 text-sm text-muted-foreground', variant === 'grouped' ? 'px-3' : 'px-4'),

@@ -268,13 +268,28 @@ including its user-adjustable fields; `agent_list` marks it `isManaged`.
 
 The UI applies the same table through `src/frontend/components/Policy`. A screen declares the
 resource it shows with `PolicyScope` (or `withResourcePolicy` for list rows and
-`capabilityPolicy` for profile-owned settings pages); wrapped standard components then lock
-fields (`PolicyEditable`, `PolicySelectItem`), hide secrets and delete actions (`PolicySecret`,
-`PolicyDeletable`), mark ownership (`ManagedBadge`) and hide unavailable entries
-(`withCapability`). Model pickers offer only the scope's allowed models, and with one model the
-composer pill, the editor's model row and "answer with another model" stay closed. Business screens
-do not branch on the edition or on `isManaged`. Users may still create their own Agents, MCP servers
-and Skills.
+`capabilityPolicy` for profile-owned settings pages). Organization-owned content is not hidden or
+dimmed; it renders locked, in one visual language:
+
+- **Locked group.** `PolicyGroup` encloses what the organization owns in a CherryUI `LockedGroup`:
+  an outlined card headed by the building mark and "Managed by {organization}". Pages the
+  organization owns entirely (provider list and details, model details, default models, delivered
+  MCP servers and Skills) put their owned content in one group; the managed Agent editor gathers
+  instructions, a single allowed model and its bindings into one group above the settings the user
+  may still change.
+- **Locked variants.** Inside a group, CherryUI switches, selections, inputs, tabs and editing rows
+  render their locked variant: full contrast without edit affordances (a switch keeps a neutral
+  track), and the reason in an info popover when pressed. The group's header is the only mark in
+  the group. Rows that only navigate or copy stay live. A single locked control outside a group,
+  such as the composer's one-model pill or a desktop's provider import, uses the same variant with
+  the mark in place of its affordance. Changes the organization owns (add, sync, delete, reorder) do not appear,
+  and secrets read "Hidden".
+- **Mark.** `ManagedMark` follows a delivered Agent, MCP server or Skill's name in lists;
+  `CapabilityLabel` marks settings entries the organization owns.
+
+Model pickers offer only the scope's allowed models, and "answer with another model" disappears
+with a single model. Business screens do not branch on the edition or on `isManaged`. Users may still
+create their own Agents, MCP servers and Skills.
 Every profile seeds the Cherry Agent once, after the first resource sync so it takes the
 organization's default model; delivered Agents do not replace it, and a deleted one is not recreated.
 

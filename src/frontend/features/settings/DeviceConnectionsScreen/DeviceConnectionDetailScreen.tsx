@@ -68,9 +68,9 @@ export function DeviceConnectionDetailScreen() {
   }
 
   const canOpenHome = connection.capabilities.includes('agent');
-  // Enterprise providers come from the organization, never from a desktop.
-  const canSyncConfiguration =
-    connection.capabilities.includes('configuration') && editionCapabilities().desktopConfigImport;
+  const canSyncConfiguration = connection.capabilities.includes('configuration');
+  // Enterprise providers come from the organization, never from a desktop: the entry stays locked.
+  const isConfigurationLocked = !editionCapabilities().desktopConfigImport;
 
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
@@ -111,6 +111,7 @@ export function DeviceConnectionDetailScreen() {
             <Section.Item
               description={t('settings.deviceConnections.syncGuide.entryDescription')}
               label={t('settings.deviceConnections.syncGuide.entry')}
+              locked={isConfigurationLocked}
               onPress={() =>
                 router.replace({
                   params: { connectionId: connection.id },
