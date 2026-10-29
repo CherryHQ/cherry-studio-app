@@ -13,8 +13,11 @@ import {
 } from '../AssistantMessageActionsProvider';
 
 let mockRetryOutcome: OperationOutcome<void>;
+let mockEditOutcome: OperationOutcome<void>;
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockEditMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockEditSheet = jest.fn();
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
 /** Captures the confirm request so a test can accept it the way a user would. */
@@ -55,6 +58,18 @@ const mockAlert = {
 };
 const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
 jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+jest.mock('../../components/EditUserMessageSheet', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    EditUserMessageSheet: (props: {
+      initialText: string;
+      onSubmit: (text: string) => Promise<boolean>;
+    }) => {
+      mockEditSheet(props);
+      return createElement('EditSheet', props);
+    },
+  };
+});
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => mockAlert,
@@ -105,6 +120,29 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
       }}
       messages={[
         {
+          key: 'user-1',
+          state: 'success',
+          completeness: 'complete',
+          display: {
+            id: 'user-1',
+            role: 'user',
+            status: 'success',
+            turnId: 'turn-1',
+            data: {
+              parts: [{ type: 'text', text: 'Question' }],
+            },
+          },
+          actions: {
+            edit: {
+              availability: { state: 'enabled' },
+              execute: async ({ text }) => {
+                await mockEditMessage({ messageId: 'user-1', text });
+                return mockEditOutcome;
+              },
+            },
+          },
+        },
+        {
           key: 'assistant-1',
           state: 'success',
           completeness: 'complete',
@@ -153,6 +191,7 @@ describe('AssistantMessageActionsProvider', () => {
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
     mockRetryOutcome = { state: 'applied', value: undefined };
+    mockEditOutcome = { state: 'applied', value: undefined };
     probeRef = createRef<ContextProbeHandle>();
   });
 
@@ -260,6 +299,48 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
     expect(mockShare).toHaveBeenCalledWith('answer', undefined);
     expect(mockRetryMessage).not.toHaveBeenCalled();
+  });
+
+  test('opens the edit sheet on a sent question and submits the edited text', async () => {
+    renderProvider();
+    act(() => probeRef.current?.actions.editUserMessage!({ messageId: 'user-1' }));
+    expect(mockEditSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ initialText: 'Question' }),
+    );
+    expect(renderer!.root.findAllByType('EditSheet')).toHaveLength(1);
+
+    await act(async () => {
+      await mockEditSheet.mock.lastCall![0].onSubmit('Edited question');
+    });
+
+    expect(mockEditMessage).toHaveBeenCalledWith({ messageId: 'user-1', text: 'Edited question' });
+    // The transcript continues from the new branch, so the sheet closes.
+    expect(renderer!.root.findAllByType('EditSheet')).toHaveLength(0);
+  });
+
+  test('keeps the edit sheet and its text when the edit is rejected', async () => {
+    mockEditOutcome = {
+      state: 'rejected',
+      failure: localConversationFailure(
+        new AgentProtocolError({
+          code: 'SESSION_BUSY',
+          message: 'private diagnostic',
+          retryable: false,
+        } as AgentErrorView),
+      ),
+    };
+    renderProvider();
+    act(() => probeRef.current?.actions.editUserMessage!({ messageId: 'user-1' }));
+
+    await act(async () => {
+      await mockEditSheet.mock.lastCall![0].onSubmit('Edited question');
+    });
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.input.sendError.sessionBusy',
+      variant: 'danger',
+    });
+    expect(renderer!.root.findAllByType('EditSheet')).toHaveLength(1);
   });
 
   test('ignores repeated share taps until the chat regains focus', () => {

@@ -453,6 +453,7 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
+  editUserMessage(input: { sessionId: string; messageId: string; text: string }): Promise<void>
   selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
   cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>
@@ -814,6 +815,42 @@ submission's, and it has no new rows to show for it. The frontend renders the an
 pending from the press until the reserved one arrives — the same state a just-sent message shows —
 so a rejected admission simply restores the untouched answer.
 
+## Editing a question
+
+`editUserMessage({ sessionId, messageId, text })` answers a settled user question anew with edited
+text. It never rewrites the question in place.
+
+**The edit branches beside the original question.** The Host reserves a new question under the
+edited question's parent, reserves one answer below it, and selects that answer, so the history
+continues from the edited message (see [Branching](#branching)). The original question, its answers,
+and any continuation below them stay in the tree as an unselected branch: an edit cannot discard an
+exchange or a tool effect the user may still want. Because the new question shares the edited
+question's parent, its position is a sibling alternative, not a replacement of the transcript
+below it.
+
+Only a settled user row can be edited. The Host rejects a missing or non-user message with
+`MESSAGE_NOT_FOUND`, and refuses the operation while the Session has unfinished work with
+`SESSION_BUSY`; the store repeats the settled-answer check inside the reservation transaction. The
+edited question's own turn id is replaced: the new question and its answer share a fresh turn id.
+
+The replacement input is derived from the stored question. All stored text collapses into one text
+part carrying `text`, and file parts stay attached while their managed file still resolves; an
+attachment deleted from the library is dropped instead of blocking the edit. Inline plugin, Skill,
+and selection references survive only when the edited text still contains their mention, remapped to
+their new offsets in order; mentions the user removed are dropped. Skill selections and the Skill
+action recorded on the question are preserved, because they are not part of the editable text. The
+answer reuses the newest answer's model; its reasoning effort and image settings are reused when the
+inference snapshot is supported, the same choices a same-model retry makes. Current credentials,
+instructions, permissions, and attachment availability are revalidated. Preparation failure leaves
+the original transcript unchanged.
+
+The client offers Edit from the user message menu, prefilled with the stored text, and requires the
+message to be settled and the Session idle. It shows no optimistic rows: the new question and its
+pending answer arrive through `message.created` and `session.updated`. A rejected admission leaves
+the original exchange unchanged and keeps the editing sheet open with the typed text. The edited
+question shows its sibling versions as a pager under the message, so the original exchange stays
+reachable; choosing a version selects the branch that contains it.
+
 ## Branching
 
 A Session's messages form a tree (see [Agent Persistence](./agent-persistence.md)). The Session's
@@ -850,6 +887,10 @@ question has, and the questions an answer has, are alternatives the client can s
 - **Regeneration.** Regenerating a settled answer reserves a sibling answer to the same question and
   selects it. Answering with another model (`retryMessage` with `modelId`) does the same with the
   chosen model, adding one more answer to the question.
+- **Editing.** Editing a settled question (`editUserMessage`) reserves a sibling question under the
+  same parent, reserves one answer below it, and selects that answer; the original question and its
+  continuations stay in the tree as an alternative branch. The edited question shows its sibling
+  versions in the transcript, so either exchange can be selected.
 - **Fork.** `forkSession({ sessionId, fromMessageId })` still creates a new Session and copies the
   selected branch up to the fork point, without its sibling alternatives, inside one transaction.
   Turns and approvals are not copied; the new Session starts idle.

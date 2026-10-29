@@ -13,11 +13,14 @@ import { Text, View } from 'react-native';
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
-import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
+import {
+  useAssistantMessageActions,
+  useAssistantMessageActionsState,
+} from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageAnswerCards } from './MessageAnswerCards';
+import { AnswerDots, MessageAnswerCards } from './MessageAnswerCards';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -174,6 +177,32 @@ function AssistantChatMessage({
   );
 }
 
+/** The versions of an edited question; a dot shows one version. */
+function UserQuestionBranch({ message }: { message: MessageListItem }) {
+  const { t } = useTranslation();
+  const { selectBranch } = useAssistantMessageActions();
+  const siblings = message.questionBranch?.siblings;
+  if (!siblings || siblings.length < 2 || !selectBranch) return null;
+  const index = Math.max(0, siblings.indexOf(message.id));
+  return (
+    <BackgroundPressExclusion>
+      <View className="flex-row justify-end pr-1">
+        <AnswerDots
+          count={siblings.length}
+          index={index}
+          onSelect={(target) => {
+            const targetId = siblings[target];
+            if (targetId) void selectBranch({ messageId: message.id, targetId });
+          }}
+          pageLabel={(dot) =>
+            t('chat.branch.questionPage', { index: dot + 1, total: siblings.length })
+          }
+        />
+      </View>
+    </BackgroundPressExclusion>
+  );
+}
+
 function formatMessageCreatedAt(createdAt: string | undefined): string | undefined {
   if (!createdAt) {
     return undefined;
@@ -208,6 +237,7 @@ export const ChatMessage = memo(function ChatMessage({
       <View className="gap-2">
         <UserMessage attachments={attachments} message={message} />
         {accessories}
+        {message.questionBranch ? <UserQuestionBranch message={message} /> : null}
       </View>
     ) : (
       <AssistantChatMessage
@@ -250,7 +280,9 @@ function ChatMessageContextMenu({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
-  const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
+  const { copyAssistantMessage, editUserMessage, shareAssistantMessage } =
+    useAssistantMessageActions();
+  const { editableMessageIds, isEditDisabled } = useAssistantMessageActionsState();
   // These existing actions and the text projection accept either message role.
   const text =
     message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
@@ -267,6 +299,17 @@ function ChatMessageContextMenu({
             label: t('common.copy'),
             onPress: () => copyAssistantMessage({ messageId: message.id, text }),
           },
+          ...((message.role === 'user' && editUserMessage && editableMessageIds.has(message.id)
+            ? [
+                {
+                  // Editing needs the question's text and an idle Session.
+                  disabled: !text || isEditDisabled,
+                  id: 'edit',
+                  label: t('chat.messageActions.edit'),
+                  onPress: () => editUserMessage({ messageId: message.id }),
+                },
+              ]
+            : []) satisfies readonly MenuItem[]),
           {
             id: 'share',
             label: t('chat.share.title'),

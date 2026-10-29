@@ -131,6 +131,7 @@ function protocolWithObservation(
     clearWorkingStorage: jest.fn(),
     deleteSession: jest.fn(),
     deleteTurn: jest.fn(),
+    editUserMessage: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
     selectMessage: jest.fn(),
@@ -418,6 +419,46 @@ describe('AgentSessionChatClient', () => {
 
     admitRetry();
     await retry;
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    unsubscribe();
+  });
+
+  test('admits an edit while the original exchange stays visible', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    const changed: string[] = [];
+    let admitEdit!: () => void;
+    protocol.editUserMessage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          admitEdit = () => resolve();
+        }),
+    );
+    const client = new AgentSessionChatClient(protocol, {
+      onTranscriptChanged: (sessionId) => changed.push(sessionId),
+    });
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    const edit = client.editUserMessage({
+      sessionId: 'session-1',
+      messageId: 'user-1',
+      text: 'Edited question',
+    });
+
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    await client.refresh('session-1');
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+
+    changed.length = 0;
+    admitEdit();
+    await edit;
+    expect(protocol.editUserMessage).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      messageId: 'user-1',
+      text: 'Edited question',
+    });
+    expect(changed).toEqual(['session-1']);
     expect(client.getState('session-1').isSubmitting).toBe(false);
     unsubscribe();
   });

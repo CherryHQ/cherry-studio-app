@@ -387,6 +387,10 @@ export function toAgentMessageListItem(
           },
         }
       : {}),
+    // Editing a sent question adds a sibling question; the row offers those versions.
+    ...(message.siblings && message.role === 'user'
+      ? { questionBranch: { siblings: message.siblings.map((sibling) => sibling.id) } }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),

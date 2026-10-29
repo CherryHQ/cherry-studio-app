@@ -42,6 +42,8 @@ import type {
   ForkSessionInput,
   ForkSessionResult,
   ReserveAnswerInput,
+  ReserveEditSubmissionInput,
+  ReserveEditSubmissionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
   ReserveRetryInput,
@@ -694,6 +696,85 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         userMessage: toAgentMessageView(userRow),
         assistantMessage: toAgentMessageView(assistantRow),
         additionalAssistantMessages: [],
+      };
+    });
+  }
+
+  async reserveEditSubmission(
+    input: ReserveEditSubmissionInput,
+  ): Promise<ReserveEditSubmissionResult> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [edited] = await tx
+        .select(agentMessageViewColumns)
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.id, input.editedMessageId),
+          ),
+        )
+        .limit(1);
+      if (!edited || edited.role !== 'user') {
+        return { status: 'message-not-found' };
+      }
+      // The edit branches beside the original question, so its answers must have
+      // stopped writing rows before the new branch is selected.
+      const [unsettled] = await tx
+        .select({ id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.parentId, edited.id),
+            eq(agentSessionMessageTable.role, 'assistant'),
+            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+          ),
+        )
+        .limit(1);
+      if (unsettled) {
+        return { status: 'turn-unsettled' };
+      }
+
+      const turnId = createOrderedUuid();
+      const [userRow] = await tx
+        .insert(agentSessionMessageTable)
+        .values({
+          id: input.userMessageId,
+          sessionId: input.sessionId,
+          parentId: edited.parentId ?? null,
+          turnId,
+          role: 'user',
+          status: 'success',
+          data: { parts: input.userParts },
+          searchableText: toSearchableText(input.userParts),
+        })
+        .returning(agentMessageViewColumns);
+      const [assistantRow] = await tx
+        .insert(agentSessionMessageTable)
+        .values({
+          id: input.assistantMessageId,
+          sessionId: input.sessionId,
+          parentId: userRow.id,
+          turnId,
+          role: 'assistant',
+          status: 'pending',
+          data: { parts: [] },
+          modelId: input.modelId,
+          inferenceSnapshot: input.inferenceSnapshot,
+        })
+        .returning(agentMessageViewColumns);
+      await tx
+        .update(agentSessionTable)
+        .set({
+          lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${assistantRow.createdAt})`,
+          activeNodeId: assistantRow.id,
+        })
+        .where(eq(agentSessionTable.id, input.sessionId));
+      return {
+        status: 'reserved',
+        turnId,
+        userMessage: toAgentMessageView(userRow),
+        assistantMessage: toAgentMessageView(assistantRow),
       };
     });
   }

@@ -84,6 +84,32 @@ export type ReserveRetryInput = Omit<
   assistantParts: AgentMessagePart[];
 };
 
+/**
+ * The settlement of an edit one input creates. Refusing rather than skipping:
+ * silently editing beside a still-running answer would reserve a new branch
+ * while a turn that owns the old one is still writing rows. The message lookup
+ * being session-scoped makes an unknown Session and an unknown row one state.
+ */
+export type ReserveEditSubmissionResult =
+  | {
+      status: 'reserved';
+      turnId: string;
+      userMessage: AgentMessageView;
+      assistantMessage: AgentMessageView;
+    }
+  | { status: 'message-not-found' }
+  | { status: 'turn-unsettled' };
+
+export type ReserveEditSubmissionInput = ReservedAnswerInput & {
+  sessionId: string;
+  /** The settled user row the edit branches from; it stays in the tree. */
+  editedMessageId: string;
+  /** Id of the sibling user row this edit reserves under the edited row's parent. */
+  userMessageId: string;
+  /** Replacement question parts, already derived from the edited row's parts by the Host. */
+  userParts: AgentMessagePart[];
+};
+
 export type ForkSessionInput = {
   sessionId: string;
   /** Inclusive fork point; the copy holds its ancestor chain only. */
@@ -202,6 +228,13 @@ export interface AgentSessionStore {
    * turn with (agent-protocol.md "Manual answer retry").
    */
   reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult>;
+
+  /**
+   * Atomically reserves an edited sibling question of an existing user row,
+   * one answer placeholder under it, and selects that answer. The edited row's
+   * answers must already be settled (agent-protocol.md "Editing a question").
+   */
+  reserveEditSubmission(input: ReserveEditSubmissionInput): Promise<ReserveEditSubmissionResult>;
 
   /**
    * Selects the branch containing `messageId`: unchanged when it is already on

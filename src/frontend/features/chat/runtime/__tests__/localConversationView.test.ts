@@ -61,6 +61,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     respondApproval: jest.fn(async () => undefined),
     respondQuestion: jest.fn(async () => undefined),
     retryMessage: jest.fn(async () => undefined),
+    editUserMessage: jest.fn(async () => undefined),
     forkSession: jest.fn(async () => ({ id: 'fork' }) as never),
     deleteTurn: jest.fn(async () => undefined),
     selectMessage: jest.fn(async () => ({ id: 'session' }) as never),
@@ -268,7 +269,50 @@ test('message actions follow the busy state and reuse projections while it is un
   expect(f.client.retryMessage).not.toHaveBeenCalled();
   expect(f.projector.message(message('user', 'user'), f.state).actions.retry).toBeUndefined();
   expect(f.projector.message(message('user', 'user'), f.state).actions.answerWith).toBeUndefined();
+  const user = message('question', 'user');
+  // Editing a question waits for the Session to settle, like regeneration.
+  const busyEdit = f.projector.message(user, f.state).actions.edit;
+  expect(busyEdit?.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  expect(await busyEdit!.execute({ text: 'edited' })).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'conflict' },
+  });
+  expect(f.client.editUserMessage).not.toHaveBeenCalled();
+  f.set({ activeTurn: null });
+  const idleEdit = f.projector.message(user, f.state).actions.edit;
+  expect(idleEdit?.availability).toEqual({ state: 'enabled' });
+  expect(await idleEdit!.execute({ text: 'edited' })).toEqual({
+    state: 'applied',
+    value: undefined,
+  });
+  expect(f.client.editUserMessage).toHaveBeenCalledWith({
+    sessionId: 'session',
+    messageId: 'question',
+    text: 'edited',
+  });
+  f.client.editUserMessage.mockClear();
+  expect(
+    await f.projector.message(message('system', 'system'), f.state).actions.edit?.execute({
+      text: 'edited',
+    }),
+  ).toBeUndefined();
   expect(f.projector.message(message('system', 'system'), f.state).actions).toEqual({});
+});
+
+test('offers branch switching for sibling questions', async () => {
+  const f = fixture();
+  const siblings = [
+    { id: 'question-0', modelId: null, status: 'success' as const, siblingsGroupId: 0 },
+    { id: 'question', modelId: null, status: 'success' as const, siblingsGroupId: 0 },
+  ];
+  const row = { ...message('question', 'user'), siblings };
+  const select = f.projector.message(row, f.state).actions.select;
+  expect(select?.availability).toEqual({ state: 'enabled' });
+  expect(await select!.execute({ messageId: 'question-0' })).toEqual({
+    state: 'applied',
+    value: undefined,
+  });
+  expect(f.client.selectMessage).toHaveBeenCalledWith('session', 'question-0');
 });
 
 test('history keeps its rows while live state streams and refreshes them when busy state changes', () => {

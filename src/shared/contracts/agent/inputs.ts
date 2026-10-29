@@ -115,6 +115,18 @@ export const AgentRetryMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
+export const AgentEditUserMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  /** The settled user row the edited question branches from; it stays in the tree. */
+  messageId: z.string().min(1),
+  /**
+   * The replacement question text. The Host derives the new input from the
+   * stored parts, not from client parts: inline references are remapped onto
+   * the edited text and carried file parts stay attached.
+   */
+  text: z.string().min(1),
+});
+export type AgentEditUserMessageInput = z.infer<typeof AgentEditUserMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),

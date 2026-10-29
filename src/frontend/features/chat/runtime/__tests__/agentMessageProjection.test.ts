@@ -27,6 +27,20 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('projects sibling questions as question versions, not answer branches', () => {
+    const item = toAgentMessageListItem(
+      message('q2', {
+        role: 'user',
+        status: 'success',
+        siblings: [
+          { id: 'q1', modelId: null, status: 'success', siblingsGroupId: 0 },
+          { id: 'q2', modelId: null, status: 'success', siblingsGroupId: 0 },
+        ],
+      }),
+    );
+    expect(item?.questionBranch).toEqual({ siblings: ['q1', 'q2'] });
+    expect(item?.branch).toBeUndefined();
+  });
   test('a stale history page cannot replace newer message-owned translations', () => {
     const older = {
       sourceHash: 'a'.repeat(64),

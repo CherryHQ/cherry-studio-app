@@ -1,4 +1,4 @@
-import { v7 as uuid } from 'uuid';
+import { v4 as uuidv4, v7 as uuid } from 'uuid';
 
 import type {
   AgentEvent,
@@ -1329,6 +1329,230 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(
         answer!.assistantMessageId,
       );
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('editing a settled question branches a new question and selects its own answer', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    const second = createUniqueModelId('provider', 'second-model');
+    const secondSnapshot: AgentInferenceSnapshotV1 = {
+      ...inferenceSnapshot,
+      model: { ...inferenceSnapshot.model, uniqueModelId: second, modelId: 'second-model' },
+    };
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      // The newest answer of the edited turn is the one whose choices the edit reuses.
+      const newest = await state.store.reserveAnswer({
+        sessionId: state.sessionId,
+        userMessageId: original.userMessageId,
+        assistantMessageId: uuid(),
+        modelId: second,
+        inferenceSnapshot: secondSnapshot,
+      });
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: newest.assistantMessage.id,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      await state.host.editUserMessage({
+        sessionId: state.sessionId,
+        messageId: original.userMessageId,
+        text: 'Edited question',
+      });
+      // The edit is a sibling question: the original exchange stays as an unselected branch.
+      const [question, answer] = await state.store.listMessages(state.sessionId);
+      expect(question?.id).not.toBe(original.userMessageId);
+      expect(question).toMatchObject({ parentId: null, status: 'success' });
+      expect(question?.turnId).not.toBe(original.identity.turnId);
+      expect(question?.parts).toEqual([
+        { id: 'input-0', type: 'text', text: 'Edited question', state: 'done' },
+      ]);
+      // Its answer reuses the original inference choices and waits for execution.
+      expect(answer).toMatchObject({
+        parentId: question?.id,
+        turnId: question?.turnId,
+        status: 'pending',
+        modelId: second,
+      });
+      expect(answer?.id).not.toBe(original.assistantMessageId);
+      expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(answer?.id);
+      for (const id of [
+        original.userMessageId,
+        original.assistantMessageId,
+        newest.assistantMessage.id,
+      ])
+        expect(await state.store.getMessage(state.sessionId, id)).toMatchObject({
+          status: 'success',
+        });
+      // The sibling runs on its own working copy.
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      expect(lane).toEqual(runtimeLane(state.sessionId, 1));
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('editing keeps only the references the replacement text still mentions', async () => {
+    const selection = {
+      file_entry_id: uuid(),
+      anchor: { format: 'docx' as const },
+      excerpt: 'Budget table',
+    };
+    const skillId = uuidv4();
+    const state = fixture();
+    const original = await state.reserve('completed', [
+      {
+        id: 'question',
+        type: 'text',
+        text: 'Look at 飞书 @skill and @selection',
+        state: 'done',
+        pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 8 }],
+        skillReferences: [{ type: 'skill', skillId, label: '@skill', offset: 11 }],
+        selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 22 }],
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      await state.host.editUserMessage({
+        sessionId: state.sessionId,
+        messageId: original.userMessageId,
+        text: 'Please check 飞书 and @selection now',
+      });
+      const [question] = await state.store.listMessages(state.sessionId);
+      // The text collapses into one part; surviving mentions move to their new offsets and
+      // the removed Skill mention is dropped.
+      expect(question?.parts).toEqual([
+        {
+          id: 'input-0',
+          type: 'text',
+          text: 'Please check 飞书 and @selection now',
+          state: 'done',
+          pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 13 }],
+          selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 20 }],
+        },
+      ]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('editing drops an attachment the library no longer has', async () => {
+    const fileEntryId = uuid();
+    const state = fixture();
+    const original = await state.reserve('completed', [
+      { id: 'question', type: 'text', text: 'Question', state: 'done' },
+      {
+        id: 'file',
+        type: 'file',
+        fileEntryId,
+        mediaType: 'text/plain',
+        filename: 'notes.txt',
+        purpose: 'input-attachment',
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      await state.host.editUserMessage({
+        sessionId: state.sessionId,
+        messageId: original.userMessageId,
+        text: 'Edited question',
+      });
+      const [question] = await state.store.listMessages(state.sessionId);
+      // The deleted file is dropped instead of blocking the edit.
+      expect(question?.parts).toEqual([
+        { id: 'input-0', type: 'text', text: 'Edited question', state: 'done' },
+      ]);
+      expect(
+        (await state.store.getMessage(state.sessionId, original.userMessageId))?.parts,
+      ).toContainEqual(expect.objectContaining({ type: 'file', fileEntryId }));
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('refuses to edit a question whose answer has not settled', async () => {
+    const state = fixture();
+    const original = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.editUserMessage({
+          sessionId: state.sessionId,
+          messageId: original.userMessageId,
+          text: 'Edited question',
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+      expect((await state.store.listMessages(state.sessionId)).map(({ id }) => id)).toEqual([
+        original.userMessageId,
+        original.assistantMessageId,
+      ]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('refuses to edit a message that is not a settled question', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      for (const messageId of [original.assistantMessageId, uuid()])
+        await expect(
+          state.host.editUserMessage({
+            sessionId: state.sessionId,
+            messageId,
+            text: 'Edited question',
+          }),
+        ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+      expect((await state.store.listMessages(state.sessionId)).map(({ id }) => id)).toEqual([
+        original.userMessageId,
+        original.assistantMessageId,
+      ]);
+      expect(state.conversations.submit).not.toHaveBeenCalled();
     } finally {
       await state.host.close();
     }

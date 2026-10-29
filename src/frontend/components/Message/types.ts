@@ -35,6 +35,13 @@ export type MessageListItem = Readonly<{
     key: string;
     siblings: readonly Readonly<{ id: string; status: MessageStatus; modelId: string | null }>[];
   }>;
+  /**
+   * The questions that are alternatives at this message's branch point, oldest
+   * first and including this question, when editing created a sibling.
+   */
+  questionBranch?: Readonly<{
+    siblings: readonly string[];
+  }>;
   role: 'assistant' | 'system' | 'user';
   /** Feature-owned timeline event synthesized beside persisted messages. */
   systemEvent?: Readonly<{
