@@ -9,6 +9,7 @@ import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
 import { type ComponentProps, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -41,7 +42,12 @@ import { createSelectionMention } from './components/ChatInput/utils/selectionMe
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
-import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import {
+  AssistantMessageUsage,
+  ChatComposerClearance,
+  ChatEmptyState,
+  ChatWorkspace,
+} from './components/ChatWorkspace';
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
@@ -200,7 +206,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
       : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
-  const [composerHeight, setComposerHeight] = useState(0);
+  const composerHeight = useSharedValue(0);
+  const setComposerHeight = useCallback(
+    (height: number) => composerHeight.set(height),
+    [composerHeight],
+  );
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -223,7 +233,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         {/* An organization Agent's composer and answer pickers follow its policy. */}
         <PolicyScope policy={agentPolicy(agent.agent)}>
           {/* A drop without a composer could import files with nothing to attach
-          them to, so the area refuses sessions in preview and error states. */}
+            them to, so the area refuses sessions in preview and error states. */}
           <ComposerDropArea enabled={hasComposer}>
             {!isPreview &&
             sessionId &&
@@ -237,16 +247,18 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               {/* Native background taps yield to scrolling and excluded message content. */}
               <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
                 {sessionId && session.error ? (
-                  <View className="flex-1 justify-center px-8 py-16">
-                    <ContentState.Error
-                      primaryAction={{
-                        children: t('agent.actions.retry'),
-                        onPress: () => void session.refetch(),
-                      }}
-                      prominence="prominent"
-                      title={t('navigation.chatsLoadFailed')}
-                    />
-                  </View>
+                  <ChatComposerClearance className="flex-1">
+                    <View className="flex-1 justify-center px-8 py-16">
+                      <ContentState.Error
+                        primaryAction={{
+                          children: t('agent.actions.retry'),
+                          onPress: () => void session.refetch(),
+                        }}
+                        prominence="prominent"
+                        title={t('navigation.chatsLoadFailed')}
+                      />
+                    </View>
+                  </ChatComposerClearance>
                 ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
                   <ChatWorkspace
                     executionSource="local"
@@ -275,11 +287,16 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 )}
               </ComposerDismissArea>
             </FullScreenLayerHost>
-            {/* Below the transcript: the column's top edge sits under the header overlay. */}
-            {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+            {/* The transcript keeps its viewport; the keyboard adapter reserves the dock inset. */}
+            {!hasComposer && sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
             {hasComposer ? (
-              <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
+              <ComposerDock
+                backgroundClassName="bg-chat-background"
+                layoutMode="expandable-overlay"
+                onHeightChange={setComposerHeight}
+              >
                 <View>
+                  {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
                   <ChatInput
                     agentId={resolvedAgentId}
                     controls={controls}
