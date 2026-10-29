@@ -70,9 +70,7 @@ export function MainHeaderView({
           </Stack.Toolbar.View>
         ) : null}
       </Stack.Toolbar>
-      {rightActions.length > 0 ? (
-        <Stack.Toolbar placement="right">{rightActions.map(renderToolbarItem)}</Stack.Toolbar>
-      ) : null}
+      <Stack.Toolbar placement="right">{rightActions.map(renderToolbarItem)}</Stack.Toolbar>
     </>
   );
 }

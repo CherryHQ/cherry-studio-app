@@ -111,7 +111,7 @@ first-level destinations lead with the sidebar button (`RouteHeaderProvider root
 which hides or shows the column; the choice persists across launches, rotation, and resizing, and
 only a wide window reads it. While an iPhone Duo is partly folded the column fills the leading side
 of the fold and has no button, since hiding it would leave the chat across the fold. The chat header
-adds New chat while the column is hidden. Swiping does not hide or show the column; the overlay
+keeps New chat at every width. Swiping does not hide or show the column; the overlay
 gesture belongs to compact windows. The sidebar marks the open destination: a
 destination opened from the chat pushes above it without animation, and another destination takes
 its place, so moving between sidebar entries builds no back history. Pages beneath a destination

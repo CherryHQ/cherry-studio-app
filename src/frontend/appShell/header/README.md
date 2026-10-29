@@ -18,8 +18,7 @@ This module owns Expo Router header adapters used by the app screens.
 - The drawer action is the sidebar button from `useSidebarToggle`
   (`@/frontend/appShell/sidebar/toggle`): it opens the overlay in a compact window and hides or
   shows the column in a wide one, with one glyph and a label for each. It is absent while the file
-  pane or a fold holds the column. `MainHeader` adds New chat while that button opens or shows the
-  sidebar; beside the file pane it returns once the pane closes.
+  pane or a fold holds the column. `MainHeader` always ends with New chat, at every width.
 - Business screens declare only titles,
   right-side actions, and exceptional back interception, and inherit their leading action from the
   provider. When no navigation history exists, the default back action replaces to `/`.
