@@ -219,6 +219,7 @@ function SectionSwitchItem({
   disabled = false,
   onPressedChange,
   onValueChange,
+  readOnly = false,
   value,
   ...props
 }: InternalSectionSwitchItemProps) {
@@ -226,9 +227,9 @@ function SectionSwitchItem({
     <SectionItem
       {...props}
       accessibilityRole="switch"
-      accessibilityState={{ checked: value }}
+      accessibilityState={{ checked: value, ...(readOnly && { disabled: true }) }}
       disabled={disabled}
-      onPress={() => onValueChange(!value)}
+      onPress={readOnly ? undefined : () => onValueChange(!value)}
       onPressedChange={onPressedChange}
       showChevron={false}
       trailing={<SwitchIndicator disabled={disabled} value={value} />}

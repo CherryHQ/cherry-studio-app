@@ -478,6 +478,26 @@ describe('Section', () => {
     expect(onValueChange).toHaveBeenCalledWith(false);
   });
 
+  test('shows a read-only switch at full contrast without a press target', () => {
+    const tree = render(
+      <Section>
+        <Section.SwitchItem label="Reasoning" onValueChange={jest.fn()} readOnly value />
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) =>
+        node.props.accessibilityLabel === 'Reasoning' && typeof node.props.className === 'string',
+    );
+    const indicator = tree.root.find(
+      (node) => node.props.mockComponent === 'switch-control' && typeof node.type === 'string',
+    );
+
+    expect(row.props.onPress).toBeUndefined();
+    expect(row.props.className).not.toContain('opacity-40');
+    expect(row.props.accessibilityState).toEqual({ checked: true, disabled: true });
+    expect(indicator.props).toMatchObject({ disabled: false, value: true });
+  });
+
   test('supports custom row content while preserving item layout', () => {
     const tree = render(
       <Section>

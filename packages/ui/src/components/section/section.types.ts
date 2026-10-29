@@ -70,6 +70,8 @@ export type SectionSwitchItemProps = Omit<
   label: ReactNode;
   leading?: ReactNode;
   onValueChange: (value: boolean) => void;
+  /** Shows the value at full contrast without letting it change, unlike `disabled`. */
+  readOnly?: boolean;
   value: boolean;
 };
 
