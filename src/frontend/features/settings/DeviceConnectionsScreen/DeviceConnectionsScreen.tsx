@@ -23,6 +23,7 @@ export function DeviceConnectionsScreen() {
         accessibilityLabel: t('settings.deviceConnections.scan.action'),
         icon: CameraIcon,
         key: 'scan-device',
+        nativeIcon: 'qrcode.viewfinder',
         onPress: () => router.replace('/settings/device-connections/scan'),
         type: 'icon',
       },

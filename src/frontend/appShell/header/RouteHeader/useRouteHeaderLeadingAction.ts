@@ -14,8 +14,6 @@ import type { RouteHeaderRootAction } from './RouteHeader.types';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
 
-const SIDEBAR_NATIVE_ICON = require('@/assets/header-toolbar/sidebar.png');
-
 /** Resolves child screens to back and route roots to their declared action. */
 function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
   const rootAction = useRouteHeaderRootAction();
@@ -56,7 +54,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
             accessibilityLabel: t(sidebarButtons[sidebar.action].accessibilityLabel),
             icon: SidebarExpandIcon,
             key: 'route-leading',
-            nativeIcon: SIDEBAR_NATIVE_ICON,
+            nativeIcon: 'sidebar.left',
             onPress: () => toggleSidebar(sidebar, openDrawer),
             testID: sidebarButtons[sidebar.action].testID,
             type: 'icon',
@@ -66,6 +64,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
               accessibilityLabel: t('common.close'),
               icon: XIcon,
               key: 'route-leading',
+              nativeIcon: 'xmark',
               onPress: goBack,
               testID: 'route-header-close',
               type: 'icon',
@@ -74,6 +73,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
               accessibilityLabel: t('navigation.back'),
               icon: ArrowLeftIcon,
               key: 'route-leading',
+              nativeIcon: 'chevron.left',
               onPress: goBack,
               testID: 'route-header-back',
               type: 'icon',

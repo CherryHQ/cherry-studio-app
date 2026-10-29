@@ -1,12 +1,11 @@
 import { Stack, useIsPreview } from 'expo-router';
 import { useMemo } from 'react';
-import { View } from 'react-native';
 
 import { usePaneChrome } from '@/frontend/appShell/layout';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { headerScreenOptions } from '../../headerScreenOptions';
-import { HeaderAction } from '../HeaderAction';
+import { renderHeaderToolbarItem } from '../HeaderAction';
 import { HeaderActionGroup } from '../HeaderActionGroup/HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
 import { InlineHeaderChrome } from './InlineHeaderChrome';
@@ -50,13 +49,12 @@ function NativeHeaderChrome({
       {titleElement && titleAlign === 'left' ? (
         // iOS centers Stack.Title; leading titles share the toolbar with the back action.
         <Stack.Toolbar placement="left">
-          {leftActions.map((action) => (
-            <Stack.Toolbar.View key={action.key}>
-              <View className={actionSurfaceClassName}>
-                <HeaderAction action={action} tone={actionTone} />
-              </View>
-            </Stack.Toolbar.View>
-          ))}
+          {leftActions.map((action) =>
+            renderHeaderToolbarItem(action, {
+              surfaceClassName: actionSurfaceClassName,
+              tone: actionTone,
+            }),
+          )}
           <Stack.Toolbar.Spacer hidden={leftActions.length === 0} width={4} />
           <Stack.Toolbar.View>{titleElement}</Stack.Toolbar.View>
         </Stack.Toolbar>
