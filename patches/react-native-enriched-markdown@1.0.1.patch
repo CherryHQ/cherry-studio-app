@@ -331,7 +331,7 @@ index 9ff71ede7eb3ec58eb6e0547d553839e1acbb977..f77b0e60dd5d22cf81f4bd176cb7e663
      }
    }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29db25fa97f 100644
+index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f195a528e5cd3c3396f4d1ca5a37b825f7e85f5 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 @@ -17,10 +17,12 @@ import android.text.StaticLayout
@@ -426,6 +426,24 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
    }
  
    override fun onLayout(
+@@ -211,7 +237,7 @@ class CodeBlockContainerView(
+     bottom: Int,
+   ) {
+     val width = right - left
+-    val labelTop = headerH - languageView.measuredHeight
++    val labelTop = (headerH - languageView.measuredHeight) / 2
+     languageView.layout(
+       inset,
+       labelTop,
+@@ -222,7 +248,7 @@ class CodeBlockContainerView(
+     val iconWidth = copyButton.drawable?.intrinsicWidth ?: copyButton.measuredWidth
+     val iconSlack = ((copyButton.measuredWidth - iconWidth) / 2).coerceAtLeast(0)
+     val buttonLeft = (width - inset - copyButton.measuredWidth + iconSlack).coerceAtLeast(0)
+-    val buttonTop = (headerH - languageView.measuredHeight / 2 - copyButton.measuredHeight / 2).coerceAtLeast(0)
++    val buttonTop = (headerH - copyButton.measuredHeight) / 2
+     copyButton.layout(
+       buttonLeft,
+       buttonTop,
 @@ -230,15 +256,14 @@ class CodeBlockContainerView(
        buttonTop + copyButton.measuredHeight,
      )
@@ -468,7 +486,17 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      private const val HEADER_LABEL_SCALE = 0.85f
  
      // Drawable box for the copy glyph, as a multiple of the code font size.
-@@ -366,7 +400,7 @@ class CodeBlockContainerView(
+@@ -323,8 +357,7 @@ class CodeBlockContainerView(
+ 
+     private fun borderPx(style: CodeBlockStyle): Int = ceil(style.borderWidth).toInt()
+ 
+-    // Header is the top content inset plus one label line; the code text
+-    // view's own top inset then forms the single gap below the label.
++    // Keep one label line plus the content inset, shared evenly above and below.
+     private fun headerHeight(style: CodeBlockStyle): Int {
+       val paint =
+         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+@@ -366,7 +399,7 @@ class CodeBlockContainerView(
        val inset = contentInset(style)
        val headerH = headerHeight(style)
        val text = buildCodeText(CodeBlockNode.extractCode(node), style)
@@ -477,7 +505,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
        val paint = createCodePaint(style, context)
        val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
        val layout =
-@@ -377,7 +411,7 @@ class CodeBlockContainerView(
+@@ -377,7 +410,7 @@ class CodeBlockContainerView(
            .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
            .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
            .build()
@@ -901,7 +929,7 @@ index 315ec083f1daf23c29bc2d708086578c14fec1e5..93548a1d3f9534811246beb7ebe31e92
                                   for (ENRMListMarkerDescriptor *marker in markers) {
                                     CGFloat markerX = isRTL ? origin.x + container.size.width - marker.indent + gap
 diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
-index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1ef4eb6ed 100644
+index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..32bcad25f94625444e1520d809c1790f6158eb0e 100644
 --- a/ios/views/ENRMCodeBlockContainerView.m
 +++ b/ios/views/ENRMCodeBlockContainerView.m
 @@ -8,8 +8,8 @@
@@ -942,7 +970,7 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
    _scrollView.backgroundColor = [UIColor clearColor];
    _scrollView.isAccessibilityElement = NO;
    _scrollView.accessibilityElementsHidden = YES;
-@@ -281,11 +286,12 @@ - (void)layoutScrollArea
+@@ -281,16 +286,16 @@ - (void)layoutScrollArea
  
    CGFloat horizontalPad = MAX(inset - borderW, 0);
    CGFloat contentWidth = MAX(_codeSize.width + horizontalPad * 2, frame.size.width);
@@ -958,7 +986,24 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  #endif
  }
  
-@@ -406,7 +412,7 @@ - (CGFloat)contentInset
+-// Header is the top content inset plus one label line; the code text's own
+-// top inset then forms the single gap below the label.
++// Keep one label line plus the content inset, shared evenly above and below.
+ - (CGFloat)headerHeight
+ {
+   return [self contentInset] + _headerLabelLineHeight;
+@@ -305,9 +310,7 @@ - (void)layoutHeaderButton
+   }
+   CGFloat iconSlack = (headerH - iconWidth) / 2;
+   CGFloat buttonLeft = MAX(self.bounds.size.width - [self contentInset] - headerH + iconSlack, 0);
+-  CGFloat labelCenterY = headerH - _headerLabelLineHeight / 2;
+-  CGFloat buttonTop = MAX(labelCenterY - headerH / 2, 0);
+-  _copyButton.frame = CGRectMake(buttonLeft, buttonTop, headerH, headerH);
++  _copyButton.frame = CGRectMake(buttonLeft, 0, headerH, headerH);
+ }
+ 
+ #if !TARGET_OS_OSX
+@@ -406,7 +409,7 @@ - (CGFloat)contentInset
  - (CGFloat)measureHeight:(CGFloat)maxWidth
  {
    CGFloat inset = [self contentInset];
@@ -967,7 +1012,7 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  }
  
  + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleConfig *)config
-@@ -414,7 +420,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
+@@ -414,7 +417,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
    CGFloat inset = ENRMCodeBlockContentInset(config);
    CGFloat headerH = inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
    NSAttributedString *code = ENRMCodeBlockPlainAttributedCode(ENRMCodeBlockExtractCode(node), config);
@@ -976,7 +1021,7 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  }
  
  - (void)drawRect:(CGRect)rect
-@@ -446,11 +452,10 @@ - (void)drawRect:(CGRect)rect
+@@ -446,11 +449,10 @@ - (void)drawRect:(CGRect)rect
    CGFloat inset = [self contentInset];
    CGFloat headerH = [self headerHeight];
  
@@ -990,6 +1035,15 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
      [dividerColor setFill];
  #if !TARGET_OS_OSX
      [[UIBezierPath bezierPathWithRect:dividerRect] fill];
+@@ -460,7 +462,7 @@ - (void)drawRect:(CGRect)rect
+   }
+ 
+   if (_languageLabel.length > 0) {
+-    [_languageLabel drawAtPoint:CGPointMake(inset, headerH - _languageLabelSize.height)];
++    [_languageLabel drawAtPoint:CGPointMake(inset, (headerH - _languageLabelSize.height) / 2)];
+   }
+ }
+ 
 diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
 index 138435033005771ce0bb194f273316a5328e3057..1f4dc09df07134d34ce259ca59d3b158494f8886 100644
 --- a/ios/views/ENRMTableIOSGridView.m
