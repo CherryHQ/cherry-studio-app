@@ -535,6 +535,7 @@
   "chat.queue.removeFailed": "Δεν ήταν δυνατή η αφαίρεση του μηνύματος από την ουρά.",
   "chat.queue.title": "Μηνύματα στην ουρά",
   "chat.quote.assistant": "Βοηθός",
+  "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Άνοιγμα μηνύματος σε παράθεση",
   "chat.quote.remove": "Αφαίρεση παράθεσης",
   "chat.quote.reply": "Απάντηση",

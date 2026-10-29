@@ -540,6 +540,7 @@
   "chat.queue.removeFailed": "Impossible de retirer le message de la file.",
   "chat.queue.title": "Messages en attente",
   "chat.quote.assistant": "Assistant",
+  "chat.quote.line": "{{author}} : {{text}}",
   "chat.quote.open": "Ouvrir le message cité",
   "chat.quote.remove": "Retirer la citation",
   "chat.quote.reply": "Répondre",

@@ -135,18 +135,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
-      {reply ? (
-        <Button
-          accessibilityLabel={t('chat.quote.reply')}
-          accessibilityRole="button"
-          onPress={reply}
-          size="xs"
-          testID="assistant-message-reply"
-          variant="ghost"
-        >
-          {t('chat.quote.reply')}
-        </Button>
-      ) : null}
       {copyText ? (
         <Button
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}

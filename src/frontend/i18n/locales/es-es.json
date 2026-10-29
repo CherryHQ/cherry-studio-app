@@ -540,6 +540,7 @@
   "chat.queue.removeFailed": "No se pudo quitar el mensaje de la cola.",
   "chat.queue.title": "Mensajes en cola",
   "chat.quote.assistant": "Asistente",
+  "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Abrir mensaje citado",
   "chat.quote.remove": "Quitar cita",
   "chat.quote.reply": "Responder",

@@ -535,6 +535,7 @@
   "chat.queue.removeFailed": "Mesaj kuyruktan kaldırılamadı.",
   "chat.queue.title": "Kuyruktaki mesajlar",
   "chat.quote.assistant": "Asistan",
+  "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Alıntılanan mesajı aç",
   "chat.quote.remove": "Alıntıyı kaldır",
   "chat.quote.reply": "Yanıtla",

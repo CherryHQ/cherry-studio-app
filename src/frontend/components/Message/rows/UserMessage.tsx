@@ -17,7 +17,7 @@ import {
 type UserMessageProps = {
   attachments?: ReactNode;
   message: MessageListItem;
-  /** The message this one replies to, above everything it carries. */
+  /** The message this one replies to, under the bubble. */
   quote?: ReactNode;
 };
 
@@ -37,7 +37,6 @@ export const UserMessage = memo(function UserMessage({
   return (
     <View className="w-full items-end">
       <View className="w-[88%] items-end gap-2">
-        {quote}
         {attachments || fileParts.length > 0 ? (
           <UserMessageAttachments>
             {attachments ?? fileParts.map(({ part }) => <FilePart key={part.url} part={part} />)}
@@ -58,6 +57,7 @@ export const UserMessage = memo(function UserMessage({
             <MessageParts message={bodyMessage} renderMode="plainText" />
           </View>
         ) : null}
+        {quote}
       </View>
     </View>
   );

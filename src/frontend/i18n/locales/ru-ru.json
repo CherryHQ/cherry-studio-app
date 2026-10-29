@@ -545,6 +545,7 @@
   "chat.queue.removeFailed": "Не удалось убрать сообщение из очереди.",
   "chat.queue.title": "Сообщения в очереди",
   "chat.quote.assistant": "Ассистент",
+  "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Открыть цитируемое сообщение",
   "chat.quote.remove": "Убрать цитату",
   "chat.quote.reply": "Ответить",

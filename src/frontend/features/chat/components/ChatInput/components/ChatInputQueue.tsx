@@ -83,11 +83,8 @@ function QueuedInputRow({
       <Text className="min-w-4 text-center text-xs tabular-nums text-muted-foreground">
         {position}
       </Text>
-      <View className="min-w-0 flex-1 gap-1">
-        {quote?.type === 'text' && quote.quotes ? (
-          <MessageQuotePreview fields={quote} numberOfLines={1} />
-        ) : null}
-        <View>
+      <View className="min-w-0 flex-1 items-start gap-1">
+        <View className="self-stretch">
           <Text className="text-sm text-foreground" numberOfLines={1}>
             {text || attachments || t('chat.queue.message')}
           </Text>
@@ -97,6 +94,9 @@ function QueuedInputRow({
             </Text>
           ) : null}
         </View>
+        {quote?.type === 'text' && quote.quotes ? (
+          <MessageQuotePreview fields={quote} numberOfLines={1} />
+        ) : null}
       </View>
       <Button
         accessibilityLabel={t('chat.queue.remove', { position })}
