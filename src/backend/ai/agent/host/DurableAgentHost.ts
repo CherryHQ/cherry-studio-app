@@ -104,6 +104,11 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
+  /**
+   * A withdrawn input's rows hand their children to its own parent. Inputs reserved below it keep
+   * that row in their immutable metadata, so their live questions follow this map until idle.
+   */
+  withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
@@ -154,11 +159,6 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly deleting = new Set<string>();
   private readonly pendingWrites = new Set<Promise<unknown>>();
   private readonly settlements = new Map<string, Promise<void>>();
-  /**
-   * A withdrawn input's rows hand their children to its own parent. Inputs reserved below it keep
-   * that row in their immutable metadata, so their live questions follow this map instead.
-   */
-  private readonly withdrawnParents = new Map<string, string | null>();
   private readonly controller = new AbortController();
   private readonly naming: MobileAgentHostNaming;
   private accepting = false;
@@ -1661,11 +1661,10 @@ export class DurableAgentHost implements AgentProtocol {
       });
       signal?.throwIfAborted();
       if (messageIds.length) {
+        const state = this.live.get(laneKey(turn.identity));
         const parent = DurableTurnMetadataSchema.parse(turn.metadata).parentMessageId;
-        if (parent !== undefined) {
-          const resolved = this.questionParent(parent);
-          for (const id of messageIds) this.withdrawnParents.set(id, resolved);
-        }
+        if (state && parent !== undefined)
+          for (const id of messageIds) state.withdrawnParents.set(id, parent);
         this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
         this.publish(sessionId, {
           type: 'queue.updated',
@@ -1764,6 +1763,7 @@ export class DurableAgentHost implements AgentProtocol {
           assistant: null,
           active: null,
           queue: [],
+          withdrawnParents: new Map(),
           contextStatus: null,
           unsubscribe: async () => {},
           background: null,
@@ -1839,6 +1839,7 @@ export class DurableAgentHost implements AgentProtocol {
       )
         state.active = null;
     }
+    if (!state.active && !state.queue.length) state.withdrawnParents.clear();
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
   }
@@ -2245,15 +2246,11 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
-  private questionParent(parentId: string | null): string | null {
-    while (parentId && this.withdrawnParents.has(parentId))
-      parentId = this.withdrawnParents.get(parentId)!;
-    return parentId;
-  }
-
   private projectTurn(turn: RuntimeDurableTurn) {
     const view = projectDurableHostTurn(turn);
-    const parentId = view.user.parentId && this.questionParent(view.user.parentId);
+    const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
+    let parentId = view.user.parentId;
+    while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);
     return parentId === view.user.parentId ? view : { ...view, user: { ...view.user, parentId } };
   }
 
