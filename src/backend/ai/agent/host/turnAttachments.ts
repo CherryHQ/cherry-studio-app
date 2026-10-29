@@ -208,7 +208,7 @@ function failAttachment(error: FileAttachmentError): never {
   fail(
     code === 'unavailable'
       ? 'ATTACHMENT_UNAVAILABLE'
-      : code === 'document-empty'
+      : code === 'document-empty' || code === 'image-ocr-empty'
         ? 'ATTACHMENT_NO_TEXT'
         : ['model-unsupported', 'runtime-unsupported', 'count', 'context'].includes(code)
           ? 'CAPABILITY_UNSUPPORTED'
@@ -250,6 +250,8 @@ export async function resolveRuntimeContentAttachments(
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
       readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+      readImageText:
+        files.readImageText && ((file, readSignal) => files.readImageText!(file, readSignal)),
       signal,
       documentParserMode,
       target: {
@@ -293,6 +295,7 @@ export async function materializeRuntimeAttachments(input: {
   }
 
   const omitImage = (fileEntryId: string, mediaType: string) => {
+    if (attachments.has(fileEntryId)) return;
     const text = unsupportedMediaNote(mediaType, NO_IMAGE_MEDIA_CAPABILITIES, {
       fileEntryId,
       name: resources.availableFiles.get(fileEntryId)?.name,

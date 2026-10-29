@@ -39,8 +39,9 @@ import {
   resolveFileEntry,
   rewriteInternalTextEntry,
 } from './fileStorage';
+import { observeFileOcr } from './fileTextExtraction';
+import { readImageUriText } from './imageText';
 import { importManagedFile } from './importManagedFile';
-import { observePdfOcr } from './pdfText';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -85,7 +86,7 @@ async function resolveCreatedEntry(entry: FileEntry): Promise<ResolvedFile> {
  * factory to inject.
  */
 export const fileContent = {
-  observePdfOcr,
+  observeFileOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {
@@ -214,6 +215,8 @@ export const fileContent = {
         readFileUriBytes(resolved.get(file.fileEntryId)!.uri, readSignal),
       readDocumentText: (file, readSignal) =>
         readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal),
+      readImageText: (file, readSignal) =>
+        readImageUriText(resolved.get(file.fileEntryId)!.uri, readSignal),
       signal,
       target: input.target,
       documentParserMode: input.documentParserMode,

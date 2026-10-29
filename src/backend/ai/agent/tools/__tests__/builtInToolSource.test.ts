@@ -489,6 +489,7 @@ describe('createSystemCapabilitySource', () => {
     };
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
@@ -546,6 +547,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
@@ -614,6 +616,7 @@ describe('createSystemCapabilitySource', () => {
       }),
     );
     const tools = await source.getTools({
+      acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
@@ -670,6 +673,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
@@ -716,6 +720,7 @@ describe('createSystemCapabilitySource', () => {
       .mockResolvedValue(new TextEncoder().encode('a\nb'));
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
@@ -763,6 +768,7 @@ async function resolve(
     platform: options.platform ?? 'ios',
   });
   return source.getTools({
+    acceptsImages: true,
     askUser: options.askUser ?? noAskUser,
     documentParserMode: 'builtin',
     disabledCapabilities: scenario.disabledCapabilities ?? [],

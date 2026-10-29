@@ -1,17 +1,30 @@
 import { File } from 'expo-file-system';
 
-import { extractPdfText, type ExtractResult } from '../../../../../modules/pdf-text-extractor';
-import { configurePdfOcrLanguage, linkPdfOcr, observePdfOcr, readPdfText } from '../pdfText';
-import { readPdfTextCache, writePdfTextCache } from '../pdfTextCache';
+import {
+  extractImageText,
+  extractPdfText,
+  type ExtractResult,
+} from '../../../../../modules/pdf-text-extractor';
+import { readFileTextCache, writeFileTextCache } from '../fileTextCache';
+import {
+  configureFileOcrLanguage,
+  linkFileOcr,
+  observeFileOcr,
+  readPdfText,
+  readImageText,
+} from '../fileTextExtraction';
 
 jest.mock('expo-file-system', () => ({ File: jest.fn() }));
-jest.mock('../../../../../modules/pdf-text-extractor', () => ({ extractPdfText: jest.fn() }));
-jest.mock('../pdfTextCache', () => ({
-  pdfTextCacheFile: (source: File, language: string) => ({
+jest.mock('../../../../../modules/pdf-text-extractor', () => ({
+  extractPdfText: jest.fn(),
+  extractImageText: jest.fn(),
+}));
+jest.mock('../fileTextCache', () => ({
+  fileTextCacheFile: (source: File, language: string) => ({
     uri: `${source.uri}.${language}.cache`,
   }),
-  readPdfTextCache: jest.fn(),
-  writePdfTextCache: jest.fn(),
+  readFileTextCache: jest.fn(),
+  writeFileTextCache: jest.fn(),
 }));
 const ID = '00000000-0000-7000-8000-000000000001';
 const OTHER_ID = '00000000-0000-7000-8000-000000000002';
@@ -38,14 +51,58 @@ function deferred<T>() {
 }
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(readPdfTextCache).mockResolvedValue(undefined);
+  jest.mocked(readFileTextCache).mockResolvedValue(undefined);
   jest.mocked(extractPdfText).mockResolvedValue(result);
+  jest.mocked(extractImageText).mockResolvedValue({ ...result, totalPages: 1, extractedPages: 1 });
+});
+
+test('image consumers share one recognition and reuse its disk result after an independent cancellation', async () => {
+  const image = { ...source, uri: `file:///managed/${ID}.png`, name: `${ID}.png` } as File;
+  const disk = new Map<string, ExtractResult>();
+  jest.mocked(readFileTextCache).mockImplementation(async (file) => disk.get(file.uri));
+  jest.mocked(writeFileTextCache).mockImplementation((file, value) => {
+    disk.set(file.uri, value);
+  });
+  const started = deferred<AbortSignal>();
+  const native = deferred<ExtractResult>();
+  const states = jest.fn();
+  const stop = observeFileOcr(ID, states);
+  jest.mocked(extractImageText).mockImplementationOnce((_uri, _options, control) => {
+    control!.onProgress!({ requestId: 'image', completedPages: 0, totalPages: 1, phase: 'ocr' });
+    started.resolve(control!.signal!);
+    return native.promise;
+  });
+  const controller = new AbortController();
+  const first = readImageText(image, controller.signal);
+  const second = readImageText(image, signal());
+  const nativeSignal = await started.promise;
+  const stopped = expect(first).rejects.toThrow('stopped');
+  controller.abort(new Error('stopped'));
+  await stopped;
+  expect(nativeSignal.aborted).toBe(false);
+  const recognized = { ...result, totalPages: 1, extractedPages: 1 };
+  native.resolve(recognized);
+  await expect(second).resolves.toEqual(recognized);
+  await expect(readImageText(image, signal())).resolves.toEqual(recognized);
+  expect(extractImageText).toHaveBeenCalledTimes(1);
+  expect(extractPdfText).not.toHaveBeenCalled();
+  expect(states.mock.calls).toContainEqual([
+    { status: 'recognizing', kind: 'image', completedPages: 0, totalPages: 1 },
+  ]);
+  expect(states.mock.lastCall).toEqual([undefined]);
+  stop();
+});
+
+test('empty image recognition stays retryable instead of being cached', async () => {
+  jest.mocked(extractImageText).mockResolvedValueOnce({ ...result, text: '' });
+  await readImageText(source, signal());
+  expect(writeFileTextCache).not.toHaveBeenCalled();
 });
 
 test('later turns and tool reads reuse persisted text without starting OCR', async () => {
   const disk = new Map<string, ExtractResult>();
-  jest.mocked(readPdfTextCache).mockImplementation(async (file) => disk.get(file.uri));
-  jest.mocked(writePdfTextCache).mockImplementation((file, value) => {
+  jest.mocked(readFileTextCache).mockImplementation(async (file) => disk.get(file.uri));
+  jest.mocked(writeFileTextCache).mockImplementation((file, value) => {
     disk.set(file.uri, value);
   });
   await expect(readPdfText(source, signal())).resolves.toEqual(result);
@@ -55,8 +112,8 @@ test('later turns and tool reads reuse persisted text without starting OCR', asy
 
 test('history re-reads of cached results show no recognition activity on the file', async () => {
   const states = jest.fn();
-  const stop = observePdfOcr(ID, states);
-  jest.mocked(readPdfTextCache).mockResolvedValueOnce({ ...result, unrecognizedPages: [2] });
+  const stop = observeFileOcr(ID, states);
+  jest.mocked(readFileTextCache).mockResolvedValueOnce({ ...result, unrecognizedPages: [2] });
   await expect(readPdfText(source, signal())).resolves.toMatchObject({ unrecognizedPages: [2] });
   expect(extractPdfText).not.toHaveBeenCalled();
   expect(states.mock.calls).toEqual([[undefined]]);
@@ -66,12 +123,12 @@ test('history re-reads of cached results show no recognition activity on the fil
 test('a linked read_file call follows the file it resolved until unlinked', async () => {
   const native = deferred<ExtractResult>();
   const states = jest.fn();
-  const stop = observePdfOcr('call-1', states);
+  const stop = observeFileOcr('call-1', states);
   jest.mocked(extractPdfText).mockImplementationOnce((_uri, _options, control) => {
     control!.onProgress!({ requestId: 'request', completedPages: 1, totalPages: 3, phase: 'ocr' });
     return native.promise;
   });
-  const unlink = linkPdfOcr('call-1', ID);
+  const unlink = linkFileOcr('call-1', ID);
   const read = readPdfText(source, signal());
   await Promise.resolve();
   await Promise.resolve();
@@ -81,7 +138,7 @@ test('a linked read_file call follows the file it resolved until unlinked', asyn
   expect(states.mock.calls).toEqual([
     [undefined],
     [undefined],
-    [{ status: 'recognizing', completedPages: 1, totalPages: 3 }],
+    [{ status: 'recognizing', kind: 'pdf', completedPages: 1, totalPages: 3 }],
     [undefined],
     [undefined],
   ]);
@@ -89,7 +146,7 @@ test('a linked read_file call follows the file it resolved until unlinked', asyn
 });
 
 test('recognizes in the resolved app language and keys results by it', async () => {
-  configurePdfOcrLanguage(() => 'ru-RU');
+  configureFileOcrLanguage(() => 'ru-RU');
   try {
     await readPdfText(source, signal());
     expect(extractPdfText).toHaveBeenCalledWith(
@@ -97,9 +154,9 @@ test('recognizes in the resolved app language and keys results by it', async () 
       expect.objectContaining({ language: 'ru-RU' }),
       expect.anything(),
     );
-    expect(writePdfTextCache).toHaveBeenCalledWith({ uri: `${source.uri}.ru-RU.cache` }, result);
+    expect(writeFileTextCache).toHaveBeenCalledWith({ uri: `${source.uri}.ru-RU.cache` }, result);
   } finally {
-    configurePdfOcrLanguage(() => 'en-US');
+    configureFileOcrLanguage(() => 'en-US');
   }
 });
 
@@ -108,8 +165,8 @@ test('a shared extraction survives one caller cancelling and reports its file on
   const native = deferred<ExtractResult>();
   const states = jest.fn();
   const others = jest.fn();
-  const stop = observePdfOcr(ID, states);
-  const stopOthers = observePdfOcr(OTHER_ID, others);
+  const stop = observeFileOcr(ID, states);
+  const stopOthers = observeFileOcr(OTHER_ID, others);
   jest.mocked(extractPdfText).mockImplementationOnce((_uri, _options, control) => {
     started.resolve(control!.signal!);
     control!.onProgress!({ requestId: 'request', completedPages: 0, totalPages: 2, phase: 'ocr' });
@@ -128,7 +185,7 @@ test('a shared extraction survives one caller cancelling and reports its file on
   expect(extractPdfText).toHaveBeenCalledTimes(1);
   expect(states.mock.calls).toEqual([
     [undefined],
-    [{ status: 'recognizing', completedPages: 0, totalPages: 2 }],
+    [{ status: 'recognizing', kind: 'pdf', completedPages: 0, totalPages: 2 }],
     [undefined],
   ]);
   expect(others.mock.calls).toEqual([[undefined]]);
@@ -154,7 +211,7 @@ test('cancels native work only when its last caller leaves and never caches a la
   // A new read waits for native cleanup, then starts its own extraction.
   await expect(readPdfText(source, signal())).resolves.toEqual(result);
   expect(extractPdfText).toHaveBeenCalledTimes(2);
-  expect(writePdfTextCache).toHaveBeenCalledTimes(1);
+  expect(writeFileTextCache).toHaveBeenCalledTimes(1);
 });
 
 test('a queued document can be cancelled without starting its native extraction', async () => {
@@ -167,7 +224,7 @@ test('a queued document can be cancelled without starting its native extraction'
   const first = readPdfText(source, signal());
   await started.promise;
   const states = jest.fn();
-  const stop = observePdfOcr(OTHER_ID, states);
+  const stop = observeFileOcr(OTHER_ID, states);
   const controller = new AbortController();
   const queued = readPdfText(managed(OTHER_ID), controller.signal);
   await new Promise(setImmediate);
@@ -199,7 +256,7 @@ test('an old cancelled read cannot clear its retry queued behind another documen
       return otherNative.promise;
     });
   const states = jest.fn();
-  const stop = observePdfOcr(ID, states);
+  const stop = observeFileOcr(ID, states);
   const controller = new AbortController();
   const first = readPdfText(source, controller.signal);
   await firstStarted.promise;
@@ -216,7 +273,7 @@ test('an old cancelled read cannot clear its retry queued behind another documen
   await otherStarted.promise;
   expect(states).toHaveBeenLastCalledWith({ status: 'queued' });
   const resumedObserver = jest.fn();
-  const stopResumed = observePdfOcr(ID, resumedObserver);
+  const stopResumed = observeFileOcr(ID, resumedObserver);
   expect(resumedObserver).toHaveBeenLastCalledWith({ status: 'queued' });
 
   otherNative.resolve(result);
@@ -229,24 +286,29 @@ test('an old cancelled read cannot clear its retry queued behind another documen
 test("queuing and cancelling another language preserves the file's active recognition", async () => {
   const started = deferred<void>();
   const native = deferred<ExtractResult>();
-  const recognizing = { status: 'recognizing', completedPages: 1, totalPages: 2 } as const;
+  const recognizing = {
+    status: 'recognizing',
+    kind: 'pdf',
+    completedPages: 1,
+    totalPages: 2,
+  } as const;
   jest.mocked(extractPdfText).mockImplementationOnce((_uri, _options, control) => {
     control!.onProgress!({ requestId: 'first', phase: 'ocr', completedPages: 1, totalPages: 2 });
     started.resolve();
     return native.promise;
   });
   const states = jest.fn();
-  const stop = observePdfOcr(ID, states);
-  configurePdfOcrLanguage(() => 'en-US');
+  const stop = observeFileOcr(ID, states);
+  configureFileOcrLanguage(() => 'en-US');
   const first = readPdfText(source, signal());
   await started.promise;
   const controller = new AbortController();
   let queued: Promise<ExtractResult>;
   try {
-    configurePdfOcrLanguage(() => 'de-DE');
+    configureFileOcrLanguage(() => 'de-DE');
     queued = readPdfText(source, controller.signal);
   } finally {
-    configurePdfOcrLanguage(() => 'en-US');
+    configureFileOcrLanguage(() => 'en-US');
   }
   await new Promise(setImmediate);
   expect(states).toHaveBeenLastCalledWith(recognizing);
@@ -280,7 +342,7 @@ test('a text PDF stops reporting a queue once extraction starts, without reporti
   const first = readPdfText(source, signal());
   await firstStarted.promise;
   const states = jest.fn();
-  const stop = observePdfOcr(OTHER_ID, states);
+  const stop = observeFileOcr(OTHER_ID, states);
   const text = readPdfText(managed(OTHER_ID), signal());
   await new Promise(setImmediate);
   expect(states).toHaveBeenLastCalledWith({ status: 'queued' });
@@ -301,7 +363,7 @@ test('keeps the body with unrecognized pages, and clears file activity on engine
     unrecognizedPages: [1],
   });
   const states = jest.fn();
-  const stop = observePdfOcr(ID, states);
+  const stop = observeFileOcr(ID, states);
   jest.mocked(extractPdfText).mockImplementationOnce(async (_uri, _options, control) => {
     control!.onProgress!({ requestId: 'request', completedPages: 0, totalPages: 1, phase: 'ocr' });
     throw new Error('engine failed');

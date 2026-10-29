@@ -8,6 +8,7 @@ import {
   imageUriToDataUrl,
   readFileUriBytes,
 } from '@/backend/services/file/fileStorage';
+import { readImageUriText } from '@/backend/services/file/imageText';
 import {
   discardNormalizedImage,
   IMPORTED_IMAGE_MAX_BYTES,
@@ -69,6 +70,10 @@ export interface ManagedFileResolver {
     file: ManagedFileFact,
     signal: AbortSignal,
   ): Promise<ExtractedDocumentText | undefined>;
+  readImageText?(
+    file: ManagedFileFact,
+    signal: AbortSignal,
+  ): Promise<ExtractedDocumentText | undefined>;
 }
 
 type AvailableFileEntries = {
@@ -81,8 +86,15 @@ export function createManagedFileResolver(
   readDataUrl: (uri: string, mediaType: string, signal: AbortSignal) => Promise<string>,
   readBytes: (uri: string, signal: AbortSignal) => Promise<Uint8Array>,
   readDocument: typeof readDocumentUriText = readDocumentUriText,
+  readImageText: typeof readImageUriText = readImageUriText,
 ): ManagedFileResolver {
   return {
+    async readImageText(file, signal) {
+      throwIfAborted(signal);
+      const uri = getUri({ filename: file.name, id: file.fileEntryId });
+      if (!uri) return undefined;
+      return readImageText(uri, signal);
+    },
     async readDocumentText(file, signal) {
       throwIfAborted(signal);
       const uri = getUri({ filename: file.name, id: file.fileEntryId });

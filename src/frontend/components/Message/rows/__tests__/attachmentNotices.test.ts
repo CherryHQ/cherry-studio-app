@@ -55,3 +55,12 @@ test('says which pages the model could not see in the locale list style, naming 
 test('stays silent for complete deliveries and pending messages without reports', () => {
   expect(attachmentNotices([attachment('a.pdf', report), attachment('b.pdf')], t)).toEqual([]);
 });
+
+test('distinguishes OCR text delivery from native image delivery', () => {
+  expect(
+    attachmentNotices([attachment('receipt.png', { ...report, mode: 'image-text' })], t),
+  ).toEqual([{ key: '0:imageText', text: 'attachments.notice.imageText' }]);
+  expect(attachmentNotices([attachment('receipt.png', { ...report, mode: 'image' })], t)).toEqual(
+    [],
+  );
+});

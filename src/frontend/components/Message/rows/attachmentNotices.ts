@@ -11,6 +11,9 @@ export function attachmentNotices(
   return attachments.flatMap(({ index, part, report }) => {
     if (!report) return [];
     const notices = [
+      ...(report.mode === 'image-text'
+        ? [{ kind: 'imageText', text: t('attachments.notice.imageText') }]
+        : []),
       ...(report.unrecognizedPages?.length
         ? [
             {

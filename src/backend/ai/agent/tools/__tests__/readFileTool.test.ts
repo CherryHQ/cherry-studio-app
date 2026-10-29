@@ -220,6 +220,45 @@ describe('character windows', () => {
 });
 
 describe('readFileTool', () => {
+  test('a text-only model pages OCR text without receiving or reading pixels', async () => {
+    const files = createFiles('unused');
+    files.resolveAvailable.mockResolvedValue(
+      new Map([
+        [
+          FILE_ID,
+          {
+            fileEntryId: FILE_ID,
+            mediaType: 'image/png',
+            name: 'receipt.png',
+            size: 12,
+          },
+        ],
+      ]),
+    );
+    const readImage = jest.fn();
+    const readImageText = jest.fn(async () => ({ text: 'Total\n42', truncated: false }));
+    const tool = createReadFileTool(
+      { ...files, readImage, readImageText },
+      IN_SCOPE,
+      'builtin',
+      undefined,
+      false,
+    );
+    expectError(await execute(tool, { file_entry_id: OTHER_ID }), 'not part');
+    expect(readImageText).not.toHaveBeenCalled();
+    const first = await execute(tool, { file_entry_id: FILE_ID, start_line: 1, limit: 1 });
+    expect(first).toMatchObject({
+      value: { status: 'ok', parser: 'native-image-ocr', text: 'Total', truncated: true },
+      artifacts: [],
+    });
+    expect(first).not.toHaveProperty('modelImages');
+    const second = await execute(tool, { file_entry_id: FILE_ID, offset: 6 });
+    expect(second).toMatchObject({ value: { status: 'ok', text: '42', complete: true } });
+    expect(readImageText).toHaveBeenCalledTimes(1);
+    expect(readImage).not.toHaveBeenCalled();
+    expect(files.readAsBytes).not.toHaveBeenCalled();
+  });
+
   test('reads bounded pixels only for an in-scope image without paging parameters', async () => {
     const files = createFiles('unused');
     files.resolveAvailable.mockResolvedValue(

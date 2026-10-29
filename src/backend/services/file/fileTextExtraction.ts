@@ -1,35 +1,39 @@
 import { File } from 'expo-file-system';
 
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
-import type { PdfOcrState } from '@/shared/contracts/file';
+import type { FileOcrState } from '@/shared/contracts/file';
 import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 import { DEFAULT_APP_LANGUAGE, type AppLanguage } from '@/shared/utils/languages';
 
-import { extractPdfText, type ExtractResult } from '../../../../modules/pdf-text-extractor';
-import { pdfTextCacheFile, readPdfTextCache, writePdfTextCache } from './pdfTextCache';
+import {
+  extractImageText,
+  extractPdfText,
+  type ExtractResult,
+} from '../../../../modules/pdf-text-extractor';
+import { fileTextCacheFile, readFileTextCache, writeFileTextCache } from './fileTextCache';
 
 type PendingExtraction = {
   controller: AbortController;
   consumers: number;
   result: Promise<ExtractResult>;
 };
-type OcrObserver = (state: PdfOcrState | undefined) => void;
+type OcrObserver = (state: FileOcrState | undefined) => void;
 const pending = new Map<string, PendingExtraction>();
 const slots = createConcurrencySlots(1);
 let extracting = 0;
 // Each extraction owns its state, including retries and reads in another language.
-const states = new Map<string, Map<AbortSignal, PdfOcrState>>();
+const states = new Map<string, Map<AbortSignal, FileOcrState>>();
 const observers = new Map<string, Set<OcrObserver>>();
 // A running read_file call is observed by its call ID; a workspace path resolves its entry later.
 const links = new Map<string, string>();
 let appLanguage = (): AppLanguage => DEFAULT_APP_LANGUAGE;
 
 /** Composition supplies the shared language resolver; recognition languages follow it. */
-export function configurePdfOcrLanguage(resolve: () => AppLanguage): void {
+export function configureFileOcrLanguage(resolve: () => AppLanguage): void {
   appLanguage = resolve;
 }
 
-export function observePdfOcr(key: string, observer: OcrObserver): () => void {
+export function observeFileOcr(key: string, observer: OcrObserver): () => void {
   let set = observers.get(key);
   if (!set) observers.set(key, (set = new Set()));
   set.add(observer);
@@ -41,7 +45,7 @@ export function observePdfOcr(key: string, observer: OcrObserver): () => void {
 }
 
 /** Lets observers of `key` follow one file's state until the returned unlink is called. */
-export function linkPdfOcr(key: string, fileEntryId: string): () => void {
+export function linkFileOcr(key: string, fileEntryId: string): () => void {
   links.set(key, fileEntryId);
   notify(key, getState(fileEntryId));
   return () => {
@@ -51,12 +55,12 @@ export function linkPdfOcr(key: string, fileEntryId: string): () => void {
   };
 }
 
-function notify(key: string, state: PdfOcrState | undefined) {
+function notify(key: string, state: FileOcrState | undefined) {
   for (const observer of observers.get(key) ?? []) observer(state);
 }
 
-function getState(fileEntryId: string): PdfOcrState | undefined {
-  let queued: PdfOcrState | undefined;
+function getState(fileEntryId: string): FileOcrState | undefined {
+  let queued: FileOcrState | undefined;
   for (const state of states.get(fileEntryId)?.values() ?? []) {
     if (state.status === 'recognizing') return state;
     queued = state;
@@ -64,7 +68,7 @@ function getState(fileEntryId: string): PdfOcrState | undefined {
   return queued;
 }
 
-function setState(fileEntryId: string, signal: AbortSignal, state: PdfOcrState | undefined) {
+function setState(fileEntryId: string, signal: AbortSignal, state: FileOcrState | undefined) {
   const previous = getState(fileEntryId);
   let extractions = states.get(fileEntryId);
   if (state) {
@@ -85,8 +89,9 @@ async function extract(
   cache: File,
   language: AppLanguage,
   signal: AbortSignal,
+  kind: 'pdf' | 'image',
 ): Promise<ExtractResult> {
-  const cached = await readPdfTextCache(cache);
+  const cached = await readFileTextCache(cache);
   signal.throwIfAborted();
   if (cached) return cached;
   // Managed filenames are the immutable entry ID plus an extension.
@@ -100,20 +105,27 @@ async function extract(
     try {
       // Waiting for extraction does not establish that this document needs OCR.
       clearState();
-      const result = await extractPdfText(
+      const recognize = kind === 'image' ? extractImageText : extractPdfText;
+      const result = await recognize(
         source.uri,
         { maxPages: MAX_PDF_ATTACHMENT_PAGES, language },
         {
           signal,
           onProgress: ({ phase, completedPages, totalPages }) => {
             if (phase === 'ocr')
-              setState(fileEntryId, signal, { status: 'recognizing', completedPages, totalPages });
+              setState(fileEntryId, signal, {
+                status: 'recognizing',
+                kind,
+                completedPages,
+                totalPages,
+              });
           },
         },
       );
       signal.throwIfAborted();
       // Do not recreate a deleted file's derived content after an in-flight read.
-      if (source.exists) writePdfTextCache(cache, result);
+      if (source.exists && (kind === 'pdf' || (result.text.trim() && !result.ocrUnavailable)))
+        writeFileTextCache(cache, result);
       return result;
     } finally {
       release();
@@ -127,9 +139,21 @@ async function extract(
 
 /** Shared across attachment preparation, follow-up turns and file tools. Each consumer owns its abort. */
 export function readPdfText(source: File, signal: AbortSignal): Promise<ExtractResult> {
+  return readText(source, signal, 'pdf');
+}
+
+export function readImageText(source: File, signal: AbortSignal): Promise<ExtractResult> {
+  return readText(source, signal, 'image');
+}
+
+function readText(
+  source: File,
+  signal: AbortSignal,
+  kind: 'pdf' | 'image',
+): Promise<ExtractResult> {
   signal.throwIfAborted();
   const language = appLanguage();
-  const cache = pdfTextCacheFile(source, language);
+  const cache = fileTextCacheFile(source, language, kind);
   const key = cache.uri;
   let operation = pending.get(key);
   if (!operation) {
@@ -137,7 +161,7 @@ export function readPdfText(source: File, signal: AbortSignal): Promise<ExtractR
     operation = {
       controller,
       consumers: 0,
-      result: extract(source, cache, language, controller.signal),
+      result: extract(source, cache, language, controller.signal, kind),
     };
     pending.set(key, operation);
     const owner = operation;
