@@ -8,7 +8,7 @@ import {
   useComposerState,
 } from '@/frontend/components/Composer/context/ComposerProvider';
 import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
-import type { AgentQueuedInput } from '@/shared/contracts/agent';
+import type { AgentQueuedInput, QuoteFields } from '@/shared/contracts/agent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { toAgentInputParts } from '../../utils/agentInputParts';
@@ -46,8 +46,10 @@ const existingAttachment: ComposerAttachmentReady = {
 
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 const mockRestoreQuote = jest.fn();
+let mockQuoteFields: QuoteFields = {};
 jest.mock('../../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteActions: () => ({ restoreQuote: mockRestoreQuote }),
+  useChatQuoteState: () => ({ fields: mockQuoteFields, isBusy: false }),
 }));
 jest.mock('../../../../runtime', () => ({
   useAgentChatClient: () => ({ client: { cancelQueuedInput: mockCancel } }),
@@ -220,6 +222,7 @@ function refresh() {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  mockQuoteFields = {};
   mockInputs = [input(), input('turn-2')];
   mockCancel.mockImplementation(async (_sessionId: string, turnId: string) => {
     mockInputs = mockInputs.filter((queued) => queued.turnId !== turnId);
@@ -312,7 +315,7 @@ it('restores text and ready attachment references only after confirmed withdrawa
 });
 
 it.each(['text', 'attachments', 'both'])(
-  'keeps %s byte-identical when conflict is kept, cancelled or dismissed',
+  'keeps %s byte-identical when conflict is cancelled or dismissed',
   async (content) => {
     render(
       content === 'attachments' ? '' : '  Existing\n draft ',
@@ -320,12 +323,11 @@ it.each(['text', 'attachments', 'both'])(
     );
     open();
     const before = JSON.stringify({ composer, inputs: mockInputs });
-    for (const choice of [1, 2, 'dismiss'] as const) {
+    for (const choice of [1, 'dismiss'] as const) {
       await press('queue-take-back');
       expect(alert().props.isOpen).toBe(true);
       expect(alert().props.actions.map((action: { label: string }) => action.label)).toEqual([
         'Replace composer content',
-        'Keep composer content and cancel',
         'Cancel take-back',
       ]);
       act(() => {
@@ -534,4 +536,18 @@ it('taking back a queued message puts its quote back in the composer, or clears 
   act(() => tree.root.findByProps({ testID: 'queue-preview-turn-2' }).props.onPress());
   await press('queue-take-back');
   expect(mockRestoreQuote).toHaveBeenLastCalledWith({});
+});
+
+it('asks before replacing a quote the composer already holds', async () => {
+  mockQuoteFields = {
+    quotes: [{ id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Held' }],
+    quoteAuthor: { role: 'assistant' },
+  };
+  render();
+  open();
+  await press('queue-take-back');
+  expect(alert().props.isOpen).toBe(true);
+  act(() => alert().props.onOpenChange(false));
+  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockRestoreQuote).not.toHaveBeenCalled();
 });
