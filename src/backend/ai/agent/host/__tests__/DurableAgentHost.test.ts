@@ -118,6 +118,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     watchWork: async () => ({ active: false, unsubscribe: async () => {} }),
     configuration: async () => configuration,
     configure: async () => {},
+    editReply: jest.fn(async () => undefined),
     resourceFileEntryIds: async () => [],
     ensureConversation: async (seed) => {
       copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
@@ -323,6 +324,65 @@ async function settle() {
 }
 
 describe('durable tool diagnostics', () => {
+  test('editing a completed answer invalidates an uneditable copy and publishes only committed text', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      const message = await f.host.editMessage({
+        sessionId: f.sessionId,
+        messageId: turn.assistantMessageId,
+        expectedText: 'Answer',
+        text: 'Corrected',
+      });
+      expect(message.parts).toContainEqual({
+        id: 'answer',
+        type: 'text',
+        text: 'Corrected',
+        state: 'done',
+      });
+      expect(message.parts[0]).toMatchObject({ type: 'reasoning', text: 'Reasoning' });
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
+      expect(f.copies.has(f.sessionId)).toBe(false);
+      expect(events.filter((event) => event.type === 'message.edited')).toEqual([
+        { type: 'message.edited', message },
+      ]);
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('a failed Cherry edit cannot leave a revised native copy eligible for execution', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    f.conversations.editReply = async (lane, input) => {
+      f.copies.get(laneKey(lane))!.revision = input.revision + 1;
+      return { contextCheckpoint: null };
+    };
+    jest.spyOn(f.store, 'editMessage').mockRejectedValueOnce(new Error('disk full'));
+    try {
+      await expect(
+        f.host.editMessage({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          expectedText: 'Answer',
+          text: 'Unsaved',
+        }),
+      ).rejects.toThrow('disk full');
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(0);
+      expect(
+        (await f.store.getMessage(f.sessionId, turn.assistantMessageId))?.parts,
+      ).toContainEqual({ id: 'answer', type: 'text', text: 'Answer', state: 'done' });
+      expect(f.copies.has(f.sessionId)).toBe(false);
+    } finally {
+      await f.host.close();
+    }
+  });
   test('refuses queueing with a changed tool return contract during an active turn', async () => {
     const tool: RuntimeTool = {
       ref: { source: 'builtin', capabilityId: 'create_document' },

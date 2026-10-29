@@ -453,6 +453,7 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
+  editMessage(input: { sessionId: string; messageId: string; expectedText: string; text: string }): Promise<AgentMessageView>
   selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
   cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>
@@ -569,6 +570,7 @@ type AgentEvent =
   | { type: 'message.created'; message: AgentMessageView }
   | { type: 'message.delta'; messageId: string; delta: AgentMessageDelta }
   | { type: 'message.finalized'; message: AgentMessageView }
+  | { type: 'message.edited'; message: AgentMessageView }
   | { type: 'turn.deleted'; turnId: string; messageIds: string[] }
   | { type: 'approval.requested'; approval: AgentApprovalView }
   | { type: 'approval.resolved'; approval: AgentApprovalView }
@@ -763,6 +765,22 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 13. Every file part uses a managed id rather than a raw path; deleted content remains an unavailable
     historical reference, and artifact parts are not implicit model attachments.
 14. A Draft Session becomes durable in the same transaction that reserves its first message pair.
+
+## Editing an answer
+
+`editMessage` replaces the final text after the last tool call of any successful answer, including
+answers with later turns or on another branch. The Session must be idle, and `expectedText` must
+still match that answer. Empty text and stale drafts are rejected. A `MESSAGE_CONFLICT` asks the
+client to read the message again before offering another edit. The operation preserves message/turn
+IDs, tool receipts, reasoning and billed usage; it clears the old translation and updates search
+text. It never starts a model request, reruns a tool or regenerates later answers: they stay as
+they were, and later model requests see the edited text in their place.
+
+The authoritative edit, context checkpoints and history revision commit together. The
+[Pi Durable editing flow](./pi-durable-migration.md#editing-a-completed-reply) either keeps native
+copies current with a context replacement or fences them out for reconstruction. A committed
+`message.edited` event replaces the client's row and invalidates its transcript query. Local UI
+offers the action in each successful answer's menu; remote sources do not advertise this capability.
 
 ## Manual answer retry
 

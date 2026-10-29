@@ -91,6 +91,7 @@ function deferred<Value>() {
 function fixture() {
   const storage = new ReopenableMemoryStorage();
   const requests: TranscriptContext[] = [];
+  const providerSessions: (string | undefined)[] = [];
   const ports: RuntimeExecutionPorts = {
     assertExecutionAllowed: jest.fn(async () => undefined),
     resolveTool: jest.fn(async () => {
@@ -123,8 +124,9 @@ function fixture() {
         reportedCostCurrency: null,
         credentialReceipt: { attribution: 'unknown' },
       },
-      streamFn: (_model, context) => {
+      streamFn: (_model, context, options) => {
         requests.push(context);
+        providerSessions.push(options?.sessionId);
         const message: AssistantMessage = {
           ...emptyAssistantMessage(wire),
           content: [{ type: 'text', text: `Response ${requests.length}` }],
@@ -156,7 +158,7 @@ function fixture() {
     close: unavailable,
   };
   const create = () => new PiDurableAgentRuntime(dependencies, async () => storage);
-  return { storage, requests, ports, database, create, dependencies };
+  return { storage, requests, providerSessions, ports, database, create, dependencies };
 }
 
 async function submitAndWait(
@@ -182,6 +184,137 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('reply edits survive reopening and native forks without another model call or provider identity change', async () => {
+    const f = fixture();
+    let runtime = f.create();
+    await runtime.initialize(f.database, f.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    try {
+      await submitAndWait(runtime, input('one'));
+      const original = (await runtime.message(lane, 'answer-one'))!.turn;
+      const parts = original.parts.flatMap((part) =>
+        part.type === 'text' ? [{ id: part.id, text: part.text }] : [],
+      );
+      expect(
+        await runtime.editReply(lane, {
+          messageId: 'answer-one',
+          revision: 0,
+          parts,
+          text: 'Corrected',
+        }),
+      ).toEqual({ contextCheckpoint: null });
+      expect(f.requests).toHaveLength(1);
+      expect(await runtime.revision(lane)).toBe(1);
+      const edited = (await runtime.message(lane, 'answer-one'))!.turn;
+      expect(edited.parts).toContainEqual({
+        ...parts[0],
+        type: 'text',
+        text: 'Corrected',
+        state: 'done',
+      });
+      expect(edited.usage).toEqual(original.usage);
+      expect(edited.answerBoundary).not.toBe(original.answerBoundary);
+      await runtime.close();
+      runtime = f.create();
+      await runtime.initialize(f.database, f.ports);
+      runtime.resume();
+      const reopened = (await runtime.message(lane, 'answer-one'))!.turn;
+      expect(reopened.parts).toEqual(edited.parts);
+      const again = await runtime.editReply(lane, {
+        messageId: 'answer-one',
+        revision: 1,
+        parts: [{ id: parts[0]!.id, text: 'Corrected' }],
+        text: 'Corrected twice',
+      });
+      expect(again).toBeDefined();
+      // The Host reinstalls configuration before continuing a reopened copy.
+      await runtime.configure(lane, seed.configuration);
+      await submitAndWait(runtime, input('two'));
+      expect(
+        f.requests[1]!.messages.some(
+          (message) =>
+            message.role === 'assistant' &&
+            message.content.some(
+              (block) => block.type === 'text' && block.text === 'Corrected twice',
+            ),
+        ),
+      ).toBe(true);
+      expect(f.providerSessions[0]).toEqual(expect.any(String));
+      expect(f.providerSessions[1]).toBe(f.providerSessions[0]);
+      const boundary = (await runtime.message(lane, 'answer-one'))!.turn.answerBoundary!;
+      const fork = runtimeLane('session', 1);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        revision: 2,
+        from: { lane, boundary },
+        referencedFileEntryIds: [],
+      });
+      expect((await runtime.message(fork, 'answer-one'))!.turn.parts).toContainEqual({
+        id: parts[0]!.id,
+        type: 'text',
+        text: 'Corrected twice',
+        state: 'done',
+      });
+      expect(await runtime.message(fork, 'answer-two')).toBeUndefined();
+    } finally {
+      await runtime.close();
+    }
+  });
+  test('an earlier answer edit reaches later requests while forks before it fall back to rebuilding', async () => {
+    const f = fixture();
+    const runtime = f.create();
+    await runtime.initialize(f.database, f.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    try {
+      await submitAndWait(runtime, input('one'));
+      await submitAndWait(runtime, input('two'));
+      const original = (await runtime.message(lane, 'answer-one'))!.turn;
+      const [text] = original.parts.flatMap((part) =>
+        part.type === 'text' ? [{ id: part.id, text: part.text }] : [],
+      );
+      expect(
+        await runtime.editReply(lane, {
+          messageId: 'answer-one',
+          revision: 0,
+          parts: [text!],
+          text: 'Corrected',
+        }),
+      ).toEqual({ contextCheckpoint: null });
+      expect(await runtime.revision(lane)).toBe(1);
+      // A fork through the first answer could not see the edit appended after the second.
+      expect((await runtime.message(lane, 'answer-one'))!.turn.answerBoundary).toBeNull();
+      const boundary = (await runtime.message(lane, 'answer-two'))!.turn.answerBoundary!;
+      const fork = runtimeLane('session', 1);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        revision: 1,
+        from: { lane, boundary },
+        referencedFileEntryIds: [],
+      });
+      await submitAndWait(runtime, input('three'));
+      const answers = f.requests[2]!.messages.flatMap((message) =>
+        message.role === 'assistant'
+          ? message.content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+          : [],
+      );
+      expect(answers).toEqual(['Corrected', 'Response 2']);
+      expect(f.providerSessions[2]).toBe(f.providerSessions[0]);
+      expect(
+        await runtime.editReply(fork, {
+          messageId: 'answer-one',
+          revision: 1,
+          parts: [{ id: text!.id, text: 'Corrected' }],
+          text: 'Inherited edit',
+        }),
+      ).toBeDefined();
+    } finally {
+      await runtime.close();
+    }
+  });
   test('releases late startup storage without opening the engine after cancellation', async () => {
     const f = fixture();
     const storage = deferred<ReopenableMemoryStorage>();

@@ -6,6 +6,7 @@
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
   AgentDeleteTurnInput,
+  AgentEditMessageInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
   AgentSelectMessageInput,
@@ -13,7 +14,12 @@ import type {
   AgentSubmitMessageInput,
 } from './inputs';
 import type { AgentRespondQuestionInput } from './userQuestion';
-import type { AgentErrorView, AgentSessionStatus, AgentSessionView } from './views';
+import type {
+  AgentErrorView,
+  AgentMessageView,
+  AgentSessionStatus,
+  AgentSessionView,
+} from './views';
 
 /**
  * Protocol operation failure. The `view` is the JSON-safe protocol value; the
@@ -27,6 +33,8 @@ export class AgentProtocolError extends Error {
 }
 
 export interface AgentProtocol {
+  /** Edits a successful answer while idle, including its future model context. */
+  editMessage(input: AgentEditMessageInput): Promise<AgentMessageView>;
   /** Stable, immutable snapshot; null until this generation runs a turn in the Session. */
   getSessionStatus(sessionId: string): AgentSessionStatus | null;
   /** Status-only observation: does not load or subscribe to the transcript. */

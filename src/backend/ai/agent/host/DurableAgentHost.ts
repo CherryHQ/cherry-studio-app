@@ -12,6 +12,7 @@ import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
+  AgentEditMessageInputSchema,
   AgentEventSchema,
   AgentForkSessionInputSchema,
   AgentInputPartSchema,
@@ -45,6 +46,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
+import { editableAssistantReply } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
@@ -65,7 +67,11 @@ import {
   type RuntimeTool,
   type RuntimeTurnTiming,
 } from '../runtime';
-import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
+import type {
+  AgentSessionStore,
+  EditMessageInput,
+  ReserveSubmissionResult,
+} from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
 import { createImageRequestTool } from './agentImageGeneration';
@@ -1033,6 +1039,79 @@ export class DurableAgentHost implements AgentProtocol {
         );
       } catch (error) {
         await this.reconcileUnsettled(source.id);
+        throw error;
+      }
+    });
+  }
+
+  async editMessage(input: Parameters<AgentProtocol['editMessage']>[0]) {
+    const parsed = AgentEditMessageInputSchema.parse(input);
+    this.assertIdle(parsed.sessionId);
+    return this.admit(parsed.sessionId, async (signal) => {
+      const current = await this.syncSession(parsed.sessionId, true);
+      const session = await this.requireSession(parsed.sessionId);
+      const message = await this.store.getMessage(session.id, parsed.messageId);
+      if (!message) fail('MESSAGE_NOT_FOUND', 'The answer no longer exists.');
+      const reply = editableAssistantReply(message.parts);
+      if (
+        message.role !== 'assistant' ||
+        message.status !== 'success' ||
+        !message.turnId ||
+        !reply ||
+        reply.text !== parsed.expectedText
+      )
+        fail('MESSAGE_CONFLICT', 'Only an unchanged successful answer can be edited.');
+      if (reply.text === parsed.text) return message;
+      const revision = await this.store.getRuntimeRevision(session.id);
+      if (revision === null) fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+      signal.throwIfAborted();
+      const editedLanes: RuntimeLane[] = [];
+      const contextCheckpoints: EditMessageInput['contextCheckpoints'] = [];
+      try {
+        // Every copy holding the answer keeps its provider affinity; the others are rebuilt.
+        for (const lane of current) {
+          const edited = await this.conversations.editReply(lane, {
+            messageId: message.id,
+            revision,
+            parts: reply.parts,
+            text: parsed.text,
+          });
+          if (!edited) continue;
+          editedLanes.push(lane);
+          if (edited.contextCheckpoint) contextCheckpoints.push(edited.contextCheckpoint);
+        }
+        const result = await this.store.editMessage({
+          ...parsed,
+          expectedRevision: revision,
+          contextCheckpoints,
+        });
+        if (result.status === 'session-not-found')
+          fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+        if (result.status === 'message-not-found')
+          fail('MESSAGE_NOT_FOUND', 'The answer no longer exists.');
+        if (result.status !== 'edited')
+          fail('MESSAGE_CONFLICT', 'The answer changed before the edit was saved.');
+        // Every other copy is fenced out by the committed revision, even if retirement fails.
+        for (const lane of current)
+          if (!editedLanes.some((edited) => sameLane(lane, edited)))
+            await this.detachLane(lane).catch((error: unknown) =>
+              logger.warn('Deferred obsolete working-copy cleanup', error as Error),
+            );
+        for (const live of this.liveStates(session.id))
+          if (live.assistant?.id === message.id) live.assistant = result.message;
+        this.publish(session.id, { type: 'message.edited', message: result.message });
+        const updatedSession = await this.store.getSession(session.id);
+        if (updatedSession)
+          this.publish(session.id, { type: 'session.updated', session: updatedSession });
+        this.ports.durableStorage?.notifyTranscript(session.id);
+        return result.message;
+      } catch (error) {
+        // A native edit preceding a failed Cherry commit has the wrong revision and cannot resume.
+        for (const lane of current)
+          if (!(await this.isCurrentConversation(lane)))
+            await this.detachLane(lane).catch((cleanup: unknown) =>
+              logger.warn('Deferred edited-copy cleanup', cleanup as Error),
+            );
         throw error;
       }
     });

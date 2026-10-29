@@ -115,6 +115,17 @@ export const AgentRetryMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
+/** An optimistic edit of a successful answer's final text. */
+export const AgentEditMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  expectedText: z.string().min(1),
+  text: z
+    .string()
+    .max(1_000_000)
+    .refine((text) => text.trim().length > 0),
+});
+export type AgentEditMessageInput = z.infer<typeof AgentEditMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),

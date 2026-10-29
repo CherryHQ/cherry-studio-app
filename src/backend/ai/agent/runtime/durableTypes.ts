@@ -268,6 +268,29 @@ export interface DurableAgentRuntime {
     signal?: AbortSignal,
   ): Promise<void>;
   configure(lane: RuntimeLane, configuration: RuntimeConversationConfiguration): Promise<void>;
+  /**
+   * Replaces final answer text anywhere in this copy's history without replaying tools or changing
+   * provider affinity. Undefined means this copy cannot represent the edit and Cherry must rebuild
+   * it. On success, atomically advances the binding to revision + 1 before Cherry commits the same
+   * history revision. A compacted copy returns its refreshed context for its newest answer.
+   */
+  editReply(
+    lane: RuntimeLane,
+    input: {
+      messageId: string;
+      revision: number;
+      parts: readonly { id: string; text: string }[];
+      text: string;
+    },
+  ): Promise<
+    | {
+        contextCheckpoint: {
+          assistantMessageId: string;
+          checkpoint: RuntimeContextCheckpoint;
+        } | null;
+      }
+    | undefined
+  >;
   submit(lane: RuntimeLane, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
   observe(
     lane: RuntimeLane,

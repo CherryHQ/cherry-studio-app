@@ -275,6 +275,42 @@ Deletion removes Cherry data immediately, while retired Pi bytes remain inside t
 file is never part of a backup, and switching or resetting storage deletes it with `cherry.db`.
 There is no raw SQL erasure, archive tombstone, hidden-turn document or descendant-reclamation chain.
 
+## Editing A Completed Reply
+
+`editMessage` edits any successful answer while the Session is idle. It changes only the final text
+after the last tool call; reasoning, attachments, completed tool receipts, message identities and
+billed usage remain intact. Later turns are kept and not regenerated. The input carries the original
+text for optimistic concurrency. The store checks the answer, absence of unfinished messages,
+original text and history revision again inside its write transaction. Translation caches and the
+edited answer's own context checkpoint are cleared.
+
+Each native copy whose current context still contains the answer's text blocks stops background
+compaction and appends a public Pi `ContextEdit` replacement at its tail. The original entries
+remain immutable, and provider session identity, earlier signed content and tools are preserved.
+The copy's newest answer records the edit as its answer boundary, so forks after that answer keep
+the edit natively. A fork through an earlier answer cannot inherit an edit appended later, so that
+answer reports no native boundary and the new copy is rebuilt from the edited Cherry transcript.
+Changed text blocks no longer carry the original provider text signatures. Native web replay,
+imported parts, copies that do not hold the answer and compacted-away targets fall back to
+rebuilding. Context replacements clear the obsolete measured usage so Pi estimates the edited text's
+size; transcript projection and Cherry's invocation ledger retain the original billed usage.
+
+Following Pi semantics, an answer already summarized by compaction keeps its old meaning inside that
+summary; only its displayed text changes. When an edited copy's context begins at a compaction or
+reset, its refreshed context is saved as the checkpoint of that copy's newest answer. A rebuild that
+uses an older checkpoint on another branch, whose retained messages still contain the answer, sees
+the original text; this rare case is accepted rather than rewriting opaque checkpoints.
+
+The native replacements and binding revisions advance before the Cherry transaction commits the same
+revision with the edited text and refreshed checkpoints. A crash between those commits leaves
+mismatched working copies that recovery discards. Every copy that was not edited becomes stale;
+failed retirement cannot make it current. `message.edited` is published only after Cherry commits.
+
+Provider prompt caches can reuse an unchanged prefix before the edited answer; the edited portion and
+the following context need a new matching cache. Preserving native copies avoids an additional
+provider-session change. The fallback rebuild retains the reconstruction limitations described
+above.
+
 ## Clearing The Working File
 
 Pi Durable has no public conversation deletion. Copying only live conversations into a new file

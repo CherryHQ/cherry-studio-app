@@ -161,6 +161,8 @@ export type ConversationMessage = {
   }[];
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
+    /** Replaces the final answer text, with an optimistic source check. */
+    edit?: ConversationAction<{ text: string; expectedText: string }, void>;
     retry?: ConversationAction<void, ConversationRef | void>;
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;

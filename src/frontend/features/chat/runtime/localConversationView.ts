@@ -12,6 +12,7 @@ import {
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { editableAssistantReply } from '@/shared/utils/assistantReply';
 
 import {
   type AgentMessageListProjectionCache,
@@ -61,6 +62,7 @@ export function createLocalConversationProjector(input: {
     | 'respondApproval'
     | 'respondQuestion'
     | 'retryMessage'
+    | 'editMessage'
     | 'forkSession'
     | 'deleteTurn'
     | 'selectMessage'
@@ -117,6 +119,15 @@ export function createLocalConversationProjector(input: {
       const projected: ConversationMessage = {
         ...projectLocalTranscriptMessage(message, cache),
         actions: {
+          ...(message.role === 'assistant' &&
+          message.status === 'success' &&
+          editableAssistantReply(message.parts)
+            ? {
+                edit: action<{ text: string; expectedText: string }, void>(state, true, (value) =>
+                  client.editMessage({ sessionId, messageId: message.id, ...value }),
+                ),
+              }
+            : {}),
           // Answers switch in place; switching only changes what is shown, so it never waits.
           ...(message.siblings && message.role === 'assistant'
             ? {

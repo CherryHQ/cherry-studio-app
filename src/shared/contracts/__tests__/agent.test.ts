@@ -15,6 +15,7 @@ import {
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentRetryMessageInputSchema,
+  AgentEditMessageInputSchema,
   AgentRenameSessionInputSchema,
   AgentForkSessionInputSchema,
   AgentToolRefSchema,
@@ -47,6 +48,36 @@ describe('answer retry input', () => {
     expect(AgentRetryMessageInputSchema.safeParse({ ...input, messageId: '' }).success).toBe(false);
     expect(AgentRetryMessageInputSchema.safeParse({ ...input, resume: [] }).success).toBe(false);
   });
+});
+
+test('reply editing accepts only text with an optimistic source and no execution payload', () => {
+  const input = { sessionId: 'session', messageId: 'answer', expectedText: 'Old', text: 'New' };
+  expect(AgentEditMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+  for (const invalid of [
+    { ...input, text: ' \n ' },
+    { ...input, expectedText: '' },
+    { ...input, parts: [] },
+    { ...input, text: 'x'.repeat(1_000_001) },
+  ])
+    expect(AgentEditMessageInputSchema.safeParse(invalid).success).toBe(false);
+  const event = {
+    type: 'message.edited',
+    message: {
+      id: 'answer',
+      sessionId: 'session',
+      turnId: 'turn',
+      parentId: 'question',
+      role: 'assistant',
+      status: 'success',
+      parts: [{ id: 'text', type: 'text', text: 'New', state: 'done' }],
+      stats: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      createdAt: '2026-10-29T00:00:00.000Z',
+      updatedAt: '2026-10-29T00:01:00.000Z',
+    },
+  };
+  expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
 });
 
 describe('Agent Session status contract', () => {

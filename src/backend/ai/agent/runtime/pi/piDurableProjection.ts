@@ -36,6 +36,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
+import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -292,7 +293,8 @@ export function projectPiTurn(options: {
   >;
 }): RuntimeDurableTurn {
   const stored = readPiSubmission(options.metadata);
-  const { record, entries } = options;
+  const { record } = options;
+  const entries = applyPiReplyEdits(options.entries);
   const parts: RuntimeOutputPart[] = [];
   const toolsByCall = new Map<string, Extract<RuntimeOutputPart, { type: 'tool' }>>();
   const usage: RuntimeUsage = {};
@@ -654,7 +656,7 @@ export function projectPiTurn(options: {
     inputBoundary: record.entry !== undefined ? `pi:${record.entry}` : null,
     answerBoundary:
       answerVisible && record.type === 'input' && record.status === 'done'
-        ? `pi:${record.answer}`
+        ? `pi:${entries.findLast((entry) => entry.kind === PI_REPLY_EDIT_KIND)?.id ?? record.answer}`
         : null,
     metadata: stored.metadata,
     status,

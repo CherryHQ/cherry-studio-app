@@ -1,5 +1,6 @@
 import type {
   AgentErrorView,
+  AgentEditMessageInput,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
   AgentMessageView,
@@ -115,6 +116,16 @@ export type DeleteTurnInput = {
   /** Deletion is turn-scoped: a lone message would orphan its tool pairing. */
   turnId: string;
 };
+
+export type EditMessageInput = AgentEditMessageInput & {
+  expectedRevision: number;
+  /** Refreshed contexts of compacted copies, each saved on that copy's newest answer. */
+  contextCheckpoints: { assistantMessageId: string; checkpoint: RuntimeContextCheckpoint }[];
+};
+
+export type EditMessageResult =
+  | { status: 'edited'; message: AgentMessageView }
+  | { status: 'session-not-found' | 'message-not-found' | 'conflict' };
 
 /**
  * Distinguishes a missing Session, a turn that is not in it, and a turn whose
@@ -233,6 +244,12 @@ export interface AgentSessionStore {
    * only way to keep deleted content out of the model's context.
    */
   deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
+
+  /**
+   * Atomically edits a successful answer, drops its own stale checkpoint, saves refreshed copy
+   * checkpoints and advances the history revision.
+   */
+  editMessage(input: EditMessageInput): Promise<EditMessageResult>;
 
   /**
    * Remove an unexecuted reservation after the Runtime confirms withdrawal. Unlike deleting

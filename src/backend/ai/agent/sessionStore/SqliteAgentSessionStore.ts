@@ -29,6 +29,7 @@ import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRo
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
+import { editableAssistantReply, replaceAssistantReply } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -37,6 +38,8 @@ import type {
   AgentSessionStore,
   DeleteTurnInput,
   DeleteTurnResult,
+  EditMessageInput,
+  EditMessageResult,
   FinalizeAssistantMessageInput,
   ForkedMessageCopy,
   ForkSessionInput,
@@ -482,6 +485,92 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       await removeTurnRows(tx, input.sessionId, rows);
       return rows.map((row) => row.id);
     });
+  }
+
+  async editMessage(input: EditMessageInput): Promise<EditMessageResult> {
+    const result = await this.dbService.withWriteTx(async (tx): Promise<EditMessageResult> => {
+      const [session] = await tx
+        .select()
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .limit(1);
+      if (!session) return { status: 'session-not-found' };
+      const [source] = await tx
+        .select(agentMessageViewColumns)
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.id, input.messageId),
+          ),
+        )
+        .limit(1);
+      if (!source) return { status: 'message-not-found' };
+      const [unsettled] = await tx
+        .select({ id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+          ),
+        )
+        .limit(1);
+      if (
+        session.runtimeRevision !== input.expectedRevision ||
+        source.role !== 'assistant' ||
+        source.status !== 'success' ||
+        !source.turnId ||
+        unsettled ||
+        editableAssistantReply(source.data.parts)?.text !== input.expectedText ||
+        !input.text.trim()
+      )
+        return { status: 'conflict' };
+
+      const parts = replaceAssistantReply(source.data.parts, input.text);
+      const data = { ...source.data, parts };
+      delete data.translations;
+      const [row] = await tx
+        .update(agentSessionMessageTable)
+        .set({
+          data,
+          searchableText: toSearchableText(parts),
+          // Its own checkpoint holds the old answer. Unless a copy refreshes it below, rebuilding
+          // falls back to an earlier checkpoint.
+          contextCheckpoint: null,
+          stats: source.stats ? { ...source.stats, contextTokens: undefined } : null,
+        })
+        .where(eq(agentSessionMessageTable.id, source.id))
+        .returning(agentMessageViewColumns);
+      for (const { assistantMessageId, checkpoint } of input.contextCheckpoints)
+        await tx
+          .update(agentSessionMessageTable)
+          .set({ contextCheckpoint: checkpoint })
+          .where(
+            and(
+              eq(agentSessionMessageTable.sessionId, input.sessionId),
+              eq(agentSessionMessageTable.id, assistantMessageId),
+              eq(agentSessionMessageTable.turnId, checkpoint.anchorTurnId),
+              eq(agentSessionMessageTable.status, 'success'),
+            ),
+          );
+
+      await tx
+        .update(agentSessionTable)
+        .set({
+          runtimeRevision: input.expectedRevision + 1,
+          lastActivityAt: Date.now(),
+        })
+        .where(eq(agentSessionTable.id, session.id));
+      return { status: 'edited', message: toAgentMessageView(row) };
+    });
+    if (result.status === 'edited')
+      publishDataApiChanges([
+        '/agent-sessions',
+        `/agent-sessions/${input.sessionId}`,
+        `/agent-sessions/${input.sessionId}/messages`,
+      ]);
+    return result;
   }
 
   async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
