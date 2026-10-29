@@ -50,17 +50,24 @@ jest.mock('@cherrystudio/ui/components', () => {
       size: string;
       testID: string;
       title: string;
-    }) => (
-      <MockView
-        accessibilityLabel={title}
-        accessibilityValue={{ text: size }}
-        testID={`${testID}-surface`}
-      >
-        {headerAction}
-        {children}
-        {footer}
-      </MockView>
-    ),
+    }) => {
+      // Like the real portal, the sheet's content sits outside the screen's PolicyScope.
+      const { PolicyScope: MockPolicyScope } = jest.requireActual(
+        '@/frontend/components/Policy/PolicyScope',
+      );
+      const { OPEN_POLICY } = jest.requireActual('@/shared/data/managedPolicy');
+      return (
+        <MockView
+          accessibilityLabel={title}
+          accessibilityValue={{ text: size }}
+          testID={`${testID}-surface`}
+        >
+          {headerAction}
+          <MockPolicyScope policy={OPEN_POLICY}>{children}</MockPolicyScope>
+          {footer}
+        </MockView>
+      );
+    },
     Button,
     SearchField: (props: Record<string, unknown>) => <MockTextInput {...props} />,
   };

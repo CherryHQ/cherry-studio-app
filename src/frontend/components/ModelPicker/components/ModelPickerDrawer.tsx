@@ -70,6 +70,8 @@ export function ModelPickerDrawer({
   const [searchText, setSearchText] = useState('');
   const [selectedBadge, setSelectedBadge] = useState<ModelPickerBadge | null>(null);
   const deferredSearchText = useDeferredValue(searchText);
+  // The sheet renders through a portal at the app root, outside the screen's PolicyScope.
+  const { allowedModelIds } = useModelChoice();
   const isSearchExpanded = isSearchFocused || searchText.trim().length > 0;
   const handleClose = useCallback(() => {
     setIsSearchFocused(false);
@@ -107,6 +109,7 @@ export function ModelPickerDrawer({
     >
       <ModelRegistryGate>
         <ModelPickerDrawerContent
+          allowedModelIds={allowedModelIds}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
@@ -130,6 +133,7 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
+  allowedModelIds,
   deferredSearchText,
   emptyText,
   isModelVisible,
@@ -159,6 +163,7 @@ function ModelPickerDrawerContent({
   | 'multiSelect'
   | 'variant'
 > & {
+  allowedModelIds: ReadonlySet<string> | null;
   deferredSearchText: string;
   onSearchFocusChange: (isFocused: boolean) => void;
   onSearchTextChange: (value: string) => void;
@@ -184,7 +189,6 @@ function ModelPickerDrawerContent({
           }),
     [groups, selectedBadge],
   );
-  const { allowedModelIds } = useModelChoice();
   const visibleGroups = useMemo(
     () =>
       isModelVisible || allowedModelIds
