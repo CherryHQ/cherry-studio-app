@@ -106,6 +106,7 @@ export type SystemCapabilitySource = {
     documentParserMode: DocumentParserMode;
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
+    acceptsImages: boolean;
     resources: TurnToolResources;
     /** Attribution for provider calls a tool makes; read when the tool runs. */
     resolveUsageAttribution?: AiUsageAttributionResolver;
@@ -149,6 +150,7 @@ export function createSystemCapabilitySource(
       askUser,
       disabledCapabilities,
       model,
+      acceptsImages,
       resources,
       documentParserMode,
       resolveUsageAttribution,
@@ -174,6 +176,7 @@ export function createSystemCapabilitySource(
         askUser,
         fileAccess,
         workspaceName,
+        acceptsImages,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -265,6 +268,7 @@ function createCatalog(
   askUser: AskUserQuestion,
   fileAccess: WorkspaceFileAccess,
   workspaceName: string | undefined,
+  acceptsImages: boolean,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -280,9 +284,21 @@ function createCatalog(
       resources,
       fileAccess,
     ),
-    createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
+    createReadFileTool(
+      managedFileResolver,
+      resources,
+      documentParserMode,
+      fileAccess,
+      acceptsImages,
+    ),
     createWriteFileTool(fileContent, fileAccess),
-    ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
+    ...createFileLibraryTools(
+      fileAccess,
+      managedFileResolver,
+      documentParserMode,
+      workspaceName,
+      acceptsImages,
+    ),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     // Office jobs read and write their files natively, which older clients cannot do.
     ...(deps.jsSandbox?.files ? createOfficeTools(deps.jsSandbox, officeFiles, fileAccess) : []),

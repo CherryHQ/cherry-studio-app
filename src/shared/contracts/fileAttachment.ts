@@ -18,6 +18,9 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'document-invalid',
     'document-ocr-failed',
     'document-ocr-unsupported',
+    'image-ocr-empty',
+    'image-ocr-failed',
+    'image-ocr-unsupported',
     'parser-unavailable',
     'parser-unsupported',
   ]),
@@ -39,13 +42,13 @@ export class FileAttachmentError extends Error {
 
 /** Persist facts about what was sent, never extracted file bodies. */
 export const FileAttachmentReportSchema = z.strictObject({
-  mode: z.enum(['image', 'text', 'document-text', 'document-ir']),
+  mode: z.enum(['image', 'image-text', 'text', 'document-text', 'document-ir']),
   sourceTruncated: z.boolean(),
   /** One-based PDF pages whose visual content did not yield recognized text. */
   unrecognizedPages: z.array(z.number().int().positive()).optional(),
   requestTruncated: z.boolean(),
   includedCharacters: z.number().int().nonnegative().optional(),
-  parser: z.enum(['anydoc', 'builtin', 'native-pdf']).optional(),
+  parser: z.enum(['anydoc', 'builtin', 'native-pdf', 'native-image-ocr']).optional(),
   parserVersion: z.string().optional(),
   delivery: z.enum(['complete', 'deferred']).optional(),
   images: z
@@ -139,6 +142,12 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
       return `${name} could not be read because scanned-page text recognition failed. The user can retry, or attach the relevant pages as images.`;
     case 'document-ocr-unsupported':
       return `${name} has no text layer, and scanned-page recognition does not support the current app language. The user can attach the relevant pages as images.`;
+    case 'image-ocr-empty':
+      return `${name} has no readable text. This model cannot see the image; choose a vision-capable model or remove the image.`;
+    case 'image-ocr-failed':
+      return `${name} could not be read by on-device text recognition. Retry, choose a vision-capable model, or remove the image.`;
+    case 'image-ocr-unsupported':
+      return `${name} cannot be read because on-device text recognition does not support the current app language. Choose a vision-capable model or remove the image.`;
     case 'parser-unavailable':
       return 'The document parser is unavailable. Rebuild the development client or select the built-in parser.';
     case 'parser-unsupported':

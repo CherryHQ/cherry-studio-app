@@ -214,6 +214,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       resolveAvailable: async () => new Map(),
       readAsBytes: async () => undefined,
       readDocumentText: async () => undefined,
+      readImageText: async () => undefined,
       readAsDataUrl: async () => undefined,
     },
     inferenceModel: async (model) => ({
@@ -2157,6 +2158,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           new Map(ids.includes(image.fileEntryId) ? [[image.fileEntryId, image]] : []),
         readAsBytes: async () => undefined,
         readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
         readAsDataUrl,
       },
     });
@@ -2621,6 +2623,7 @@ describe('quoted requests through durable execution', () => {
         readAsBytes: async () => undefined,
         readAsDataUrl: async () => undefined,
         readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
       },
     });
     const turn = await state.reserve('running', [

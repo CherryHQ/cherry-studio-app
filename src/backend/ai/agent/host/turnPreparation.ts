@@ -553,6 +553,7 @@ export async function prepareResolvedTurn(
           askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
+          acceptsImages: modelPreflight.inputModalities.includes('image'),
           resources,
           documentParserMode,
           resolveUsageAttribution: usageAttribution.resolve,

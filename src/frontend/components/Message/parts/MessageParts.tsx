@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { usePdfOcrActive } from '@/frontend/hooks/file';
+import { useFileOcrActive } from '@/frontend/hooks/file';
 import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
@@ -142,11 +142,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
 /** Names local attachment work, such as scan recognition, that delays the first token. */
 function PendingInputReply({ fileEntryIds }: { fileEntryIds: readonly string[] }) {
   const { t } = useTranslation();
-  const recognizing = usePdfOcrActive(fileEntryIds);
+  const recognizing = useFileOcrActive(fileEntryIds);
   return (
     <MessagePart.Pending
       accessibilityLabel={t('chat.message.waitingForResponse')}
-      reason={recognizing ? t('chat.message.recognizingScan') : undefined}
+      reason={recognizing ? t('chat.message.recognizingText') : undefined}
     />
   );
 }

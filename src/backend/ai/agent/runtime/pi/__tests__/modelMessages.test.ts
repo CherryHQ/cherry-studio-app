@@ -58,3 +58,33 @@ test('an image omitted for a text-only model still names its managed file', () =
     '[image attachment omitted: this model does not accept image input] Cherry managed file: {"fileEntryId":"00000000-0000-7000-8000-000000000001","name":"chart.png"}',
   );
 });
+
+test('OCR content is visible to non-tool text models with an explicit image-reading limitation', () => {
+  const conversation = toPiConversation(
+    request({
+      input: [
+        {
+          type: 'text-attachment',
+          fileEntryId: image.fileEntryId!,
+          name: 'receipt.png',
+          mediaType: 'image/png',
+          trust: 'untrusted-user-content',
+          text: 'Total: 42',
+          truncated: false,
+          attachmentReport: {
+            mode: 'image-text',
+            parser: 'native-image-ocr',
+            sourceTruncated: false,
+            requestTruncated: false,
+          },
+        },
+      ],
+    }),
+    { input: ['text'] } as unknown as Model<Api>,
+  );
+  expect(typeof conversation.prompt.content).toBe('string');
+  expect(conversation.prompt.content).toContain('Total: 42');
+  expect(conversation.prompt.content).toContain('native-image-ocr');
+  expect(conversation.prompt.content).toContain('has not received image pixels');
+  expect(conversation.prompt.content).not.toContain('attachment omitted');
+});

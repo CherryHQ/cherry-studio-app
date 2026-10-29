@@ -29,14 +29,18 @@ function directory(): Directory {
 }
 
 /** Managed filenames contain the immutable entry ID. Never persist a sandbox path. */
-export function pdfTextCacheFile(source: File, language: string): File {
+export function fileTextCacheFile(
+  source: File,
+  language: string,
+  kind: 'pdf' | 'image' = 'pdf',
+): File {
   return new File(
     directory(),
-    `${source.name}.v${CACHE_VERSION}.${source.size}.${source.modificationTime ?? 0}.${MAX_PDF_ATTACHMENT_PAGES}.${language}.json`,
+    `${source.name}.v${CACHE_VERSION}.${kind}.${source.size}.${source.modificationTime ?? 0}.${MAX_PDF_ATTACHMENT_PAGES}.${language}.json`,
   );
 }
 
-export async function readPdfTextCache(file: File): Promise<ExtractResult | undefined> {
+export async function readFileTextCache(file: File): Promise<ExtractResult | undefined> {
   try {
     if (!file.exists || file.size > MAX_ENTRY_BYTES) return undefined;
     return resultSchema.parse(JSON.parse(await file.text()));
@@ -46,7 +50,7 @@ export async function readPdfTextCache(file: File): Promise<ExtractResult | unde
   }
 }
 
-export function writePdfTextCache(file: File, result: ExtractResult): void {
+export function writeFileTextCache(file: File, result: ExtractResult): void {
   if (result.extractionError || result.ocrError) return;
   try {
     const folder = directory();
@@ -70,7 +74,7 @@ export function writePdfTextCache(file: File, result: ExtractResult): void {
   }
 }
 
-export function deletePdfTextCache(entry: Pick<FileEntry, 'id'>): void {
+export function deleteFileTextCache(entry: Pick<FileEntry, 'id'>): void {
   const folder = directory();
   if (!folder.exists) return;
   for (const file of folder.list()) {
@@ -79,7 +83,7 @@ export function deletePdfTextCache(entry: Pick<FileEntry, 'id'>): void {
 }
 
 /** Called at the cold-start restore gate, before file readers exist. */
-export function resetPdfTextCacheForRestore(): void {
+export function resetFileTextCacheForRestore(): void {
   const folder = directory();
   if (folder.exists) folder.delete();
 }

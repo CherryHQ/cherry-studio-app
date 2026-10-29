@@ -38,7 +38,7 @@ it already exists.
 | Whether a Provider is ready to use, and why not | `getProviderConfigurationIssue` in `src/backend/services/providers/providerConfiguration.ts` |
 | Whether a Provider may send requests without a key | `resolveAuthOptional` in `src/shared/utils/providerAuth.ts` |
 | Provider API key selection and rotation | `ProviderService.resolveApiKey` and `getRotatedApiKey` in `src/backend/data/services/ProviderService.ts` |
-| PDF text extraction and on-device scanned-page OCR | `modules/pdf-text-extractor`; `src/backend/services/file/pdfText.ts` shares extraction and derived disk results across `documentText.ts` readers; `FileModule.observePdfOcr` reports one file's recognition progress |
+| PDF text extraction and on-device PDF/image OCR | `modules/pdf-text-extractor`; `src/backend/services/file/fileTextExtraction.ts` shares extraction and derived disk results across `documentText.ts` and `imageText.ts` readers; `FileModule.observeFileOcr` reports one file's recognition progress |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Quoted answer text on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquote in `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
