@@ -161,6 +161,8 @@ export type ConversationMessage = {
   }[];
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
+    /** Opens the reply editor, which commits its own optimistic edit through the Agent protocol. */
+    edit?: { availability: Availability };
     retry?: ConversationAction<void, ConversationRef | void>;
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;

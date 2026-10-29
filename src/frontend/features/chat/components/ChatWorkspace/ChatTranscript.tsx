@@ -14,12 +14,13 @@ import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRe
 
 type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
-  'bottomAccessoryHeight' | 'contentTopInset' | 'onReady'
+  'bottomAccessoryHeight' | 'contentTopInset'
 > & { requiresInitialLayout: boolean; isLoadingMore: boolean };
 
 export function ChatTranscript({
   requiresInitialLayout,
   isLoadingMore,
+  onReady,
   ...list
 }: ChatTranscriptProps) {
   const composer = useComposerExpansion();
@@ -42,7 +43,10 @@ export function ChatTranscript({
         {...list}
         bottomAccessoryHeight={composer?.meta.contentInset}
         contentTopInset={resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight)}
-        onReady={markListLoaded}
+        onReady={() => {
+          markListLoaded();
+          onReady?.();
+        }}
       />
       <ChatInitialRenderCover isVisible={isCoverVisible} />
     </View>

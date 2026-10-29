@@ -61,6 +61,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     respondApproval: jest.fn(async () => undefined),
     respondQuestion: jest.fn(async () => undefined),
     retryMessage: jest.fn(async () => undefined),
+    editMessage: jest.fn(async () => undefined),
     forkSession: jest.fn(async () => ({ id: 'fork' }) as never),
     deleteTurn: jest.fn(async () => undefined),
     selectMessage: jest.fn(async () => ({ id: 'session' }) as never),
@@ -94,6 +95,21 @@ test('a queued-only session blocks history edits while leaving its queue outside
   const projected = f.projector.message(row, f.state);
   expect(projected.actions.remove?.availability).toEqual({ state: 'disabled', reason: 'busy' });
   expect(f.projector.snapshot(f.state, undefined).executions).toEqual([]);
+});
+
+test('every successful answer offers editing, disabled together while the session is busy', () => {
+  const rows = [message('first'), message('second')];
+  const f = fixture();
+  const history = f.projector.history(rows, f.state);
+  expect(history.map((row) => row.actions.edit?.availability.state)).toEqual([
+    'enabled',
+    'enabled',
+  ]);
+  f.set({ isSubmitting: true });
+  expect(f.projector.message(rows[0], f.state).actions.edit?.availability).toEqual({
+    state: 'disabled',
+    reason: 'busy',
+  });
 });
 
 test('a changed approval payload under the same id rejects the earlier decision', async () => {

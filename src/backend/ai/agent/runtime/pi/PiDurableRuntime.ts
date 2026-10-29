@@ -8,6 +8,7 @@ import {
   type AgentChange,
   type Conversation,
   type ConversationId,
+  type ContextEdit,
   type EntryDraft,
   type EntryId,
   type HarnessOptions,
@@ -27,6 +28,7 @@ import {
 
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
+import { PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { ToolInstructions } from './piToolInstructions';
 
 type PiSessionBinding = {
@@ -44,8 +46,14 @@ const SessionBinding = defineDocFamily<PiSessionBinding, number>({
   initial: (revision) => ({ conversationId: null, revision }),
 });
 
-/** Display identities and original managed-file references, not an assistant transcript mirror. */
-const SubmissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+/**
+ * Display identities and original managed-file references, not an assistant transcript mirror.
+ * `editBoundary` extends a latest answer through a reply edit appended after it.
+ */
+const SubmissionMetadata = defineDocFamily<
+  { value: JsonObject; editBoundary?: number },
+  JsonObject
+>({
   kind: 'cherry.submission',
   version: 1,
   scope: 'session',
@@ -348,8 +356,7 @@ export class PiDurableRuntime {
     if (!(await this.storage.entry(conversation.id, record.entry, context))) return [];
     const entries: EntryRecord[] = [];
     let next: Cursor | undefined;
-    const maxEntryId =
-      through ?? (record.type === 'input' && record.status === 'done' ? record.answer : undefined);
+    const maxEntryId = through ?? (await this.answerBoundary(sessionId, record, context));
     do {
       const page = await this.history(sessionId, 256, next, context, {
         minEntryId: record.entry,
@@ -458,6 +465,87 @@ export class PiDurableRuntime {
         context,
       )
     )?.value;
+  }
+
+  /** A fork before an edit retains the original answer; later forks include its override entry. */
+  async answerBoundary(
+    sessionId: string,
+    record: SubmissionRecord,
+    context: Context = BACKGROUND_CONTEXT,
+  ) {
+    if (record.type !== 'input' || record.status !== 'done') return undefined;
+    const conversation = await this.requireSession(sessionId, context);
+    const metadata =
+      record.requestId === undefined
+        ? undefined
+        : await this.harness.snapshot(
+            SubmissionMetadata,
+            metadataKey(record.conversationId, record.requestId),
+            context,
+          );
+    const edited = metadata?.editBoundary as EntryId | undefined;
+    return edited !== undefined && (await this.storage.entry(conversation.id, edited, context))
+      ? edited
+      : record.answer;
+  }
+
+  /** A fork through `at` cannot see a later edit of the history it inherits. */
+  async editedAfter(sessionId: string, at: EntryId, context: Context = BACKGROUND_CONTEXT) {
+    const conversation = await this.requireSession(sessionId, context);
+    return this.harness.commit(async (tx) => {
+      let cursor: Cursor | undefined;
+      do {
+        const page = await tx.scanEntries(
+          { conversationId: conversation.id, minEntryId: (at + 1) as EntryId },
+          256,
+          cursor,
+        );
+        if (page.items.some((entry) => entry.edits?.some((edit) => edit.target <= at))) return true;
+        cursor = page.next;
+      } while (cursor !== undefined);
+      return false;
+    }, context);
+  }
+
+  /**
+   * Host admission is locked and all work is stopped before appending this immutable override.
+   * `latest` is the copy's own newest answer; its boundary then covers the edit for later forks.
+   */
+  async editReply(
+    sessionId: string,
+    input: {
+      latest: SubmissionRecord | undefined;
+      revision: number;
+      tail: EntryId;
+      edits: readonly ContextEdit[];
+    },
+    context: Context = BACKGROUND_CONTEXT,
+  ) {
+    const conversation = await this.requireSession(sessionId, context);
+    const { latest } = input;
+    await this.harness.commit(async (tx) => {
+      const binding = await tx.doc(SessionBinding, sessionId, input.revision);
+      const newest = await tx.scanEntries(
+        { conversationId: conversation.id, order: 'descending' },
+        1,
+      );
+      if (binding.revision !== input.revision || newest.items[0]?.id !== input.tail)
+        throw new Error('The working context changed before the edit.');
+      const entry = await tx.appendEntry(conversation.id, {
+        kind: PI_REPLY_EDIT_KIND,
+        edits: input.edits,
+      });
+      if (latest?.conversationId === conversation.id && latest.requestId !== undefined) {
+        const metadata = await tx.doc(
+          SubmissionMetadata,
+          metadataKey(conversation.id, latest.requestId),
+          {},
+        );
+        metadata.editBoundary = entry.id;
+      }
+      // Until Cherry commits this same revision, recovery rejects this copy.
+      binding.revision = input.revision + 1;
+    }, context);
   }
 
   /** Inherited aliases stay in their source. The visible input boundary prevents future-history leakage. */

@@ -80,7 +80,7 @@ patchedDependencies:
   ai@6.0.185: patches/ai@6.0.185.patch
   react-native-keyboard-controller@1.22.9: patches/react-native-keyboard-controller@1.22.9.patch
   expo-router@58.0.26: patches/expo-router@58.0.26.patch
-  react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
+  react-native-enriched-markdown@1.1.1: patches/react-native-enriched-markdown@1.1.1.patch
   react-native-drawer-layout@4.2.12: patches/react-native-drawer-layout@4.2.12.patch
   expo-calendar@58.0.6: patches/expo-calendar@58.0.6.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch

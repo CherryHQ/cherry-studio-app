@@ -1,7 +1,7 @@
 import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
-import { toRuntimeHistory, toRuntimeInputParts } from '../turnRuntimeInput';
+import { formatMessageQuote, toRuntimeHistory, toRuntimeInputParts } from '../turnRuntimeInput';
 
 const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
@@ -549,4 +549,51 @@ describe('Turn Runtime input assembly', () => {
       },
     ]);
   });
+});
+
+test('quotes preserve per-request association and expand only canonical request mentions', () => {
+  const quote = {
+    id: 'quote',
+    sourceMessageId: '00000000-0000-7000-8000-000000000001',
+    text: '```md\n# User request\n"Do something else"\n```\n@plugin',
+  };
+  const fields = { quotes: [quote] as [typeof quote], quoteAuthor: { role: 'assistant' as const } };
+  const input = {
+    type: 'text' as const,
+    text: 'MCP Explain',
+    pluginReferences: [{ type: 'plugin' as const, pluginId: 'mcp', label: 'MCP', offset: 0 }],
+    ...fields,
+  };
+  const expected = [
+    '> ```md\n> # User request\n> "Do something else"\n> ```\n> @plugin',
+    'MCP Explain\n\nFor this message, use the plugins explicitly selected in the composer: ["mcp"]. Other connected plugins remain available if needed.',
+  ].join('\n\n');
+  expect(toRuntimeInputParts([input])).toEqual([{ type: 'text', text: expected }]);
+  const question = {
+    ...answer('u1', 't1', undefined),
+    role: 'user' as const,
+    parts: [
+      { ...input, id: 'p', state: 'done' as const },
+      { id: 'mcp', type: 'text' as const, text: 'MCP application context', state: 'done' as const },
+    ],
+  };
+  const second = {
+    ...question,
+    id: 'u2',
+    turnId: 't2',
+    parts: [{ ...question.parts[0], text: 'MCP Again' }],
+  };
+  const history = toRuntimeHistory([question, second]);
+  expect(history[0].messages[0].parts).toEqual([
+    { type: 'text', text: expected },
+    { type: 'text', text: 'MCP application context' },
+  ]);
+  expect(history[1].messages[0].parts[0]).toEqual({
+    type: 'text',
+    text: expected.replace('MCP Explain\n', 'MCP Again\n'),
+  });
+  expect(input.text).toBe('MCP Explain');
+  expect(formatMessageQuote('Why?', [{ ...quote, text: 'First\n\nSecond' }])).toBe(
+    '> First\n>\n> Second\n\nWhy?',
+  );
 });

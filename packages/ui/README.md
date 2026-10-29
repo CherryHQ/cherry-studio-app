@@ -163,6 +163,15 @@ defaults:
 />;
 ```
 
+`renderMermaid` is an optional presentation slot for complete top-level Mermaid fences. With it,
+`MarkdownText` splits the document around those fences, keeps each text segment on its own native
+renderer, and passes the caller the diagram source plus the fence as an ordinary code block for
+fallback. Quoted, listed, indented, and nested fences, longer code examples, and a fence whose
+closing line has not finished streaming stay inside the text. Reference definitions are repeated
+into every segment so links resolve across a diagram. Without the slot, Mermaid is a code block and
+the output is the single renderer above. CherryUI owns neither the diagram renderer nor its
+WebView; the app supplies both.
+
 Streaming updates use the Desktop cadence at the chat-state owner: 100 ms for small
 messages, increasing with accumulated text length to at most 3 seconds. Terminal events
 publish immediately. The Streamdown dependency patch allows one repair job and one latest

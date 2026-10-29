@@ -22,6 +22,7 @@ export const AGENT_SESSION_MESSAGES_MAX_LIMIT = 200;
  */
 export const ListAgentSessionMessagesQuerySchema = z
   .strictObject({
+    aroundMode: z.literal('exact').optional(),
     aroundMessageId: z.string().min(1).optional(),
     cursor: z.string().min(1).optional(),
     direction: z.enum(['older', 'newer']).optional(),
@@ -54,6 +55,12 @@ export const ListAgentSessionMessagesQuerySchema = z
     message: 'aroundMessageId cannot be combined with cursor or direction',
     path: ['aroundMessageId'],
   })
+  .refine(
+    (query) =>
+      !query.aroundMode ||
+      Boolean(query.aroundMessageId && !query.ids && !query.cursor && !query.direction),
+    { message: 'Exact mode requires only an around target.', path: ['aroundMode'] },
+  )
   .refine((query) => query.direction !== 'newer' || Boolean(query.cursor), {
     message: 'Newer pagination requires a cursor',
     path: ['cursor'],

@@ -33,11 +33,13 @@ export function usePaintingInput({
   initialParamValues,
   onGenerate,
   preparePrompt,
+  onSubmissionSettled,
 }: {
   model: Model | undefined;
   initialParamValues?: ImageParamDraft;
   onGenerate(input: PaintingInputSubmission): Promise<unknown>;
   preparePrompt?: PaintingPromptPreparation;
+  onSubmissionSettled?: () => void;
 }) {
   const file = useBackendModule('file');
   const { attachments, draft, isSubmitting } = useComposerState();
@@ -133,67 +135,71 @@ export function usePaintingInput({
       removeAttachment(id);
     },
     async send({ attachments: manualAttachments, text }: ComposerSendPayload) {
-      const images = referenceAttachment
-        ? appendComposerAttachments(manualAttachments, [referenceAttachment]).filter(
-            isComposerAttachmentReady,
-          )
-        : [...manualAttachments];
-      // Image-local editing instructions must be frozen before validation and file preparation.
-      const preparedPrompt = preparePrompt?.(text, images) ?? text;
-      const promptSnapshot =
-        typeof preparedPrompt === 'string' ? preparedPrompt : preparedPrompt.prompt;
-      const displayPrompt =
-        typeof preparedPrompt === 'string' ? undefined : preparedPrompt.displayPrompt;
-      if (!model) throw new PaintingGenerationError({ code: 'model-unavailable' });
-      if (isReferenceUnavailable || isCheckingReference)
-        throw new FileAttachmentError({
-          code: 'unavailable',
-          fileEntryId: selection?.image.fileEntryId,
-        });
-      if (!isImageParamDraftValid(paramValues, resolvedMode))
-        throw new PaintingGenerationError({ code: 'invalid-parameters' });
-      const paramValuesSnapshot = prepareImageParamValues(
-        paramValues,
-        model.imageGeneration,
-        resolvedMode,
-      );
-      // Pure preflight happens before any asynchronous work and never repairs input.
-      strategy.prepare({
-        images: images.map(toFileFact),
-        prompt: promptSnapshot,
-        paramValues: paramValuesSnapshot,
-      });
-      reference.beginSubmission(images);
       try {
-        const prepared = await file.prepareAttachments({
-          fileEntryIds: images.map((image) => image.fileEntryId),
-          target: strategy.attachmentTarget,
-        });
-        const actualImages = prepared.map(({ entry, uri }) => ({
-          id: `file:${entry.id}`,
-          fileEntryId: entry.id,
-          mediaType: entry.mediaType,
-          name: entry.filename,
-          size: entry.size,
-          uri,
-          kind: 'image' as const,
-          status: 'ready' as const,
-        }));
-        const request = strategy.prepare({
-          images: actualImages.map(toFileFact),
+        const images = referenceAttachment
+          ? appendComposerAttachments(manualAttachments, [referenceAttachment]).filter(
+              isComposerAttachmentReady,
+            )
+          : [...manualAttachments];
+        // Image-local editing instructions must be frozen before validation and file preparation.
+        const preparedPrompt = preparePrompt?.(text, images) ?? text;
+        const promptSnapshot =
+          typeof preparedPrompt === 'string' ? preparedPrompt : preparedPrompt.prompt;
+        const displayPrompt =
+          typeof preparedPrompt === 'string' ? undefined : preparedPrompt.displayPrompt;
+        if (!model) throw new PaintingGenerationError({ code: 'model-unavailable' });
+        if (isReferenceUnavailable || isCheckingReference)
+          throw new FileAttachmentError({
+            code: 'unavailable',
+            fileEntryId: selection?.image.fileEntryId,
+          });
+        if (!isImageParamDraftValid(paramValues, resolvedMode))
+          throw new PaintingGenerationError({ code: 'invalid-parameters' });
+        const paramValuesSnapshot = prepareImageParamValues(
+          paramValues,
+          model.imageGeneration,
+          resolvedMode,
+        );
+        // Pure preflight happens before any asynchronous work and never repairs input.
+        strategy.prepare({
+          images: images.map(toFileFact),
           prompt: promptSnapshot,
           paramValues: paramValuesSnapshot,
         });
-        await onGenerate({
-          ...request,
-          displayPrompt,
-          attachments: actualImages,
-          modelId: model.id,
-          modelName: model.name,
-        });
-      } catch (error) {
-        reference.rejectSubmission();
-        throw error;
+        reference.beginSubmission(images);
+        try {
+          const prepared = await file.prepareAttachments({
+            fileEntryIds: images.map((image) => image.fileEntryId),
+            target: strategy.attachmentTarget,
+          });
+          const actualImages = prepared.map(({ entry, uri }) => ({
+            id: `file:${entry.id}`,
+            fileEntryId: entry.id,
+            mediaType: entry.mediaType,
+            name: entry.filename,
+            size: entry.size,
+            uri,
+            kind: 'image' as const,
+            status: 'ready' as const,
+          }));
+          const request = strategy.prepare({
+            images: actualImages.map(toFileFact),
+            prompt: promptSnapshot,
+            paramValues: paramValuesSnapshot,
+          });
+          await onGenerate({
+            ...request,
+            displayPrompt,
+            attachments: actualImages,
+            modelId: model.id,
+            modelName: model.name,
+          });
+        } catch (error) {
+          reference.rejectSubmission();
+          throw error;
+        }
+      } finally {
+        onSubmissionSettled?.();
       }
     },
   };

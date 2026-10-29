@@ -12,6 +12,7 @@ import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
+  AgentEditMessageInputSchema,
   AgentEventSchema,
   AgentForkSessionInputSchema,
   AgentInputPartSchema,
@@ -45,6 +46,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
+import { applyReplyEdits } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
@@ -65,7 +67,11 @@ import {
   type RuntimeTool,
   type RuntimeTurnTiming,
 } from '../runtime';
-import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
+import type {
+  AgentSessionStore,
+  EditMessageInput,
+  ReserveSubmissionResult,
+} from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
 import { createImageRequestTool } from './agentImageGeneration';
@@ -88,6 +94,7 @@ import {
   type TurnPreparationDependencies,
 } from './turnPreparation';
 import {
+  runtimeUserText,
   toRuntimeHistory,
   toRuntimeInputParts,
   type RuntimeAttachmentContents,
@@ -104,6 +111,11 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
+  /**
+   * A withdrawn input's rows hand their children to its own parent. Inputs reserved below it keep
+   * that row in their immutable metadata, so their live questions follow this map until idle.
+   */
+  withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
@@ -497,6 +509,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   startSession(input: AgentStartSessionInput) {
     const parsed = AgentStartSessionInputSchema.parse(input);
+    if (parsed.parts.some((part) => part.type === 'text' && part.quotes))
+      fail('CAPABILITY_UNSUPPORTED', 'A new session cannot quote another session.');
     return this.admit(parsed.sessionId, async (signal) => {
       if (await this.store.getSession(parsed.sessionId))
         fail('SESSION_BUSY', 'This session already exists.');
@@ -532,6 +546,15 @@ export class DurableAgentHost implements AgentProtocol {
     return this.admit(parsed.sessionId, async (signal) => {
       const session = await this.requireSession(parsed.sessionId);
       const current = await this.syncSession(parsed.sessionId);
+      const quote = parsed.parts.find((part) => part.type === 'text' && part.quotes);
+      if (quote?.type === 'text' && quote.quotes) {
+        const source = await this.store.getMessage(
+          parsed.sessionId,
+          quote.quotes[0].sourceMessageId,
+        );
+        if (source?.role !== 'assistant')
+          fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
+      }
       const parent = session.activeNodeId ?? null;
       const answers = replyTargets(parsed);
       const busy = this.busyLanes(parsed.sessionId);
@@ -730,7 +753,7 @@ export class DurableAgentHost implements AgentProtocol {
                 type: 'text' as const,
                 text:
                   part.type === 'text'
-                    ? part.text
+                    ? runtimeUserText(part)
                     : `[Image input: ${part.filename ?? part.fileEntryId}]`,
               }))
             : toRuntimeInputParts(plan.inputParts, plan.resources, attachments[index]!),
@@ -1038,6 +1061,78 @@ export class DurableAgentHost implements AgentProtocol {
     });
   }
 
+  async editMessage(input: Parameters<AgentProtocol['editMessage']>[0]) {
+    const parsed = AgentEditMessageInputSchema.parse(input);
+    this.assertIdle(parsed.sessionId);
+    return this.admit(parsed.sessionId, async (signal) => {
+      const current = await this.syncSession(parsed.sessionId, true);
+      const session = await this.requireSession(parsed.sessionId);
+      const message = await this.store.getMessage(session.id, parsed.messageId);
+      if (!message) fail('MESSAGE_NOT_FOUND', 'The answer no longer exists.');
+      if (
+        message.role !== 'assistant' ||
+        message.status !== 'success' ||
+        !message.turnId ||
+        !applyReplyEdits(message.parts, parsed.parts)
+      )
+        fail('MESSAGE_CONFLICT', 'Only unchanged text of a successful answer can be edited.');
+      const changed = parsed.parts.filter((part) => part.text !== part.expectedText);
+      if (changed.length === 0) return message;
+      const revision = await this.store.getRuntimeRevision(session.id);
+      if (revision === null) fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+      signal.throwIfAborted();
+      const editedLanes: RuntimeLane[] = [];
+      const contextCheckpoints: EditMessageInput['contextCheckpoints'] = [];
+      try {
+        // Every copy holding the answer keeps its provider affinity; the others are rebuilt.
+        for (const lane of current) {
+          const edited = await this.conversations.editReply(lane, {
+            messageId: message.id,
+            revision,
+            parts: changed,
+          });
+          if (!edited) continue;
+          editedLanes.push(lane);
+          if (edited.contextCheckpoint) contextCheckpoints.push(edited.contextCheckpoint);
+        }
+        const result = await this.store.editMessage({
+          ...parsed,
+          parts: changed,
+          expectedRevision: revision,
+          contextCheckpoints,
+        });
+        if (result.status === 'session-not-found')
+          fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+        if (result.status === 'message-not-found')
+          fail('MESSAGE_NOT_FOUND', 'The answer no longer exists.');
+        if (result.status !== 'edited')
+          fail('MESSAGE_CONFLICT', 'The answer changed before the edit was saved.');
+        // Every other copy is fenced out by the committed revision, even if retirement fails.
+        for (const lane of current)
+          if (!editedLanes.some((edited) => sameLane(lane, edited)))
+            await this.detachLane(lane).catch((error: unknown) =>
+              logger.warn('Deferred obsolete working-copy cleanup', error as Error),
+            );
+        for (const live of this.liveStates(session.id))
+          if (live.assistant?.id === message.id) live.assistant = result.message;
+        this.publish(session.id, { type: 'message.edited', message: result.message });
+        const updatedSession = await this.store.getSession(session.id);
+        if (updatedSession)
+          this.publish(session.id, { type: 'session.updated', session: updatedSession });
+        this.ports.durableStorage?.notifyTranscript(session.id);
+        return result.message;
+      } catch (error) {
+        // A native edit preceding a failed Cherry commit has the wrong revision and cannot resume.
+        for (const lane of current)
+          if (!(await this.isCurrentConversation(lane)))
+            await this.detachLane(lane).catch((cleanup: unknown) =>
+              logger.warn('Deferred edited-copy cleanup', cleanup as Error),
+            );
+        throw error;
+      }
+    });
+  }
+
   async selectMessage(input: Parameters<AgentProtocol['selectMessage']>[0]) {
     const parsed = AgentSelectMessageInputSchema.parse(input);
     storageMutationGate.assertWritable();
@@ -1236,7 +1331,7 @@ export class DurableAgentHost implements AgentProtocol {
     // Several lanes run when one question has several answers; the first active one leads.
     const running = states.filter((state) => state.active);
     const state = running[0] ?? states[0];
-    const view = state?.active ? projectDurableHostTurn(state.active) : undefined;
+    const view = state?.active ? this.projectTurn(state.active) : undefined;
     const snapshot = AgentSessionSnapshotSchema.parse({
       agent: { id: agent.id, name: agent.name },
       session,
@@ -1656,7 +1751,15 @@ export class DurableAgentHost implements AgentProtocol {
       });
       signal?.throwIfAborted();
       if (messageIds.length) {
+        const state = this.live.get(laneKey(turn.identity));
+        const parent = DurableTurnMetadataSchema.parse(turn.metadata).parentMessageId;
+        if (state && parent !== undefined)
+          for (const id of messageIds) state.withdrawnParents.set(id, parent);
         this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
+        this.publish(sessionId, {
+          type: 'queue.updated',
+          inputs: this.queuedInputs(this.liveStates(sessionId).flatMap((state) => state.queue)),
+        });
         this.ports.durableStorage?.notifyTranscript(sessionId);
         const session = await this.store.getSession(sessionId);
         signal?.throwIfAborted();
@@ -1750,6 +1853,7 @@ export class DurableAgentHost implements AgentProtocol {
           assistant: null,
           active: null,
           queue: [],
+          withdrawnParents: new Map(),
           contextStatus: null,
           unsubscribe: async () => {},
           background: null,
@@ -1825,6 +1929,7 @@ export class DurableAgentHost implements AgentProtocol {
       )
         state.active = null;
     }
+    if (!state.active && !state.queue.length) state.withdrawnParents.clear();
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
   }
@@ -1968,7 +2073,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private publishRows(turn: RuntimeDurableTurn) {
-    const { user, assistant } = projectDurableHostTurn(turn);
+    const { user, assistant } = this.projectTurn(turn);
     const { sessionId } = turn.identity;
     const state = this.live.get(laneKey(turn.identity));
     if (!state?.users.has(user.id)) {
@@ -2231,10 +2336,18 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  private projectTurn(turn: RuntimeDurableTurn) {
+    const view = projectDurableHostTurn(turn);
+    const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
+    let parentId = view.user.parentId;
+    while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);
+    return parentId === view.user.parentId ? view : { ...view, user: { ...view.user, parentId } };
+  }
+
   private queuedInputs(queue: readonly RuntimeDurableTurn[]): AgentQueuedInput[] {
     return queue.map((turn) => ({
       turnId: turn.identity.turnId,
-      userMessage: projectDurableHostTurn(turn).user,
+      userMessage: this.projectTurn(turn).user,
       assistantMessageId: turn.assistantMessageId,
     }));
   }
@@ -2427,12 +2540,13 @@ function submittedSkills(parts: AgentMessageView['parts']) {
 function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
   return parts.flatMap((part) => {
     // A selection made without typed text is recorded on an empty text part.
-    if (part.type === 'text' && !part.text) return [];
+    if (part.type === 'text' && !part.text && !part.quotes) return [];
     if (part.type === 'text')
       return [
         AgentInputPartSchema.parse({
           type: part.type,
           text: part.text,
+          ...(part.quotes ? { quotes: part.quotes, quoteAuthor: part.quoteAuthor } : {}),
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
           ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),

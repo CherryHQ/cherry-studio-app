@@ -7,12 +7,15 @@
 
 import {
   AgentMessagePartSchema,
+  AgentInputPartSchema,
   AgentToolResultSchema,
   type AgentInputPart,
+  type MessageQuote,
   type AgentMessageView,
 } from '@/shared/contracts/agent';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
+import type { SkillTextReference } from '@/shared/data/types/skill';
 import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
 
 import type { TurnResourceLedger } from '../resources/managedFileResolver';
@@ -182,11 +185,20 @@ function contextAnchor(
 }
 
 /** Preserve message-scoped composer intent as user content, without changing the stored text. */
-function runtimeUserText(part: {
+export function runtimeUserText(part: {
   text: string;
+  quotes?: [MessageQuote];
   pluginReferences?: PluginTextReference[];
   selectionReferences?: SelectionTextReference[];
+  skillReferences?: SkillTextReference[];
 }): string {
+  AgentInputPartSchema.parse({
+    type: 'text',
+    text: part.text,
+    ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
+    ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
+    ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
+  });
   let text = part.text;
   // A selection chip reaches the model as the fenced block desktop sends, right after its label.
   for (const reference of [...(part.selectionReferences ?? [])].sort(
@@ -196,7 +208,22 @@ function runtimeUserText(part: {
     const block = createCodeBlockMarkdown(JSON.stringify(reference.selection), 'selection-ref');
     text = `${text.slice(0, end)}\n${block}\n${text.slice(end)}`;
   }
-  if (!part.pluginReferences?.length) return text;
-  const pluginIds = [...new Set(part.pluginReferences.map((reference) => reference.pluginId))];
-  return `${text}\n\nFor this message, use the plugins explicitly selected in the composer: ${JSON.stringify(pluginIds)}. Other connected plugins remain available if needed.`;
+  if (part.pluginReferences?.length) {
+    const pluginIds = [...new Set(part.pluginReferences.map((reference) => reference.pluginId))];
+    text = `${text}\n\nFor this message, use the plugins explicitly selected in the composer: ${JSON.stringify(pluginIds)}. Other connected plugins remain available if needed.`;
+  }
+  return formatMessageQuote(text, part.quotes);
+}
+
+export function formatMessageQuote(
+  expandedRequest: string,
+  quotes?: readonly [MessageQuote],
+): string {
+  if (!quotes) return expandedRequest;
+  // The quoted passage leads as a Markdown blockquote, the way chat apps send a selection.
+  const quoted = quotes[0].text
+    .split('\n')
+    .map((line) => (line ? `> ${line}` : '>'))
+    .join('\n');
+  return `${quoted}\n\n${expandedRequest}`;
 }
