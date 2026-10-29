@@ -356,6 +356,37 @@ describe('durable tool diagnostics', () => {
     }
   });
 
+  test('a native edit keeps its copy current and saves its refreshed context', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: turn.identity.turnId,
+      payload: { edited: true },
+    };
+    f.conversations.editReply = async (lane, input) => {
+      f.copies.get(laneKey(lane))!.revision = input.revision + 1;
+      return { contextCheckpoint: { assistantMessageId: turn.assistantMessageId, checkpoint } };
+    };
+    try {
+      await f.host.editMessage({
+        sessionId: f.sessionId,
+        messageId: turn.assistantMessageId,
+        expectedText: 'Answer',
+        text: 'Corrected',
+      });
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
+      expect(f.copies.get(f.sessionId)?.revision).toBe(1);
+      expect(await f.store.getLatestContextCheckpoint(f.sessionId)).toEqual({
+        assistantMessageId: turn.assistantMessageId,
+        checkpoint,
+      });
+    } finally {
+      await f.host.close();
+    }
+  });
+
   test('a failed Cherry edit cannot leave a revised native copy eligible for execution', async () => {
     const f = fixture();
     const turn = await f.reserve();

@@ -137,14 +137,21 @@ describe('SqliteAgentSessionStore conformance', () => {
     ).toEqual({ searchable_text: 'Corrected' });
   });
 
-  test('editing an earlier answer keeps later turns and saves the refreshed copy context on the newest answer', async () => {
+  test('editing an earlier answer keeps later turns, drops checkpoints that may hold it and saves refreshed copy context', async () => {
     const session = await harness.createEmptySession({ agentId });
-    const earlier = await settleTurn(store, session.id, 'Earlier');
-    await store.saveContextCheckpoint(earlier.assistantMessage.id, earlier.turnId, {
-      version: 1,
-      anchorTurnId: earlier.turnId,
-      payload: { summary: 'Contains Earlier' },
-    });
+    const checkpointed = async (text: string) => {
+      const turn = await settleTurn(store, session.id, text);
+      const checkpoint = {
+        version: 1 as const,
+        anchorTurnId: turn.turnId,
+        payload: { summary: `Through ${text}` },
+      };
+      await store.saveContextCheckpoint(turn.assistantMessage.id, turn.turnId, checkpoint);
+      return { ...turn, checkpoint };
+    };
+    const before = await checkpointed('Before');
+    const earlier = await checkpointed('Earlier');
+    const middle = await checkpointed('Middle');
     const later = await settleTurn(store, session.id, 'Later');
     const refreshed = {
       version: 1 as const,
@@ -172,9 +179,10 @@ describe('SqliteAgentSessionStore conformance', () => {
       assistantMessageId: later.assistantMessage.id,
       checkpoint: refreshed,
     });
+    // Regenerating the latest answer rebuilds through the middle one: only the earlier context remains.
     expect(
-      await store.getLatestContextCheckpoint(session.id, undefined, earlier.assistantMessage.id),
-    ).toBeNull();
+      await store.getLatestContextCheckpoint(session.id, undefined, middle.assistantMessage.id),
+    ).toEqual({ assistantMessageId: before.assistantMessage.id, checkpoint: before.checkpoint });
     expect(await store.getRuntimeRevision(session.id)).toBe(1);
   });
 

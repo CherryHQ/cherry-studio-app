@@ -281,8 +281,9 @@ There is no raw SQL erasure, archive tombstone, hidden-turn document or descenda
 after the last tool call; reasoning, attachments, completed tool receipts, message identities and
 billed usage remain intact. Later turns are kept and not regenerated. The input carries the original
 text for optimistic concurrency. The store checks the answer, absence of unfinished messages,
-original text and history revision again inside its write transaction. Translation caches and the
-edited answer's own context checkpoint are cleared.
+original text and history revision again inside its write transaction. Translation caches are
+cleared, and so is every context checkpoint whose anchor is not strictly before the edited turn,
+because it may retain the old answer verbatim; the same rule protects deleted turns.
 
 Each native copy whose current context still contains the answer's text blocks stops background
 compaction and appends a public Pi `ContextEdit` replacement at its tail. The original entries
@@ -290,16 +291,17 @@ remain immutable, and provider session identity, earlier signed content and tool
 The copy's newest answer records the edit as its answer boundary, so forks after that answer keep
 the edit natively. A fork through an earlier answer cannot inherit an edit appended later, so that
 answer reports no native boundary and the new copy is rebuilt from the edited Cherry transcript.
-Changed text blocks no longer carry the original provider text signatures. Native web replay,
+Changed text blocks no longer carry the original provider text signatures, except OpenAI Responses
+signatures, which identify the output item and phase rather than its content. Native web replay,
 imported parts, copies that do not hold the answer and compacted-away targets fall back to
-rebuilding. Context replacements clear the obsolete measured usage so Pi estimates the edited text's
-size; transcript projection and Cherry's invocation ledger retain the original billed usage.
+rebuilding. Context replacements clear the edited answer's obsolete measured usage; Pi measures
+context from the newest remaining usage, so editing an earlier answer is reflected only after the
+next request. Transcript projection and Cherry's invocation ledger retain the original billed usage.
 
 Following Pi semantics, an answer already summarized by compaction keeps its old meaning inside that
-summary; only its displayed text changes. When an edited copy's context begins at a compaction or
-reset, its refreshed context is saved as the checkpoint of that copy's newest answer. A rebuild that
-uses an older checkpoint on another branch, whose retained messages still contain the answer, sees
-the original text; this rare case is accepted rather than rewriting opaque checkpoints.
+summary in a native copy; only its displayed text changes. When an edited copy's context begins at a
+compaction or reset, its refreshed context is saved as the checkpoint of that copy's newest answer.
+Any other rebuild falls back to an earlier checkpoint and replays the edited Cherry transcript.
 
 The native replacements and binding revisions advance before the Cherry transaction commits the same
 revision with the edited text and refreshed checkpoints. A crash between those commits leaves

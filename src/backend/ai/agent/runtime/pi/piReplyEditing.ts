@@ -3,6 +3,12 @@ import type { ContextEdit, ContextView, EntryId, EntryRecord } from '@earendil-w
 import { readPiWebResult } from './PiWebResponse';
 
 export const PI_REPLY_EDIT_KIND = 'cherry.reply-edit';
+// Their text signatures carry the output item identity and phase, not a proof of the content.
+const RESPONSES_APIS = new Set([
+  'openai-responses',
+  'azure-openai-responses',
+  'openai-codex-responses',
+]);
 
 /** Preserve the original transcript's IDs and usage while presenting Cherry's explicit text edits. */
 export function applyPiReplyEdits(entries: readonly EntryRecord[]): readonly EntryRecord[] {
@@ -61,9 +67,18 @@ export function createPiReplyEdits(
       .join('');
     if (current !== part.text) return undefined;
     const content = [...message.content];
-    // A replacement has no provider signature or citation payload claiming it was generated.
-    for (let block = index; block < end; block++)
-      content[block] = { type: 'text', text: block === index && partIndex === 0 ? text : '' };
+    const keepsIdentity = RESPONSES_APIS.has(message.api);
+    for (let block = index; block < end; block++) {
+      const original = message.content[block];
+      // A replacement has no provider signature or citation payload claiming it was generated.
+      content[block] = {
+        type: 'text',
+        text: block === index && partIndex === 0 ? text : '',
+        ...(keepsIdentity && original?.type === 'text' && original.textSignature
+          ? { textSignature: original.textSignature }
+          : {}),
+      };
+    }
     replacements.set(id, {
       target: id,
       action: 'replace',

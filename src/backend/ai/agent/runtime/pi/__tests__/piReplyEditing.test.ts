@@ -125,3 +125,21 @@ test('refuses parts outside the answer turn or whose current context text has ch
     createPiReplyEdits(edited, [entry], [{ id: 'pi:1:block:1', text: 'Edited' }], 'Again'),
   ).toBeDefined();
 });
+
+test('keeps the OpenAI Responses output item identity on the replaced text', () => {
+  const signature = JSON.stringify({ v: 1, id: 'msg_1', phase: 'final_answer' });
+  const responses: AssistantMessage = {
+    ...message,
+    api: 'openai-responses',
+    content: [message.content[0]!, { type: 'text', text: 'Answer', textSignature: signature }],
+  };
+  const [edit] = createPiReplyEdits(
+    { ...view, contributions: [[responses]] },
+    [entry],
+    [{ id: 'pi:1:block:1', text: 'Answer' }],
+    'Edited',
+  )!;
+  expect(edit.action === 'replace' && edit.messages[0]).toMatchObject({
+    content: [responses.content[0], { type: 'text', text: 'Edited', textSignature: signature }],
+  });
+});
