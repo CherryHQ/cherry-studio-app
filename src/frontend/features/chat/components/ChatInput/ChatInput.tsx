@@ -29,14 +29,12 @@ import {
 } from '@/frontend/components/PaintingInput';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
-import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
-import { useChatEditing } from '../../context/ChatEditingProvider';
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
@@ -46,6 +44,7 @@ import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
+import { useChatEditDraft } from './hooks/useChatEditDraft';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
@@ -55,6 +54,7 @@ import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
+import { buildEditUserMessageInput } from './utils/editSubmission';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
@@ -239,30 +239,7 @@ function TextChatInput({
 }) {
   const { t } = useTranslation();
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
-  const { draft } = useComposerState();
-  const { clearAttachments, setDraft } = useComposerActions();
-  const { editing, endEdit } = useChatEditing();
-  const editDraftStash = useRef<string>();
-  const draftRef = useRef(draft);
-  useLayoutEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-  const editingMessageId = editing?.messageId;
-  useLayoutEffect(() => {
-    if (!editingMessageId || editDraftStash.current !== undefined) return;
-    // The composer's draft becomes the question; the interrupted draft and any
-    // attachments resume when the edit is cancelled.
-    editDraftStash.current = draftRef.current;
-    clearAttachments();
-    setDraft(editing?.initialText ?? '');
-  }, [clearAttachments, editing, editingMessageId, setDraft]);
-  const cancelEdit = useCallback(() => {
-    if (editDraftStash.current !== undefined) {
-      setDraft(editDraftStash.current);
-      editDraftStash.current = undefined;
-    }
-    endEdit();
-  }, [endEdit, setDraft]);
+  const { cancelEdit, commitEdit, editing } = useChatEditDraft();
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
@@ -319,45 +296,20 @@ function TextChatInput({
     async ({ attachments, text }: ComposerSendPayload) => {
       setOpenPicker(null);
       if (editing) {
-        if (!sessionId || attachments.length > 0) {
-          // Editing targets an existing Session message and keeps its original
-          // attachments; the menu and drop area are disabled while editing, so
-          // only an in-flight import can land here. Reject loudly so the
-          // composer restores the typed edit instead of clearing it.
-          logger.warn('Ignored edit submission without a Session or with attachments', {
-            hasAttachments: attachments.length > 0,
+        await editMessage(
+          buildEditUserMessageInput({
+            sessionId,
             messageId: editing.messageId,
-          });
-          throw new AgentProtocolError({
-            code: sessionId ? 'CAPABILITY_UNSUPPORTED' : 'SESSION_NOT_FOUND',
-            message: sessionId
-              ? 'Editing keeps the original message attachments.'
-              : 'Editing requires an existing Session.',
-          });
-        }
-        const { skills: editSkills, skillAction: editSkillAction } =
-          mode === 'standard' ? readSkillMentions(text) : { skills: [], skillAction: undefined };
-        const editModelId = replyModels?.[0] ?? selectedModelId;
-        await editMessage({
-          sessionId,
-          messageId: editing.messageId,
-          text,
-          ...(editSkills.length ? { skillIds: editSkills.map((skill) => skill.id) } : {}),
-          ...(editSkillAction ? { skillAction: editSkillAction } : {}),
-          ...(editModelId ? { modelId: editModelId } : {}),
-          ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
-          ...(reasoningEfforts.length > 0
-            ? {
-                reasoningEffort: getChatInputReasoningEffortSnapshot(
-                  reasoningEffort,
-                  isReasoningEffortSelected,
-                  reasoningEfforts,
-                ),
-              }
-            : {}),
-        });
-        editDraftStash.current = undefined;
-        endEdit();
+            text,
+            attachmentCount: attachments.length,
+            mode,
+            replyModels,
+            selectedModelId,
+            reasoningEfforts,
+            reasoningSelection,
+          }),
+        );
+        commitEdit();
         return;
       }
       const plugins =
@@ -411,13 +363,14 @@ function TextChatInput({
     [
       editMessage,
       editing,
-      endEdit,
+      commitEdit,
       isReasoningEffortSelected,
       mcpApps,
       mode,
       reasoningEffort,
       reasoningEfforts,
       replyModels,
+      reasoningSelection,
       selectedModelId,
       sendMessage,
       sessionId,
