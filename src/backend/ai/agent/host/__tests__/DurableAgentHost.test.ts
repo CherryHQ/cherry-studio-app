@@ -387,6 +387,52 @@ describe('durable tool diagnostics', () => {
     }
   });
 
+  test('editing keeps every copy that holds the answer and retires only the copies that cannot represent it', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    for (const slot of [1, 2])
+      f.copies.set(laneKey(runtimeLane(f.sessionId, slot)), { revision: 0, turns: [] });
+    await f.host.initialize();
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: turn.identity.turnId,
+      payload: { edited: true },
+    };
+    const editReply = jest.fn<
+      ReturnType<DurableAgentRuntime['editReply']>,
+      Parameters<DurableAgentRuntime['editReply']>
+    >(async (lane, input) => {
+      // Slot 2 does not hold a native copy of the answer.
+      if (lane.slot === 2) return undefined;
+      f.copies.get(laneKey(lane))!.revision = input.revision + 1;
+      return {
+        contextCheckpoint:
+          lane.slot === 0 ? { assistantMessageId: turn.assistantMessageId, checkpoint } : null,
+      };
+    });
+    f.conversations.editReply = editReply;
+    try {
+      await f.host.editMessage({
+        sessionId: f.sessionId,
+        messageId: turn.assistantMessageId,
+        expectedText: 'Answer',
+        text: 'Corrected',
+      });
+      expect(editReply.mock.calls.map(([lane]) => lane.slot).sort()).toEqual([0, 1, 2]);
+      expect([...f.copies].map(([key, copy]) => [key, copy.revision])).toEqual([
+        [laneKey(runtimeLane(f.sessionId, 0)), 1],
+        [laneKey(runtimeLane(f.sessionId, 1)), 1],
+      ]);
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
+      expect(await f.store.getLatestContextCheckpoint(f.sessionId)).toEqual({
+        assistantMessageId: turn.assistantMessageId,
+        checkpoint,
+      });
+    } finally {
+      await f.host.close();
+    }
+  });
+
   test('a failed Cherry edit cannot leave a revised native copy eligible for execution', async () => {
     const f = fixture();
     const turn = await f.reserve();

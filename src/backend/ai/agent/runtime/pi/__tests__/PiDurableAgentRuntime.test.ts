@@ -30,6 +30,7 @@ import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
   RuntimeExecutionPorts,
+  RuntimeLane,
   RuntimeSqlDatabase,
 } from '../../durableTypes';
 import { runtimeLane } from '../../durableTypes';
@@ -165,9 +166,10 @@ async function submitAndWait(
   runtime: PiDurableAgentRuntime,
   submission: RuntimeDurableSubmission,
   status: 'completed' | 'failed' = 'completed',
+  target: RuntimeLane = lane,
 ) {
   const complete = deferred<void>();
-  const observation = await runtime.observe(lane, (event) => {
+  const observation = await runtime.observe(target, (event) => {
     if (
       event.type === 'turn.updated' &&
       event.turn.identity.requestId === submission.requestId &&
@@ -176,7 +178,7 @@ async function submitAndWait(
       complete.resolve();
   });
   try {
-    await runtime.submit(lane, submission);
+    await runtime.submit(target, submission);
     await complete.promise;
   } finally {
     await observation.unsubscribe();
@@ -295,14 +297,20 @@ describe('Persistent Agent facade', () => {
         from: { lane, boundary },
         referencedFileEntryIds: [],
       });
+      const answers = () =>
+        f.requests
+          .at(-1)!
+          .messages.flatMap((message) =>
+            message.role === 'assistant'
+              ? message.content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+              : [],
+          );
       await submitAndWait(runtime, input('three'));
-      const answers = f.requests[2]!.messages.flatMap((message) =>
-        message.role === 'assistant'
-          ? message.content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-          : [],
-      );
-      expect(answers).toEqual(['Corrected', 'Response 2']);
+      expect(answers()).toEqual(['Corrected', 'Response 2']);
       expect(f.providerSessions[2]).toBe(f.providerSessions[0]);
+      // The fork inherits the edit natively, and can edit that inherited answer again.
+      await submitAndWait(runtime, input('fork-one'), 'completed', fork);
+      expect(answers()).toEqual(['Corrected', 'Response 2']);
       expect(
         await runtime.editReply(fork, {
           messageId: 'answer-one',
@@ -311,6 +319,11 @@ describe('Persistent Agent facade', () => {
           text: 'Inherited edit',
         }),
       ).toBeDefined();
+      await submitAndWait(runtime, input('fork-two'), 'completed', fork);
+      expect(answers()).toEqual(['Inherited edit', 'Response 2', 'Response 4']);
+      // The source copy keeps its own history.
+      await submitAndWait(runtime, input('four'));
+      expect(answers()).toEqual(['Corrected', 'Response 2', 'Response 3']);
     } finally {
       await runtime.close();
     }
