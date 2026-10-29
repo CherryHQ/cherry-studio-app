@@ -117,7 +117,7 @@ export function MessageList({
       const viewport = viewportHeight.get();
       // Match the keyboard adapter's capped inset, including short conversations
       // that become scrollable only once the keyboard covers part of the list.
-      const inset = Math.min(viewport, keyboardLift.get());
+      const inset = Math.min(viewport, (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get());
       return {
         dataKey,
         isAtBottom:
@@ -144,7 +144,7 @@ export function MessageList({
       if (content.dataKey !== dataKey || viewport <= 0) {
         return { dataKey, isInView: true };
       }
-      const inset = Math.min(viewport, keyboardLift.get());
+      const inset = Math.min(viewport, (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get());
       return {
         dataKey,
         isInView: isMessageListLiveTailInView(
@@ -219,6 +219,7 @@ export function MessageList({
                 applyWorkaroundForContentInsetHitTestBug
                 contentContainerStyle={contentContainerStyle}
                 contentInsetAdjustmentBehavior="never"
+                contentInsetEndAdjustment={bottomAccessoryHeight}
                 data={messages}
                 {...(dataKey ? { dataKey } : {})}
                 drawDistance={80}

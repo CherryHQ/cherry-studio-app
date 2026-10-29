@@ -27,6 +27,7 @@ const FEATURE_ROUTES: readonly [string, DiagnosticFeedbackFeature][] = [
   ['/trash', 'files'],
   ['/document-export', 'files'],
   ['/chat-share', 'chat'],
+  ['/edit-reply', 'chat'],
   ['/remote', 'chat'],
 ];
 

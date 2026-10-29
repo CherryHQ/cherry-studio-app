@@ -36,7 +36,18 @@ jest.mock('react-native-reanimated', () => ({
   Extrapolation: { CLAMP: 'clamp' },
   interpolate: () => 1,
   useAnimatedStyle: () => ({}),
-  useSharedValue: (initial: unknown) => ({ get: () => initial, set: () => undefined }),
+  useSharedValue: (initial: unknown) => {
+    const { useRef } = jest.requireActual('react');
+    return useRef({
+      value: initial,
+      get() {
+        return this.value;
+      },
+      set(value: unknown) {
+        this.value = value;
+      },
+    }).current;
+  },
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -208,7 +219,7 @@ describe('ChatScreen composer dock wiring', () => {
     renderer = undefined;
   });
 
-  it('reserves the expandable composer separately from message-list keyboard geometry', () => {
+  it('keeps composer measurements outside screen rendering and overlays the transcript', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
@@ -218,15 +229,15 @@ describe('ChatScreen composer dock wiring', () => {
       keyboardOffset: 26,
     });
     expect(dockProps).toMatchObject({
-      layoutMode: 'expandable',
+      layoutMode: 'expandable-overlay',
     });
     const onHeightChange = dockProps?.onHeightChange as (height: number) => void;
     act(() => onHeightChange(180));
     expect(chatWorkspaceProps).toMatchObject({
       contentBottomInset: 8,
       keyboardOffset: 26,
-      feedbackHintBottomOffset: 180,
     });
+    expect((chatWorkspaceProps?.feedbackHintBottomOffset as { get(): number }).get()).toBe(180);
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       controls: mockChatControls,

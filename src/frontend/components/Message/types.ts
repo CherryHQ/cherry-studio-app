@@ -53,6 +53,7 @@ export type MessageListItem = Readonly<{
 }>;
 
 export type MessageListProps = {
+  /** Floating content reserved through the keyboard adapter without resizing the viewport. */
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;

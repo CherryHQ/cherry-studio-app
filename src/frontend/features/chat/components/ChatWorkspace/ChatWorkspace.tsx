@@ -2,6 +2,7 @@ import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/compone
 import { type ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 import type {
   ConversationHistoryView,
@@ -16,6 +17,7 @@ import type { ChatShareTranslations } from '../../share/chatShareHandoff';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
+import { ChatComposerClearance } from './components/ChatComposerClearance';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatMessageRow } from './components/ChatMessageRow';
@@ -49,7 +51,7 @@ type ChatWorkspaceProps = {
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
-  feedbackHintBottomOffset?: number;
+  feedbackHintBottomOffset?: SharedValue<number>;
   messageWindow: ConversationHistoryView;
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
@@ -80,7 +82,7 @@ export function ChatWorkspace({
   forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
-  feedbackHintBottomOffset = 0,
+  feedbackHintBottomOffset,
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
@@ -245,26 +247,28 @@ export function ChatWorkspace({
 
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
-      <View className="flex-1 justify-center px-8 py-16">
-        <BackgroundPressExclusion>
-          <ContentState.Error
-            primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
-            secondaryAction={
-              returnToLatest
-                ? {
-                    children: t('chat.history.returnToLatest'),
-                    onPress: returnToLatest,
-                  }
-                : undefined
-            }
-            title={t(
-              error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
-                ? 'chat.history.messageUnavailable'
-                : 'chat.history.loadFailed',
-            )}
-          />
-        </BackgroundPressExclusion>
-      </View>
+      <ChatComposerClearance className="flex-1">
+        <View className="flex-1 justify-center px-8 py-16">
+          <BackgroundPressExclusion>
+            <ContentState.Error
+              primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
+              secondaryAction={
+                returnToLatest
+                  ? {
+                      children: t('chat.history.returnToLatest'),
+                      onPress: returnToLatest,
+                    }
+                  : undefined
+              }
+              title={t(
+                error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
+                  ? 'chat.history.messageUnavailable'
+                  : 'chat.history.loadFailed',
+              )}
+            />
+          </BackgroundPressExclusion>
+        </View>
+      </ChatComposerClearance>
     );
   }
 
@@ -281,6 +285,7 @@ export function ChatWorkspace({
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
           onShare={onShare}
+          sessionId={sessionId}
           snapshot={live}
           messages={mergedMessages}
         >

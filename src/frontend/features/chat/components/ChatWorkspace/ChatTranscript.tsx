@@ -1,3 +1,4 @@
+import { useComposerExpansion } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { type ComponentProps, useState } from 'react';
 import { View } from 'react-native';
@@ -11,10 +12,10 @@ import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
 
-type ChatTranscriptProps = Omit<ComponentProps<typeof MessageList>, 'contentTopInset'> & {
-  requiresInitialLayout: boolean;
-  isLoadingMore: boolean;
-};
+type ChatTranscriptProps = Omit<
+  ComponentProps<typeof MessageList>,
+  'bottomAccessoryHeight' | 'contentTopInset'
+> & { requiresInitialLayout: boolean; isLoadingMore: boolean };
 
 export function ChatTranscript({
   requiresInitialLayout,
@@ -22,6 +23,7 @@ export function ChatTranscript({
   onReady,
   ...list
 }: ChatTranscriptProps) {
+  const composer = useComposerExpansion();
   const reportedHeaderHeight = useHeaderHeight();
   // A header hidden under a full-screen layer reports no height; keeping the last one leaves the
   // transcript where it was, so closing the layer lands back on the same content.
@@ -39,6 +41,7 @@ export function ChatTranscript({
       <ChatOlderMessagesIndicator isLoading={isLoadingMore} />
       <MessageList
         {...list}
+        bottomAccessoryHeight={composer?.meta.contentInset}
         contentTopInset={resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight)}
         onReady={() => {
           markListLoaded();

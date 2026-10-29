@@ -6,6 +6,11 @@
     "node": "24.x"
   },
   "expo": {
+    "install": {
+      "exclude": [
+        "react-native-keyboard-controller"
+      ]
+    },
     "autolinking": {
       "android": {
         "buildFromSource": [
@@ -85,12 +90,12 @@
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/file-preview-webview": "workspace:*",
     "@cherrystudio/mcp-app-webview": "workspace:*",
-    "@cherrystudio/provider-registry": "0.2.5",
+    "@cherrystudio/provider-registry": "0.2.8",
     "@cherrystudio/remote-protocol": "0.7.0",
     "@cherrystudio/remote-transport": "0.2.5",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
-    "@cherrystudio/web-search": "0.3.0",
+    "@cherrystudio/web-search": "0.4.0",
     "@e965/xlsx": "0.20.3",
     "@earendil-works/chord": "1.4.0",
     "@earendil-works/pi-ai": "1.4.0",
@@ -179,7 +184,7 @@
     "react-native-chart-kit": "7.0.2",
     "react-native-enriched-markdown": "1.0.1",
     "react-native-gesture-handler": "~3.3.0",
-    "react-native-keyboard-controller": "1.22.7",
+    "react-native-keyboard-controller": "1.22.9",
     "react-native-mmkv": "4.3.2",
     "react-native-nitro-modules": "0.36.4",
     "react-native-nitro-theme-transition": "^1.0.0",
