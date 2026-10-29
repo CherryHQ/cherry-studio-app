@@ -58,11 +58,21 @@ jest.mock('@/frontend/appShell/header', () => ({
     return null;
   },
 }));
-jest.mock('@/frontend/components/Message', () => ({
-  useToolTitle: () => (part: { title?: string }) => part.title,
-}));
+jest.mock('@/frontend/components/Message', () => {
+  const { Text } = require('react-native');
+  return {
+    MessagePartRenderer: ({ part }: { part: { type: string } }) => (
+      <Text>{`part:${part.type}`}</Text>
+    ),
+    ToolGroupPart: ({ tools }: { tools: { toolCallId: string }[] }) => (
+      <Text>{`tools:${tools.map((tool) => tool.toolCallId).join(',')}`}</Text>
+    ),
+    useMessageProcessTitle: () => 'process',
+  };
+});
 jest.mock('@cherrystudio/ui/components', () => ({
   ContentState: { Error: () => null, Loading: () => null },
+  MessagePart: { Process: ({ children }: { children: ReactNode }) => children },
   Section: ({ children }: { children: ReactNode }) => children,
   useToast: () => ({ toast: { show: mockToast } }),
 }));
@@ -97,7 +107,7 @@ describe('EditReplyScreen', () => {
     const inputs = renderer.root.findAllByType(TextInput);
     expect(inputs.map((input) => input.props.value)).toEqual(['Looking it up.', 'Final answer']);
     expect(renderer.root.findAllByType(Text).map((text) => text.props.children)).toEqual(
-      expect.arrayContaining(['chat.reasoningStatus.thought', 'Read file']),
+      expect.arrayContaining(['part:reasoning', 'tools:call']),
     );
     expect(save().disabled).toBe(true);
 

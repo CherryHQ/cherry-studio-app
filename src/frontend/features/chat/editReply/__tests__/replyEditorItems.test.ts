@@ -67,7 +67,7 @@ test('lays the answer out as the transcript does, with prose keyed by its source
 });
 
 test('an answer without process is a single result', () => {
-  expect(replyEditorItems(answer([text('final', 'Only text')]))).toEqual({
+  expect(replyEditorItems(answer([text('final', 'Only text')]))).toMatchObject({
     answer: [{ kind: 'text', key: 'final', text: 'Only text' }],
     process: [],
   });

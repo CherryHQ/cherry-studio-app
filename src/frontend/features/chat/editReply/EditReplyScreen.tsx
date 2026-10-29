@@ -1,4 +1,4 @@
-import { ContentState, Section, useToast } from '@cherrystudio/ui/components';
+import { ContentState, MessagePart, Section, useToast } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,13 +7,19 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
-import { useToolTitle, type ToolMessagePart } from '@/frontend/components/Message';
+import {
+  MessagePartRenderer,
+  ToolGroupPart,
+  useMessageProcessTitle,
+  type ToolMessagePart,
+} from '@/frontend/components/Message';
 import { useBackendModule } from '@/frontend/data';
 import { useQuery } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { getSendErrorLabelKey } from '../components/ChatInput/utils/sendErrorLabel';
 import type { EditReplyTarget } from './editReplyRoute';
@@ -67,7 +73,8 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
   const { toast } = useToast();
   const agent = useBackendModule('agent');
   const insets = useSafeAreaInsets();
-  const { answer, process } = useMemo(() => replyEditorItems(message), [message]);
+  const { answer, parts, process, stats } = useMemo(() => replyEditorItems(message), [message]);
+  const processTitle = useMessageProcessTitle(stats, parts);
   const texts = useMemo(
     () => [...process, ...answer].filter((item): item is ReplyEditorText => item.kind === 'text'),
     [answer, process],
@@ -108,11 +115,12 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
       type: 'label',
     },
   ];
-  const segment = (item: ReplyEditorText) => (
+  const segment = (item: ReplyEditorText, title?: string) => (
     <ReplySegment
       editable={!saving}
       key={item.key}
       onChange={(text) => setDrafts((current) => ({ ...current, [item.key]: text }))}
+      title={title}
       value={drafts[item.key] ?? item.text}
     />
   );
@@ -129,30 +137,73 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
         keyboardShouldPersistTaps="handled"
         style={styles.scroll}
       >
-        <Text className="px-1 pb-2 text-muted-foreground text-xs">
+        <Text className="px-1 text-muted-foreground text-xs">
           {t('chat.messageActions.editDescription')}
         </Text>
+        {/* The transcript's own process parts: reasoning and tool records read exactly as there. */}
         {process.length > 0 ? (
-          <View className="gap-2 border-border-subtle border-b pb-4">
+          <MessagePart.Process defaultExpanded state="complete" title={processTitle}>
             {process.map((item) =>
               item.kind === 'text' ? (
                 segment(item)
               ) : item.kind === 'tools' ? (
-                <ToolsRow key={item.key} tools={item.tools} />
+                <ReadOnlyToolGroup
+                  key={item.key}
+                  messageId={message.id}
+                  parts={parts}
+                  tools={item.tools}
+                />
               ) : (
-                <ProcessRow key={item.key} label={t('chat.reasoningStatus.thought')} />
+                <MessagePartRenderer
+                  isStreaming={false}
+                  key={item.key}
+                  messageId={message.id}
+                  messageParts={parts}
+                  part={item.part}
+                />
               ),
             )}
-          </View>
+          </MessagePart.Process>
         ) : null}
-        {process.length > 0 && answer.length > 0 ? (
-          <Text className="px-1 pt-3 pb-1 text-muted-foreground text-xs">
-            {t('chat.messageActions.editAnswer')}
-          </Text>
-        ) : null}
-        {answer.map(segment)}
+        {answer.map((item, index) =>
+          segment(
+            item,
+            process.length > 0 && index === 0 ? t('chat.messageActions.editAnswer') : undefined,
+          ),
+        )}
       </KeyboardAwareScrollView>
     </>
+  );
+}
+
+function ReadOnlyToolGroup({
+  messageId,
+  parts,
+  tools,
+}: {
+  messageId: string;
+  parts: readonly CherryMessagePart[];
+  tools: readonly ToolMessagePart[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <ToolGroupPart
+      expanded={expanded}
+      isStreaming={false}
+      isThinking={false}
+      onExpandedChange={setExpanded}
+      tools={tools}
+    >
+      {tools.map((part) => (
+        <MessagePartRenderer
+          isStreaming={false}
+          key={part.toolCallId}
+          messageId={messageId}
+          messageParts={parts}
+          part={part}
+        />
+      ))}
+    </ToolGroupPart>
   );
 }
 
@@ -160,10 +211,12 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
 function ReplySegment({
   editable,
   onChange,
+  title,
   value,
 }: {
   editable: boolean;
   onChange: (text: string) => void;
+  title?: string;
   value: string;
 }) {
   const { t } = useTranslation();
@@ -171,6 +224,7 @@ function ReplySegment({
   const [focused, setFocused] = useState(false);
   return (
     <Section
+      title={title}
       contentClassName={
         focused ? 'border-[1.5px] border-foreground' : 'border-[1.5px] border-transparent'
       }
@@ -191,34 +245,6 @@ function ReplySegment({
         value={value}
       />
     </Section>
-  );
-}
-
-/** Reasoning and tool records stay as the transcript shows them collapsed: read-only. */
-function ProcessRow({ label }: { label: string }) {
-  return (
-    <View className="min-h-7 justify-center px-1">
-      <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function ToolsRow({ tools }: { tools: readonly ToolMessagePart[] }) {
-  const { t } = useTranslation();
-  const getTitle = useToolTitle();
-  const titles = [...new Set(tools.map(getTitle))];
-  return (
-    <ProcessRow
-      label={
-        titles.length === 1
-          ? titles[0]!
-          : titles.length === 2
-            ? t('chat.toolGroup.activities', { first: titles[0], second: titles[1] })
-            : t('chat.toolGroup.activity')
-      }
-    />
   );
 }
 
