@@ -1,5 +1,6 @@
 import { useIsFocused } from 'expo-router';
 import { useEffect, useEffectEvent, useRef } from 'react';
+import type { SharedValue } from 'react-native-reanimated';
 
 import type { ConversationSnapshot } from '@/frontend/appShell/conversation';
 import { useFeedbackHint } from '@/frontend/appShell/feedback';
@@ -8,12 +9,12 @@ import { useFeedbackHint } from '@/frontend/appShell/feedback';
 export function useConversationFeedbackHint(
   scope: string,
   snapshot: ConversationSnapshot,
-  bottomOffset: number,
+  bottomOffset?: SharedValue<number>,
 ) {
   const { show, hide } = useFeedbackHint();
   const isFocused = useIsFocused();
   const previous = useRef<{ scope: string; states: Map<string, string> } | undefined>(undefined);
-  const notify = useEffectEvent(() => show(bottomOffset));
+  const notify = useEffectEvent(() => show(bottomOffset?.get() ?? 0));
   useEffect(() => {
     if (!isFocused || snapshot.freshness.state !== 'current') {
       previous.current = undefined;

@@ -17,9 +17,15 @@ import {
 type UserMessageProps = {
   attachments?: ReactNode;
   message: MessageListItem;
+  /** The message this one replies to, under the bubble. */
+  quote?: ReactNode;
 };
 
-export const UserMessage = memo(function UserMessage({ attachments, message }: UserMessageProps) {
+export const UserMessage = memo(function UserMessage({
+  attachments,
+  message,
+  quote,
+}: UserMessageProps) {
   const { t } = useTranslation();
   const { attachments: fileParts, bodyMessage } = useMemo(
     () => partitionUserMessageParts(message),
@@ -59,6 +65,7 @@ export const UserMessage = memo(function UserMessage({ attachments, message }: U
             <MessageParts message={bodyMessage} renderMode="plainText" />
           </View>
         ) : null}
+        {quote}
       </View>
     </View>
   );

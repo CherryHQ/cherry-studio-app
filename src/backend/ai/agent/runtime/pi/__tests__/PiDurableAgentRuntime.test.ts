@@ -24,12 +24,14 @@ import {
   buildInitialSkillInstructions,
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
+import { formatMessageQuote } from '../../../host/turnRuntimeInput';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
   RuntimeExecutionPorts,
+  RuntimeLane,
   RuntimeSqlDatabase,
 } from '../../durableTypes';
 import { runtimeLane } from '../../durableTypes';
@@ -91,6 +93,7 @@ function deferred<Value>() {
 function fixture() {
   const storage = new ReopenableMemoryStorage();
   const requests: TranscriptContext[] = [];
+  const providerSessions: (string | undefined)[] = [];
   const ports: RuntimeExecutionPorts = {
     assertExecutionAllowed: jest.fn(async () => undefined),
     resolveTool: jest.fn(async () => {
@@ -123,8 +126,9 @@ function fixture() {
         reportedCostCurrency: null,
         credentialReceipt: { attribution: 'unknown' },
       },
-      streamFn: (_model, context) => {
+      streamFn: (_model, context, options) => {
         requests.push(context);
+        providerSessions.push(options?.sessionId);
         const message: AssistantMessage = {
           ...emptyAssistantMessage(wire),
           content: [{ type: 'text', text: `Response ${requests.length}` }],
@@ -156,16 +160,17 @@ function fixture() {
     close: unavailable,
   };
   const create = () => new PiDurableAgentRuntime(dependencies, async () => storage);
-  return { storage, requests, ports, database, create, dependencies };
+  return { storage, requests, providerSessions, ports, database, create, dependencies };
 }
 
 async function submitAndWait(
   runtime: PiDurableAgentRuntime,
   submission: RuntimeDurableSubmission,
   status: 'completed' | 'failed' = 'completed',
+  target: RuntimeLane = lane,
 ) {
   const complete = deferred<void>();
-  const observation = await runtime.observe(lane, (event) => {
+  const observation = await runtime.observe(target, (event) => {
     if (
       event.type === 'turn.updated' &&
       event.turn.identity.requestId === submission.requestId &&
@@ -174,7 +179,7 @@ async function submitAndWait(
       complete.resolve();
   });
   try {
-    await runtime.submit(lane, submission);
+    await runtime.submit(target, submission);
     await complete.promise;
   } finally {
     await observation.unsubscribe();
@@ -182,6 +187,197 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('retained-tool retry has one quoted historical question and a plain continuation after reopen', async () => {
+    const f = fixture();
+    let runtime = f.create();
+    const quoted = formatMessageQuote('Explain', [
+      { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+    ]);
+    await runtime.initialize(f.database, f.ports);
+    try {
+      await runtime.ensureConversation({
+        ...seed,
+        history: {
+          history: [
+            {
+              turnId: 'question',
+              messages: [{ role: 'user', parts: [{ type: 'text', text: quoted }] }],
+            },
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: [],
+        },
+      });
+      await runtime.close();
+      runtime = f.create();
+      await runtime.initialize(f.database, f.ports);
+      await runtime.configure(lane, seed.configuration);
+      await submitAndWait(runtime, {
+        ...input('resume-quote'),
+        input: [{ type: 'text', text: quoted }],
+        resume: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call',
+            toolRef: { source: 'builtin', capabilityId: 'read_file' },
+            providerName: 'read_file',
+            input: {},
+          },
+          {
+            type: 'tool-result',
+            toolCallId: 'call',
+            output: { value: 'Completed tool result', artifacts: [] },
+            isError: false,
+          },
+        ],
+      });
+      expect(JSON.stringify(f.requests.at(-1)).match(/> Snapshot/g)).toHaveLength(1);
+      expect(JSON.stringify(f.requests.at(-1))).toContain('Continue the interrupted answer');
+      expect(f.ports.resolveTool).not.toHaveBeenCalled();
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('reply edits survive reopening and native forks without another model call or provider identity change', async () => {
+    const f = fixture();
+    let runtime = f.create();
+    await runtime.initialize(f.database, f.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    try {
+      await submitAndWait(runtime, input('one'));
+      const original = (await runtime.message(lane, 'answer-one'))!.turn;
+      const parts = original.parts.flatMap((part) =>
+        part.type === 'text' ? [{ id: part.id, text: part.text }] : [],
+      );
+      expect(
+        await runtime.editReply(lane, {
+          messageId: 'answer-one',
+          revision: 0,
+          parts: [{ id: parts[0]!.id, expectedText: parts[0]!.text, text: 'Corrected' }],
+        }),
+      ).toEqual({ contextCheckpoint: null });
+      expect(f.requests).toHaveLength(1);
+      expect(await runtime.revision(lane)).toBe(1);
+      const edited = (await runtime.message(lane, 'answer-one'))!.turn;
+      expect(edited.parts).toContainEqual({
+        ...parts[0],
+        type: 'text',
+        text: 'Corrected',
+        state: 'done',
+      });
+      expect(edited.usage).toEqual(original.usage);
+      expect(edited.answerBoundary).not.toBe(original.answerBoundary);
+      await runtime.close();
+      runtime = f.create();
+      await runtime.initialize(f.database, f.ports);
+      runtime.resume();
+      const reopened = (await runtime.message(lane, 'answer-one'))!.turn;
+      expect(reopened.parts).toEqual(edited.parts);
+      const again = await runtime.editReply(lane, {
+        messageId: 'answer-one',
+        revision: 1,
+        parts: [{ id: parts[0]!.id, expectedText: 'Corrected', text: 'Corrected twice' }],
+      });
+      expect(again).toBeDefined();
+      // The Host reinstalls configuration before continuing a reopened copy.
+      await runtime.configure(lane, seed.configuration);
+      await submitAndWait(runtime, input('two'));
+      expect(
+        f.requests[1]!.messages.some(
+          (message) =>
+            message.role === 'assistant' &&
+            message.content.some(
+              (block) => block.type === 'text' && block.text === 'Corrected twice',
+            ),
+        ),
+      ).toBe(true);
+      expect(f.providerSessions[0]).toEqual(expect.any(String));
+      expect(f.providerSessions[1]).toBe(f.providerSessions[0]);
+      const boundary = (await runtime.message(lane, 'answer-one'))!.turn.answerBoundary!;
+      const fork = runtimeLane('session', 1);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        revision: 2,
+        from: { lane, boundary },
+        referencedFileEntryIds: [],
+      });
+      expect((await runtime.message(fork, 'answer-one'))!.turn.parts).toContainEqual({
+        id: parts[0]!.id,
+        type: 'text',
+        text: 'Corrected twice',
+        state: 'done',
+      });
+      expect(await runtime.message(fork, 'answer-two')).toBeUndefined();
+    } finally {
+      await runtime.close();
+    }
+  });
+  test('an earlier answer edit reaches later requests while forks before it fall back to rebuilding', async () => {
+    const f = fixture();
+    const runtime = f.create();
+    await runtime.initialize(f.database, f.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    try {
+      await submitAndWait(runtime, input('one'));
+      await submitAndWait(runtime, input('two'));
+      const original = (await runtime.message(lane, 'answer-one'))!.turn;
+      const [text] = original.parts.flatMap((part) =>
+        part.type === 'text' ? [{ id: part.id, text: part.text }] : [],
+      );
+      expect(
+        await runtime.editReply(lane, {
+          messageId: 'answer-one',
+          revision: 0,
+          parts: [{ id: text!.id, expectedText: text!.text, text: 'Corrected' }],
+        }),
+      ).toEqual({ contextCheckpoint: null });
+      expect(await runtime.revision(lane)).toBe(1);
+      // A fork through the first answer could not see the edit appended after the second.
+      expect((await runtime.message(lane, 'answer-one'))!.turn.answerBoundary).toBeNull();
+      const boundary = (await runtime.message(lane, 'answer-two'))!.turn.answerBoundary!;
+      const fork = runtimeLane('session', 1);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        revision: 1,
+        from: { lane, boundary },
+        referencedFileEntryIds: [],
+      });
+      const answers = () =>
+        f.requests
+          .at(-1)!
+          .messages.flatMap((message) =>
+            message.role === 'assistant'
+              ? message.content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+              : [],
+          );
+      await submitAndWait(runtime, input('three'));
+      expect(answers()).toEqual(['Corrected', 'Response 2']);
+      expect(f.providerSessions[2]).toBe(f.providerSessions[0]);
+      // The fork inherits the edit natively, and can edit that inherited answer again.
+      await submitAndWait(runtime, input('fork-one'), 'completed', fork);
+      expect(answers()).toEqual(['Corrected', 'Response 2']);
+      expect(
+        await runtime.editReply(fork, {
+          messageId: 'answer-one',
+          revision: 1,
+          parts: [{ id: text!.id, expectedText: 'Corrected', text: 'Inherited edit' }],
+        }),
+      ).toBeDefined();
+      await submitAndWait(runtime, input('fork-two'), 'completed', fork);
+      expect(answers()).toEqual(['Inherited edit', 'Response 2', 'Response 4']);
+      // The source copy keeps its own history.
+      await submitAndWait(runtime, input('four'));
+      expect(answers()).toEqual(['Corrected', 'Response 2', 'Response 3']);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('releases late startup storage without opening the engine after cancellation', async () => {
     const f = fixture();
     const storage = deferred<ReopenableMemoryStorage>();
@@ -534,9 +730,19 @@ describe('Persistent Agent facade', () => {
     const firstStream = new AssistantMessageEventStream();
     const started = deferred<void>();
     let calls = 0;
+    const contexts: TranscriptContext[] = [];
+    const quoted = (name: string) =>
+      formatMessageQuote(`Request ${name}`, [
+        {
+          id: name,
+          sourceMessageId: '00000000-0000-7000-8000-000000000001',
+          text: `Snapshot ${name}`,
+        },
+      ]);
     state.dependencies.resolveModel = async (...args) => ({
       ...(await resolveModel(...args)),
-      streamFn: () => {
+      streamFn: (_model, context) => {
+        contexts.push(context);
         calls++;
         if (calls === 1) {
           started.resolve();
@@ -569,9 +775,15 @@ describe('Persistent Agent facade', () => {
         completed.resolve();
     });
     try {
-      await runtime.submit(seed.lane, input('first'));
+      await runtime.submit(seed.lane, {
+        ...input('first'),
+        input: [{ type: 'text', text: quoted('first') }],
+      });
       await started.promise;
-      await runtime.submit(seed.lane, input('second'));
+      await runtime.submit(seed.lane, {
+        ...input('second'),
+        input: [{ type: 'text', text: quoted('second') }],
+      });
       firstStream.push(
         providerErrorEvent(emptyAssistantMessage(wire), {
           message: 'Invalid request',
@@ -585,6 +797,9 @@ describe('Persistent Agent facade', () => {
         ['first', 'failed'],
       ]);
       expect(calls).toBe(2);
+      expect(JSON.stringify(contexts[0]).match(/> Snapshot /g)).toHaveLength(1);
+      expect(JSON.stringify(contexts[1]).match(/> Snapshot /g)).toHaveLength(2);
+      expect(JSON.stringify(contexts[1])).toContain('Snapshot second');
     } finally {
       await observed.unsubscribe();
       await runtime.close();

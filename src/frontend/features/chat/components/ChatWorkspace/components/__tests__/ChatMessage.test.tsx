@@ -10,6 +10,10 @@ const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
 const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
+jest.mock('../../../../quotes/MessageQuoteHighlight', () => ({
+  MessageQuoteHighlight: () => null,
+}));
+
 const mockLocalUsage = jest.fn(() => null);
 
 jest.mock('@cherrystudio/ui/components', () => ({

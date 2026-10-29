@@ -439,8 +439,9 @@ function updatedMessage(
   changes: readonly MessageChange[],
   usage: AssistantMessage['usage'],
 ): AssistantMessage {
-  const next = JSON.parse(JSON.stringify(message)) as AssistantMessage;
-  next.usage = usage;
+  // A delta must not copy all preceding text, reasoning and tool arguments in a long reply.
+  // Copy only changed blocks/argument paths, keeping published snapshots immutable.
+  const next = { ...message, content: [...message.content], usage };
   for (const change of changes) {
     if (change.type === 'message') return change.message;
     if (
@@ -454,20 +455,32 @@ function updatedMessage(
     }
     const block = next.content[change.contentIndex];
     if (!block) continue;
-    if (change.type === 'text_delta' && block.type === 'text') block.text += change.delta;
+    if (change.type === 'text_delta' && block.type === 'text')
+      next.content[change.contentIndex] = { ...block, text: block.text + change.delta };
     else if (change.type === 'thinking_delta' && block.type === 'thinking')
-      block.thinking += change.delta;
+      next.content[change.contentIndex] = { ...block, thinking: block.thinking + change.delta };
     else if (change.type === 'toolcall_delta' && block.type === 'toolCall')
-      appendAtPath(block.arguments, change.path, change.delta);
+      next.content[change.contentIndex] = {
+        ...block,
+        arguments: appendAtPath(block.arguments, change.path, change.delta) as JsonObject,
+      };
   }
   return next;
 }
 
-function appendAtPath(value: unknown, path: readonly (string | number)[], delta: string) {
-  if (value === null || typeof value !== 'object' || path.length === 0) return;
+function appendAtPath(value: unknown, path: readonly (string | number)[], delta: string): unknown {
+  if (value === null || typeof value !== 'object' || path.length === 0) return value;
   const object = value as Record<string | number, unknown>;
   const key = path[0]!;
-  if (path.length === 1)
-    object[key] = typeof object[key] === 'string' ? object[key] + delta : delta;
-  else appendAtPath(object[key], path.slice(1), delta);
+  const previous = object[key];
+  const next =
+    path.length === 1
+      ? typeof previous === 'string'
+        ? previous + delta
+        : delta
+      : appendAtPath(previous, path.slice(1), delta);
+  if (next === previous) return value;
+  const copy = Array.isArray(value) ? [...value] : { ...object };
+  (copy as Record<string | number, unknown>)[key] = next;
+  return copy;
 }

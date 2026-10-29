@@ -1,4 +1,5 @@
 import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { PluginError } from '@/shared/contracts/plugins';
 import { createLogRecord } from '@/shared/core/logger/LoggerService';
 import type { TraceSpanRecord } from '@/shared/data/types/trace';
@@ -22,6 +23,27 @@ const trace: TraceSpanRecord = {
   endedAt: 200,
   durationMs: 100,
 };
+
+test('retains admission rejection codes through log persistence and export without private text', () => {
+  const error = new AgentProtocolError({
+    code: 'SESSION_BUSY',
+    message: 'private session details',
+    retryable: true,
+  });
+  const raw = createLogRecord('error', 'Agent operation failed', 'DurableAgentHost', {}, [
+    { operation: 'ai.admission', error },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  expect(persisted?.facts).toEqual({
+    operation: 'ai.admission',
+    'error.type': 'AgentProtocolError',
+    'error.code': 'SESSION_BUSY',
+    'error.retryable': true,
+  });
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported).toEqual(persisted);
+  expect(JSON.stringify(exported)).not.toMatch(/private|stack|view/);
+});
 
 test('retains useful error facts without free text, credentials, payloads or stack traces', () => {
   const error = Object.assign(

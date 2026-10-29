@@ -56,6 +56,8 @@ export function remoteInput(input: ConversationInput): {
     input.imageGeneration !== undefined ||
     input.parts.some(
       (part) =>
+        'quotes' in part ||
+        'quoteAuthor' in part ||
         (part.type !== 'text' && part.type !== 'file') ||
         (part.type === 'text' &&
           (part.pluginReferences?.length || part.selectionReferences?.length)),

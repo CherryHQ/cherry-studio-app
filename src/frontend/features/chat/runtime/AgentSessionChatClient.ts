@@ -702,6 +702,7 @@ export class AgentSessionChatClient {
         this.commitLiveMessages(entry);
         return;
       }
+      case 'message.edited':
       case 'message.finalized':
         // Parallel answers keep streaming: drop only this message's unflushed text.
         for (const [key, pending] of entry.pendingTextDeltas)

@@ -37,6 +37,7 @@ export {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
+  AgentEditMessageInputSchema,
   AgentForkSessionInputSchema,
   AgentRetryMessageInputSchema,
   AgentRenameSessionInputSchema,
@@ -47,6 +48,8 @@ export {
   MAX_PARALLEL_ANSWERS,
   type AgentAdditionalReply,
   type AgentDeleteTurnInput,
+  type AgentEditMessageInput,
+  type AgentReplyPartEdit,
   type AgentForkSessionInput,
   type AgentRetryMessageInput,
   type AgentSelectMessageInput,
@@ -66,6 +69,8 @@ export {
   AgentInferenceSnapshotV1Schema,
   AgentInferenceSnapshotViewSchema,
   AgentInputPartSchema,
+  AgentInputPartsSchema,
+  AgentUserPartsSchema,
   AgentMessagePartSchema,
   AgentMessageSiblingSchema,
   AgentMessageToolRefSchema,
@@ -116,3 +121,12 @@ export {
   type AgentUserAnswers,
   type AgentRespondQuestionInput,
 } from './userQuestion';
+
+export {
+  MessageQuoteSchema,
+  QuoteAuthorSchema,
+  invalidQuoteCarriers,
+  type MessageQuote,
+  type QuoteAuthor,
+  type QuoteFields,
+} from './messageQuote';

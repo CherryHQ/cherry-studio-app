@@ -1,8 +1,8 @@
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+index 06fa054e92f77befdb84baf13dde03f32643b3d7..9db33726b66391d17f59faa1cd41d855964390ee 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
 +++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+@@ -3321,6 +3321,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
  
  struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    std::string pattern{};
@@ -11,7 +11,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    SharedColor color{};
    bool underline{false};
    SharedColor backgroundColor{};
-@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+@@ -3332,6 +3334,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    folly::dynamic toDynamic() const {
      folly::dynamic result = folly::dynamic::object();
      result["pattern"] = pattern;
@@ -20,7 +20,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
      result["color"] = ::facebook::react::toDynamic(color);
      result["underline"] = underline;
      result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
-@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+@@ -3347,6 +3351,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
    if (tmp_pattern != map.end()) {
      fromRawValue(context, tmp_pattern->second, result.pattern);
    }
@@ -36,18 +36,10 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e622f04ba2 100644
+index 561cf6623a2270ffe3942a85ee42a031cb938bd3..eb7e0e2af0b9320f845785eca466e604d099961a 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-@@ -8,6 +8,7 @@ import android.graphics.Color
- import android.os.Build
- import android.text.Editable
- import android.text.InputType
-+import android.util.Log
- import android.util.TypedValue
- import android.view.Gravity
- import android.view.KeyEvent
-@@ -285,11 +286,40 @@ class EnrichedMarkdownTextInputView(
+@@ -295,7 +295,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -61,35 +53,26 @@ index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e6
 +      if (top == null || top.className != "android.widget.Editor" || top.methodName != "updateCursorPosition") {
 +        throw e
 +      }
-+      Log.w("EnrichedMarkdownTextInputView", "Framework cursor layout unavailable during touch", e)
++      Log.w(TAG, "Framework cursor layout unavailable during touch", e)
 +      // Keep this touch consumed; do not retry a partially processed selection change.
 +      true
 +    }
    }
  
    override fun performClick(): Boolean = super.performClick()
- 
-+  // Selection callbacks can invalidate Editor's cursor controller during a long press.
-+  // Extend https://github.com/software-mansion/enriched-markdown/pull/738 for CHERRY-STUDIO-APP-R.
-+  override fun performLongClick(): Boolean =
-+    try {
-+      super.performLongClick()
-+    } catch (e: NullPointerException) {
-+      val top = e.stackTrace.firstOrNull()
-+      if (top == null || top.className != "android.widget.Editor" ||
+@@ -315,7 +327,10 @@ class EnrichedMarkdownTextInputView(
+       super.performLongClick()
+     } catch (e: NullPointerException) {
+       val top = e.stackTrace.firstOrNull()
+-      if (top == null || !top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick") {
++      // Cherry Mobile (CHERRY-STUDIO-APP-R): the same race also surfaces from selectCurrentWordAndStartDrag.
++      if (top == null || !top.className.startsWith("android.widget.Editor") ||
 +        (top.methodName != "performLongClick" && top.methodName != "selectCurrentWordAndStartDrag")
 +      ) {
-+        throw e
-+      }
-+      Log.w("EnrichedMarkdownTextInputView", "Framework cursor controller unavailable during long press", e)
-+      // Mark the long press handled so ACTION_UP does not dispatch an extra click.
-+      true
-+    }
-+
-   // In auto-grow mode (scrollEnabled=false) TextView's internal bringPointIntoView
-   // scrolls content before Fabric has resized the view, causing a visible flicker.
-   override fun scrollTo(
-@@ -304,6 +334,32 @@ class EnrichedMarkdownTextInputView(
+         throw e
+       }
+       Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
+@@ -336,6 +351,32 @@ class EnrichedMarkdownTextInputView(
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -122,7 +105,7 @@ index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e6
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -444,6 +500,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +539,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()
@@ -330,16 +313,11 @@ index 9ff71ede7eb3ec58eb6e0547d553839e1acbb977..f77b0e60dd5d22cf81f4bd176cb7e663
        )
      }
    }
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29db25fa97f 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-@@ -17,10 +17,12 @@ import android.text.StaticLayout
- import android.text.TextPaint
- import android.text.TextUtils
- import android.util.TypedValue
-+import android.view.MotionEvent
- import android.view.View
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/segments/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/segments/CodeBlockContainerView.kt
+index f3c451c413904575a25a8302f2f361782d0690f5..01e684aa70cf62e31f896e3607efbf2a72f7fae9 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/segments/CodeBlockContainerView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/segments/CodeBlockContainerView.kt
+@@ -23,6 +23,7 @@ import android.view.View
  import android.widget.FrameLayout
  import android.widget.HorizontalScrollView
  import android.widget.ImageView
@@ -347,7 +325,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
  import androidx.appcompat.widget.AppCompatImageButton
  import androidx.appcompat.widget.AppCompatTextView
  import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-@@ -35,8 +37,8 @@ import kotlin.math.ceil
+@@ -39,8 +40,8 @@ import kotlin.math.ceil
  
  /**
   * Block segment view for fenced code blocks (see splitASTIntoSegments):
@@ -358,7 +336,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
   * CodeBlockHighlighter seam and falls back to plain text. The box visuals
   * must stay in sync with the commonmark flavor's CodeBlockSpan.
   *
-@@ -55,6 +57,7 @@ class CodeBlockContainerView(
+@@ -59,6 +60,7 @@ class CodeBlockContainerView(
    private val inset = contentInset(codeBlockStyle)
    private val borderW = borderPx(codeBlockStyle)
    private val headerH = headerHeight(codeBlockStyle)
@@ -366,7 +344,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
  
    override val segmentMarginTop: Int get() = codeBlockStyle.marginTop.toInt()
    override val segmentMarginBottom: Int get() = codeBlockStyle.marginBottom.toInt()
-@@ -114,6 +117,29 @@ class CodeBlockContainerView(
+@@ -114,6 +116,29 @@ class CodeBlockContainerView(
        addView(textView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
      }
  
@@ -396,7 +374,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
    private val languageView =
      AppCompatTextView(context).apply {
        includeFontPadding = false
-@@ -155,7 +181,7 @@ class CodeBlockContainerView(
+@@ -173,7 +198,7 @@ class CodeBlockContainerView(
        }
      isLongClickable = true
      setOnLongClickListener { view -> showContextMenu(view) }
@@ -405,7 +383,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      addView(languageView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
      addView(copyButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
    }
-@@ -187,9 +213,9 @@ class CodeBlockContainerView(
+@@ -205,9 +230,9 @@ class CodeBlockContainerView(
      heightSpec: Int,
    ) {
      val measuredWidth = MeasureSpec.getSize(widthSpec)
@@ -417,7 +395,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      )
      copyButton.measure(
        MeasureSpec.makeMeasureSpec(headerH, MeasureSpec.EXACTLY),
-@@ -200,7 +226,7 @@ class CodeBlockContainerView(
+@@ -218,7 +243,7 @@ class CodeBlockContainerView(
        MeasureSpec.makeMeasureSpec(labelMaxWidth, MeasureSpec.AT_MOST),
        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
      )
@@ -426,7 +404,25 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
    }
  
    override fun onLayout(
-@@ -230,15 +256,14 @@ class CodeBlockContainerView(
+@@ -229,7 +254,7 @@ class CodeBlockContainerView(
+     bottom: Int,
+   ) {
+     val width = right - left
+-    val labelTop = headerH - languageView.measuredHeight
++    val labelTop = (headerH - languageView.measuredHeight) / 2
+     languageView.layout(
+       inset,
+       labelTop,
+@@ -240,7 +265,7 @@ class CodeBlockContainerView(
+     val iconWidth = copyButton.drawable?.intrinsicWidth ?: copyButton.measuredWidth
+     val iconSlack = ((copyButton.measuredWidth - iconWidth) / 2).coerceAtLeast(0)
+     val buttonLeft = (width - inset - copyButton.measuredWidth + iconSlack).coerceAtLeast(0)
+-    val buttonTop = (headerH - languageView.measuredHeight / 2 - copyButton.measuredHeight / 2).coerceAtLeast(0)
++    val buttonTop = (headerH - copyButton.measuredHeight) / 2
+     copyButton.layout(
+       buttonLeft,
+       buttonTop,
+@@ -248,15 +273,14 @@ class CodeBlockContainerView(
        buttonTop + copyButton.measuredHeight,
      )
  
@@ -445,17 +441,17 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      canvas.drawLine(borderWidth, y, width - borderWidth, y, dividerPaint)
    }
  
-@@ -246,6 +271,9 @@ class CodeBlockContainerView(
+@@ -264,6 +288,9 @@ class CodeBlockContainerView(
    // the event when there is one (a pending block has no menu yet).
    private fun showContextMenu(anchor: View): Boolean {
-     if (pending) return false
+     if (!dynamicProps.enableBlockContextMenu || pending) return false
 +    // A popup only takes window focus; it does not cancel an ancestor's long press.
 +    // Commit this native gesture before presenting, including for non-scrolling blocks.
 +    anchor.parent?.requestDisallowInterceptTouchEvent(true)
      ContextMenuPopup.show(anchor, this) {
-       item(ContextMenuPopup.Icon.COPY, copyLabel) { copyCode() }
-       item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) { copyFencedMarkdown() }
-@@ -305,6 +333,12 @@ class CodeBlockContainerView(
+       item(ContextMenuPopup.Icon.COPY, dynamicProps.copyLabel) { copyCode() }
+       item(ContextMenuPopup.Icon.DOCUMENT, dynamicProps.copyAsMarkdownLabel) { copyFencedMarkdown() }
+@@ -338,6 +365,12 @@ class CodeBlockContainerView(
    }
  
    companion object {
@@ -468,7 +464,17 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      private const val HEADER_LABEL_SCALE = 0.85f
  
      // Drawable box for the copy glyph, as a multiple of the code font size.
-@@ -366,7 +400,7 @@ class CodeBlockContainerView(
+@@ -356,8 +389,7 @@ class CodeBlockContainerView(
+ 
+     private fun borderPx(style: CodeBlockStyle): Int = ceil(style.borderWidth).toInt()
+ 
+-    // Header is the top content inset plus one label line; the code text
+-    // view's own top inset then forms the single gap below the label.
++    // Keep one label line plus the content inset, shared evenly above and below.
+     private fun headerHeight(style: CodeBlockStyle): Int {
+       val paint =
+         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+@@ -399,7 +431,7 @@ class CodeBlockContainerView(
        val inset = contentInset(style)
        val headerH = headerHeight(style)
        val text = buildCodeText(CodeBlockNode.extractCode(node), style)
@@ -477,7 +483,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
        val paint = createCodePaint(style, context)
        val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
        val layout =
-@@ -377,7 +411,7 @@ class CodeBlockContainerView(
+@@ -410,7 +442,7 @@ class CodeBlockContainerView(
            .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
            .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
            .build()
@@ -486,11 +492,11 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      }
    }
  }
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51beedfa654a 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-@@ -67,6 +67,7 @@ class TableContainerView(
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt
+index 1100ee40de4f7ba9d9e8fe48c4d468a4d875d3d9..577f1a218d27c876eddea46a465d8b95e9c49533 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt
+@@ -70,6 +70,7 @@ class TableContainerView(
    private val scrollView =
      HorizontalScrollView(context).apply {
        isHorizontalScrollBarEnabled = true
@@ -508,10 +514,10 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51be
          contentDescription = description
          if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+index 06fa054e92f77befdb84baf13dde03f32643b3d7..9db33726b66391d17f59faa1cd41d855964390ee 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 +++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+@@ -3321,6 +3321,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
  
  struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    std::string pattern{};
@@ -520,7 +526,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    SharedColor color{};
    bool underline{false};
    SharedColor backgroundColor{};
-@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+@@ -3332,6 +3334,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    folly::dynamic toDynamic() const {
      folly::dynamic result = folly::dynamic::object();
      result["pattern"] = pattern;
@@ -529,7 +535,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
      result["color"] = ::facebook::react::toDynamic(color);
      result["underline"] = underline;
      result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
-@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+@@ -3347,6 +3351,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
    if (tmp_pattern != map.end()) {
      fromRawValue(context, tmp_pattern->second, result.pattern);
    }
@@ -545,16 +551,16 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
 diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
-index 851d9902478af68906739d03a93fff94afc07000..79d858eaa2d27d72a15bf020703b20dc8ea12f3d 100644
+index 828077550fab215bec1bb94639279da768367b67..d9ebfc3adf901f8b4554d383a5c6517330a9ee44 100644
 --- a/ios/input/ENRMInputFormatter.mm
 +++ b/ios/input/ENRMInputFormatter.mm
-@@ -92,6 +92,9 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
-   [textStorage removeAttribute:NSUnderlineStyleAttributeName range:scopeRange];
-   [textStorage removeAttribute:NSStrikethroughStyleAttributeName range:scopeRange];
-   [textStorage removeAttribute:NSBackgroundColorAttributeName range:scopeRange];
+@@ -144,6 +144,9 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+   ENRMRemoveAttributeIfPresent(textStorage, NSUnderlineStyleAttributeName, scopeRange, changed);
+   ENRMRemoveAttributeIfPresent(textStorage, NSStrikethroughStyleAttributeName, scopeRange, changed);
+   ENRMRemoveAttributeIfPresent(textStorage, NSBackgroundColorAttributeName, scopeRange, changed);
 +  // Attachments are derived from link ranges, so deletion and undo cannot leave stale icons.
-+  [textStorage removeAttribute:NSAttachmentAttributeName range:scopeRange];
-+  [textStorage removeAttribute:@"com.cherryai.composer-mention-icon" range:scopeRange];
++  ENRMRemoveAttributeIfPresent(textStorage, NSAttachmentAttributeName, scopeRange, changed);
++  ENRMRemoveAttributeIfPresent(textStorage, @"com.cherryai.composer-mention-icon", scopeRange, changed);
  
    UIFontDescriptorSymbolicTraits *traitMap =
        (UIFontDescriptorSymbolicTraits *)calloc(scopeLength, sizeof(UIFontDescriptorSymbolicTraits));
@@ -571,10 +577,10 @@ index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcd
  @property (nonatomic, assign) BOOL underline;
  @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
 diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
-index 9a9987e0d61c907787cff3d6a6f6cea81155f536..299e21b9750c78a30ec56e8fae651b40840cdfe3 100644
+index 7e72cff2624c636d78192c02a7f5db79d79f37b6..478c1d002bb6dab05e2f70d30904052f5a6d69bd 100644
 --- a/ios/input/EnrichedMarkdownTextInput.mm
 +++ b/ios/input/EnrichedMarkdownTextInput.mm
-@@ -1575,6 +1575,7 @@ - (ENRMInputTypingAttributesController *)typingController
+@@ -1682,6 +1682,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
  - (void)handleTextChanged
  {
    if (_editSession.isComposing) {
@@ -619,7 +625,7 @@ index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa
          variant.backgroundColor = CGColorGetAlpha(backgroundColor.CGColor) > 0 ? backgroundColor : nil;
          variant.regex = [NSRegularExpression regularExpressionWithPattern:variant.pattern options:0 error:nil];
 diff --git a/ios/input/styles/ENRMLinkStyleHandler.mm b/ios/input/styles/ENRMLinkStyleHandler.mm
-index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83364e40d7 100644
+index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..338292b062ff83e3f4334b45d5879ab1a69a51b6 100644
 --- a/ios/input/styles/ENRMLinkStyleHandler.mm
 +++ b/ios/input/styles/ENRMLinkStyleHandler.mm
 @@ -38,6 +38,20 @@ - (void)applyNonFontAttributesToTextStorage:(NSTextStorage *)storage
@@ -644,24 +650,24 @@ index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83
      [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
    }
 diff --git a/ios/attachments/ENRMMathInlineAttachment.h b/ios/attachments/ENRMMathInlineAttachment.h
-index 956792262d7301cbe7a781d8515a8019a5a294d3..b7f582a99b4da075b9e8e8e5ebec6b37bb5457ca 100644
+index bccb200bb65c4ca4c861da2b01b3f97fae33bdfb..bf8476bb4ea4fd4036e994ead46d3a4ba1d38fc5 100644
 --- a/ios/attachments/ENRMMathInlineAttachment.h
 +++ b/ios/attachments/ENRMMathInlineAttachment.h
-@@ -8,6 +8,9 @@
+@@ -9,6 +9,9 @@ NS_ASSUME_NONNULL_BEGIN
  @property (nonatomic, strong) NSString *latex;
  @property (nonatomic, assign) CGFloat fontSize;
  @property (nonatomic, strong, nullable) RCTUIColor *mathTextColor;
 +/// Cherry Mobile: YES for display math nested in a paragraph or list item (root-level
 +/// display math uses the scrolling segment instead). Inline math keeps intrinsic bounds.
 +@property (nonatomic, assign) BOOL displayMath;
- 
- @property (nonatomic, readonly) CGFloat boxHeight;
+ @property (nonatomic, assign) BOOL displayMode;
+ @property (nonatomic, copy, nullable) ENRMLatexErrorHandler onLatexError;
  
 diff --git a/ios/attachments/ENRMMathInlineAttachment.m b/ios/attachments/ENRMMathInlineAttachment.m
-index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a1f8ead8efe5206078c31d01460ab4554c12fe73 100644
+index 9763eca5d4233265c6f67ab7bfd8fa86c7a7b753..e1e4eb1bb240974c6bcff325a7ca7b57b2cf4140 100644
 --- a/ios/attachments/ENRMMathInlineAttachment.m
 +++ b/ios/attachments/ENRMMathInlineAttachment.m
-@@ -46,13 +46,54 @@
+@@ -62,13 +62,54 @@ - (void)prepareIfNeeded
    _cachedSize = CGSizeMake(ceil(result.width), ceil(result.totalHeight));
  }
  
@@ -717,7 +723,7 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a1f8ead8efe5206078c31d01460ab455
  }
  
  - (UIImage *)imageForBounds:(CGRect)imageBounds
-@@ -63,22 +104,31 @@
+@@ -79,22 +120,31 @@ - (UIImage *)imageForBounds:(CGRect)imageBounds
    if (!_renderResult && !_fallbackSource)
      return nil;
  
@@ -768,24 +774,24 @@ index bdfe794b253e7ed92153b7701c4b01b9c2403b34..c49556026bea99a0a01896afae73641e
  
  NS_ASSUME_NONNULL_END
 diff --git a/ios/renderer/ENRMMathInlineRenderer.m b/ios/renderer/ENRMMathInlineRenderer.m
-index bff00b34db8ff08034871e778a852a00d3490b92..a0c1421213a0ef069ed6156d18d1eeb1a7ed6cd6 100644
+index 5a45362af5f775a48acef1c9ee2428e4e33b132c..31437ea3ce1b6ee5941a35d987477ae79daf1867 100644
 --- a/ios/renderer/ENRMMathInlineRenderer.m
 +++ b/ios/renderer/ENRMMathInlineRenderer.m
-@@ -27,6 +27,9 @@
+@@ -27,6 +27,9 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
    attachment.latex = latex;
    attachment.fontSize = currentFont ? currentFont.pointSize : [_config paragraphFontSize];
    attachment.mathTextColor = [_config inlineMathColor];
 +  // Cherry Mobile: display math nested in a paragraph/list item is fitted to the
 +  // usable column; inline math keeps its intrinsic width so TextKit wraps it as before.
 +  attachment.displayMath = self.displayMath;
+   [context.mathReporters addObject:attachment];
  
  #if TARGET_OS_OSX
-   // On macOS, NSLayoutManager uses self.image/self.bounds rather than calling
 diff --git a/ios/renderer/RendererFactory.m b/ios/renderer/RendererFactory.m
-index 1f4ff795e9d7e155f0b9d89723df37b4a4a055d6..49defb037204a6ac593764d2ea9a62fe97a30ce3 100644
+index a5554197d915efb8e94286b6f71a97fea7b8aa62..112282ac50470538af0d8b540a9c5b9bb66593ef 100644
 --- a/ios/renderer/RendererFactory.m
 +++ b/ios/renderer/RendererFactory.m
-@@ -112,14 +112,22 @@
+@@ -118,14 +118,22 @@ - (instancetype)initWithConfig:(StyleConfig *)config
  #if ENRICHED_MARKDOWN_MATH
      case MarkdownNodeTypeLatexMathInline:
        return [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
@@ -810,100 +816,10 @@ index 1f4ff795e9d7e155f0b9d89723df37b4a4a055d6..49defb037204a6ac593764d2ea9a62fe
  #endif
      case MarkdownNodeTypeSpoiler:
        return [[ENRMSpoilerRenderer alloc] initWithRendererFactory:self config:_config];
-diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
-index 204fc18510d3de0b79c3d3741b1599659a53d4d9..0c34c0637f57f8ba97ce83d83a70ae3341cd1fd4 100644
---- a/ios/renderer/ListItemRenderer.m
-+++ b/ios/renderer/ListItemRenderer.m
-@@ -130,13 +130,19 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
-     NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
-     style.firstLineHeadIndent = totalIndent;
-     style.headIndent = totalIndent;
--    if (lineHeightConfig > 0) {
--      style.minimumLineHeight = lineHeightConfig;
--      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
--    }
-+#if TARGET_OS_OSX
-+    if (lineHeightConfig > 0) {
-+      style.minimumLineHeight = lineHeightConfig;
-+      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
-+    }
-+#endif
-     NSMutableDictionary *attributesToApply = [metadata mutableCopy];
-     attributesToApply[NSParagraphStyleAttributeName] = style;
-     [output addAttributes:attributesToApply range:range];
-+#if !TARGET_OS_OSX
-+    // Cherry Mobile: reuse the scoped math/block-image height exception while keeping the prose minimum.
-+    applyLineHeight(output, range, lineHeightConfig);
-+#endif
-   };
- 
-   NSUInteger pos = itemRange.location;
-@@ -173,10 +179,16 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
-     }
-   }
- 
-+  // Cover the whole grapheme cluster: anchoring on a single UTF-16 code unit
-+  // splits multi-unit graphemes (emoji surrogate pairs, ZWJ sequences) across
-+  // two attribute runs, which drops the glyph and hides the marker for every
-+  // item but the last.
-+  const NSRange anchorRange = [string rangeOfComposedCharacterSequenceAtIndex:anchorLocation];
-+
-   NSArray *existingMarkers = [output attribute:ListItemMarkerStartAttribute atIndex:anchorLocation effectiveRange:NULL];
-   NSArray *markers =
-       [existingMarkers isKindOfClass:[NSArray class]] ? [existingMarkers arrayByAddingObject:marker] : @[ marker ];
--  [output addAttribute:ListItemMarkerStartAttribute value:markers range:NSMakeRange(anchorLocation, 1)];
-+  [output addAttribute:ListItemMarkerStartAttribute value:markers range:anchorRange];
- 
-   if (isTask && isChecked) {
-     [self applyCheckedDecorationsTo:output range:itemRange nestingLevel:nestingLevel];
-diff --git a/ios/utils/ListMarkerDrawer.m b/ios/utils/ListMarkerDrawer.m
-index 315ec083f1daf23c29bc2d708086578c14fec1e5..93548a1d3f9534811246beb7ebe31e9294d243b0 100644
---- a/ios/utils/ListMarkerDrawer.m
-+++ b/ios/utils/ListMarkerDrawer.m
-@@ -7,6 +7,8 @@
- 
- extern NSString *const ListItemMarkerStartAttribute;
- 
-+static NSString *const kAppleColorEmojiFontName = @"AppleColorEmoji";
-+
- @implementation ListMarkerDrawer {
-   StyleConfig *_config;
- }
-@@ -57,7 +59,29 @@ - (void)drawMarkersForGlyphRange:(NSRange)glyphsToShow
- 
-                                  CGPoint glyphLoc = [layoutManager locationForGlyphAtIndex:glyphRange.location];
-                                  CGFloat baselineY = origin.y + rect.origin.y + glyphLoc.y;
--                                 UIFont *font = attrs[NSFontAttributeName] ?: [self defaultFont];
-+
-+                                 // When the anchor character is an emoji, NSFontAttributeName
-+                                 // returns AppleColorEmoji whose metrics (xHeight, capHeight)
-+                                 // differ widely from the text font and would misplace the
-+                                 // marker. Look past the first composed character sequence
-+                                 // to find the actual text font used on the line.
-+                                 UIFont *font = attrs[NSFontAttributeName];
-+                                 if (charRange.length > 1) {
-+                                   NSRange firstGrapheme =
-+                                       [storage.string rangeOfComposedCharacterSequenceAtIndex:charRange.location];
-+                                   NSUInteger afterFirst = NSMaxRange(firstGrapheme);
-+                                   if (afterFirst < NSMaxRange(charRange)) {
-+                                     UIFont *textFont = [storage attribute:NSFontAttributeName
-+                                                                   atIndex:afterFirst
-+                                                            effectiveRange:NULL];
-+                                     if (textFont) {
-+                                       font = textFont;
-+                                     }
-+                                   }
-+                                 }
-+                                 if (!font || [font.fontName isEqualToString:kAppleColorEmojiFontName]) {
-+                                   font = [self defaultFont];
-+                                 }
- 
-                                  for (ENRMListMarkerDescriptor *marker in markers) {
-                                    CGFloat markerX = isRTL ? origin.x + container.size.width - marker.indent + gap
-diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
-index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1ef4eb6ed 100644
---- a/ios/views/ENRMCodeBlockContainerView.m
-+++ b/ios/views/ENRMCodeBlockContainerView.m
+diff --git a/ios/segments/ENRMCodeBlockContainerView.m b/ios/segments/ENRMCodeBlockContainerView.m
+index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..3e460d0d76326a49d56f8b09d9154722973cf6e5 100644
+--- a/ios/segments/ENRMCodeBlockContainerView.m
++++ b/ios/segments/ENRMCodeBlockContainerView.m
 @@ -8,8 +8,8 @@
  #endif
  
@@ -925,7 +841,7 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  
  // Height geometry and code-run construction shared by the instance layout path
  // and the view-free measureHeightForCodeBlockNode:, so the two cannot drift.
-@@ -243,13 +246,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+@@ -303,13 +306,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
  - (void)setupScrollView
  {
    _scrollView = [[RCTUIScrollView alloc] init];
@@ -942,7 +858,7 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
    _scrollView.backgroundColor = [UIColor clearColor];
    _scrollView.isAccessibilityElement = NO;
    _scrollView.accessibilityElementsHidden = YES;
-@@ -281,11 +286,12 @@ - (void)layoutScrollArea
+@@ -341,16 +346,16 @@ - (void)layoutScrollArea
  
    CGFloat horizontalPad = MAX(inset - borderW, 0);
    CGFloat contentWidth = MAX(_codeSize.width + horizontalPad * 2, frame.size.width);
@@ -958,7 +874,24 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  #endif
  }
  
-@@ -406,7 +412,7 @@ - (CGFloat)contentInset
+-// Header is the top content inset plus one label line; the code text's own
+-// top inset then forms the single gap below the label.
++// Keep one label line plus the content inset, shared evenly above and below.
+ - (CGFloat)headerHeight
+ {
+   return [self contentInset] + _headerLabelLineHeight;
+@@ -365,9 +370,7 @@ - (void)layoutHeaderButton
+   }
+   CGFloat iconSlack = (headerH - iconWidth) / 2;
+   CGFloat buttonLeft = MAX(self.bounds.size.width - [self contentInset] - headerH + iconSlack, 0);
+-  CGFloat labelCenterY = headerH - _headerLabelLineHeight / 2;
+-  CGFloat buttonTop = MAX(labelCenterY - headerH / 2, 0);
+-  _copyButton.frame = CGRectMake(buttonLeft, buttonTop, headerH, headerH);
++  _copyButton.frame = CGRectMake(buttonLeft, 0, headerH, headerH);
+ }
+ 
+ #if !TARGET_OS_OSX
+@@ -475,7 +478,7 @@ - (CGFloat)contentInset
  - (CGFloat)measureHeight:(CGFloat)maxWidth
  {
    CGFloat inset = [self contentInset];
@@ -967,16 +900,16 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  }
  
  + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleConfig *)config
-@@ -414,7 +420,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
+@@ -483,7 +486,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
    CGFloat inset = ENRMCodeBlockContentInset(config);
    CGFloat headerH = inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
-   NSAttributedString *code = ENRMCodeBlockPlainAttributedCode(ENRMCodeBlockExtractCode(node), config);
--  return ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH;
-+  return MIN(ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH, kENRMCodeBlockMaxHeight);
+   CGFloat codeHeight = ENRMCodeBlockCodeHeight(ENRMCodeBlockExtractCode(node), config);
+-  return codeHeight + inset * 2 + headerH;
++  return MIN(codeHeight + inset * 2 + headerH, kENRMCodeBlockMaxHeight);
  }
  
  - (void)drawRect:(CGRect)rect
-@@ -446,11 +452,10 @@ - (void)drawRect:(CGRect)rect
+@@ -515,11 +518,10 @@ - (void)drawRect:(CGRect)rect
    CGFloat inset = [self contentInset];
    CGFloat headerH = [self headerHeight];
  
@@ -990,10 +923,19 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
      [dividerColor setFill];
  #if !TARGET_OS_OSX
      [[UIBezierPath bezierPathWithRect:dividerRect] fill];
-diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
+@@ -529,7 +531,7 @@ - (void)drawRect:(CGRect)rect
+   }
+ 
+   if (_languageLabel.length > 0) {
+-    [_languageLabel drawAtPoint:CGPointMake(inset, headerH - _languageLabelSize.height)];
++    [_languageLabel drawAtPoint:CGPointMake(inset, (headerH - _languageLabelSize.height) / 2)];
+   }
+ }
+ 
+diff --git a/ios/segments/ENRMTableIOSGridView.m b/ios/segments/ENRMTableIOSGridView.m
 index 138435033005771ce0bb194f273316a5328e3057..1f4dc09df07134d34ce259ca59d3b158494f8886 100644
---- a/ios/views/ENRMTableIOSGridView.m
-+++ b/ios/views/ENRMTableIOSGridView.m
+--- a/ios/segments/ENRMTableIOSGridView.m
++++ b/ios/segments/ENRMTableIOSGridView.m
 @@ -5,6 +5,9 @@
  @implementation ENRMTableIOSRowData
  @end
@@ -1030,11 +972,11 @@ index 138435033005771ce0bb194f273316a5328e3057..1f4dc09df07134d34ce259ca59d3b158
  - (void)handleLinkGesture:(UIGestureRecognizer *)recognizer block:(ENRMTableIOSLinkBlock)block
  {
    CGPoint point = [recognizer locationInView:self];
-diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
-index b76936d8620a3748be375ec8f3e35f47c03c0edd..840224fc70bb88f286ae8c70cc6e652105d11b33 100644
---- a/ios/views/TableContainerView.m
-+++ b/ios/views/TableContainerView.m
-@@ -623,11 +623,17 @@ - (CGFloat)alignOffsetForFreeSpace:(CGFloat)freeSpace
+diff --git a/ios/segments/TableContainerView.m b/ios/segments/TableContainerView.m
+index 7a39908bd40067a817051d4f0a1c9e7f23e9b4eb..28d4e9420158ba750d3a39371aa3867716479dec 100644
+--- a/ios/segments/TableContainerView.m
++++ b/ios/segments/TableContainerView.m
+@@ -705,11 +705,17 @@ - (CGFloat)alignOffsetForFreeSpace:(CGFloat)freeSpace
  - (void)layoutSubviews
  {
    [super layoutSubviews];
@@ -1053,7 +995,7 @@ index b76936d8620a3748be375ec8f3e35f47c03c0edd..840224fc70bb88f286ae8c70cc6e6521
  
    if (tableOverflows) {
      UIEdgeInsets inset = UIEdgeInsetsMake(0, overhang, 0, overhang);
-@@ -646,6 +652,10 @@ - (void)layoutSubviews
+@@ -728,6 +734,10 @@ - (void)layoutSubviews
      _scrollView.scrollEnabled = (_totalTableWidth > containerWidth);
      _gridContainer.frame = CGRectMake(overhang + alignOffset, 0, _totalTableWidth, _totalTableHeight);
    }
@@ -1065,7 +1007,7 @@ index b76936d8620a3748be375ec8f3e35f47c03c0edd..840224fc70bb88f286ae8c70cc6e6521
    CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
    CGFloat containerWidth = self.bounds.size.width;
 diff --git a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
-index dc228d579a8e7c55a1c07156e3f0e3357c019d67..3981e6222db948f0413cddbe917674adf49e11c6 100644
+index c2fec26187cbec03b8eeb9a1fddac3b438b0ae62..dc5bcf560ac1c267ed335328347285d53ff0b022 100644
 --- a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 +++ b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 @@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1091,11 +1033,11 @@ index 90562c8e94c588b1d3384e9fbc003603fe5b1fd5..f630f772ea272a0595e3f6d1d4ea9216
        underline: override.underline ?? linkBase.underline,
        backgroundColor: normalizeColor(override.backgroundColor) ?? defaultInternal.link.backgroundColor
 diff --git a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
-index f0d547318578065dadd950139ac0a8e054125741..b5afc902238c7fea024029353d3abdcb1fb5d6f8 100644
+index 631fb19b499bc8505c264a4c0360524e5b47697f..d5e55e0fa627a761e21b97b4fd5a4a9a36eb30b3 100644
 --- a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
 +++ b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
 @@ -3,6 +3,10 @@ export type { OnKeyPressEvent, OnLinkDetected, OnStartMentionEvent, OnChangeMent
- import type { HostInstance, NativeSyntheticEvent, ViewProps, ViewStyle, TextStyle, ColorValue } from 'react-native';
+ import type { HostInstance, NativeSyntheticEvent, TextInputProps, ViewProps, ViewStyle, TextStyle, ColorValue } from 'react-native';
  import type { RefObject } from 'react';
  export interface LinkStyle {
 +  /** Base64 PNG for a leading U+FFFC text attachment in a link variant. */
@@ -1106,7 +1048,7 @@ index f0d547318578065dadd950139ac0a8e054125741..b5afc902238c7fea024029353d3abdcb
      underline?: boolean;
      backgroundColor?: string;
 diff --git a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
-index 03fd4520a97e4cda0628066718ff87551f380a9e..a87eed03a516116caf0f38864d04c62e5997ef03 100644
+index 6f9148cf8c95a6a3dcc74971a84c7bbe9f5ce16d..cfb8fb46d57a15b1c163f100ceed65882493eedb 100644
 --- a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
 +++ b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
 @@ -19,6 +19,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1144,10 +1086,10 @@ index a306bfd89955bdff4c997cfa84bdacdba84567c8..61cb620034a9ca54708d3a54ed9f5c3b
      underline: boolean;
      backgroundColor: ColorValue;
 diff --git a/src/EnrichedMarkdownTextInput.tsx b/src/EnrichedMarkdownTextInput.tsx
-index eb4acdf5b7d6b4f9cb4b27e3ce9b444ed1a8e929..32d8315a77c997b401a3a05490fe356d1a1365cd 100644
+index 4100c709093f7fb002f08869ccb1d4306a975bd1..2d73ab11f17354a034ed3ab8185a16f1f820e809 100644
 --- a/src/EnrichedMarkdownTextInput.tsx
 +++ b/src/EnrichedMarkdownTextInput.tsx
-@@ -48,6 +48,10 @@ import type { RefObject } from 'react';
+@@ -53,6 +53,10 @@ import type { RefObject } from 'react';
  type NativeRef = HostInstance;
  
  export interface LinkStyle {
@@ -1159,7 +1101,7 @@ index eb4acdf5b7d6b4f9cb4b27e3ce9b444ed1a8e929..32d8315a77c997b401a3a05490fe356d
    underline?: boolean;
    backgroundColor?: string;
 diff --git a/src/EnrichedMarkdownTextInputNativeComponent.ts b/src/EnrichedMarkdownTextInputNativeComponent.ts
-index dc228d579a8e7c55a1c07156e3f0e3357c019d67..3981e6222db948f0413cddbe917674adf49e11c6 100644
+index c2fec26187cbec03b8eeb9a1fddac3b438b0ae62..dc5bcf560ac1c267ed335328347285d53ff0b022 100644
 --- a/src/EnrichedMarkdownTextInputNativeComponent.ts
 +++ b/src/EnrichedMarkdownTextInputNativeComponent.ts
 @@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1219,157 +1161,157 @@ index 240cd3e5d736d370160dc1907c0760f18d5ed478..b5b6edcceb083c4345e3a717f1173541
          underline: override.underline ?? linkBase.underline,
          backgroundColor:
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
-index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0abe528b8b 100644
+index b6b38b4cc1a37eacf53f48f940608ed7ead26f93..84ee8320e68eff5df5d0c27bd1fde1fb66657a5c 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
-@@ -63,10 +63,25 @@ class EnrichedMarkdown
-     }
+@@ -57,8 +57,24 @@ class EnrichedMarkdown(
+   private val videoContainerClass: Class<*>? by lazy { SegmentViewCreators.videoContainerClass() }
  
-     private var currentRenderId = 0L
-+    // Main-thread-owned: at most one worker job, with props holding the latest
-+    // pending input instead of retaining a queue of growing Markdown snapshots.
-+    private var renderInFlight = false
-+    private var renderRequested = false
-+    private var disposed = false
-     private val segmentViews = mutableListOf<View>()
-     private val segmentSignatures = mutableListOf<Long>()
-     private val dirtyFlags = EnumSet.noneOf(DirtyFlag::class.java)
-+    private var streamingGeneration = 0L
-     var streamingAnimation: Boolean = false
-+      set(value) {
-+        if (field == value) return
-+        field = value
-+        // A status-only completion must release filtered tails and invalidate
-+        // in-flight streaming work, including a quick stop/start transition.
-+        streamingGeneration++
-+        dirtyFlags += DirtyFlag.FORCE_HEIGHT
-+        renderPending = true
+   private var currentRenderId = 0L
++
++  // Main-thread-owned: at most one worker job, with props holding the latest
++  // pending input instead of retaining a queue of growing Markdown snapshots.
++  private var renderInFlight = false
++  private var renderRequested = false
++  private var disposed = false
+   private val dirtyFlags = EnumSet.noneOf(DirtyFlag::class.java)
++  private var streamingGeneration = 0L
+   var streamingAnimation: Boolean = false
++    set(value) {
++      if (field == value) return
++      field = value
++      // A status-only completion must release filtered tails and invalidate
++      // in-flight streaming work, including a quick stop/start transition.
++      streamingGeneration++
++      dirtyFlags += DirtyFlag.FORCE_HEIGHT
++      renderPending = true
++    }
+ 
+   // used to force a Yoga re-measure when a block image resolves its box height
+   var stateWrapper: StateWrapper? = null
+@@ -362,19 +378,32 @@ class EnrichedMarkdown(
+   }
+ 
+   private fun scheduleRenderIfNeeded() {
+-    if (currentMarkdown.isNotEmpty()) scheduleRender()
++    scheduleRender()
+   }
+ 
+   private fun scheduleRender() {
++    if (disposed) return
++    val renderId = ++currentRenderId
++    if (renderInFlight) {
++      renderRequested = true
++      return
++    }
+     val style = markdownStyle ?: return
+-    val markdown = currentMarkdown.takeIf { it.isNotEmpty() } ?: return
++    val markdown = currentMarkdown
++    val flags = md4cFlags
++    val gfm = isGFM
+     val isStreaming = streamingAnimation
++    val generation = streamingGeneration
+     val tableMode = tableStreamingMode
+     val codeBlockMode = codeBlockStreamingMode
+-
+-    val renderId = ++currentRenderId
++    val linkPress = onLinkPressCallback
++    val linkLongPress = onLinkLongPressCallback
++    renderInFlight = true
++    renderRequested = false
+ 
+     executor.execute {
++      var renderedSegments: List<RenderedSegment> = emptyList()
++      var hasPendingCodeBlock = false
+       try {
+         val filtered =
+           if (isStreaming) {
+@@ -383,34 +412,42 @@ class EnrichedMarkdown(
+             null
+           }
+         val renderableMarkdown = filtered?.markdown ?: markdown
+-        val hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
+-
+-        if (renderableMarkdown.isEmpty()) {
+-          postToMain(renderId) { applyRenderedSegments(emptyList(), false) }
+-          return@execute
++        hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
++        val ast = if (renderableMarkdown.isEmpty()) null else parser.parseMarkdown(renderableMarkdown, flags, gfm)
++        if (ast != null) {
++          renderedSegments =
++            MarkdownSegmentRenderer.render(
++              splitASTIntoSegments(ast),
++              style,
++              context,
++              linkPress,
++              linkLongPress,
++              onLatexError = latexErrorReporter,
++            )
+         }
++      } catch (e: Throwable) {
++        // Errors such as StackOverflowError would otherwise kill the process from this
++        // worker and skip the post below, leaving renderInFlight set forever.
++        Log.e(TAG, "Render failed", e)
 +      }
  
-     // used to force a Yoga re-measure when a block image resolves its box height
-     var stateWrapper: StateWrapper? = null
-@@ -343,19 +358,31 @@ class EnrichedMarkdown
-     }
- 
-     private fun scheduleRenderIfNeeded() {
--      if (currentMarkdown.isNotEmpty()) scheduleRender()
-+      scheduleRender()
-     }
- 
-     private fun scheduleRender() {
-+      if (disposed) return
-+      val renderId = ++currentRenderId
-+      if (renderInFlight) {
-+        renderRequested = true
-+        return
-+      }
-       val style = markdownStyle ?: return
--      val markdown = currentMarkdown.takeIf { it.isNotEmpty() } ?: return
-+      val markdown = currentMarkdown
-+      val flags = md4cFlags
-       val isStreaming = streamingAnimation
-+      val generation = streamingGeneration
-       val tableMode = tableStreamingMode
-       val codeBlockMode = codeBlockStreamingMode
--
--      val renderId = ++currentRenderId
-+      val linkPress = onLinkPressCallback
-+      val linkLongPress = onLinkLongPressCallback
-+      renderInFlight = true
-+      renderRequested = false
- 
-       executor.execute {
-+        var renderedSegments: List<RenderedSegment> = emptyList()
-+        var hasPendingCodeBlock = false
-         try {
-           val filtered =
-             if (isStreaming) {
-@@ -364,33 +391,41 @@ class EnrichedMarkdown
-               null
-             }
-           val renderableMarkdown = filtered?.markdown ?: markdown
--          val hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
--
--          if (renderableMarkdown.isEmpty()) {
--            postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
+-        val ast =
+-          parser.parseMarkdown(renderableMarkdown, md4cFlags, isGFM) ?: run {
+-            postToMain(renderId) { applyRenderedSegments(emptyList(), false) }
 -            return@execute
-+          hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
-+          val ast = if (renderableMarkdown.isEmpty()) null else parser.parseMarkdown(renderableMarkdown, flags)
-+          if (ast != null) {
-+            renderedSegments =
-+              MarkdownSegmentRenderer.render(
-+                splitASTIntoSegments(ast),
-+                style,
-+                context,
-+                linkPress,
-+                linkLongPress,
-+              )
++      mainHandler.post {
++        renderInFlight = false
++        if (!disposed) {
++          // Streamdown keys this view by the raw-source generation, remounting
++          // on replacement/clear. Within that lifetime remend may rewrite the
++          // suffix, so repaired-text prefix matching would starve progress.
++          // This serial worker preserves result order; status changes also
++          // invalidate jobs even when the Markdown itself did not change.
++          val compatibleStream =
++            isStreaming && streamingAnimation &&
++              markdownStyle === style && md4cFlags == flags && isGFM == gfm &&
++              tableStreamingMode == tableMode && codeBlockStreamingMode == codeBlockMode
++          if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {
++            applyRenderedSegments(renderedSegments, hasPendingCodeBlock)
            }
 -
--          val ast =
--            parser.parseMarkdown(renderableMarkdown, md4cFlags) ?: run {
--              postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
--              return@execute
--            }
+-        val segments = splitASTIntoSegments(ast)
+-        val renderedSegments =
+-          MarkdownSegmentRenderer.render(
+-            segments,
+-            style,
+-            context,
+-            onLinkPressCallback,
+-            onLinkLongPressCallback,
+-            onLatexError = latexErrorReporter,
+-          )
 -
--          val segments = splitASTIntoSegments(ast)
--          val renderedSegments =
--            MarkdownSegmentRenderer.render(
--              segments,
--              style,
--              context,
--              onLinkPressCallback,
--              onLinkLongPressCallback,
--            )
--
--          postToMain(renderId) { applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock) }
--        } catch (e: Exception) {
--          Log.e(TAG, "Render failed", e)
--          postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
-+        } catch (e: Throwable) {
-+          // Errors such as StackOverflowError would otherwise kill the process from this
-+          // worker and skip the post below, leaving renderInFlight set forever.
-+          Log.e(TAG, "Render failed", e)
+-        postToMain(renderId) { applyRenderedSegments(renderedSegments, hasPendingCodeBlock) }
+-      } catch (e: Exception) {
+-        Log.e(TAG, "Render failed", e)
+-        postToMain(renderId) { applyRenderedSegments(emptyList(), false) }
++          if (renderRequested) scheduleRender()
 +        }
-+
-+        mainHandler.post {
-+          renderInFlight = false
-+          if (!disposed) {
-+            // Streamdown keys this view by the raw-source generation, remounting
-+            // on replacement/clear. Within that lifetime remend may rewrite the
-+            // suffix, so repaired-text prefix matching would starve progress.
-+            // This serial worker preserves result order; status changes also
-+            // invalidate jobs even when the Markdown itself did not change.
-+            val compatibleStream =
-+              isStreaming && streamingAnimation &&
-+                markdownStyle === style && md4cFlags == flags &&
-+                tableStreamingMode == tableMode && codeBlockStreamingMode == codeBlockMode
-+            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {
-+              applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock)
-+            }
-+            if (renderRequested) scheduleRender()
-+          }
-         }
        }
      }
-@@ -453,6 +488,16 @@ class EnrichedMarkdown
-           requestLayout()
-         }
+   }
+@@ -449,6 +486,16 @@ class EnrichedMarkdown(
+         requestLayout()
        }
-+      if (forceHeight) {
-+        // requestLayout only updates Android's view tree. Explicitly invalidate
-+        // Fabric/Yoga as well when a status-only change releases a hidden tail.
-+        MeasurementStore.invalidate(id)
-+        stateWrapper?.let { wrapper ->
-+          val state = Arguments.createMap()
-+          state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)
-+          wrapper.updateState(state)
-+        }
+     }
++    if (forceHeight) {
++      // requestLayout only updates Android's view tree. Explicitly invalidate
++      // Fabric/Yoga as well when a status-only change releases a hidden tail.
++      MeasurementStore.invalidate(id)
++      stateWrapper?.let { wrapper ->
++        val state = Arguments.createMap()
++        state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)
++        wrapper.updateState(state)
 +      }
-     }
++    }
+   }
  
-     private fun viewMatchesSegmentKind(
-@@ -497,7 +542,7 @@ class EnrichedMarkdown
+   private fun isMathContainerView(view: View): Boolean = mathContainerClass?.isInstance(view) == true
+@@ -546,7 +593,7 @@ class EnrichedMarkdown(
            val tableView = view as TableContainerView
            val previousRowCount = tableView.rowCount
            tableView.applyTableNode(segment.node)
@@ -1378,16 +1320,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0a
              tableView.animateNewRows(previousRowCount, BLOCK_FADE_DURATION_MS)
            }
          }
-@@ -517,11 +562,16 @@ class EnrichedMarkdown
-       }
-     }
- 
-+    // Keep streaming parsing/finalization semantics when large content stops
-+    // animating, just as Desktop separates isStreaming from per-word animation.
-+    private val shouldAnimateStreaming: Boolean
-+      get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH
-+
-     private fun animateNewView(
+@@ -576,7 +623,7 @@ class EnrichedMarkdown(
        view: View,
        segment: RenderedSegment,
      ) {
@@ -1395,55 +1328,64 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0a
 +      if (!shouldAnimateStreaming) return
        when (segment) {
          is RenderedSegment.Text -> animateTextViewTail(view as EnrichedMarkdownInternalText, 0)
-         is RenderedSegment.Table, is RenderedSegment.Math, is RenderedSegment.CodeBlock -> animateBlockViewFadeIn(view)
-@@ -532,14 +582,14 @@ class EnrichedMarkdown
-       view: EnrichedMarkdownInternalText,
-       tailStart: Int,
-     ) {
--      if (!streamingAnimation) return
-+      if (!shouldAnimateStreaming) return
-       val textLength = view.text?.length ?: 0
-       if (textLength <= tailStart) return
-       TailFadeInAnimator(view).animate(tailStart, textLength)
-     }
  
-     private fun animateBlockViewFadeIn(view: View) {
--      if (!streamingAnimation) return
-+      if (!shouldAnimateStreaming) return
-       if (isReducedMotionEnabled(context)) return
-       view.alpha = 0f
-       view
-@@ -635,15 +685,6 @@ class EnrichedMarkdown
-       }
-     }
- 
--    private fun postToMain(
--      renderId: Long,
--      action: () -> Unit,
--    ) {
--      mainHandler.post {
--        if (renderId == currentRenderId) action()
--      }
--    }
--
-     override fun onLayout(
-       changed: Boolean,
-       l: Int,
-@@ -729,11 +770,14 @@ class EnrichedMarkdown
-     }
- 
-     fun cleanup() {
-+      disposed = true
-+      renderRequested = false
-       executor.shutdownNow()
-     }
- 
-     companion object {
-       private const val TAG = "EnrichedMarkdown"
-       private const val BLOCK_FADE_DURATION_MS = 200L
-+      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024
+@@ -590,18 +637,23 @@ class EnrichedMarkdown(
      }
    }
+ 
++  // Keep streaming parsing/finalization semantics when large content stops
++  // animating, just as Desktop separates isStreaming from per-word animation.
++  private val shouldAnimateStreaming: Boolean
++    get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH
++
+   private fun animateTextViewTail(
+     view: EnrichedMarkdownInternalText,
+     tailStart: Int,
+   ) {
+-    if (!streamingAnimation) return
++    if (!shouldAnimateStreaming) return
+     val textLength = view.text?.length ?: 0
+     if (textLength <= tailStart) return
+     TailFadeInAnimator(view).animate(tailStart, textLength)
+   }
+ 
+   private fun animateBlockViewFadeIn(view: View) {
+-    if (!streamingAnimation) return
++    if (!shouldAnimateStreaming) return
+     if (isReducedMotionEnabled(context)) return
+     view.alpha = 0f
+     view
+@@ -611,15 +663,6 @@ class EnrichedMarkdown(
+       .start()
+   }
+ 
+-  private fun postToMain(
+-    renderId: Long,
+-    action: () -> Unit,
+-  ) {
+-    mainHandler.post {
+-      if (renderId == currentRenderId) action()
+-    }
+-  }
+-
+   override fun onLayout(
+     changed: Boolean,
+     l: Int,
+@@ -643,11 +686,14 @@ class EnrichedMarkdown(
+   }
+ 
+   fun cleanup() {
++    disposed = true
++    renderRequested = false
+     executor.shutdownNow()
+   }
+ 
+   companion object {
+     private const val TAG = "EnrichedMarkdown"
+     private const val BLOCK_FADE_DURATION_MS = 200L
++    private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024
+   }
+ }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt
 index 6f6a2eac2dfe211074eff7984775a4fb89e38fde..37fb0297f066d6a9fa741f68bc63f349dd9e37f7 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt
@@ -1489,19 +1431,19 @@ index 92a4fbe06893243c3768d88b65ee9f65ec108dbb..51c80a4a7879e3d27f6657257d4d2bcc
        mergedStart = MIN(mergedStart, existing.range.location);
        mergedEnd = MAX(mergedEnd, existingEnd);
        [mergeIndexes addIndex:idx];
-diff --git a/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt b/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
-index 4281042795e71a20b0f3d89811505103c5cb2d28..0561f8cf27ae85b37376378f69c9a7493374f8bf 100644
---- a/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
-+++ b/android/src/math/java/com/swmansion/enriched/markdown/views/MathContainerView.kt
-@@ -11,6 +11,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+diff --git a/android/src/math/java/com/swmansion/enriched/markdown/segments/MathContainerView.kt b/android/src/math/java/com/swmansion/enriched/markdown/segments/MathContainerView.kt
+index c937222bc213002b629c14093aecc80082cdb51b..1d41a58868d7cd8728e18c974ae49e2d8bf4e7fb 100644
+--- a/android/src/math/java/com/swmansion/enriched/markdown/segments/MathContainerView.kt
++++ b/android/src/math/java/com/swmansion/enriched/markdown/segments/MathContainerView.kt
+@@ -12,6 +12,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
  import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
  import android.widget.FrameLayout
  import android.widget.HorizontalScrollView
 +import androidx.core.view.ViewCompat
  import com.swmansion.enriched.markdown.accessibility.AccessibilityLabels
+ import com.swmansion.enriched.markdown.math.LatexErrorReporter
  import com.swmansion.enriched.markdown.spans.MathMeasureHelper
- import com.swmansion.enriched.markdown.spans.MathMeasureRequest
-@@ -82,7 +83,7 @@ class MathContainerView(
+@@ -83,7 +84,7 @@ class MathContainerView(
      addView(scrollView, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
  
      isFocusable = true

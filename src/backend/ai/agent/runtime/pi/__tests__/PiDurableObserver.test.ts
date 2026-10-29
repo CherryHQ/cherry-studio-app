@@ -231,6 +231,100 @@ function attach(
   };
 }
 
+test('applies streamed changes without mutating earlier snapshots or newly supplied blocks', async () => {
+  const message: AssistantMessage = {
+    role: 'assistant',
+    api: 'openai-completions',
+    provider: 'provider',
+    model: 'model',
+    content: [
+      { type: 'text', text: 'Answer' },
+      { type: 'thinking', thinking: 'Reason' },
+    ],
+    stopReason: 'stop',
+    timestamp: 1,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+  };
+  const block = {
+    type: 'toolCall' as const,
+    id: 'call',
+    name: 'custom_tool',
+    arguments: { rows: [{ text: 'A' }, { text: 'B' }], other: { text: 'Kept' } },
+  };
+  const { observer, events, advance } = attach(
+    {
+      entries: [],
+      tools: [],
+      nestedTools: [],
+      compactions: [],
+      inbox: [],
+      generation: { attempt: 0, message },
+    },
+    true,
+  );
+  const latestTurn = () => events.findLast((event) => event.type === 'turn.updated')!.turn;
+  try {
+    const initial = (await observer.start()).activeTurn!;
+    await advance([
+      {
+        type: 'message_update',
+        usage: message.usage,
+        changes: [
+          { type: 'text_delta', contentIndex: 0, delta: ' one' },
+          { type: 'thinking_delta', contentIndex: 1, delta: ' more' },
+          { type: 'toolcall_start', contentIndex: 2, block },
+          { type: 'toolcall_delta', contentIndex: 2, path: ['rows', 0, 'text'], delta: '1' },
+          { type: 'toolcall_delta', contentIndex: 2, path: ['rows', 0, 'text'], delta: '2' },
+        ],
+      },
+    ]);
+    const first = latestTurn();
+    expect(first.parts).toMatchObject([
+      { type: 'text', text: 'Answer one' },
+      { type: 'reasoning', text: 'Reason more' },
+      { type: 'tool', input: { rows: [{ text: 'A12' }, { text: 'B' }], other: { text: 'Kept' } } },
+    ]);
+    await advance([
+      {
+        type: 'message_update',
+        usage: message.usage,
+        changes: [
+          { type: 'text_delta', contentIndex: 0, delta: ' two' },
+          { type: 'toolcall_delta', contentIndex: 2, path: ['rows', 1, 'text'], delta: '3' },
+        ],
+      },
+    ]);
+    expect(latestTurn().parts).toMatchObject([
+      { type: 'text', text: 'Answer one two' },
+      { type: 'reasoning', text: 'Reason more' },
+      { type: 'tool', input: { rows: [{ text: 'A12' }, { text: 'B3' }] } },
+    ]);
+    expect(first.parts[0]).toMatchObject({ text: 'Answer one' });
+    expect(first.parts[2]).toMatchObject({ input: { rows: [{ text: 'A12' }, { text: 'B' }] } });
+    expect(initial.parts).toMatchObject([
+      { type: 'text', text: 'Answer' },
+      { type: 'reasoning', text: 'Reason' },
+    ]);
+    expect(message.content).toEqual([
+      { type: 'text', text: 'Answer' },
+      { type: 'thinking', thinking: 'Reason' },
+    ]);
+    expect(block.arguments).toEqual({
+      rows: [{ text: 'A' }, { text: 'B' }],
+      other: { text: 'Kept' },
+    });
+  } finally {
+    await observer.stop();
+  }
+});
+
 test('records compaction tasks separately from committed summaries and keeps private errors out of logs', async () => {
   const { observer, advance } = attach({
     entries: [],

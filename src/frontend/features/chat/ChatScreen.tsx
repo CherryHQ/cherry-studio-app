@@ -9,6 +9,7 @@ import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
 import { type ComponentProps, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -39,12 +40,19 @@ import { createSelectionMention } from './components/ChatInput/utils/selectionMe
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
-import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import {
+  AssistantMessageUsage,
+  ChatComposerClearance,
+  ChatEmptyState,
+  ChatWorkspace,
+} from './components/ChatWorkspace';
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
+import { ChatQuoteProvider } from './quotes/ChatQuoteProvider';
+import { useChatQuoteNavigation } from './quotes/useChatQuoteNavigation';
 import {
   latestConversationImageResult,
   useAgentChatControls,
@@ -161,10 +169,14 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
   const agent = useAgentApiById(resolvedAgentId);
+  const quoteNavigation = useChatQuoteNavigation(
+    sessionId,
+    target.kind === 'session' ? target.messageRequestId : undefined,
+  );
   const { snapshot, messages, messageWindow } = useLocalConversation({
     sessionId,
     title: session.data?.name,
-    navigation: target.kind === 'session' ? target : undefined,
+    navigation: quoteNavigation.navigation ?? (target.kind === 'session' ? target : undefined),
   });
   // With several answers to the last question, the next message continues the one shown.
   const continuesShownAnswer =
@@ -198,7 +210,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
       : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
-  const [composerHeight, setComposerHeight] = useState(0);
+  const composerHeight = useSharedValue(0);
+  const setComposerHeight = useCallback(
+    (height: number) => composerHeight.set(height),
+    [composerHeight],
+  );
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -214,95 +230,117 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       initialAttachments={composerHandoff?.attachments}
       initialDraft={initialDraft}
     >
-      <McpAppConversationProvider
-        enabled={hasComposer && agent.agent?.mode !== 'minimal'}
-        agentId={resolvedAgentId}
+      <ChatQuoteProvider
+        sessionId={sessionId}
+        enabled={hasComposer}
+        authorName={agent.agent?.name}
+        openQuote={quoteNavigation.openQuote}
+        highlight={quoteNavigation.highlight}
       >
-        {/* A drop without a composer could import files with nothing to attach
+        <McpAppConversationProvider
+          enabled={hasComposer && agent.agent?.mode !== 'minimal'}
+          agentId={resolvedAgentId}
+        >
+          {/* A drop without a composer could import files with nothing to attach
           them to, so the area refuses sessions in preview and error states. */}
-        <ComposerDropArea enabled={hasComposer}>
-          {!isPreview &&
-          sessionId &&
-          session.data &&
-          !session.error &&
-          !messageWindow.isLoadingInitial &&
-          !messageWindow.error ? (
-            <SessionReadReceipt sessionId={sessionId} />
-          ) : null}
-          <FullScreenLayerHost>
-            {/* Native background taps yield to scrolling and excluded message content. */}
-            <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
-              {sessionId && session.error ? (
-                <View className="flex-1 justify-center px-8 py-16">
-                  <ContentState.Error
-                    primaryAction={{
-                      children: t('agent.actions.retry'),
-                      onPress: () => void session.refetch(),
-                    }}
-                    prominence="prominent"
-                    title={t('navigation.chatsLoadFailed')}
+          <ComposerDropArea enabled={hasComposer}>
+            {!isPreview &&
+            sessionId &&
+            session.data &&
+            !session.error &&
+            !messageWindow.isLoadingInitial &&
+            !messageWindow.error ? (
+              <SessionReadReceipt sessionId={sessionId} />
+            ) : null}
+            <FullScreenLayerHost>
+              {/* Native background taps yield to scrolling and excluded message content. */}
+              <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
+                {sessionId && session.error ? (
+                  <ChatComposerClearance className="flex-1">
+                    <View className="flex-1 justify-center px-8 py-16">
+                      <ContentState.Error
+                        primaryAction={{
+                          children: t('agent.actions.retry'),
+                          onPress: () => void session.refetch(),
+                        }}
+                        prominence="prominent"
+                        title={t('navigation.chatsLoadFailed')}
+                      />
+                    </View>
+                  </ChatComposerClearance>
+                ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+                  <ChatWorkspace
+                    executionSource="local"
+                    onQuoteTargetRestored={
+                      quoteNavigation.navigation ? quoteNavigation.onTargetRestored : undefined
+                    }
+                    onQuoteWindowReady={
+                      quoteNavigation.navigation ? quoteNavigation.onReady : undefined
+                    }
+                    onQuoteTakeover={quoteNavigation.cancel}
+                    feedbackHintBottomOffset={composerHeight}
+                    isTranslationEnabled
+                    renderUsage={renderLocalUsage}
+                    snapshot={snapshot}
+                    messages={messages}
+                    onShare={sessionId ? shareMessage : undefined}
+                    pendingSend={controls.pendingSend}
+                    enteringUserMessageId={controls.enteringUserMessageId}
+                    onPendingSendDisplayed={controls.completePendingSend}
+                    assistantAvatar={agent.agent?.avatar}
+                    assistantAvatarUri={agent.agent?.avatarUri}
+                    assistantName={agent.agent?.name}
+                    isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+                    contentBottomInset={contentBottomInset}
+                    forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+                    forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+                    keyboardOffset={keyboardOffset}
+                    messageWindow={messageWindow}
+                    sessionId={sessionId}
                   />
+                ) : (
+                  <ChatEmptyState contentBottomInset={contentBottomInset} />
+                )}
+              </ComposerDismissArea>
+            </FullScreenLayerHost>
+            {/* The transcript keeps its viewport; the keyboard adapter reserves the dock inset. */}
+            {!hasComposer && sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+            {hasComposer ? (
+              <ComposerDock
+                backgroundClassName="bg-chat-background"
+                layoutMode="expandable-overlay"
+                onHeightChange={setComposerHeight}
+              >
+                <View>
+                  {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+                  <ChatInput
+                    agentId={resolvedAgentId}
+                    controls={controls}
+                    dismissKeyboardOnSend
+                    imageResult={
+                      messageWindow.hasNewerMessages
+                        ? undefined
+                        : latestConversationImageResult(
+                            messageWindow.messages.map((message) => message.imageResult),
+                          )
+                    }
+                    placeholder={
+                      continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
+                    }
+                    sessionId={sessionId}
+                    selectionHandoff={target.selectionHandoff}
+                  />
+                  <ChatDockFooter>
+                    <Text className="text-center text-xs text-muted-foreground">
+                      {t('chat.input.disclaimer')}
+                    </Text>
+                  </ChatDockFooter>
                 </View>
-              ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
-                <ChatWorkspace
-                  executionSource="local"
-                  feedbackHintBottomOffset={composerHeight}
-                  isTranslationEnabled
-                  renderUsage={renderLocalUsage}
-                  snapshot={snapshot}
-                  messages={messages}
-                  onShare={sessionId ? shareMessage : undefined}
-                  pendingSend={controls.pendingSend}
-                  enteringUserMessageId={controls.enteringUserMessageId}
-                  onPendingSendDisplayed={controls.completePendingSend}
-                  assistantAvatar={agent.agent?.avatar}
-                  assistantAvatarUri={agent.agent?.avatarUri}
-                  assistantName={agent.agent?.name}
-                  isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
-                  contentBottomInset={contentBottomInset}
-                  forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-                  forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-                  keyboardOffset={keyboardOffset}
-                  messageWindow={messageWindow}
-                  sessionId={sessionId}
-                />
-              ) : (
-                <ChatEmptyState contentBottomInset={contentBottomInset} />
-              )}
-            </ComposerDismissArea>
-          </FullScreenLayerHost>
-          {/* Below the transcript: the column's top edge sits under the header overlay. */}
-          {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
-          {hasComposer ? (
-            <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
-              <View>
-                <ChatInput
-                  agentId={resolvedAgentId}
-                  controls={controls}
-                  dismissKeyboardOnSend
-                  imageResult={
-                    messageWindow.hasNewerMessages
-                      ? undefined
-                      : latestConversationImageResult(
-                          messageWindow.messages.map((message) => message.imageResult),
-                        )
-                  }
-                  placeholder={
-                    continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
-                  }
-                  sessionId={sessionId}
-                  selectionHandoff={target.selectionHandoff}
-                />
-                <ChatDockFooter>
-                  <Text className="text-center text-xs text-muted-foreground">
-                    {t('chat.input.disclaimer')}
-                  </Text>
-                </ChatDockFooter>
-              </View>
-            </ComposerDock>
-          ) : null}
-        </ComposerDropArea>
-      </McpAppConversationProvider>
+              </ComposerDock>
+            ) : null}
+          </ComposerDropArea>
+        </McpAppConversationProvider>
+      </ChatQuoteProvider>
     </ComposerSessionProvider>
   );
 }

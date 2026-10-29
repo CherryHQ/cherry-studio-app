@@ -197,7 +197,7 @@ Cherry Studio desktop.
 | Provider | Search | Page reading | Credentials |
 | --- | --- | --- | --- |
 | `zhipu` | yes | | Zhipu model provider key |
-| `tavily`, `exa`, `bocha`, `parallel`, `serply` | yes | | API key required |
+| `tavily`, `exa`, `bocha`, `parallel`, `serply`, `searchapi` | yes | | API key required |
 | `querit`, `deepseek` | yes | yes | API key required |
 | `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
 | `jina` | yes | yes | API key required to search, optional to read pages |
@@ -231,7 +231,12 @@ SearXNG returns the instance's result snippets and sends the configured engine l
 is stored; it does not read each result page. Several API keys rotate per provider across lookups,
 over distinct keys.
 
-Querit accepts configured addresses with or without `/v1`. Crawl4AI uses `/scrape` for
+SearchApi uses the shared Google-search protocol with the configured result limit, API key, and
+optional custom address. It appears only on the Web search page; it does not read pages.
+
+Querit accepts configured addresses with or without `/v1`. A page marked failed in its response
+statuses remains a failed input even when the response includes content; successful pages in the
+same Mobile batch remain available. Crawl4AI uses `/scrape` for
 `crawl4ai.com` and its subdomains, and `/md` for self-hosted instances. These protocol choices are
 owned by the shared package.
 

@@ -102,6 +102,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+    useComposerExpansion: () => null,
     useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
@@ -248,6 +249,12 @@ function ChatWorkspace(
     />
   );
 }
+
+jest.mock('../components/ChatComposerClearance', () => ({
+  ChatComposerClearance: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('../../../quotes/MessageQuoteHighlight', () => ({ MessageQuoteHighlight: () => null }));
 
 jest.mock('../components/ChatInitialRenderCover', () => ({
   ChatInitialRenderCover: ({ isVisible }: { isVisible: boolean }) => {

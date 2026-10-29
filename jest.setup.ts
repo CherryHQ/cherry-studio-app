@@ -89,6 +89,13 @@ jest.mock('react-native-keyboard-controller', () =>
 // into a spy, which is what lets mention insertion be asserted at all.
 jest.mock('react-native-enriched-markdown', () => require('react-native-enriched-markdown/jest'));
 
+// Its module registers a TurboModule at import time. Markdown reaches it through Mermaid diagrams,
+// so every Markdown consumer would otherwise fail to load; an inert element keeps props inspectable.
+jest.mock('react-native-webview', () => {
+  const { createElement } = jest.requireActual('react');
+  return { WebView: (props: object) => createElement('WebView', props) };
+});
+
 // Minimal Skia surface for components that render under test (AnimatedText):
 // declarative elements become inert nodes and matchFont hands back fixed
 // glyph geometry. The official mock lacks matchFont, so we roll our own.

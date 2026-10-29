@@ -85,6 +85,140 @@ describe('SqliteAgentSessionStore conformance', () => {
     harness.cleanup();
   });
 
+  test('editing an answer commits text, search and revision together while clearing stale translation and context', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const previous = await settleTurn(store, session.id, 'Earlier');
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: previous.turnId,
+      payload: { summary: 'Earlier history' },
+    };
+    await store.saveContextCheckpoint(previous.assistantMessage.id, previous.turnId, checkpoint);
+    const answer = await settleTurn(store, session.id, 'Original');
+    await store.saveContextCheckpoint(answer.assistantMessage.id, answer.turnId, {
+      version: 1,
+      anchorTurnId: answer.turnId,
+      payload: { summary: 'Contains Original' },
+    });
+    harness.raw
+      .prepare(
+        "UPDATE agent_session_message SET data = json_set(data, '$.translations', json(?)) WHERE id = ?",
+      )
+      .run(
+        JSON.stringify({
+          sourceHash: sha256HexOfText('re: Original'),
+          results: { 'zh-CN': { content: '旧译文', createdAt: 1 } },
+        }),
+        answer.assistantMessage.id,
+      );
+    const original = await store.getMessage(session.id, answer.assistantMessage.id);
+    const result = await store.editMessage({
+      sessionId: session.id,
+      messageId: answer.assistantMessage.id,
+      expectedRevision: 0,
+      parts: [{ id: 'text-1', expectedText: 're: Original', text: 'Corrected' }],
+      contextCheckpoints: [],
+    });
+    expect(result.status).toBe('edited');
+    const saved = await store.getMessage(session.id, answer.assistantMessage.id);
+    expect(saved?.parts).toEqual([
+      { id: 'text-1', type: 'text', text: 'Corrected', state: 'done' },
+    ]);
+    expect(saved?.translations).toBeUndefined();
+    expect(saved?.stats).toEqual(original?.stats);
+    expect(saved?.turnId).toBe(original?.turnId);
+    expect(await store.getRuntimeRevision(session.id)).toBe(1);
+    expect((await store.getLatestContextCheckpoint(session.id))?.checkpoint).toEqual(checkpoint);
+    expect(
+      harness.raw
+        .prepare('SELECT searchable_text FROM agent_session_message WHERE id = ?')
+        .get(saved!.id),
+    ).toEqual({ searchable_text: 'Corrected' });
+  });
+
+  test('editing an earlier answer keeps later turns, drops checkpoints that may hold it and saves refreshed copy context', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const checkpointed = async (text: string) => {
+      const turn = await settleTurn(store, session.id, text);
+      const checkpoint = {
+        version: 1 as const,
+        anchorTurnId: turn.turnId,
+        payload: { summary: `Through ${text}` },
+      };
+      await store.saveContextCheckpoint(turn.assistantMessage.id, turn.turnId, checkpoint);
+      return { ...turn, checkpoint };
+    };
+    const before = await checkpointed('Before');
+    const earlier = await checkpointed('Earlier');
+    const middle = await checkpointed('Middle');
+    const later = await settleTurn(store, session.id, 'Later');
+    const refreshed = {
+      version: 1 as const,
+      anchorTurnId: later.turnId,
+      payload: { summary: 'Contains Corrected' },
+    };
+    const result = await store.editMessage({
+      sessionId: session.id,
+      messageId: earlier.assistantMessage.id,
+      expectedRevision: 0,
+      parts: [{ id: 'text-1', expectedText: 're: Earlier', text: 'Corrected' }],
+      contextCheckpoints: [
+        { assistantMessageId: later.assistantMessage.id, checkpoint: refreshed },
+      ],
+    });
+    expect(result.status).toBe('edited');
+    expect((await store.getMessage(session.id, earlier.assistantMessage.id))?.parts).toEqual([
+      { id: 'text-1', type: 'text', text: 'Corrected', state: 'done' },
+    ]);
+    expect((await store.getMessage(session.id, later.assistantMessage.id))?.parts).toEqual([
+      { id: 'text-1', type: 'text', text: 're: Later', state: 'done' },
+    ]);
+    expect(await store.getLatestContextCheckpoint(session.id)).toEqual({
+      assistantMessageId: later.assistantMessage.id,
+      checkpoint: refreshed,
+    });
+    // Regenerating the latest answer rebuilds through the middle one: only the earlier context remains.
+    expect(
+      await store.getLatestContextCheckpoint(session.id, undefined, middle.assistantMessage.id),
+    ).toEqual({ assistantMessageId: before.assistantMessage.id, checkpoint: before.checkpoint });
+    expect(await store.getRuntimeRevision(session.id)).toBe(1);
+  });
+
+  test('rejects stale drafts, old revisions and busy sessions without changing history', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const answer = await settleTurn(store, session.id, 'Original');
+    const input = {
+      sessionId: session.id,
+      messageId: answer.assistantMessage.id,
+      expectedRevision: 0,
+      parts: [{ id: 'text-1', expectedText: 're: Original', text: 'Changed' }],
+      contextCheckpoints: [],
+    };
+    expect(
+      await store.editMessage({
+        ...input,
+        parts: [{ id: 'text-1', expectedText: 'Stale', text: 'Changed' }],
+      }),
+    ).toEqual({
+      status: 'conflict',
+    });
+    expect(await store.editMessage({ ...input, expectedRevision: 1 })).toEqual({
+      status: 'conflict',
+    });
+    const next = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'next', type: 'text', text: 'Next', state: 'done' }],
+    });
+    expect(await store.editMessage(input)).toEqual({ status: 'conflict' });
+    expect(
+      (await store.getMessage(session.id, answer.assistantMessage.id))?.parts[0],
+    ).toMatchObject({ text: 're: Original' });
+    expect(await store.getRuntimeRevision(session.id)).toBe(0);
+    expect((await store.getMessage(session.id, next.assistantMessage.id))?.status).toBe('pending');
+  });
+
   test('withdrawing a queued reservation preserves history, checkpoints and the current runtime revision', async () => {
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
@@ -577,6 +711,124 @@ describe('SqliteAgentSessionStore conformance', () => {
       'plugin:notion',
       'plugin:github',
     ]);
+  });
+
+  test('fork remaps all copied quote sources and deletion preserves surviving snapshots', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'p', type: 'text', text: 'Source secret', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'a', type: 'text', text: 'Original answer', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const fields = {
+      quotes: [
+        { id: 'q', sourceMessageId: first.assistantMessage.id, text: 'Original answer' },
+      ] as [{ id: string; sourceMessageId: string; text: string }],
+      quoteAuthor: { role: 'assistant' as const },
+    };
+    const second = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'p', type: 'text', text: 'Follow-up', state: 'done', ...fields }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: second.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: second.assistantMessage.id,
+    });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    const copy = await store.listMessages(fork.session.id);
+    expect(copy[2].parts[0]).toMatchObject({
+      quotes: [{ ...fields.quotes[0], sourceMessageId: copy[1].id }],
+      quoteAuthor: fields.quoteAuthor,
+    });
+    expect(await store.getMessage(fork.session.id, first.assistantMessage.id)).toBeNull();
+    await store.deleteTurn({ sessionId: session.id, turnId: first.turnId });
+    expect((await store.listMessages(session.id))[0].parts[0]).toMatchObject(fields);
+    expect(await store.getMessage(session.id, first.assistantMessage.id)).toBeNull();
+  });
+
+  test('fork uses a complete source-id map and leaves uncopied sources unresolved', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const laterId = uuidv7();
+    const uncopiedId = uuidv7();
+    const quoted = (sourceMessageId: string): AgentMessagePart => ({
+      id: 'p',
+      type: 'text',
+      state: 'done',
+      text: 'Authored request',
+      quotes: [{ id: 'q', sourceMessageId, text: 'quoteOnlyNeedle' }],
+      quoteAuthor: { role: 'assistant' },
+    });
+    // Structural historical snapshots do not require the source to precede them in row order.
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [quoted(laterId)],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const last = await store.reserveSubmission({
+      ...messageIds(),
+      userMessageId: laterId,
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [quoted(uncopiedId)],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: last.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: last.assistantMessage.id,
+    });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    const copied = await store.listMessages(fork.session.id);
+    expect(copied[0].parts[0]).toMatchObject({ quotes: [{ sourceMessageId: copied[2].id }] });
+    expect(copied[2].parts[0]).toMatchObject({
+      quotes: [{ sourceMessageId: uncopiedId, text: 'quoteOnlyNeedle' }],
+    });
+    expect(await store.getMessage(fork.session.id, uncopiedId)).toBeNull();
+    expect(
+      harness.raw
+        .prepare(
+          'SELECT rowid FROM agent_session_message_fts WHERE agent_session_message_fts MATCH ?',
+        )
+        .all('quoteOnlyNeedle'),
+    ).toHaveLength(0);
   });
 
   test('forkSession copies the transcript up to the fork point into an idle Session', async () => {

@@ -1,4 +1,5 @@
 import {
+  type Availability,
   type ConversationAction,
   type ConversationInteraction,
   type ConversationInteractionResponse,
@@ -12,6 +13,7 @@ import {
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { editableReplyParts } from '@/shared/utils/assistantReply';
 
 import {
   type AgentMessageListProjectionCache,
@@ -83,19 +85,19 @@ export function createLocalConversationProjector(input: {
       return { state: 'rejected', failure: localConversationFailure(error) };
     }
   };
+  const availability = (state: AgentSessionChatState, requiresIdle: boolean): Availability =>
+    requiresIdle && isAgentSessionBusy(state)
+      ? { state: 'disabled', reason: 'busy' }
+      : state.status === 'error'
+        ? { state: 'disabled', reason: 'synchronizing' }
+        : { state: 'enabled' };
   function action<Input, Output>(
     state: AgentSessionChatState,
     requiresIdle: boolean,
     run: (value: Input) => Promise<Output>,
   ): ConversationAction<Input, Output> {
-    const availability: ConversationAction<Input, Output>['availability'] =
-      requiresIdle && isAgentSessionBusy(state)
-        ? { state: 'disabled', reason: 'busy' }
-        : state.status === 'error'
-          ? { state: 'disabled', reason: 'synchronizing' }
-          : { state: 'enabled' };
     return {
-      availability,
+      availability: availability(state, requiresIdle),
       execute: (value) => {
         const current = client.getState(sessionId);
         if (requiresIdle && isAgentSessionBusy(current))
@@ -117,6 +119,11 @@ export function createLocalConversationProjector(input: {
       const projected: ConversationMessage = {
         ...projectLocalTranscriptMessage(message, cache),
         actions: {
+          ...(message.role === 'assistant' &&
+          message.status === 'success' &&
+          editableReplyParts(message.parts).length > 0
+            ? { edit: { availability: availability(state, true) } }
+            : {}),
           // Answers switch in place; switching only changes what is shown, so it never waits.
           ...(message.siblings && message.role === 'assistant'
             ? {

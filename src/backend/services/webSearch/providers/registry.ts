@@ -8,6 +8,7 @@ import { firecrawl } from '@cherrystudio/web-search/providers/firecrawl';
 import { jina } from '@cherrystudio/web-search/providers/jina';
 import { parallel } from '@cherrystudio/web-search/providers/parallel';
 import { querit } from '@cherrystudio/web-search/providers/querit';
+import { searchapi } from '@cherrystudio/web-search/providers/searchapi';
 import { searxng } from '@cherrystudio/web-search/providers/searxng';
 import { serply } from '@cherrystudio/web-search/providers/serply';
 import { tavily } from '@cherrystudio/web-search/providers/tavily';
@@ -31,4 +32,5 @@ export const REMOTE_WEB_SEARCH_PROVIDERS = {
   crawl4ai,
   parallel,
   serply,
+  searchapi,
 } satisfies Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderModule>;
