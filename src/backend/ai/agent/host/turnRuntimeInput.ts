@@ -5,6 +5,8 @@
  * back into protocol views.
  */
 
+import { createCodeBlockMarkdown } from '@cherrystudio/ui/markdown';
+
 import {
   AgentMessagePartSchema,
   AgentToolResultSchema,
@@ -13,7 +15,6 @@ import {
 } from '@/shared/contracts/agent';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
-import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
 
 import type { TurnResourceLedger } from '../resources/managedFileResolver';
 import type {

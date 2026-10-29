@@ -4,15 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
-import { MessageDetailSection } from '@/frontend/components/MessageDetail';
-import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
+import { MessageDetailSection, MessageDetailText } from '@/frontend/components/MessageDetail';
 
 import { SourceLink } from '../SourceLink';
 import {
-  createToolResultPreview,
   formatToolResultJson,
   getToolResultCopyText,
-  TOOL_RESULT_PREVIEW_LIMIT,
   type ToolResultContent,
 } from './toolResultContent';
 
@@ -33,8 +30,19 @@ export function ToolResultContentRenderer({
   imageAccessibilityLabel,
   renderResourceLink,
 }: ToolResultContentRendererProps) {
-  const preview = createToolResultPreview(contents);
-  const { t } = useTranslation();
+  const single = contents.length === 1 ? contents[0] : undefined;
+  if (single?.kind === 'code' || single?.kind === 'json') {
+    return (
+      <MessageDetailText
+        copyTestID="tool-result-copy-full-text"
+        language={single.kind === 'json' ? 'json' : single.language}
+        title={title}
+        tone={tone}
+        value={single.kind === 'json' ? formatToolResultJson(single.value) : single.content}
+        variant="code"
+      />
+    );
+  }
 
   return (
     <MessageDetailSection
@@ -48,7 +56,7 @@ export function ToolResultContentRenderer({
       copyTestID="tool-result-copy-full-text"
     >
       <View className="gap-4">
-        {preview.contents.map((content, index) => (
+        {contents.map((content, index) => (
           <ToolResultContentItem
             content={content}
             imageAccessibilityLabel={imageAccessibilityLabel}
@@ -57,11 +65,6 @@ export function ToolResultContentRenderer({
           />
         ))}
       </View>
-      {preview.isTruncated ? (
-        <Text className="text-muted-foreground text-xs">
-          {t('chat.tool.previewTruncated', { count: TOOL_RESULT_PREVIEW_LIMIT })}
-        </Text>
-      ) : null}
     </MessageDetailSection>
   );
 }
@@ -107,7 +110,15 @@ function ToolResultContentItem({
 }
 
 function CodeContent({ content, language }: { content: string; language?: string }) {
-  return <MarkdownText markdown={createCodeBlockMarkdown(content, language)} />;
+  const { t } = useTranslation();
+  return (
+    <MessageDetailText
+      language={language}
+      title={t('chat.tool.code')}
+      value={content}
+      variant="code"
+    />
+  );
 }
 
 function SelectableText({ value }: { value: string }) {

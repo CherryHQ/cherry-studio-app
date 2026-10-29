@@ -592,7 +592,6 @@
   "chat.tool.noOutput": "Không có đầu ra",
   "chat.tool.output": "Đầu ra",
   "chat.tool.preparingInput": "Đang chuẩn bị đầu vào",
-  "chat.tool.previewTruncated": "Bản xem trước bị giới hạn ở {{count}} ký tự. Copy để đọc toàn văn.",
   "chat.tool.response": "Phản hồi",
   "chat.tool.result": "Kết quả",
   "chat.tool.runDenied": "Chạy bị từ chối",

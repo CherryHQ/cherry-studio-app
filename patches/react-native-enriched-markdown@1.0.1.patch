@@ -1,8 +1,35 @@
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+index 1416540317cfe30b8f54c04643afd7296e6e707f..14e108679e14f86e545afebe7c5c8cb55c902783 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
 +++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+@@ -887,6 +887,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
+ #endif
+ 
+ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
++  bool externalControls{false};
+   Float fontSize{0.0};
+   std::string fontFamily{};
+   std::string fontWeight{};
+@@ -907,6 +908,7 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
+@@ -928,6 +930,10 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
+ static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownMarkdownStyleCodeBlockStruct &result) {
+   auto map = (std::unordered_map<std::string, RawValue>)value;
+ 
++  auto tmp_externalControls = map.find("externalControls");
++  if (tmp_externalControls != map.end()) {
++    fromRawValue(context, tmp_externalControls->second, result.externalControls);
++  }
+   auto tmp_fontSize = map.find("fontSize");
+   if (tmp_fontSize != map.end()) {
+     fromRawValue(context, tmp_fontSize->second, result.fontSize);
+@@ -2923,6 +2929,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
  
  struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    std::string pattern{};
@@ -11,7 +38,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    SharedColor color{};
    bool underline{false};
    SharedColor backgroundColor{};
-@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+@@ -2934,6 +2942,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    folly::dynamic toDynamic() const {
      folly::dynamic result = folly::dynamic::object();
      result["pattern"] = pattern;
@@ -20,7 +47,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
      result["color"] = ::facebook::react::toDynamic(color);
      result["underline"] = underline;
      result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
-@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+@@ -2949,6 +2959,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
    if (tmp_pattern != map.end()) {
      fromRawValue(context, tmp_pattern->second, result.pattern);
    }
@@ -35,6 +62,33 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
+@@ -4601,6 +4619,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
+ #endif
+ 
+ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
++  bool externalControls{false};
+   Float fontSize{0.0};
+   std::string fontFamily{};
+   std::string fontWeight{};
+@@ -4621,6 +4640,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
+@@ -4642,6 +4662,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+ static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownTextMarkdownStyleCodeBlockStruct &result) {
+   auto map = (std::unordered_map<std::string, RawValue>)value;
+ 
++  auto tmp_externalControls = map.find("externalControls");
++  if (tmp_externalControls != map.end()) {
++    fromRawValue(context, tmp_externalControls->second, result.externalControls);
++  }
+   auto tmp_fontSize = map.find("fontSize");
+   if (tmp_fontSize != map.end()) {
+     fromRawValue(context, tmp_fontSize->second, result.fontSize);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e622f04ba2 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
@@ -331,7 +385,7 @@ index 9ff71ede7eb3ec58eb6e0547d553839e1acbb977..f77b0e60dd5d22cf81f4bd176cb7e663
      }
    }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29db25fa97f 100644
+index 380c6be097ff3e6b67e6f66ec32b205af196844f..9be007ef2e78a3f20599c09bc3b58828ebf320b8 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 @@ -17,10 +17,12 @@ import android.text.StaticLayout
@@ -396,16 +450,21 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
    private val languageView =
      AppCompatTextView(context).apply {
        includeFontPadding = false
-@@ -155,7 +181,7 @@ class CodeBlockContainerView(
+@@ -153,9 +179,11 @@ class CodeBlockContainerView(
+           setStroke(ceil(codeBlockStyle.borderWidth).toInt(), codeBlockStyle.borderColor)
+         }
        }
-     isLongClickable = true
+-    isLongClickable = true
++    isLongClickable = !codeBlockStyle.externalControls
      setOnLongClickListener { view -> showContextMenu(view) }
 -    addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++    languageView.visibility = if (codeBlockStyle.externalControls) View.GONE else View.VISIBLE
++    copyButton.visibility = if (codeBlockStyle.externalControls) View.GONE else View.VISIBLE
 +    addView(verticalScrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
      addView(languageView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
      addView(copyButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
    }
-@@ -187,9 +213,9 @@ class CodeBlockContainerView(
+@@ -187,9 +215,9 @@ class CodeBlockContainerView(
      heightSpec: Int,
    ) {
      val measuredWidth = MeasureSpec.getSize(widthSpec)
@@ -417,7 +476,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      )
      copyButton.measure(
        MeasureSpec.makeMeasureSpec(headerH, MeasureSpec.EXACTLY),
-@@ -200,7 +226,7 @@ class CodeBlockContainerView(
+@@ -200,7 +228,7 @@ class CodeBlockContainerView(
        MeasureSpec.makeMeasureSpec(labelMaxWidth, MeasureSpec.AT_MOST),
        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
      )
@@ -426,7 +485,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
    }
  
    override fun onLayout(
-@@ -230,15 +256,14 @@ class CodeBlockContainerView(
+@@ -230,22 +258,25 @@ class CodeBlockContainerView(
        buttonTop + copyButton.measuredHeight,
      )
  
@@ -439,23 +498,25 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
 +  // Keep the divider above the code viewport so scrolling text cannot cross it.
    override fun onDraw(canvas: Canvas) {
      super.onDraw(canvas)
++    if (codeBlockStyle.externalControls) return
      val borderWidth = borderW.toFloat()
 -    val y = headerH + inset / 2f
 +    val y = headerH - dividerPaint.strokeWidth / 2f
      canvas.drawLine(borderWidth, y, width - borderWidth, y, dividerPaint)
    }
  
-@@ -246,6 +271,9 @@ class CodeBlockContainerView(
+   // Returns whether a menu was shown, so the long-press listener only consumes
    // the event when there is one (a pending block has no menu yet).
    private fun showContextMenu(anchor: View): Boolean {
-     if (pending) return false
+-    if (pending) return false
++    if (pending || codeBlockStyle.externalControls) return false
 +    // A popup only takes window focus; it does not cancel an ancestor's long press.
 +    // Commit this native gesture before presenting, including for non-scrolling blocks.
 +    anchor.parent?.requestDisallowInterceptTouchEvent(true)
      ContextMenuPopup.show(anchor, this) {
        item(ContextMenuPopup.Icon.COPY, copyLabel) { copyCode() }
        item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) { copyFencedMarkdown() }
-@@ -305,6 +333,12 @@ class CodeBlockContainerView(
+@@ -305,6 +336,12 @@ class CodeBlockContainerView(
    }
  
    companion object {
@@ -468,7 +529,15 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      private const val HEADER_LABEL_SCALE = 0.85f
  
      // Drawable box for the copy glyph, as a multiple of the code font size.
-@@ -366,7 +400,7 @@ class CodeBlockContainerView(
+@@ -326,6 +363,7 @@ class CodeBlockContainerView(
+     // Header is the top content inset plus one label line; the code text
+     // view's own top inset then forms the single gap below the label.
+     private fun headerHeight(style: CodeBlockStyle): Int {
++      if (style.externalControls) return 0
+       val paint =
+         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+           textSize = style.fontSize * HEADER_LABEL_SCALE
+@@ -366,7 +404,7 @@ class CodeBlockContainerView(
        val inset = contentInset(style)
        val headerH = headerHeight(style)
        val text = buildCodeText(CodeBlockNode.extractCode(node), style)
@@ -477,7 +546,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
        val paint = createCodePaint(style, context)
        val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
        val layout =
-@@ -377,7 +411,7 @@ class CodeBlockContainerView(
+@@ -377,7 +415,7 @@ class CodeBlockContainerView(
            .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
            .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
            .build()
@@ -508,10 +577,37 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51be
          contentDescription = description
          if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+index 1416540317cfe30b8f54c04643afd7296e6e707f..14e108679e14f86e545afebe7c5c8cb55c902783 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 +++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+@@ -887,6 +887,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
+ #endif
+ 
+ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
++  bool externalControls{false};
+   Float fontSize{0.0};
+   std::string fontFamily{};
+   std::string fontWeight{};
+@@ -907,6 +908,7 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
+@@ -928,6 +930,10 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
+ static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownMarkdownStyleCodeBlockStruct &result) {
+   auto map = (std::unordered_map<std::string, RawValue>)value;
+ 
++  auto tmp_externalControls = map.find("externalControls");
++  if (tmp_externalControls != map.end()) {
++    fromRawValue(context, tmp_externalControls->second, result.externalControls);
++  }
+   auto tmp_fontSize = map.find("fontSize");
+   if (tmp_fontSize != map.end()) {
+     fromRawValue(context, tmp_fontSize->second, result.fontSize);
+@@ -2923,6 +2929,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
  
  struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    std::string pattern{};
@@ -520,7 +616,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    SharedColor color{};
    bool underline{false};
    SharedColor backgroundColor{};
-@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+@@ -2934,6 +2942,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
    folly::dynamic toDynamic() const {
      folly::dynamic result = folly::dynamic::object();
      result["pattern"] = pattern;
@@ -529,7 +625,7 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
      result["color"] = ::facebook::react::toDynamic(color);
      result["underline"] = underline;
      result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
-@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+@@ -2949,6 +2959,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
    if (tmp_pattern != map.end()) {
      fromRawValue(context, tmp_pattern->second, result.pattern);
    }
@@ -544,6 +640,33 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
+@@ -4601,6 +4619,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
+ #endif
+ 
+ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
++  bool externalControls{false};
+   Float fontSize{0.0};
+   std::string fontFamily{};
+   std::string fontWeight{};
+@@ -4621,6 +4640,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
+@@ -4642,6 +4662,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+ static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownTextMarkdownStyleCodeBlockStruct &result) {
+   auto map = (std::unordered_map<std::string, RawValue>)value;
+ 
++  auto tmp_externalControls = map.find("externalControls");
++  if (tmp_externalControls != map.end()) {
++    fromRawValue(context, tmp_externalControls->second, result.externalControls);
++  }
+   auto tmp_fontSize = map.find("fontSize");
+   if (tmp_fontSize != map.end()) {
+     fromRawValue(context, tmp_fontSize->second, result.fontSize);
 diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
 index 851d9902478af68906739d03a93fff94afc07000..79d858eaa2d27d72a15bf020703b20dc8ea12f3d 100644
 --- a/ios/input/ENRMInputFormatter.mm
@@ -647,7 +770,7 @@ diff --git a/ios/attachments/ENRMMathInlineAttachment.h b/ios/attachments/ENRMMa
 index 956792262d7301cbe7a781d8515a8019a5a294d3..b7f582a99b4da075b9e8e8e5ebec6b37bb5457ca 100644
 --- a/ios/attachments/ENRMMathInlineAttachment.h
 +++ b/ios/attachments/ENRMMathInlineAttachment.h
-@@ -8,6 +8,9 @@
+@@ -8,6 +8,9 @@ NS_ASSUME_NONNULL_BEGIN
  @property (nonatomic, strong) NSString *latex;
  @property (nonatomic, assign) CGFloat fontSize;
  @property (nonatomic, strong, nullable) RCTUIColor *mathTextColor;
@@ -661,7 +784,7 @@ diff --git a/ios/attachments/ENRMMathInlineAttachment.m b/ios/attachments/ENRMMa
 index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a1f8ead8efe5206078c31d01460ab4554c12fe73 100644
 --- a/ios/attachments/ENRMMathInlineAttachment.m
 +++ b/ios/attachments/ENRMMathInlineAttachment.m
-@@ -46,13 +46,54 @@
+@@ -46,13 +46,54 @@ - (void)prepareIfNeeded
    _cachedSize = CGSizeMake(ceil(result.width), ceil(result.totalHeight));
  }
  
@@ -717,7 +840,7 @@ index 1ec7163289fd4dc288a6bf18170b32b8a2d78c6c..a1f8ead8efe5206078c31d01460ab455
  }
  
  - (UIImage *)imageForBounds:(CGRect)imageBounds
-@@ -63,22 +104,31 @@
+@@ -63,22 +104,31 @@ - (UIImage *)imageForBounds:(CGRect)imageBounds
    if (!_renderResult && !_fallbackSource)
      return nil;
  
@@ -771,7 +894,7 @@ diff --git a/ios/renderer/ENRMMathInlineRenderer.m b/ios/renderer/ENRMMathInline
 index bff00b34db8ff08034871e778a852a00d3490b92..a0c1421213a0ef069ed6156d18d1eeb1a7ed6cd6 100644
 --- a/ios/renderer/ENRMMathInlineRenderer.m
 +++ b/ios/renderer/ENRMMathInlineRenderer.m
-@@ -27,6 +27,9 @@
+@@ -27,6 +27,9 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
    attachment.latex = latex;
    attachment.fontSize = currentFont ? currentFont.pointSize : [_config paragraphFontSize];
    attachment.mathTextColor = [_config inlineMathColor];
@@ -785,7 +908,7 @@ diff --git a/ios/renderer/RendererFactory.m b/ios/renderer/RendererFactory.m
 index 1f4ff795e9d7e155f0b9d89723df37b4a4a055d6..49defb037204a6ac593764d2ea9a62fe97a30ce3 100644
 --- a/ios/renderer/RendererFactory.m
 +++ b/ios/renderer/RendererFactory.m
-@@ -112,14 +112,22 @@
+@@ -112,14 +112,22 @@ - (instancetype)initWithConfig:(StyleConfig *)config
  #if ENRICHED_MARKDOWN_MATH
      case MarkdownNodeTypeLatexMathInline:
        return [[ENRMMathInlineRenderer alloc] initWithRendererFactory:self config:_config];
@@ -818,15 +941,11 @@ index 204fc18510d3de0b79c3d3741b1599659a53d4d9..0c34c0637f57f8ba97ce83d83a70ae33
      NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
      style.firstLineHeadIndent = totalIndent;
      style.headIndent = totalIndent;
--    if (lineHeightConfig > 0) {
--      style.minimumLineHeight = lineHeightConfig;
--      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
--    }
 +#if TARGET_OS_OSX
-+    if (lineHeightConfig > 0) {
-+      style.minimumLineHeight = lineHeightConfig;
-+      style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
-+    }
+     if (lineHeightConfig > 0) {
+       style.minimumLineHeight = lineHeightConfig;
+       style.maximumLineHeight = ENRMRangeContainsBlockImage(output, range) ? 0 : lineHeightConfig;
+     }
 +#endif
      NSMutableDictionary *attributesToApply = [metadata mutableCopy];
      attributesToApply[NSParagraphStyleAttributeName] = style;
@@ -901,7 +1020,7 @@ index 315ec083f1daf23c29bc2d708086578c14fec1e5..93548a1d3f9534811246beb7ebe31e92
                                   for (ENRMListMarkerDescriptor *marker in markers) {
                                     CGFloat markerX = isRTL ? origin.x + container.size.width - marker.indent + gap
 diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
-index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1ef4eb6ed 100644
+index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..01a1d98900d9c16ddf715138e9d21f2471e7442f 100644
 --- a/ios/views/ENRMCodeBlockContainerView.m
 +++ b/ios/views/ENRMCodeBlockContainerView.m
 @@ -8,8 +8,8 @@
@@ -925,7 +1044,23 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  
  // Height geometry and code-run construction shared by the instance layout path
  // and the view-free measureHeightForCodeBlockNode:, so the two cannot drift.
-@@ -243,13 +246,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+@@ -224,6 +227,7 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+                  forState:UIControlStateNormal];
+     _copyButton.tintColor = [[config codeBlockColor] colorWithAlphaComponent:kENRMHeaderSecondaryAlpha];
+     [_copyButton addTarget:self action:@selector(copyCodeToPasteboard) forControlEvents:UIControlEventTouchUpInside];
++    _copyButton.hidden = [config codeBlockExternalControls];
+     [self addSubview:_copyButton];
+ #else
+     NSImageSymbolConfiguration *symbolConfig =
+@@ -234,6 +238,7 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+     _copyButton = [NSButton buttonWithImage:copyImage target:self action:@selector(copyCodeToPasteboard)];
+     _copyButton.bordered = NO;
+     _copyButton.contentTintColor = [[config codeBlockColor] colorWithAlphaComponent:kENRMHeaderSecondaryAlpha];
++    _copyButton.hidden = [config codeBlockExternalControls];
+     [self addSubview:_copyButton];
+ #endif
+   }
+@@ -243,13 +248,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
  - (void)setupScrollView
  {
    _scrollView = [[RCTUIScrollView alloc] init];
@@ -942,7 +1077,7 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
    _scrollView.backgroundColor = [UIColor clearColor];
    _scrollView.isAccessibilityElement = NO;
    _scrollView.accessibilityElementsHidden = YES;
-@@ -281,11 +286,12 @@ - (void)layoutScrollArea
+@@ -281,11 +288,12 @@ - (void)layoutScrollArea
  
    CGFloat horizontalPad = MAX(inset - borderW, 0);
    CGFloat contentWidth = MAX(_codeSize.width + horizontalPad * 2, frame.size.width);
@@ -958,7 +1093,16 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  #endif
  }
  
-@@ -406,7 +412,7 @@ - (CGFloat)contentInset
+@@ -293,7 +301,7 @@ - (void)layoutScrollArea
+ // top inset then forms the single gap below the label.
+ - (CGFloat)headerHeight
+ {
+-  return [self contentInset] + _headerLabelLineHeight;
++  return [_config codeBlockExternalControls] ? 0 : [self contentInset] + _headerLabelLineHeight;
+ }
+ 
+ - (void)layoutHeaderButton
+@@ -406,15 +414,17 @@ - (CGFloat)contentInset
  - (CGFloat)measureHeight:(CGFloat)maxWidth
  {
    CGFloat inset = [self contentInset];
@@ -967,21 +1111,28 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
  }
  
  + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleConfig *)config
-@@ -414,7 +420,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
+ {
    CGFloat inset = ENRMCodeBlockContentInset(config);
-   CGFloat headerH = inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
+-  CGFloat headerH = inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
++  CGFloat headerH = [config codeBlockExternalControls]
++                        ? 0
++                        : inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
    NSAttributedString *code = ENRMCodeBlockPlainAttributedCode(ENRMCodeBlockExtractCode(node), config);
 -  return ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH;
 +  return MIN(ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH, kENRMCodeBlockMaxHeight);
  }
  
  - (void)drawRect:(CGRect)rect
-@@ -446,11 +452,10 @@ - (void)drawRect:(CGRect)rect
+@@ -446,11 +456,14 @@ - (void)drawRect:(CGRect)rect
    CGFloat inset = [self contentInset];
    CGFloat headerH = [self headerHeight];
  
 -  // Divider between the header and the code, centered in the gap the code
 -  // text's top inset creates, so it adds no height of its own.
++  if ([_config codeBlockExternalControls]) {
++    return;
++  }
++
 +  // Keep the divider above the code viewport so scrolling text cannot cross it.
    RCTUIColor *dividerColor = [[_config codeBlockColor] colorWithAlphaComponent:kENRMHeaderDividerAlpha];
    if (dividerColor) {
@@ -990,6 +1141,33 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
      [dividerColor setFill];
  #if !TARGET_OS_OSX
      [[UIBezierPath bezierPathWithRect:dividerRect] fill];
+@@ -486,7 +499,7 @@ - (void)copyMarkdownToPasteboard
+ - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                         configurationForMenuAtLocation:(CGPoint)location
+ {
+-  if (_pending) {
++  if (_pending || [_config codeBlockExternalControls]) {
+     return nil;
+   }
+   return [UIContextMenuConfiguration
+@@ -513,7 +526,7 @@ - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction
+ #if TARGET_OS_OSX
+ - (NSMenu *)buildContextMenu
+ {
+-  if (_pending) {
++  if (_pending || [_config codeBlockExternalControls]) {
+     return nil;
+   }
+   NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
+@@ -543,7 +556,7 @@ - (UIAccessibilityTraits)accessibilityTraits
+ // button subview from VoiceOver; expose the copy action explicitly instead.
+ - (NSArray<UIAccessibilityCustomAction *> *)accessibilityCustomActions
+ {
+-  if (_pending || self.copyLabel.length == 0) {
++  if (_pending || [_config codeBlockExternalControls] || self.copyLabel.length == 0) {
+     return @[];
+   }
+   UIAccessibilityCustomAction *copyAction =
 diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
 index 138435033005771ce0bb194f273316a5328e3057..1f4dc09df07134d34ce259ca59d3b158494f8886 100644
 --- a/ios/views/ENRMTableIOSGridView.m
@@ -1305,12 +1483,31 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0a
 +                linkLongPress,
 +              )
            }
--
++        } catch (e: Throwable) {
++          // Errors such as StackOverflowError would otherwise kill the process from this
++          // worker and skip the post below, leaving renderInFlight set forever.
++          Log.e(TAG, "Render failed", e)
++        }
+ 
 -          val ast =
 -            parser.parseMarkdown(renderableMarkdown, md4cFlags) ?: run {
 -              postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
 -              return@execute
--            }
++        mainHandler.post {
++          renderInFlight = false
++          if (!disposed) {
++            // Streamdown keys this view by the raw-source generation, remounting
++            // on replacement/clear. Within that lifetime remend may rewrite the
++            // suffix, so repaired-text prefix matching would starve progress.
++            // This serial worker preserves result order; status changes also
++            // invalidate jobs even when the Markdown itself did not change.
++            val compatibleStream =
++              isStreaming && streamingAnimation &&
++                markdownStyle === style && md4cFlags == flags &&
++                tableStreamingMode == tableMode && codeBlockStreamingMode == codeBlockMode
++            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {
++              applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock)
+             }
 -
 -          val segments = splitASTIntoSegments(ast)
 -          val renderedSegments =
@@ -1326,27 +1523,6 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0a
 -        } catch (e: Exception) {
 -          Log.e(TAG, "Render failed", e)
 -          postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
-+        } catch (e: Throwable) {
-+          // Errors such as StackOverflowError would otherwise kill the process from this
-+          // worker and skip the post below, leaving renderInFlight set forever.
-+          Log.e(TAG, "Render failed", e)
-+        }
-+
-+        mainHandler.post {
-+          renderInFlight = false
-+          if (!disposed) {
-+            // Streamdown keys this view by the raw-source generation, remounting
-+            // on replacement/clear. Within that lifetime remend may rewrite the
-+            // suffix, so repaired-text prefix matching would starve progress.
-+            // This serial worker preserves result order; status changes also
-+            // invalidate jobs even when the Markdown itself did not change.
-+            val compatibleStream =
-+              isStreaming && streamingAnimation &&
-+                markdownStyle === style && md4cFlags == flags &&
-+                tableStreamingMode == tableMode && codeBlockStreamingMode == codeBlockMode
-+            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {
-+              applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock)
-+            }
 +            if (renderRequested) scheduleRender()
 +          }
          }
@@ -1625,3 +1801,270 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b03
  }
  
  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt
+index 907389bf69f6efdcc603d1d076200493826eb714..d2a9335517c5b489d680452cab128add7c4d412b 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt
+@@ -16,6 +16,7 @@ data class CodeBlockStyle(
+   val borderWidth: Float,
+   val padding: Float,
+   val syntaxColors: List<Int>,
++  val externalControls: Boolean,
+ ) : BaseBlockStyle {
+   companion object {
+     private val SYNTAX_COLOR_KEYS =
+@@ -74,6 +75,7 @@ data class CodeBlockStyle(
+         borderWidth,
+         padding,
+         syntaxColors,
++        map.hasKey("externalControls") && map.getBoolean("externalControls"),
+       )
+     }
+   }
+diff --git a/ios/internals/MeasurementCache.h b/ios/internals/MeasurementCache.h
+index f5c671934a8fe489f51a15ea7568d8e8ad0b9bc3..75e8f57bdeb8ef367321597bd4f8999990840894 100644
+--- a/ios/internals/MeasurementCache.h
++++ b/ios/internals/MeasurementCache.h
+@@ -125,7 +125,7 @@ template <typename StyleStruct> inline size_t computeStyleFingerprint(const Styl
+   // Code & Inlines
+   hashFields(s.codeBlock.fontFamily, s.codeBlock.fontSize, s.codeBlock.fontWeight, s.codeBlock.marginTop,
+              s.codeBlock.marginBottom, s.codeBlock.lineHeight, s.codeBlock.padding, s.codeBlock.borderRadius,
+-             s.codeBlock.borderWidth);
++             s.codeBlock.borderWidth, s.codeBlock.externalControls);
+   hashFields(s.code.fontFamily, s.code.fontSize);
+   hashFields(s.link.fontFamily, s.strong.fontFamily, s.strong.fontWeight, s.em.fontFamily, s.em.fontStyle);
+   hashFields(s.highlight.backgroundColor, s.highlight.color);
+diff --git a/ios/styles/StyleConfig.h b/ios/styles/StyleConfig.h
+index 89ff9e9c834e1878d397555a71457ea787e9ab7f..98af4f29c14a0b0de2f6bc84379fbd3928288b35 100644
+--- a/ios/styles/StyleConfig.h
++++ b/ios/styles/StyleConfig.h
+@@ -291,6 +291,8 @@ NS_ASSUME_NONNULL_BEGIN
+ - (CGFloat)effectiveListMarginLeftForNumber;
+ - (CGFloat)effectiveListMarginLeftForTask;
+ // Code block properties
++- (BOOL)codeBlockExternalControls;
++- (void)setCodeBlockExternalControls:(BOOL)newValue;
+ - (CGFloat)codeBlockFontSize;
+ - (void)setCodeBlockFontSize:(CGFloat)newValue;
+ - (NSString *)codeBlockFontFamily;
+diff --git a/ios/styles/StyleConfig.mm b/ios/styles/StyleConfig.mm
+index cabaa087395a0336e69fc5521c73799e7c3fa63a..86778915faa8190e2c485d8655673a4ab59cf26c 100644
+--- a/ios/styles/StyleConfig.mm
++++ b/ios/styles/StyleConfig.mm
+@@ -181,6 +181,7 @@ @implementation StyleConfig {
+   ENRMFontSlot *_listMarkerFont;
+   ENRMFontSlot *_listStyleFont;
+   // Code block properties
++  BOOL _codeBlockExternalControls;
+   CGFloat _codeBlockFontSize;
+   NSString *_codeBlockFontFamily;
+   NSString *_codeBlockFontWeight;
+@@ -456,6 +457,7 @@ - (id)copyWithZone:(NSZone *)zone
+   copy->_listStyleGapWidth = _listStyleGapWidth;
+   copy->_listStyleMarginLeft = _listStyleMarginLeft;
+   copy->_listStyleItemSpacing = _listStyleItemSpacing;
++  copy->_codeBlockExternalControls = _codeBlockExternalControls;
+   copy->_codeBlockFontSize = _codeBlockFontSize;
+   copy->_codeBlockFontFamily = [_codeBlockFontFamily copy];
+   copy->_codeBlockFontWeight = [_codeBlockFontWeight copy];
+@@ -1977,6 +1979,16 @@ - (CGFloat)effectiveListMarginLeftForTask
+ }
+ 
+ // Code block properties
++- (BOOL)codeBlockExternalControls
++{
++  return _codeBlockExternalControls;
++}
++
++- (void)setCodeBlockExternalControls:(BOOL)newValue
++{
++  _codeBlockExternalControls = newValue;
++}
++
+ - (CGFloat)codeBlockFontSize
+ {
+   return _codeBlockFontSize;
+diff --git a/ios/utils/StylePropsUtils.h b/ios/utils/StylePropsUtils.h
+index 03c8db575c5145663d1756f4dfeb72b5653b572a..90d46d2d14ba2e5f0c2e7328f8a1b92de3711a79 100644
+--- a/ios/utils/StylePropsUtils.h
++++ b/ios/utils/StylePropsUtils.h
+@@ -822,6 +822,11 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
+ 
+   // ── Code Block ─────────────────────────────────────────────────────────────
+ 
++  if (newStyle.codeBlock.externalControls != oldStyle.codeBlock.externalControls) {
++    [config setCodeBlockExternalControls:newStyle.codeBlock.externalControls];
++    changed = YES;
++  }
++
+   if (newStyle.codeBlock.fontSize != oldStyle.codeBlock.fontSize) {
+     [config setCodeBlockFontSize:newStyle.codeBlock.fontSize];
+     changed = YES;
+diff --git a/lib/module/normalizeMarkdownStyle.js b/lib/module/normalizeMarkdownStyle.js
+index be187efd5af04e1fd70dc698ea016a0912a73b64..4e65f0302c45590ea2b49ef30c57f41359b44e11 100644
+--- a/lib/module/normalizeMarkdownStyle.js
++++ b/lib/module/normalizeMarkdownStyle.js
+@@ -173,6 +173,7 @@ const DEFAULT_NORMALIZED_STYLE = Object.freeze({
+     itemSpacing: 0
+   },
+   codeBlock: {
++    externalControls: false,
+     fontSize: 14,
+     fontFamily: getMonospaceFont(),
+     fontWeight: '',
+diff --git a/lib/module/normalizeMarkdownStyle.web.js b/lib/module/normalizeMarkdownStyle.web.js
+index 9bf1c941c7db7f8c8b24453217c147890c1fb7d8..fe4ee192cce38fc05111626ec1405e3f80501767 100644
+--- a/lib/module/normalizeMarkdownStyle.web.js
++++ b/lib/module/normalizeMarkdownStyle.web.js
+@@ -93,6 +93,7 @@ const DEFAULT_NORMALIZED_STYLE = Object.freeze({
+     itemSpacing: 0
+   },
+   codeBlock: {
++    externalControls: false,
+     fontSize: 14,
+     fontFamily: MONOSPACE_FONT,
+     fontWeight: '',
+diff --git a/lib/typescript/src/EnrichedMarkdownNativeComponent.d.ts b/lib/typescript/src/EnrichedMarkdownNativeComponent.d.ts
+index 173e01ccd18964e3454dae296a3fd2b654209eba..edf33a4d6cef6b414f9d6b6e734b5663d3d22a6e 100644
+--- a/lib/typescript/src/EnrichedMarkdownNativeComponent.d.ts
++++ b/lib/typescript/src/EnrichedMarkdownNativeComponent.d.ts
+@@ -49,6 +49,7 @@ interface CodeBlockSyntaxColorsInternal {
+     embedded: ColorValue;
+ }
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++    externalControls: boolean;
+     backgroundColor: ColorValue;
+     borderColor: ColorValue;
+     borderRadius: CodegenTypes.Float;
+diff --git a/lib/typescript/src/EnrichedMarkdownTextNativeComponent.d.ts b/lib/typescript/src/EnrichedMarkdownTextNativeComponent.d.ts
+index b13b5066153989f8a7d68391709ec29471d272da..f2e516e731ee5717e5ca280e950b8fbb78125b3b 100644
+--- a/lib/typescript/src/EnrichedMarkdownTextNativeComponent.d.ts
++++ b/lib/typescript/src/EnrichedMarkdownTextNativeComponent.d.ts
+@@ -49,6 +49,7 @@ interface CodeBlockSyntaxColorsInternal {
+     embedded: ColorValue;
+ }
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++    externalControls: boolean;
+     backgroundColor: ColorValue;
+     borderColor: ColorValue;
+     borderRadius: CodegenTypes.Float;
+diff --git a/lib/typescript/src/types/MarkdownStyle.d.ts b/lib/typescript/src/types/MarkdownStyle.d.ts
+index a8e1af2820c768cfca0ec4ef89b81b3c5e47c28a..1f6cc3cdd876e1e27bc881abd41cdd4d35b558ed 100644
+--- a/lib/typescript/src/types/MarkdownStyle.d.ts
++++ b/lib/typescript/src/types/MarkdownStyle.d.ts
+@@ -68,6 +68,8 @@ interface CodeBlockSyntaxColors {
+     embedded?: string;
+ }
+ interface CodeBlockStyle extends BaseBlockStyle {
++    /** The host owns the header and whole-code copy actions. */
++    externalControls?: boolean;
+     backgroundColor?: string;
+     borderColor?: string;
+     borderRadius?: number;
+diff --git a/lib/typescript/src/types/MarkdownStyleInternal.d.ts b/lib/typescript/src/types/MarkdownStyleInternal.d.ts
+index 1d30cb28e40e993c6dd57dfd885fb110081224e8..612c1bf752b6e7bb3144f4b2fe8185fd3e99c093 100644
+--- a/lib/typescript/src/types/MarkdownStyleInternal.d.ts
++++ b/lib/typescript/src/types/MarkdownStyleInternal.d.ts
+@@ -52,6 +52,7 @@ export interface CodeBlockSyntaxColorsInternal {
+     embedded: string;
+ }
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++    externalControls: boolean;
+     backgroundColor: string;
+     borderColor: string;
+     borderRadius: number;
+diff --git a/src/EnrichedMarkdownNativeComponent.ts b/src/EnrichedMarkdownNativeComponent.ts
+index e69c3644d90f3d1c0f89fd3b55d16496e73a9680..cf7910c4d022ea31997cd895b2d9c4374cbf7626 100644
+--- a/src/EnrichedMarkdownNativeComponent.ts
++++ b/src/EnrichedMarkdownNativeComponent.ts
+@@ -62,6 +62,7 @@ interface CodeBlockSyntaxColorsInternal {
+ }
+ 
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++  externalControls: boolean;
+   backgroundColor: ColorValue;
+   borderColor: ColorValue;
+   borderRadius: CodegenTypes.Float;
+diff --git a/src/EnrichedMarkdownTextNativeComponent.ts b/src/EnrichedMarkdownTextNativeComponent.ts
+index e011cfc77c26ddbe70a57fe9d08ed7006c032ed7..1a00236ade555d3c51a6f33ee5daa6d774c66349 100644
+--- a/src/EnrichedMarkdownTextNativeComponent.ts
++++ b/src/EnrichedMarkdownTextNativeComponent.ts
+@@ -62,6 +62,7 @@ interface CodeBlockSyntaxColorsInternal {
+ }
+ 
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++  externalControls: boolean;
+   backgroundColor: ColorValue;
+   borderColor: ColorValue;
+   borderRadius: CodegenTypes.Float;
+diff --git a/src/normalizeMarkdownStyle.ts b/src/normalizeMarkdownStyle.ts
+index 8c57c55b5440d4aea3fecd9b8881fc364ddefd43..941e5425ef3e8f1ec1d49abd44b68e3169ce4e63 100644
+--- a/src/normalizeMarkdownStyle.ts
++++ b/src/normalizeMarkdownStyle.ts
+@@ -164,6 +164,7 @@ const DEFAULT_NORMALIZED_STYLE = Object.freeze({
+     itemSpacing: 0,
+   },
+   codeBlock: {
++    externalControls: false,
+     fontSize: 14,
+     fontFamily: getMonospaceFont(),
+     fontWeight: '',
+diff --git a/src/normalizeMarkdownStyle.web.ts b/src/normalizeMarkdownStyle.web.ts
+index 73fe1eb54a38da21c6d8d2f363e63daef98e4139..a6577ae2a46d067975ffc58e5cfa376f4d724c26 100644
+--- a/src/normalizeMarkdownStyle.web.ts
++++ b/src/normalizeMarkdownStyle.web.ts
+@@ -113,6 +113,7 @@ const DEFAULT_NORMALIZED_STYLE: MarkdownStyleInternal = Object.freeze({
+     itemSpacing: 0,
+   },
+   codeBlock: {
++    externalControls: false,
+     fontSize: 14,
+     fontFamily: MONOSPACE_FONT,
+     fontWeight: '',
+diff --git a/src/types/MarkdownStyle.ts b/src/types/MarkdownStyle.ts
+index 11158ab1308d8761ab1c4296949751b5b5daa786..fa2823fc67d60888721da8ea59028dcf6dc89d48 100644
+--- a/src/types/MarkdownStyle.ts
++++ b/src/types/MarkdownStyle.ts
+@@ -76,6 +76,8 @@ interface CodeBlockSyntaxColors {
+ }
+ 
+ interface CodeBlockStyle extends BaseBlockStyle {
++  /** The host owns the header and whole-code copy actions. */
++  externalControls?: boolean;
+   backgroundColor?: string;
+   borderColor?: string;
+   borderRadius?: number;
+diff --git a/src/types/MarkdownStyleInternal.ts b/src/types/MarkdownStyleInternal.ts
+index 6be91c078323bba4b7b0ea3915df1952a6ac607c..998af58c79d6dbc3d94deaa808b36e3880021e32 100644
+--- a/src/types/MarkdownStyleInternal.ts
++++ b/src/types/MarkdownStyleInternal.ts
+@@ -75,6 +75,7 @@ export interface CodeBlockSyntaxColorsInternal {
+ }
+ 
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++  externalControls: boolean;
+   backgroundColor: string;
+   borderColor: string;
+   borderRadius: number;
+diff --git a/lib/module/EnrichedMarkdownNativeComponent.ts b/lib/module/EnrichedMarkdownNativeComponent.ts
+--- a/lib/module/EnrichedMarkdownNativeComponent.ts
++++ b/lib/module/EnrichedMarkdownNativeComponent.ts
+@@ -62,6 +62,7 @@
+ }
+ 
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++  externalControls: boolean;
+   backgroundColor: ColorValue;
+   borderColor: ColorValue;
+   borderRadius: CodegenTypes.Float;
+diff --git a/lib/module/EnrichedMarkdownTextNativeComponent.ts b/lib/module/EnrichedMarkdownTextNativeComponent.ts
+--- a/lib/module/EnrichedMarkdownTextNativeComponent.ts
++++ b/lib/module/EnrichedMarkdownTextNativeComponent.ts
+@@ -62,6 +62,7 @@
+ }
+ 
+ interface CodeBlockStyleInternal extends BaseBlockStyleInternal {
++  externalControls: boolean;
+   backgroundColor: ColorValue;
+   borderColor: ColorValue;
+   borderRadius: CodegenTypes.Float;

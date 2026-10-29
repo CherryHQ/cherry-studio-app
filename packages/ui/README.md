@@ -163,6 +163,19 @@ defaults:
 />;
 ```
 
+`CodeBlock` presents one complete standalone source with a title, optional language, and one copy
+action. It shares Markdown's native highlighting, theme, typography, and two-axis scroll viewport.
+It passes the original `code` to `onCopy`, retaining trailing newlines and text beyond the visible
+viewport; callers own clipboard writes, labels, and feedback. It never clips the source. The native
+adapter's `codeBlock.externalControls` mode removes its header, copy menus, and accessibility copy
+action so the shared accessible button is the sole whole-code copy owner. Ordinary Markdown code
+blocks keep their native controls. Native scroll recognition continues to own drags; standalone
+blocks do not install a competing text-selection or long-press copy action. This mode requires an
+updated development client. Mount large detail content only while its host is open.
+
+`createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` wraps raw source in a safe fence. It is a
+pure helper shared by code presentation, message copying/translation, and Agent input formatting.
+
 Streaming updates use the Desktop cadence at the chat-state owner: 100 ms for small
 messages, increasing with accumulated text length to at most 3 seconds. Terminal events
 publish immediately. The Streamdown dependency patch allows one repair job and one latest

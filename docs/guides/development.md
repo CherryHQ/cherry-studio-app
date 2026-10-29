@@ -43,8 +43,8 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.0.1.patch` is the app's largest dependency patch: 35
-files, about half native. Upstream is at 1.1.x and moved Table and Math views from `views/` to
+`patches/react-native-enriched-markdown@1.0.1.patch` includes native code and its matching JavaScript,
+TypeScript, and generated prop definitions. Upstream is at 1.1.x and moved Table and Math views from `views/` to
 `segments/`, so an upgrade re-ports every native block below and needs a native rebuild with
 iOS/Android device acceptance of paste, undo, selection, and accessibility. Keep this table current
 when a block is added or retired; a block leaves when upstream ships an equivalent.
@@ -62,6 +62,7 @@ when a block is added or retired; a block leaves when upstream ships an equivale
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
 | Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
 | Code block 192 pt viewport, header and divider (gesture arbitration part is a fix) | Product customization | #606 | Not upstream | Never, unless the design changes |
+| Standalone code block external controls (style, generated props, layout/cache, menus and accessibility) | Product customization | CherryUI `CodeBlock` | Not upstream | Upstream supports caller-owned code-block controls without changing scrolling |
 | Table scrollbar that does not fade | Product customization | #606 | Not upstream | Never, unless the design changes |
 | Generic `linkVariantUtils`, `!TARGET_OS_OSX` guard | Build compatibility | #606 | Not upstream | Upstream builds without them |
 

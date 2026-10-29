@@ -604,7 +604,6 @@
   "chat.tool.noOutput": "Sem saída",
   "chat.tool.output": "Saída",
   "chat.tool.preparingInput": "A preparar entrada",
-  "chat.tool.previewTruncated": "Visualização limitada a {{count}} caracteres. Copie para ler o texto completo.",
   "chat.tool.response": "resposta",
   "chat.tool.result": "Resultado",
   "chat.tool.runDenied": "Execução negada",

@@ -1,7 +1,7 @@
+import { createCodeBlockMarkdown } from '@cherrystudio/ui/markdown';
+
 import type { AgentMessagePart } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
-
-import { createCodeBlockMarkdown } from './createCodeBlockMarkdown';
 
 /** Only answer text and code belong to the translation source. */
 export function messageTranslationText(

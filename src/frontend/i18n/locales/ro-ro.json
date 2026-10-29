@@ -604,7 +604,6 @@
   "chat.tool.noOutput": "Nicio ieșire",
   "chat.tool.output": "Ieșire",
   "chat.tool.preparingInput": "Se pregătește intrarea",
-  "chat.tool.previewTruncated": "Previzualizare limitată la {{count}} caractere. Copiați pentru a citi textul integral.",
   "chat.tool.response": "Răspuns",
   "chat.tool.result": "Rezultat",
   "chat.tool.runDenied": "Executare refuzată",

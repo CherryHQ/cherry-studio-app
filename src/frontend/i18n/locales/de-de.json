@@ -598,7 +598,6 @@
   "chat.tool.noOutput": "Keine Ausgabe",
   "chat.tool.output": "Ausgabe",
   "chat.tool.preparingInput": "Eingabe wird vorbereitet",
-  "chat.tool.previewTruncated": "Vorschau auf {{count}} Zeichen beschränkt. Kopieren Sie, um den vollständigen Text zu lesen.",
   "chat.tool.response": "Antwort",
   "chat.tool.result": "Ergebnis",
   "chat.tool.runDenied": "Ausführung verweigert",
