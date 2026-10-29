@@ -543,7 +543,6 @@
   "chat.queue.message": "Сообщение",
   "chat.queue.remove": "Убрать сообщение {{position}} из очереди",
   "chat.queue.removeFailed": "Не удалось убрать сообщение из очереди.",
-  "chat.queue.title": "Сообщения в очереди",
   "chat.quote.action": "Цитировать",
   "chat.quote.assistant": "Ассистент",
   "chat.quote.line": "{{author}}: {{text}}",

@@ -11,14 +11,10 @@ import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
 
 export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   const inputs = useAgentQueuedInputs(sessionId);
-  const { t } = useTranslation();
   if (!sessionId || inputs.length === 0) return null;
   return (
     <Surface testID="chat-input-queue">
-      <View className="gap-1 py-2 pl-4 pr-2">
-        <Text accessibilityRole="header" className="text-xs font-medium text-muted-foreground">
-          {t('chat.queue.title')} <Text className="tabular-nums">{inputs.length}</Text>
-        </Text>
+      <View className="py-1 pl-4 pr-2">
         {/* Native scrolling owns drags; only each remove button is a tap target. */}
         <ScrollView className="max-h-40" keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           {inputs.map((input, index) => (
@@ -76,7 +72,11 @@ function QueuedInputRow({
   };
   return (
     <View className="min-h-10 flex-row items-center gap-2">
-      <View className="min-w-0 flex-1">
+      {/* Sending order: the first row is the next to run. */}
+      <Text className="min-w-3 self-start py-2.5 text-sm tabular-nums text-muted-foreground">
+        {position}
+      </Text>
+      <View className="min-w-0 flex-1 py-2.5">
         <Text className="text-sm text-foreground" numberOfLines={1}>
           {text || attachments || t('chat.queue.message')}
         </Text>

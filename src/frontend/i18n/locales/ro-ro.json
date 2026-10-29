@@ -538,7 +538,6 @@
   "chat.queue.message": "Mesaj",
   "chat.queue.remove": "Elimină mesajul {{position}} din coadă",
   "chat.queue.removeFailed": "Mesajul nu a putut fi eliminat din coadă.",
-  "chat.queue.title": "Mesaje în așteptare",
   "chat.quote.action": "Citează",
   "chat.quote.assistant": "Asistent",
   "chat.quote.line": "{{author}}: {{text}}",

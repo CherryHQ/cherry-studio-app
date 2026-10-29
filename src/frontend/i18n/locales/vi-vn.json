@@ -528,7 +528,6 @@
   "chat.queue.message": "Tin nhắn",
   "chat.queue.remove": "Xóa tin nhắn thứ {{position}} khỏi hàng đợi",
   "chat.queue.removeFailed": "Không thể xóa tin nhắn khỏi hàng đợi.",
-  "chat.queue.title": "Tin nhắn trong hàng đợi",
   "chat.quote.action": "Trích dẫn",
   "chat.quote.assistant": "Trợ lý",
   "chat.quote.line": "{{author}}: {{text}}",

@@ -538,7 +538,6 @@
   "chat.queue.message": "Mensagem",
   "chat.queue.remove": "Remover a mensagem {{position}} da fila",
   "chat.queue.removeFailed": "Não foi possível remover a mensagem da fila.",
-  "chat.queue.title": "Mensagens na fila",
   "chat.quote.action": "Citar",
   "chat.quote.assistant": "Assistente",
   "chat.quote.line": "{{author}}: {{text}}",

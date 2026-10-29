@@ -528,7 +528,6 @@
   "chat.queue.message": "消息",
   "chat.queue.remove": "移除第 {{position}} 条排队消息",
   "chat.queue.removeFailed": "无法移除排队消息。",
-  "chat.queue.title": "排队消息",
   "chat.quote.action": "引用",
   "chat.quote.assistant": "助手",
   "chat.quote.line": "{{author}}：{{text}}",

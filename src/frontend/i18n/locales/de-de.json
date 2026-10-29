@@ -533,7 +533,6 @@
   "chat.queue.message": "Nachricht",
   "chat.queue.remove": "Nachricht {{position}} aus der Warteschlange entfernen",
   "chat.queue.removeFailed": "Die Nachricht konnte nicht aus der Warteschlange entfernt werden.",
-  "chat.queue.title": "Nachrichten in der Warteschlange",
   "chat.quote.action": "Zitieren",
   "chat.quote.assistant": "Assistent",
   "chat.quote.line": "{{author}}: {{text}}",

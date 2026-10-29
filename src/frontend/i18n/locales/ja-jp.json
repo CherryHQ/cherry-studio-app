@@ -528,7 +528,6 @@
   "chat.queue.message": "メッセージ",
   "chat.queue.remove": "待機中のメッセージ {{position}} を削除",
   "chat.queue.removeFailed": "待機中のメッセージを削除できませんでした。",
-  "chat.queue.title": "待機中のメッセージ",
   "chat.quote.action": "引用",
   "chat.quote.assistant": "アシスタント",
   "chat.quote.line": "{{author}}：{{text}}",
