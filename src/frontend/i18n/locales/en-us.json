@@ -535,7 +535,6 @@
   "chat.queue.removeFailed": "Couldn't remove the queued message.",
   "chat.queue.title": "Queued messages",
   "chat.quote.assistant": "Assistant",
-  "chat.quote.checking": "Checking quoted message…",
   "chat.quote.open": "Open quoted message",
   "chat.quote.remove": "Remove quote",
   "chat.quote.reply": "Reply",

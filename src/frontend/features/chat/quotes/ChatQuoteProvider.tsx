@@ -1,3 +1,4 @@
+import { useToast } from '@cherrystudio/ui/components';
 import {
   type PropsWithChildren,
   useCallback,
@@ -7,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { v7 as uuidv7 } from 'uuid';
 
 import { useComposerMeta } from '@/frontend/components/Composer';
@@ -44,6 +46,8 @@ export function ChatQuoteProvider({
   const api = useApiClient();
   const { client } = useAgentChatClient();
   const { inputRef } = useComposerMeta();
+  const { toast } = useToast();
+  const { t } = useTranslation();
   const [state, setState] = useState<QuoteState>({ fields: {}, isBusy: false });
   const current = useRef(state);
   const mounted = useRef(true);
@@ -79,7 +83,7 @@ export function ChatQuoteProvider({
       const scope = latest.current;
       if (locked.current || !scope.enabled || !scope.sessionId) return;
       const request = ++generation.current;
-      update({ ...current.current, isBusy: true, failure: undefined });
+      update({ ...current.current, isBusy: true });
       try {
         const source = await readChatQuoteSource(api, client, scope.sessionId, messageId);
         if (
@@ -90,7 +94,8 @@ export function ChatQuoteProvider({
           return;
         const text = source && messageQuoteSnapshot(source);
         if (!source || !text || (source.role !== 'user' && source.role !== 'assistant')) {
-          update({ ...current.current, isBusy: false, failure: 'unavailable' });
+          update({ ...current.current, isBusy: false });
+          toast.show({ label: t('chat.quote.unavailable') });
           return;
         }
         update({
@@ -112,11 +117,13 @@ export function ChatQuoteProvider({
             inputRef.current?.focus();
         });
       } catch {
-        if (mounted.current && request === generation.current)
-          update({ ...current.current, isBusy: false, failure: 'retryable' });
+        if (mounted.current && request === generation.current) {
+          update({ ...current.current, isBusy: false });
+          toast.show({ label: t('chat.quote.retryable'), variant: 'danger' });
+        }
       }
     },
-    [api, client, inputRef, update],
+    [api, client, inputRef, t, toast, update],
   );
   const capture = useCallback((): QuoteAttempt => {
     if (locked.current || current.current.isBusy)

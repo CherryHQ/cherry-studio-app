@@ -17,9 +17,15 @@ import {
 type UserMessageProps = {
   attachments?: ReactNode;
   message: MessageListItem;
+  /** The message this one replies to, above everything it carries. */
+  quote?: ReactNode;
 };
 
-export const UserMessage = memo(function UserMessage({ attachments, message }: UserMessageProps) {
+export const UserMessage = memo(function UserMessage({
+  attachments,
+  message,
+  quote,
+}: UserMessageProps) {
   const { t } = useTranslation();
   const { attachments: fileParts, bodyMessage } = useMemo(
     () => partitionUserMessageParts(message),
@@ -31,6 +37,7 @@ export const UserMessage = memo(function UserMessage({ attachments, message }: U
   return (
     <View className="w-full items-end">
       <View className="w-[88%] items-end gap-2">
+        {quote}
         {attachments || fileParts.length > 0 ? (
           <UserMessageAttachments>
             {attachments ?? fileParts.map(({ part }) => <FilePart key={part.url} part={part} />)}

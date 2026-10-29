@@ -19,6 +19,9 @@ jest.mock('../../../../quotes/ChatQuoteContext', () => ({
       : undefined,
   useChatQuoteHighlight: () => undefined,
 }));
+jest.mock('../../../../quotes/MessageQuoteHighlight', () => ({
+  MessageQuoteHighlight: () => null,
+}));
 
 const mockLocalUsage = jest.fn(() => null);
 

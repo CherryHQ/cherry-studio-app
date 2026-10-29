@@ -14,7 +14,8 @@ import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
-import { useChatQuoteActions, useChatQuoteHighlight } from '../../../quotes/ChatQuoteContext';
+import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
+import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
 import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
@@ -206,7 +207,6 @@ export const ChatMessage = memo(function ChatMessage({
   accessories,
   renderUsage,
 }: ChatMessageProps) {
-  const highlight = useChatQuoteHighlight();
   const quotePart = message.data.parts?.find(
     (part) => part.type === 'text' && readCherryMeta(part)?.quotes,
   );
@@ -215,8 +215,11 @@ export const ChatMessage = memo(function ChatMessage({
   const content =
     message.role === 'user' ? (
       <View className="gap-2">
-        {quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : null}
-        <UserMessage attachments={attachments} message={message} />
+        <UserMessage
+          attachments={attachments}
+          message={message}
+          quote={quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : undefined}
+        />
         {accessories}
       </View>
     ) : (
@@ -230,10 +233,8 @@ export const ChatMessage = memo(function ChatMessage({
     );
 
   return (
-    <View
-      className={`w-full gap-3 ${highlight === message.id ? 'bg-secondary' : ''}`}
-      testID={`chat-message-${message.id}`}
-    >
+    <View className="w-full gap-3" testID={`chat-message-${message.id}`}>
+      <MessageQuoteHighlight messageId={message.id} />
       {createdAt ? (
         <Text
           className="text-center font-mono text-muted-foreground text-xs"

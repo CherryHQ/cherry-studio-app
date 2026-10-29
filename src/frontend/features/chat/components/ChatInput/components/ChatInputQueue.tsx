@@ -83,16 +83,20 @@ function QueuedInputRow({
       <Text className="min-w-4 text-center text-xs tabular-nums text-muted-foreground">
         {position}
       </Text>
-      <View className="min-w-0 flex-1">
-        {quote?.type === 'text' && quote.quotes ? <MessageQuotePreview fields={quote} /> : null}
-        <Text className="text-sm text-foreground" numberOfLines={1}>
-          {text || attachments || t('chat.queue.message')}
-        </Text>
-        {text && attachments ? (
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-            {attachments}
-          </Text>
+      <View className="min-w-0 flex-1 gap-1">
+        {quote?.type === 'text' && quote.quotes ? (
+          <MessageQuotePreview fields={quote} numberOfLines={1} />
         ) : null}
+        <View>
+          <Text className="text-sm text-foreground" numberOfLines={1}>
+            {text || attachments || t('chat.queue.message')}
+          </Text>
+          {text && attachments ? (
+            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              {attachments}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <Button
         accessibilityLabel={t('chat.queue.remove', { position })}

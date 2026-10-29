@@ -1,4 +1,6 @@
-import { buildSearchSnippet, stripMarkdownFormatting, toSearchableText } from '../searchSnippet';
+import { stripMarkdownFormatting } from '@/shared/utils/markdownFormatting';
+
+import { buildSearchSnippet, toSearchableText } from '../searchSnippet';
 
 describe('searchable message text', () => {
   test.each([

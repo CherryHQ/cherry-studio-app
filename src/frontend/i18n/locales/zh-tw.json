@@ -530,7 +530,6 @@
   "chat.queue.removeFailed": "無法移除排隊訊息。",
   "chat.queue.title": "排隊訊息",
   "chat.quote.assistant": "助理",
-  "chat.quote.checking": "正在檢查引用訊息…",
   "chat.quote.open": "開啟引用訊息",
   "chat.quote.remove": "移除引用",
   "chat.quote.reply": "回覆",

@@ -15,11 +15,7 @@ export type ChatQuoteActions = {
   capture: () => QuoteAttempt;
   canReply: (message: MessageListItem) => boolean;
 };
-export type QuoteState = {
-  fields: QuoteFields;
-  isBusy: boolean;
-  failure?: 'unavailable' | 'retryable';
-};
+export type QuoteState = { fields: QuoteFields; isBusy: boolean };
 export const Actions = createContext<ChatQuoteActions | undefined>(undefined);
 export const State = createContext<QuoteState>({ fields: {}, isBusy: false });
 export const Highlight = createContext<string | undefined>(undefined);

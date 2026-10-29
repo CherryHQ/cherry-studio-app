@@ -1,129 +1,100 @@
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import {
   BackgroundPressExclusion,
   Button,
+  Composer,
   ContextMenuExclusion,
+  useToast,
 } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
 import type { QuoteFields } from '@/shared/contracts/agent';
+import { stripMarkdownFormatting } from '@/shared/utils/markdownFormatting';
 
 import { useChatQuoteActions, useChatQuoteState } from './ChatQuoteContext';
 
+/** The quote waiting in the composer, in the attachment row's place above the field. */
 export function DraftMessageQuotePreview() {
-  const state = useChatQuoteState();
+  const { fields, isBusy } = useChatQuoteState();
   const actions = useChatQuoteActions();
   const { t } = useTranslation();
-  if (!state.fields.quotes)
-    return state.isBusy || state.failure ? (
-      <Text
-        accessibilityRole="text"
-        accessibilityLabel={t(
-          state.isBusy
-            ? 'chat.quote.checking'
-            : state.failure === 'unavailable'
-              ? 'chat.quote.unavailable'
-              : 'chat.quote.retryable',
-        )}
-        className="text-muted-foreground text-sm"
-      >
-        {t(
-          state.isBusy
-            ? 'chat.quote.checking'
-            : state.failure === 'unavailable'
-              ? 'chat.quote.unavailable'
-              : 'chat.quote.retryable',
-        )}
-      </Text>
-    ) : null;
   return (
-    <View className="gap-1">
-      <MessageQuotePreview
-        key={state.fields.quotes[0].id}
-        fields={state.fields}
-        isBusy={state.isBusy}
-        onRemove={actions?.clearQuote}
-      />
-      {state.failure ? (
-        <Text accessibilityRole="text" className="text-muted-foreground text-sm">
-          {t(state.failure === 'unavailable' ? 'chat.quote.unavailable' : 'chat.quote.retryable')}
-        </Text>
+    <Composer.Collapsible style={draftRowStyle}>
+      {fields.quotes ? (
+        <View className="flex-row items-center gap-2">
+          <View className="min-w-0 flex-1">
+            <MessageQuotePreview key={fields.quotes[0].id} fields={fields} />
+          </View>
+          <Button
+            accessibilityLabel={t('chat.quote.remove')}
+            disabled={isBusy}
+            icon={<XIcon className="text-muted-foreground" />}
+            onPress={actions?.clearQuote}
+            shape="pill"
+            size="xs"
+            variant="ghost"
+          />
+        </View>
       ) : null}
-    </View>
+    </Composer.Collapsible>
   );
 }
 
+/** A quiet reference to the quoted message; pressing it scrolls the transcript to the source. */
 export function MessageQuotePreview({
   fields,
-  isBusy = false,
-  onRemove,
+  numberOfLines = 2,
 }: {
   fields: QuoteFields;
-  isBusy?: boolean;
-  onRemove?: () => void;
+  numberOfLines?: number;
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const actions = useChatQuoteActions();
-  const [status, setStatus] = useState<'idle' | 'checking' | 'unavailable' | 'retryable'>('idle');
+  const [isOpening, setIsOpening] = useState(false);
   const quote = fields.quotes?.[0];
   if (!quote || !fields.quoteAuthor) return null;
   const author =
     fields.quoteAuthor.name ??
     t(fields.quoteAuthor.role === 'user' ? 'chat.quote.you' : 'chat.quote.assistant');
-  const busy = isBusy || status === 'checking';
-  const label = t(
-    status === 'unavailable'
-      ? 'chat.quote.unavailable'
-      : status === 'retryable'
-        ? 'chat.quote.retryable'
-        : 'chat.quote.open',
-  );
-  const open = async () => {
-    if (!actions || busy) return;
-    setStatus('checking');
-    const result = await actions.openQuote({
-      sourceMessageId: quote.sourceMessageId,
-      requestId: uuidv7(),
-    });
-    setStatus(
-      result.state === 'unavailable' || result.state === 'retryable' ? result.state : 'idle',
-    );
-  };
+  const excerpt = stripMarkdownFormatting(quote.text).replace(/\s+/g, ' ').trim();
+  const open = actions
+    ? async () => {
+        setIsOpening(true);
+        const result = await actions.openQuote({
+          sourceMessageId: quote.sourceMessageId,
+          requestId: uuidv7(),
+        });
+        setIsOpening(false);
+        if (result.state === 'unavailable') toast.show({ label: t('chat.quote.unavailable') });
+        else if (result.state === 'retryable')
+          toast.show({ label: t('chat.quote.retryable'), variant: 'danger' });
+      }
+    : undefined;
   return (
     <BackgroundPressExclusion>
-      <ContextMenuExclusion className="w-full flex-row items-start gap-2 rounded-md border-l-2 border-border-selected bg-secondary px-3 py-2">
-        <View className="min-w-0 flex-1 gap-1">
-          <Text className="font-medium text-foreground text-sm">{author}</Text>
-          <Text className="text-muted-foreground text-sm" numberOfLines={3}>
-            {quote.text}
+      <ContextMenuExclusion className="min-w-0 shrink">
+        <Pressable
+          accessibilityHint={open ? t('chat.quote.open') : undefined}
+          accessibilityLabel={`${author}: ${excerpt}`}
+          accessibilityRole={open ? 'button' : 'text'}
+          accessibilityState={{ busy: isOpening }}
+          className="min-w-0 gap-0.5 border-l-2 border-border pl-2.5 active:opacity-70"
+          disabled={!open || isOpening}
+          onPress={() => void open?.()}
+        >
+          <Text className="font-medium text-muted-foreground text-xs">{author}</Text>
+          <Text className="text-muted-foreground text-sm" numberOfLines={numberOfLines}>
+            {excerpt}
           </Text>
-          <Button
-            accessibilityLabel={label}
-            accessibilityRole="button"
-            disabled={busy || !actions || status === 'unavailable'}
-            loading={busy}
-            onPress={() => void open()}
-            size="xs"
-            variant="ghost"
-          >
-            {label}
-          </Button>
-        </View>
-        {onRemove ? (
-          <Button
-            accessibilityLabel={t('chat.quote.remove')}
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={onRemove}
-            size="xs"
-            variant="ghost"
-          >
-            {t('chat.quote.remove')}
-          </Button>
-        ) : null}
+        </Pressable>
       </ContextMenuExclusion>
     </BackgroundPressExclusion>
   );
 }
+
+// Matches the attachment row: flush with the field's text, the composer's rhythm below it.
+const draftRowStyle = { paddingBottom: 8, paddingTop: 2 } as const;

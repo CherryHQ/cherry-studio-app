@@ -1,7 +1,7 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
 import { Button, Composer } from '@cherrystudio/ui/components';
-import { useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -59,6 +59,8 @@ type PaintingModelSelection = {
 };
 
 type PaintingInputProps = {
+  /** Chat presentation only: context the prompt carries, shown above everything else. */
+  accessory?: ReactNode;
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
   initialParamValues?: ImageParamDraft;
@@ -83,6 +85,7 @@ export function PaintingWorkspaceInput(
 }
 
 function PaintingInputControls({
+  accessory,
   canSend,
   dismissKeyboardOnSend,
   initialParamValues,
@@ -185,6 +188,7 @@ function PaintingInputControls({
         </PaintingWorkspaceEditor>
       ) : (
         <>
+          {accessory}
           {isReferenceVisible && reference.isPickerOpen && strategy.acceptsImages ? (
             <PaintingReferencePicker reference={reference} />
           ) : null}

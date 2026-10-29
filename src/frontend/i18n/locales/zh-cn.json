@@ -530,7 +530,6 @@
   "chat.queue.removeFailed": "无法移除排队消息。",
   "chat.queue.title": "排队消息",
   "chat.quote.assistant": "助手",
-  "chat.quote.checking": "正在检查引用消息…",
   "chat.quote.open": "打开引用消息",
   "chat.quote.remove": "移除引用",
   "chat.quote.reply": "回复",

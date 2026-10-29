@@ -530,7 +530,6 @@
   "chat.queue.removeFailed": "待機中のメッセージを削除できませんでした。",
   "chat.queue.title": "待機中のメッセージ",
   "chat.quote.assistant": "アシスタント",
-  "chat.quote.checking": "引用元のメッセージを確認中…",
   "chat.quote.open": "引用元のメッセージを開く",
   "chat.quote.remove": "引用を削除",
   "chat.quote.reply": "返信",

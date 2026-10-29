@@ -193,13 +193,13 @@ export function ChatInput({
     <PaintingInputProvider result={latestImageResult}>
       <View className="gap-2">
         <ChatInputQueue sessionId={sessionId} />
-        <DraftMessageQuotePreview />
         {mode === 'standard' &&
         !replyModels &&
         selectedModelItem &&
         isImageGenerationModel(selectedModelItem.model) &&
         !skillAction ? (
           <PaintingInput
+            accessory={<DraftMessageQuotePreview />}
             canSend={canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             modelSelection={modelSelection}
@@ -454,6 +454,7 @@ function TextChatInput({
                         pointerEvents={isPickerVisible ? 'none' : 'auto'}
                         style={isPickerVisible ? foldedAttachmentsStyle : undefined}
                       >
+                        <DraftMessageQuotePreview />
                         <ComposerAttachments />
                         {mode === 'standard' ? <McpAppContextNotice /> : null}
                       </View>

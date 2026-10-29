@@ -15,6 +15,11 @@ jest.mock('../../runtime/ChatProvider', () => ({ useAgentChatClient: () => mockC
 const mockMeta = { inputRef: { current: { focus: mockFocus } } };
 jest.mock('@/frontend/data', () => ({ useApiClient: () => mockApi }));
 jest.mock('@/frontend/components/Composer', () => ({ useComposerMeta: () => mockMeta }));
+const mockToast = jest.fn();
+jest.mock('@cherrystudio/ui/components', () => ({
+  useToast: () => ({ toast: { show: mockToast } }),
+}));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 const source = {
   id: '00000000-0000-7000-8000-000000000001',
   sessionId: 'A',
@@ -204,4 +209,22 @@ test('Reply uses the public focus handle on the next frame and rejects incomplet
   } finally {
     raf.mockRestore();
   }
+});
+test('a Reply whose source cannot be read reports through a toast and leaves the draft unquoted', async () => {
+  mockToast.mockClear();
+  await act(async () => {
+    renderer = create(tree('A'));
+  });
+  mockGet.mockRejectedValueOnce(new Error('offline'));
+  await act(async () => {
+    await actions.replyToMessage({ messageId: source.id });
+  });
+  expect(mockToast).toHaveBeenCalledWith({ label: 'chat.quote.retryable', variant: 'danger' });
+  mockGet.mockResolvedValueOnce({ items: [] });
+  await act(async () => {
+    await actions.replyToMessage({ messageId: source.id });
+  });
+  expect(mockToast).toHaveBeenLastCalledWith({ label: 'chat.quote.unavailable' });
+  expect(state).toEqual({ fields: {}, isBusy: false });
+  expect(mockFocus).not.toHaveBeenCalled();
 });
