@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
+import { PolicyDeletable, withResourcePolicy } from '@/frontend/components/Policy';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import {
@@ -34,7 +36,7 @@ export default function ProviderModelScreen() {
  * The model's avatar, name, provider and purpose, then its settings, changed in place and saved immediately, with
  * the same rows the add-model screen uses. The model ID leads those rows.
  */
-function ModelDetails({ model, provider }: { model: Model; provider: Provider }) {
+function ModelDetailsView({ model, provider }: { model: Model; provider: Provider }) {
   const { t } = useTranslation();
   const router = useRouter();
   const settings = useSavedModelSettings(model, provider);
@@ -75,16 +77,23 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
 
       <ProviderModelSettings value={settings} />
 
-      <Section>
-        <Section.Item
-          destructive
-          disabled={management.isDeleting}
-          label={t('settings.provider.models.detail.delete')}
-          onPress={() => management.requestDelete([model])}
-          showChevron={false}
-          testID="model-delete"
-        />
-      </Section>
+      <PolicyDeletable>
+        <Section>
+          <Section.Item
+            destructive
+            disabled={management.isDeleting}
+            label={t('settings.provider.models.detail.delete')}
+            onPress={() => management.requestDelete([model])}
+            showChevron={false}
+            testID="model-delete"
+          />
+        </Section>
+      </PolicyDeletable>
     </SettingsScrollPage>
   );
 }
+
+/** An organization's models open read-only. */
+const ModelDetails = withResourcePolicy(ModelDetailsView, () =>
+  capabilityPolicy('providerSettings'),
+);

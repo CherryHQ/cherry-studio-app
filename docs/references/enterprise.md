@@ -208,7 +208,9 @@ its previously installed row; it is not treated as server deletion. An unsupport
 its definition and history, while bindings absent from its validated setup are removed even when
 other Agents still receive those resources. An invalid configuration identity inventory rejects the
 snapshot. Unsupported items are logged: unknown provider types,
-endpoints or capabilities, non-HTTP MCP transports, and Agents without a usable model. As on the
+endpoints or capabilities, non-HTTP MCP transports, and Agents without a usable model. A model
+the server lists with capabilities keeps exactly those; one listed without them takes the model
+registry's, and the next sync after a catalog download rewrites them. As on the
 desktop, an Agent's default model is its primary model (or, when that is unusable, its first usable
 pool model) and its allowed models are the sorted usable pool including the default. Plan/small models and turn limits are ignored. Any permission mode
 other than bypass

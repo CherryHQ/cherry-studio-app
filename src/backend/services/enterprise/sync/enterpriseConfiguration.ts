@@ -1,5 +1,6 @@
 import * as z from 'zod';
 
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { normalizeEnterpriseAddress } from '@/shared/contracts/account';
 import type { EnterpriseDefaultModels } from '@/shared/data/preference';
 import {
@@ -337,9 +338,11 @@ function parseProvider(
     );
     for (const endpoint of endpointTypes) endpoints.add(endpoint);
     const capabilities = new Set<ModelCapability>(
-      (model.capabilities ?? []).flatMap((value) =>
-        Object.hasOwn(CAPABILITIES, value) ? [CAPABILITIES[value]!] : [],
-      ),
+      model.capabilities == null
+        ? registryCapabilities(presetProviderId, provider.provider_id, model.id)
+        : model.capabilities.flatMap((value) =>
+            Object.hasOwn(CAPABILITIES, value) ? [CAPABILITIES[value]!] : [],
+          ),
     );
     for (const endpoint of endpointTypes) {
       const implied = endpointImpliedCapability(endpoint);
@@ -445,6 +448,22 @@ function httpAddress(value: string, keepQuery = false): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * As on the desktop, a model the server lists without capabilities takes the registry's. Before
+ * the catalog is downloaded it has none; the next sync sees the difference and rewrites them.
+ */
+function registryCapabilities(
+  presetProviderId: string,
+  providerId: string,
+  modelId: string,
+): ModelCapability[] {
+  if (!providerRegistryService.isReady()) return [];
+  const suffix = `@${providerId}`;
+  const registryId = modelId.endsWith(suffix) ? modelId.slice(0, -suffix.length) : modelId;
+  const [model] = providerRegistryService.resolveModels(presetProviderId, [registryId]);
+  return model?.capabilities ?? [];
 }
 
 /** The enterprise gateway addresses models as `<model>@<provider>`. */

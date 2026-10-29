@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
+import { PolicySelectItem, withPolicy } from '@/frontend/components/Policy';
+
 import { ProviderValueSheet } from '../../../components/ProviderValueSheet';
 import type { ProviderModelAddEndpoint } from '../../utils/providerModelAdd';
 import {
@@ -34,9 +36,16 @@ const LIMIT_FIELDS: readonly ProviderModelLimitField[] = [
 
 /**
  * A model's settings as rows, shared by model details and adding a model. Switches change in
- * place; names, limits, notes and pricing open a sheet that edits a copy until Save.
+ * place; names, limits, notes and pricing open a sheet that edits a copy until Save. Read-only
+ * rows show the same values without opening anything.
  */
-export function ProviderModelSettings({ value }: { value: ProviderModelSettingsValue }) {
+function ModelSettings({
+  readOnly = false,
+  value,
+}: {
+  readOnly?: boolean;
+  value: ProviderModelSettingsValue;
+}) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { actions, capabilities, disabled } = value;
@@ -107,8 +116,8 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
         disabled={disabled}
         key={field}
         label={fieldLabel(field)}
-        onPress={() => openText(field)}
-        showChevron
+        onPress={readOnly ? undefined : () => openText(field)}
+        showChevron={!readOnly}
         testID={`model-setting-${field}`}
         trailing={
           shown ? (
@@ -167,7 +176,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
           value={value.primaryType}
         />
         {!isVoiceModel ? (
-          <Section.SelectItem
+          <PolicySelectItem
             accessibilityLabel={`${t('settings.provider.models.addEndpointTypeLabel')}, ${value.endpoint.label}`}
             description={
               value.endpoint.error ? (
@@ -175,6 +184,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
               ) : undefined
             }
             disabled={disabled || value.endpoint.disabled}
+            field="model"
             label={t('settings.provider.models.addEndpointTypeLabel')}
             onPress={() => {
               Keyboard.dismiss();
@@ -194,6 +204,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
                 key={capability}
                 label={t(`settings.provider.models.classification.${capability}`)}
                 onValueChange={(selected) => actions.setCapability(capability, selected)}
+                readOnly={readOnly}
                 value={capabilities[capability]}
               />
             ))}
@@ -201,6 +212,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
               disabled={disabled}
               label={t('settings.provider.models.supportsStreaming')}
               onValueChange={actions.setSupportsStreaming}
+              readOnly={readOnly}
               value={value.supportsStreaming}
             />
           </Section>
@@ -218,6 +230,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
                       : `settings.provider.models.classification.${capability}`,
                   )}
                   onValueChange={(selected) => actions.setCapability(capability, selected)}
+                  readOnly={readOnly}
                   value={capabilities[capability] || isFixed}
                 />
               );
@@ -236,11 +249,15 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
         <Section.Item
           disabled={disabled}
           label={t('settings.provider.models.pricing.title')}
-          onPress={() => {
-            Keyboard.dismiss();
-            setPricingEdit({ draft: pricing, open: true });
-          }}
-          showChevron
+          onPress={
+            readOnly
+              ? undefined
+              : () => {
+                  Keyboard.dismiss();
+                  setPricingEdit({ draft: pricing, open: true });
+                }
+          }
+          showChevron={!readOnly}
           testID="model-setting-pricing"
           trailing={
             <Text
@@ -340,6 +357,11 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
     </>
   );
 }
+
+/** An organization's model shows its settings read-only. */
+export const ProviderModelSettings = withPolicy(ModelSettings, (policy) => ({
+  readOnly: !policy.canEdit('model'),
+}));
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },

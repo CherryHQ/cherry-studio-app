@@ -31,7 +31,8 @@ This page branch owns the `/settings/provider` list and its child pages.
 
 In an enterprise profile the organization configures every provider and model. The list hides
 creation, import, and enable switches, and `detail/` renders `ManagedProviderDetail` instead: the
-provider name and its usable models only, without credentials, account, or edit actions.
+provider name and its usable models only, without credentials, account, or edit actions. A model
+opens the same details page read-only, without its delete action.
 
 ## Provider List Motion
 

@@ -1,3 +1,6 @@
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+
 import { parseAgentSetup, parseConfiguration, type SkipLog } from '../enterpriseConfiguration';
 
 const configuration = {
@@ -32,6 +35,30 @@ const configuration = {
 };
 
 describe('enterprise configuration', () => {
+  afterEach(() => providerRegistryService.clearRemoteSnapshot());
+
+  it('takes registry capabilities only for a model the server lists without any', () => {
+    const models = (withRegistry: boolean) => {
+      if (withRegistry) installProviderRegistryTestSnapshot();
+      else providerRegistryService.clearRemoteSnapshot();
+      return parseConfiguration(
+        {
+          ...configuration,
+          providers: [configuration.providers[0]],
+          models: [
+            { id: 'agent/deepseek-v4-flash', name: 'DeepSeek', provider: 'openai' },
+            { id: 'deepseek-v4-flash', name: 'Declared', provider: 'openai', capabilities: [] },
+          ],
+        },
+        [],
+      ).providers[0]!.models.map((model) => model.capabilities);
+    };
+
+    expect(models(true)).toEqual([expect.arrayContaining(['function-call', 'reasoning']), []]);
+    // Before the catalog download; the next sync's hash differs once it arrives.
+    expect(models(false)).toEqual([[], []]);
+  });
+
   it('keeps what Mobile can run and skips the rest item by item', () => {
     const skipped: SkipLog = [];
     const parsed = parseConfiguration(configuration, skipped);

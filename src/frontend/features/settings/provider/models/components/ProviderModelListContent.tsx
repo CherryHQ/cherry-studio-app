@@ -151,9 +151,9 @@ export function ProviderModelListContent({
         );
       }
       return (
-        <ProviderModelRow model={item.model} provider={itemProvider} variant="management">
+        <DetailModelRow model={item.model} provider={itemProvider}>
           {endpointButton}
-        </ProviderModelRow>
+        </DetailModelRow>
       );
     },
     [t],
@@ -186,6 +186,36 @@ export function ProviderModelListContent({
   );
 }
 
+/** A row without management actions still opens the model's details. */
+function DetailModelRow({
+  children,
+  model,
+  provider,
+}: {
+  children: ReactElement | null;
+  model: Model;
+  provider: Provider | undefined;
+}) {
+  const router = useRouter();
+  return (
+    <ProviderModelRow
+      model={model}
+      provider={provider}
+      variant="management"
+      onPress={() => openModelDetails(router, model)}
+    >
+      {children}
+    </ProviderModelRow>
+  );
+}
+
+function openModelDetails(router: ReturnType<typeof useRouter>, model: Model) {
+  router.push({
+    pathname: '/settings/provider/[providerId]/model',
+    params: { providerId: model.providerId, modelId: model.id },
+  });
+}
+
 function ManagedModelRow({
   model,
   provider,
@@ -211,11 +241,7 @@ function ManagedModelRow({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const openModel = () =>
-    router.push({
-      pathname: '/settings/provider/[providerId]/model',
-      params: { providerId: model.providerId, modelId: model.id },
-    });
+  const openModel = () => openModelDetails(router, model);
   const items: readonly MenuItem[] = [
     {
       id: 'detail',
