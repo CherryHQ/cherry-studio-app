@@ -319,6 +319,7 @@ describe('buildAgentSystemPrompt', () => {
     });
     expect(prompt).toContain('## JavaScript Sandbox');
     expect(prompt).toContain('Follow its declared environment and tool-access contract');
+    expect(prompt).toContain('call the offered JavaScript execution tool directly');
     expect(
       buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools: [] }),
     ).not.toContain('## JavaScript Sandbox');
