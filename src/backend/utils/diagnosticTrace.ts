@@ -1,3 +1,4 @@
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { TraceContext, TraceSpanStatus } from '@/shared/data/types/trace';
@@ -89,13 +90,14 @@ export function sanitizeTraceAttributes(
 export function traceErrorAttributes(error: unknown): TraceAttributes {
   try {
     if (!error || typeof error !== 'object') return {};
-    const source = error as Record<string, unknown>;
+    const wrapper = error as Record<string, unknown>;
+    const source = error instanceof AgentProtocolError ? record(error.view)! : wrapper;
     // Agent errors wrap the product reason and original provider facts in a failure snapshot.
     const failure = record(source.failure);
     const failureSource = record(failure?.source);
     const productReason = failure ? AiFailureReasonSchema.safeParse(failure.reasonCode) : undefined;
     const context = record(source.context) ?? record(failure?.context);
-    const name = source.name ?? failureSource?.name;
+    const name = wrapper.name ?? source.name ?? failureSource?.name;
     const origin = source.origin ?? failureSource?.layer;
     return sanitizeTraceAttributes({
       'error.type': typeof name === 'string' ? name : undefined,
