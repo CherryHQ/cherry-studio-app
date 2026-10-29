@@ -154,6 +154,11 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly deleting = new Set<string>();
   private readonly pendingWrites = new Set<Promise<unknown>>();
   private readonly settlements = new Map<string, Promise<void>>();
+  /**
+   * A withdrawn input's rows hand their children to its own parent. Inputs reserved below it keep
+   * that row in their immutable metadata, so their live questions follow this map instead.
+   */
+  private readonly withdrawnParents = new Map<string, string | null>();
   private readonly controller = new AbortController();
   private readonly naming: MobileAgentHostNaming;
   private accepting = false;
@@ -1236,7 +1241,7 @@ export class DurableAgentHost implements AgentProtocol {
     // Several lanes run when one question has several answers; the first active one leads.
     const running = states.filter((state) => state.active);
     const state = running[0] ?? states[0];
-    const view = state?.active ? projectDurableHostTurn(state.active) : undefined;
+    const view = state?.active ? this.projectTurn(state.active) : undefined;
     const snapshot = AgentSessionSnapshotSchema.parse({
       agent: { id: agent.id, name: agent.name },
       session,
@@ -1656,7 +1661,16 @@ export class DurableAgentHost implements AgentProtocol {
       });
       signal?.throwIfAborted();
       if (messageIds.length) {
+        const parent = DurableTurnMetadataSchema.parse(turn.metadata).parentMessageId;
+        if (parent !== undefined) {
+          const resolved = this.questionParent(parent);
+          for (const id of messageIds) this.withdrawnParents.set(id, resolved);
+        }
         this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
+        this.publish(sessionId, {
+          type: 'queue.updated',
+          inputs: this.queuedInputs(this.liveStates(sessionId).flatMap((state) => state.queue)),
+        });
         this.ports.durableStorage?.notifyTranscript(sessionId);
         const session = await this.store.getSession(sessionId);
         signal?.throwIfAborted();
@@ -1968,7 +1982,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private publishRows(turn: RuntimeDurableTurn) {
-    const { user, assistant } = projectDurableHostTurn(turn);
+    const { user, assistant } = this.projectTurn(turn);
     const { sessionId } = turn.identity;
     const state = this.live.get(laneKey(turn.identity));
     if (!state?.users.has(user.id)) {
@@ -2231,10 +2245,22 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  private questionParent(parentId: string | null): string | null {
+    while (parentId && this.withdrawnParents.has(parentId))
+      parentId = this.withdrawnParents.get(parentId)!;
+    return parentId;
+  }
+
+  private projectTurn(turn: RuntimeDurableTurn) {
+    const view = projectDurableHostTurn(turn);
+    const parentId = view.user.parentId && this.questionParent(view.user.parentId);
+    return parentId === view.user.parentId ? view : { ...view, user: { ...view.user, parentId } };
+  }
+
   private queuedInputs(queue: readonly RuntimeDurableTurn[]): AgentQueuedInput[] {
     return queue.map((turn) => ({
       turnId: turn.identity.turnId,
-      userMessage: projectDurableHostTurn(turn).user,
+      userMessage: this.projectTurn(turn).user,
       assistantMessageId: turn.assistantMessageId,
     }));
   }
