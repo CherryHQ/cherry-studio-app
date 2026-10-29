@@ -61,6 +61,7 @@ export function createLocalConversationProjector(input: {
     | 'respondApproval'
     | 'respondQuestion'
     | 'retryMessage'
+    | 'editUserMessage'
     | 'forkSession'
     | 'deleteTurn'
     | 'selectMessage'
@@ -118,7 +119,7 @@ export function createLocalConversationProjector(input: {
         ...projectLocalTranscriptMessage(message, cache),
         actions: {
           // Answers switch in place; switching only changes what is shown, so it never waits.
-          ...(message.siblings && message.role === 'assistant'
+          ...(message.siblings
             ? {
                 select: action<{ messageId: string }, void>(state, false, async ({ messageId }) => {
                   await client.selectMessage(sessionId, messageId);
@@ -129,6 +130,13 @@ export function createLocalConversationProjector(input: {
             ? {
                 remove: action<void, void>(state, true, () =>
                   client.deleteTurn(sessionId, message.turnId!),
+                ),
+              }
+            : {}),
+          ...(canModify && message.role === 'user'
+            ? {
+                edit: action<{ text: string }, void>(state, true, ({ text }) =>
+                  client.editUserMessage({ sessionId, messageId: message.id, text }),
                 ),
               }
             : {}),

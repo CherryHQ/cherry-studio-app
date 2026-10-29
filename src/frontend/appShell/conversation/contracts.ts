@@ -164,6 +164,8 @@ export type ConversationMessage = {
     retry?: ConversationAction<void, ConversationRef | void>;
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
+    /** Sends the edited text as a sibling question of this message; the original stays. */
+    edit?: ConversationAction<{ text: string }, void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
     /** Shows the branch containing another alternative at this message's branch point. */
