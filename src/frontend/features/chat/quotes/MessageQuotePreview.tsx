@@ -6,6 +6,7 @@ import {
   ContextMenuExclusion,
   useToast,
 } from '@cherrystudio/ui/components';
+import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text } from 'react-native';
@@ -51,14 +52,8 @@ export function DraftMessageQuotePreview() {
   );
 }
 
-/** The quote a sent or queued message carries; pressing it scrolls the transcript to the source. */
-export function MessageQuotePreview({
-  fields,
-  numberOfLines = 2,
-}: {
-  fields: QuoteFields;
-  numberOfLines?: number;
-}) {
+/** The quote a sent message carries; pressing it scrolls the transcript to the source. */
+export function MessageQuotePreview({ fields }: { fields: QuoteFields }) {
   const line = useQuoteLine(fields);
   if (!line) return null;
   return (
@@ -68,7 +63,7 @@ export function MessageQuotePreview({
           {...line.pressProps}
           className="min-w-0 rounded-lg bg-secondary px-2.5 py-1.5 active:opacity-70"
         >
-          <Text className="text-muted-foreground text-xs" numberOfLines={numberOfLines}>
+          <Text className="text-muted-foreground text-xs" numberOfLines={2}>
             {line.text}
           </Text>
         </Pressable>
@@ -77,19 +72,25 @@ export function MessageQuotePreview({
   );
 }
 
-/** "Author: excerpt" in plain text, and the press that opens the source. */
+/** "Author: excerpt" in plain text, or nothing for a part without a quote. */
+export function messageQuoteLine(fields: QuoteFields, t: TFunction): string | undefined {
+  const quote = fields.quotes?.[0];
+  if (!quote || !fields.quoteAuthor) return undefined;
+  return t('chat.quote.line', {
+    author: fields.quoteAuthor.name ?? t('chat.quote.assistant'),
+    text: stripMarkdownFormatting(quote.text).replace(/\s+/g, ' ').trim(),
+  });
+}
+
+/** The quote's line and the press that opens the source. */
 function useQuoteLine(fields: QuoteFields) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const actions = useChatQuoteActions();
   const [isOpening, setIsOpening] = useState(false);
   const quote = fields.quotes?.[0];
-  if (!quote || !fields.quoteAuthor) return undefined;
-  const author = fields.quoteAuthor.name ?? t('chat.quote.assistant');
-  const text = t('chat.quote.line', {
-    author,
-    text: stripMarkdownFormatting(quote.text).replace(/\s+/g, ' ').trim(),
-  });
+  const text = messageQuoteLine(fields, t);
+  if (!quote || !text) return undefined;
   const open = actions
     ? async () => {
         setIsOpening(true);
