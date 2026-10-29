@@ -11,6 +11,8 @@ import {
 import type { AgentQueuedInput } from '@/shared/contracts/agent';
 import type { FileEntryId } from '@/shared/data/types/file';
 
+import { messageQuoteLine } from '../../../quotes/MessageQuotePreview';
+
 export function QueuedInputPreview({
   input,
   pending,
@@ -59,9 +61,18 @@ export function QueuedInputPreview({
       <ScrollView contentContainerClassName="gap-4 p-5" keyboardShouldPersistTaps="handled">
         {input.userMessage.parts.map((part) =>
           part.type === 'text' ? (
-            <Text key={part.id} selectable className="text-base text-foreground">
-              {part.text}
-            </Text>
+            <View key={part.id} className="gap-2">
+              {part.text ? (
+                <Text selectable className="text-base text-foreground">
+                  {part.text}
+                </Text>
+              ) : null}
+              {part.quotes ? (
+                <Text selectable className="text-sm text-muted-foreground">
+                  {messageQuoteLine(part, t)}
+                </Text>
+              ) : null}
+            </View>
           ) : part.type === 'file' ? (
             <QueuedInputAttachment key={part.id} entryId={part.fileEntryId} onClose={onClose} />
           ) : null,

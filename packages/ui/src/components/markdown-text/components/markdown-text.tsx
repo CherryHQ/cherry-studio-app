@@ -39,6 +39,12 @@ export type MarkdownSelectionMenuLabels = {
   copyAsMarkdown: string;
 };
 
+/** One app action shown beside Copy in the native menu of selected text. */
+export type MarkdownSelectionAction = {
+  label: string;
+  onPress: (selectedText: string) => void;
+};
+
 export type MarkdownTextProps = {
   /**
    * URL prefix of inline citation markers. Citations annotate the answer rather
@@ -56,6 +62,7 @@ export type MarkdownTextProps = {
    */
   renderMermaid?: (diagram: { source: string; fallback: ReactElement }) => ReactNode;
   selectable?: boolean;
+  selectionAction?: MarkdownSelectionAction;
   selectionMenuLabels?: MarkdownSelectionMenuLabels;
 };
 
@@ -146,6 +153,7 @@ export function MarkdownContent({
   onLinkPress,
   renderMermaid,
   selectable = true,
+  selectionAction,
   selectionMenuLabels,
 }: MarkdownTextProps & { externalCodeBlockControls?: boolean }) {
   const { theme } = useUniwind();
@@ -193,6 +201,16 @@ export function MarkdownContent({
         copyAsMarkdown: { label: selectionMenuLabels.copyAsMarkdown },
       },
     [selectionMenuLabels],
+  );
+  const contextMenuItems = useMemo(
+    () =>
+      selectionAction && [
+        {
+          text: selectionAction.label,
+          onPress: ({ text }: { text: string }) => selectionAction.onPress(text),
+        },
+      ],
+    [selectionAction],
   );
   const markdownStyle = useMemo<MarkdownStyle>(() => {
     const typography = createMarkdownTypographyStyle(fontSizeStep, monoFontFamily);
@@ -304,6 +322,7 @@ export function MarkdownContent({
     <MarkdownRenderer
       key={key}
       allowTrailingMargin={false}
+      contextMenuItems={contextMenuItems}
       flavor="github"
       markdown={markdown}
       markdownStyle={markdownStyle}

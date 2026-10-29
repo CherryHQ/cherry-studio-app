@@ -1,4 +1,7 @@
-import { MarkdownText as CherryMarkdownText } from '@cherrystudio/ui/components';
+import {
+  MarkdownText as CherryMarkdownText,
+  type MarkdownSelectionAction,
+} from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { type ReactElement, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +18,7 @@ type MarkdownTextProps = {
   isStreaming?: boolean;
   markdown: string;
   selectable?: boolean;
+  selectionAction?: MarkdownSelectionAction;
 };
 
 export function MarkdownText({
@@ -22,6 +26,7 @@ export function MarkdownText({
   isStreaming = false,
   markdown,
   selectable = true,
+  selectionAction,
 }: MarkdownTextProps) {
   const [storedFontSizeStep] = usePreference('ui.font_size_step');
   const { t } = useTranslation();
@@ -41,6 +46,7 @@ export function MarkdownText({
       onLinkPress={handleLinkPress}
       renderMermaid={renderMermaid}
       selectable={selectable}
+      selectionAction={selectionAction}
       selectionMenuLabels={selectionMenuLabels}
     />
   );

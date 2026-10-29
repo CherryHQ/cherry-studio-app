@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MessageListLiveTailProvider } from '../../list/MessageListLiveTailContext';
+import { MessageSelectionActionProvider } from '../MessageSelectionActionContext';
 import { PartMarkdown } from '../PartMarkdown';
 
 const mockMarkdownRenders: string[] = [];
@@ -87,5 +88,25 @@ describe('PartMarkdown', () => {
     });
     act(() => renderer!.update(<PartMarkdown isStreaming markdown="ab" />));
     expect(shown()).toBe('ab');
+  });
+
+  test('offers the host selection action for its message only', () => {
+    const onPress = jest.fn();
+    const element = (messageId?: string) => (
+      <MessageSelectionActionProvider action={{ label: 'Quote', onPress }}>
+        <PartMarkdown isStreaming={false} markdown="Answer" messageId={messageId} />
+      </MessageSelectionActionProvider>
+    );
+    act(() => {
+      renderer = create(element('answer-1'));
+    });
+    const action = renderer!.root.findByType('MarkdownText' as never).props.selectionAction;
+    expect(action.label).toBe('Quote');
+    action.onPress('Selected words');
+    expect(onPress).toHaveBeenCalledWith({ messageId: 'answer-1', text: 'Selected words' });
+    act(() => renderer!.update(element(undefined)));
+    expect(
+      renderer!.root.findByType('MarkdownText' as never).props.selectionAction,
+    ).toBeUndefined();
   });
 });

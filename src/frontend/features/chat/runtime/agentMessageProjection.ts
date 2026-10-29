@@ -172,10 +172,12 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
         part.skillReferences?.length ||
         part.selectionReferences?.length ||
         part.skillSelections?.length ||
-        part.skillAction
+        part.skillAction ||
+        part.quotes
         ? withCherryMeta(
             { type: 'text', text: part.text, state: part.state },
             {
+              ...(part.quotes ? { quotes: part.quotes, quoteAuthor: part.quoteAuthor } : {}),
               references: [
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),

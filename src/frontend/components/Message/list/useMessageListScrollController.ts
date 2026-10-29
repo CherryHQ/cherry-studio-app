@@ -31,6 +31,7 @@ type MessageListScrollControllerInputs = {
   listRef: RefObject<LegendListRef | null>;
   messages: readonly MessageListItem[];
   onReady: (() => void) | undefined;
+  onTargetRestored?: MessageListProps['onTargetRestored'];
   onReturnToLatest?: () => void;
 };
 
@@ -298,7 +299,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   );
 
   const reportReadyAfterRestore = useCallback(
-    (generation: number, shouldReportReady = true) => {
+    (generation: number, shouldReportReady = true, restoredMessageId?: string) => {
       if (generation !== restoreGenerationRef.current) {
         return;
       }
@@ -312,7 +313,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         }
 
         suppressSaveRef.current = false;
-        if (shouldReportReady) inputsRef.current.onReady?.();
+        const current = inputsRef.current;
+        if (
+          restoredMessageId &&
+          current.dataKey &&
+          current.initialLayoutReady &&
+          current.messages.some((message) => message.id === restoredMessageId)
+        )
+          current.onTargetRestored?.({ dataKey: current.dataKey, messageId: restoredMessageId });
+        if (shouldReportReady) current.onReady?.();
         const pendingMessageId = pendingEnteringMessageIdRef.current;
         if (pendingMessageId) {
           scheduleLocalSendScroll(pendingMessageId);
@@ -360,6 +369,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
           : current.dataKey
             ? cacheService.get(cacheKeyFor(current.dataKey))
             : null;
+    if (
+      current.onTargetRestored &&
+      explicitTarget &&
+      explicitTarget !== 'end' &&
+      !current.messages.some((message) => message.id === explicitTarget.messageId)
+    ) {
+      reportReadyAfterRestore(generation);
+      return;
+    }
     const target = resolveRestoreTarget(
       saved,
       (key) => current.messages.findIndex((message) => message.id === key),
@@ -389,7 +407,14 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     }
 
     void restore.then(
-      () => reportReadyAfterRestore(generation),
+      () =>
+        reportReadyAfterRestore(
+          generation,
+          true,
+          target.align === 'start' && explicitTarget && explicitTarget !== 'end'
+            ? explicitTarget.messageId
+            : undefined,
+        ),
       () => reportReadyAfterRestore(generation),
     );
   }, [follow, reportReadyAfterRestore, scrollToLiveEdge]);

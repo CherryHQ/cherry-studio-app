@@ -69,6 +69,8 @@ export {
   AgentInferenceSnapshotV1Schema,
   AgentInferenceSnapshotViewSchema,
   AgentInputPartSchema,
+  AgentInputPartsSchema,
+  AgentUserPartsSchema,
   AgentMessagePartSchema,
   AgentMessageSiblingSchema,
   AgentMessageToolRefSchema,
@@ -119,3 +121,12 @@ export {
   type AgentUserAnswers,
   type AgentRespondQuestionInput,
 } from './userQuestion';
+
+export {
+  MessageQuoteSchema,
+  QuoteAuthorSchema,
+  invalidQuoteCarriers,
+  type MessageQuote,
+  type QuoteAuthor,
+  type QuoteFields,
+} from './messageQuote';

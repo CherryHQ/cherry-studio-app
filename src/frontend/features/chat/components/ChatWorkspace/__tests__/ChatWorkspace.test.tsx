@@ -254,6 +254,8 @@ jest.mock('../components/ChatComposerClearance', () => ({
   ChatComposerClearance: ({ children }: { children: ReactNode }) => children,
 }));
 
+jest.mock('../../../quotes/MessageQuoteHighlight', () => ({ MessageQuoteHighlight: () => null }));
+
 jest.mock('../components/ChatInitialRenderCover', () => ({
   ChatInitialRenderCover: ({ isVisible }: { isVisible: boolean }) => {
     mockCoverVisible = isVisible;

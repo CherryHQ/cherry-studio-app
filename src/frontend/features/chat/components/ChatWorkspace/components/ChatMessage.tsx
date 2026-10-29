@@ -12,7 +12,10 @@ import { Text, View } from 'react-native';
 
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
+import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
+import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
@@ -202,11 +205,19 @@ export const ChatMessage = memo(function ChatMessage({
   accessories,
   renderUsage,
 }: ChatMessageProps) {
+  const quotePart = message.data.parts?.find(
+    (part) => part.type === 'text' && readCherryMeta(part)?.quotes,
+  );
+  const quoteFields = quotePart?.type === 'text' ? readCherryMeta(quotePart) : undefined;
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
     message.role === 'user' ? (
       <View className="gap-2">
-        <UserMessage attachments={attachments} message={message} />
+        <UserMessage
+          attachments={attachments}
+          message={message}
+          quote={quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : undefined}
+        />
         {accessories}
       </View>
     ) : (
@@ -221,6 +232,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <View className="w-full gap-3" testID={`chat-message-${message.id}`}>
+      <MessageQuoteHighlight messageId={message.id} />
       {createdAt ? (
         <Text
           className="text-center font-mono text-muted-foreground text-xs"

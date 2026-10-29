@@ -47,3 +47,21 @@ describe('message window query contract', () => {
     expect(ListAgentSessionMessagesQuerySchema.safeParse(query).success).toBe(false);
   });
 });
+
+test('exact around mode requires a single around target and preserves limits', () => {
+  expect(
+    ListAgentSessionMessagesQuerySchema.parse({
+      aroundMessageId: 'source',
+      aroundMode: 'exact',
+      limit: 200,
+    }),
+  ).toEqual({ aroundMessageId: 'source', aroundMode: 'exact', limit: 200 });
+  for (const query of [
+    { aroundMode: 'exact' },
+    { aroundMode: 'exact', ids: ['source'] },
+    { aroundMode: 'exact', aroundMessageId: 'source', cursor: 'cursor' },
+    { aroundMode: 'exact', aroundMessageId: 'source', direction: 'older' },
+    { aroundMode: 'exact', aroundMessageId: 'source', limit: 201 },
+  ])
+    expect(ListAgentSessionMessagesQuerySchema.safeParse(query).success).toBe(false);
+});
