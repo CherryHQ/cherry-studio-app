@@ -123,8 +123,9 @@ async function extract(
         },
       );
       signal.throwIfAborted();
-      // Do not recreate a deleted file's derived content after an in-flight read.
-      if (source.exists && (kind === 'pdf' || (result.text.trim() && !result.ocrUnavailable)))
+      // Do not recreate a deleted file's derived content after an in-flight read. An empty image
+      // is cached so history rebuilds skip it; an unsupported language ran no recognition.
+      if (source.exists && !(kind === 'image' && result.ocrUnavailable))
         writeFileTextCache(cache, result);
       return result;
     } finally {

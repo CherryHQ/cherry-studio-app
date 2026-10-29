@@ -23,7 +23,7 @@ import type { ExtractedDocumentText } from './officeText';
 import { decodeManagedUtf8, ManagedTextError } from './utf8Text';
 
 export type AttachmentContentReader = DocumentContentReader & {
-  readImageText?(
+  readImageText(
     file: FileAttachmentFact,
     signal: AbortSignal,
   ): Promise<ExtractedDocumentText | undefined>;
@@ -66,9 +66,9 @@ export async function readAttachmentContent(
   if (file.size > limit) fail('file-bytes');
   try {
     if (isImage) {
-      const result = await reader.readImageText?.(file, signal);
+      const result = await reader.readImageText(file, signal);
       signal.throwIfAborted();
-      if (!result) return fail('image-ocr-failed');
+      if (!result) return fail('unavailable');
       if (!result.text.trim()) return fail('image-ocr-empty');
       return {
         kind: 'text',

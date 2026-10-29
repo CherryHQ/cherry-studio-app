@@ -70,7 +70,7 @@ export interface ManagedFileResolver {
     file: ManagedFileFact,
     signal: AbortSignal,
   ): Promise<ExtractedDocumentText | undefined>;
-  readImageText?(
+  readImageText(
     file: ManagedFileFact,
     signal: AbortSignal,
   ): Promise<ExtractedDocumentText | undefined>;

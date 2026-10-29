@@ -259,6 +259,17 @@ describe('readFileTool', () => {
     expect(files.readAsBytes).not.toHaveBeenCalled();
   });
 
+  test('tells a text-only model why an image has no OCR text, and reports a missing file as unavailable', async () => {
+    const files = createFiles('unused');
+    const photo = { fileEntryId: FILE_ID, mediaType: 'image/png', name: 'photo.png', size: 12 };
+    files.resolveAvailable.mockResolvedValue(new Map([[FILE_ID, photo]]));
+    const tool = createReadFileTool(files, IN_SCOPE, 'builtin', undefined, false);
+    files.readImageText.mockResolvedValueOnce({ text: ' ', truncated: false });
+    expectError(await execute(tool, { file_entry_id: FILE_ID }), 'vision-capable model is needed');
+    files.readImageText.mockResolvedValueOnce(undefined);
+    expectError(await execute(tool, { file_entry_id: FILE_ID }), ': unavailable');
+  });
+
   test('reads bounded pixels only for an in-scope image without paging parameters', async () => {
     const files = createFiles('unused');
     files.resolveAvailable.mockResolvedValue(
@@ -609,7 +620,16 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
     ReturnType<ReadFileFiles['readDocumentText']>,
     Parameters<ReadFileFiles['readDocumentText']>
   >(async () => undefined);
-  return { readAsBytes, readDocumentText, resolveAvailable } satisfies ReadFileFiles & {
+  const readImageText = jest.fn<
+    ReturnType<ReadFileFiles['readImageText']>,
+    Parameters<ReadFileFiles['readImageText']>
+  >(async () => undefined);
+  return {
+    readAsBytes,
+    readDocumentText,
+    readImageText,
+    resolveAvailable,
+  } satisfies ReadFileFiles & {
     readAsBytes: jest.Mock;
     resolveAvailable: jest.Mock;
   };

@@ -81,7 +81,8 @@ purging or corrupt cache files require extraction again; ordinary follow-up read
 
 Each consumer can stop immediately. Only the last consumer cancels the shared native request;
 the extraction slot remains occupied until native cleanup finishes. Aborted or failed extraction
-is never cached; empty or unsupported standalone-image results are not cached either.
+is never cached; a standalone image in an unsupported app language is not cached either. An empty
+image result is cached so history rebuilds do not recognize it again.
 `observeFileOcr` aggregates each file's extraction states, preferring active
 recognition over queued reads. Cancelling or finishing one extraction cannot clear another's state.
 A running `read_file` call links its call ID to the entry it resolved, so its row follows reads by

@@ -37,6 +37,7 @@ describe('managed document projection', () => {
       ]),
       currentFileEntryIds: [FIRST_ID, SECOND_ID],
       readBytes: async () => new Uint8Array([1]),
+      readImageText: async () => undefined,
       signal: new AbortController().signal,
       documentParserMode: 'anydoc' as const,
       target: TARGET,
@@ -199,6 +200,7 @@ describe('managed text attachments', () => {
       readBytes: async () => {
         throw new Error('missing');
       },
+      readImageText: async () => undefined,
       signal: new AbortController().signal,
       target: TARGET,
     });
@@ -218,6 +220,7 @@ describe('managed text attachments', () => {
       historicalFileEntryIds: [FIRST_ID],
       limits: { maxBytesPerFile: 64, maxCharactersPerFile: 10, maxTotalCharacters: 9 },
       readBytes: async () => utf8('uvwxyz'),
+      readImageText: async () => undefined,
       readDocumentText: async () => ({ text: 'abc', truncated: true }),
       signal: new AbortController().signal,
       target: TARGET,
@@ -247,6 +250,7 @@ describe('managed text attachments', () => {
         currentFileEntryIds: [FIRST_ID],
         historicalFileEntryIds: [],
         readBytes: async () => undefined,
+        readImageText: async () => undefined,
         readDocumentText: async () => {
           throw new DocumentTextError(failure);
         },
@@ -275,6 +279,7 @@ describe('managed text attachments', () => {
         currentFileEntryIds: [FIRST_ID],
         historicalFileEntryIds: [],
         readBytes: async () => undefined,
+        readImageText: async () => undefined,
         readDocumentText,
         signal: new AbortController().signal,
         target: TARGET,
@@ -297,6 +302,7 @@ async function resolve(
     historicalFileEntryIds,
     ...(limits ? { limits } : {}),
     readBytes: async (file) => bytes.get(file.fileEntryId),
+    readImageText: async () => undefined,
     signal: new AbortController().signal,
     target: TARGET,
   });

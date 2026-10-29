@@ -93,8 +93,13 @@ test('image consumers share one recognition and reuse its disk result after an i
   stop();
 });
 
-test('empty image recognition stays retryable instead of being cached', async () => {
-  jest.mocked(extractImageText).mockResolvedValueOnce({ ...result, text: '' });
+test('empty image recognition is cached, while an unsupported language is not', async () => {
+  const empty = { ...result, text: '', unrecognizedPages: [1] };
+  jest.mocked(extractImageText).mockResolvedValueOnce(empty);
+  await readImageText(source, signal());
+  expect(writeFileTextCache).toHaveBeenCalledWith(expect.anything(), empty);
+  jest.mocked(writeFileTextCache).mockClear();
+  jest.mocked(extractImageText).mockResolvedValueOnce({ ...empty, ocrUnavailable: true });
   await readImageText(source, signal());
   expect(writeFileTextCache).not.toHaveBeenCalled();
 });

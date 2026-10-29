@@ -152,9 +152,9 @@ export async function resolveManagedInput(
 
 /**
  * Request-level attachment gate: runtime capability, media admissibility, and
- * image limits — all before any network call. Historical images may be
- * omitted after a model switch, but a newly attached image must be rejected
- * when the selected model cannot consume it.
+ * image limits — all before any network call. A text-only model receives OCR
+ * text for images instead; a current image without readable text fails later,
+ * during content preparation, while a historical one is omitted.
  */
 export function assertAttachmentRequestSupported(
   runtime: Pick<AgentRuntime, 'descriptor'>,
@@ -250,8 +250,7 @@ export async function resolveRuntimeContentAttachments(
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
       readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
-      readImageText:
-        files.readImageText && ((file, readSignal) => files.readImageText!(file, readSignal)),
+      readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       signal,
       documentParserMode,
       target: {

@@ -41,7 +41,11 @@ export function FilePart({ part }: FilePartProps) {
       <FileEntryPreview
         badge={
           ocr ? (
-            <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+            <Text
+              // Fixed-width page counts do not shift as recognition advances.
+              className={`${recognizing?.kind === 'image' ? '' : 'font-mono '}text-muted-foreground text-xs`}
+              numberOfLines={1}
+            >
               {recognizing
                 ? recognizing.kind === 'image'
                   ? t('attachments.ocr.recognizingImage')

@@ -21,6 +21,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   FileAttachmentError,
   type DocumentParserMode,
+  type FileAttachmentIssue,
 } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -93,7 +94,7 @@ export const readFileInputSchema = z.strictObject({
 
 export type ReadFileFiles = {
   readImage?: ManagedFileResolver['readImage'];
-  readImageText?: ManagedFileResolver['readImageText'];
+  readImageText: ManagedFileResolver['readImageText'];
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
   readDocumentText: ManagedFileResolver['readDocumentText'];
@@ -102,6 +103,17 @@ export type ReadFileFiles = {
 type ReadContent =
   | Extract<ReadAttachmentContent, { kind: 'text' }>
   | (Extract<ReadAttachmentContent, { kind: 'document' }> & { json: string });
+
+const NEEDS_VISION =
+  'The current model cannot receive image pixels; tell the user that a vision-capable model is needed to inspect it.';
+/** Read failures addressed to the model; the shared diagnostics address the user. */
+const MODEL_FACING_READ_ERRORS: Partial<Record<FileAttachmentIssue['code'], string>> = {
+  'document-empty':
+    'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.',
+  'image-ocr-empty': `On-device OCR found no readable text in this image. ${NEEDS_VISION}`,
+  'image-ocr-failed': `On-device OCR could not read this image; do not retry unchanged. ${NEEDS_VISION}`,
+  'image-ocr-unsupported': `On-device OCR does not support the current app language. ${NEEDS_VISION}`,
+};
 
 export function createReadFileTool(
   files: ReadFileFiles,
@@ -130,8 +142,7 @@ export function createReadFileTool(
       {
         readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
         readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
-        readImageText:
-          files.readImageText && ((file, readSignal) => files.readImageText!(file, readSignal)),
+        readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       },
       signal,
       READ_FILE_MAX_SOURCE_BYTES,
@@ -274,11 +285,7 @@ export function createReadFileTool(
               artifacts: [],
             };
           }
-          return invalid(
-            error.issue.code === 'document-empty'
-              ? 'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.'
-              : error.message,
-          );
+          return invalid(MODEL_FACING_READ_ERRORS[error.issue.code] ?? error.message);
         }
         return invalid('The managed file could not be read.');
       }

@@ -30,6 +30,7 @@ function input(files: FileAttachmentFact[]) {
     availableFiles: new Map(files.map((file) => [file.fileEntryId, file])),
     currentFileEntryIds: files.map((file) => file.fileEntryId),
     readBytes: jest.fn(async () => new TextEncoder().encode('hello')),
+    readImageText: jest.fn(async () => undefined),
     signal: signal(),
     target: { purpose: 'chat' as const, acceptsImages: true },
   };
