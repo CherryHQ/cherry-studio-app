@@ -1,4 +1,5 @@
 import { sanitizeTraceAttributes, traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { TraceSpanRecordSchema, type TraceSpanRecord } from '@/shared/data/types/trace';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
@@ -105,12 +106,12 @@ describe('TraceSession', () => {
     expect(records.at(-1)?.attributes['trace.dropped_spans']).toBe(45);
   });
 
-  it('keeps the product reason and provider facts behind a protocol failure without its text', () => {
-    const { root, records } = capture();
-    root.end(
-      'error',
-      traceErrorAttributes({
-        code: 'EXECUTION_FAILED',
+  it.each([false, true])(
+    'keeps protocol failure facts without its text (wrapped: %s)',
+    (wrapped) => {
+      const { root, records } = capture();
+      const view = {
+        code: 'EXECUTION_FAILED' as const,
         ...createAiFailure({
           code: 'runtime_error',
           message: 'Maximum context length exceeded: private response',
@@ -119,19 +120,20 @@ describe('TraceSession', () => {
           name: 'ProviderError',
           context: { statusCode: 400, responseBody: 'private body' },
         }),
-      }),
-    );
-    expect(records.at(-1)?.attributes).toEqual({
-      'error.type': 'ProviderError',
-      'error.code': 'EXECUTION_FAILED',
-      'error.source.code': 'runtime_error',
-      'error.product_reason': 'context_length',
-      'error.origin': 'provider',
-      'error.retryable': true,
-      'http.status_code': 400,
-    });
-    expect(JSON.stringify(records)).not.toMatch(/private|Maximum|body|message/);
-  });
+      };
+      root.end('error', traceErrorAttributes(wrapped ? new AgentProtocolError(view) : view));
+      expect(records.at(-1)?.attributes).toEqual({
+        'error.type': wrapped ? 'AgentProtocolError' : 'ProviderError',
+        'error.code': 'EXECUTION_FAILED',
+        'error.source.code': 'runtime_error',
+        'error.product_reason': 'context_length',
+        'error.origin': 'provider',
+        'error.retryable': true,
+        'http.status_code': 400,
+      });
+      expect(JSON.stringify(records)).not.toMatch(/private|Maximum|body|message/);
+    },
+  );
 
   it('counts only retained attributes toward the limit and makes truncation visible', () => {
     const omitted = Object.fromEntries(

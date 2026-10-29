@@ -4,6 +4,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import { useComposerMeta } from '@/frontend/components/Composer';
 import { MessageSelectionActionProvider } from '@/frontend/components/Message';
+import type { QuoteFields } from '@/shared/contracts/agent';
 
 import {
   Actions,
@@ -50,6 +51,13 @@ export function ChatQuoteProvider({
   const clearQuote = useCallback(() => {
     if (!locked.current) update({ fields: {}, isBusy: false });
   }, [update]);
+  const restoreQuote = useCallback(
+    ({ quotes, quoteAuthor }: QuoteFields) => {
+      if (!locked.current)
+        update({ fields: quotes && quoteAuthor ? { quotes, quoteAuthor } : {}, isBusy: false });
+    },
+    [update],
+  );
   const quoteSelection = useCallback(
     ({ messageId, text }: { messageId: string; text: string }) => {
       if (locked.current || !text.trim()) return;
@@ -88,8 +96,8 @@ export function ChatQuoteProvider({
     };
   }, [update]);
   const actions = useMemo(
-    () => ({ clearQuote, capture, openQuote }),
-    [clearQuote, capture, openQuote],
+    () => ({ clearQuote, restoreQuote, capture, openQuote }),
+    [clearQuote, restoreQuote, capture, openQuote],
   );
   const selectionAction = useMemo(
     () =>

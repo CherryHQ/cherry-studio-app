@@ -6,6 +6,8 @@ import type { QuoteNavigationOutcome } from './useChatQuoteNavigation';
 export type QuoteAttempt = { fields: QuoteFields; finish: (accepted: boolean) => void };
 export type ChatQuoteActions = {
   clearQuote: () => void;
+  /** Puts a taken-back message's quote, or none, in the composer. */
+  restoreQuote: (fields: QuoteFields) => void;
   openQuote: (input: {
     sourceMessageId: string;
     requestId: string;

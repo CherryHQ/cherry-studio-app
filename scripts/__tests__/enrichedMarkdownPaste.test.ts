@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-const patch = readFileSync('patches/react-native-enriched-markdown@1.0.1.patch', 'utf8');
+const patch = readFileSync('patches/react-native-enriched-markdown@1.1.1.patch', 'utf8');
 const inputPatch = patch
   .split('+++ b/ios/input/ENRMInputTextView.mm\n')[1]
   ?.split('diff --git ')[0];
