@@ -2,6 +2,7 @@ import type {
   AgentErrorView,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
+  AgentMessageSibling,
   AgentMessageView,
   AgentSessionView,
 } from '@/shared/contracts/agent';
@@ -82,32 +83,6 @@ export type ReserveRetryInput = Omit<
 > & {
   /** Recorded prefix the replacement execution keeps; empty restarts the answer. */
   assistantParts: AgentMessagePart[];
-};
-
-/**
- * The settlement of an edit one input creates. Refusing rather than skipping:
- * silently editing beside a still-running answer would reserve a new branch
- * while a turn that owns the old one is still writing rows. The message lookup
- * being session-scoped makes an unknown Session and an unknown row one state.
- */
-export type ReserveEditSubmissionResult =
-  | {
-      status: 'reserved';
-      turnId: string;
-      userMessage: AgentMessageView;
-      assistantMessage: AgentMessageView;
-    }
-  | { status: 'message-not-found' }
-  | { status: 'turn-unsettled' };
-
-export type ReserveEditSubmissionInput = ReservedAnswerInput & {
-  sessionId: string;
-  /** The settled user row the edit branches from; it stays in the tree. */
-  editedMessageId: string;
-  /** Id of the sibling user row this edit reserves under the edited row's parent. */
-  userMessageId: string;
-  /** Replacement question parts, already derived from the edited row's parts by the Host. */
-  userParts: AgentMessagePart[];
 };
 
 export type ForkSessionInput = {
@@ -218,6 +193,13 @@ export interface AgentSessionStore {
    */
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
 
+  /**
+   * Every child of `parentId` in creation order, as branch alternatives. The
+   * Host attaches them to live message projections so branch switching matches
+   * settled transcript reads while the new turn is still running.
+   */
+  listBranchSiblings(sessionId: string, parentId: string | null): Promise<AgentMessageSibling[]>;
+
   /** Atomically reserves a sibling answer to an existing question and selects it. */
   reserveAnswer(input: ReserveAnswerInput): Promise<ReserveSubmissionResult>;
 
@@ -228,13 +210,6 @@ export interface AgentSessionStore {
    * turn with (agent-protocol.md "Manual answer retry").
    */
   reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult>;
-
-  /**
-   * Atomically reserves an edited sibling question of an existing user row,
-   * one answer placeholder under it, and selects that answer. The edited row's
-   * answers must already be settled (agent-protocol.md "Editing a question").
-   */
-  reserveEditSubmission(input: ReserveEditSubmissionInput): Promise<ReserveEditSubmissionResult>;
 
   /**
    * Selects the branch containing `messageId`: unchanged when it is already on
