@@ -21,8 +21,8 @@ sooner. The threshold comes from the narrowest readable regions in `windowClass.
 pane beside a 440-point conversation needs 800 points. A wide window keeps one left column (the
 280-point sidebar, the file pane, or search) beside one content region, so fitting the widest left
 column also fits the sidebar. Layout owners read the class; pages and components never branch on
-device names. `useIsSidebarPersistent` is the shell's single rule for keeping the sidebar beside the
-content region.
+device names. `useCanDockSidebar` is the shell's single rule for whether the sidebar can stand beside
+the content region; the [sidebar](../sidebar/README.md) decides whether it is showing.
 `resolveFilePaneWidth` gives a pane 43% of the content width, kept between 360 and 520 points.
 
 On a foldable, `FoldRegionProvider` shares the fold reported by
