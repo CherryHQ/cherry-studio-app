@@ -583,6 +583,67 @@ describe('durable tool diagnostics', () => {
     }
   });
 
+  test('a withdrawn input hands the questions queued below it to its own parent', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const follow = async (text: string): Promise<RuntimeDurableTurn> => {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      return {
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      };
+    };
+    const withdrawn = await follow('B');
+    const remaining = await follow('C');
+    f.copies.get(f.sessionId)!.turns = [running, withdrawn, remaining];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      f.copies.get(f.sessionId)!.turns = [running, remaining];
+      f.emit({ ...withdrawn, status: 'cancelled' });
+      return 'aborted';
+    });
+    try {
+      await expect(
+        f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: withdrawn.identity.turnId }),
+      ).resolves.toBe('withdrawn');
+      const queue = [
+        { userMessage: { id: remaining.userMessageId, parentId: running.assistantMessageId } },
+      ];
+      expect(events.findLast((event) => event.type === 'queue.updated')).toMatchObject({
+        inputs: queue,
+      });
+      const refreshed = await f.host.observeSession(f.sessionId, () => {});
+      expect(refreshed.snapshot.queuedInputs).toMatchObject(queue);
+      refreshed.unsubscribe();
+      expect(await f.store.getMessage(f.sessionId, remaining.userMessageId)).toMatchObject({
+        parentId: running.assistantMessageId,
+      });
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
   test('a queued removal that loses the placement race never aborts the active run', async () => {
     const f = fixture();
     const turn = {
