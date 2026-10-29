@@ -45,6 +45,7 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
       return (
         <TextPart
           isStreaming={isStreaming && part.state !== 'done'}
+          messageId={messageId}
           part={part}
           renderMode={renderMode}
           resolvedText={resolvedText}

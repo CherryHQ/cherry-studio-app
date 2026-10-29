@@ -9,6 +9,8 @@ import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/uti
 import type { AgentQueuedInput } from '@/shared/contracts/agent';
 import { fileEntryUrl } from '@/shared/data/types/file';
 
+import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
+import { messageQuoteLine } from '../../../quotes/MessageQuotePreview';
 import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
 import { QueuedInputPreview } from './QueuedInputSheets';
 
@@ -19,6 +21,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   const { toast } = useToast();
   const composer = useComposerState();
   const { setDraft, setAttachments } = useComposerActions();
+  const quoteActions = useChatQuoteActions();
   const [preview, setPreview] = useState<AgentQueuedInput>();
   const [conflict, setConflict] = useState(false);
   const [pending, setPending] = useState<Record<string, boolean>>({});
@@ -93,6 +96,8 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
             .join('\n'),
         );
         setAttachments(attachments);
+        const quoted = input.userMessage.parts.find((part) => part.type === 'text' && part.quotes);
+        quoteActions?.restoreQuote(quoted?.type === 'text' ? quoted : {});
       }
       completed = true;
       if (latest.current.sessionId === targetSession) {
@@ -124,20 +129,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
     <>
       {sessionId && inputs.length > 0 ? (
         <Surface testID="chat-input-queue">
-          <View className="px-3 pb-1 pt-3">
-            <View className="flex-row items-center gap-2 px-1 pb-1">
-              <Text
-                accessibilityRole="header"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                {t('chat.queue.title')}
-              </Text>
-              <View className="min-w-5 items-center rounded-full bg-secondary px-1.5">
-                <Text className="text-xs font-medium tabular-nums text-muted-foreground">
-                  {inputs.length}
-                </Text>
-              </View>
-            </View>
+          <View className="py-1 pl-4 pr-2">
             {/* Native scrolling cancels row taps; only detail text is selectable. */}
             <ScrollView
               className="max-h-40"
@@ -214,26 +206,31 @@ function QueuedInputRow({
   const attachments = input.userMessage.parts
     .flatMap((part) => (part.type === 'file' ? [part.filename ?? t('chat.queue.message')] : []))
     .join(' · ');
+  const quote = input.userMessage.parts.flatMap((part) => {
+    const line = part.type === 'text' ? messageQuoteLine(part, t) : undefined;
+    return line ? [line] : [];
+  })[0];
+  // One quiet line under the request: what it carries besides its own words.
+  const detail = [text ? attachments : '', quote].filter(Boolean).join(' · ');
   return (
-    <View
-      className={`min-h-10 flex-row items-center gap-3 px-1 py-1.5 ${position > 1 ? 'border-t border-border-subtle' : ''}`}
-    >
-      <Text className="min-w-4 text-center text-xs tabular-nums text-muted-foreground">
+    <View className="min-h-10 flex-row items-center gap-2">
+      {/* Sending order: the first row is the next to run. */}
+      <Text className="min-w-3 self-start py-2.5 text-sm tabular-nums text-muted-foreground">
         {position}
       </Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('chat.queue.openPreview', { position })}
-        className="min-w-0 flex-1"
+        className="min-w-0 flex-1 py-2.5"
         onPress={onPreview}
         testID={`queue-preview-${input.turnId}`}
       >
         <Text className="text-sm text-foreground" numberOfLines={1}>
           {text || attachments || t('chat.queue.message')}
         </Text>
-        {text && attachments ? (
+        {detail ? (
           <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-            {attachments}
+            {detail}
           </Text>
         ) : null}
       </Pressable>

@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { SkillActionSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
-import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
+import { AgentImageGenerationSchema, AgentInputPartsSchema } from './views';
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
 export const AgentRenameSessionInputSchema = z.strictObject({
@@ -39,7 +39,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   /** Allocated once by the send action and reused for display and persistence. */
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  parts: z.array(AgentInputPartSchema).min(1),
+  parts: AgentInputPartsSchema,
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
@@ -63,7 +63,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  parts: z.array(AgentInputPartSchema).min(1),
+  parts: AgentInputPartsSchema,
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),

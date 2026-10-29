@@ -45,6 +45,10 @@ const existingAttachment: ComposerAttachmentReady = {
 };
 
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+const mockRestoreQuote = jest.fn();
+jest.mock('../../../../quotes/ChatQuoteContext', () => ({
+  useChatQuoteActions: () => ({ restoreQuote: mockRestoreQuote }),
+}));
 jest.mock('../../../../runtime', () => ({
   useAgentChatClient: () => ({ client: { cancelQueuedInput: mockCancel } }),
   useAgentQueuedInputs: () => mockInputs,
@@ -96,11 +100,13 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { position?: number }) => {
+    t: (key: string, options?: Record<string, unknown>) => {
       const catalog = jest.requireActual<Record<string, string>>(
         '@/frontend/i18n/locales/en-us.json',
       );
-      return catalog[key]?.replace('{{position}}', String(options?.position)) ?? key;
+      return (
+        catalog[key]?.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(options?.[name])) ?? key
+      );
     },
   }),
 }));
@@ -148,9 +154,10 @@ function Probe() {
   }, [state, composerActions]);
   return null;
 }
+const NO_ATTACHMENTS: ComposerAttachmentReady[] = [];
 function Harness({
   initialDraft = '',
-  initialAttachments = [],
+  initialAttachments = NO_ATTACHMENTS,
 }: {
   initialDraft?: string;
   initialAttachments?: ComposerAttachmentReady[];
@@ -200,11 +207,13 @@ function text() {
     .join('\n');
 }
 function queueCount() {
-  return String(
-    tree.root.findByProps({
-      className: 'text-xs font-medium tabular-nums text-muted-foreground',
-    }).props.children,
-  );
+  const rows = tree.root
+    .findAll(
+      (node) =>
+        typeof node.props.testID === 'string' && node.props.testID.startsWith('queue-preview-'),
+    )
+    .map((node) => node.props.testID as string);
+  return String(new Set(rows).size);
 }
 function refresh() {
   act(() => tree.update(<Harness />));
@@ -456,4 +465,73 @@ it('preserves newer composer content during withdrawal and can restore later wit
   await act(async () => alert().props.actions[0].onPress());
   expect(composer.draft).toBe(restoredText);
   expect(mockCancel).toHaveBeenCalledTimes(1);
+});
+
+it('numbers rows in sending order and joins attachments and the quote in one quiet line', () => {
+  const quoted = input();
+  quoted.userMessage.parts = [
+    {
+      id: 'text-1',
+      type: 'text',
+      text: 'Make it work offline',
+      state: 'done',
+      quotes: [
+        {
+          id: 'q',
+          sourceMessageId: '00000000-0000-7000-8000-000000000001',
+          text: 'Store **records** in the browser',
+        },
+      ],
+      quoteAuthor: { role: 'assistant', name: 'Cherry' },
+    },
+    ...quoted.userMessage.parts.filter((part) => part.type === 'file'),
+  ];
+  mockInputs = [quoted, input('turn-2')];
+  render();
+  const row = tree.root.findByProps({ testID: 'queue-preview-turn-1' });
+  const strings = (nodes: { props: { children?: unknown } }[]) => [
+    ...new Set(nodes.map((node) => String(node.props.children))),
+  ];
+  expect(strings(row.findAll((node) => typeof node.props.children === 'string'))).toEqual([
+    'Make it work offline',
+    'photo.png · Cherry: Store records in the browser',
+  ]);
+  expect(
+    strings(tree.root.findAll((node) => node.props.className?.includes?.('tabular-nums'))),
+  ).toEqual(['1', '2']);
+});
+
+it('taking back a queued message puts its quote back in the composer, or clears it', async () => {
+  const quote = {
+    id: 'q',
+    sourceMessageId: '00000000-0000-7000-8000-000000000001',
+    text: 'Passage',
+  };
+  const quoted = input();
+  quoted.userMessage.parts = [
+    {
+      id: 'text-1',
+      type: 'text',
+      text: 'Offline please',
+      state: 'done',
+      quotes: [quote],
+      quoteAuthor: { role: 'assistant', name: 'Cherry' },
+    },
+  ];
+  mockInputs = [quoted, input('turn-2')];
+  render();
+  open();
+  expect(text()).toContain('Cherry: Passage');
+  await press('queue-take-back');
+  expect(composer.draft).toBe('Offline please');
+  expect(mockRestoreQuote).toHaveBeenCalledWith(
+    expect.objectContaining({
+      quotes: [quote],
+      quoteAuthor: { role: 'assistant', name: 'Cherry' },
+    }),
+  );
+  act(() => actions.setDraft(''));
+  act(() => tree.root.findByProps({ testID: 'queue-preview-turn-2' }).props.onPress());
+  await press('queue-take-back');
+  expect(mockRestoreQuote).toHaveBeenLastCalledWith({});
 });

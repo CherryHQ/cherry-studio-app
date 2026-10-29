@@ -406,8 +406,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // Ids are generated here in transcript order, so they stay monotonic
       // across the chunked multi-row inserts below. The copy is one straight
       // branch: each row's parent is the previous copied row.
+      const copiedIds = new Map(copied.map((row) => [row.id, createOrderedUuid()]));
       const copiedRows = copied.map((row) => {
-        const copiedMessageId = createOrderedUuid();
+        const copiedMessageId = copiedIds.get(row.id)!;
         const copiedParentId = parentId;
         parentId = copiedMessageId;
         const copiedTurnId = reissueTurnId(forkedTurnIds, row.turnId);
@@ -425,7 +426,24 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // holds because createdAt is the major sort key and the reissued ids
           // break ties in the same direction as the source.
           createdAt: row.createdAt,
-          data: row.data,
+          data: {
+            ...row.data,
+            parts: row.data.parts.map((part) =>
+              part.type === 'text' && part.quotes
+                ? {
+                    ...part,
+                    quotes: [
+                      {
+                        ...part.quotes[0],
+                        sourceMessageId:
+                          copiedIds.get(part.quotes[0].sourceMessageId) ??
+                          part.quotes[0].sourceMessageId,
+                      },
+                    ] as [(typeof part.quotes)[0]],
+                  }
+                : part,
+            ),
+          },
           error: row.error,
           id: copiedMessageId,
           parentId: copiedParentId,
