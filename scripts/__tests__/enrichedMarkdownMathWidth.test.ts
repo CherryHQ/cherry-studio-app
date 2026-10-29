@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const patchPath = 'patches/react-native-enriched-markdown@1.0.1.patch';
+const patchPath = 'patches/react-native-enriched-markdown@1.1.1.patch';
 const patch = readFileSync(patchPath, 'utf8');
 const attachmentFile = 'ios/attachments/ENRMMathInlineAttachment.m';
 const attachmentHeaderFile = 'ios/attachments/ENRMMathInlineAttachment.h';
@@ -30,7 +30,7 @@ describe('Enriched Markdown iOS math width patch', () => {
   test('pins the patch with its current lockfile digest', () => {
     const hash = createHash('sha256').update(patch).digest('hex');
     const lockfile = readFileSync('pnpm-lock.yaml', 'utf8');
-    expect(lockfile).toContain(`  react-native-enriched-markdown@1.0.1: ${hash}\n`);
+    expect(lockfile).toContain(`  react-native-enriched-markdown@1.1.1: ${hash}\n`);
   });
 
   test('executes the display-only column fit policy from the native patch', () => {
@@ -152,16 +152,16 @@ int main(void)
     );
   });
 
-  test('reuses the scoped math-aware list height helper only on iOS after applying attributes', () => {
-    const source = afterSide('ios/renderer/ListItemRenderer.m');
-    expect(source).toContain(
-      '#ifTARGET_OS_OSXif(lineHeightConfig>0){style.minimumLineHeight=lineHeightConfig;style.maximumLineHeight=ENRMRangeContainsBlockImage(output,range)?0:lineHeightConfig;}#endif',
+  test('relies on upstream list items flooring rather than capping their line height', () => {
+    expect(filePatch('ios/renderer/ListItemRenderer.m')).toBeUndefined();
+    const source = compact(
+      readFileSync(
+        'node_modules/react-native-enriched-markdown/ios/renderer/ListItemRenderer.m',
+        'utf8',
+      ),
     );
-    expect(source).toContain(
-      'attributesToApply[NSParagraphStyleAttributeName]=style;[outputaddAttributes:attributesToApplyrange:range];#if!TARGET_OS_OSX',
-    );
-    expect(source).toContain('applyLineHeight(output,range,lineHeightConfig);#endif};');
-    expect(source.match(/applyLineHeight\(/g)).toHaveLength(1);
+    expect(source).toContain('if(lineHeightConfig>0){style.minimumLineHeight=lineHeightConfig;}');
+    expect(source).not.toContain('maximumLineHeight');
   });
 
   test('preserves intrinsic metrics, stored LaTeX, and the iOS-only attachment boundary', () => {
@@ -197,7 +197,7 @@ int main(void)
     expect(renderer).toContain('attachment.latex=latex;');
     expect(filePatch('ios/renderer/ENRMMathInlineRenderer.m')).toBeDefined();
     expect(filePatch('ios/utils/MarkdownExtractor.m')).toBeUndefined();
-    expect(filePatch('ios/views/ENRMMathContainerView.m')).toBeUndefined();
+    expect(filePatch('ios/segments/ENRMMathContainerView.m')).toBeUndefined();
   });
 
   test('keeps Android math changes limited to the existing screen-reader compatibility fix', () => {

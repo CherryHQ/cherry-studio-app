@@ -31,7 +31,7 @@ describe('expo-paste-input iOS clipboard patch', () => {
       'utf8',
     );
     expect(formatter).toContain(
-      '[textStorage removeAttribute:@"com.cherryai.composer-mention-icon" range:scopeRange]',
+      'ENRMRemoveAttributeIfPresent(textStorage, @"com.cherryai.composer-mention-icon", scopeRange, changed);',
     );
     const extraction = source
       .split('attributedText.enumerateAttribute(.attachment,')[1]

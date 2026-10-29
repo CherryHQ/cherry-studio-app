@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-const patchPath = 'patches/react-native-enriched-markdown@1.0.1.patch';
+const patchPath = 'patches/react-native-enriched-markdown@1.1.1.patch';
 const patch = readFileSync(patchPath, 'utf8');
 const filePatch = (file: string) => patch.split(`+++ b/${file}\n`)[1]?.split('diff --git ')[0];
 
@@ -11,10 +11,10 @@ describe('Enriched Markdown atomic link patch', () => {
     const hash = createHash('sha256').update(patch).digest('hex');
 
     expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(
-      `react-native-enriched-markdown@1.0.1: ${patchPath}`,
+      `react-native-enriched-markdown@1.1.1: ${patchPath}`,
     );
     expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(
-      `  react-native-enriched-markdown@1.0.1: ${hash}\n`,
+      `  react-native-enriched-markdown@1.1.1: ${hash}\n`,
     );
   });
 
