@@ -12,10 +12,14 @@ This module owns Expo Router header adapters used by the app screens.
 
 - Route layouts declare the root screen's leading behavior with `RouteHeaderProvider`. The root
   stack uses back, the `(chat)` stack uses the drawer action, and the content region beside the
-  sidebar uses back in compact windows and `none` in wide ones, where the persistent sidebar already
+  sidebar uses back in compact windows and the drawer action in wide ones, where the sidebar column
   moves between first-level pages. Any screen above a stack's root resolves to back, and a page that
-  intercepts back keeps it even at a `none` root.
-- Only `MainHeader` can resolve to the drawer action. Business screens declare only titles,
+  intercepts back keeps it even at a drawer root.
+- The drawer action is the sidebar button from `useSidebarToggle`
+  (`@/frontend/appShell/sidebar/toggle`): it opens the overlay in a compact window and hides or
+  shows the column in a wide one, with one glyph and a label for each. It is absent while the file
+  pane or a fold holds the column. `MainHeader` always ends with New chat, at every width.
+- Business screens declare only titles,
   right-side actions, and exceptional back interception, and inherit their leading action from the
   provider. When no navigation history exists, the default back action replaces to `/`.
 - The right side defaults to empty. Business screens choose `menu`, `icon`, or `label` according to

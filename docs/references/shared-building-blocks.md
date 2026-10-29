@@ -64,7 +64,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | --- | --- |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
 | Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
-| Window size classes and the persistent-sidebar rule | `useWindowClass` and `useIsSidebarPersistent` in `src/frontend/appShell/layout` |
+| Window size classes and the docked-sidebar rule | `useWindowClass` and `useCanDockSidebar` in `src/frontend/appShell/layout` |
 | Android back for a layer inside a route | `useFocusedBackPress` in `src/frontend/appShell/navigation`, held only while the route is focused |
 | Pages rendered in a side pane, and the file pane beside chat | `PaneChromeProvider` in `src/frontend/appShell/layout`; `FilePaneProvider`, `FilePaneHost`, and `useFilePane` in `src/frontend/appShell/pane` |
 | Mermaid diagrams in Markdown | `MermaidBlock`, `MermaidSvgView`, and the shared hidden renderer in `src/frontend/components/MermaidDiagram`; the offline page is `packages/mermaid-webview` |

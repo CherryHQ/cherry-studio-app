@@ -59,7 +59,7 @@ export function MainHeaderView({
     <>
       <Stack.Screen options={{ headerShown: true }} />
       <Stack.Toolbar placement="left">
-        {/* A permanent sidebar has no button that opens it. */}
+        {/* A column given to the file pane or sized to a fold has no sidebar button. */}
         {leadingAction ? renderToolbarItem(leadingAction) : null}
         <Stack.Toolbar.Spacer hidden={!leadingAction || !agent} width={4} />
         {agent ? (
@@ -70,9 +70,7 @@ export function MainHeaderView({
           </Stack.Toolbar.View>
         ) : null}
       </Stack.Toolbar>
-      {rightActions.length > 0 ? (
-        <Stack.Toolbar placement="right">{rightActions.map(renderToolbarItem)}</Stack.Toolbar>
-      ) : null}
+      <Stack.Toolbar placement="right">{rightActions.map(renderToolbarItem)}</Stack.Toolbar>
     </>
   );
 }

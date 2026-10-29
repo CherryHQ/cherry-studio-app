@@ -5,12 +5,21 @@ It is app-wide navigation infrastructure rather than a route page.
 
 In compact windows the drawer is a temporary overlay, with its width capped at 400 logical points
 and at least 64 points of chat left visible. Wide windows (see [layout](../layout/README.md)) make
-it a permanent column beside the content region, divided by a hairline; the chat header then drops
-its sidebar and new-chat buttons. `useSidebarColumn` resolves that column through the pure
-`resolveSidebarColumn`: 280 points for the sidebar, the file pane width for search, the leading half
-of the window when an iPhone Duo is partly folded, or yielded entirely while the file pane holds the
-column beside a focused chat. `SidebarColumnProvider` owns whether the column shows the sidebar or
-search. Navigation state reports a permanent drawer as closed, so visibility comes from
+it a permanent column beside the content region, divided by a hairline. `useSidebarColumn` resolves
+that column through the pure `resolveSidebarColumn`: 280 points for the sidebar, the file pane width
+for search, the leading half of the window when an iPhone Duo is partly folded, yielded entirely
+while the file pane holds the column beside a focused chat, or collapsed when the user hid it.
+`SidebarColumnProvider` owns whether the column shows the sidebar or search, and the
+`ui.sidebar.collapsed` preference. A partly folded Duo ignores that preference: hiding the column
+would leave the chat across the fold.
+
+The header's leading sidebar button is the one entry for every width. `SidebarToggleProvider` wraps
+the drawer and publishes `resolveSidebarToggleAction` for the column through `useSidebarToggle`,
+exported from `@/frontend/appShell/sidebar/toggle` so headers do not load the sidebar UI: `open`
+for the overlay, `hide` or `show` for a wide column, and nothing while the file pane or a fold holds
+it. Hiding and showing switch the drawer between its permanent and closed overlay types in one step:
+animating the column's width would relayout the chat on every frame. Swiping only opens the
+overlay in compact windows. Navigation state reports a permanent drawer as closed, so visibility comes from
 `useSidebarPresence`: `persistent`, `open`, or `closed`. Selection mode, the title marquee, and read
 receipts use it instead of the raw drawer status.
 
