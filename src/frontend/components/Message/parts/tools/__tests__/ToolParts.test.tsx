@@ -21,6 +21,7 @@ jest.mock('@/frontend/components/McpApp', () => ({
 }));
 
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => [0] }));
+jest.mock('@cherrystudio/ui/utils', () => ({ normalizeFontSizeStep: (step: number) => step }));
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetStringAsync(text) }));
 jest.mock('@cherrystudio/app-icons/icons/copy', () => jest.requireActual('react-native').View);
@@ -230,7 +231,8 @@ describe('tool message detail sheets', () => {
     const code = findByTestID('mock-code-block').props.code as string;
     expect(code).toBe(JSON.stringify(output, null, 2));
     expect(code).toContain('must remain copyable');
-    expect(findAllByTestID('tool-result-copy-full-text')).toHaveLength(1);
+    // findByProps throws when more than one outermost element carries the ID.
+    expect(() => findByTestID('tool-result-copy-full-text')).not.toThrow();
 
     await act(async () => {
       findByTestID('tool-result-copy-full-text').props.onPress();

@@ -4,10 +4,10 @@ import { createCodeBlockMarkdown } from '../../../markdown';
 import type { TypographySizeStep } from '../../../utils/typography-scale';
 import { Button } from '../../button';
 import { MessagePartSection } from '../../message-part/components/message-part-sections';
-import type { MessagePartSectionTitleProps } from '../../message-part/message-part.types';
+import type { MessagePartSectionProps } from '../../message-part/message-part.types';
 import { MarkdownContent } from './markdown-text';
 
-export type CodeBlockProps = MessagePartSectionTitleProps & {
+export type CodeBlockProps = Pick<MessagePartSectionProps, 'title' | 'tone'> & {
   code: string;
   copyLabel: string;
   copyTestID?: string;
