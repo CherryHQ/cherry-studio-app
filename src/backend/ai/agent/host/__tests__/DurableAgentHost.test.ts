@@ -2623,6 +2623,7 @@ describe('quoted requests through durable execution', () => {
         readAsBytes: async () => undefined,
         readAsDataUrl: async () => undefined,
         readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
       },
     });
     const turn = await state.reserve('running', [
