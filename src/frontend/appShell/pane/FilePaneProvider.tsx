@@ -54,7 +54,7 @@ export function FilePaneProvider({ children }: PropsWithChildren) {
   const [lastTouched, setLastTouched] = useState<TouchRegion>('chat');
   // The expanded state to restore when a carried preview returns beside the chat.
   const [carried, setCarried] = useState<{ wasExpanded: boolean } | null>(null);
-  // An upright foldable is narrow but tall enough to stack the pane above the chat.
+  // A narrow window folded across its middle is tall enough to stack the pane above the chat.
   const isAvailable = isLocal && (windowClass !== 'compact' || (fold !== null && isAcross(fold)));
 
   // Availability only changes on a current snapshot, so a rotation's stale fold cannot carry.

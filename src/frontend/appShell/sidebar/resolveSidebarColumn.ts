@@ -1,6 +1,9 @@
-import { isAcross, resolveFilePaneWidth, windowRegionWidths } from '@/frontend/appShell/layout';
-
-import type { FoldRegion } from '../../../../modules/fold-region';
+import {
+  type FoldRegion,
+  isAcross,
+  resolveFilePaneWidth,
+  windowRegionWidths,
+} from '@/frontend/appShell/layout';
 
 /** What the window's left column shows beside the content region. */
 export type SidebarColumnContent = 'sidebar' | 'search';
@@ -38,7 +41,7 @@ type SidebarColumnInput = {
 
 /**
  * Lists and the content region meet at a fold whenever the device is partly folded, as the file
- * pane does; flat, the column keeps its regular width for its content. The fold sets the layout
+ * pane does; a flat device reports no fold, and the column keeps its regular width for its content. The fold sets the layout
  * while it divides the window: hiding the column would leave the chat straddling it, so a collapsed
  * sidebar returns until the device lies flat again.
  */
@@ -55,7 +58,7 @@ export function resolveSidebarColumn({
   if (!isWide) return { kind: 'overlay' };
   if (isPaneInColumn) return { kind: 'yielded' };
 
-  if (fold && fold.isActive && !isAcross(fold)) {
+  if (fold && !isAcross(fold)) {
     const end = fold.x + fold.width;
     if (fold.x > 0 && end < windowWidth) {
       return { content, foldGap: fold.width, kind: 'permanent', width: end };

@@ -192,6 +192,7 @@
     "react-native-quick-base64": "3.0.0",
     "react-native-quick-crypto": "1.1.8",
     "react-native-reanimated": "4.7.1",
+    "react-native-reserved-regions": "0.2.0",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "4.30.0",
     "react-native-share": "12.3.1",
