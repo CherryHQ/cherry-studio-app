@@ -7,6 +7,9 @@ import {
 } from 'react-native-keyboard-controller';
 import { useSharedValue } from 'react-native-reanimated';
 
+// A software keyboard starts moving well within this after focus; past it, none is coming.
+const keyboardStartTimeout = 400;
+
 /** Editing belongs to the whole composer, including its menus and pickers. */
 export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle | null>) {
   const [isEditing, setIsEditing] = useState(false);
@@ -16,20 +19,46 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
   const keyboardTracking = useSharedValue(false);
   const inputTag = useSharedValue<number | null>(null);
   const isDismissPendingRef = useRef(false);
+  const activationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeInputRef = useRef<Pick<ComposerInputHandle, 'blur'> | null>(null);
 
+  const cancelActivation = useCallback(() => {
+    if (activationTimerRef.current === null) return false;
+    clearTimeout(activationTimerRef.current);
+    activationTimerRef.current = null;
+    return true;
+  }, []);
+  const commitActivation = useCallback(() => {
+    if (cancelActivation()) setIsEditing(true);
+  }, [cancelActivation]);
+
   useEffect(() => {
-    const subscription = KeyboardEvents.addListener('keyboardDidHide', () => {
+    // On iOS a React commit in flight when the keyboard starts makes Reanimated hold
+    // back that start event's writes, so the dock and transcript skip the keyboard's
+    // animation. Editing state therefore commits once the keyboard has started; the
+    // dock and editor already follow the UI-thread signals. A newer focus cancels a
+    // pending dismissal.
+    const showStarted = KeyboardEvents.addListener('keyboardWillShow', commitActivation);
+    const hideStarted = KeyboardEvents.addListener('keyboardWillHide', () => {
+      if (isDismissPendingRef.current) setIsEditing(false);
+    });
+    const hidden = KeyboardEvents.addListener('keyboardDidHide', () => {
       // Follow the native closing animation, then stop consuming global keyboard
-      // coordinates. A newer focus cancels this dismissal before a late hide.
+      // coordinates.
       if (isDismissPendingRef.current) {
         isDismissPendingRef.current = false;
+        setIsEditing(false);
         keyboardTracking.set(false);
       }
     });
 
-    return () => subscription.remove();
-  }, [keyboardTracking]);
+    return () => {
+      showStarted.remove();
+      hideStarted.remove();
+      hidden.remove();
+      cancelActivation();
+    };
+  }, [cancelActivation, commitActivation, keyboardTracking]);
 
   // A tap focuses the field natively, so iOS starts the keyboard before JS hears
   // of the focus. Only a dock moved inside this start event rides the keyboard's
@@ -59,9 +88,14 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
       isEditingRef.current = true;
       isDismissPendingRef.current = false;
       keyboardTracking.set(true);
-      setIsEditing(true);
+      if (KeyboardController.isVisible()) {
+        setIsEditing(true);
+      } else if (activationTimerRef.current === null) {
+        // A hardware keyboard never starts one.
+        activationTimerRef.current = setTimeout(commitActivation, keyboardStartTimeout);
+      }
     },
-    [inputRef, keyboardTracking],
+    [commitActivation, inputRef, keyboardTracking],
   );
 
   const dismissInput = useCallback(() => {
@@ -69,13 +103,14 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
     // One editing session must issue it only once, including before React commits.
     if (!isEditingRef.current) return;
     isEditingRef.current = false;
-    setIsEditing(false);
+    cancelActivation();
     isDismissPendingRef.current = KeyboardController.isVisible();
     if (!isDismissPendingRef.current) {
+      setIsEditing(false);
       keyboardTracking.set(false);
     }
     (activeInputRef.current ?? inputRef.current)?.blur();
-  }, [inputRef, keyboardTracking]);
+  }, [cancelActivation, inputRef, keyboardTracking]);
 
   const runInputReplacement = useCallback(
     async <TValue>(present: () => Promise<TValue> | TValue): Promise<TValue> => {

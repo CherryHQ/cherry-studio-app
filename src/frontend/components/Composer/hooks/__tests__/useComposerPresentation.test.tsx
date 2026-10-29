@@ -100,6 +100,7 @@ describe('useComposerPresentation', () => {
     });
 
     expect(mockBlur).toHaveBeenCalledTimes(1);
+    act(() => emitKeyboardEvent('keyboardWillHide'));
     expectPresentation(false, true);
     act(() => emitKeyboardEvent('keyboardDidHide'));
     expect(presentation.state.keyboardTracking.get()).toBe(false);
@@ -124,6 +125,8 @@ describe('useComposerPresentation', () => {
   test('follows dismissal until the keyboard finishes closing, then detaches', () => {
     act(() => presentation.actions.activateInput());
     act(() => presentation.actions.dismissInput());
+    // Editing state commits only after the keyboard's start, never alongside it.
+    expectPresentation(true, true);
     act(() => emitKeyboardEvent('keyboardWillHide'));
 
     expectPresentation(false, true);
@@ -171,10 +174,38 @@ describe('useComposerPresentation', () => {
       presentation.actions.activateInput();
       emitKeyboardEvent('keyboardWillHide');
       emitKeyboardEvent('keyboardDidHide');
+      emitKeyboardEvent('keyboardWillShow');
     });
 
     expect(presentation.state.isEditing).toBe(true);
     expect(mockBlur).not.toHaveBeenCalled();
+  });
+
+  test('commits editing once its keyboard has started, not on focus', () => {
+    mockIsKeyboardVisible.mockReturnValue(false);
+    act(() => presentation.actions.activateInput());
+    expectPresentation(false, true);
+
+    act(() => emitKeyboardEvent('keyboardWillShow'));
+    expectPresentation(true, true);
+  });
+
+  test('commits editing without a software keyboard, and not after an earlier dismissal', () => {
+    jest.useFakeTimers();
+    try {
+      mockIsKeyboardVisible.mockReturnValue(false);
+      act(() => presentation.actions.activateInput());
+      act(() => jest.advanceTimersByTime(400));
+      expectPresentation(true, true);
+
+      act(() => presentation.actions.dismissInput());
+      act(() => presentation.actions.activateInput());
+      act(() => presentation.actions.dismissInput());
+      act(() => jest.advanceTimersByTime(400));
+      expectPresentation(false, false);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('preserves the current composer state when a keyboard hide notification arrives', () => {

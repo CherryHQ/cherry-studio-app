@@ -9,6 +9,7 @@ const mockReactions: {
   prepare: () => unknown;
   react: (current: unknown, previous: unknown) => void;
   last: unknown;
+  deps: unknown[];
 }[] = [];
 
 jest.mock('@cherrystudio/app-icons/icons/maximize-2', () => () => null);
@@ -28,10 +29,12 @@ jest.mock('react-native-reanimated', () => {
     useAnimatedReaction: (
       prepare: () => unknown,
       react: (current: unknown, previous: unknown) => void,
+      deps: unknown[] = [],
     ) => {
-      const entry = React.useRef({ prepare, react, last: null as unknown }).current;
-      entry.prepare = prepare;
-      entry.react = react;
+      const entry = React.useRef({ prepare, react, last: null as unknown, deps }).current;
+      // Changed dependencies recreate the reaction, which then sees no previous value.
+      if (deps.some((dep, index) => dep !== entry.deps[index])) entry.last = null;
+      Object.assign(entry, { prepare, react, deps });
       if (!mockReactions.includes(entry)) mockReactions.push(entry);
     },
     useAnimatedStyle: (factory: () => object) => factory(),
@@ -116,6 +119,7 @@ describe('Composer.Editor', () => {
     flushReactions();
     expect(activeTargets()).toEqual([1]);
 
+    // The committed close collapses it while the keyboard signal is still raised.
     act(() => renderer.update(renderEditor(false)));
     flushReactions();
     expect(activeTargets()).toEqual([1, 0]);

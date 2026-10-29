@@ -111,7 +111,11 @@ export function ComposerEditor({
   useEffect(() => morphTo(isInputActive), [isInputActive, morphTo]);
   useAnimatedReaction(
     () => activeSignal?.get() ?? false,
-    (raised) => morphTo(raised || isInputActive),
+    (raised, previous) => {
+      // Only the signal's own changes move the shape: a commit that recreates this
+      // reaction must not re-expand an editor the committed state just closed.
+      if (previous !== null && raised !== previous) morphTo(raised || isInputActive);
+    },
     [activeSignal, isInputActive, morphTo],
   );
 
