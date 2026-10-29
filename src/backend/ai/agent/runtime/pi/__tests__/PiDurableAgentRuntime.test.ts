@@ -231,7 +231,7 @@ describe('Persistent Agent facade', () => {
           },
         ],
       });
-      expect(JSON.stringify(f.requests.at(-1)).match(/# Referenced messages/g)).toHaveLength(1);
+      expect(JSON.stringify(f.requests.at(-1)).match(/> Snapshot/g)).toHaveLength(1);
       expect(JSON.stringify(f.requests.at(-1))).toContain('Continue the interrupted answer');
       expect(f.ports.resolveTool).not.toHaveBeenCalled();
     } finally {
@@ -797,8 +797,8 @@ describe('Persistent Agent facade', () => {
         ['first', 'failed'],
       ]);
       expect(calls).toBe(2);
-      expect(JSON.stringify(contexts[0]).match(/# Referenced messages/g)).toHaveLength(1);
-      expect(JSON.stringify(contexts[1]).match(/# Referenced messages/g)).toHaveLength(2);
+      expect(JSON.stringify(contexts[0]).match(/> Snapshot /g)).toHaveLength(1);
+      expect(JSON.stringify(contexts[1]).match(/> Snapshot /g)).toHaveLength(2);
       expect(JSON.stringify(contexts[1])).toContain('Snapshot second');
     } finally {
       await observed.unsubscribe();

@@ -674,7 +674,7 @@ test('remote input explicitly rejects injected quote and orphan author metadata'
     quotes: [
       { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
     ] as [{ id: string; sourceMessageId: string; text: string }],
-    quoteAuthor: { role: 'user' as const },
+    quoteAuthor: { role: 'assistant' as const },
   };
   expect(() => remoteInput({ parts: [{ type: 'text', text: 'Request', ...fields }] })).toThrow();
   expect(() =>

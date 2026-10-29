@@ -1,5 +1,5 @@
 import type { useApiClient } from '@/frontend/data';
-import { messageQuoteSnapshot, type AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentMessageView } from '@/shared/contracts/agent';
 
 type QuoteSourceStateReader = {
   getState(sessionId: string): { liveMessages: readonly AgentMessageView[] };
@@ -16,7 +16,7 @@ export function completeChatQuoteSource(
   const live = client
     .getState(sessionId)
     .liveMessages.find((message) => message.id === source.id && message.sessionId === sessionId);
-  return live && messageQuoteSnapshot(live) !== undefined ? live : source;
+  return live?.status === 'success' ? live : source;
 }
 
 export async function readChatQuoteSource(

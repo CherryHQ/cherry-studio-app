@@ -25,7 +25,6 @@ import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/compone
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { editReplyHref } from '../../../editReply/editReplyRoute';
-import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
@@ -49,7 +48,6 @@ type AssistantMessageActionsState = {
 };
 
 type AssistantMessageActions = {
-  replyToMessage?: (input: { messageId: string }) => Promise<void>;
   editAssistantMessage?: (input: { messageId: string }) => void;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
@@ -92,7 +90,6 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { alert } = useAlert();
-  const quoteActions = useChatQuoteActions();
   const translationStore = useMessageTranslationStore();
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
@@ -302,7 +299,6 @@ export function AssistantMessageActionsProvider({
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-      onReply={quoteActions?.replyToMessage}
       onShare={share}
       onEdit={editableMessageIds.size ? edit : undefined}
       editableMessageIds={editableMessageIds}
@@ -344,7 +340,6 @@ export function AssistantMessageActionsProvider({
 export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
-  onReply: replyToMessage,
   onShare: shareAssistantMessage,
   onEdit: editAssistantMessage,
   onFork: forkFromAssistantMessage,
@@ -359,7 +354,6 @@ export function ChatMessageActionsProvider({
   isEditDisabled = true,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
-  onReply?: AssistantMessageActions['replyToMessage'];
   onShare: AssistantMessageActions['shareAssistantMessage'];
   onEdit?: AssistantMessageActions['editAssistantMessage'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
@@ -438,7 +432,6 @@ export function ChatMessageActionsProvider({
   );
   const actionsValue = useMemo(
     () => ({
-      replyToMessage,
       answerWithModel,
       editAssistantMessage,
       copyAssistantMessage,
@@ -449,7 +442,6 @@ export function ChatMessageActionsProvider({
       shareAssistantMessage,
     }),
     [
-      replyToMessage,
       answerWithModel,
       editAssistantMessage,
       copyAssistantMessage,

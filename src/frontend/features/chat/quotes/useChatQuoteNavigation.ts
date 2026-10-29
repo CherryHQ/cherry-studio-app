@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { useApiClient } from '@/frontend/data';
-import { messageQuoteSnapshot } from '@/shared/contracts/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { useAgentChatClient } from '../runtime/ChatProvider';
@@ -89,8 +88,7 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
           try {
             const source = await lookup();
             if (!active()) return;
-            if (!source || messageQuoteSnapshot(source) === undefined)
-              return finish({ state: 'unavailable' });
+            if (!source) return finish({ state: 'unavailable' });
             await client.selectMessage(sessionId, source.id);
             if (!active()) return;
             const page = await api.get(`/agent-sessions/${sessionId}/messages`, {
@@ -101,9 +99,7 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
             if (!page.items.some((item) => item.id === source.id)) {
               const fresh = await lookup();
               return finish(
-                fresh && messageQuoteSnapshot(fresh) !== undefined
-                  ? { state: 'retryable', reason: 'branch-changed' }
-                  : { state: 'unavailable' },
+                fresh ? { state: 'retryable', reason: 'branch-changed' } : { state: 'unavailable' },
               );
             }
             const exactSource = completeChatQuoteSource(
@@ -111,8 +107,7 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
               client,
               sessionId,
             );
-            if (!exactSource || messageQuoteSnapshot(exactSource) === undefined)
-              return finish({ state: 'unavailable' });
+            if (!exactSource) return finish({ state: 'unavailable' });
             setNavigation({
               messageId: source.id,
               messageRequestId: request.windowId,
@@ -128,7 +123,7 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
               try {
                 const fresh = await lookup();
                 finish(
-                  fresh && messageQuoteSnapshot(fresh) !== undefined
+                  fresh
                     ? { state: 'retryable', reason: 'branch-changed' }
                     : { state: 'unavailable' },
                 );

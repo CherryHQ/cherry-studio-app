@@ -44,7 +44,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { AssistantMessage, type MessageListItem } from '@/frontend/components/Message';
+import {
+  AssistantMessage,
+  type MessageListItem,
+  MessageSelectionActionProvider,
+  useMessageSelectionAction,
+} from '@/frontend/components/Message';
 
 import { useAgentAnswers } from '../../../runtime';
 import {
@@ -153,6 +158,19 @@ function ExpandedAnswer({
   const reduceMotion = useReducedMotion();
   const { selectBranch } = useAssistantMessageActions();
   const sessionId = useChatSessionId();
+  // A quote is written in the composer this layer covers, so quoting closes the layer.
+  const parentSelectionAction = useMessageSelectionAction();
+  const selectionAction = useMemo(
+    () =>
+      parentSelectionAction && {
+        ...parentSelectionAction,
+        onPress: (selection: { messageId: string; text: string }) => {
+          parentSelectionAction.onPress(selection);
+          onClosed();
+        },
+      },
+    [onClosed, parentSelectionAction],
+  );
   // The opened answer finds its row, whichever answer of the group the row shows.
   const row = useMemo(
     () =>
@@ -343,7 +361,7 @@ function ExpandedAnswer({
 
   const model = group.models[shownIndex];
   return (
-    <>
+    <MessageSelectionActionProvider action={selectionAction}>
       {/* Measures the region the layer covers from. */}
       <View
         className="absolute inset-0"
@@ -436,7 +454,7 @@ function ExpandedAnswer({
                   >
                     {shown && shown.status !== 'pending' ? (
                       <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-                        <AssistantMessageToolbar message={shown} onReply={onClosed} />
+                        <AssistantMessageToolbar message={shown} />
                         <View className="min-w-0 max-w-full flex-1 items-end">
                           {renderUsage?.(shown)}
                         </View>
@@ -449,7 +467,7 @@ function ExpandedAnswer({
           ) : null}
         </View>
       ) : null}
-    </>
+    </MessageSelectionActionProvider>
   );
 }
 

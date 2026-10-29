@@ -96,7 +96,7 @@ export interface CherryTextMeta {
   /** Content references (citations, mentions). */
   references?: unknown[];
   quotes?: [{ id: string; sourceMessageId: string; text: string }];
-  quoteAuthor?: { role: 'user' | 'assistant'; name?: string };
+  quoteAuthor?: { role: 'assistant'; name?: string };
 }
 
 /** Cherry metadata on a ReasoningUIPart. */
@@ -167,9 +167,7 @@ export const CherryTextMetaSchema: z.ZodType<CherryTextMeta> = z.object({
   quotes: z
     .tuple([z.object({ id: z.string().min(1), sourceMessageId: z.uuid(), text: z.string() })])
     .optional(),
-  quoteAuthor: z
-    .object({ role: z.enum(['user', 'assistant']), name: z.string().optional() })
-    .optional(),
+  quoteAuthor: z.object({ role: z.literal('assistant'), name: z.string().optional() }).optional(),
 });
 
 export const CherryReasoningMetaSchema: z.ZodType<CherryReasoningMeta> = z.object({

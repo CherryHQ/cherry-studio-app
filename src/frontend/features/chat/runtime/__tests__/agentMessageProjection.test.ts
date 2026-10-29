@@ -957,7 +957,7 @@ test('settled and pending quote-only metadata survives the conditional display p
     quotes: [
       { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
     ] as [{ id: string; sourceMessageId: string; text: string }],
-    quoteAuthor: { role: 'user' as const },
+    quoteAuthor: { role: 'assistant' as const },
   };
   const source = message('q', {
     role: 'user',

@@ -191,7 +191,7 @@ describe('Pi API adapters', () => {
     await result.result();
     expect(payloads).toHaveLength(1);
     const wire = JSON.stringify(payloads[0]);
-    expect(wire.match(/# Referenced messages/g)).toHaveLength(2);
+    expect(wire.match(/> Snapshot (one|two)/g)).toHaveLength(2);
     const blocks = payloads[0].input as {
       role?: string;
       content?: { text?: string; type?: string }[];

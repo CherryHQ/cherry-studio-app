@@ -829,8 +829,11 @@ describe('local message quotes', () => {
     };
     expect(AgentMessagePartSchema.parse(old)).toEqual(old);
     expect(
-      AgentMessagePartSchema.safeParse({ ...old, quotes: [quote], quoteAuthor: { role: 'user' } })
-        .success,
+      AgentMessagePartSchema.safeParse({
+        ...old,
+        quotes: [quote],
+        quoteAuthor: { role: 'assistant' },
+      }).success,
     ).toBe(false);
   });
 });

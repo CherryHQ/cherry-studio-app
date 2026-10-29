@@ -57,7 +57,7 @@ test('quote-only terms never enter the replying row search text', () => {
             text: 'quoteOnlyNeedle',
           },
         ],
-        quoteAuthor: { role: 'user' },
+        quoteAuthor: { role: 'assistant' },
       },
     ]),
   ).toBe('My request');

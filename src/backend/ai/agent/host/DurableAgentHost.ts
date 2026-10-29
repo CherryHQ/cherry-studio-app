@@ -7,7 +7,6 @@ import type {
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
-import { messageQuoteSnapshot } from '@/shared/contracts/agent';
 import {
   AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
@@ -548,8 +547,8 @@ export class DurableAgentHost implements AgentProtocol {
           parsed.sessionId,
           quote.quotes[0].sourceMessageId,
         );
-        if (!source || messageQuoteSnapshot(source) === undefined)
-          fail('CAPABILITY_UNSUPPORTED', 'The quoted source is unavailable or incomplete.');
+        if (source?.role !== 'assistant')
+          fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
       }
       const parent = session.activeNodeId ?? null;
       const answers = replyTargets(parsed);

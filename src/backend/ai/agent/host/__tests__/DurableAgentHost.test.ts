@@ -2613,10 +2613,10 @@ describe('quoted requests through durable execution', () => {
         expect(request.input).toEqual([
           {
             type: 'text',
-            text: expect.stringContaining('[{"index":1,"text":"Immutable source snapshot"}]'),
+            text: expect.stringContaining('> Immutable source snapshot\n\nExplain'),
           },
         ]);
-        expect(JSON.stringify(request.input).match(/# Referenced messages/g)).toHaveLength(1);
+        expect(JSON.stringify(request.input).match(/> Immutable source snapshot/g)).toHaveLength(1);
         expect(request.metadata.userParts).toEqual([expect.objectContaining(fields)]);
       } finally {
         await state.host.close();
@@ -2635,7 +2635,7 @@ describe('quoted requests through durable execution', () => {
       const quoted = {
         ...fields,
         quotes: [
-          { ...fields.quotes[0], sourceMessageId: source.userMessageId },
+          { ...fields.quotes[0], sourceMessageId: source.assistantMessageId },
         ] as typeof fields.quotes,
       };
       for (let index = 0; index < 2; index++) {
@@ -2650,7 +2650,7 @@ describe('quoted requests through durable execution', () => {
       expect(requests).toHaveLength(2);
       for (const request of requests) {
         expect(request.metadata.userParts).toEqual([expect.objectContaining(quoted)]);
-        expect(JSON.stringify(request.input).match(/# Referenced messages/g)).toHaveLength(1);
+        expect(JSON.stringify(request.input).match(/> Immutable source snapshot/g)).toHaveLength(1);
       }
       await expect(
         state.host.submitMessage({

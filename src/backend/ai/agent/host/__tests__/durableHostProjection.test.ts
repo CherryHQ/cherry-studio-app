@@ -231,7 +231,7 @@ test('durable userParts retain the snapshot and reject ambiguous carriers before
     quotes: [
       { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
     ],
-    quoteAuthor: { role: 'user' },
+    quoteAuthor: { role: 'assistant' },
   };
   expect(DurableTurnMetadataSchema.parse({ ...metadata, userParts: [quoted] }).userParts).toEqual([
     quoted,

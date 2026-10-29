@@ -85,9 +85,7 @@ function useQuoteLine(fields: QuoteFields) {
   const [isOpening, setIsOpening] = useState(false);
   const quote = fields.quotes?.[0];
   if (!quote || !fields.quoteAuthor) return undefined;
-  const author =
-    fields.quoteAuthor.name ??
-    t(fields.quoteAuthor.role === 'user' ? 'chat.quote.you' : 'chat.quote.assistant');
+  const author = fields.quoteAuthor.name ?? t('chat.quote.assistant');
   const text = t('chat.quote.line', {
     author,
     text: stripMarkdownFormatting(quote.text).replace(/\s+/g, ' ').trim(),

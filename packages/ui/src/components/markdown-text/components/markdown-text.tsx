@@ -38,6 +38,12 @@ export type MarkdownSelectionMenuLabels = {
   copyAsMarkdown: string;
 };
 
+/** One app action shown beside Copy in the native menu of selected text. */
+export type MarkdownSelectionAction = {
+  label: string;
+  onPress: (selectedText: string) => void;
+};
+
 export type MarkdownTextProps = {
   /**
    * URL prefix of inline citation markers. Citations annotate the answer rather
@@ -50,6 +56,7 @@ export type MarkdownTextProps = {
   markdown: string;
   onLinkPress: (url: string) => void;
   selectable?: boolean;
+  selectionAction?: MarkdownSelectionAction;
   selectionMenuLabels?: MarkdownSelectionMenuLabels;
 };
 
@@ -133,6 +140,7 @@ export function MarkdownText({
   markdown,
   onLinkPress,
   selectable = true,
+  selectionAction,
   selectionMenuLabels,
 }: MarkdownTextProps) {
   const { theme } = useUniwind();
@@ -180,6 +188,16 @@ export function MarkdownText({
         copyAsMarkdown: { label: selectionMenuLabels.copyAsMarkdown },
       },
     [selectionMenuLabels],
+  );
+  const contextMenuItems = useMemo(
+    () =>
+      selectionAction && [
+        {
+          text: selectionAction.label,
+          onPress: ({ text }: { text: string }) => selectionAction.onPress(text),
+        },
+      ],
+    [selectionAction],
   );
   const markdownStyle = useMemo<MarkdownStyle>(() => {
     const typography = createMarkdownTypographyStyle(fontSizeStep, monoFontFamily);
@@ -283,6 +301,7 @@ export function MarkdownText({
   return (
     <MarkdownRenderer
       allowTrailingMargin={false}
+      contextMenuItems={contextMenuItems}
       flavor="github"
       markdown={normalizedMarkdown}
       markdownStyle={markdownStyle}

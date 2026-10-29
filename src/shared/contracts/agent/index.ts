@@ -126,7 +126,6 @@ export {
   MessageQuoteSchema,
   QuoteAuthorSchema,
   invalidQuoteCarriers,
-  messageQuoteSnapshot,
   type MessageQuote,
   type QuoteAuthor,
   type QuoteFields,

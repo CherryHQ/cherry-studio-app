@@ -1,45 +1,40 @@
 import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListItem } from '@/frontend/components/Message';
+import {
+  type MessageSelectionAction,
+  useMessageSelectionAction,
+} from '@/frontend/components/Message';
 
 import { useChatQuoteActions, useChatQuoteState } from '../ChatQuoteContext';
 import { ChatQuoteProvider } from '../ChatQuoteProvider';
 import { attachMessageQuote } from '../messageQuoteInput';
 
-const mockGet = jest.fn();
 const mockFocus = jest.fn();
-const mockApi = { get: mockGet };
-const mockClient = { client: { getState: () => ({ liveMessages: [] }) } };
-jest.mock('../../runtime/ChatProvider', () => ({ useAgentChatClient: () => mockClient }));
 const mockMeta = { inputRef: { current: { focus: mockFocus } } };
-jest.mock('@/frontend/data', () => ({ useApiClient: () => mockApi }));
 jest.mock('@/frontend/components/Composer', () => ({ useComposerMeta: () => mockMeta }));
-const mockToast = jest.fn();
-jest.mock('@cherrystudio/ui/components', () => ({
-  useToast: () => ({ toast: { show: mockToast } }),
-}));
+// The public barrel loads the whole message renderer; the provider only needs the context.
+jest.mock('@/frontend/components/Message', () =>
+  jest.requireActual('@/frontend/components/Message/parts/MessageSelectionActionContext'),
+);
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-const source = {
-  id: '00000000-0000-7000-8000-000000000001',
-  sessionId: 'A',
-  role: 'assistant',
-  status: 'success',
-  parts: [{ id: 'p', type: 'text', text: '```ts\nComplete original\n```', state: 'done' }],
-};
+const sourceId = '00000000-0000-7000-8000-000000000001';
 const openQuote = jest.fn();
 let actions: NonNullable<ReturnType<typeof useChatQuoteActions>>;
 let state: ReturnType<typeof useChatQuoteState>;
+let selection: MessageSelectionAction | undefined;
 function Probe() {
   const currentActions = useChatQuoteActions()!;
   const currentState = useChatQuoteState();
+  const currentSelection = useMessageSelectionAction();
   useLayoutEffect(() => {
     actions = currentActions;
     state = currentState;
+    selection = currentSelection;
   });
   return null;
 }
-const tree = (sessionId: string, enabled = true) => (
+const tree = (sessionId: string | undefined, enabled = true) => (
   <ChatQuoteProvider
     key={sessionId}
     sessionId={sessionId}
@@ -50,36 +45,55 @@ const tree = (sessionId: string, enabled = true) => (
     <Probe />
   </ChatQuoteProvider>
 );
+const quote = (text = 'Selected passage') =>
+  act(() => selection!.onPress({ messageId: sourceId, text }));
 let renderer: ReactTestRenderer;
-beforeEach(() => {
-  mockGet.mockReset();
-  mockGet.mockImplementation(async (path: string) => ({
-    items: [{ ...source, sessionId: path.includes('/B/') ? 'B' : 'A' }],
-  }));
-  mockFocus.mockClear();
-});
+beforeEach(() => mockFocus.mockClear());
 afterEach(() => {
   act(() => renderer?.unmount());
 });
-test('captures exactly one send attempt, locks selection, retains rejection and clears success', async () => {
-  await act(async () => {
+
+test('quoting a selection records the exact text and answer, then focuses on the next frame', () => {
+  let frame!: FrameRequestCallback;
+  const raf = jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {
+    frame = callback;
+    return 42;
+  });
+  try {
+    act(() => {
+      renderer = create(tree('A'));
+    });
+    expect(selection?.label).toBe('chat.quote.action');
+    quote('  line one\nline two  ');
+    expect(state.fields.quotes?.[0]).toMatchObject({
+      sourceMessageId: sourceId,
+      text: '  line one\nline two  ',
+    });
+    expect(state.fields.quoteAuthor).toEqual({ role: 'assistant', name: 'Captured Agent' });
+    expect(mockFocus).not.toHaveBeenCalled();
+    act(() => frame(0));
+    expect(mockFocus).toHaveBeenCalledTimes(1);
+    const first = state.fields;
+    quote('   ');
+    expect(state.fields).toBe(first);
+  } finally {
+    raf.mockRestore();
+  }
+});
+
+test('captures exactly one send attempt, locks selection, retains rejection and clears success', () => {
+  act(() => {
     renderer = create(tree('A'));
   });
-  await act(async () => {
-    await actions.replyToMessage({ messageId: source.id });
-  });
-  expect(state.fields.quotes?.[0].text).toBe(source.parts[0].text);
-  expect(state.fields.quoteAuthor).toEqual({ role: 'assistant', name: 'Captured Agent' });
+  quote();
   let attempt: ReturnType<typeof actions.capture>;
   act(() => {
     attempt = actions.capture();
   });
   expect(() => actions.capture()).toThrow();
   act(() => actions.clearQuote());
-  await act(async () => {
-    await actions.replyToMessage({ messageId: 'other' });
-  });
-  expect(mockGet).toHaveBeenCalledTimes(1);
+  quote('Another passage');
+  expect(state.fields).toBe(attempt!.fields);
   const parts = attachMessageQuote(
     [
       { type: 'text', text: 'Request' },
@@ -104,127 +118,38 @@ test('captures exactly one send attempt, locks selection, retains rejection and 
   });
   expect(state.fields).toEqual({});
 });
-test('session remount cancels late lookup; same-session jump and Agent changes preserve draft', async () => {
-  let resolve!: (value: unknown) => void;
-  mockGet.mockImplementationOnce(
-    () =>
-      new Promise((done) => {
-        resolve = done;
-      }),
-  );
-  await act(async () => {
+
+test('a session switch clears the draft quote; the same session keeps it', () => {
+  act(() => {
     renderer = create(tree('A'));
   });
-  let pending!: Promise<void>;
-  act(() => {
-    pending = actions.replyToMessage({ messageId: source.id });
-  });
-  await act(async () => {
-    renderer.update(tree('B'));
-    resolve({ items: [source] });
-    await pending;
-  });
+  quote();
+  const kept = state.fields;
+  act(() => renderer.update(tree('A')));
+  expect(state.fields).toBe(kept);
+  act(() => renderer.update(tree('B')));
   expect(state.fields).toEqual({});
-  await act(async () => {
-    await actions.replyToMessage({ messageId: source.id });
-  });
-  const snapshot = state.fields;
-  await act(async () => {
-    renderer.update(tree('B'));
-  });
-  expect(state.fields).toBe(snapshot);
-});
-test('remote/read-only capability has no eligible Reply and cannot select a quote', async () => {
-  await act(async () => {
-    renderer = create(tree('A', false));
-  });
-  await act(async () => {
-    await actions.replyToMessage({ messageId: source.id });
-  });
-  expect(mockGet).not.toHaveBeenCalled();
 });
 
-test('late admission rejection after a session switch cannot restore the old quote in the new composer', async () => {
-  await act(async () => {
+test('a disabled or unsaved conversation offers no selection action', () => {
+  act(() => {
+    renderer = create(tree('A', false));
+  });
+  expect(selection).toBeUndefined();
+  act(() => renderer.update(tree(undefined)));
+  expect(selection).toBeUndefined();
+});
+
+test('late admission rejection after a session switch cannot restore the old quote in the new composer', () => {
+  act(() => {
     renderer = create(tree('A'));
   });
-  await act(async () => {
-    await actions.replyToMessage({ messageId: source.id });
-  });
+  quote();
   let attempt!: ReturnType<typeof actions.capture>;
   act(() => {
     attempt = actions.capture();
   });
-  await act(async () => {
-    renderer.update(tree('B'));
-  });
+  act(() => renderer.update(tree('B')));
   act(() => attempt.finish(false));
   expect(state.fields).toEqual({});
-});
-
-test('Reply uses the public focus handle on the next frame and rejects incomplete display sources', async () => {
-  let frame!: FrameRequestCallback;
-  const raf = jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {
-    frame = callback;
-    return 42;
-  });
-  try {
-    await act(async () => {
-      renderer = create(tree('A'));
-    });
-    const message: MessageListItem = {
-      id: source.id,
-      role: 'assistant',
-      status: 'success',
-      data: { parts: [{ type: 'text', text: 'Visible', state: 'done' }] },
-    };
-    expect(actions.canReply(message)).toBe(true);
-    for (const status of ['pending', 'error', 'paused'] as const)
-      expect(actions.canReply({ ...message, status })).toBe(false);
-    expect(actions.canReply({ ...message, role: 'system' })).toBe(false);
-    await act(async () => {
-      await actions.replyToMessage({ messageId: source.id });
-    });
-    expect(mockFocus).not.toHaveBeenCalled();
-    act(() => frame(0));
-    expect(mockFocus).toHaveBeenCalledTimes(1);
-    const selected = state.fields;
-    await act(async () => {
-      renderer.update(
-        <ChatQuoteProvider
-          key="A"
-          sessionId="A"
-          enabled
-          authorName="Different Agent"
-          openQuote={openQuote}
-          partialMessageIds={[source.id]}
-        >
-          <Probe />
-        </ChatQuoteProvider>,
-      );
-    });
-    expect(actions.canReply(message)).toBe(false);
-    expect(state.fields).toBe(selected);
-    expect(state.fields.quoteAuthor?.name).toBe('Captured Agent');
-  } finally {
-    raf.mockRestore();
-  }
-});
-test('a Reply whose source cannot be read reports through a toast and leaves the draft unquoted', async () => {
-  mockToast.mockClear();
-  await act(async () => {
-    renderer = create(tree('A'));
-  });
-  mockGet.mockRejectedValueOnce(new Error('offline'));
-  await act(async () => {
-    await actions.replyToMessage({ messageId: source.id });
-  });
-  expect(mockToast).toHaveBeenCalledWith({ label: 'chat.quote.retryable', variant: 'danger' });
-  mockGet.mockResolvedValueOnce({ items: [] });
-  await act(async () => {
-    await actions.replyToMessage({ messageId: source.id });
-  });
-  expect(mockToast).toHaveBeenLastCalledWith({ label: 'chat.quote.unavailable' });
-  expect(state).toEqual({ fields: {}, isBusy: false });
-  expect(mockFocus).not.toHaveBeenCalled();
 });

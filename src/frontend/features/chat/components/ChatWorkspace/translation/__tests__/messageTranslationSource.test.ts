@@ -77,7 +77,7 @@ test('quote accessories cannot change original translation text or hash', () => 
                 text: 'Other source words',
               },
             ],
-            quoteAuthor: { role: 'user' },
+            quoteAuthor: { role: 'assistant' },
           },
         ),
       ],

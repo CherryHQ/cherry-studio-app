@@ -236,9 +236,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         authorName={agent.agent?.name}
         openQuote={quoteNavigation.openQuote}
         highlight={quoteNavigation.highlight}
-        partialMessageIds={messages
-          .filter((message) => message.completeness !== 'complete')
-          .map((message) => message.key)}
       >
         <McpAppConversationProvider
           enabled={hasComposer && agent.agent?.mode !== 'minimal'}

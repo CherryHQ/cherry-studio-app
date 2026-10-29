@@ -36,6 +36,10 @@ history, message rows and parts, viewport following, and scroll restoration.
   gesture exclusion above the bubble. Local cards draw a scanned PDF's recognition progress, and
   a line under them lists what the model did not receive (unrecognized pages, truncation) from the
   attachment reports. A pending reply's `inputFileEntryIds` lets it name that wait.
+  Its `quote` slot renders under the bubble in the same right-aligned column.
+- `MessageSelectionActionProvider` adds one feature action beside Copy in the native menu of
+  selected Markdown in a message body; the action receives the message id and the selected plain
+  text. Text outside a message body (translations, previews, user plain text) offers none.
 - `getBuiltInToolDisplay` exposes the shared title and platform-specific icon used by
   feature-owned tool approval UI.
 - `ToolRendererProvider` lets a source supply tool detail loading and presentation inside the

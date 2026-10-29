@@ -138,14 +138,7 @@ export function createAgentImageGeneration(dependencies: {
                 dependencies.ai.generateImage({
                   ...capturedSettings,
                   inputImages,
-                  prompt: [
-                    instructions.trim(),
-                    parts.some((part) => part.type === 'text' && part.quotes)
-                      ? modelPrompt
-                      : modelPrompt.trim(),
-                  ]
-                    .filter(Boolean)
-                    .join('\n\n'),
+                  prompt: [instructions.trim(), modelPrompt.trim()].filter(Boolean).join('\n\n'),
                   requestOptions: { signal: requestSignal },
                   uniqueModelId,
                   usageAttribution,

@@ -777,7 +777,7 @@ describe('SqliteAgentSessionStore conformance', () => {
       state: 'done',
       text: 'Authored request',
       quotes: [{ id: 'q', sourceMessageId, text: 'quoteOnlyNeedle' }],
-      quoteAuthor: { role: 'user' },
+      quoteAuthor: { role: 'assistant' },
     });
     // Structural historical snapshots do not require the source to precede them in row order.
     const first = await store.reserveSubmission({

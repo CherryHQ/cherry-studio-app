@@ -12,7 +12,6 @@ import { View } from 'react-native';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
-import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -22,8 +21,6 @@ import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
   message: MessageListItem;
-  onReply?: () => void;
-  isQuoteReplyEnabled?: boolean;
 };
 
 /**
@@ -32,10 +29,7 @@ type AssistantMessageToolbarProps = {
  */
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
-  onReply,
-  isQuoteReplyEnabled = true,
 }: AssistantMessageToolbarProps) {
-  const quoteActions = useChatQuoteActions();
   const { i18n, t } = useTranslation();
   const {
     copiedMessageId,
@@ -47,7 +41,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     isEditDisabled,
   } = useAssistantMessageActionsState();
   const {
-    replyToMessage,
     answerWithModel,
     editAssistantMessage,
     copyAssistantMessage,
@@ -74,15 +67,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   }
 
   const hasTranslation = translation ? translation.state.status !== 'idle' : false;
-  const reply =
-    isQuoteReplyEnabled && replyToMessage && quoteActions?.canReply(message)
-      ? () => {
-          onReply?.();
-          void replyToMessage({ messageId: message.id });
-        }
-      : undefined;
   const menuItems: MenuItem[] = [
-    ...(reply ? [{ id: 'reply', label: t('chat.quote.reply'), onPress: reply }] : []),
     ...(editAssistantMessage && editableMessageIds.has(message.id)
       ? [
           {

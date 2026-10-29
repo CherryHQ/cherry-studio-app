@@ -14,7 +14,6 @@ import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
-import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
 import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
 import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
@@ -154,8 +153,7 @@ function AssistantChatMessage({
       {message.status !== 'pending' ? (
         <BackgroundPressExclusion>
           <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-            {/* Cards own Reply by exact sibling; the row id can lag a pending branch choice. */}
-            <AssistantMessageToolbar message={message} isQuoteReplyEnabled={!isGrouped} />
+            <AssistantMessageToolbar message={message} />
             <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
           </ContextMenuExclusion>
         </BackgroundPressExclusion>
@@ -264,9 +262,7 @@ function ChatMessageContextMenu({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
-  const quoteActions = useChatQuoteActions();
-  const { replyToMessage, copyAssistantMessage, shareAssistantMessage } =
-    useAssistantMessageActions();
+  const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
   // These existing actions and the text projection accept either message role.
   const text =
     message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
@@ -277,15 +273,6 @@ function ChatMessageContextMenu({
     message.status === 'pending'
       ? []
       : [
-          ...(replyToMessage && !message.branch && quoteActions?.canReply(message)
-            ? [
-                {
-                  id: 'reply',
-                  label: t('chat.quote.reply'),
-                  onPress: () => void replyToMessage({ messageId: message.id }),
-                },
-              ]
-            : []),
           {
             disabled: !text,
             id: 'copy',

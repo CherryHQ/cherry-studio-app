@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import type { AgentMessageView } from './views';
-
 export const MessageQuoteSchema = z.strictObject({
   id: z.string().refine((id) => id.trim().length > 0, 'Quote id must be nonempty.'),
   sourceMessageId: z.uuid(),
@@ -9,7 +7,7 @@ export const MessageQuoteSchema = z.strictObject({
 });
 export type MessageQuote = z.infer<typeof MessageQuoteSchema>;
 export const QuoteAuthorSchema = z.strictObject({
-  role: z.enum(['user', 'assistant']),
+  role: z.literal('assistant'),
   name: z.string().optional(),
 });
 export type QuoteAuthor = z.infer<typeof QuoteAuthorSchema>;
@@ -44,26 +42,4 @@ export function invalidQuoteCarriers(parts: readonly unknown[], role = 'user'): 
       (!part.text?.trim() && !hasAttachment)
     );
   });
-}
-
-/** Original authored Markdown and readable file descriptors only; no nested quote expansion. */
-export function messageQuoteSnapshot(message: AgentMessageView): string | undefined {
-  if (message.role !== 'user' && message.role !== 'assistant') return undefined;
-  if (
-    message.status !== 'success' ||
-    message.parts.some(
-      (part) =>
-        (part.type === 'data-error' && part.data.code === 'MESSAGE_UNREADABLE') ||
-        ((part.type === 'text' || part.type === 'reasoning') && part.state !== 'done'),
-    )
-  )
-    return undefined;
-  const text = message.parts
-    .flatMap((part) => {
-      if (part.type === 'text') return [part.text];
-      if (part.type === 'file') return [`[${part.filename ?? part.mediaType} (${part.mediaType})]`];
-      return [];
-    })
-    .join('\n\n');
-  return text.trim() ? text : undefined;
 }

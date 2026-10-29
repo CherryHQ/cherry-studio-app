@@ -144,5 +144,5 @@ test('checkpoint reconstruction leaves already-materialized quote envelopes byte
   ]);
   const entries = createWorkingPiEntries(input, model);
   expect(entries[1]?.model?.[0]).toMatchObject({ content: text });
-  expect(JSON.stringify(entries).match(/# Referenced messages/g)).toHaveLength(1);
+  expect(JSON.stringify(entries).match(/> Snapshot/g)).toHaveLength(1);
 });

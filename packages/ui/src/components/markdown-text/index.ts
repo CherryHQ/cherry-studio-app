@@ -1,1 +1,5 @@
-export { MarkdownText, type MarkdownTextProps } from './components/markdown-text';
+export {
+  MarkdownText,
+  type MarkdownSelectionAction,
+  type MarkdownTextProps,
+} from './components/markdown-text';
