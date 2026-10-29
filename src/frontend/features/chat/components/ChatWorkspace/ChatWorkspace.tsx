@@ -279,6 +279,7 @@ export function ChatWorkspace({
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
           onShare={onShare}
+          sessionId={sessionId}
           snapshot={live}
           messages={mergedMessages}
         >

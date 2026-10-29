@@ -29,6 +29,23 @@ type ProcessGroupPartProps = {
   renderMode: MessagePartRenderMode;
 };
 
+/** The process disclosure's title: its persisted duration, or a plain label before one exists. */
+export function useMessageProcessTitle(
+  stats: MessageListItem['stats'],
+  parts: readonly CherryMessagePart[],
+) {
+  const { t } = useTranslation();
+  const reasoningDurations = parts.flatMap((part) => {
+    if (part.type !== 'reasoning') return [];
+    const thinkingMs = readCherryMeta(part)?.thinkingMs;
+    return thinkingMs === undefined ? [] : [thinkingMs];
+  });
+  const durationMs = getMessageProcessDurationMs(stats, reasoningDurations);
+  return durationMs === undefined
+    ? t('chat.process.title')
+    : t('chat.process.duration', { seconds: Math.max(1, Math.round(durationMs / 1000)) });
+}
+
 export function ProcessGroupPart({
   citationText,
   items,
@@ -36,23 +53,15 @@ export function ProcessGroupPart({
   messageParts,
   renderMode,
 }: ProcessGroupPartProps) {
-  const { t } = useTranslation();
   const handleDisclosureToggle = useMessageListDisclosureToggle();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const isStreaming = message.status === 'pending';
   const groups = groupMessageProcessItems(items);
   const latestActivityPart = findLatestActivityPart(messageParts);
-  const reasoningDurations = items.flatMap(({ part }) => {
-    if (part.type !== 'reasoning') return [];
-    const thinkingMs = readCherryMeta(part)?.thinkingMs;
-    return thinkingMs === undefined ? [] : [thinkingMs];
-  });
-  const persistedDurationMs = getMessageProcessDurationMs(message.stats, reasoningDurations);
-  const seconds = Math.max(1, Math.round((persistedDurationMs ?? 0) / 1000));
-  const title =
-    persistedDurationMs === undefined
-      ? t('chat.process.title')
-      : t('chat.process.duration', { seconds });
+  const title = useMessageProcessTitle(
+    message.stats,
+    items.map(({ part }) => part),
+  );
 
   const renderItem = ({ index, key, part }: ProcessGroupItem) => (
     <MessagePartRenderer

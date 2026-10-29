@@ -171,6 +171,7 @@ function RootStack() {
         options={{ headerTransparent: false }}
       />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
+      <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
       <Stack.Screen
         name="document-export"
         options={{

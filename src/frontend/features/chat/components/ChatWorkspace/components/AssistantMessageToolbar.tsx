@@ -37,9 +37,12 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     isDeleteDisabled,
     isRetryDisabled,
     retryableMessageIds,
+    editableMessageIds,
+    isEditDisabled,
   } = useAssistantMessageActionsState();
   const {
     answerWithModel,
+    editAssistantMessage,
     copyAssistantMessage,
     deleteMessageTurn,
     forkFromAssistantMessage,
@@ -65,6 +68,16 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 
   const hasTranslation = translation ? translation.state.status !== 'idle' : false;
   const menuItems: MenuItem[] = [
+    ...(editAssistantMessage && editableMessageIds.has(message.id)
+      ? [
+          {
+            id: 'edit',
+            label: t('chat.messageActions.edit'),
+            disabled: isEditDisabled,
+            onPress: () => editAssistantMessage({ messageId: message.id }),
+          },
+        ]
+      : []),
     ...(translation
       ? [
           {

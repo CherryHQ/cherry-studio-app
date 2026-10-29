@@ -61,6 +61,7 @@ import {
 import { hasRunnablePiTasks, PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import { createPiReplyEdits } from './piReplyEditing';
 import { PiToolBudget } from './piToolBudget';
 import {
   PI_WEB_FAILURE_GROUP,
@@ -583,6 +584,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!selected) return undefined;
     const turn = await this.project(lane, selected.record, selected.metadata);
     if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
+    // Forking would drop that edit; Cherry rebuilds the edited history instead.
+    if (
+      turn.answerBoundary &&
+      (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
+    )
+      return { turn: { ...turn, answerBoundary: null }, role: selected.role };
     return { turn, role: selected.role };
   }
 
@@ -600,13 +607,53 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!conversation) throw new Error('The working copy is missing.');
     const view = await conversation.context(
       BACKGROUND_CONTEXT,
-      options.currentContext ? {} : { at: record.answer },
+      options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
     );
     const contextCheckpoint =
       view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
         ? createPiContextCheckpoint(stored.turnId, view.messages)
         : null;
     return { contextCheckpoint };
+  }
+
+  async editReply(lane: RuntimeLane, input: Parameters<DurableAgentRuntime['editReply']>[1]) {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    const selected = await runtime.submissionForMessage(key, input.messageId);
+    const conversation = await runtime.conversation(key);
+    if (!conversation || selected?.role !== 'assistant' || selected.record.status !== 'done')
+      return undefined;
+    const latest = (await this.history(lane, { limit: 1 })).turns[0];
+    if (latest?.status !== 'completed' || !input.parts.length) return undefined;
+    // A background summary prepared with the old answer must not land after the edit.
+    await runtime.stop(key);
+    const [tail] = (await runtime.history(key, 1)).entries;
+    const view = await conversation.context(BACKGROUND_CONTEXT);
+    const edits = createPiReplyEdits(
+      view,
+      await runtime.turnEntries(key, selected.record),
+      input.parts,
+    );
+    if (!tail || !edits) return undefined;
+    const record = await runtime.inputRecord(key, latest.identity.requestId);
+    await this.rebinding(lane, () =>
+      runtime.editReply(key, {
+        latest: record ?? undefined,
+        revision: input.revision,
+        tail: tail.id,
+        edits,
+      }),
+    );
+    const updated = await conversation.context(BACKGROUND_CONTEXT);
+    const checkpoint =
+      updated.head && (CompactionEntry.is(updated.head) || ResetEntry.is(updated.head))
+        ? createPiContextCheckpoint(latest.identity.turnId, updated.messages)
+        : null;
+    return {
+      contextCheckpoint: checkpoint
+        ? { assistantMessageId: latest.assistantMessageId, checkpoint }
+        : null,
+    };
   }
 
   async abort(lane: RuntimeLane) {
