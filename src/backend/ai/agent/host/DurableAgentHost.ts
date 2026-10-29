@@ -536,31 +536,40 @@ export class DurableAgentHost implements AgentProtocol {
     return this.admit(parsed.sessionId, async (signal) => {
       const session = await this.requireSession(parsed.sessionId);
       const current = await this.syncSession(parsed.sessionId);
-      const parent = session.activeNodeId ?? null;
-      const answers = replyTargets(parsed);
-      const busy = this.busyLanes(parsed.sessionId);
-      if (busy.length && answers.length > 1)
-        fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
-      const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
-      // Only a follow-up to the busy lane's newest answer can wait in its queue.
-      const [first] = choices;
-      if (
-        busy.length &&
-        (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
-      )
-        fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
-      const scope = { through: parent, readOnlyTools: answers.length > 1 };
-      const targets = await eachAnswer(
-        answers,
-        signal,
-        async (answer, index, signal): Promise<ReplyTarget> => {
-          const input = { ...parsed, ...answer };
-          const choice = choices[index]!;
-          return { ...choice, plan: await this.planAnswer(choice, input, signal, scope), input };
-        },
-      );
-      return this.submitTargets(parsed, parent, targets, signal);
+      return this.submitAdmitted(parsed, session.activeNodeId ?? null, current, signal);
     });
+  }
+
+  /** The shared submission path: a new question plans its answers and reserves them. */
+  private async submitAdmitted(
+    parsed: AgentSubmitMessageInput,
+    parent: string | null,
+    current: RuntimeLane[],
+    signal: AbortSignal,
+  ) {
+    const answers = replyTargets(parsed);
+    const busy = this.busyLanes(parsed.sessionId);
+    if (busy.length && answers.length > 1)
+      fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
+    const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
+    // Only a follow-up to the busy lane's newest answer can wait in its queue.
+    const [first] = choices;
+    if (
+      busy.length &&
+      (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
+    )
+      fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
+    const scope = { through: parent, readOnlyTools: answers.length > 1 };
+    const targets = await eachAnswer(
+      answers,
+      signal,
+      async (answer, index, signal): Promise<ReplyTarget> => {
+        const input = { ...parsed, ...answer };
+        const choice = choices[index]!;
+        return { ...choice, plan: await this.planAnswer(choice, input, signal, scope), input };
+      },
+    );
+    return this.submitTargets(parsed, parent, targets, signal);
   }
 
   /** Rebuilt copies read their history from Cherry; native and forked ones keep the engine's. */
@@ -1052,14 +1061,13 @@ export class DurableAgentHost implements AgentProtocol {
       if (!edited || edited.role !== 'user' || !edited.turnId)
         fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
       // The edited row's turn holds the question and every answer it already
-      // has; its newest answer carries the inference choices the edit reuses.
+      // has; its newest answer carries the inference choices an edit reuses
+      // when the composer did not snapshot its own.
       const original = await this.store
         .listTurnMessages(session.id, edited.turnId)
         .then((turn) => turn.findLast((row) => row.role === 'assistant'));
       if (original?.status === 'pending' || original?.status === 'streaming')
         fail('SESSION_BUSY', 'The edited question is still being answered.');
-      // Editing answers the question anew with the original answer's inference
-      // choices, like a same-model retry that also replaces the question text.
       const snapshot =
         original?.inferenceSnapshot?.status === 'supported'
           ? original.inferenceSnapshot.snapshot
@@ -1077,47 +1085,37 @@ export class DurableAgentHost implements AgentProtocol {
           // Keep every part and let preparation report the unavailable attachment.
         }
       }
-      const choices = {
-        parts: editedUserInput(edited.parts, parsed.text, availableFiles),
-        ...submittedSkills(edited.parts),
-        ...(original?.modelId ? { modelId: original.modelId } : {}),
-        ...submittedEffort(snapshot?.reasoningEffort),
-        ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
-      };
-      // The edited row keeps its own answers; the selected leaf moves to the new
-      // question's answer, which becomes the transcript's continuation.
-      const parent = edited.parentId ?? null;
+      // The composer's current send choices define the new answer; an older
+      // client sends none and the original answer's inference choices apply.
       const edit: AgentSubmitMessageInput = {
         sessionId: session.id,
         userMessageId: uuidv7(),
         assistantMessageId: uuidv7(),
-        ...choices,
+        parts: editedUserInput(edited.parts, parsed.text, availableFiles),
+        ...(parsed.modelId
+          ? { modelId: parsed.modelId }
+          : original?.modelId
+            ? { modelId: original.modelId }
+            : {}),
+        ...(parsed.additionalReplies ? { additionalReplies: parsed.additionalReplies } : {}),
+        ...(parsed.reasoningEffort !== undefined
+          ? { reasoningEffort: parsed.reasoningEffort }
+          : submittedEffort(snapshot?.reasoningEffort)),
+        ...(parsed.imageGeneration
+          ? { imageGeneration: parsed.imageGeneration }
+          : snapshot?.imageGeneration
+            ? { imageGeneration: snapshot.imageGeneration }
+            : {}),
+        ...(parsed.skillIds !== undefined || parsed.skillAction !== undefined
+          ? {
+              ...(parsed.skillIds ? { skillIds: parsed.skillIds } : {}),
+              ...(parsed.skillAction ? { skillAction: parsed.skillAction } : {}),
+            }
+          : submittedSkills(edited.parts)),
       };
-      const [choice] = await this.chooseLanes(session.id, parent, 1, current);
-      const plan = await this.planAnswer(choice, edit, signal, { through: parent });
-      await this.submitTargets(
-        edit,
-        parent,
-        [{ ...choice, plan, input: edit }],
-        signal,
-        undefined,
-        async () => {
-          const reserved = await this.store.reserveEditSubmission({
-            sessionId: session.id,
-            editedMessageId: edited.id,
-            userMessageId: edit.userMessageId,
-            assistantMessageId: edit.assistantMessageId,
-            userParts: plan.userParts,
-            modelId: plan.inferenceSnapshot.model.uniqueModelId,
-            inferenceSnapshot: plan.inferenceSnapshot,
-          });
-          if (reserved.status === 'message-not-found')
-            fail('MESSAGE_NOT_FOUND', 'The edited question no longer exists.');
-          if (reserved.status === 'turn-unsettled')
-            fail('SESSION_BUSY', 'The edited question is still being answered.');
-          return { ...reserved, additionalAssistantMessages: [] };
-        },
-      );
+      // The edited row keeps its own answers; the new question branches from
+      // the edited row's parent and the shared path selects its answer.
+      await this.submitAdmitted(edit, edited.parentId ?? null, current, signal);
     });
   }
 
