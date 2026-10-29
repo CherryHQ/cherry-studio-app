@@ -29,7 +29,7 @@ import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRo
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
-import { editableAssistantReply, replaceAssistantReply } from '@/shared/utils/assistantReply';
+import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -516,14 +516,14 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           ),
         )
         .limit(1);
+      const parts = applyReplyEdits(source.data.parts, input.parts);
       if (
         session.runtimeRevision !== input.expectedRevision ||
         source.role !== 'assistant' ||
         source.status !== 'success' ||
         !source.turnId ||
         unsettled ||
-        editableAssistantReply(source.data.parts)?.text !== input.expectedText ||
-        !input.text.trim()
+        !parts
       )
         return { status: 'conflict' };
 
@@ -541,7 +541,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // Later checkpoints may retain the old answer verbatim. Rebuilding falls back to an earlier
       // one and replays the edited transcript, unless a copy refreshes its newest answer below.
       await clearCheckpointsFrom(tx, input.sessionId, firstRow!);
-      const parts = replaceAssistantReply(source.data.parts, input.text);
       const data = { ...source.data, parts };
       delete data.translations;
       const [row] = await tx

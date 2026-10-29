@@ -633,7 +633,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       view,
       await runtime.turnEntries(key, selected.record),
       input.parts,
-      input.text,
     );
     if (!tail || !edits) return undefined;
     const record = await runtime.inputRecord(key, latest.identity.requestId);

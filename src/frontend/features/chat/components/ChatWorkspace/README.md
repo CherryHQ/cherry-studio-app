@@ -38,12 +38,13 @@ Fork provenance stays on the Session, not in persisted Messages. When the copied
 is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
 
-Every successful answer offers **Edit reply** in its toolbar menu. Its sheet owns a plain-text
-draft of the final answer after the last tool call; typing does not update the composer or
-transcript. Saving uses the original text as an optimistic guard and reports conflicts without
-discarding the draft. The local conversation action updates both persisted history and future model
-context; later answers stay as they are. Busy/queued Sessions disable editing, and remote sources
-do not offer the action.
+Every successful local answer offers **Edit reply** in its toolbar menu, which opens the
+`/edit-reply` page owned by `features/chat/editReply`. The page lays the answer out in transcript
+order: prose between tool calls and the final result are editable cards, while reasoning and tool
+groups stay read-only rows. It loads the answer once, keeps its drafts while the transcript moves
+on, and saves only changed parts with their original text as an optimistic guard; a conflict keeps
+the drafts. The transcript updates through `message.edited`; later answers stay as they are.
+Busy/queued Sessions disable the menu item, and remote sources do not offer it.
 
 Several answers to one question are equal-height cards. Swiping settles on an answer and shows it,
 so the next message continues it; only the reader's own swipe chooses, never a scroll that ends

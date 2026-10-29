@@ -46,7 +46,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
-import { editableAssistantReply } from '@/shared/utils/assistantReply';
+import { applyReplyEdits } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
@@ -1052,16 +1052,15 @@ export class DurableAgentHost implements AgentProtocol {
       const session = await this.requireSession(parsed.sessionId);
       const message = await this.store.getMessage(session.id, parsed.messageId);
       if (!message) fail('MESSAGE_NOT_FOUND', 'The answer no longer exists.');
-      const reply = editableAssistantReply(message.parts);
       if (
         message.role !== 'assistant' ||
         message.status !== 'success' ||
         !message.turnId ||
-        !reply ||
-        reply.text !== parsed.expectedText
+        !applyReplyEdits(message.parts, parsed.parts)
       )
-        fail('MESSAGE_CONFLICT', 'Only an unchanged successful answer can be edited.');
-      if (reply.text === parsed.text) return message;
+        fail('MESSAGE_CONFLICT', 'Only unchanged text of a successful answer can be edited.');
+      const changed = parsed.parts.filter((part) => part.text !== part.expectedText);
+      if (changed.length === 0) return message;
       const revision = await this.store.getRuntimeRevision(session.id);
       if (revision === null) fail('SESSION_NOT_FOUND', 'The session no longer exists.');
       signal.throwIfAborted();
@@ -1073,8 +1072,7 @@ export class DurableAgentHost implements AgentProtocol {
           const edited = await this.conversations.editReply(lane, {
             messageId: message.id,
             revision,
-            parts: reply.parts,
-            text: parsed.text,
+            parts: changed,
           });
           if (!edited) continue;
           editedLanes.push(lane);
@@ -1082,6 +1080,7 @@ export class DurableAgentHost implements AgentProtocol {
         }
         const result = await this.store.editMessage({
           ...parsed,
+          parts: changed,
           expectedRevision: revision,
           contextCheckpoints,
         });

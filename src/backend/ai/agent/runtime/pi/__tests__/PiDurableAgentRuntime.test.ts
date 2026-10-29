@@ -202,8 +202,7 @@ describe('Persistent Agent facade', () => {
         await runtime.editReply(lane, {
           messageId: 'answer-one',
           revision: 0,
-          parts,
-          text: 'Corrected',
+          parts: [{ id: parts[0]!.id, expectedText: parts[0]!.text, text: 'Corrected' }],
         }),
       ).toEqual({ contextCheckpoint: null });
       expect(f.requests).toHaveLength(1);
@@ -226,8 +225,7 @@ describe('Persistent Agent facade', () => {
       const again = await runtime.editReply(lane, {
         messageId: 'answer-one',
         revision: 1,
-        parts: [{ id: parts[0]!.id, text: 'Corrected' }],
-        text: 'Corrected twice',
+        parts: [{ id: parts[0]!.id, expectedText: 'Corrected', text: 'Corrected twice' }],
       });
       expect(again).toBeDefined();
       // The Host reinstalls configuration before continuing a reopened copy.
@@ -281,8 +279,7 @@ describe('Persistent Agent facade', () => {
         await runtime.editReply(lane, {
           messageId: 'answer-one',
           revision: 0,
-          parts: [text!],
-          text: 'Corrected',
+          parts: [{ id: text!.id, expectedText: text!.text, text: 'Corrected' }],
         }),
       ).toEqual({ contextCheckpoint: null });
       expect(await runtime.revision(lane)).toBe(1);
@@ -315,8 +312,7 @@ describe('Persistent Agent facade', () => {
         await runtime.editReply(fork, {
           messageId: 'answer-one',
           revision: 1,
-          parts: [{ id: text!.id, text: 'Corrected' }],
-          text: 'Inherited edit',
+          parts: [{ id: text!.id, expectedText: 'Corrected', text: 'Inherited edit' }],
         }),
       ).toBeDefined();
       await submitAndWait(runtime, input('fork-two'), 'completed', fork);

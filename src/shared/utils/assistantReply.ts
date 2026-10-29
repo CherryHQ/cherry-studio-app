@@ -1,29 +1,26 @@
-import type { AgentMessagePart } from '@/shared/contracts/agent';
-import type { CherryMessagePart } from '@/shared/data/types/message';
+import type { AgentMessagePart, AgentReplyPartEdit } from '@/shared/contracts/agent';
 
-/** Only the final answer after the last tool call is editable; execution receipts stay intact. */
-export function editableAssistantReply<Part extends AgentMessagePart | CherryMessagePart>(
-  parts: readonly Part[],
-) {
-  const lastTool = parts.findLastIndex((part) => part.type === 'dynamic-tool');
-  const textParts = parts
-    .slice(lastTool + 1)
-    .filter((part): part is Part & { type: 'text'; text: string } => part.type === 'text');
-  const text = textParts
-    .map((part) => part.text)
-    .filter(Boolean)
-    .join('\n\n');
-  return text.trim() ? { text, parts: textParts } : undefined;
+/** Visible prose is editable; reasoning, files and tool receipts record what happened. */
+export function editableReplyParts(parts: readonly AgentMessagePart[]) {
+  return parts.filter(
+    (part): part is AgentMessagePart & { type: 'text'; id: string; text: string } =>
+      part.type === 'text' && part.text.trim().length > 0,
+  );
 }
 
-/** Keep part identities, reasoning, files and tool results; emptied fragments preserve Pi block indexes. */
-export function replaceAssistantReply(parts: AgentMessagePart[], text: string): AgentMessagePart[] {
-  const reply = editableAssistantReply(parts);
-  if (!reply) throw new Error('The message has no editable answer.');
-  const ids = new Set(reply.parts.map((part) => part.id));
-  return parts.map((part) =>
-    part.type === 'text' && ids.has(part.id)
-      ? { ...part, text: part.id === reply.parts[0]!.id ? text : '' }
-      : part,
-  );
+/**
+ * Applies the edits in place, keeping every part identity. Undefined when an edit names a part
+ * that is not editable or whose text no longer matches what the reader edited.
+ */
+export function applyReplyEdits(
+  parts: readonly AgentMessagePart[],
+  edits: readonly AgentReplyPartEdit[],
+): AgentMessagePart[] | undefined {
+  const editable = new Map(editableReplyParts(parts).map((part) => [part.id, part.text]));
+  if (edits.some((edit) => editable.get(edit.id) !== edit.expectedText)) return undefined;
+  const replacements = new Map(edits.map((edit) => [edit.id, edit.text]));
+  return parts.map((part) => {
+    const text = part.type === 'text' ? replacements.get(part.id) : undefined;
+    return text === undefined ? part : { ...part, text };
+  });
 }

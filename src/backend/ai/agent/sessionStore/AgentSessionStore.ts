@@ -246,8 +246,8 @@ export interface AgentSessionStore {
   deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
 
   /**
-   * Atomically edits a successful answer, drops its own stale checkpoint, saves refreshed copy
-   * checkpoints and advances the history revision.
+   * Atomically edits text parts of a successful answer, drops checkpoints that may retain the old
+   * text, saves refreshed copy checkpoints and advances the history revision.
    */
   editMessage(input: EditMessageInput): Promise<EditMessageResult>;
 

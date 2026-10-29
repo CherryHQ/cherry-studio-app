@@ -23,11 +23,10 @@ import type {
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { editableAssistantReply } from '@/shared/utils/assistantReply';
 
+import { editReplyHref } from '../../../editReply/editReplyRoute';
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
-import { EditAssistantReplySheet } from '../components/EditAssistantReplySheet';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
@@ -74,6 +73,8 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   /** Opens the source-owned share selector; absent while no Session exists. */
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
+  /** The local Session whose answers open in the reply editor. */
+  sessionId?: string;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
@@ -82,6 +83,7 @@ export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
   onShare,
+  sessionId,
   snapshot,
   messages,
 }: AssistantMessageActionsProviderProps) {
@@ -94,7 +96,6 @@ export function AssistantMessageActionsProvider({
   const sharing = useRef(false);
   // The answer whose question the model picker adds an answer to.
   const [answeringMessageId, setAnsweringMessageId] = useState<string>();
-  const [editing, setEditing] = useState<{ messageId: string; originalText: string }>();
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -150,7 +151,7 @@ export function AssistantMessageActionsProvider({
       key: string,
       action: ConversationAction<Input, Output> | undefined,
       value: Input,
-      errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed' | 'branchFailed' | 'editFailed',
+      errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed' | 'branchFailed',
       applied?: (result: Output) => void,
     ) => {
       if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key))
@@ -202,33 +203,17 @@ export function AssistantMessageActionsProvider({
     },
     [translationStore],
   );
-  const edit = useCallback(({ messageId }: { messageId: string }) => {
-    const current = latest.current;
-    const message = current.messages.find((message) => message.key === messageId);
-    if (current.isBusy || message?.actions.edit?.availability.state !== 'enabled') return;
-    const reply = editableAssistantReply(message.display.data.parts ?? []);
-    if (reply) {
+  const edit = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      const current = latest.current;
+      const message = current.messages.find((message) => message.key === messageId);
+      if (!sessionId || current.isBusy || message?.actions.edit?.availability.state !== 'enabled')
+        return;
       Keyboard.dismiss();
-      setEditing({ messageId, originalText: reply.text });
-    }
-  }, []);
-  const saveEdit = async (text: string) => {
-    if (!editing) return false;
-    const action = latest.current.messages.find((message) => message.key === editing.messageId)
-      ?.actions.edit;
-    return run(
-      `edit:${editing.messageId}`,
-      action,
-      { text, expectedText: editing.originalText },
-      'editFailed',
-      () => {
-        latest.current.toast.show({
-          label: latest.current.t('chat.messageActions.editSaved'),
-          variant: 'success',
-        });
-      },
-    );
-  };
+      router.push(editReplyHref({ sessionId, messageId }));
+    },
+    [sessionId],
+  );
   const retry = useCallback(
     ({ messageId }: { messageId: string }) => {
       const current = latest.current;
@@ -336,19 +321,6 @@ export function AssistantMessageActionsProvider({
       retryableMessageIds={retryableMessageIds}
     >
       {children}
-      {editing ? (
-        <EditAssistantReplySheet
-          key={editing.messageId}
-          originalText={editing.originalText}
-          available={
-            !isBusy &&
-            messages.find((message) => message.key === editing.messageId)?.actions.edit
-              ?.availability.state === 'enabled'
-          }
-          onClose={() => setEditing(undefined)}
-          onSave={saveEdit}
-        />
-      ) : null}
       {answeringMessage ? (
         <ModelPickerDrawer
           modelType="text"

@@ -1,5 +1,7 @@
 import type { ContextEdit, ContextView, EntryId, EntryRecord } from '@earendil-works/pi-durable';
 
+import type { AgentReplyPartEdit } from '@/shared/contracts/agent';
+
 import { readPiWebResult } from './PiWebResponse';
 
 export const PI_REPLY_EDIT_KIND = 'cherry.reply-edit';
@@ -36,17 +38,16 @@ export function applyPiReplyEdits(entries: readonly EntryRecord[]): readonly Ent
 
 /**
  * Text part IDs identify native content blocks of the answer's own turn. The current context, with
- * earlier edits applied, must still show the submitted text. Compacted/imported answers and
+ * earlier edits applied, must still show each part's expected text. Compacted/imported answers and
  * provider web replay cannot safely be rewritten this way; those use the Cherry rebuild path.
  */
 export function createPiReplyEdits(
   view: ContextView,
   turn: readonly EntryRecord[],
-  parts: readonly { id: string; text: string }[],
-  text: string,
+  parts: readonly AgentReplyPartEdit[],
 ): ContextEdit[] | undefined {
   const replacements = new Map<EntryId, Extract<ContextEdit, { action: 'replace' }>>();
-  for (const [partIndex, part] of parts.entries()) {
+  for (const part of parts) {
     const match = /^pi:(\d+):block:(\d+)$/.exec(part.id);
     if (!match) return undefined;
     const id = Number(match[1]) as EntryId;
@@ -65,7 +66,7 @@ export function createPiReplyEdits(
       .slice(index, end)
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('');
-    if (current !== part.text) return undefined;
+    if (current !== part.expectedText) return undefined;
     const content = [...message.content];
     const keepsIdentity = RESPONSES_APIS.has(message.api);
     for (let block = index; block < end; block++) {
@@ -73,7 +74,7 @@ export function createPiReplyEdits(
       // A replacement has no provider signature or citation payload claiming it was generated.
       content[block] = {
         type: 'text',
-        text: block === index && partIndex === 0 ? text : '',
+        text: block === index ? part.text : '',
         ...(keepsIdentity && original?.type === 'text' && original.textSignature
           ? { textSignature: original.textSignature }
           : {}),

@@ -1,6 +1,7 @@
 export { MessageList } from './MessageList';
 export { MessageFailureReportProvider } from './parts/MessageFailureReportContext';
-export { ToolRendererProvider } from './parts/tools/ToolRendererContext';
+export { ToolRendererProvider, useToolTitle } from './parts/tools/ToolRendererContext';
+export type { ToolMessagePart } from './parts/tools/toolPartState';
 export {
   ToolInputPreviewProvider,
   type ToolInputPreviewSource,

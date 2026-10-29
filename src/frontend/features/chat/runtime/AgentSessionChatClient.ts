@@ -8,7 +8,6 @@ import type {
   AgentProtocol,
   AgentQueuedInput,
   AgentRetryMessageInput,
-  AgentEditMessageInput,
   AgentSessionObservation,
   AgentSessionSnapshot,
   AgentSessionView,
@@ -325,12 +324,6 @@ export class AgentSessionChatClient {
    */
   async deleteTurn(sessionId: string, turnId: string): Promise<void> {
     await this.protocol.deleteTurn({ sessionId, turnId });
-  }
-
-  async editMessage(input: AgentEditMessageInput): Promise<void> {
-    await this.protocol.editMessage(input);
-    this.options.onTranscriptChanged?.(input.sessionId);
-    this.options.onSessionChanged?.(input.sessionId);
   }
 
   async submitMessage(input: AgentSubmitMessageInput) {

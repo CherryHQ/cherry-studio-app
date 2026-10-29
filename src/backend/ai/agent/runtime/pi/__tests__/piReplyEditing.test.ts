@@ -38,8 +38,7 @@ test('replaces merged text fragments without changing signed reasoning, usage or
   const edits = createPiReplyEdits(
     view,
     [entry],
-    [{ id: 'pi:1:block:1', text: 'First fragment' }],
-    'Edited',
+    [{ id: 'pi:1:block:1', expectedText: 'First fragment', text: 'Edited' }],
   )!;
   expect(edits).toEqual([
     {
@@ -84,8 +83,7 @@ test('falls back to Cherry history when the target was compacted or carries nati
     createPiReplyEdits(
       { ...view, entries: [], contributions: [] },
       [entry],
-      [{ id: 'pi:1:block:1', text: 'First fragment' }],
-      'New',
+      [{ id: 'pi:1:block:1', expectedText: 'First fragment', text: 'New' }],
     ),
   ).toBeUndefined();
   const web: AssistantMessage = {
@@ -102,27 +100,30 @@ test('falls back to Cherry history when the target was compacted or carries nati
     createPiReplyEdits(
       { ...view, contributions: [[web]] },
       [entry],
-      [{ id: 'pi:1:block:1', text: 'First fragment' }],
-      'New',
+      [{ id: 'pi:1:block:1', expectedText: 'First fragment', text: 'New' }],
     ),
   ).toBeUndefined();
   expect(
-    createPiReplyEdits(view, [entry], [{ id: 'imported-text', text: 'Old' }], 'New'),
+    createPiReplyEdits(view, [entry], [{ id: 'imported-text', expectedText: 'Old', text: 'New' }]),
   ).toBeUndefined();
 });
 
 test('refuses parts outside the answer turn or whose current context text has changed', () => {
-  const parts = [{ id: 'pi:1:block:1', text: 'First fragment' }];
+  const parts = [{ id: 'pi:1:block:1', expectedText: 'First fragment', text: 'Edited' }];
   // A rebuilt copy can reuse an entry ID that belonged to another copy's answer.
-  expect(createPiReplyEdits(view, [], parts, 'New')).toBeUndefined();
+  expect(createPiReplyEdits(view, [], parts)).toBeUndefined();
   expect(
-    createPiReplyEdits(view, [entry], [{ id: 'pi:1:block:1', text: 'Stale' }], 'New'),
+    createPiReplyEdits(view, [entry], [{ id: 'pi:1:block:1', expectedText: 'Stale', text: 'New' }]),
   ).toBeUndefined();
-  const [edit] = createPiReplyEdits(view, [entry], parts, 'Edited')!;
+  const [edit] = createPiReplyEdits(view, [entry], parts)!;
   const edited = { ...view, contributions: [edit.action === 'replace' ? edit.messages : []] };
-  expect(createPiReplyEdits(edited, [entry], parts, 'Again')).toBeUndefined();
+  expect(createPiReplyEdits(edited, [entry], parts)).toBeUndefined();
   expect(
-    createPiReplyEdits(edited, [entry], [{ id: 'pi:1:block:1', text: 'Edited' }], 'Again'),
+    createPiReplyEdits(
+      edited,
+      [entry],
+      [{ id: 'pi:1:block:1', expectedText: 'Edited', text: 'Again' }],
+    ),
   ).toBeDefined();
 });
 
@@ -136,10 +137,46 @@ test('keeps the OpenAI Responses output item identity on the replaced text', () 
   const [edit] = createPiReplyEdits(
     { ...view, contributions: [[responses]] },
     [entry],
-    [{ id: 'pi:1:block:1', text: 'Answer' }],
-    'Edited',
+    [{ id: 'pi:1:block:1', expectedText: 'Answer', text: 'Edited' }],
   )!;
   expect(edit.action === 'replace' && edit.messages[0]).toMatchObject({
     content: [responses.content[0], { type: 'text', text: 'Edited', textSignature: signature }],
   });
+});
+
+test('edits each prose part in its own block, including narration in another entry', () => {
+  const narration: AssistantMessage = {
+    ...message,
+    api: 'openai-completions',
+    content: [{ type: 'text', text: 'Looking it up.' }],
+  };
+  const answer: AssistantMessage = {
+    ...message,
+    api: 'openai-completions',
+    content: [{ type: 'text', text: 'Answer' }],
+  };
+  const first = { ...entry, model: [narration] };
+  const second = { ...entry, id: 3 as EntryId, model: [answer] };
+  const edits = createPiReplyEdits(
+    {
+      head: undefined,
+      entries: [first, second],
+      contributions: [[narration], [answer]],
+      messages: [],
+    },
+    [first, second],
+    [
+      { id: 'pi:1:block:0', expectedText: 'Looking it up.', text: 'Checking the timetable.' },
+      { id: 'pi:3:block:0', expectedText: 'Answer', text: 'Edited answer' },
+    ],
+  )!;
+  expect(
+    edits.map((edit) => [
+      edit.target,
+      edit.action === 'replace' ? edit.messages[0]!.content : undefined,
+    ]),
+  ).toEqual([
+    [1, [{ type: 'text', text: 'Checking the timetable.' }]],
+    [3, [{ type: 'text', text: 'Edited answer' }]],
+  ]);
 });

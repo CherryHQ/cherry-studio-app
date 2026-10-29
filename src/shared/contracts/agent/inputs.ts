@@ -115,15 +115,25 @@ export const AgentRetryMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
-/** An optimistic edit of a successful answer's final text. */
-export const AgentEditMessageInputSchema = z.strictObject({
-  sessionId: z.string().min(1),
-  messageId: z.string().min(1),
+const AgentReplyPartEditSchema = z.strictObject({
+  /** A text part of the answer; reasoning, files and tool receipts are not editable. */
+  id: z.string().min(1),
+  /** The part's current text, rejecting an edit of text that changed meanwhile. */
   expectedText: z.string().min(1),
   text: z
     .string()
     .max(1_000_000)
     .refine((text) => text.trim().length > 0),
+});
+export type AgentReplyPartEdit = z.infer<typeof AgentReplyPartEditSchema>;
+/** Optimistic edits of a successful answer's text parts. */
+export const AgentEditMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  parts: z
+    .array(AgentReplyPartEditSchema)
+    .min(1)
+    .refine((parts) => new Set(parts.map((part) => part.id)).size === parts.length),
 });
 export type AgentEditMessageInput = z.infer<typeof AgentEditMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({

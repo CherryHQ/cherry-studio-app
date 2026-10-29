@@ -277,17 +277,19 @@ There is no raw SQL erasure, archive tombstone, hidden-turn document or descenda
 
 ## Editing A Completed Reply
 
-`editMessage` edits any successful answer while the Session is idle. It changes only the final text
-after the last tool call; reasoning, attachments, completed tool receipts, message identities and
-billed usage remain intact. Later turns are kept and not regenerated. The input carries the original
-text for optimistic concurrency. The store checks the answer, absence of unfinished messages,
-original text and history revision again inside its write transaction. Translation caches are
-cleared, and so is every context checkpoint whose anchor is not strictly before the edited turn,
-because it may retain the old answer verbatim; the same rule protects deleted turns.
+`editMessage` edits text parts of any successful answer while the Session is idle: prose between
+tool calls and the final result. Reasoning, attachments, completed tool receipts, message identities
+and billed usage remain intact. Later turns are kept and not regenerated. Each part carries its
+original text for optimistic concurrency. The store checks the answer, absence of unfinished
+messages, every original text and the history revision again inside its write transaction.
+Translation caches are cleared, and so is every context checkpoint whose anchor is not strictly
+before the edited turn, because it may retain the old answer verbatim; the same rule protects
+deleted turns.
 
 Each native copy whose current context still contains the answer's text blocks stops background
-compaction and appends a public Pi `ContextEdit` replacement at its tail. The original entries
-remain immutable, and provider session identity, earlier signed content and tools are preserved.
+compaction and appends one public Pi `ContextEdit` replacement per changed entry at its tail; every
+part replaces only its own text block. The original entries remain immutable, and provider session
+identity, earlier signed content and tools are preserved.
 The copy's newest answer records the edit as its answer boundary, so forks after that answer keep
 the edit natively. A fork through an earlier answer cannot inherit an edit appended later, so that
 answer reports no native boundary and the new copy is rebuilt from the edited Cherry transcript.

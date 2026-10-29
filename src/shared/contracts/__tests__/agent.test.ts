@@ -50,14 +50,17 @@ describe('answer retry input', () => {
   });
 });
 
-test('reply editing accepts only text with an optimistic source and no execution payload', () => {
-  const input = { sessionId: 'session', messageId: 'answer', expectedText: 'Old', text: 'New' };
+test('reply editing accepts only text parts with an optimistic source and no execution payload', () => {
+  const part = { id: 'text', expectedText: 'Old', text: 'New' };
+  const input = { sessionId: 'session', messageId: 'answer', parts: [part] };
   expect(AgentEditMessageInputSchema.parse(roundTrip(input))).toEqual(input);
   for (const invalid of [
-    { ...input, text: ' \n ' },
-    { ...input, expectedText: '' },
     { ...input, parts: [] },
-    { ...input, text: 'x'.repeat(1_000_001) },
+    { ...input, parts: [part, part] },
+    { ...input, parts: [{ ...part, text: ' \n ' }] },
+    { ...input, parts: [{ ...part, expectedText: '' }] },
+    { ...input, parts: [{ ...part, text: 'x'.repeat(1_000_001) }] },
+    { ...input, text: 'New' },
   ])
     expect(AgentEditMessageInputSchema.safeParse(invalid).success).toBe(false);
   const event = {

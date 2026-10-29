@@ -453,7 +453,7 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
-  editMessage(input: { sessionId: string; messageId: string; expectedText: string; text: string }): Promise<AgentMessageView>
+  editMessage(input: { sessionId: string; messageId: string; parts: { id: string; expectedText: string; text: string }[] }): Promise<AgentMessageView>
   selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
   cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>
@@ -768,19 +768,22 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 
 ## Editing an answer
 
-`editMessage` replaces the final text after the last tool call of any successful answer, including
-answers with later turns or on another branch. The Session must be idle, and `expectedText` must
-still match that answer. Empty text and stale drafts are rejected. A `MESSAGE_CONFLICT` asks the
-client to read the message again before offering another edit. The operation preserves message/turn
-IDs, tool receipts, reasoning and billed usage; it clears the old translation and updates search
-text. It never starts a model request, reruns a tool or regenerates later answers: they stay as
-they were, and later model requests see the edited text in their place.
+`editMessage` replaces text parts of any successful answer, including answers with later turns or
+on another branch: the prose between tool calls as well as the final result. Each part names its
+current `expectedText`; reasoning, files and tool receipts cannot be edited, because a changed
+reasoning block either breaks its provider signature or never reaches the model, and tool records
+describe what actually ran. The Session must be idle. Empty text, duplicate parts and stale text are
+rejected; a `MESSAGE_CONFLICT` asks the client to read the message again. The operation preserves
+message/turn/part IDs, reasoning and billed usage; it clears the old translation and updates search
+text. It never starts a model request, reruns a tool or regenerates later answers: they stay as they
+were, and later model requests see the edited text in their place.
 
 The authoritative edit, context checkpoints and history revision commit together. The
 [Pi Durable editing flow](./pi-durable-migration.md#editing-a-completed-reply) either keeps native
 copies current with a context replacement or fences them out for reconstruction. A committed
-`message.edited` event replaces the client's row and invalidates its transcript query. Local UI
-offers the action in each successful answer's menu; remote sources do not advertise this capability.
+`message.edited` event replaces the client's row and invalidates its transcript query. Local answers
+offer **Edit reply** in their menu, which opens the `/edit-reply` page; remote sources do not
+advertise this capability.
 
 ## Manual answer retry
 

@@ -116,8 +116,7 @@ describe('SqliteAgentSessionStore conformance', () => {
       sessionId: session.id,
       messageId: answer.assistantMessage.id,
       expectedRevision: 0,
-      expectedText: 're: Original',
-      text: 'Corrected',
+      parts: [{ id: 'text-1', expectedText: 're: Original', text: 'Corrected' }],
       contextCheckpoints: [],
     });
     expect(result.status).toBe('edited');
@@ -162,8 +161,7 @@ describe('SqliteAgentSessionStore conformance', () => {
       sessionId: session.id,
       messageId: earlier.assistantMessage.id,
       expectedRevision: 0,
-      expectedText: 're: Earlier',
-      text: 'Corrected',
+      parts: [{ id: 'text-1', expectedText: 're: Earlier', text: 'Corrected' }],
       contextCheckpoints: [
         { assistantMessageId: later.assistantMessage.id, checkpoint: refreshed },
       ],
@@ -193,11 +191,15 @@ describe('SqliteAgentSessionStore conformance', () => {
       sessionId: session.id,
       messageId: answer.assistantMessage.id,
       expectedRevision: 0,
-      expectedText: 're: Original',
-      text: 'Changed',
+      parts: [{ id: 'text-1', expectedText: 're: Original', text: 'Changed' }],
       contextCheckpoints: [],
     };
-    expect(await store.editMessage({ ...input, expectedText: 'Stale' })).toEqual({
+    expect(
+      await store.editMessage({
+        ...input,
+        parts: [{ id: 'text-1', expectedText: 'Stale', text: 'Changed' }],
+      }),
+    ).toEqual({
       status: 'conflict',
     });
     expect(await store.editMessage({ ...input, expectedRevision: 1 })).toEqual({

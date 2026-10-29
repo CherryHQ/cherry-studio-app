@@ -334,8 +334,7 @@ describe('durable tool diagnostics', () => {
       const message = await f.host.editMessage({
         sessionId: f.sessionId,
         messageId: turn.assistantMessageId,
-        expectedText: 'Answer',
-        text: 'Corrected',
+        parts: [{ id: 'answer', expectedText: 'Answer', text: 'Corrected' }],
       });
       expect(message.parts).toContainEqual({
         id: 'answer',
@@ -373,8 +372,7 @@ describe('durable tool diagnostics', () => {
       await f.host.editMessage({
         sessionId: f.sessionId,
         messageId: turn.assistantMessageId,
-        expectedText: 'Answer',
-        text: 'Corrected',
+        parts: [{ id: 'answer', expectedText: 'Answer', text: 'Corrected' }],
       });
       expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
       expect(f.copies.get(f.sessionId)?.revision).toBe(1);
@@ -415,8 +413,7 @@ describe('durable tool diagnostics', () => {
       await f.host.editMessage({
         sessionId: f.sessionId,
         messageId: turn.assistantMessageId,
-        expectedText: 'Answer',
-        text: 'Corrected',
+        parts: [{ id: 'answer', expectedText: 'Answer', text: 'Corrected' }],
       });
       expect(editReply.mock.calls.map(([lane]) => lane.slot).sort()).toEqual([0, 1, 2]);
       expect([...f.copies].map(([key, copy]) => [key, copy.revision])).toEqual([
@@ -447,8 +444,7 @@ describe('durable tool diagnostics', () => {
         f.host.editMessage({
           sessionId: f.sessionId,
           messageId: turn.assistantMessageId,
-          expectedText: 'Answer',
-          text: 'Unsaved',
+          parts: [{ id: 'answer', expectedText: 'Answer', text: 'Unsaved' }],
         }),
       ).rejects.toThrow('disk full');
       expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(0);

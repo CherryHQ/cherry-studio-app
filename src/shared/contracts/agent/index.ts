@@ -49,6 +49,7 @@ export {
   type AgentAdditionalReply,
   type AgentDeleteTurnInput,
   type AgentEditMessageInput,
+  type AgentReplyPartEdit,
   type AgentForkSessionInput,
   type AgentRetryMessageInput,
   type AgentSelectMessageInput,
