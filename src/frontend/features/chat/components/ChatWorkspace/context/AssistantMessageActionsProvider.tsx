@@ -24,9 +24,9 @@ import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useChatEditing } from '../../../context/ChatEditingProvider';
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
-import { EditUserMessageSheet } from '../components/EditUserMessageSheet';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
@@ -296,28 +296,17 @@ export function AssistantMessageActionsProvider({
   const answeringMessage = answeringMessageId
     ? messages.find((message) => message.key === answeringMessageId)
     : undefined;
-  // The sent question whose editing sheet is open; its text is read when it renders.
-  const [editingMessageId, setEditingMessageId] = useState<string>();
-  const editUserMessage = useCallback(({ messageId }: { messageId: string }) => {
-    if (!latest.current.isBusy) setEditingMessageId(messageId);
-  }, []);
-  const closeEditSheet = useCallback(() => setEditingMessageId(undefined), []);
-  const submitEdit = useCallback(
-    async (text: string): Promise<boolean> => {
-      const messageId = editingMessageId;
-      if (!messageId) return false;
-      const action = latest.current.messages.find((message) => message.key === messageId)?.actions
-        .edit;
-      const applied = await run(`edit:${messageId}`, action, { text }, 'editFailed');
-      // A rejected admission keeps the sheet open with the typed text.
-      if (applied) setEditingMessageId((current) => (current === messageId ? undefined : current));
-      return applied;
+  // The composer owns the editing session: its draft becomes the question and
+  // its current send settings define the new answer.
+  const { beginEdit } = useChatEditing();
+  const editUserMessage = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      if (latest.current.isBusy) return;
+      const message = latest.current.messages.find((message) => message.key === messageId);
+      if (message) beginEdit({ messageId, initialText: editInitialText(message) });
     },
-    [editingMessageId, run],
+    [beginEdit],
   );
-  const editingMessage = editingMessageId
-    ? messages.find((message) => message.key === editingMessageId)
-    : undefined;
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}
@@ -346,14 +335,6 @@ export function AssistantMessageActionsProvider({
           selectedModelId={answeringMessage.display.model?.id ?? null}
           title={t('chat.messageActions.answerWith')}
           variant="chat"
-        />
-      ) : null}
-      {editingMessage ? (
-        <EditUserMessageSheet
-          initialText={editInitialText(editingMessage)}
-          key={editingMessage.key}
-          onClose={closeEditSheet}
-          onSubmit={submitEdit}
         />
       ) : null}
     </ChatMessageActionsProvider>

@@ -9,6 +9,7 @@ import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/C
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useChatEditing } from '../../../context/ChatEditingProvider';
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
 
 const logger = loggerService.withContext('ChatInputMenu');
@@ -30,6 +31,7 @@ export function ChatInputMenu({
   const { t } = useTranslation();
   const { toast } = useToast();
   const mcpIcon = useMcpIcon();
+  const { editing } = useChatEditing();
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const openDocumentPicker = useComposerDocumentPicker();
 
@@ -46,6 +48,7 @@ export function ChatInputMenu({
   return (
     <>
       <ComposerMenu
+        attachmentsDisabled={editing != null}
         media={media}
         onPickFiles={() => setIsFilePickerOpen(true)}
         triggerRef={triggerRef}

@@ -37,12 +37,15 @@ const logger = loggerService.withContext('ComposerMenu');
  * scrolling its contents when needed instead of dismissing the keyboard.
  */
 type ComposerMenuProps = PropsWithChildren<{
+  /** Hide camera/photos/files: the caller's current flow keeps no attachments. */
+  attachmentsDisabled?: boolean;
   media?: 'all' | 'images';
   onPickFiles?: () => void;
   triggerRef?: RefObject<ViewInstance | null>;
 }>;
 
 export function ComposerMenu({
+  attachmentsDisabled,
   children,
   media = 'all',
   onPickFiles,
@@ -122,23 +125,27 @@ export function ComposerMenu({
       testID="composer-menu"
       triggerRef={triggerRef}
     >
-      <Composer.Menu.Item
-        icon={<CameraIcon className="size-5 text-foreground" />}
-        label={t('chat.media.camera')}
-        onPress={() => present('camera', openCamera)}
-      />
-      <Composer.Menu.Item
-        icon={<ImagesIcon className="size-5 text-foreground" />}
-        label={t('chat.media.photos')}
-        onPress={() => present('photo', openPhotoLibrary)}
-      />
-      {media === 'all' ? (
-        <Composer.Menu.Item
-          icon={<PaperclipIcon className="size-5 text-foreground" />}
-          label={t('chat.media.file')}
-          onPress={() => present('file', openFiles)}
-        />
-      ) : null}
+      {attachmentsDisabled ? null : (
+        <>
+          <Composer.Menu.Item
+            icon={<CameraIcon className="size-5 text-foreground" />}
+            label={t('chat.media.camera')}
+            onPress={() => present('camera', openCamera)}
+          />
+          <Composer.Menu.Item
+            icon={<ImagesIcon className="size-5 text-foreground" />}
+            label={t('chat.media.photos')}
+            onPress={() => present('photo', openPhotoLibrary)}
+          />
+          {media === 'all' ? (
+            <Composer.Menu.Item
+              icon={<PaperclipIcon className="size-5 text-foreground" />}
+              label={t('chat.media.file')}
+              onPress={() => present('file', openFiles)}
+            />
+          ) : null}
+        </>
+      )}
       {children ? (
         <>
           <View className="my-1 h-px bg-border-subtle" />
