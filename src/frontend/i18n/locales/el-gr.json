@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "Το αρχείο λείπει ή δεν μπορεί να διαβαστεί. Επιλέξτε το ξανά από τα Αρχεία μου.",
   "attachments.issue.unsupported-type": "Αυτή η μορφή αρχείου δεν υποστηρίζεται για αυτήν την ενέργεια. Μετατρέψτε το σε υποστηριζόμενη μορφή ή αφαιρέστε το.",
   "attachments.notice.documentText": "Το εξαγόμενο κείμενο στάλθηκε. Οι εικόνες και η διάταξη εγγράφου δεν συμπεριλήφθηκαν.",
-  "attachments.notice.imageText": "Το κείμενο της εικόνας εξήχθη. Το μοντέλο έλαβε μόνο κείμενο.",
+  "attachments.notice.imageText": "Στάλθηκε μόνο το κείμενο της εικόνας",
   "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Μόνο μέρος του κειμένου στάλθηκε λόγω του ορίου χωρητικότητας αυτού του αιτήματος.",
   "attachments.notice.sourceTruncated": "Η εξαγωγή εγγράφων έφτασε στο όριο. μόνο ένα μέρος της πηγής ήταν διαθέσιμο.",

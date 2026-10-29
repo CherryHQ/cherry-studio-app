@@ -34,7 +34,11 @@ const report = {
 test('says which pages the model could not see in the locale list style, naming the file only among several', () => {
   const scan = attachment('scan.pdf', { ...report, unrecognizedPages: [3, 7] });
   expect(attachmentNotices([scan], t)).toEqual([
-    { key: '0:unrecognizedPages', text: 'attachments.notice.unrecognizedPages {"pages":"3、7"}' },
+    {
+      key: '0:unrecognizedPages',
+      text: 'attachments.notice.unrecognizedPages {"pages":"3、7"}',
+      tone: 'warning',
+    },
   ]);
   const long = attachment('long.pdf', { ...report, sourceTruncated: true });
   expect(
@@ -59,7 +63,7 @@ test('stays silent for complete deliveries and pending messages without reports'
 test('distinguishes OCR text delivery from native image delivery', () => {
   expect(
     attachmentNotices([attachment('receipt.png', { ...report, mode: 'image-text' })], t),
-  ).toEqual([{ key: '0:imageText', text: 'attachments.notice.imageText' }]);
+  ).toEqual([{ key: '0:imageText', text: 'attachments.notice.imageText', tone: 'neutral' }]);
   expect(attachmentNotices([attachment('receipt.png', { ...report, mode: 'image' })], t)).toEqual(
     [],
   );

@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "The file is missing or cannot be read. Select it again from My Files.",
   "attachments.issue.unsupported-type": "This file format is not supported for this action. Convert it to a supported format or remove it.",
   "attachments.notice.documentText": "Extracted text was sent; document images and layout were not included.",
-  "attachments.notice.imageText": "Image text extracted. The model received text only.",
+  "attachments.notice.imageText": "Only text from the image was sent",
   "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Only part of the text was sent due to this request’s capacity limit.",
   "attachments.notice.sourceTruncated": "Document extraction reached its limit; only part of the source was available.",

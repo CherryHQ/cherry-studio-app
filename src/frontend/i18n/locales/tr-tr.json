@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "Dosya eksik veya okunamıyor. Dosyalarım'dan tekrar seçin.",
   "attachments.issue.unsupported-type": "Bu dosya formatı bu işlem için desteklenmiyor. Desteklenen bir formata dönüştürün veya kaldırın.",
   "attachments.notice.documentText": "Çıkarılan metin gönderildi; belge görselleri ve düzeni dahil edilmedi.",
-  "attachments.notice.imageText": "Görüntüdeki metin çıkarıldı. Model yalnızca metin aldı.",
+  "attachments.notice.imageText": "Yalnızca görseldeki metin gönderildi",
   "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Bu isteğin kapasite sınırı nedeniyle metnin yalnızca bir kısmı gönderildi.",
   "attachments.notice.sourceTruncated": "Belge çıkarma sınırına ulaştı; kaynağın yalnızca bir kısmı mevcuttu.",

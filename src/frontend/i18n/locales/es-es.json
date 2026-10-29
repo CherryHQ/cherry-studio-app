@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "El archivo falta o no se puede leer. Selecciónelo nuevamente desde Mis archivos.",
   "attachments.issue.unsupported-type": "Este formato de archivo no es compatible con esta acción. Conviértalo a un formato compatible o elimínelo.",
   "attachments.notice.documentText": "Se envió el texto extraído; Las imágenes y el diseño del documento no se incluyeron.",
-  "attachments.notice.imageText": "Texto de la imagen extraído. El modelo solo recibió texto.",
+  "attachments.notice.imageText": "Solo se envió el texto de la imagen",
   "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Solo se envió una parte del texto debido al límite de capacidad de esta solicitud.",
   "attachments.notice.sourceTruncated": "La extracción de documentos llegó a su límite; sólo una parte de la fuente estaba disponible.",

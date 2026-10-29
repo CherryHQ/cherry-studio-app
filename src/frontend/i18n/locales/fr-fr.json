@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "Le fichier est manquant ou ne peut pas être lu. Sélectionnez-le à nouveau dans Mes fichiers.",
   "attachments.issue.unsupported-type": "Ce format de fichier n'est pas pris en charge pour cette action. Convertissez-le dans un format pris en charge ou supprimez-le.",
   "attachments.notice.documentText": "Le texte extrait a été envoyé ; les images et la mise en page du document n’étaient pas incluses.",
-  "attachments.notice.imageText": "Texte de l’image extrait. Le modèle n’a reçu que du texte.",
+  "attachments.notice.imageText": "Seul le texte de l’image a été envoyé",
   "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Seule une partie du texte a été envoyée en raison de la limite de capacité de cette demande.",
   "attachments.notice.sourceTruncated": "L'extraction de documents a atteint sa limite ; seule une partie de la source était disponible.",

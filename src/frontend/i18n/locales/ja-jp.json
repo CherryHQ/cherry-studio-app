@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "ファイルが見つからないか、読み取ることができません。 [マイ ファイル] から再度選択します。",
   "attachments.issue.unsupported-type": "このファイル形式はこのアクションではサポートされていません。サポートされている形式に変換するか、削除します。",
   "attachments.notice.documentText": "抽出されたテキストが送信されました。ドキュメントの画像とレイアウトは含まれていません。",
-  "attachments.notice.imageText": "画像から文字を抽出しました。モデルには文字のみ送信されています。",
+  "attachments.notice.imageText": "画像内のテキストのみ送信",
   "attachments.notice.pageSeparator": "、",
   "attachments.notice.requestTruncated": "このリクエストの容量制限のため、テキストの一部のみが送信されました。",
   "attachments.notice.sourceTruncated": "文書抽出は限界に達しました。ソースの一部しか入手できませんでした。",

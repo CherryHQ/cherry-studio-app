@@ -177,7 +177,7 @@
   "attachments.issue.unavailable": "Tệp bị thiếu hoặc không thể đọc được. Chọn lại nó từ Tệp của tôi.",
   "attachments.issue.unsupported-type": "Định dạng tệp này không được hỗ trợ cho hành động này. Chuyển đổi nó sang định dạng được hỗ trợ hoặc xóa nó.",
   "attachments.notice.documentText": "Văn bản trích xuất đã được gửi; hình ảnh tài liệu và bố cục không được bao gồm.",
-  "attachments.notice.imageText": "Đã trích xuất văn bản từ ảnh. Mô hình chỉ nhận được văn bản.",
+  "attachments.notice.imageText": "Chỉ gửi văn bản trong ảnh",
   "attachments.notice.pageSeparator": ", ",
   "attachments.notice.requestTruncated": "Chỉ một phần văn bản được gửi do giới hạn dung lượng của yêu cầu này.",
   "attachments.notice.sourceTruncated": "Việc trích xuất tài liệu đã đạt đến giới hạn; chỉ có một phần của nguồn có sẵn.",
