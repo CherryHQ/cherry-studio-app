@@ -29,6 +29,7 @@ import {
   type AgentErrorView,
   type AgentEvent,
   type AgentInputPart,
+  type AgentMessageSibling,
   type AgentMessageView,
   type AgentPendingQuestion,
   type AgentProtocol,
@@ -146,6 +147,8 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly attachments = new Map<string, Promise<LiveSession>>();
   private readonly admissions = new Map<string, Admission>();
   private readonly prepared = new Map<string, PreparedInput>();
+  /** Branch alternatives by {@link siblingKey}, refreshed when a sibling set changes. */
+  private readonly branchSiblings = new Map<string, AgentMessageSibling[]>();
   /** Approval waits are app-observed; they join the turn's timing and its settled message. */
   private readonly approvalWaits = new Map<
     string,
@@ -717,6 +720,11 @@ export class DurableAgentHost implements AgentProtocol {
         : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
     const { turnId } = reserved;
     const assistants = [reserved.assistantMessage, ...reserved.additionalAssistantMessages];
+    // The reservation committed the branch before execution: every alternative
+    // is already readable, so live projections can carry it while the turn runs.
+    await this.refreshBranchSiblings(sessionId, parent);
+    for (const answerParent of new Set(assistants.map((message) => message.parentId ?? null)))
+      if (answerParent !== parent) await this.refreshBranchSiblings(sessionId, answerParent);
     // The reservation selected the new answer. Observers learn the branch before its rows arrive.
     const selected = await this.store.getSession(sessionId);
     if (selected) this.publish(sessionId, { type: 'session.updated', session: selected });
@@ -1135,12 +1143,16 @@ export class DurableAgentHost implements AgentProtocol {
     this.assertIdle(parsed.sessionId);
     return this.admit(parsed.sessionId, async () => {
       await this.syncSession(parsed.sessionId, true);
+      const removed = await this.store.listTurnMessages(parsed.sessionId, parsed.turnId);
+      const affectedParents = new Set(removed.map((row) => row.parentId ?? null));
       const result = await this.store.deleteTurn(parsed);
       if (result.status === 'session-not-found')
         fail('SESSION_NOT_FOUND', 'The session no longer exists.');
       if (result.status === 'turn-not-found')
         fail('MESSAGE_NOT_FOUND', 'The turn no longer exists.');
       if (result.status === 'turn-unsettled') fail('SESSION_BUSY', 'The turn has not settled.');
+      for (const parentId of affectedParents)
+        await this.refreshBranchSiblings(parsed.sessionId, parentId);
       // The same Cherry transaction invalidated the old revision. A crash before retirement is safe.
       await this.detachConversation(parsed.sessionId).catch((error: unknown) =>
         logger.warn('Deferred obsolete working-copy cleanup', error as Error),
@@ -1172,6 +1184,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   async deleteSession(input: Parameters<AgentProtocol['deleteSession']>[0]) {
     const { sessionId } = AgentDeleteSessionInputSchema.parse(input);
+    for (const key of [...this.branchSiblings.keys()])
+      if (key.startsWith(`${sessionId} `)) this.branchSiblings.delete(key);
     storageMutationGate.assertWritable();
     if (!this.accepting) fail('EXECUTION_UNAVAILABLE', 'The Agent Host is not ready.');
     if (this.deleting.has(sessionId)) fail('SESSION_BUSY', 'This session is being deleted.');
@@ -1324,11 +1338,14 @@ export class DurableAgentHost implements AgentProtocol {
       capabilities: this.conversations.descriptor.capabilities,
       activeTurn: view ? this.turnStatus(view.turn, state!) : null,
       queuedInputs: this.queuedInputs(states.flatMap((candidate) => candidate.queue)),
-      activeUserMessage: view?.user ?? null,
-      streamingMessage: view?.assistant ?? null,
+      activeUserMessage: view?.user ? this.withBranchSiblings(session.id, view.user) : null,
+      streamingMessage: view?.assistant
+        ? this.withBranchSiblings(session.id, view.assistant)
+        : null,
       additionalMessages: running
         .slice(1)
-        .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? []),
+        .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? [])
+        .map((message) => this.withBranchSiblings(session.id, message)),
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
@@ -2048,6 +2065,23 @@ export class DurableAgentHost implements AgentProtocol {
     );
   }
 
+  private siblingKey(sessionId: string, parentId: string | null) {
+    return `${sessionId} ${parentId ?? ''}`;
+  }
+
+  /** Fewer than two alternatives hide the switcher; the map holds no entry then. */
+  private async refreshBranchSiblings(sessionId: string, parentId: string | null) {
+    const key = this.siblingKey(sessionId, parentId);
+    const siblings = await this.store.listBranchSiblings(sessionId, parentId);
+    if (siblings.length >= 2) this.branchSiblings.set(key, siblings);
+    else this.branchSiblings.delete(key);
+  }
+
+  private withBranchSiblings<T extends AgentMessageView>(sessionId: string, view: T): T {
+    const siblings = this.branchSiblings.get(this.siblingKey(sessionId, view.parentId ?? null));
+    return siblings ? { ...view, siblings } : view;
+  }
+
   private publishRows(turn: RuntimeDurableTurn) {
     const { user, assistant } = projectDurableHostTurn(turn);
     const { sessionId } = turn.identity;
@@ -2056,18 +2090,29 @@ export class DurableAgentHost implements AgentProtocol {
       // The answers of one question share it: the Session shows it once.
       const shown = this.liveStates(sessionId).some((candidate) => candidate.users.has(user.id));
       state?.users.add(user.id);
-      if (!shown) this.publish(sessionId, { type: 'message.created', message: user });
+      if (!shown)
+        this.publish(sessionId, {
+          type: 'message.created',
+          message: this.withBranchSiblings(sessionId, user),
+        });
     }
     if (!assistant) return;
     const terminal = turn.status !== 'running' && turn.status !== 'queued';
     const previous = state?.assistant;
-    if (terminal) this.publish(sessionId, { type: 'message.finalized', message: assistant });
+    if (terminal)
+      this.publish(sessionId, {
+        type: 'message.finalized',
+        message: this.withBranchSiblings(sessionId, assistant),
+      });
     else if (
       !previous ||
       previous.id !== assistant.id ||
       previous.parts.some((part, index) => assistant.parts[index]?.id !== part.id)
     )
-      this.publish(sessionId, { type: 'message.created', message: assistant });
+      this.publish(sessionId, {
+        type: 'message.created',
+        message: this.withBranchSiblings(sessionId, assistant),
+      });
     else
       for (const [index, part] of assistant.parts.entries()) {
         const old = previous.parts[index];

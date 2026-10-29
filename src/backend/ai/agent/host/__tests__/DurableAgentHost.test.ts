@@ -1408,6 +1408,98 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('live rows of a new branch carry their alternatives while the turn runs', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      try {
+        await state.host.editUserMessage({
+          sessionId: state.sessionId,
+          messageId: original.userMessageId,
+          text: 'Edited question',
+        });
+      } finally {
+        observation.unsubscribe();
+      }
+      const [question] = await state.store.listMessages(state.sessionId);
+      // The new question's live row already names both alternatives, matching the
+      // settled read: the branch switcher works while the answer still runs.
+      const created = events.find(
+        (event) => event.type === 'message.created' && event.message.id === question?.id,
+      );
+      expect(created).toMatchObject({
+        message: {
+          siblings: [
+            { id: original.userMessageId, status: 'success' },
+            { id: question?.id, status: 'success' },
+          ],
+        },
+      });
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('a retry answer carries its sibling answers while it runs', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    const second = createUniqueModelId('provider', 'second-model');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      try {
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+          modelId: second,
+        });
+      } finally {
+        observation.unsubscribe();
+      }
+      const [retry] = await state.store.listUnsettledAssistantMessages();
+      const created = events.find(
+        (event) =>
+          event.type === 'message.created' && event.message.id === retry?.assistantMessageId,
+      );
+      expect(created).toMatchObject({
+        message: {
+          siblings: [
+            { id: original.assistantMessageId, status: 'success' },
+            { id: retry?.assistantMessageId, status: 'pending' },
+          ],
+        },
+      });
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('editing keeps only the references the replacement text still mentions', async () => {
     const selection = {
       file_entry_id: uuid(),
