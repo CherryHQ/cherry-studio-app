@@ -6,6 +6,7 @@
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
   AgentDeleteTurnInput,
+  AgentEditUserMessageInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
   AgentSelectMessageInput,
@@ -67,6 +68,14 @@ export interface AgentProtocol {
    * stays in the tree.
    */
   retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
+
+  /**
+   * Editing a settled question adds a sibling question under the same parent
+   * carrying the edited text, reserves one answer for it, and selects that
+   * answer. The original question and its answers stay in the tree as an
+   * unselected branch, and the history continues from the edited message.
+   */
+  editUserMessage(input: AgentEditUserMessageInput): Promise<void>;
 
   /**
    * Selects the branch containing `messageId`. Unless it is already on the

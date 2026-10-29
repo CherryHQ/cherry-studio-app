@@ -12,6 +12,7 @@ import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
+  AgentEditUserMessageInputSchema,
   AgentEventSchema,
   AgentForkSessionInputSchema,
   AgentInputPartSchema,
@@ -44,6 +45,9 @@ import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { PluginTextReference } from '@/shared/data/types/plugin';
+import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
+import type { SkillTextReference } from '@/shared/data/types/skill';
 import type { TraceContext } from '@/shared/data/types/trace';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
@@ -1035,6 +1039,85 @@ export class DurableAgentHost implements AgentProtocol {
         await this.reconcileUnsettled(source.id);
         throw error;
       }
+    });
+  }
+
+  async editUserMessage(input: Parameters<AgentProtocol['editUserMessage']>[0]): Promise<void> {
+    const parsed = AgentEditUserMessageInputSchema.parse(input);
+    this.assertIdle(parsed.sessionId);
+    return this.admit(parsed.sessionId, async (signal) => {
+      const current = await this.syncSession(parsed.sessionId, true);
+      const session = await this.requireSession(parsed.sessionId);
+      const edited = await this.store.getMessage(session.id, parsed.messageId);
+      if (!edited || edited.role !== 'user' || !edited.turnId)
+        fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
+      // The edited row's turn holds the question and every answer it already
+      // has; its newest answer carries the inference choices the edit reuses.
+      const original = await this.store
+        .listTurnMessages(session.id, edited.turnId)
+        .then((turn) => turn.findLast((row) => row.role === 'assistant'));
+      if (original?.status === 'pending' || original?.status === 'streaming')
+        fail('SESSION_BUSY', 'The edited question is still being answered.');
+      // Editing answers the question anew with the original answer's inference
+      // choices, like a same-model retry that also replaces the question text.
+      const snapshot =
+        original?.inferenceSnapshot?.status === 'supported'
+          ? original.inferenceSnapshot.snapshot
+          : undefined;
+      // A file deleted from the library must not make the question uneditable:
+      // keep the attachments that still resolve and drop the rest.
+      const fileEntryIds = edited.parts.flatMap((part) =>
+        part.type === 'file' ? [part.fileEntryId] : [],
+      );
+      let availableFiles: ReadonlyMap<string, unknown> | undefined;
+      if (fileEntryIds.length > 0) {
+        try {
+          availableFiles = await this.ports.files.resolveAvailable(fileEntryIds);
+        } catch {
+          // Keep every part and let preparation report the unavailable attachment.
+        }
+      }
+      const choices = {
+        parts: editedUserInput(edited.parts, parsed.text, availableFiles),
+        ...submittedSkills(edited.parts),
+        ...(original?.modelId ? { modelId: original.modelId } : {}),
+        ...submittedEffort(snapshot?.reasoningEffort),
+        ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
+      };
+      // The edited row keeps its own answers; the selected leaf moves to the new
+      // question's answer, which becomes the transcript's continuation.
+      const parent = edited.parentId ?? null;
+      const edit: AgentSubmitMessageInput = {
+        sessionId: session.id,
+        userMessageId: uuidv7(),
+        assistantMessageId: uuidv7(),
+        ...choices,
+      };
+      const [choice] = await this.chooseLanes(session.id, parent, 1, current);
+      const plan = await this.planAnswer(choice, edit, signal, { through: parent });
+      await this.submitTargets(
+        edit,
+        parent,
+        [{ ...choice, plan, input: edit }],
+        signal,
+        undefined,
+        async () => {
+          const reserved = await this.store.reserveEditSubmission({
+            sessionId: session.id,
+            editedMessageId: edited.id,
+            userMessageId: edit.userMessageId,
+            assistantMessageId: edit.assistantMessageId,
+            userParts: plan.userParts,
+            modelId: plan.inferenceSnapshot.model.uniqueModelId,
+            inferenceSnapshot: plan.inferenceSnapshot,
+          });
+          if (reserved.status === 'message-not-found')
+            fail('MESSAGE_NOT_FOUND', 'The edited question no longer exists.');
+          if (reserved.status === 'turn-unsettled')
+            fail('SESSION_BUSY', 'The edited question is still being answered.');
+          return { ...reserved, additionalAssistantMessages: [] };
+        },
+      );
     });
   }
 
@@ -2449,4 +2532,92 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
       ];
     return [];
   });
+}
+
+/** Every stored reference kind an edit may carry onto the replacement text. */
+type InlineReferenceEntry =
+  | { kind: 'plugin'; reference: PluginTextReference }
+  | { kind: 'skill'; reference: SkillTextReference }
+  | { kind: 'selection'; reference: SelectionTextReference };
+
+/**
+ * The replacement input of an edited question: its text collapses into one text
+ * part and the original file parts that are still available stay. Inline
+ * references survive when their mention still occurs in the edited text,
+ * remapped by finding each label's first occurrence after the previous
+ * reference's end, so rewritten offsets remain ordered and non-overlapping;
+ * mentions the user removed are dropped.
+ */
+function editedUserInput(
+  parts: AgentMessageView['parts'],
+  text: string,
+  availableFiles?: ReadonlyMap<string, unknown>,
+): AgentInputPart[] {
+  const texts = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
+  const pluginEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.pluginReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'plugin', reference }),
+    ),
+  );
+  const skillEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.skillReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'skill', reference }),
+    ),
+  );
+  const selectionEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.selectionReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'selection', reference }),
+    ),
+  );
+  const ordered = [...pluginEntries, ...skillEntries, ...selectionEntries].sort(
+    (left, right) => left.reference.offset - right.reference.offset,
+  );
+  const kept: InlineReferenceEntry[] = [];
+  let end = 0;
+  for (const entry of ordered) {
+    const offset = text.indexOf(entry.reference.label, end);
+    if (offset < 0) continue;
+    switch (entry.kind) {
+      case 'plugin':
+        kept.push({ kind: 'plugin', reference: { ...entry.reference, offset } });
+        break;
+      case 'skill':
+        kept.push({ kind: 'skill', reference: { ...entry.reference, offset } });
+        break;
+      case 'selection':
+        kept.push({ kind: 'selection', reference: { ...entry.reference, offset } });
+        break;
+    }
+    end = offset + entry.reference.label.length;
+  }
+  const pluginReferences = kept.flatMap((entry) =>
+    entry.kind === 'plugin' ? [entry.reference] : [],
+  );
+  const skillReferences = kept.flatMap((entry) =>
+    entry.kind === 'skill' ? [entry.reference] : [],
+  );
+  const selectionReferences = kept.flatMap((entry) =>
+    entry.kind === 'selection' ? [entry.reference] : [],
+  );
+  return [
+    AgentInputPartSchema.parse({
+      type: 'text',
+      text,
+      ...(pluginReferences.length ? { pluginReferences } : {}),
+      ...(skillReferences.length ? { skillReferences } : {}),
+      ...(selectionReferences.length ? { selectionReferences } : {}),
+    }),
+    ...parts.flatMap((part) =>
+      part.type === 'file' && (!availableFiles || availableFiles.has(part.fileEntryId))
+        ? [
+            AgentInputPartSchema.parse({
+              type: part.type,
+              fileEntryId: part.fileEntryId,
+              mediaType: part.mediaType,
+              ...(part.filename !== undefined ? { filename: part.filename } : {}),
+            }),
+          ]
+        : [],
+    ),
+  ];
 }
