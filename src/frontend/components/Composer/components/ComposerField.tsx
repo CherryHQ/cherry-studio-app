@@ -2,6 +2,7 @@ import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import type { PasteEventPayload } from 'expo-paste-input';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { findNodeHandle } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import pluginInlineIcons from '@/assets/plugins/inline-icons.json';
@@ -39,7 +40,7 @@ export function ComposerField({
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
-  const { activateInput } = useComposerPresentationActions();
+  const { activateInput, registerInputTag } = useComposerPresentationActions();
   const linkColor = useThemeColor('link');
   const { theme } = useUniwind();
 
@@ -77,13 +78,22 @@ export function ComposerField({
     onFocus?.();
   }, [activateInput, onFocus]);
 
+  const handleLayout = useCallback<NonNullable<ComposerInputProps['onLayout']>>(
+    (event) => {
+      // The keyboard reports its focused field by native tag; this is the field's.
+      registerInputTag(findNodeHandle(event.currentTarget) ?? null);
+      onLayout?.(event);
+    },
+    [onLayout, registerInputTag],
+  );
+
   return (
     <Composer.Input
       layout={layout}
       markdownStyle={markdownStyle}
       onBlur={onBlur}
       onFocus={handleFocus}
-      onLayout={onLayout}
+      onLayout={handleLayout}
       onPaste={handlePaste}
       placeholder={placeholder ?? t('chat.inputPlaceholder')}
       ref={inputRef}

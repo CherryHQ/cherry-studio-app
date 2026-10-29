@@ -5,6 +5,10 @@ import { ImageDropTargetView } from '../../../../../../modules/image-drop-target
 import { ComposerDropArea } from '../ComposerDropArea';
 import { ComposerTestProvider } from './_composerTestProvider';
 
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual('@/frontend/components/Composer/components/__tests__/_sharedValueMock'),
+);
+
 jest.mock('expo', () => {
   const React = jest.requireActual('react');
   function MockExpoView(props: { children?: ReactNode }) {

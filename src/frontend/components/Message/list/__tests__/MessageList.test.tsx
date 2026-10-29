@@ -23,6 +23,7 @@ type MockLegendListProps = {
   anchoredEndSpace?: unknown;
   applyWorkaroundForContentInsetHitTestBug?: boolean;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
+  contentInsetEndAdjustment?: SharedValue<number>;
   data?: readonly MessageListItem[];
   dataKey?: string;
   extraData?: unknown;
@@ -884,6 +885,37 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(167);
     accessoryHeight.set(120);
     expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(207);
+  });
+
+  test('counts the floating composer inset when determining the visible bottom', async () => {
+    const accessoryHeight = mockCreateSharedValue(80);
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('user-1', 'user')], {
+            bottomAccessoryHeight: accessoryHeight,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 400);
+      mockLatestListProps?.onScrollBeginDrag?.();
+    });
+    act(flushAnimatedReactions);
+    expect(mockLatestListProps?.contentInsetEndAdjustment).toBe(accessoryHeight);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+    mockLatestListProps?.sharedValues?.scrollOffset.set(80);
+    act(flushAnimatedReactions);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+    accessoryHeight.set(120);
+    act(flushAnimatedReactions);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+    mockLatestListProps?.sharedValues?.scrollOffset.set(120);
+    act(flushAnimatedReactions);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
   });
 
   test('rerenders only the changed row during a streaming update', () => {
