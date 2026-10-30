@@ -1,16 +1,8 @@
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec5c4bb326 100644
+index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b3b1c700b 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
 +++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-@@ -943,6 +943,7 @@ struct EnrichedMarkdownMarkdownStyleListStruct {
- 
-   folly::dynamic toDynamic() const {
-     folly::dynamic result = folly::dynamic::object();
-+    result["externalControls"] = externalControls;
-     result["fontSize"] = fontSize;
-     result["fontFamily"] = fontFamily;
-     result["fontWeight"] = fontWeight;
-@@ -1151,6 +1152,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
+@@ -1151,6 +1151,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
  #endif
  
  struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
@@ -18,6 +10,14 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec
    Float fontSize{0.0};
    std::string fontFamily{};
    std::string fontWeight{};
+@@ -1171,6 +1172,7 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
 @@ -1192,6 +1194,10 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
  static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownMarkdownStyleCodeBlockStruct &result) {
    auto map = (std::unordered_map<std::string, RawValue>)value;
@@ -62,15 +62,7 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
-@@ -4603,6 +4621,7 @@ struct EnrichedMarkdownTextMarkdownStyleH6Struct {
- 
-   folly::dynamic toDynamic() const {
-     folly::dynamic result = folly::dynamic::object();
-+    result["externalControls"] = externalControls;
-     result["fontSize"] = fontSize;
-     result["fontFamily"] = fontFamily;
-     result["fontWeight"] = fontWeight;
-@@ -5264,6 +5283,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
+@@ -5264,6 +5282,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
  #endif
  
  struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
@@ -78,6 +70,14 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec
    Float fontSize{0.0};
    std::string fontFamily{};
    std::string fontWeight{};
+@@ -5284,6 +5303,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
 @@ -5305,6 +5325,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
  static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownTextMarkdownStyleCodeBlockStruct &result) {
    auto map = (std::unordered_map<std::string, RawValue>)value;
@@ -577,18 +577,10 @@ index 1100ee40de4f7ba9d9e8fe48c4d468a4d875d3d9..577f1a218d27c876eddea46a465d8b95
          contentDescription = description
          if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec5c4bb326 100644
+index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b3b1c700b 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 +++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-@@ -943,6 +943,7 @@ struct EnrichedMarkdownMarkdownStyleListStruct {
- 
-   folly::dynamic toDynamic() const {
-     folly::dynamic result = folly::dynamic::object();
-+    result["externalControls"] = externalControls;
-     result["fontSize"] = fontSize;
-     result["fontFamily"] = fontFamily;
-     result["fontWeight"] = fontWeight;
-@@ -1151,6 +1152,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
+@@ -1151,6 +1151,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
  #endif
  
  struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
@@ -596,6 +588,14 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec
    Float fontSize{0.0};
    std::string fontFamily{};
    std::string fontWeight{};
+@@ -1171,6 +1172,7 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
 @@ -1192,6 +1194,10 @@ struct EnrichedMarkdownMarkdownStyleCodeBlockStruct {
  static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownMarkdownStyleCodeBlockStruct &result) {
    auto map = (std::unordered_map<std::string, RawValue>)value;
@@ -640,15 +640,7 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
-@@ -4603,6 +4621,7 @@ struct EnrichedMarkdownTextMarkdownStyleH6Struct {
- 
-   folly::dynamic toDynamic() const {
-     folly::dynamic result = folly::dynamic::object();
-+    result["externalControls"] = externalControls;
-     result["fontSize"] = fontSize;
-     result["fontFamily"] = fontFamily;
-     result["fontWeight"] = fontWeight;
-@@ -5264,6 +5283,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
+@@ -5264,6 +5282,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
  #endif
  
  struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
@@ -656,6 +648,14 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f6215dd3131f36bd68afa22199d4d1ec
    Float fontSize{0.0};
    std::string fontFamily{};
    std::string fontWeight{};
+@@ -5284,6 +5303,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+ 
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
++    result["externalControls"] = externalControls;
+     result["fontSize"] = fontSize;
+     result["fontFamily"] = fontFamily;
+     result["fontWeight"] = fontWeight;
 @@ -5305,6 +5325,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
  static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownTextMarkdownStyleCodeBlockStruct &result) {
    auto map = (std::unordered_map<std::string, RawValue>)value;
@@ -934,7 +934,7 @@ index a5554197d915efb8e94286b6f71a97fea7b8aa62..112282ac50470538af0d8b540a9c5b9b
      case MarkdownNodeTypeSpoiler:
        return [[ENRMSpoilerRenderer alloc] initWithRendererFactory:self config:_config];
 diff --git a/ios/segments/ENRMCodeBlockContainerView.m b/ios/segments/ENRMCodeBlockContainerView.m
-index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169ac537ec9c 100644
+index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..4c54007dca45ee19564687d4f96f81f7cf937bee 100644
 --- a/ios/segments/ENRMCodeBlockContainerView.m
 +++ b/ios/segments/ENRMCodeBlockContainerView.m
 @@ -8,8 +8,8 @@
@@ -958,7 +958,142 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
  
  // Height geometry and code-run construction shared by the instance layout path
  // and the view-free measureHeightForCodeBlockNode:, so the two cannot drift.
-@@ -280,6 +283,7 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+@@ -132,9 +135,19 @@ static BOOL ENRMColorIsDark(RCTUIColor *color)
+ // but the layout is no longer thrown away on every draw. The container is
+ // unbounded (lines never wrap) with zero line-fragment padding and font leading
+ // disabled, matching the NSStringDrawing origin the block used before.
++//
++// On iOS this view only spans the scroll extent and has no backing store. A
++// canvas subview covering the visible window draws the glyphs: a full-size
++// backing store grows with the code, and Core Animation drops one that is too
++// large, leaving long or wide blocks blank.
+ @interface ENRMCodeBlockContentView : RCTUIView
+ @property (nonatomic, strong, nullable) NSAttributedString *attributedCode;
+ @property (nonatomic, assign) CGPoint textOrigin;
++#if !TARGET_OS_OSX
++// The scroll view's visible bounds, in this view's coordinates.
++@property (nonatomic, assign) CGRect visibleRect;
++#endif
++- (void)drawCodeInRect:(CGRect)rect canvasOrigin:(CGPoint)canvasOrigin;
+ // Laid-out content width, for the horizontal scroll extent. Free once the
+ // cached stack exists; no separate measurement pass.
+ @property (nonatomic, readonly) CGFloat usedWidth;
+@@ -143,12 +156,78 @@ @interface ENRMCodeBlockContentView : RCTUIView
+ #endif
+ @end
+ 
++#if !TARGET_OS_OSX
++@interface ENRMCodeBlockCanvasView : UIView
++@property (nonatomic, weak) ENRMCodeBlockContentView *owner;
++@end
++
++@implementation ENRMCodeBlockCanvasView
++
++- (void)drawRect:(CGRect)rect
++{
++  [self.owner drawCodeInRect:rect canvasOrigin:self.frame.origin];
++}
++
++@end
++#endif
++
+ @implementation ENRMCodeBlockContentView {
+   NSTextStorage *_textStorage;
+   NSLayoutManager *_layoutManager;
+   NSTextContainer *_textContainer;
++#if !TARGET_OS_OSX
++  ENRMCodeBlockCanvasView *_canvas;
++#endif
+ }
+ 
++#if !TARGET_OS_OSX
++- (instancetype)initWithFrame:(CGRect)frame
++{
++  self = [super initWithFrame:frame];
++  if (self) {
++    _canvas = [[ENRMCodeBlockCanvasView alloc] initWithFrame:CGRectZero];
++    _canvas.owner = self;
++    _canvas.userInteractionEnabled = NO;
++    _canvas.opaque = NO;
++    _canvas.backgroundColor = [UIColor clearColor];
++    _canvas.contentMode = UIViewContentModeRedraw;
++    [self addSubview:_canvas];
++  }
++  return self;
++}
++
++- (void)setVisibleRect:(CGRect)visibleRect
++{
++  _visibleRect = visibleRect;
++  [self placeCanvas];
++}
++
++- (void)layoutSubviews
++{
++  [super layoutSubviews];
++  [self placeCanvas];
++}
++
++- (void)setNeedsDisplay
++{
++  [super setNeedsDisplay];
++  [_canvas setNeedsDisplay];
++}
++
++// Half a viewport of margin on each side, so scrolling redraws only after
++// leaving the drawn window.
++- (void)placeCanvas
++{
++  CGRect visible = CGRectIntersection(_visibleRect, self.bounds);
++  if (CGRectIsEmpty(visible) || CGRectContainsRect(_canvas.frame, visible)) {
++    return;
++  }
++  CGRect window = CGRectInset(visible, -visible.size.width / 2, -visible.size.height / 2);
++  _canvas.frame = CGRectIntegral(CGRectIntersection(window, self.bounds));
++  [_canvas setNeedsDisplay];
++}
++#endif
++
+ #if TARGET_OS_OSX
+ - (BOOL)isFlipped
+ {
+@@ -189,22 +268,31 @@ - (CGFloat)usedWidth
+   return ceil([_layoutManager usedRectForTextContainer:_textContainer].size.width);
+ }
+ 
++#if TARGET_OS_OSX
+ - (void)drawRect:(CGRect)rect
++{
++  [self drawCodeInRect:rect canvasOrigin:CGPointZero];
++}
++#endif
++
++- (void)drawCodeInRect:(CGRect)rect canvasOrigin:(CGPoint)canvasOrigin
+ {
+   if (!_layoutManager) {
+     return;
+   }
+   // Only paint the glyphs intersecting the dirty rect; tall blocks skip their
+-  // off-screen lines. The rect is in view space, the layout in container space.
+-  CGRect boundingRect = CGRectOffset(rect, -self.textOrigin.x, -self.textOrigin.y);
++  // off-screen lines. The rect is in drawing-view space, the layout in container space.
++  CGPoint origin = CGPointMake(self.textOrigin.x - canvasOrigin.x, self.textOrigin.y - canvasOrigin.y);
++  CGRect boundingRect = CGRectOffset(rect, -origin.x, -origin.y);
+   NSRange glyphRange = [_layoutManager glyphRangeForBoundingRect:boundingRect inTextContainer:_textContainer];
+-  [_layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:self.textOrigin];
++  [_layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:origin];
+ }
+ 
+ @end
+ 
+ #if !TARGET_OS_OSX
+-@interface ENRMCodeBlockContainerView () <UIContextMenuInteractionDelegate, UIGestureRecognizerDelegate>
++@interface ENRMCodeBlockContainerView () <UIContextMenuInteractionDelegate, UIGestureRecognizerDelegate,
++                                          UIScrollViewDelegate>
+ @end
+ #endif
+ 
+@@ -280,6 +368,7 @@ - (instancetype)initWithConfig:(StyleConfig *)config
                   forState:UIControlStateNormal];
      _copyButton.tintColor = [[config codeBlockColor] colorWithAlphaComponent:kENRMHeaderSecondaryAlpha];
      [_copyButton addTarget:self action:@selector(copyCodeToPasteboard) forControlEvents:UIControlEventTouchUpInside];
@@ -966,7 +1101,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
      [self addSubview:_copyButton];
  
      _tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleCodeBlockTap:)];
-@@ -294,6 +298,7 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+@@ -294,6 +383,7 @@ - (instancetype)initWithConfig:(StyleConfig *)config
      _copyButton = [NSButton buttonWithImage:copyImage target:self action:@selector(copyCodeToPasteboard)];
      _copyButton.bordered = NO;
      _copyButton.contentTintColor = [[config codeBlockColor] colorWithAlphaComponent:kENRMHeaderSecondaryAlpha];
@@ -974,7 +1109,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
      [self addSubview:_copyButton];
  #endif
    }
-@@ -303,13 +308,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+@@ -303,17 +393,20 @@ - (instancetype)initWithConfig:(StyleConfig *)config
  - (void)setupScrollView
  {
    _scrollView = [[RCTUIScrollView alloc] init];
@@ -991,7 +1126,12 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
    _scrollView.backgroundColor = [UIColor clearColor];
    _scrollView.isAccessibilityElement = NO;
    _scrollView.accessibilityElementsHidden = YES;
-@@ -341,19 +348,19 @@ - (void)layoutScrollArea
+   _scrollView.indicatorStyle = darkBackground ? UIScrollViewIndicatorStyleWhite : UIScrollViewIndicatorStyleDefault;
++  _scrollView.delegate = self;
+   _codeContentView.backgroundColor = [UIColor clearColor];
+   _codeContentView.contentMode = UIViewContentModeRedraw;
+   [_scrollView addSubview:_codeContentView];
+@@ -341,19 +434,27 @@ - (void)layoutScrollArea
  
    CGFloat horizontalPad = MAX(inset - borderW, 0);
    CGFloat contentWidth = MAX(_codeSize.width + horizontalPad * 2, frame.size.width);
@@ -1004,11 +1144,19 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
 -  _scrollView.scrollEnabled = contentWidth > frame.size.width;
 +  _scrollView.contentSize = CGSizeMake(contentWidth, contentHeight);
 +  _scrollView.scrollEnabled = contentWidth > frame.size.width || contentHeight > frame.size.height;
++  _codeContentView.visibleRect = _scrollView.bounds;
  #endif
  }
  
 -// Header is the top content inset plus one label line; the code text's own
 -// top inset then forms the single gap below the label.
++#if !TARGET_OS_OSX
++- (void)scrollViewDidScroll:(UIScrollView *)scrollView
++{
++  _codeContentView.visibleRect = scrollView.bounds;
++}
++#endif
++
 +// Keep one label line plus the content inset, shared evenly above and below.
  - (CGFloat)headerHeight
  {
@@ -1017,7 +1165,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
  }
  
  - (void)layoutHeaderButton
-@@ -365,9 +372,7 @@ - (void)layoutHeaderButton
+@@ -365,9 +466,7 @@ - (void)layoutHeaderButton
    }
    CGFloat iconSlack = (headerH - iconWidth) / 2;
    CGFloat buttonLeft = MAX(self.bounds.size.width - [self contentInset] - headerH + iconSlack, 0);
@@ -1028,7 +1176,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
  }
  
  #if !TARGET_OS_OSX
-@@ -475,15 +480,17 @@ - (CGFloat)contentInset
+@@ -475,15 +574,17 @@ - (CGFloat)contentInset
  - (CGFloat)measureHeight:(CGFloat)maxWidth
  {
    CGFloat inset = [self contentInset];
@@ -1049,7 +1197,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
  }
  
  - (void)drawRect:(CGRect)rect
-@@ -515,11 +522,14 @@ - (void)drawRect:(CGRect)rect
+@@ -515,11 +616,14 @@ - (void)drawRect:(CGRect)rect
    CGFloat inset = [self contentInset];
    CGFloat headerH = [self headerHeight];
  
@@ -1067,7 +1215,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
      [dividerColor setFill];
  #if !TARGET_OS_OSX
      [[UIBezierPath bezierPathWithRect:dividerRect] fill];
-@@ -529,7 +539,7 @@ - (void)drawRect:(CGRect)rect
+@@ -529,7 +633,7 @@ - (void)drawRect:(CGRect)rect
    }
  
    if (_languageLabel.length > 0) {
@@ -1076,7 +1224,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
    }
  }
  
-@@ -586,7 +596,7 @@ - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceive
+@@ -586,7 +690,7 @@ - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceive
  - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                          configurationForMenuAtLocation:(CGPoint)location
  {
@@ -1085,7 +1233,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
      return nil;
    }
    return [UIContextMenuConfiguration
-@@ -613,7 +623,7 @@ - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction
+@@ -613,7 +717,7 @@ - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction
  #if TARGET_OS_OSX
  - (NSMenu *)buildContextMenu
  {
@@ -1094,7 +1242,7 @@ index 0c022cfd5644ed59ffc492b12f79ca0b3521fdc1..355e3fc5d75aa7fb3d619f5d872d169a
      return nil;
    }
    NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
-@@ -643,7 +653,7 @@ - (UIAccessibilityTraits)accessibilityTraits
+@@ -643,7 +747,7 @@ - (UIAccessibilityTraits)accessibilityTraits
  // button subview from VoiceOver; expose the copy action explicitly instead.
  - (NSArray<UIAccessibilityCustomAction *> *)accessibilityCustomActions
  {

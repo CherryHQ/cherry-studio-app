@@ -43,6 +43,30 @@ describe('standalone code-block controls patch', () => {
       '+  if (_pending || [_config codeBlockExternalControls] || self.dynamicProps.menuCopyLabel.length == 0) {',
     );
   });
+
+  // A backing store the size of the whole code is dropped by Core Animation once it is too
+  // large, so complete tool output would render blank.
+  test('draws iOS code text only around the visible scroll window', () => {
+    expect(patch).toContain('+@interface ENRMCodeBlockCanvasView : UIView');
+    expect(patch).toContain('+  [self.owner drawCodeInRect:rect canvasOrigin:self.frame.origin];');
+    expect(patch).toContain('+  _scrollView.delegate = self;');
+    expect(patch).toContain('+  _codeContentView.visibleRect = scrollView.bounds;');
+    expect(patch).toContain('+  [self drawCodeInRect:rect canvasOrigin:CGPointZero];');
+  });
+
+  // Android compiles generated Props with RN_SERIALIZABLE_STATE, so a field serialized by
+  // another struct's toDynamic breaks the native build.
+  test('serializes the generated prop only from code-block structs', () => {
+    const hunks = patch
+      .split(/^(?=@@ )/m)
+      .filter((hunk) => hunk.includes('+    result["externalControls"] = externalControls;'));
+    expect(hunks).toHaveLength(4);
+    for (const hunk of hunks) {
+      expect(hunk.split('\n')[0]).toMatch(
+        / struct EnrichedMarkdown(?:Text)?MarkdownStyleCodeBlockStruct \{$/,
+      );
+    }
+  });
 });
 
 describe('native Markdown table interaction patch', () => {
