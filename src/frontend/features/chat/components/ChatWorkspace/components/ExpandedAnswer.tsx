@@ -6,7 +6,6 @@ import {
   Skeleton,
 } from '@cherrystudio/ui/components';
 import { duration, easing, spring } from '@cherrystudio/ui/motion';
-import { useFocusEffect } from 'expo-router';
 import {
   type PropsWithChildren,
   type ReactNode,
@@ -18,7 +17,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  BackHandler,
   Keyboard,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -44,8 +42,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { AssistantMessage, type MessageListItem } from '@/frontend/components/Message';
+import {
+  AssistantMessage,
+  type MessageListItem,
+  MessageSelectionActionProvider,
+  useMessageSelectionAction,
+} from '@/frontend/components/Message';
 
 import { useAgentAnswers } from '../../../runtime';
 import {
@@ -154,6 +158,19 @@ function ExpandedAnswer({
   const reduceMotion = useReducedMotion();
   const { selectBranch } = useAssistantMessageActions();
   const sessionId = useChatSessionId();
+  // A quote is written in the composer this layer covers, so quoting closes the layer.
+  const parentSelectionAction = useMessageSelectionAction();
+  const selectionAction = useMemo(
+    () =>
+      parentSelectionAction && {
+        ...parentSelectionAction,
+        onPress: (selection: { messageId: string; text: string }) => {
+          parentSelectionAction.onPress(selection);
+          onClosed();
+        },
+      },
+    [onClosed, parentSelectionAction],
+  );
   // The opened answer finds its row, whichever answer of the group the row shows.
   const row = useMemo(
     () =>
@@ -273,16 +290,7 @@ function ExpandedAnswer({
   }, [onClosed, row?.branch]);
 
   // A route pushed over the chat keeps back for itself; the layer stays open underneath.
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'android') return;
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        close();
-        return true;
-      });
-      return () => subscription.remove();
-    }, [close]),
-  );
+  useFocusedBackPress(close);
 
   const openDuration = useRef<number>(undefined);
   const handleHostLayout = () => {
@@ -353,7 +361,7 @@ function ExpandedAnswer({
 
   const model = group.models[shownIndex];
   return (
-    <>
+    <MessageSelectionActionProvider action={selectionAction}>
       {/* Measures the region the layer covers from. */}
       <View
         className="absolute inset-0"
@@ -459,7 +467,7 @@ function ExpandedAnswer({
           ) : null}
         </View>
       ) : null}
-    </>
+    </MessageSelectionActionProvider>
   );
 }
 

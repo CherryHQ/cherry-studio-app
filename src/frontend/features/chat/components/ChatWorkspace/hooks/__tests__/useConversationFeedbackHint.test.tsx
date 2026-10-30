@@ -1,3 +1,4 @@
+import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ConversationSnapshot } from '@/frontend/appShell/conversation';
@@ -6,6 +7,8 @@ import { useConversationFeedbackHint } from '../useConversationFeedbackHint';
 
 const mockHint = { show: jest.fn(), hide: jest.fn() };
 let mockFocused = true;
+let mockBottomOffset = 100;
+const bottomOffset = { get: () => mockBottomOffset } as SharedValue<number>;
 jest.mock('@/frontend/appShell/feedback', () => ({ useFeedbackHint: () => mockHint }));
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 let renderer: ReactTestRenderer;
@@ -28,13 +31,14 @@ function Probe({
       executions: runs,
       freshness: { state: freshness },
     },
-    100,
+    bottomOffset,
   );
   return null;
 }
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = true;
+  mockBottomOffset = 100;
   act(() => {
     renderer = create(<Probe />);
   });
@@ -53,6 +57,12 @@ test('only newly failed executions prompt, and repeated snapshots do not', () =>
 test('a fast failure without an intermediate running render still prompts', () => {
   act(() => renderer.update(<Probe runs={[{ id: 'fast', state: 'failed' }]} />));
   expect(mockHint.show).toHaveBeenCalledTimes(1);
+});
+
+test('reads the latest composer height when a failure arrives', () => {
+  mockBottomOffset = 180;
+  act(() => renderer.update(<Probe runs={[{ id: 'fast', state: 'failed' }]} />));
+  expect(mockHint.show).toHaveBeenCalledWith(180);
 });
 
 test.each(['completed', 'cancelled', 'interrupted', 'awaiting-input'] as const)(

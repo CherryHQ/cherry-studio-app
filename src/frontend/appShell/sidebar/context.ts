@@ -1,7 +1,10 @@
 import { createContext, use } from 'react';
 
 export type SidebarActions = {
+  /** Closes an overlay and brings the chat back in front of any page beside the sidebar. */
   closeDrawer: () => void;
+  /** Brings the chat back in front of any page beside the sidebar, leaving an overlay open. */
+  returnToChat: () => void;
   navigateAgents: () => void;
   openLibrary: () => void;
   openPlugins: () => void;

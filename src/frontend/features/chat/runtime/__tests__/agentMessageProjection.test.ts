@@ -1,11 +1,11 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   createAgentMessageListProjectionCache,
   createPendingChatMessages,
   mergeAgentMessageViews,
-  projectRetryingMessage,
   toAgentMessageListItem,
   toAgentMessageListItems,
 } from '../agentMessageProjection';
@@ -283,22 +283,6 @@ describe('agentMessageProjection', () => {
       toAgentMessageListItem(message('failed', { status: 'error', parts }))?.data.partKeys,
     ).toEqual(['text', 'legacy-abort', 'failure']);
   });
-  test('renders a retrying answer as an empty pending row and leaves the rest untouched', () => {
-    const question = message('user-1', { role: 'user', status: 'success' });
-    const answer = message('assistant-1', {
-      status: 'error',
-      parts: [{ id: 'text-1', type: 'text', state: 'done', text: 'Broken answer' }],
-    });
-
-    const projected = projectRetryingMessage([question, answer], 'assistant-1');
-
-    expect(projected[0]).toBe(question);
-    expect(projected[1]).toMatchObject({ id: 'assistant-1', status: 'pending', parts: [] });
-    // Nothing to project once admission settles or when the row is off-window.
-    expect(projectRetryingMessage([question, answer], undefined)).toEqual([question, answer]);
-    expect(projectRetryingMessage([question], 'assistant-1')).toEqual([question]);
-  });
-
   test('preserves compaction identity, data and position in live and reopened history', () => {
     const anchor = {
       id: 'compaction-anchor:turn-1:1',
@@ -966,4 +950,26 @@ describe('agentMessageProjection', () => {
   test('omits system messages from the chat row projection', () => {
     expect(toAgentMessageListItem(message('system-1', { role: 'system' }))).toBeUndefined();
   });
+});
+
+test('settled and pending quote-only metadata survives the conditional display projection', () => {
+  const fields = {
+    quotes: [
+      { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+    ] as [{ id: string; sourceMessageId: string; text: string }],
+    quoteAuthor: { role: 'assistant' as const },
+  };
+  const source = message('q', {
+    role: 'user',
+    parts: [{ id: 'p', type: 'text', text: 'Request', state: 'done', ...fields }],
+  });
+  const pending = createPendingChatMessages({
+    userMessageId: 'u',
+    assistantMessageId: 'a',
+    parts: [{ type: 'text', text: 'Request', ...fields }],
+  });
+  const pendingPart = pending[0].data.parts?.[0];
+  expect(pendingPart?.type === 'text' && readCherryMeta(pendingPart)).toMatchObject(fields);
+  const part = toAgentMessageListItem(source)?.data.parts?.[0];
+  expect(part?.type === 'text' && readCherryMeta(part)).toMatchObject(fields);
 });

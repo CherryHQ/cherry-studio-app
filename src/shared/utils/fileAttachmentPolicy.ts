@@ -52,10 +52,10 @@ export function validateFileAttachments(
       throw new FileAttachmentError({ ...issue, code: 'unsupported-type' });
     }
     if (mode === 'image') {
-      if (!target.acceptsImages) {
+      if (!target.acceptsImages && target.purpose === 'painting') {
         throw new FileAttachmentError({ ...issue, code: 'model-unsupported' });
       }
-      images.push(file);
+      if (target.acceptsImages) images.push(file);
     }
     const limit =
       mode === 'image'

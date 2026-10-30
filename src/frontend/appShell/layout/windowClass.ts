@@ -1,9 +1,9 @@
 /**
  * How much of the shell fits side by side in the current window. Device names never decide this:
  * an iPad in Split View, an Android tablet, and a foldable's inner display all resolve from the
- * width they actually have.
+ * width they actually have. A wide window keeps a left column beside one content region.
  */
-export type WindowClass = 'compact' | 'medium' | 'expanded';
+export type WindowClass = 'compact' | 'wide';
 
 /** Body text size at which the region widths below were measured. */
 export const windowRegionBodyTextSize = 16;
@@ -16,10 +16,9 @@ export const windowRegionWidths = {
   sidebar: 280,
 } as const;
 
-// A file pane beside a conversation is the widest arrangement the content needs; the persistent
-// sidebar then adds its own column.
-const MEDIUM_MIN_WIDTH = windowRegionWidths.filePaneMin + windowRegionWidths.conversationMin;
-const EXPANDED_MIN_WIDTH = MEDIUM_MIN_WIDTH + windowRegionWidths.sidebar;
+// The left column is widest when it holds files, so a window that fits files beside a conversation
+// also fits the narrower sidebar there.
+const WIDE_MIN_WIDTH = windowRegionWidths.filePaneMin + windowRegionWidths.conversationMin;
 
 type WindowClassInput = {
   width: number;
@@ -38,9 +37,7 @@ export function resolveWindowClass({
 }: WindowClassInput): WindowClass {
   const availableWidth = (width - insetLeft - insetRight) / Math.max(1, textScale);
 
-  if (availableWidth >= EXPANDED_MIN_WIDTH) return 'expanded';
-  if (availableWidth >= MEDIUM_MIN_WIDTH) return 'medium';
-  return 'compact';
+  return availableWidth >= WIDE_MIN_WIDTH ? 'wide' : 'compact';
 }
 
 /** The file pane takes 43% of the content width, kept between its readable bounds. */

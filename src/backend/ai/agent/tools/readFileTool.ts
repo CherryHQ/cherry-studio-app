@@ -11,7 +11,7 @@
 import * as z from 'zod';
 
 import type { ParsedDocument } from '@/backend/services/file/documentParser';
-import { linkPdfOcr } from '@/backend/services/file/pdfText';
+import { linkFileOcr } from '@/backend/services/file/fileTextExtraction';
 import {
   readAttachmentContent,
   type ReadAttachmentContent,
@@ -21,6 +21,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   FileAttachmentError,
   type DocumentParserMode,
+  type FileAttachmentIssue,
 } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -93,6 +94,7 @@ export const readFileInputSchema = z.strictObject({
 
 export type ReadFileFiles = {
   readImage?: ManagedFileResolver['readImage'];
+  readImageText: ManagedFileResolver['readImageText'];
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
   readDocumentText: ManagedFileResolver['readDocumentText'];
@@ -102,11 +104,23 @@ type ReadContent =
   | Extract<ReadAttachmentContent, { kind: 'text' }>
   | (Extract<ReadAttachmentContent, { kind: 'document' }> & { json: string });
 
+const NEEDS_VISION =
+  'The current model cannot receive image pixels; tell the user that a vision-capable model is needed to inspect it.';
+/** Read failures addressed to the model; the shared diagnostics address the user. */
+const MODEL_FACING_READ_ERRORS: Partial<Record<FileAttachmentIssue['code'], string>> = {
+  'document-empty':
+    'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.',
+  'image-ocr-empty': `On-device OCR found no readable text in this image. ${NEEDS_VISION}`,
+  'image-ocr-failed': `On-device OCR could not read this image; do not retry unchanged. ${NEEDS_VISION}`,
+  'image-ocr-unsupported': `On-device OCR does not support the current app language. ${NEEDS_VISION}`,
+};
+
 export function createReadFileTool(
   files: ReadFileFiles,
   scope: TurnFileScope,
   documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
   access?: WorkspaceFileAccess,
+  acceptsImages = true,
 ): RuntimeTool {
   /**
    * The last document this turn parsed, so paging a large document parses it
@@ -122,12 +136,13 @@ export function createReadFileTool(
   ): Promise<ReadContent> => {
     if (lastDocument?.id === source.fileEntryId) return lastDocument.content;
     // The tool row observes recognition by call ID, including reads by workspace path.
-    const unlinkOcr = linkPdfOcr(toolCallId, source.fileEntryId);
+    const unlinkOcr = linkFileOcr(toolCallId, source.fileEntryId);
     const content = await readAttachmentContent(
       source,
       {
         readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
         readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+        readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       },
       signal,
       READ_FILE_MAX_SOURCE_BYTES,
@@ -137,7 +152,10 @@ export function createReadFileTool(
       content.kind === 'document'
         ? { ...content, json: JSON.stringify(content.parsed.output.ir) }
         : content;
-    if (documentFileTypeFromMediaType(source.mediaType)) {
+    if (
+      documentFileTypeFromMediaType(source.mediaType) ||
+      isAiSupportedImageMediaType(source.mediaType)
+    ) {
       lastDocument = { id: source.fileEntryId, content: result };
     }
     return result;
@@ -151,7 +169,11 @@ export function createReadFileTool(
       documentParserMode === 'anydoc'
         ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
         : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. PNG, JPEG, WebP and GIF reads return bounded image pixels to vision models; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.`,
+    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. ${
+      acceptsImages
+        ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
+        : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
+    }`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
@@ -186,7 +208,7 @@ export function createReadFileTool(
       if (!source) {
         return invalid('The managed file is unavailable.');
       }
-      if (isAiSupportedImageMediaType(source.mediaType)) {
+      if (isAiSupportedImageMediaType(source.mediaType) && acceptsImages) {
         if (source.size > MAX_IMAGE_ATTACHMENT_BYTES)
           return invalid('The image exceeds the attachment byte limit.');
         if (hasLineParameters || hasJsonParameters)
@@ -216,7 +238,7 @@ export function createReadFileTool(
       let text: string;
       let sourceTruncated: boolean;
       let unrecognizedPages: number[] | undefined;
-      let parser: 'builtin' | 'native-pdf' | undefined;
+      let parser: 'builtin' | 'native-pdf' | 'native-image-ocr' | undefined;
       try {
         const content = await read(source, signal, toolCallId);
         if (content.kind === 'document') {
@@ -263,11 +285,7 @@ export function createReadFileTool(
               artifacts: [],
             };
           }
-          return invalid(
-            error.issue.code === 'document-empty'
-              ? 'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.'
-              : error.message,
-          );
+          return invalid(MODEL_FACING_READ_ERRORS[error.issue.code] ?? error.message);
         }
         return invalid('The managed file could not be read.');
       }
@@ -280,6 +298,12 @@ export function createReadFileTool(
         filename: source.name,
         size: source.size,
         ...(parser ? { parser } : {}),
+        ...(parser === 'native-image-ocr'
+          ? {
+              delivery:
+                'ocr-text-only; first frame; image pixels and visual details are not available to the model',
+            }
+          : {}),
         ...(unrecognizedPages ? { unrecognizedPages } : {}),
       };
       if (hasJsonParameters) {

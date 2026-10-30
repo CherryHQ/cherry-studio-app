@@ -39,14 +39,20 @@ import {
   type PaintingGenerationStrategy,
 } from '@/shared/utils/paintingGenerationStrategy';
 
+import {
+  isImageGenerationTimeout,
+  withImageGenerationDeadline,
+} from '../../host/agentImageGeneration';
 import type { TurnFileScope } from '../../resources/managedFileResolver';
-import type { RuntimeError } from '../../runtime';
+import { raceAbort, type RuntimeError } from '../../runtime';
 import type { GenerateImageToolInput } from './generateImageSchema';
 
 const logger = loggerService.withContext('GenerateImageTool');
 
 export const PAINTING_ERROR_NOTE =
   'The image generation request failed. Inform the user; do not automatically repeat the request.';
+const PAINTING_TIMEOUT_NOTE =
+  'The image provider did not answer within 10 minutes. Inform the user; do not automatically repeat the request.';
 const PAINTING_STORAGE_ERROR_NOTE =
   'The generated images could not be saved. Inform the user; do not automatically repeat the paid generation.';
 export const PAINTING_MODEL_NOT_CONFIGURED_NOTE =
@@ -197,13 +203,18 @@ export async function generateImageFromPrompt(
   const createdFiles: FileEntry[] = [];
   let stage: 'request' | 'storage' = 'request';
   try {
-    const result = await dependencies.ai.generateImage({
-      ...request,
-      ...(inputImages.length > 0 && { inputImages }),
-      requestOptions: { signal },
-      uniqueModelId,
-      usageAttribution,
-    });
+    const result = await withImageGenerationDeadline(signal, (requestSignal) =>
+      raceAbort(
+        dependencies.ai.generateImage({
+          ...request,
+          ...(inputImages.length > 0 && { inputImages }),
+          requestOptions: { signal: requestSignal },
+          uniqueModelId,
+          usageAttribution,
+        }),
+        requestSignal,
+      ),
+    );
     throwIfAborted(signal);
     if (result.images.length === 0) {
       return paintingError('image_generation_empty', 'The image provider returned no image.');
@@ -233,6 +244,10 @@ export async function generateImageFromPrompt(
     await discardCreatedFiles(dependencies, createdFiles);
     if (signal.aborted || isAbortError(error)) {
       throw error;
+    }
+    if (isImageGenerationTimeout(error)) {
+      logger.warn('generate_image timed out', { uniqueModelId });
+      return paintingError('image_generation_timeout', PAINTING_TIMEOUT_NOTE);
     }
     logger.error('generate_image failed', error as Error, { uniqueModelId });
     if (stage === 'request' && error instanceof AiRequestError) throw error;

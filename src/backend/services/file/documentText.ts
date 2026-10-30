@@ -7,8 +7,8 @@ import {
 import { documentAttachmentByteLimit } from '@/shared/utils/fileAttachmentPolicy';
 
 import { readFileUriBytes } from './fileStorage';
+import { readPdfText } from './fileTextExtraction';
 import type { ExtractedDocumentText } from './officeText';
-import { readPdfText } from './pdfText';
 
 export type { ExtractedDocumentText } from './officeText';
 

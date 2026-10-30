@@ -100,6 +100,7 @@ export function FeedbackHistoryScreen() {
           rightActions: [
             {
               key: 'refresh',
+              nativeIcon: 'arrow.clockwise',
               type: 'icon',
               icon: RefreshCwIcon,
               accessibilityLabel: t('settings.about.feedback.history.refresh'),

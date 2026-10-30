@@ -15,7 +15,7 @@ import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
 } from '../../sessionStore/AgentSessionStore';
-import type { StoredSkillActivation } from '../../sessionStore/skillActivations';
+import type { StoredSkillActivation } from '../../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
@@ -197,7 +197,7 @@ describe('turn preparation', () => {
     expect(harness.resolveRuntimeTools).not.toHaveBeenCalled();
   });
 
-  test('minimal mode accepts direct images and still rejects a model without vision', async () => {
+  test('minimal mode accepts direct images and sends OCR text to a model without vision', async () => {
     const harness = createHarness();
     harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
     harness.files.resolveAvailable = async () =>
@@ -222,9 +222,17 @@ describe('turn preparation', () => {
       maxOutputTokens: 8_000,
       supportsTools: false,
     });
-    await expect(
-      prepareTurn(harness.dependencies, input, new AbortController().signal),
-    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    harness.files.readImageText = jest.fn(async () => ({ text: 'Total: 42', truncated: false }));
+    const ocr = await prepareTurn(harness.dependencies, input, new AbortController().signal);
+    expect(ocr.userParts).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        attachmentReport: expect.objectContaining({
+          mode: 'image-text',
+          parser: 'native-image-ocr',
+        }),
+      }),
+    ]);
   });
 
   test('minimal mode rejects documents before parsing or tool discovery', async () => {
@@ -506,6 +514,7 @@ describe('turn preparation', () => {
       askUser: harness.askUser,
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
+      acceptsImages: true,
       resources: plan.resources,
       documentParserMode: 'anydoc',
       resolveUsageAttribution: plan.usageAttribution.resolve,
@@ -1005,6 +1014,7 @@ function createHarness() {
     resolveAvailable,
     readAsBytes,
     readDocumentText: jest.fn(async () => undefined),
+    readImageText: jest.fn(async () => undefined),
     readAsDataUrl: jest.fn(async () => undefined),
   };
   const systemTool = tool('system_tool', 'ask');

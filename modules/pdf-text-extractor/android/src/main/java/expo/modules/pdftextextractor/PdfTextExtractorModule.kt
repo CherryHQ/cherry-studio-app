@@ -110,9 +110,44 @@ class PdfTextExtractorModule : Module() {
             }
         }
 
-        AsyncFunction("getPageCount") Coroutine { filePath: String ->
-            withContext(Dispatchers.IO) {
-                documentMutex.withLock { getPageCount(filePath) }
+        AsyncFunction("extractImageText") Coroutine { filePath: String, options: ExtractOptions?, requestId: String ->
+            val cancelled = requests[requestId] ?: throw PdfExtractionCancelledException()
+            fun checkCancelled() {
+                if (cancelled.get()) throw PdfExtractionCancelledException()
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    documentMutex.withLock {
+                        checkCancelled()
+                        val file = parseFilePath(filePath)
+                        try {
+                            val supported = isPdfOcrLanguageSupported(options?.language)
+                            val text = if (supported) {
+                                sendEvent("onProgress", mapOf(
+                                    "requestId" to requestId, "completedPages" to 0,
+                                    "totalPages" to 1, "phase" to "ocr"
+                                ))
+                                recognizeImageFile(file, ::checkCancelled).let {
+                                    if (hasUsablePdfText(it)) it else ""
+                                }
+                            } else ""
+                            checkCancelled()
+                            var end = minOf(text.length, MAX_PDF_TEXT_CHARACTERS)
+                            if (end > 0 && text[end - 1].isHighSurrogate()) end--
+                            mapOf(
+                                "text" to text.substring(0, end), "totalPages" to 1,
+                                "extractedPages" to 1, "isTruncated" to (end < text.length),
+                                "extractionError" to false, "ocrError" to false,
+                                "ocrUnavailable" to !supported,
+                                "unrecognizedPages" to if (text.isEmpty()) listOf(1) else emptyList<Int>()
+                            )
+                        } finally {
+                            if (filePath.startsWith("content://")) file.delete()
+                        }
+                    }
+                }
+            } finally {
+                requests.remove(requestId)
             }
         }
     }
@@ -232,24 +267,6 @@ class PdfTextExtractorModule : Module() {
             }
         } finally {
             if (isTempFile) file.delete()
-        }
-    }
-
-    private fun getPageCount(filePath: String): Int {
-        return try {
-            val isTempFile = filePath.startsWith("content://")
-            val file = parseFilePath(filePath)
-            try {
-                loadDocument(file).use { doc ->
-                    doc.numberOfPages
-                }
-            } finally {
-                if (isTempFile && file.exists()) {
-                    file.delete()
-                }
-            }
-        } catch (e: Exception) {
-            0
         }
     }
 

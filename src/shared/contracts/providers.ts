@@ -22,6 +22,7 @@ export type ProviderConfigurationIssue =
   | 'missing-oauth'
   | 'missing-api-key'
   | 'disabled-api-keys'
+  | 'invalid-service-account'
   | 'invalid-endpoint'
   | 'unsupported-auth';
 

@@ -27,7 +27,10 @@ selection was requested, never that reading was granted. Reselection shares the 
 permission queue with ordinary system requests.
 
 The workout overview uses a bounded, newest-first sample query and preserves absent distance
-and energy as null. It uses this module directly and adds no third-party dependency patch.
+and energy as null. The seven-metric summary reads native statistics in fixed units (`unit`:
+kcal, m, count/min, ms, count) so its values do not follow the person's display units, and pages
+sleep samples for its stage merge. Every Health read goes through this module; there is no
+third-party HealthKit dependency.
 
 Ordinary reads use bounded anchored pages. Continue with the returned cursor and the same explicit
 dates, type and workout filter; a full last page may be followed by an empty page. Deleted IDs are

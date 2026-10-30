@@ -99,6 +99,7 @@ function AgentListScreenBody() {
         accessibilityLabel: t('agent.actions.create'),
         icon: PlusIcon,
         key: 'create-agent',
+        nativeIcon: 'plus',
         onPress: openCreateAgent,
         type: 'icon',
       },

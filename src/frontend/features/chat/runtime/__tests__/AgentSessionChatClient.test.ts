@@ -133,6 +133,7 @@ function protocolWithObservation(
     deleteTurn: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
+    editMessage: jest.fn(),
     selectMessage: jest.fn(),
     getWorkingStorageSize: jest.fn(),
     getSessionStatus: jest.fn<
@@ -412,15 +413,13 @@ describe('AgentSessionChatClient', () => {
     const unsubscribe = client.subscribe('session-1', () => undefined);
     const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
 
-    expect(client.getState('session-1').retryingMessageId).toBeUndefined();
     expect(client.getState('session-1').isSubmitting).toBe(true);
-    // A re-observation does not replace the original answer with a pending projection.
     await client.refresh('session-1');
-    expect(client.getState('session-1').retryingMessageId).toBeUndefined();
+    expect(client.getState('session-1').isSubmitting).toBe(true);
 
     admitRetry();
     await retry;
-    expect(client.getState('session-1').retryingMessageId).toBeUndefined();
+    expect(client.getState('session-1').isSubmitting).toBe(false);
     unsubscribe();
   });
 

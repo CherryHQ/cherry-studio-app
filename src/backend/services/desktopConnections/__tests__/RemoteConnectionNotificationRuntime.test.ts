@@ -1,6 +1,3 @@
-import { Platform } from 'react-native';
-
-import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundActivityActionResponse } from '@/shared/backgroundActivity/actions';
@@ -29,7 +26,6 @@ let runtime: RemoteConnectionNotificationRuntime;
 
 beforeEach(async () => {
   jest.clearAllMocks();
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
   connections = [];
   runtime = new RemoteConnectionNotificationRuntime(
     {
@@ -42,8 +38,8 @@ beforeEach(async () => {
       disconnect,
     } as unknown as DesktopConnectionManager,
     { acquire } as unknown as KeepAliveCoordinator,
-    { setRemoteConnections: notifications } as unknown as AndroidBackgroundActivityRuntime,
     {
+      connectionNotices: { setRemoteConnections: notifications },
       translate: (key: string) => key,
       subscribeActions: (listener: typeof action) => {
         action = listener;
@@ -111,4 +107,21 @@ test('host disposal removes its notice and ignores late button delivery', async 
   expect(disconnect).not.toHaveBeenCalled();
   expect(release).toHaveBeenCalledTimes(1);
   expect(notifications).toHaveBeenLastCalledWith([]);
+});
+
+test('without connection notices, connections stay page-scoped and nothing is held', async () => {
+  const enablePersistentConnections = jest.fn();
+  const inert = new RemoteConnectionNotificationRuntime(
+    {
+      enablePersistentConnections,
+      getPersistentConnections: () => connections,
+      subscribeConnections: () => () => {},
+    } as unknown as DesktopConnectionManager,
+    { acquire } as unknown as KeepAliveCoordinator,
+    { translate: (key: string) => key } as unknown as BackgroundActivityEnvironment,
+  );
+  await inert._doInit();
+  await inert._doStop();
+  expect(enablePersistentConnections).not.toHaveBeenCalled();
+  expect(acquire).not.toHaveBeenCalled();
 });

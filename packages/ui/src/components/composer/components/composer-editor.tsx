@@ -8,7 +8,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
 } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import Animated, {
@@ -16,12 +15,13 @@ import Animated, {
   interpolate,
   ReduceMotion,
   type SharedValue,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
-import { duration, easing } from '../../../motion';
+import { easing } from '../../../motion';
 import type { ComposerInputProps } from '../composer.types';
 import { composerActionSize, COMPOSER_MAX_TEXT_HEIGHT } from '../utils/composer-layout';
 import { ComposerExpansionMeasure, useComposerExpansion } from './composer-expansion';
@@ -31,8 +31,11 @@ const fieldContentStyle = { minHeight: restingInputHeight };
 const restingActionSlotWidth = restingInputHeight + 8;
 const activeToolbarGap = 16;
 const fieldActionInsetStyle = { paddingRight: restingActionSlotWidth };
+// Shorter than the keyboard on purpose: the editor finishes its shape early in the keyboard's
+// travel, so the transcript reads one motion with a small early growth instead of two
+// overlapping ones. Interruptions reverse it; Reduce Motion lands directly.
 const activeTransitionMotion = {
-  duration: duration.base,
+  duration: 90,
   easing: easing.settle,
   reduceMotion: ReduceMotion.System,
 } as const;
@@ -51,6 +54,7 @@ const EditorContext = createContext<EditorContextValue | null>(null);
  */
 export function ComposerEditor({
   active,
+  activeSignal,
   children,
   compactAccessory,
   expandLabel,
@@ -58,6 +62,11 @@ export function ComposerEditor({
   testID,
 }: PropsWithChildren<{
   active: boolean;
+  /**
+   * Raises `active` on the UI thread before React commits, so the shape change starts with the
+   * keyboard rather than a render later. Deactivation still follows `active`.
+   */
+  activeSignal?: SharedValue<boolean>;
   /** One action-sized preview beside the resting field; its presence never activates editing. */
   compactAccessory?: ReactNode;
   expandLabel: string;
@@ -67,7 +76,8 @@ export function ComposerEditor({
   const expansion = useComposerExpansion();
   const isExpanded = expansion?.state.isExpanded ?? false;
   const isInputActive = active || isExpanded;
-  const naturalFieldHeight = useRef(restingInputHeight);
+  const naturalFieldHeight = useSharedValue(restingInputHeight);
+  const morphTarget = useSharedValue(isInputActive);
   const activeProgress = useSharedValue(isInputActive ? 1 : 0);
   const fieldFrameHeight = useSharedValue(restingInputHeight);
   const expansionHeight = expansion?.meta.extraHeight;
@@ -84,17 +94,30 @@ export function ComposerEditor({
 
   useEffect(() => () => collapseEditor?.(), [collapseEditor]);
 
-  // Preserve the existing isolated frame motion: the top grows away from the
-  // anchored toolbar, interruptions reverse it, and Reduce Motion lands directly.
-  useEffect(() => {
-    activeProgress.set(withTiming(isInputActive ? 1 : 0, activeTransitionMotion));
-    fieldFrameHeight.set(
-      withTiming(
-        isInputActive ? naturalFieldHeight.current : restingInputHeight,
-        activeTransitionMotion,
-      ),
-    );
-  }, [activeProgress, fieldFrameHeight, isInputActive]);
+  // The top grows away from the anchored toolbar. Whichever of the signal and the
+  // committed state arrives first starts the motion; the other finds it running.
+  const morphTo = useCallback(
+    (target: boolean) => {
+      'worklet';
+      if (morphTarget.get() === target) return;
+      morphTarget.set(target);
+      activeProgress.set(withTiming(target ? 1 : 0, activeTransitionMotion));
+      fieldFrameHeight.set(
+        withTiming(target ? naturalFieldHeight.get() : restingInputHeight, activeTransitionMotion),
+      );
+    },
+    [activeProgress, fieldFrameHeight, morphTarget, naturalFieldHeight],
+  );
+  useEffect(() => morphTo(isInputActive), [isInputActive, morphTo]);
+  useAnimatedReaction(
+    () => activeSignal?.get() ?? false,
+    (raised, previous) => {
+      // Only the signal's own changes move the shape: a commit that recreates this
+      // reaction must not re-expand an editor the committed state just closed.
+      if (previous !== null && raised !== previous) morphTo(raised || isInputActive);
+    },
+    [activeSignal, isInputActive, morphTo],
+  );
 
   const morphFrameStyle = useAnimatedStyle(() => ({
     height:
@@ -133,14 +156,15 @@ export function ComposerEditor({
         restingInputHeight,
         Math.min(COMPOSER_MAX_TEXT_HEIGHT, Math.ceil(event.nativeEvent.layout.height)),
       );
-      if (naturalFieldHeight.current === nextHeight) return;
+      const previousHeight = naturalFieldHeight.get();
+      if (previousHeight === nextHeight) return;
       if (expansion?.state.isPresented) {
-        expansion.actions.resizeContent(nextHeight - naturalFieldHeight.current);
+        expansion.actions.resizeContent(nextHeight - previousHeight);
       }
-      naturalFieldHeight.current = nextHeight;
+      naturalFieldHeight.set(nextHeight);
       if (isInputActive) fieldFrameHeight.set(nextHeight);
     },
-    [expansion, fieldFrameHeight, isInputActive],
+    [expansion, fieldFrameHeight, isInputActive, naturalFieldHeight],
   );
 
   return (

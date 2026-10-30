@@ -86,6 +86,8 @@ export interface PreferenceSchema {
 
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  /** The user hid the sidebar a wide window would otherwise keep beside the content. */
+  'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
   'ui.theme_mode': ThemeMode;
 }
@@ -134,6 +136,7 @@ export const PreferenceDefaults = {
 
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
@@ -158,4 +161,5 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   'feature.voice.dictation_engine',
   'feature.voice.speech_engine',
   'feature.voice.system_voice',
+  'ui.sidebar.collapsed',
 ] as const satisfies readonly PreferenceKeyType[];

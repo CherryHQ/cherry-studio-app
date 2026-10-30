@@ -30,7 +30,7 @@ import { PiProviderAccountAdapter } from './PiProviderAccountAdapter';
  * support, so system model support swaps together with the Runtime.
  */
 @Injectable('AgentRuntime')
-@DependsOn(['ProviderAccountRuntime'])
+@DependsOn(['ProviderAccountRuntime', 'VertexAuthClient'])
 @ServicePhase(Phase.PostReady)
 export class PiRuntimeService
   extends BaseService

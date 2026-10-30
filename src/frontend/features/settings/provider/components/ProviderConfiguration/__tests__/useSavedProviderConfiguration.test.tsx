@@ -17,6 +17,7 @@ const mockProvider = {
   id: 'custom',
   isEnabled: true,
   name: 'Custom',
+  settings: {},
 } as Provider;
 const followingModel: Model = {
   capabilities: [],

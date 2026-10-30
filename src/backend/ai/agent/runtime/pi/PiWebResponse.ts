@@ -62,7 +62,8 @@ export function applyPiWebReplay(
   if (!body) return payload;
   if (model.api === 'openai-responses' || model.api === 'azure-openai-responses')
     return replayOpenAIItems(body, messages);
-  if (model.api === 'google-generative-ai') return replayGoogleParts(body, model, messages);
+  if (model.api === 'google-generative-ai' || model.api === 'google-vertex')
+    return replayGoogleParts(body, model, messages);
   if (model.api === 'anthropic-messages') return replayAnthropicContent(body, model, messages);
   return payload;
 }

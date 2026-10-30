@@ -36,6 +36,10 @@ let mockComposerProps: MockComposerProps | undefined;
 let mockComposerActions: ReturnType<typeof useComposerActions> | undefined;
 let mockComposerState: ReturnType<typeof useComposerState> | undefined;
 
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual('@/frontend/components/Composer/components/__tests__/_sharedValueMock'),
+);
+
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');

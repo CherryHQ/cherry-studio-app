@@ -101,7 +101,7 @@ export type TurnPreparationDependencies = {
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
   /** The Host keeps the engine binding; preparation consumes that local Runtime. */
-  runtime: AgentRuntime;
+  runtime: Pick<AgentRuntime, 'descriptor' | 'preflightModel'>;
   runtimeTools: AgentRuntimeToolResolver;
   /** Optional so tests and hosts without a Skill library prepare turns unchanged. */
   skills?: SkillScopeSource;
@@ -553,6 +553,7 @@ export async function prepareResolvedTurn(
           askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
+          acceptsImages: modelPreflight.inputModalities.includes('image'),
           resources,
           documentParserMode,
           resolveUsageAttribution: usageAttribution.resolve,

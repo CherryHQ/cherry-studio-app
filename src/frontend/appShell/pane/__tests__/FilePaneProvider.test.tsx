@@ -3,11 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FilePaneProvider, useFilePane } from '../FilePaneProvider';
 
-let mockWindowClass = 'expanded';
+let mockWindowClass = 'wide';
 let mockSource = 'local';
 let mockIsLayoutCurrent = true;
-let mockFold: { x: number; y: number; width: number; height: number; isActive: boolean } | null =
-  null;
+let mockFold: { x: number; y: number; width: number; height: number } | null = null;
 
 jest.mock('@/frontend/appShell/layout', () => ({
   isAcross: jest.requireActual('@/frontend/appShell/layout/paneSplit').isAcross,
@@ -56,14 +55,14 @@ function narrow() {
 }
 
 function expand() {
-  mockWindowClass = 'expanded';
+  mockWindowClass = 'wide';
   update();
 }
 
 const file = { entryId: '00000000-0000-7000-8000-000000000001' as never };
 
 beforeEach(() => {
-  mockWindowClass = 'expanded';
+  mockWindowClass = 'wide';
   mockSource = 'local';
   mockIsLayoutCurrent = true;
   mockFold = null;
@@ -142,7 +141,7 @@ it('waits for a current snapshot before deciding whether a narrow window carries
   expect(pane!.isCarried).toBe(false);
 
   // Portrait rotation still has room for a stacked pane when its fold arrives.
-  mockFold = { x: 0, y: 455, width: 669, height: 40, isActive: true };
+  mockFold = { x: 0, y: 455, width: 669, height: 40 };
   mockIsLayoutCurrent = true;
   update();
   expect(pane!.isCarried).toBe(false);
@@ -191,8 +190,8 @@ it('records touches without publishing another pane state', () => {
 });
 
 it.each([
-  ['across the window', { height: 0, isActive: false, width: 669, x: 0, y: 475 }, true],
-  ['down the window', { height: 669, isActive: true, width: 40, x: 455, y: 0 }, false],
+  ['across the window', { height: 40, width: 669, x: 0, y: 455 }, true],
+  ['down the window', { height: 669, width: 40, x: 455, y: 0 }, false],
 ])('stacks a pane in a compact window with a fold %s: %s', (_, fold, isAvailable) => {
   mockWindowClass = 'compact';
   mockFold = fold;

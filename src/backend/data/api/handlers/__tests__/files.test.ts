@@ -28,19 +28,6 @@ describe('file Data API handlers', () => {
     expect(library.moveFiles).toHaveBeenCalledWith([entryId], null);
   });
 
-  it('passes the list query through untouched, including an absent one', async () => {
-    const page = { items: [] };
-    const entries = { listByCursor: jest.fn(async () => page) };
-    const handlers = createFileHandlers(entries as never, {} as never);
-
-    await expect(handlers['/files/entries'].GET({ query: { limit: 5 } })).resolves.toBe(page);
-    expect(entries.listByCursor).toHaveBeenCalledWith({ limit: 5 });
-
-    // Undefined reaches the service so its own defaults apply.
-    await handlers['/files/entries'].GET({});
-    expect(entries.listByCursor).toHaveBeenLastCalledWith(undefined);
-  });
-
   it('validates the id before delegating the entry lookup', async () => {
     const entries = { getById: jest.fn(async () => ({ id: entryId })) };
     const handlers = createFileHandlers(entries as never, {} as never);

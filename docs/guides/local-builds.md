@@ -2,8 +2,10 @@
 
 Use `pnpm build:local` to create an Android or iOS installation package on your machine. It runs
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
-`pnpm install` also generates the document preview page through the `postinstall` script of
-[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md); EAS installs
+`pnpm install` also generates the document preview page and the Mermaid renderer page through the
+`postinstall` scripts of
+[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md) and
+[`@cherrystudio/mermaid-webview`](../../packages/mermaid-webview/README.md); EAS installs
 dependencies the same way, so no separate build hook is needed.
 
 | Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map, R8 mapping, source-context, and debug-symbol uploads |
@@ -377,7 +379,7 @@ entry. Expo Asset 58 resolves bundled resources through that public export; with
 preview fails before loading its HTML page. Keep the forwarding until Uniwind includes it upstream.
 `scripts/__tests__/uniwindAssetRegistry.test.ts` guards the installed entry and patch registration.
 
-Android builds compile `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
+Android builds compile `expo-app-metrics` and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's

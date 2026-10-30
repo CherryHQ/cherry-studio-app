@@ -5,10 +5,10 @@ import { Stack, useIsPreview } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
+import { useReportChatHeaderHeight } from '@/frontend/appShell/layout';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-import { HeaderAction } from '../../components/HeaderAction';
-import { HeaderActionGroup } from '../../components/HeaderActionGroup/HeaderActionGroup';
+import { renderHeaderToolbarItem } from '../../components/HeaderAction';
 import { headerScreenOptions } from '../../headerScreenOptions';
 import { MainHeaderAgentLabel } from '../MainHeaderAgentLabel';
 import { useMainHeaderActions } from '../useMainHeaderActions';
@@ -20,6 +20,25 @@ const HEADER_BLUR_BAND_HEIGHT_RATIOS = [1, 0.72, 0.46, 0.22] as const;
 const HEADER_BLUR_INTENSITY = 9;
 const legacyHeaderBackground = () => <LegacyHeaderBackground />;
 
+/**
+ * Route options for a screen that hosts this header, declared with the route so the first frame
+ * already has the transparent native toolbar. The view itself only toggles `hidden`, which cannot
+ * move content because the toolbar never takes layout space.
+ */
+export const mainHeaderScreenOptions = {
+  ...headerScreenOptions,
+  title: '',
+  headerTransparent: true,
+  headerBackground: isLiquidGlassAvailable ? undefined : legacyHeaderBackground,
+  unstable_nativeProps: {
+    headerConfig: {
+      // Uniwind owns the window appearance. Native-stack's light/dark
+      // override cannot update the visible iOS header dynamically.
+      experimental_userInterfaceStyle: 'unspecified',
+    },
+  },
+} as const;
+
 export function MainHeaderView({
   agent,
   hidden,
@@ -29,52 +48,38 @@ export function MainHeaderView({
 }: MainHeaderViewProps) {
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
+  useReportChatHeaderHeight();
   if (isPreview) {
     return null;
   }
 
-  if (hidden) return <Stack.Screen options={{ ...headerScreenOptions, headerShown: false }} />;
+  if (hidden) return <Stack.Screen options={{ headerShown: false }} />;
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          ...headerScreenOptions,
-          headerShown: true,
-          title: '',
-          headerTransparent: true,
-          headerBackground: isLiquidGlassAvailable ? undefined : legacyHeaderBackground,
-          unstable_nativeProps: {
-            headerConfig: {
-              // Uniwind owns the window appearance. Native-stack's light/dark
-              // override cannot update the visible iOS header dynamically.
-              experimental_userInterfaceStyle: 'unspecified',
-            },
-          },
-        }}
-      />
+      <Stack.Screen options={{ headerShown: true }} />
       <Stack.Toolbar placement="left">
-        {/* A permanent sidebar has no button that opens it. */}
-        {leadingAction ? (
-          <Stack.Toolbar.View>
-            <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
-              <HeaderAction action={leadingAction} />
-            </View>
-          </Stack.Toolbar.View>
-        ) : null}
+        {/* A column given to the file pane or sized to a fold has no sidebar button. */}
+        {leadingAction ? renderHeaderToolbarItem(leadingAction, actionSurface) : null}
         <Stack.Toolbar.Spacer hidden={!leadingAction || !agent} width={4} />
         {agent ? (
           <Stack.Toolbar.View>
-            <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
+            <View className={actionSurface.surfaceClassName}>
               <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
             </View>
           </Stack.Toolbar.View>
         ) : null}
       </Stack.Toolbar>
-      <HeaderActionGroup actions={rightActions} placement="right" />
+      <Stack.Toolbar placement="right">
+        {rightActions.map((action) => renderHeaderToolbarItem(action, actionSurface))}
+      </Stack.Toolbar>
     </>
   );
 }
+
+const actionSurface = {
+  surfaceClassName: isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70',
+};
 
 /**
  * Systems without the native toolbar's shared glass surface need this fallback.

@@ -204,11 +204,11 @@ policy rather than guessed IDs or reconstructed paths.
 
 | Owner | State and responsibility |
 | --- | --- |
-| `McpRuntimeService` | One pooled client per server configuration, transport and catalog generations, cached catalogs, invalidation, temporary inspection, tracked OAuth completion and service teardown |
+| `McpRuntimeService` | One pooled client per server configuration, transport and catalog generations, cached catalogs, invalidation, temporary inspection, tracked OAuth completion, pausing pooled in-flight network budgets while a server question waits, and service teardown |
 | `McpAppAccess` | Stateless App source/configuration binding, per-Agent permission, visibility/schema checks and independent consent; each validation round shares one catalog |
 | `McpAppRuntime` | Live view sessions, initialization, bounded bridge messages, duplicate request rejection, view cancellation and redacted errors |
 | `McpOAuthRuntime` | Authorization attempts, token refresh, revocation and serialized SecureStore writes; its stop cancels network work and settles token storage |
-| `McpElicitationBroker` | User questions and responses; pooled in-flight requests pause their network budgets while a server question waits |
+| `McpElicitationBroker` | User questions and responses |
 | `mcpRuntimeAdapter` | Shared transmission/effect outcome classification and Agent result projection; App callers use the same classification without Agent presentation |
 
 App content and tool operations acquire the service's shared connection. Settings inspection of an

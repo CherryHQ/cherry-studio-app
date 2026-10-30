@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 jest.mock('@sentry/react-native/metro', () => ({
   getSentryExpoConfig: () => ({ resolver: { sourceExts: [], assetExts: [] }, watchFolders: [] }),
@@ -68,3 +69,48 @@ it('preserves the requesting package context for ordinary dependencies', () => {
   );
   expect(resolveRequest).toHaveBeenCalledWith(context, 'react-native', 'ios');
 });
+
+it.each(['ios', 'android'])('resolves Pi Vertex to the Google web SDK on %s', (platform) => {
+  const originModulePath = realpathSync(
+    join(process.cwd(), 'node_modules/@earendil-works/pi-ai/dist/api/google-vertex.js'),
+  );
+  const context = {
+    originModulePath,
+    resolveRequest: () => {
+      throw new Error('The native resolver cannot resolve @google/genai/web');
+    },
+  };
+  const result = config.resolver.resolveRequest(context, '@google/genai/web', platform);
+  // Resolve Pi's installed dependency, rather than assuming it is hoisted at the app root.
+  const nodeEntry = resolveFrom(originModulePath, '@google/genai');
+  expect(result).toEqual({
+    type: 'sourceFile',
+    filePath: realpathSync(join(dirname(nodeEntry), '../web/index.mjs')),
+  });
+});
+
+it('preserves web platform resolution for the Google web SDK', () => {
+  const resolveRequest = jest.fn(() => ({ type: 'sourceFile' as const, filePath: '/web.js' }));
+  const context = { originModulePath: '/package/index.js', resolveRequest };
+  expect(config.resolver.resolveRequest(context, '@google/genai/web', 'web').filePath).toBe(
+    '/web.js',
+  );
+  expect(resolveRequest).toHaveBeenCalledWith(context, '@google/genai/web', 'web');
+});
+
+it.each(['ios', 'android'])(
+  'keeps the Vertex SDK on its host-injected auth path on %s',
+  (platform) => {
+    const sdk = resolveFrom(projectOrigin, '@anthropic-ai/vertex-sdk/client');
+    const resolveRequest = jest.fn(() => ({
+      type: 'sourceFile' as const,
+      filePath: '/node-auth.js',
+    }));
+    const context = { originModulePath: sdk, resolveRequest };
+    const result = config.resolver.resolveRequest(context, 'google-auth-library', platform);
+    expect(result.filePath).toBe(join(dirname(sdk), 'google-auth.native.js'));
+    expect(resolveRequest).not.toHaveBeenCalled();
+    const { GoogleAuth } = jest.requireActual<{ GoogleAuth: new () => unknown }>(result.filePath);
+    expect(() => new GoogleAuth()).toThrow('host-provided authClient');
+  },
+);

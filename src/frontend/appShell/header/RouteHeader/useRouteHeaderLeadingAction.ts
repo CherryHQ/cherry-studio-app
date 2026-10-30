@@ -6,6 +6,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import { type SidebarToggle, useSidebarToggle } from '@/frontend/appShell/sidebar/toggle';
 
 import SidebarExpandIcon from '../../icons/SidebarExpandIcon';
 import type { HeaderToolbarAction } from '../components/HeaderAction';
@@ -13,22 +14,25 @@ import type { RouteHeaderRootAction } from './RouteHeader.types';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
 
-/** Resolves drawer child screens to back and route roots to their declared action. */
-export function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
+/** Resolves child screens to back and route roots to their declared action. */
+function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
   const rootAction = useRouteHeaderRootAction();
   const isStackChild = useNavigationState((state) => state.index > 0);
 
   return rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
 }
 
-export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarAction {
+/** The header's leading action, or undefined when the route root leads with nothing. */
+export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarAction | undefined {
   const { t } = useTranslation();
   const router = useRouter();
   const openDrawer = useOpenDrawer();
+  const sidebar = useSidebarToggle();
   const pane = usePaneChrome();
   const routeKind = useRouteHeaderLeadingKind();
   // A pane is not a stack screen: it leads with its own exit unless the page declares a back step.
-  const action = pane ? 'back' : routeKind;
+  // A page that intercepts back keeps it even at a root that otherwise leads with the sidebar.
+  const action = pane || (onBack && routeKind === 'drawer') ? 'back' : routeKind;
   const goBack = useCallback(() => {
     if (onBack) {
       onBack();
@@ -43,15 +47,16 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
     router.replace('/');
   }, [onBack, router]);
 
-  const routeAction = useMemo<HeaderToolbarAction>(
+  const routeAction = useMemo<HeaderToolbarAction | undefined>(
     () =>
       action === 'drawer'
-        ? {
-            accessibilityLabel: t('navigation.openMenu'),
+        ? sidebar && {
+            accessibilityLabel: t(sidebarButtons[sidebar.action].accessibilityLabel),
             icon: SidebarExpandIcon,
             key: 'route-leading',
-            onPress: openDrawer,
-            testID: 'main-header-open-sidebar',
+            nativeIcon: 'sidebar.left',
+            onPress: () => toggleSidebar(sidebar, openDrawer),
+            testID: sidebarButtons[sidebar.action].testID,
             type: 'icon',
           }
         : action === 'close'
@@ -59,6 +64,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
               accessibilityLabel: t('common.close'),
               icon: XIcon,
               key: 'route-leading',
+              nativeIcon: 'xmark',
               onPress: goBack,
               testID: 'route-header-close',
               type: 'icon',
@@ -67,12 +73,27 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
               accessibilityLabel: t('navigation.back'),
               icon: ArrowLeftIcon,
               key: 'route-leading',
+              nativeIcon: 'chevron.left',
               onPress: goBack,
               testID: 'route-header-back',
               type: 'icon',
             },
-    [action, goBack, openDrawer, t],
+    [action, goBack, openDrawer, sidebar, t],
   );
 
-  return pane && !onBack ? pane.leadingAction : routeAction;
+  if (pane && !onBack) return pane.leadingAction;
+  return routeAction;
+}
+
+// One button in one place at every width: it opens the overlay in a compact window and hides or
+// shows the column in a wide one, keeping the same glyph as the platform's sidebar button does.
+const sidebarButtons = {
+  hide: { accessibilityLabel: 'navigation.hideMenu', testID: 'main-header-hide-sidebar' },
+  open: { accessibilityLabel: 'navigation.openMenu', testID: 'main-header-open-sidebar' },
+  show: { accessibilityLabel: 'navigation.showMenu', testID: 'main-header-show-sidebar' },
+} as const;
+
+function toggleSidebar(sidebar: SidebarToggle, openDrawer: () => void) {
+  if (sidebar.action === 'open') openDrawer();
+  else sidebar.setCollapsed(sidebar.action === 'hide');
 }

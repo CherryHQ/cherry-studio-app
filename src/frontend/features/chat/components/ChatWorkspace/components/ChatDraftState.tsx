@@ -3,6 +3,8 @@ import { Text, View } from 'react-native';
 
 import { AgentAvatar } from '@/frontend/components/Avatar';
 
+import { ChatComposerClearance } from './ChatComposerClearance';
+
 type ChatDraftStateProps = {
   assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
@@ -22,9 +24,9 @@ export function ChatDraftState({
   const { t } = useTranslation();
 
   return (
-    <View
+    <ChatComposerClearance
       className="flex-1 items-center justify-center px-8"
-      style={{ paddingBottom: contentBottomInset }}
+      contentBottomInset={contentBottomInset}
     >
       <View className="items-center gap-6">
         {assistantName ? (
@@ -40,6 +42,6 @@ export function ChatDraftState({
           {t('chat.draft.greeting')}
         </Text>
       </View>
-    </View>
+    </ChatComposerClearance>
   );
 }

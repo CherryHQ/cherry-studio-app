@@ -2,23 +2,24 @@ import type { PropsWithChildren } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const FORM_CONTENT_MAX_WIDTH = 720;
+// Forms and conversations share one measure: about 43 CJK characters at the base text size.
+const CONTENT_MAX_WIDTH = 720;
 
 /** Whether the window leaves space beside the form column, inside its safe area. */
 export function useIsFormContentConstrained() {
   const { width } = useWindowDimensions();
   const { left, right } = useSafeAreaInsets();
 
-  return width - left - right > FORM_CONTENT_MAX_WIDTH;
+  return width - left - right > CONTENT_MAX_WIDTH;
 }
 
 /** Shared page constraints; neither frame owns navigation or page identity. */
 export function FormContentFrame({ children }: PropsWithChildren) {
-  return <ScreenContentFrame maxWidth={FORM_CONTENT_MAX_WIDTH}>{children}</ScreenContentFrame>;
+  return <ScreenContentFrame maxWidth={CONTENT_MAX_WIDTH}>{children}</ScreenContentFrame>;
 }
 
 export function ReadingContentFrame({ children }: PropsWithChildren) {
-  return <ScreenContentFrame maxWidth={800}>{children}</ScreenContentFrame>;
+  return <ScreenContentFrame maxWidth={CONTENT_MAX_WIDTH}>{children}</ScreenContentFrame>;
 }
 
 function ScreenContentFrame({ children, maxWidth }: PropsWithChildren<{ maxWidth: number }>) {

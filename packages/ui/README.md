@@ -163,6 +163,28 @@ defaults:
 />;
 ```
 
+`CodeBlock` presents one complete standalone source with a title, optional language, and one copy
+action. It shares Markdown's native highlighting, theme, typography, and two-axis scroll viewport.
+It passes the original `code` to `onCopy`, retaining trailing newlines and text beyond the visible
+viewport; callers own clipboard writes, labels, and feedback. It never clips the source. The native
+adapter's `codeBlock.externalControls` mode removes its header, copy menus, and accessibility copy
+action so the shared accessible button is the sole whole-code copy owner. Ordinary Markdown code
+blocks keep their native controls. Native scroll recognition continues to own drags; standalone
+blocks do not install a competing text-selection or long-press copy action. This mode requires an
+updated development client. Mount large detail content only while its host is open.
+
+`createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` wraps raw source in a safe fence. It is a
+pure helper shared by code presentation, message copying/translation, and Agent input formatting.
+
+`renderMermaid` is an optional presentation slot for complete top-level Mermaid fences. With it,
+`MarkdownText` splits the document around those fences, keeps each text segment on its own native
+renderer, and passes the caller the diagram source plus the fence as an ordinary code block for
+fallback. Quoted, listed, indented, and nested fences, longer code examples, and a fence whose
+closing line has not finished streaming stay inside the text. Reference definitions are repeated
+into every segment so links resolve across a diagram. Without the slot, Mermaid is a code block and
+the output is the single renderer above. CherryUI owns neither the diagram renderer nor its
+WebView; the app supplies both.
+
 Streaming updates use the Desktop cadence at the chat-state owner: 100 ms for small
 messages, increasing with accumulated text length to at most 3 seconds. Terminal events
 publish immediately. The Streamdown dependency patch allows one repair job and one latest
@@ -261,10 +283,32 @@ composed directly below the section heading. `TextSection` and `ValueSection` us
 primitives. The app supplies translated copy controls and highlighted code, so the UI package never
 reads the clipboard or imports application preferences.
 
+`MessagePart.TextBody` is the complete plain-text reading surface for tool output and diagnostic
+details. Short text keeps the ordinary padded surface and natural height. Long text uses a 192-point
+inner scroll viewport with at most 1000 characters and 20 source lines per native text block;
+LegendList mounts only nearby blocks. Partial selection is local to a block, so native text views
+are not recycled between blocks. Native scroll and selection recognizers own cancellation; Android enables
+nested scrolling inside the detail sheet. There is no row tap or custom long-press handler. The
+section's explicit copy action always uses the original value, including text outside the viewport
+and original line endings. Gesture cancellation still requires acceptance on both platforms.
+
+`splitTextBlocks` from `@cherrystudio/ui/utils` owns bounded reader chunks for `TextBody` and the file
+reader. It normalizes line endings for display and continues very long lines without splitting
+UTF-16 surrogate pairs; callers retain the original string for copying.
+
 `MessagePart.Pending` owns the empty-response loader and its stable text-line height. An optional
 `reason` names local work that delays the reply, such as attachment text recognition, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
+
+The pending indicator matches Desktop's
+[`PlaceholderBlock`](https://github.com/CherryHQ/cherry-studio/blob/c40a14ba138255987f6f5019c77e5f51d80bc8d9/src/renderer/components/chat/messages/blocks/PlaceholderBlock.tsx)
+and its `react-spinners` 0.14.1 `BeatLoader`: three 4-point neutral dots with 4-point gaps,
+an 875ms linear cycle, and a 437.5ms delay on the middle dot. Each dot reaches 75% scale and 20%
+opacity halfway through its cycle. Reanimated CSS animations own the native motion; no web loader
+dependency is needed. The indicator exists only while the reply has no visible content, so content
+or cancellation removes it immediately. Backgrounding and Reduce Motion remove the animation and
+leave static dots; the surrounding status row retains its text-line height.
 
 `Surface` is the semantic material boundary for shared product chrome. Callers choose a token-backed
 `tone` and a `shape`, then size and align the content inside it. CherryUI maps that specification to
@@ -601,6 +645,13 @@ const items = [
   <MessageRow />
 </ContextMenu>;
 
+// An interactive row: the tap waits for the menu's long press to fail on Android.
+<ContextMenu items={items}>
+  <ContextMenu.Trigger accessibilityRole="button" onPress={openItem}>
+    {({ pressed }) => <RowContent pressed={pressed} />}
+  </ContextMenu.Trigger>
+</ContextMenu>;
+
 // The scroll owner exposes drag and momentum state to every descendant context menu.
 <ScrollInteractionBoundary>
   {(scrollHandlers) => <ScrollView {...scrollHandlers}>{rows}</ScrollView>}
@@ -644,6 +695,17 @@ Android tap menus own one press target even when their trigger contains a `Butto
 The child remains presentation-only; `disabled`, accessibility disabled state, and
 `pointerEvents="none"` all disable the menu trigger. Long-press menus retain the child's ordinary
 tap and accessibility actions.
+
+`ContextMenu.Trigger` supplies a Gesture Handler press target for tappable menu rows. Android
+connects it to the enclosing menu's long press with `requireToFail`, so the tap cannot preempt the
+menu and a committed long press cancels it. Both recognizers use the Gesture Handler 3 API;
+the relation stays attached when menu items are disabled so the press target does not switch
+implementations or remount its content. The trigger can sit beneath an `asChild` navigation link,
+and it remains an ordinary press target outside a menu (for example, in selection mode). iOS keeps
+its native context-menu recognition and the existing Gesture Handler press target. Callers supply
+the tap action, accessibility props, and content; pressed styling belongs on that content.
+A touch begun during scrolling fails menu recognition before activation and cannot become a row
+tap when momentum ends. The next touch can recognize normally.
 
 The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
 bounded scrolling, and safe-area positioning. They open above or below their anchor according to
@@ -757,9 +819,18 @@ const dock = useComposerDockLayout();
 For a screen that supports manual large-editor presentation, wrap its content and header in
 `Composer.Expansion` and use `Composer.Dock layoutMode="expandable"`. Its flow placeholder reserves
 only compact input space; expansion stays in the same native subtree above the transcript.
+Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholder, and
+`useComposerExpansion().meta.contentInset` publishes the dock's measured height for the keyboard
+list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
+without resizing the list viewport or rerendering the screen for every height sample. The inset
+stays fixed through manual expansion and clears when the dock unmounts. Pass the page color as
+`backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
+transcript beneath it; it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
-returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
-while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.
+returning `null` outside that screen-local boundary. The dock follows live keyboard geometry,
+or only while an optional `keyboardTracking` shared value is true. The dock reads it on the UI
+thread, so focus can lift the dock on the keyboard's first frame instead of after a React commit.
+Pass the translated `collapseLabel` for its backdrop.
 The expanded dock removes its horizontal gutter and fills through the bottom safe area, keeping
 the footer and controls inside one opaque surface with only the top corners rounded.
 `Composer.Editor` owns the shared compact-to-editing frame, keeping primary actions in one resting
@@ -769,8 +840,11 @@ activating editing. The `field` stays mounted, and `Composer.Input` automaticall
 native layout and action inset to the editor frame, including through app-specific field wrappers.
 `Composer.EditorSecondary` reveals secondary toolbar tools, and
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
-The isolated frame retains the existing 250ms settle motion, interruptibility and system Reduce
-Motion behavior, without fading ancestors of native glass controls.
+The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it
+finishes early in the keyboard's travel, so content behind the dock moves once with a small early
+growth instead of following two overlapping motions. An optional `activeSignal` raises `active` on
+the UI thread, letting the shape start inside the keyboard's first frame. The motion stays
+interruptible, respects system Reduce Motion, and never fades ancestors of native glass controls.
 
 For custom arrangements, compose `Composer.ExpansionMeasure` around accessories that change height
 during expansion, and use `Composer.Input layout="fill"` inside the bounded large editing region.

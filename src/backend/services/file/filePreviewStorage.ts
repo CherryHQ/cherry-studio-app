@@ -33,10 +33,13 @@ export function resetFilePreviewsForRestore(): void {
 export async function createInternalEntryWithPreview(
   entries: Pick<FileEntryService, 'create' | 'delete'>,
   input: CreateInternalEntryInput,
+  signal?: AbortSignal,
 ): Promise<FileEntry> {
-  const entry = await createInternalEntry(entries, input);
+  const entry = await createInternalEntry(entries, input, signal);
   try {
+    signal?.throwIfAborted();
     const { previewUri, uri } = await resolveFilePreviewUris(entry);
+    signal?.throwIfAborted();
     if (
       input.source === 'base64' &&
       input.provenance === 'generated' &&
@@ -52,6 +55,7 @@ export async function createInternalEntryWithPreview(
       });
       image.release();
     }
+    signal?.throwIfAborted();
     return entry;
   } catch (error) {
     await discardInternalEntries(entries, [entry]);

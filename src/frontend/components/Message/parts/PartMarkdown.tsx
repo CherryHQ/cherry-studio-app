@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 
 import { useMessageListLiveTailVisible } from '../list/MessageListLiveTailContext';
+import { useMessageSelectionAction } from './MessageSelectionActionContext';
 
 type PartMarkdownProps = {
   isStreaming: boolean;
   markdown: string;
+  messageId?: string;
 };
 
 /**
@@ -17,13 +19,27 @@ type PartMarkdownProps = {
  * out the whole part for content nobody can see; it catches up when the end
  * comes back into view or the part finishes.
  */
-export function PartMarkdown({ isStreaming, markdown }: PartMarkdownProps) {
+export function PartMarkdown({ isStreaming, markdown, messageId }: PartMarkdownProps) {
   const isLiveTailVisible = useMessageListLiveTailVisible(isStreaming);
+  const action = useMessageSelectionAction();
+  const selectionAction = useMemo(
+    () =>
+      action && messageId
+        ? { label: action.label, onPress: (text: string) => action.onPress({ messageId, text }) }
+        : undefined,
+    [action, messageId],
+  );
   const [shownMarkdown, setShownMarkdown] = useState(markdown);
   const isHeld = isStreaming && !isLiveTailVisible;
   if (!isHeld && shownMarkdown !== markdown) {
     setShownMarkdown(markdown);
   }
 
-  return <MarkdownText isStreaming={isStreaming} markdown={isHeld ? shownMarkdown : markdown} />;
+  return (
+    <MarkdownText
+      isStreaming={isStreaming}
+      markdown={isHeld ? shownMarkdown : markdown}
+      selectionAction={selectionAction}
+    />
+  );
 }

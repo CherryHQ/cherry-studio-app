@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View, type ViewInstance } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
@@ -145,7 +146,11 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
-  const [composerHeight, setComposerHeight] = useState(0);
+  const composerHeight = useSharedValue(0);
+  const setComposerHeight = useCallback(
+    (height: number) => composerHeight.set(height),
+    [composerHeight],
+  );
   const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
     useRemoteChatNavigation(target, source);
   const opened = useConversation(
@@ -211,6 +216,7 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
+                executionSource="desktop"
                 feedbackHintBottomOffset={composerHeight}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
@@ -227,7 +233,11 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
+          <ComposerDock
+            backgroundClassName="bg-chat-background"
+            layoutMode="expandable-overlay"
+            onHeightChange={setComposerHeight}
+          >
             <View>
               <ConversationStatus
                 availability={availability}

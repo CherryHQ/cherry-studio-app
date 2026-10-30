@@ -39,8 +39,9 @@ import {
   resolveFileEntry,
   rewriteInternalTextEntry,
 } from './fileStorage';
-import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
-import { observePdfOcr } from './pdfText';
+import { observeFileOcr } from './fileTextExtraction';
+import { readImageUriText } from './imageText';
+import { importManagedFile } from './importManagedFile';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -68,6 +69,15 @@ const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true 
   uri: z.string().min(1),
 });
 
+async function resolveCreatedEntry(entry: FileEntry): Promise<ResolvedFile> {
+  const resolved = await resolveFileEntry(fileEntryService, entry.id);
+  if (!resolved) {
+    await discardInternalEntries(fileEntryService, [entry]);
+    throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
+  }
+  return resolved;
+}
+
 /**
  * Managed-file port over `fileStorage`, validated at the boundary.
  *
@@ -76,7 +86,7 @@ const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true 
  * factory to inject.
  */
 export const fileContent = {
-  observePdfOcr,
+  observeFileOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {
@@ -92,12 +102,16 @@ export const fileContent = {
         : await fileLibraryService.resolveDirectory(z.uuid().parse(input.folderId), '.');
     if (!folder || (await fileLibraryService.contains(folder.id, id))) return source;
     const logical = await fileLibraryService.fileForEntry(id);
-    return fileContent.createInternalEntry({
+    // A copy keeps its origin and bytes; only an import normalizes.
+    const entry = await createInternalEntryWithPreview(fileEntryService, {
       uri: source.uri,
       name: logical?.name ?? source.entry.filename,
       mediaType: source.entry.mediaType,
       folderId: folder.id,
+      provenance: source.entry.provenance,
+      source: 'uri',
     });
+    return resolveCreatedEntry(entry);
   },
   async hashFile(id: FileEntryId, signal: AbortSignal): Promise<string> {
     signal.throwIfAborted();
@@ -111,9 +125,6 @@ export const fileContent = {
    * instead of taking it: anything that can produce other origins — an agent
    * tool, a peer transfer — uses `fileStorage.createInternalEntry` directly and
    * must state one.
-   *
-   * An oversized still image is re-encoded here, once, so the managed file is
-   * already what a model request can carry; nothing downstream resizes it again.
    */
   createInternalEntry: async (input: {
     mediaType?: string;
@@ -129,24 +140,8 @@ export const fileContent = {
           folderId: (await fileLibraryService.workspace(workspaceSessionId))?.id ?? null,
         }
       : parsed;
-    const normalized = await normalizeImportedImage(validated);
-    let entry: FileEntry;
-    try {
-      entry = await createInternalEntryWithPreview(fileEntryService, {
-        ...validated,
-        ...normalized,
-        provenance: 'imported',
-        source: 'uri',
-      });
-    } finally {
-      if (normalized) discardNormalizedImage(normalized);
-    }
-    const resolved = await resolveFileEntry(fileEntryService, entry.id);
-    if (!resolved) {
-      await discardInternalEntries(fileEntryService, [entry]);
-      throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
-    }
-    return resolved;
+    const entry = await importManagedFile(fileEntryService, validated);
+    return resolveCreatedEntry(entry);
   },
   /**
    * Store UTF-8 text as a new managed entry. Unlike an imported attachment it
@@ -220,6 +215,8 @@ export const fileContent = {
         readFileUriBytes(resolved.get(file.fileEntryId)!.uri, readSignal),
       readDocumentText: (file, readSignal) =>
         readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal),
+      readImageText: (file, readSignal) =>
+        readImageUriText(resolved.get(file.fileEntryId)!.uri, readSignal),
       signal,
       target: input.target,
       documentParserMode: input.documentParserMode,

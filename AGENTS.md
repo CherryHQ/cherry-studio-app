@@ -31,6 +31,7 @@ configuration, not in repository rules.
   resolver owns locale selection for UI and Agent behavior.
 - Before creating commits, splitting work, or opening a pull request, read
   [Git Workflow](docs/guides/git-workflow.md).
+- Before preparing or publishing a release, read [Cloud Releases](docs/guides/cloud-releases.md).
 - Before creating installation packages or changing build configuration, read
   [Local EAS Builds](docs/guides/local-builds.md). Use `pnpm build:local` for local EAS packaging;
   it defaults to development. Sentry reporting and build-time uploads are production-only.

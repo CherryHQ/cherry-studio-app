@@ -1,4 +1,4 @@
-import { routeToEndpoint } from '@cherrystudio/ai-runtime/provider';
+import { isVertexMaasModelId, routeToEndpoint } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import {
@@ -57,11 +57,21 @@ export function resolvePiLanguageBinding(
     connection.adapterFamily === 'azure-responses' &&
     connection.endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES &&
     provider.authType === 'iam-azure';
+  const supportsVertex =
+    provider.authType === 'iam-gcp' &&
+    !isVertexMaasModelId(connection.wireModelId) &&
+    ((connection.adapterFamily === 'google-vertex' &&
+      connection.endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT &&
+      /^(?:google\/)?gemini[\w.@-]*$/i.test(connection.wireModelId)) ||
+      (connection.adapterFamily === 'google-vertex-anthropic' &&
+        connection.endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES &&
+        /^(?:anthropic\/)?claude[\w.@-]*$/i.test(connection.wireModelId)));
 
   if (
     connection.adapterFamily &&
     NON_STANDARD_PI_ADAPTER_FAMILIES.has(connection.adapterFamily) &&
-    !supportsAzureResponses
+    !supportsAzureResponses &&
+    !supportsVertex
   ) {
     return unsupported(
       'unsupported-adapter-family',
@@ -76,7 +86,7 @@ export function resolvePiLanguageBinding(
     );
   }
 
-  if (!supportsAzureResponses && provider.authType !== 'api-key') {
+  if (!supportsAzureResponses && !supportsVertex && provider.authType !== 'api-key') {
     return unsupported(
       'unsupported-auth-type',
       `Pi Runtime does not support provider authentication type: ${provider.authType}.`,
@@ -84,6 +94,7 @@ export function resolvePiLanguageBinding(
   }
 
   if (
+    !supportsVertex &&
     !getPiOAuthProviderId(provider) &&
     provider.authMethods?.length &&
     !provider.authMethods.includes('api-key')
@@ -95,7 +106,7 @@ export function resolvePiLanguageBinding(
   }
 
   const configuredBaseUrl = connection.baseUrl.trim();
-  if (!configuredBaseUrl) {
+  if (!configuredBaseUrl && !supportsVertex) {
     return unsupported(
       'missing-base-url',
       'Pi Runtime requires a base URL from the selected provider.',

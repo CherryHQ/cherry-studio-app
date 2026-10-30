@@ -81,6 +81,7 @@ export function createSystemEntryModule(dependencies: Dependencies): {
     publishReceiving();
     try {
       const files = await dependencies.importFiles(entry, controller.signal);
+      controller.signal.throwIfAborted();
       // Staging has no further role once every attachment belongs to the library.
       await native!.completeEntry(entry.id);
       return { kind: 'share.receive', text: entry.text, files };

@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { SkillActionSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
-import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
+import { AgentImageGenerationSchema, AgentInputPartsSchema } from './views';
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
 export const AgentRenameSessionInputSchema = z.strictObject({
@@ -39,7 +39,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   /** Allocated once by the send action and reused for display and persistence. */
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  parts: z.array(AgentInputPartSchema).min(1),
+  parts: AgentInputPartsSchema,
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
@@ -63,7 +63,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  parts: z.array(AgentInputPartSchema).min(1),
+  parts: AgentInputPartsSchema,
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
@@ -115,6 +115,27 @@ export const AgentRetryMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
+const AgentReplyPartEditSchema = z.strictObject({
+  /** A text part of the answer; reasoning, files and tool receipts are not editable. */
+  id: z.string().min(1),
+  /** The part's current text, rejecting an edit of text that changed meanwhile. */
+  expectedText: z.string().min(1),
+  text: z
+    .string()
+    .max(1_000_000)
+    .refine((text) => text.trim().length > 0),
+});
+export type AgentReplyPartEdit = z.infer<typeof AgentReplyPartEditSchema>;
+/** Optimistic edits of a successful answer's text parts. */
+export const AgentEditMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  parts: z
+    .array(AgentReplyPartEditSchema)
+    .min(1)
+    .refine((parts) => new Set(parts.map((part) => part.id)).size === parts.length),
+});
+export type AgentEditMessageInput = z.infer<typeof AgentEditMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),

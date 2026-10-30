@@ -7,6 +7,8 @@ const mockList = jest.fn((_props: { contentTopInset: number }) => null);
 
 jest.mock('expo-router/react-navigation', () => ({ useHeaderHeight: () => mockHeaderHeight }));
 
+jest.mock('@cherrystudio/ui/components', () => ({ useComposerExpansion: () => null }));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
 }));

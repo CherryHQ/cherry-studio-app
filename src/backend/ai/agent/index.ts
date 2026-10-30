@@ -1,9 +1,6 @@
 export type {
   AgentRuntime,
   AgentRuntimeSession,
-  FakeExecutionController,
-  FakeRuntimeOptions,
-  FakeRuntimeProgram,
   RuntimeApproval,
   RuntimeArtifact,
   RuntimeCapabilities,
@@ -39,7 +36,6 @@ export {
   createDeniedToolResult,
   createErrorToolResult,
   createInterruptedToolResult,
-  FakeRuntime,
   RuntimeContextCheckpointSchema,
   RuntimeJsonValueSchema,
 } from './runtime';

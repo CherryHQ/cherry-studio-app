@@ -87,7 +87,8 @@ reference-image contract; they are not masks.
 - `components/` holds the workspace, the focus canvas and chrome, the overview and its chrome, the
   lineage strip, and the generation info sheet.
 - `hooks/` holds board data, generation control, the focus reference, and annotation drafts.
-- `utils/` holds the board graph, annotation prompts, and change-ratio options.
+- `utils/` holds the board graph, annotation prompts, and output attachments. Change-ratio options
+  live with the shared composer in `src/frontend/components/PaintingInput`.
 
 The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries, the board
 list, starting generations, and job observation shared with it live in `src/frontend/data/paintings`.
