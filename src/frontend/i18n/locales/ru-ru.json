@@ -633,7 +633,6 @@
   "chat.tool.noOutput": "Нет вывода",
   "chat.tool.output": "Выход",
   "chat.tool.preparingInput": "Подготовка ввода",
-  "chat.tool.previewTruncated": "Предварительный просмотр ограничен {{count}} символами. Скопируйте, чтобы прочитать полный текст.",
   "chat.tool.response": "ответ",
   "chat.tool.result": "Результат",
   "chat.tool.runDenied": "Запуск запрещен",

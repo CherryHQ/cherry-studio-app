@@ -621,7 +621,6 @@
   "chat.tool.noOutput": "Δεν υπάρχει έξοδος",
   "chat.tool.output": "Έξοδος",
   "chat.tool.preparingInput": "Προετοιμασία εισαγωγής",
-  "chat.tool.previewTruncated": "Η προεπισκόπηση περιορίζεται σε {{count}} χαρακτήρες. Αντιγράψτε για να διαβάσετε το πλήρες κείμενο.",
   "chat.tool.response": "απάντηση",
   "chat.tool.result": "Αποτέλεσμα",
   "chat.tool.runDenied": "Απορρίφθηκε η εκτέλεση",

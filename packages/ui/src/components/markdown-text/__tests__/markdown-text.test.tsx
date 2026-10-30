@@ -90,6 +90,7 @@ describe('MarkdownText', () => {
             fontSize: 18,
           }),
           codeBlock: expect.objectContaining({
+            externalControls: false,
             backgroundColor: 'code-block',
             borderColor: 'border',
             color: 'foreground',

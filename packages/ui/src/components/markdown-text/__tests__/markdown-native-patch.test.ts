@@ -14,8 +14,58 @@ describe('native Markdown code-block menu patch', () => {
       )[1]
       ?.split('diff --git ')[0];
     expect(codeBlockPatch).toMatch(
-      /private fun showContextMenu\(anchor: View\): Boolean \{\n     if \(!dynamicProps\.enableBlockContextMenu \|\| pending\) return false\n(?:\+[^\n]*\n)*\+    anchor\.parent\?\.requestDisallowInterceptTouchEvent\(true\)\n     ContextMenuPopup\.show\(anchor, this\)/,
+      /\+    if \(!dynamicProps\.enableBlockContextMenu \|\| pending \|\| codeBlockStyle\.externalControls\) return false\n(?:\+[^\n]*\n)*\+    anchor\.parent\?\.requestDisallowInterceptTouchEvent\(true\)\n     ContextMenuPopup\.show\(anchor, this\)/,
     );
+  });
+});
+
+describe('standalone code-block controls patch', () => {
+  test('removes the native header from both platforms without changing code extent', () => {
+    expect(patch).toContain(
+      '+    copyButton.visibility = if (codeBlockStyle.externalControls) View.GONE else View.VISIBLE',
+    );
+    expect(patch).toContain('+      if (style.externalControls) return 0');
+    expect(patch).toContain('+    _copyButton.hidden = [config codeBlockExternalControls];');
+    expect(patch).toContain(
+      '+  return [_config codeBlockExternalControls] ? 0 : [self contentInset] + _headerLabelLineHeight;',
+    );
+    expect(patch).toContain('+  CGFloat headerH = [config codeBlockExternalControls]');
+  });
+
+  test('disables native menu and accessibility copy actions when the caller owns copying', () => {
+    expect(patch).toContain(
+      '+    if (!dynamicProps.enableBlockContextMenu || pending || codeBlockStyle.externalControls) return false',
+    );
+    expect(patch).toContain(
+      '+  if (!self.dynamicProps.enableBlockContextMenu || _pending || [_config codeBlockExternalControls]) {',
+    );
+    expect(patch).toContain(
+      '+  if (_pending || [_config codeBlockExternalControls] || self.dynamicProps.menuCopyLabel.length == 0) {',
+    );
+  });
+
+  // A backing store the size of the whole code is dropped by Core Animation once it is too
+  // large, so complete tool output would render blank.
+  test('draws iOS code text only around the visible scroll window', () => {
+    expect(patch).toContain('+@interface ENRMCodeBlockCanvasView : UIView');
+    expect(patch).toContain('+  [self.owner drawCodeInRect:rect canvasOrigin:self.frame.origin];');
+    expect(patch).toContain('+  _scrollView.delegate = self;');
+    expect(patch).toContain('+  _codeContentView.visibleRect = scrollView.bounds;');
+    expect(patch).toContain('+  [self drawCodeInRect:rect canvasOrigin:CGPointZero];');
+  });
+
+  // Android compiles generated Props with RN_SERIALIZABLE_STATE, so a field serialized by
+  // another struct's toDynamic breaks the native build.
+  test('serializes the generated prop only from code-block structs', () => {
+    const hunks = patch
+      .split(/^(?=@@ )/m)
+      .filter((hunk) => hunk.includes('+    result["externalControls"] = externalControls;'));
+    expect(hunks).toHaveLength(4);
+    for (const hunk of hunks) {
+      expect(hunk.split('\n')[0]).toMatch(
+        / struct EnrichedMarkdown(?:Text)?MarkdownStyleCodeBlockStruct \{$/,
+      );
+    }
   });
 });
 
@@ -105,9 +155,9 @@ describe('native Markdown code-block divider patch', () => {
 });
 
 describe('native Markdown streaming work patch', () => {
-  const streamingPatch = patch.split(
-    '+++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt',
-  )[1];
+  const streamingPatch = patch
+    .split('+++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt')[1]
+    ?.split('diff --git ')[0];
 
   test('coalesces native work before submitting another full render', () => {
     expect(streamingPatch).toContain('+    if (renderInFlight) {');

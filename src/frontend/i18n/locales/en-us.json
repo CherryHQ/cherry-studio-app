@@ -621,7 +621,6 @@
   "chat.tool.noOutput": "No output",
   "chat.tool.output": "Output",
   "chat.tool.preparingInput": "Preparing input",
-  "chat.tool.previewTruncated": "Preview limited to {{count}} characters. Copy to read the full text.",
   "chat.tool.response": "Response",
   "chat.tool.result": "Result",
   "chat.tool.runDenied": "Run denied",

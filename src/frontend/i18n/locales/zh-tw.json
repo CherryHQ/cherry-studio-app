@@ -615,7 +615,6 @@
   "chat.tool.noOutput": "無輸出",
   "chat.tool.output": "輸出",
   "chat.tool.preparingInput": "準備輸入中",
-  "chat.tool.previewTruncated": "最多預覽 {{count}} 個字符，可複製完整文本閱讀。",
   "chat.tool.response": "回應",
   "chat.tool.result": "結果",
   "chat.tool.runDenied": "拒絕運行",

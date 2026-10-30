@@ -621,7 +621,6 @@
   "chat.tool.noOutput": "Çıkış yok",
   "chat.tool.output": "Çıktı",
   "chat.tool.preparingInput": "Giriş hazırlanıyor",
-  "chat.tool.previewTruncated": "Önizleme {{count}} karakterle sınırlıdır. Tam metni okumak için kopyalayın.",
   "chat.tool.response": "Yanıt",
   "chat.tool.result": "Sonuç",
   "chat.tool.runDenied": "Çalıştırma reddedildi",

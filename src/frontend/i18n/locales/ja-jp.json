@@ -615,7 +615,6 @@
   "chat.tool.noOutput": "出力なし",
   "chat.tool.output": "出力",
   "chat.tool.preparingInput": "入力の準備中",
-  "chat.tool.previewTruncated": "プレビューは {{count}} 文字に限定されます。コピーして全文をお読みください。",
   "chat.tool.response": "応答",
   "chat.tool.result": "結果",
   "chat.tool.runDenied": "実行が拒否されました",

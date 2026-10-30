@@ -627,7 +627,6 @@
   "chat.tool.noOutput": "Aucune sortie",
   "chat.tool.output": "Sortie",
   "chat.tool.preparingInput": "Préparation de la saisie",
-  "chat.tool.previewTruncated": "Aperçu limité à {{count}} caractères. Copier pour lire le texte intégral.",
   "chat.tool.response": "réponse",
   "chat.tool.result": "Résultat",
   "chat.tool.runDenied": "Exécution refusée",

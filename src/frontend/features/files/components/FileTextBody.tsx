@@ -1,3 +1,4 @@
+import { splitTextBlocks, type TextBlockLimits } from '@cherrystudio/ui/utils';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -6,17 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 
-import { splitTextBlocks, type TextBlockLimits } from '../utils/textBlocks';
-
 const pagePadding = 16;
 // A native text view lays out and draws its whole block, so a large file is read through bounded
 // blocks that mount only near the viewport. Source rows continue past 240 characters so a block
 // stays a few screens wide.
-const plainTextLimits: TextBlockLimits = {
-  maxBlockLength: 1000,
-  maxBlockLines: 20,
-  maxLineLength: 1000,
-};
 const sourceLimits: TextBlockLimits = {
   maxBlockLength: 2000,
   maxBlockLines: 20,
@@ -54,7 +48,7 @@ function MarkdownBody({ bottomInset, text }: TextBodyProps) {
 }
 
 function PlainTextBody({ bottomInset, text }: TextBodyProps) {
-  const blocks = useMemo(() => splitTextBlocks(text, plainTextLimits), [text]);
+  const blocks = useMemo(() => splitTextBlocks(text), [text]);
   const contentContainerStyle = usePageContentStyle(pagePadding, bottomInset);
 
   return (
