@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 import type {
   LongPressGesture,
   LongPressGestureConfig,
   NativeGestureConfig,
+  PressableProps,
 } from 'react-native-gesture-handler';
-import StatefulPressable from 'react-native-gesture-handler/src/v3/components/StatefulPressable';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 // Exercise the installed Pressable and its real state machine. Only the native
@@ -42,6 +42,12 @@ jest.mock('react-native-gesture-handler/src/handlers/PressabilityDebugView', () 
 jest.mock('react-native-gesture-handler/src/useIsScreenReaderEnabled', () => ({
   useIsScreenReaderEnabled: () => mockScreenReaderEnabled,
 }));
+
+// Load the real implementation at runtime without type-checking upstream source
+// against the app's ambient types. Its public props still check our test inputs.
+const StatefulPressable = jest.requireActual<{
+  default: ComponentType<PressableProps>;
+}>('react-native-gesture-handler/src/v3/components/StatefulPressable').default;
 
 const dependency = { handlerTag: 1 } as LongPressGesture;
 const touch = { id: 1, x: 20, y: 20, absoluteX: 20, absoluteY: 20 };
