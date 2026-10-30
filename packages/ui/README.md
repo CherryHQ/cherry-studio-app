@@ -645,6 +645,13 @@ const items = [
   <MessageRow />
 </ContextMenu>;
 
+// An interactive row: the tap waits for the menu's long press to fail on Android.
+<ContextMenu items={items}>
+  <ContextMenu.Trigger accessibilityRole="button" onPress={openItem}>
+    {({ pressed }) => <RowContent pressed={pressed} />}
+  </ContextMenu.Trigger>
+</ContextMenu>;
+
 // The scroll owner exposes drag and momentum state to every descendant context menu.
 <ScrollInteractionBoundary>
   {(scrollHandlers) => <ScrollView {...scrollHandlers}>{rows}</ScrollView>}
@@ -688,6 +695,17 @@ Android tap menus own one press target even when their trigger contains a `Butto
 The child remains presentation-only; `disabled`, accessibility disabled state, and
 `pointerEvents="none"` all disable the menu trigger. Long-press menus retain the child's ordinary
 tap and accessibility actions.
+
+`ContextMenu.Trigger` supplies a Gesture Handler press target for tappable menu rows. Android
+connects it to the enclosing menu's long press with `requireToFail`, so the tap cannot preempt the
+menu and a committed long press cancels it. Both recognizers use the Gesture Handler 3 API;
+the relation stays attached when menu items are disabled so the press target does not switch
+implementations or remount its content. The trigger can sit beneath an `asChild` navigation link,
+and it remains an ordinary press target outside a menu (for example, in selection mode). iOS keeps
+its native context-menu recognition and the existing Gesture Handler press target. Callers supply
+the tap action, accessibility props, and content; pressed styling belongs on that content.
+A touch begun during scrolling fails menu recognition before activation and cannot become a row
+tap when momentum ends. The next touch can recognize normally.
 
 The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
 bounded scrolling, and safe-area positioning. They open above or below their anchor according to

@@ -101,6 +101,20 @@ transitions, with multiline drafts, paste, undo, IME composition, mentions, and 
 text. The standalone regression does not exercise Fabric state publication or the first-mount
 parser/formatter integration.
 
+### Gesture Handler Pressable Patch
+
+`patches/react-native-gesture-handler@3.3.0.patch` preserves pending Android presses when
+`requireToFail` defers the native result beyond touch release. Without it, `StatefulPressable`
+resets before the context-menu long press fails, swallowing ordinary taps. The patch changes only
+the TypeScript source and published JavaScript; it does not change native inputs. Ordinary presses
+without a failure dependency keep the upstream release fallback.
+
+Remove it when upstream preserves deferred results and the real-state-machine regression in
+`context-menu-pressable.android.test.tsx` passes without the patch. That suite covers callback
+ordering, cancellation, rearming, pressed feedback, and accessibility activation; Android device
+acceptance still owns native arbitration. `gestureHandlerPressablePatch.test.ts` and
+`patchReapplication.test.ts` guard installation and both published entry paths.
+
 ### Pi Dependency Upgrades
 
 The pinned Pi family includes scheduler/recovery behavior patches as well as mobile compatibility

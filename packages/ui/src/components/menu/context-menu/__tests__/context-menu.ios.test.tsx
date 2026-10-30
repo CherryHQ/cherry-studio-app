@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect } from 'react';
-import { type GestureResponderEvent, Pressable, Text, View } from 'react-native';
+import { type GestureResponderEvent, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ContextMenuExclusion } from '../context-menu-exclusion';
@@ -39,9 +39,9 @@ describe('ContextMenu.ios', () => {
     act(() => {
       renderer = create(
         <ContextMenu items={[{ id: 'rename', label: 'Rename', onPress: onRename }]}>
-          <Pressable testID="row">
+          <ContextMenu.Trigger testID="row">
             <Text>Row</Text>
-          </Pressable>
+          </ContextMenu.Trigger>
         </ContextMenu>,
       );
     });
@@ -51,8 +51,9 @@ describe('ContextMenu.ios', () => {
 
     // Accessibility for the system interaction is UIKit-owned; the child is not
     // rewritten with custom actions on iOS.
-    const row = renderer!.root.findByProps({ testID: 'row' });
+    const row = renderer!.root.find((node) => node.type === View && node.props.testID === 'row');
     expect(row.props.accessibilityActions).toBeUndefined();
+    expect(row.props.requireToFail).toBeUndefined();
 
     act(() => menu.props.onAction('rename'));
     expect(onRename).toHaveBeenCalledTimes(1);

@@ -56,6 +56,12 @@ The `/search` page uses the shared transient selection contract and closes befor
 The sidebar owns conversation browsing, rename, and individual deletion. There is no separate
 Session history/management route or chat-header history action.
 
+Session rows use `ContextMenu.Trigger`, backed by Gesture Handler's `Pressable`. CherryUI owns the
+Android relation that makes the row's tap wait for the menu's long press to fail; a committed hold
+cancels the pending tap ([#1541](https://github.com/CherryHQ/cherry-studio-app/issues/1541)).
+`ContextMenuLink` composes navigation and accessibility actions without owning gesture state.
+Selection mode uses the same press target outside the menu. iOS keeps native menu recognition.
+
 Multi-select deletion removes sessions serially so active work settles before its rows are deleted.
 Deleted rows hide immediately, and each removal's catalog change notification refreshes the lists;
 selection never refreshes them itself. Failed deletions remain selected for retry.

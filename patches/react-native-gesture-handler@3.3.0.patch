@@ -1,0 +1,38 @@
+diff --git a/lib/module/v3/components/StatefulPressable.js b/lib/module/v3/components/StatefulPressable.js
+index 3304d79f5c3c49a340cb83d40989e051d3d5dd5d..7d10a384d5f6ec7b31a5ed71321119fb2e4de101 100644
+--- a/lib/module/v3/components/StatefulPressable.js
++++ b/lib/module/v3/components/StatefulPressable.js
+@@ -200,8 +200,10 @@ const StatefulPressable = props => {
+       stateMachine.handleEvent(StateMachineEvent.LONG_PRESS_TOUCHES_DOWN, pressableEvent);
+     },
+     onTouchesUp: () => {
+-      if (Platform.OS === 'android' && !isScreenReaderEnabled) {
+-        // Prevents potential soft-locks
++      if (Platform.OS === 'android' && !isScreenReaderEnabled && requireToFail == null) {
++        // Prevent potential soft-locks only when no failure dependency can
++        // defer Native.onFinalize past this UP. Otherwise that terminal
++        // callback (or cancellation) must consume the pending press first.
+         stateMachine.reset();
+         handleFinalize();
+       }
+diff --git a/src/v3/components/StatefulPressable.tsx b/src/v3/components/StatefulPressable.tsx
+index 5be685f22edd7fd7a2d3324d537a1dce9d9b4e09..852dad86def0bb42adbf34dba3efdd323e544e2b 100644
+--- a/src/v3/components/StatefulPressable.tsx
++++ b/src/v3/components/StatefulPressable.tsx
+@@ -307,8 +307,14 @@ const StatefulPressable = (props: PressableProps) => {
+       );
+     },
+     onTouchesUp: () => {
+-      if (Platform.OS === 'android' && !isScreenReaderEnabled) {
+-        // Prevents potential soft-locks
++      if (
++        Platform.OS === 'android' &&
++        !isScreenReaderEnabled &&
++        requireToFail == null
++      ) {
++        // Prevent potential soft-locks only when no failure dependency can
++        // defer Native.onFinalize past this UP. Otherwise that terminal
++        // callback (or cancellation) must consume the pending press first.
+         stateMachine.reset();
+         handleFinalize();
+       }
