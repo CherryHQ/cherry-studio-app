@@ -4,8 +4,10 @@ import type { VoiceEngineId } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 import type { SystemPromptQueue } from './microphoneAccess';
+import { createSenseVoiceDictationEngine } from './senseVoiceDictation';
 import { createSystemDictationEngine } from './systemDictation';
 import { createSystemSpeechEngine } from './systemSpeech';
+import { createVoiceModel } from './voiceModel';
 import { createVoiceRuntime } from './VoiceRuntime';
 
 type VoicePreferences = {
@@ -30,10 +32,12 @@ export function createVoice({
   language(): AppLanguage;
   dictationLanguage(): AppLanguage;
 }) {
-  return createVoiceRuntime({
+  const model = createVoiceModel();
+  const runtime = createVoiceRuntime({
     engines: {
       dictation: {
         system: createSystemDictationEngine({ permissions }),
+        sensevoice: createSenseVoiceDictationEngine(model, permissions),
       },
       speech: {
         system: createSystemSpeechEngine({
@@ -52,4 +56,11 @@ export function createVoice({
       return () => subscription.remove();
     },
   });
+  return {
+    module: { ...runtime.module, localModel: model.module },
+    async dispose() {
+      // Stop admission/downloads immediately; runtime joins native recognition before disposal ends.
+      await Promise.all([runtime.dispose(), model.dispose()]);
+    },
+  };
 }

@@ -8,6 +8,7 @@ import { VOICE_ENGINE_PREFERENCE, type VoiceCapability } from '@/shared/contract
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { DictationLanguageSetting } from './components/DictationLanguageSetting';
+import { OfflineModelSetting } from './components/OfflineModelSetting';
 import { SpeechVoiceSetting } from './components/SpeechVoiceSetting';
 import { VoiceEngineSection } from './components/VoiceEngineSection';
 
@@ -38,6 +39,7 @@ export default function VoiceSettingsScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.voice.title') }}>
       <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null}>
         {dictationEngine === 'system' ? <DictationLanguageSetting /> : null}
+        {dictationEngine === 'sensevoice' ? <OfflineModelSetting /> : null}
       </VoiceEngineSection>
       <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
         {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}

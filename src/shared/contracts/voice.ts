@@ -1,5 +1,5 @@
 /** Engines a capability can run on. Each engine is one adapter under `backend/services/voice`. */
-export const VOICE_ENGINES = ['system'] as const;
+export const VOICE_ENGINES = ['system', 'sensevoice'] as const;
 export type VoiceEngineId = (typeof VOICE_ENGINES)[number];
 
 /** `dictation` turns speech into composer text; `speech` reads text aloud. */
@@ -12,7 +12,31 @@ export const VOICE_ENGINE_PREFERENCE = {
 } as const satisfies Record<VoiceCapability, string>;
 
 /** `needs-setup` requires device configuration; `unsupported` cannot run on this device. */
-export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'unsupported';
+export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'needs-model' | 'unsupported';
+
+export type VoiceModelState = {
+  status:
+    | 'not-downloaded'
+    | 'checking'
+    | 'downloading'
+    | 'verifying'
+    | 'ready'
+    | 'removing'
+    | 'failed';
+  receivedBytes: number;
+  totalBytes: number;
+  failure?: 'download' | 'verification' | 'storage';
+};
+
+/** One optional downloaded recognizer. Its transfer outlives settings navigation. */
+export interface VoiceModelModule {
+  getState(): VoiceModelState;
+  subscribe(listener: () => void): () => void;
+  refresh(): Promise<void>;
+  download(): Promise<void>;
+  cancel(): Promise<void>;
+  remove(): Promise<void>;
+}
 
 export type SpeechVoice = { id: string; name: string; language?: string };
 
@@ -23,6 +47,8 @@ export type DictationOptions = VoiceRequestOptions & {
   onText?: (text: string) => void;
   /** Input level from 0 to 1 while capturing. */
   onLevel?: (level: number) => void;
+  /** Capture ended automatically and the engine is producing the final text. */
+  onTranscribing?: () => void;
 };
 
 export interface DictationSession {
@@ -46,6 +72,7 @@ export type VoiceErrorCode =
   | 'unsupported'
   | 'not-configured'
   | 'recognition-not-configured'
+  | 'model-not-downloaded'
   | 'permission-denied'
   | 'permission-blocked'
   | 'invalid-voice'
@@ -69,6 +96,7 @@ export class VoiceError extends Error {
  * At most one dictation or speech runs at a time, and backgrounding the app ends it.
  */
 export interface VoiceModule {
+  readonly localModel: VoiceModelModule;
   getEngineStatus(
     capability: VoiceCapability,
     engine: VoiceEngineId,

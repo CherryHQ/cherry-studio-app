@@ -24,6 +24,8 @@ trustPolicyExclude:
   - ua-parser-js@0.7.41||1.0.41
 
 overrides:
+  # Sherpa's packaging plugin uses the app's Expo SDK rather than installing SDK 56 tooling.
+  '@siteed/sherpa-onnx.rn>@expo/config-plugins': 58.0.10
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
   '@storybook/react-native-ui': 10.5.1
@@ -43,6 +45,8 @@ overrides:
   react-native-svg: 15.16.0
 
 allowBuilds:
+  # Downloads published Sherpa native libraries; does not compile unless explicitly requested.
+  '@siteed/sherpa-onnx.rn': true
   esbuild: true
   msgpackr-extract: true
   sharp: true

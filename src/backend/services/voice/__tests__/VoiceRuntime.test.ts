@@ -79,6 +79,17 @@ function setup({
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('engine choice', () => {
+  test('offline voice needs a downloaded model and never falls back to a network-capable system service', async () => {
+    const local = dictationEngine('needs-model');
+    const system = dictationEngine();
+    const { module } = setup({
+      dictation: { system: system.engine, sensevoice: local.engine },
+      selected: { dictation: 'sensevoice' },
+    });
+    await expect(module.startDictation()).rejects.toMatchObject({ code: 'model-not-downloaded' });
+    expect(system.engine.start).not.toHaveBeenCalled();
+    expect(local.engine.start).not.toHaveBeenCalled();
+  });
   test('a missing device default preserves the choice and reports actionable setup', async () => {
     const system = dictationEngine('needs-setup');
     const { module } = setup({

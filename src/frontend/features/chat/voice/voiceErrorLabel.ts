@@ -4,6 +4,7 @@ const VOICE_ERROR_KEYS = {
   unsupported: 'voice.error.unsupported',
   'not-configured': 'voice.error.notConfigured',
   'recognition-not-configured': 'settings.voice.dictation.setupRequired',
+  'model-not-downloaded': 'voice.error.modelNotDownloaded',
   'permission-denied': 'voice.error.permissionDenied',
   'permission-blocked': 'voice.error.permissionDenied',
   'invalid-voice': 'voice.error.invalidVoice',

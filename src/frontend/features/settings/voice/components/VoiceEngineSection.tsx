@@ -30,12 +30,13 @@ export function VoiceEngineSection({
   const showDictationSetup = useDictationSetup();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [, setSelected] = usePreference(VOICE_ENGINE_PREFERENCE[capability]);
+  const engines = capability === 'speech' ? (['system'] as const) : VOICE_ENGINES;
   const statuses = useQuery({
     queryKey: ['voice', 'engine-status', capability],
     queryFn: async ({ signal }) =>
       Object.fromEntries(
         await Promise.all(
-          VOICE_ENGINES.map(
+          engines.map(
             async (engine) =>
               [engine, await voice.getEngineStatus(capability, engine, { signal })] as const,
           ),
@@ -47,7 +48,13 @@ export function VoiceEngineSection({
   const describe = (engine: VoiceEngineId) => {
     const status = statuses.data?.[engine];
     if (status === 'needs-setup') return t('settings.voice.dictation.setupRequired');
-    if (status === 'unsupported') return t(`settings.voice.${capability}.systemUnavailable`);
+    if (status === 'needs-model') return t('voice.error.modelNotDownloaded');
+    if (status === 'unsupported')
+      return t(
+        engine === 'system'
+          ? `settings.voice.${capability}.systemUnavailable`
+          : 'settings.voice.engine.unavailable',
+      );
     return t(`settings.voice.engine.${engine}Description`);
   };
   const select = (engine: VoiceEngineId | null) => {
@@ -105,7 +112,7 @@ export function VoiceEngineSection({
               testID="settings-voice-dictation-off"
             />
           ) : null}
-          {VOICE_ENGINES.map((engine) => (
+          {engines.map((engine) => (
             <Section.RadioItem
               description={describe(engine)}
               disabled={!statuses.data || statuses.data[engine] === 'unsupported'}

@@ -12,6 +12,7 @@ export type DictationStart = {
   signal: AbortSignal;
   onText(text: string): void;
   onLevel(level: number): void;
+  onTranscribing?(): void;
 };
 
 /** One way of turning speech into text. Adapters own their native resources and permissions. */

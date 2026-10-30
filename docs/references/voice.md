@@ -1,31 +1,34 @@
 # Voice Input And Speech
 
-> Status: system dictation, system speech, composer interactions and voice settings are implemented.
-> iOS/Android device acceptance of the current settings layout is pending.
+> Status: system dictation, system speech and downloadable SenseVoice dictation are implemented.
+> The offline native integration and current settings layout still need builds and iOS/Android
+> device acceptance. Source implementation does not establish device behavior.
 
 ## Capabilities
 
 | Capability | Default | Engine |
 | --- | --- | --- |
-| Dictation into the composer draft | Off until enabled | System speech recognition |
+| Dictation into the composer draft | Off until enabled | System speech recognition or downloaded SenseVoiceSmall |
 | Reading an assistant reply aloud | Enabled | System text-to-speech |
 
-Voice uses the device's system services and needs no Cherry provider account or model selection.
-Cloud voice adapters and audio attachment transcription are outside this implementation.
+Voice needs no Cherry provider account. Users select system dictation or download the optional
+SenseVoiceSmall model for offline dictation. Cloud voice adapters and audio attachment transcription
+are outside this implementation.
 
 System engines do not guarantee offline execution: the configured recognition service, installed
 voices and language support determine whether the platform uses a network. The current adapters do
-not enforce on-device recognition or filter voices by network requirements. Downloadable local
-models and strict offline capability checks are not implemented.
+not enforce on-device recognition or filter voices by network requirements. SenseVoice runs locally
+after download and never falls back to a system or cloud recognizer.
 
-Users enable system dictation in **Settings → Voice**, choose its recognition language and select
-an installed speaking voice for reading aloud. They can also dictate through their keyboard's own
+Users choose a dictation engine in **Settings → Voice**, choose a language for system recognition
+or download the offline model, and select an installed speaking voice for reading aloud. They can also dictate through their keyboard's own
 voice input, independently of this module.
 
 The local and remote chat composers share one primary action slot: voice input while the draft
-and attachments are empty and system dictation is enabled and available, send once there is
+and attachments are empty and dictation is enabled and available, send once there is
 content, and stop while a reply streams. Dictation off or an unavailable system recognizer keeps
-the send action. Dictation keeps the slot until it ends, even as text fills the draft; there it
+the send action. An offline engine waiting for a model keeps an actionable voice entry that explains
+where to download it. Dictation keeps the slot until it ends, even as text fills the draft; there it
 finishes dictation with a check mark and shows progress while waiting for the final result.
 
 While dictating, cancel replaces the leading attachment action and discards the dictation,
@@ -46,8 +49,9 @@ preferences. The module has no dependency on `AiService`, provider accounts or m
 - `engines.ts` declares the `DictationEngine` and `SpeechEngine` ports. An engine may serve only one
   capability; a missing entry is unsupported.
 - `VoiceRuntime.ts` chooses the engine from the registered `VOICE_ENGINES` IDs. With no valid
-  selection, dictation is off and speech uses the first supported entry. Only `system` is
-  registered. The runtime allows one activity at a time: dictation stops reading, reading replaces
+  selection, dictation is off and speech uses the first supported entry. `system` and `sensevoice`
+  are registered for dictation; only `system` reads aloud. The runtime allows one activity at a time:
+  dictation stops reading, reading replaces
   reading, and reading cannot start during dictation. Backgrounding and host disposal abort the
   activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
@@ -56,8 +60,10 @@ preferences. The module has no dependency on `AiService`, provider accounts or m
 - `systemDictation.ts` owns `expo-speech-recognition`, permissions, native listeners and cleanup.
   `systemSpeech.ts` owns `expo-speech`, installed voice selection and speech cancellation.
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
-  with the iOS ring switch silenced. There is no application recording or generated-audio playback.
-- `createVoice.ts` assembles the system engines and the background listener for the host. Adding a
+  with the iOS ring switch silenced.
+- `senseVoiceDictation.ts` owns local recording, lazy native inference, model-use leases and cleanup.
+  `voiceModel.ts` owns the optional model's download, integrity and deletion through `localModel`.
+- `createVoice.ts` assembles the engines, model owner and background listener for the host. Adding a
   future engine requires an adapter, a `VOICE_ENGINES` entry and registration here.
 
 The frontend uses `useBackendModule('voice')`. Chat owns the dictation and read-aloud hooks in
@@ -113,12 +119,42 @@ which follows the app language when null. Engine choices and the system voice ar
 preferences: support and installed voices differ per device, so a restored backup keeps the target
 device's values.
 
+## Downloaded Offline Dictation
+
+SenseVoiceSmall INT8 supports iOS and Android through `@siteed/sherpa-onnx.rn` 1.3.1 (sherpa-onnx
+1.13.0). The dependency is loaded only when offline dictation starts. Missing native modules report
+unsupported while system voice remains available. The Expo packaging plugin uses this app's SDK 58
+config-plugin version; its installation script downloads prebuilt libraries rather than compiling.
+
+The user downloads the model in **Settings → Voice → SenseVoice (offline)**. The pinned
+`senseVoiceAssets.ts` manifest contains a ModelScope revision, exact sizes and SHA-256 values for
+`model.int8.onnx` and `tokens.txt`, totaling 239,549,735 bytes (about 240 MB). The model source is
+[pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue](https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue);
+the upstream model and its licensing information are
+[FunAudioLLM/SenseVoiceSmall](https://huggingface.co/FunAudioLLM/SenseVoiceSmall).
+Model weights are not bundled in the app or copied from DSH Go source.
+
+The shared [file downloader](../../src/backend/services/download/README.md) owns native transfer,
+progress, byte limits, cancellation, temporary-file cleanup and checksum verification. Settings
+observes the backend-owned operation; leaving settings does not cancel it. Retry reuses complete
+verified assets and restarts an interrupted file. Model storage survives cache eviction and is
+excluded from OS backup. A new app generation verifies cached bytes before use. Deletion is blocked
+while recognition holds a model lease; disposal cancels downloads and joins active native work.
+
+[`modules/voice-input`](../../modules/voice-input/README.md) records 16 kHz mono PCM16 WAV, with a
+native 30-second limit. Stop or the limit transitions the composer to transcription. SenseVoice
+automatically detects Mandarin, Cantonese, English, Japanese or Korean; the system recognizer's
+language preference does not restrict it. The first version transcribes whole utterances and does
+not need a separate VAD model. It does not stream partial text. Audio is processed locally, deleted
+after completion/cancellation, and never sent to a provider. Native inference cannot be interrupted
+mid-decode: cancellation discards its result and joins it before releasing the recognizer/model.
+
 ## Native Configuration And Acceptance
 
 `expo-speech-recognition` adds the speech recognition purpose string, `RECORD_AUDIO`, and package
 visibility for recognition services. `expo-audio` remains for audio-session control, with background
 recording and playback disabled. Camera and image-picker share the microphone purpose string,
-because Expo composes these plugins into one native configuration. These native modules require
+  because Expo composes these plugins into one native configuration. These native modules require
 iOS and Android development clients that contain them; a JavaScript update cannot add the modules.
 
 Existing focused suites cover engine choice, the single-activity rule, backgrounding and disposal,

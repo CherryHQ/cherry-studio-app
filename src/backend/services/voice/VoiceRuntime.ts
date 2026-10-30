@@ -40,7 +40,10 @@ export function createVoiceRuntime({
   language,
   dictationLanguage,
   onBackground,
-}: VoiceRuntimeDependencies): { module: VoiceModule; dispose(): Promise<void> } {
+}: VoiceRuntimeDependencies): {
+  module: Omit<VoiceModule, 'localModel'>;
+  dispose(): Promise<void>;
+} {
   const lifetime = new AbortController();
   const pending = new Set<Promise<unknown>>();
   const listeners = new Set<() => void>();
@@ -109,6 +112,11 @@ export function createVoiceRuntime({
         'recognition-not-configured',
         'Configure system speech recognition first.',
       );
+    if (effective?.status === 'needs-model')
+      throw new VoiceError(
+        'model-not-downloaded',
+        'Download the offline voice model in voice settings.',
+      );
     if (effective?.status === 'ready') return registry(capability)[effective.id] as T;
     throw new VoiceError('unsupported', `No ${capability} engine is available on this device.`);
   }
@@ -130,7 +138,7 @@ export function createVoiceRuntime({
 
   const unsubscribeBackground = onBackground(() => current?.controller.abort());
 
-  const module: VoiceModule = {
+  const module: Omit<VoiceModule, 'localModel'> = {
     getEngineStatus: (capability, engine, options) =>
       run(
         options,
@@ -157,6 +165,7 @@ export function createVoiceRuntime({
             signal: activity.signal,
             onText: (text) => options?.onText?.(text),
             onLevel: (level) => options?.onLevel?.(level),
+            onTranscribing: () => options?.onTranscribing?.(),
           }),
         );
         const result = track(session.result);

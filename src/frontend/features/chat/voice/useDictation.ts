@@ -99,6 +99,9 @@ export function useDictation() {
           if (!controller.signal.aborted) write(appendUtterance(base, text));
         },
         onLevel: setLevel,
+        onTranscribing: () => {
+          if (!controller.signal.aborted) setState('finishing');
+        },
       });
       setState('listening');
       const text = await owner.session.result;
