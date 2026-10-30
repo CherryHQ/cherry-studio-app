@@ -6,9 +6,11 @@ export type PiWebDialect =
   | 'openai-preview'
   | 'xai'
   | 'anthropic'
+  | 'qwen-anthropic'
   | 'google'
   | 'zhipu'
   | 'dashscope'
+  | 'qwencloud'
   | 'openrouter'
   | 'perplexity';
 
@@ -75,6 +77,11 @@ export function resolvePiWebToolRoutes(
           : 'none';
   let search = select('search');
   let fetch = select('fetch');
+  // Qwen's native fetch requires search in the same request, subject to the same approval.
+  if (native?.dialect === 'qwen-anthropic' && fetch === 'server') {
+    if (server.search) search = 'server';
+    else fetch = client.fetch ? 'client' : 'none';
+  }
   if (
     !native?.functionToolMixing &&
     ((search === 'server' && fetch === 'client') || (search === 'client' && fetch === 'server'))
@@ -106,6 +113,19 @@ const ANTHROPIC_MAX_USES = 5;
 /** A fetched page returns with every later request, so it gets the external reader's page allowance. */
 const ANTHROPIC_FETCH_CONTENT_TOKENS = 4_000;
 
+/** Required by Qwen's Anthropic web-tool contract; preserve the caller's system/cache blocks. */
+function qwenWebToolSystem(system: unknown): unknown {
+  const identifier = 'x-anthropic-billing-header: cc_entrypoint=cli;';
+  const blocks = typeof system === 'string' ? [{ type: 'text', text: system }] : system;
+  const existing = Array.isArray(blocks) ? blocks : [];
+  if (
+    existing.some((block) => typeof block?.text === 'string' && block.text.includes(identifier))
+  ) {
+    return system;
+  }
+  return [{ type: 'text', text: identifier }, ...existing];
+}
+
 /** Native tools are injected only into conversation calls that permit tool use. */
 export function applyPiWebTools(
   payload: unknown,
@@ -113,7 +133,8 @@ export function applyPiWebTools(
   routes: PiWebToolRoutes,
 ): unknown {
   const search = routes.search === 'server';
-  const fetch = routes.fetch === 'server';
+  // Credential fallback may narrow the preselected routes; never re-enable a forbidden search.
+  const fetch = routes.fetch === 'server' && (dialect !== 'qwen-anthropic' || search);
   if (!dialect || (!search && !fetch)) return payload;
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('Pi produced an invalid provider request.');
@@ -136,6 +157,7 @@ export function applyPiWebTools(
           )
         : payload;
     case 'anthropic':
+    case 'qwen-anthropic':
       return {
         ...withTools(
           ...(search
@@ -155,6 +177,7 @@ export function applyPiWebTools(
         ...(fetch
           ? { betas: [...(Array.isArray(body.betas) ? body.betas : []), 'web-fetch-2025-09-10'] }
           : {}),
+        ...(dialect === 'qwen-anthropic' ? { system: qwenWebToolSystem(body.system) } : {}),
       };
     case 'google': {
       const config = (body.config ?? {}) as Record<string, unknown>;
@@ -202,6 +225,21 @@ export function applyPiWebTools(
               enable_source: true,
               // The newest Max and multimodal SKUs search only under the agent strategy.
               ...(/qwen3-max|omni|qwen3-vl/.test(String(body.model))
+                ? { search_strategy: 'agent' }
+                : {}),
+            },
+          }
+        : payload;
+    case 'qwencloud':
+      return search
+        ? {
+            ...body,
+            enable_search: true,
+            search_options: {
+              // Mobile offers the capability without forcing a lookup on every request.
+              ...(/qwen3[.-]8-omni-flash|qwen3[.-]7-(?:max|plus|flash)|qwen3[.-][56]-(?:plus|flash)|qwen3-max/.test(
+                String(body.model),
+              )
                 ? { search_strategy: 'agent' }
                 : {}),
             },

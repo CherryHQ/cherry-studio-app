@@ -285,6 +285,41 @@ test('keeps source facts ahead of a pending tool call', () => {
   expect(readPiWebResult(settled)?.replayIndex).toBe(1);
 });
 
+test('retains Qwen Anthropic fetch URL lists and goals in the provider replay content', () => {
+  const capture = new PiWebResponse('qwen-fetch', 'qwen-anthropic');
+  const input = {
+    urls: ['https://example.com/a', 'https://example.com/b'],
+    goal: 'Compare the pages',
+  };
+  capture.observe({
+    type: 'content_block_start',
+    index: 0,
+    content_block: {
+      type: 'server_tool_use',
+      id: 'srvtoolu_qwen',
+      name: 'web_fetch',
+      input: {},
+    },
+  });
+  capture.observe({
+    type: 'content_block_delta',
+    index: 0,
+    delta: {
+      type: 'input_json_delta',
+      partial_json: JSON.stringify(input),
+    },
+  });
+  capture.observe({ type: 'content_block_stop', index: 0 });
+  expect(
+    readPiWebResult(capture.settle(message('Comparing pages')))?.anthropicContent,
+  ).toContainEqual({
+    type: 'server_tool_use',
+    id: 'srvtoolu_qwen',
+    name: 'web_fetch',
+    input,
+  });
+});
+
 /** A fetch deferred behind a function call, as the request that returns the function result. */
 function deferredAnthropicFetch() {
   const capture = new PiWebResponse('anthropic-replay', 'anthropic');
