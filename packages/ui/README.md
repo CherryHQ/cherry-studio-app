@@ -283,6 +283,19 @@ composed directly below the section heading. `TextSection` and `ValueSection` us
 primitives. The app supplies translated copy controls and highlighted code, so the UI package never
 reads the clipboard or imports application preferences.
 
+`MessagePart.TextBody` is the complete plain-text reading surface for tool output and diagnostic
+details. Short text keeps the ordinary padded surface and natural height. Long text uses a 192-point
+inner scroll viewport with at most 1000 characters and 20 source lines per native text block;
+LegendList mounts only nearby blocks. Partial selection is local to a block, so native text views
+are not recycled between blocks. Native scroll and selection recognizers own cancellation; Android enables
+nested scrolling inside the detail sheet. There is no row tap or custom long-press handler. The
+section's explicit copy action always uses the original value, including text outside the viewport
+and original line endings. Gesture cancellation still requires acceptance on both platforms.
+
+`splitTextBlocks` from `@cherrystudio/ui/utils` owns bounded reader chunks for `TextBody` and the file
+reader. It normalizes line endings for display and continues very long lines without splitting
+UTF-16 surrogate pairs; callers retain the original string for copying.
+
 `MessagePart.Pending` owns the empty-response loader and its stable text-line height. An optional
 `reason` names local work that delays the reply, such as attachment text recognition, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under

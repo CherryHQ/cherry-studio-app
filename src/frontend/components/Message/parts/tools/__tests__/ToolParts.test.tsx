@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { GenericToolPart } from '../GenericToolPart';
@@ -138,6 +139,11 @@ jest.mock('@cherrystudio/ui/components', () => {
         </MockView>
       ),
       SectionBody: ({ children }: { children: ReactNode }) => <MockView>{children}</MockView>,
+      TextBody: ({ value }: { value: string }) => (
+        <MockView testID="mock-text-body" value={value}>
+          <MockText>{value}</MockText>
+        </MockView>
+      ),
       SectionTitle: ({ title }: { title: string }) => <MockText>{title}</MockText>,
       Source: ({ label }: { label: string }) => <MockText>{label}</MockText>,
       TextSection: ({ title, value, ...props }: { title: string; value: string }) => (
@@ -265,7 +271,7 @@ describe('tool message detail sheets', () => {
   });
 
   it('keeps later MCP blocks readable and copies the entire result', async () => {
-    const first = 'a'.repeat(5_000);
+    const first = 'log entry\r\n'.repeat(5_000);
     const json = { tail: 'b'.repeat(5_000) };
     await render(
       <McpToolPart
@@ -283,12 +289,27 @@ describe('tool message detail sheets', () => {
     );
     await act(async () => findByTestID('mcp-tool-part-trigger').props.onPress());
     expect(findText(first)).toHaveLength(1);
+    expect(findAllByTestID('mock-text-body').map((body) => body.props.value)).toEqual([
+      first,
+      'Final block\n\n',
+    ]);
     expect(findByTestID('mock-code-block').props.code).toBe(JSON.stringify(json, null, 2));
     expect(findText('Final block\n\n')).toHaveLength(1);
     await act(async () => findByTestID('tool-result-copy-full-text').props.onPress());
     expect(mockSetStringAsync).toHaveBeenCalledWith(
       [first, JSON.stringify(json, null, 2), 'Final block\n\n'].join('\n\n'),
     );
+  });
+
+  it('keeps body rendering separate from exact-source copy for long diagnostic text', async () => {
+    const value = `${'diagnostic line\r\n'.repeat(5_000)}尾部😀\n\n`;
+    await render(
+      <MessageDetailText copyTestID="diagnostic-copy" title="Diagnostic" value={value} />,
+    );
+
+    expect(findByTestID('mock-text-body').props.value).toBe(value);
+    await act(async () => findByTestID('diagnostic-copy').props.onPress());
+    expect(mockSetStringAsync).toHaveBeenCalledWith(value);
   });
 
   it('renders and copies all arguments beyond the old preview limit', async () => {

@@ -1,7 +1,7 @@
 import { Image, MessagePart } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { MessageDetailSection, MessageDetailText } from '@/frontend/components/MessageDetail';
@@ -81,7 +81,7 @@ function ToolResultContentItem({
   switch (content.kind) {
     case 'audio':
     case 'resource':
-      return <SelectableText value={content.fallbackText} />;
+      return <MessagePart.TextBody value={content.fallbackText} />;
     case 'code':
       return <CodeContent content={content.content} language={content.language} />;
     case 'image':
@@ -102,10 +102,10 @@ function ToolResultContentItem({
       return isExternalResourceUri(content.uri) ? (
         <SourceLink label={content.label} url={content.uri} variant="listItem" />
       ) : (
-        <SelectableText value={content.label} />
+        <MessagePart.TextBody value={content.label} />
       );
     case 'text':
-      return <SelectableText value={content.content} />;
+      return <MessagePart.TextBody value={content.content} />;
   }
 }
 
@@ -118,16 +118,6 @@ function CodeContent({ content, language }: { content: string; language?: string
       value={content}
       variant="code"
     />
-  );
-}
-
-function SelectableText({ value }: { value: string }) {
-  return (
-    <MessagePart.SectionBody>
-      <Text className="text-base text-foreground" selectable>
-        {value}
-      </Text>
-    </MessagePart.SectionBody>
   );
 }
 

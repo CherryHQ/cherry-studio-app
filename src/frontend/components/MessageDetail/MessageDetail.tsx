@@ -11,7 +11,6 @@ import {
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
 
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -71,11 +70,7 @@ export function MessageDetailText({
 
   return (
     <MessageDetailSection {...props} copyText={() => value}>
-      <MessagePart.SectionBody>
-        <Text className="text-base text-foreground" selectable>
-          {value}
-        </Text>
-      </MessagePart.SectionBody>
+      <MessagePart.TextBody value={value} />
     </MessageDetailSection>
   );
 }

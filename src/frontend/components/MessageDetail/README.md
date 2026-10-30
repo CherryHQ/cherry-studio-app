@@ -6,8 +6,11 @@ a sheet or its open state.
 
 - `MessageDetailSection` supplies a localized, section-scoped copy action. Its `copyText` callback
   resolves the full original text only when pressed and reports clipboard outcomes through toast.
-- `MessageDetailText` renders complete selectable prose or CherryUI `CodeBlock`. Code blocks have
-  one title/copy action and a bounded native scroll viewport; scrolling reaches the full source and
+- `MessageDetailText` renders complete prose through CherryUI `MessagePart.TextBody`, or `CodeBlock`.
+  Short prose keeps its natural height. Long prose uses bounded text blocks in a virtualized scroll
+  viewport; native selection stays within one block, while the section action copies the original
+  value including its line endings. Ordinary tool results use the same text body.
+  Code blocks have one title/copy action and a bounded native scroll viewport; scrolling reaches the full source and
   copying preserves the original text, including trailing newlines. There is no character budget.
   Tool detail sheets mount this content only when opened.
 - `MessageDetailValue` presents invocation arguments as formatted JSON. Human-facing metadata
