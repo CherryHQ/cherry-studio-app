@@ -62,6 +62,7 @@ const MOBILE_REMOTE_CAPABILITIES: Record<
   parallel: ['searchKeywords'],
   serply: ['searchKeywords'],
   searchapi: ['searchKeywords'],
+  desearch: ['searchKeywords'],
 };
 
 const remotePresets = Object.fromEntries(

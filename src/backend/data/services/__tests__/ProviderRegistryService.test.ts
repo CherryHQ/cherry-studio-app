@@ -19,6 +19,58 @@ import {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
+  test('keeps QwenCloud native tool membership bound to the requested endpoint', () => {
+    const provider = { id: 'qwencloud-copy', presetProviderId: 'qwencloud' };
+    expect(
+      providerRegistryService.resolveServerTools(
+        provider,
+        'qwen3.8-flash',
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      ),
+    ).toEqual(['web-search']);
+    expect(
+      providerRegistryService.resolveServerTools(
+        provider,
+        'qwen3.8-flash',
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      ),
+    ).toEqual([]);
+    expect(
+      providerRegistryService.resolveServerTools(
+        provider,
+        'glm-5.2',
+        ENDPOINT_TYPE.OPENAI_RESPONSES,
+      ),
+    ).toEqual(['web-search']);
+    expect(
+      providerRegistryService.resolveServerTools(
+        provider,
+        'glm-5.2',
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      ),
+    ).toEqual([]);
+  });
+
+  test('infers effort controls for manually added Step-5 Preview models', () => {
+    const [model] = providerRegistryService.resolveModels('custom-provider', ['step-5-preview'], {
+      presetProviderId: null,
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    });
+    expect(model.reasoning?.selectableEfforts).toEqual(['low', 'medium', 'high']);
+  });
+
+  test('projects Grok Imagine aspect ratios and image routing from the downloaded catalog', () => {
+    const [model] = providerRegistryService.resolveModels('grok', ['grok-imagine-image-2.0']);
+    expect(model.endpointTypes).toEqual([ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]);
+    for (const mode of ['generate', 'edit'] as const) {
+      expect(model.imageGeneration?.modes?.[mode]?.supports.aspectRatio).toMatchObject({
+        type: 'enum',
+        default: 'auto',
+        options: expect.arrayContaining(['1:1', '16:9', '9:16']),
+      });
+    }
+  });
+
   test('materializes downloaded GPT-6.1 Terra with its Codex limits and reasoning defaults', () => {
     const [model] = providerRegistryService.resolveModels('openai-codex', ['gpt-6.1-terra']);
     expect(model).toMatchObject({

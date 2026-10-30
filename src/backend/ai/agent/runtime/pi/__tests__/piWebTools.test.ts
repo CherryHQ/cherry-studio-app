@@ -82,6 +82,23 @@ describe('Pi web tool selection', () => {
     expect(routes).toEqual({ search: 'client', fetch: 'client' });
   });
 
+  test('pairs Qwen Anthropic fetch with search while respecting approvals and denies', () => {
+    const qwen = { ...native, dialect: 'qwen-anthropic' as const };
+    const preferClient = { ...policy, modelToolsPreferred: false, clientFetchAvailable: false };
+    expect(resolvePiWebToolRoutes(preferClient, qwen, tools)).toEqual({
+      search: 'server',
+      fetch: 'server',
+    });
+    for (const approval of ['ask', 'deny'] as const) {
+      const guarded = [tool('web_search', approval), tool('web_fetch')];
+      expect(resolvePiWebToolRoutes(policy, qwen, guarded)).toEqual({
+        search: approval === 'ask' ? 'client' : 'none',
+        fetch: 'client',
+      });
+      expect(resolvePiWebToolRoutes(preferClient, qwen, guarded).fetch).toBe('none');
+    }
+  });
+
   test('does not mix native and external web tools on older Gemini', () => {
     expect(
       resolvePiWebToolRoutes(policy, { ...native, fetch: false, functionToolMixing: false }, tools),
@@ -195,5 +212,44 @@ describe('native request adapters', () => {
     });
     const sonar = { model: 'sonar' };
     expect(applyPiWebTools(sonar, 'perplexity', search)).toBe(sonar);
+  });
+
+  test('Qwen Anthropic adds its system identifier without changing cached prompt blocks', () => {
+    const system = [
+      { type: 'text', text: 'User instructions', cache_control: { type: 'ephemeral' } },
+    ];
+    const body = { system, tools: functions, temperature: 0.5 };
+    const prepared = applyPiWebTools(body, 'qwen-anthropic', routes) as typeof body;
+    expect(prepared).toMatchObject({
+      system: [{ type: 'text', text: 'x-anthropic-billing-header: cc_entrypoint=cli;' }, ...system],
+      temperature: 0.5,
+      tools: expect.arrayContaining([
+        ...functions,
+        expect.objectContaining({ name: 'web_search' }),
+        expect.objectContaining({ name: 'web_fetch' }),
+      ]),
+    });
+    expect(body.system).toEqual(system);
+    expect((applyPiWebTools(prepared, 'qwen-anthropic', routes) as typeof body).system).toEqual(
+      prepared.system,
+    );
+    expect(applyPiWebTools(body, 'qwen-anthropic', { search: 'none', fetch: 'server' })).toBe(body);
+    expect(applyPiWebTools(body, 'qwen-anthropic', { search: 'client', fetch: 'client' })).toBe(
+      body,
+    );
+    expect((applyPiWebTools(body, 'anthropic', routes) as typeof body).system).toBe(system);
+  });
+
+  test.each([
+    ['qwen3.8-flash', undefined],
+    ['qwen3.8-max', undefined],
+    ['qwen3.8-omni-flash', 'agent'],
+    ['qwen3.7-plus', 'agent'],
+  ])('uses QwenCloud search strategy for %s', (model, strategy) => {
+    expect(applyPiWebTools({ model }, 'qwencloud', { search: 'server', fetch: 'client' })).toEqual({
+      model,
+      enable_search: true,
+      search_options: { ...(strategy ? { search_strategy: strategy } : {}) },
+    });
   });
 });

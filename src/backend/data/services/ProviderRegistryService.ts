@@ -490,7 +490,7 @@ export class ProviderRegistryService {
       const vendor = tool.vendors?.length ? matchVendor(normalizeModelId(wireModelId)) : undefined;
       if (tool.vendors?.length && !(vendor && tool.vendors.includes(vendor))) return [];
       return tool.modelScope === 'all-chat-models' ||
-        isServerToolModelEligible(wireModelId, preset.id, tool.id)
+        isServerToolModelEligible(wireModelId, preset.id, tool.id, endpointType)
         ? [tool.id]
         : [];
     });

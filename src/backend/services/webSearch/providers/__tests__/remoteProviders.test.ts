@@ -18,6 +18,34 @@ beforeEach(() => {
   request.mockReset();
 });
 
+test('runs Desearch through the mobile registry with its key, host and caller cancellation', async () => {
+  const configuration = providerConfig('desearch');
+  configuration.apiKeys = ['desearch-key'];
+  configuration.capabilities[0].apiHost = 'https://search.example.com';
+  request.mockResolvedValue({
+    status: 200,
+    headers: {},
+    bodyText: JSON.stringify({
+      data: [{ title: 'Result', snippet: 'Summary', link: 'https://example.com' }],
+    }),
+  });
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  const signal = new AbortController().signal;
+  await expect(provider.searchKeywords!('猫 & dog', config, { signal })).resolves.toMatchObject({
+    providerId: 'desearch',
+    capability: 'searchKeywords',
+    results: [
+      { title: 'Result', content: 'Summary', url: 'https://example.com', sourceInput: '猫 & dog' },
+    ],
+  });
+  expect(request.mock.calls[0][0]).toMatchObject({
+    url: 'https://search.example.com/web?query=%E7%8C%AB%20%26%20dog',
+    method: 'GET',
+    headers: { Authorization: 'desearch-key' },
+    signal,
+  });
+});
+
 test('keeps Exa MCP search and page-reading capabilities with their separate deadlines', async () => {
   request
     .mockResolvedValueOnce(mcpResponse('Title: Example\nURL: https://example.com\nText: Snippet'))

@@ -9,6 +9,79 @@ import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../providerConfig';
 
 describe('providerToAiSdkConfig', () => {
+  it.each([
+    ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+    ENDPOINT_TYPE.OPENAI_RESPONSES,
+  ])('uses the QwenCloud image origin independently of the %s text endpoint', async (endpoint) => {
+    const preset = providerRegistryService.loadProviders().find(({ id }) => id === 'qwencloud')!;
+    const input = createPresetProviderInput(preset);
+    const provider = createProvider({
+      id: 'qwencloud-copy',
+      presetProviderId: 'qwencloud',
+      defaultChatEndpoint: endpoint,
+      endpointConfigs: {
+        ...input.endpointConfigs,
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          ...input.endpointConfigs?.[ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+          baseUrl: 'https://proxy.example.com/qwen/compatible-mode/v1/',
+        },
+      },
+      settings: { extraHeaders: { 'X-Provider': 'custom' } },
+    });
+    const fetch = jest.fn(async () => new Response());
+    const config = await providerToAiSdkConfig(
+      provider,
+      {
+        ...createModel(provider.id, 'qwen-image-2.0'),
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      },
+      { ...createRuntime(), fetch },
+    );
+    expect(config.providerId).toBe('dashscope');
+    expect(config.providerSettings).toMatchObject({
+      imageBaseURL: 'https://proxy.example.com/qwen',
+      fetch,
+      headers: { 'X-Provider': 'custom' },
+    });
+    const chat = await providerToAiSdkConfig(
+      provider,
+      {
+        ...createModel(provider.id, 'qwen3.8-max'),
+        endpointTypes: [endpoint],
+      },
+      createRuntime(),
+    );
+    expect(chat.providerId).toBe(
+      endpoint === ENDPOINT_TYPE.ANTHROPIC_MESSAGES
+        ? 'anthropic'
+        : endpoint === ENDPOINT_TYPE.OPENAI_RESPONSES
+          ? 'openai'
+          : 'openai-compatible',
+    );
+  });
+
+  it('uses the xAI image adapter declared by the Grok catalog', async () => {
+    const preset = providerRegistryService.loadProviders().find(({ id }) => id === 'grok')!;
+    const input = createPresetProviderInput(preset);
+    const provider = createProvider({
+      id: 'grok-copy',
+      presetProviderId: 'grok',
+      defaultChatEndpoint: input.defaultChatEndpoint ?? undefined,
+      endpointConfigs: input.endpointConfigs ?? undefined,
+    });
+    const config = await providerToAiSdkConfig(
+      provider,
+      {
+        ...createModel(provider.id, 'grok-imagine-image-2.0'),
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+      },
+      createRuntime(),
+    );
+    expect(config.providerId).toBe('xai');
+  });
+
   it('honors a versionless custom base URL during model checks', async () => {
     const provider = createProvider({
       id: 'custom-openai',
