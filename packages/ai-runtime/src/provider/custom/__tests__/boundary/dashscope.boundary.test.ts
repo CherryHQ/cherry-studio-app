@@ -209,6 +209,7 @@ describe('DashScope request boundary', () => {
         prompt: 'a fox',
         n: 2,
         size: '2048x2048',
+        providerParams: {},
         modelDescriptor: {
           id: modelId,
           endpoint: '/api/v1/services/aigc/multimodal-generation/generation',
