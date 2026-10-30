@@ -4,6 +4,7 @@ import { callback } from 'react-native-nitro-modules';
 import type { ContextMenuProps } from '../menu.types';
 import { NativeCherryMenuView, useNativeMenu } from '../use-native-menu';
 import { ContextMenuExclusionContext, useContextMenuTouch } from './context-menu-exclusion';
+import { ContextMenuTrigger } from './context-menu-trigger';
 
 const EMPTY_NATIVE_ITEMS: [] = [];
 
@@ -12,7 +13,7 @@ const EMPTY_NATIVE_ITEMS: [] = [];
  * UIContextMenuInteraction and UIKit arbitrates it against scroll ancestors,
  * cancellation, and accessibility.
  */
-export function ContextMenu({ children, items }: ContextMenuProps) {
+function ContextMenuRoot({ children, items }: ContextMenuProps) {
   const { nativeItems, onAction } = useNativeMenu(items);
   const touch = useContextMenuTouch();
 
@@ -32,3 +33,5 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
     </ContextMenuExclusionContext>
   );
 }
+
+export const ContextMenu = Object.assign(ContextMenuRoot, { Trigger: ContextMenuTrigger });

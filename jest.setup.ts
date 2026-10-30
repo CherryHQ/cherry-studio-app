@@ -192,6 +192,7 @@ jest.mock('react-native-gesture-handler', () => {
 
   return {
     Gesture: new Proxy({}, { get: () => () => createChainableGesture() }),
+    useLongPressGesture: (config: unknown) => config,
     GestureDetector: ({ children }: { children?: unknown }) => children,
     GestureHandlerRootView: ({ children, ...props }: { children?: unknown }) =>
       react.createElement(View, props, children),

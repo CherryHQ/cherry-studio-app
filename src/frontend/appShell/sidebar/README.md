@@ -56,11 +56,11 @@ The `/search` page uses the shared transient selection contract and closes befor
 The sidebar owns conversation browsing, rename, and individual deletion. There is no separate
 Session history/management route or chat-header history action.
 
-Session rows use `SidebarSessionPressable`: React Native's `Pressable` on Android, and the existing
-Gesture Handler press target on iOS and fallback platforms. The Android target avoids nesting a
-Gesture Handler native button beneath `ContextMenu`'s long-press recognizer to address reports of
-the menu failing to open ([#1541](https://github.com/CherryHQ/cherry-studio-app/issues/1541)).
-The menu owns long-press recognition; a committed hold or scroll must cancel the row's pending tap.
+Session rows use `ContextMenu.Trigger`, backed by Gesture Handler's `Pressable`. CherryUI owns the
+Android relation that makes the row's tap wait for the menu's long press to fail; a committed hold
+cancels the pending tap ([#1541](https://github.com/CherryHQ/cherry-studio-app/issues/1541)).
+`ContextMenuLink` composes navigation and accessibility actions without owning gesture state.
+Selection mode uses the same press target outside the menu. iOS keeps native menu recognition.
 
 Multi-select deletion removes sessions serially so active work settles before its rows are deleted.
 Deleted rows hide immediately, and each removal's catalog change notification refreshes the lists;
