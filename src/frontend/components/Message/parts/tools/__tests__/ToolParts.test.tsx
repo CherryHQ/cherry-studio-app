@@ -833,7 +833,8 @@ describe('tool message detail sheets', () => {
   }
 
   function findAllByTestID(testID: string) {
-    return renderer?.root.findAllByProps({ testID }) ?? [];
+    // Count the mocked View once, excluding its native host with the same testID.
+    return renderer?.root.findAllByType(View).filter((node) => node.props.testID === testID) ?? [];
   }
 
   function findText(text: string) {
