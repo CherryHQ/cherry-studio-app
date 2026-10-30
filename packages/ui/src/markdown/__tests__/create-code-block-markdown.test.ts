@@ -1,4 +1,4 @@
-import { createCodeBlockMarkdown } from '../createCodeBlockMarkdown';
+import { createCodeBlockMarkdown } from '../create-code-block-markdown';
 
 describe('createCodeBlockMarkdown', () => {
   it('keeps a streaming fence open so native code highlighting waits for completion', () => {

@@ -1,7 +1,7 @@
 const MINIMUM_FENCE_LENGTH = 3;
 const SAFE_LANGUAGE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_+.#-]*$/;
 
-/** Wrap code in a fence that cannot be closed by its content. */
+/** Wrap the complete source in a fence that cannot be closed by its content. */
 export function createCodeBlockMarkdown(
   content: string,
   language?: string,

@@ -36,6 +36,10 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
+
 jest.mock('../hooks/useConversationFeedbackHint', () => ({
   useConversationFeedbackHint: jest.fn(),
 }));

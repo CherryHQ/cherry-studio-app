@@ -6,12 +6,22 @@ export type TextBlockLimits = {
   maxBlockLines: number;
 };
 
+const PLAIN_TEXT_LIMITS: TextBlockLimits = {
+  maxBlockLength: 1000,
+  maxBlockLines: 20,
+  maxLineLength: 1000,
+};
+
 /**
  * Splits text into bounded blocks for a virtualized reader. A native text view lays out and draws
  * its whole block at once, so neither its rows nor its row length may grow with the file. Joining
- * the blocks with line breaks restores the text, apart from the breaks inserted into long lines.
+ * the blocks with line breaks restores the text, apart from normalized line endings and breaks
+ * inserted into long lines. Copy actions must use the original text.
  */
-export function splitTextBlocks(text: string, limits: TextBlockLimits): string[] {
+export function splitTextBlocks(
+  text: string,
+  limits: TextBlockLimits = PLAIN_TEXT_LIMITS,
+): string[] {
   const blocks: string[] = [];
   let rows: string[] = [];
   let length = 0;
@@ -21,7 +31,7 @@ export function splitTextBlocks(text: string, limits: TextBlockLimits): string[]
     length = 0;
   };
 
-  for (const line of text.split('\n')) {
+  for (const line of text.split(/\r\n|[\n\r\v\f\u0085\u2028\u2029]/)) {
     for (const row of splitLine(line, limits.maxLineLength)) {
       if (
         rows.length > 0 &&

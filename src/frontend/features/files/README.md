@@ -34,8 +34,8 @@ for format behavior, limits, selection evidence and pending acceptance.
   the current image.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
   in source view. `FileTextBody` renders plain text and source as a virtualized list of bounded
-  blocks from `splitTextBlocks`. Copy uses the displayed source text and explicitly says when it is partial;
-  sharing always exports the complete original file.
+  blocks from `splitTextBlocks` in `@cherrystudio/ui/utils`. Copy uses the displayed source text and
+  explicitly says when it is partial; sharing always exports the complete original file.
 - `FileHtmlBody` loads strings through `react-native-webview`, with local file access and cookie
   sharing disabled, and no app message bridge. Web links leave through `openExternalUrl`; other
   navigations are blocked. Load/process failures show the source, and the user can switch manually.
