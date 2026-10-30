@@ -32,6 +32,7 @@ import {
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import { useSidebarPresence } from '@/frontend/appShell/sidebar';
+import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -97,7 +98,23 @@ function RemoteChatUnavailable({ state }: { state: 'loading' | 'error' | 'unpair
 }
 function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInstance | null> }) {
   const { startRemoteChat } = useChatSource();
-  return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
+  const action = useRemoteDesktopAction();
+  return (
+    <MainHeaderView
+      actions={action ? [action] : []}
+      blurTarget={blurTarget}
+      onNewChat={() => startRemoteChat()}
+    />
+  );
+}
+
+function useRemoteDesktopAction() {
+  const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
+  return useUuRemoteAction(
+    target.connectionId
+      ? { ...target, connectionId: target.connectionId, page: 'chat' }
+      : undefined,
+  ).action;
 }
 const HeaderContext = createContext<{
   agent?: AgentSummary;
@@ -114,9 +131,11 @@ function RemoteHeader({
   const header = use(HeaderContext)!;
   const catalog = useConversationAgents();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const desktopAction = useRemoteDesktopAction();
   return (
     <>
       <MainHeaderView
+        actions={desktopAction ? [desktopAction] : []}
         agent={header.agent}
         blurTarget={blurTarget}
         hidden={hidden}
