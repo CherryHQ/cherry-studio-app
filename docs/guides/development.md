@@ -43,7 +43,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 38
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 45
 files, about half native. An upgrade re-ports every native block below and needs a native rebuild
 with iOS/Android device acceptance of paste, undo, selection, and accessibility. Keep this table
 current when a block is added or retired; a block leaves when upstream ships an equivalent.
@@ -53,6 +53,7 @@ current when a block is added or retired; a block leaves when upstream ships an 
 | Android input null and long-press guards | Bug fix | #973, #1015 | 1.1.1 guards only `Editor.performLongClick`; touch and drag paths are not upstream | Upstream guards the same Sentry crashes |
 | Android input height invalidation and scroll clamp | Bug fix | #1028 | Not upstream | Upstream re-measures after insertion |
 | Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |
+| iOS input measurement without main-thread waits | Bug fix | Duo startup and display-transition deadlock | [#582](https://github.com/software-mansion/enriched-markdown/pull/582) leaves input measurement unresolved | Upstream input layout consumes immutable text without waiting for the main thread |
 | Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
 | Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
 | iOS nested display math fitted to the column | Bug fix | #1484 | Not fixed in 1.1.1 | Upstream fits nested display math |
@@ -66,6 +67,36 @@ current when a block is added or retired; a block leaves when upstream ships an 
 
 `scripts/__tests__/enrichedMarkdown*.test.ts` and `patchReapplication.test.ts` guard the installed
 source text, not behavior.
+
+The iOS input publishes immutable text and layout attributes in Fabric state. Its layout node
+measures the snapshot at the current width without calling the live view; before the first native
+mount it uses the same input parser and formatter on detached storage. Snapshot runs carry a private
+attribute so Foundation cannot intern their copied paragraph styles with equal, mutable styles in
+the live editor. Attachments carry only bounds and are materialized per measurement.
+
+The [native input regression](../../scripts/__tests__/fixtures/enrichedMarkdownInputMeasurement.mm)
+checks measurement while main is blocked, empty and trailing-newline heights, CJK/RTL/emoji,
+width changes, mutable-source isolation, and concurrent measurement. Run it explicitly after
+claiming an authorized, booted iOS simulator through the device workflow; set `IOS_SIMULATOR_UDID`
+to that device's UDID. It does not boot a simulator or replace full application acceptance:
+
+```bash
+ENRICHED_IOS_DIR="$PWD/node_modules/react-native-enriched-markdown/ios"
+IOS_SIMULATOR_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+mkdir -p .context/agent-self-testing
+xcrun clang++ -std=c++20 -fobjc-arc -fblocks -target arm64-apple-ios17.0-simulator \
+  -isysroot "$IOS_SIMULATOR_SDK" -I"$ENRICHED_IOS_DIR/input" -I"$ENRICHED_IOS_DIR/utils" \
+  scripts/__tests__/fixtures/enrichedMarkdownInputMeasurement.mm \
+  "$ENRICHED_IOS_DIR/input/ENRMInputMeasurement.mm" \
+  -framework Foundation -framework UIKit -framework CoreGraphics \
+  -o .context/agent-self-testing/input-measurement-test
+xcrun simctl spawn "$IOS_SIMULATOR_UDID" "$PWD/.context/agent-self-testing/input-measurement-test"
+```
+
+A new iOS development client must also pass cold startup and repeated inner/outer-screen and fold
+transitions, with multiline drafts, paste, undo, IME composition, mentions, and clearing/restoring
+text. The standalone regression does not exercise Fabric state publication or the first-mount
+parser/formatter integration.
 
 ### Pi Dependency Upgrades
 
