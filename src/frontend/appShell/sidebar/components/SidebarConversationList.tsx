@@ -38,6 +38,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
+import { SidebarSessionPressable } from './SidebarSessionPressable/SidebarSessionPressable';
 
 type RegisterEndReached = (handler?: () => void) => void;
 
@@ -376,7 +377,7 @@ function SidebarSessionRow({
     });
   }
   const row = (
-    <Pressable
+    <SidebarSessionPressable
       accessibilityLabel={session.title || t('session.list.untitled')}
       accessibilityRole={isSelecting ? 'checkbox' : 'link'}
       accessibilityState={
@@ -417,7 +418,7 @@ function SidebarSessionRow({
           ) : null}
         </SidebarRowContent>
       )}
-    </Pressable>
+    </SidebarSessionPressable>
   );
   return (
     <Animated.View layout={rowLayout} exiting={rowExit}>
