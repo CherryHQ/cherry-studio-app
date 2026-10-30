@@ -34,6 +34,9 @@ export function useRemoteChatNavigation(
   return {
     draftId,
     identity,
+    // A newly selected desktop has no route draftId yet. Persist the composer's actual identity
+    // when another app may return after this process has been reclaimed.
+    returnTarget: { ...target, draftId: target.sessionId ? undefined : draftId },
     selectAgent: (agentId: string) => {
       // Read at click time: admission may have happened since the header last rendered. A submitted
       // start keeps its route; an undelivered one stays on the draft and still resends to its Agent.

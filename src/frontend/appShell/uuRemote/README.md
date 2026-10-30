@@ -8,7 +8,10 @@ Device details also expose reassociation when the user chose the wrong computer 
 `Backend.uuRemote` owns the external protocol, installation and iOS version checks, device-local SecureStore
 bindings and a single pending request. It uses this build's native callback scheme, preserves the
 originating chat/device target across process restarts, and validates and consumes correlated
-callbacks once. Encrypted UU device IDs never enter frontend state or the Cherry desktop protocol.
+callbacks once. Persistent bindings stay in SecureStore and never enter the Cherry desktop protocol.
+Observe filters the UU device ID and request correlation parameters before exporting navigation
+metrics; removing the callback route after mount is not a telemetry boundary. Remote chat supplies
+its effective draft ID so a callback can restore unsent input even after a process restart.
 Replacing a request makes older callbacks inert; callbacks expire after 30 minutes without imposing
 a short UI timeout while UU is waiting for a user decision. Bootstrap drains operations on disposal.
 

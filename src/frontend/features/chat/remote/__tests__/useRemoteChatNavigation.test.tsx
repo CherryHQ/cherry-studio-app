@@ -48,6 +48,37 @@ afterEach(async () => {
   renderer = undefined!;
 });
 
+it.each([{ connectionId: 'desktop' }, draft])(
+  'restores the same composer after a serialized return target and a fresh mount: %j',
+  async (target) => {
+    await render(target);
+    const identity = navigation.identity;
+    const draftId = navigation.draftId;
+    const returnTarget: RemoteChatTarget = JSON.parse(JSON.stringify(navigation.returnTarget));
+
+    await act(async () => renderer.unmount());
+    renderer = undefined!;
+    await render(returnTarget);
+
+    expect(navigation.identity).toBe(identity);
+    expect(navigation.draftId).toBe(draftId);
+    expect(navigation.returnTarget.connectionId).toBe(target.connectionId);
+    expect(mockOpen).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
+  },
+);
+
+it('returns to an existing session without carrying an obsolete draft identity', async () => {
+  await render({ ...draft, sessionId: 'existing' });
+  const returnTarget: RemoteChatTarget = JSON.parse(JSON.stringify(navigation.returnTarget));
+  expect(returnTarget).toEqual({ connectionId: 'desktop', agentId: 'a', sessionId: 'existing' });
+
+  await act(async () => renderer.unmount());
+  renderer = undefined!;
+  await render(returnTarget);
+  expect(navigation.identity).toBe('session:existing');
+});
+
 it('retargets an unsent draft without changing its composer or desktop identity', async () => {
   await render(draft);
   const identity = navigation.identity;
