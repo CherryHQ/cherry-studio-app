@@ -266,7 +266,7 @@ test.each([
 );
 
 function providerConfig(
-  id: 'exa-mcp' | 'searxng' | 'deepseek' | 'yuanbao' | 'crawl4ai',
+  id: 'exa-mcp' | 'searxng' | 'deepseek' | 'yuanbao' | 'crawl4ai' | 'desearch',
 ): WebSearchProvider {
   const preset = WEB_SEARCH_PROVIDER_PRESET_MAP[id];
   return {
