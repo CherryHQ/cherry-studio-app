@@ -1,9 +1,8 @@
 import { Stack, useIsPreview } from 'expo-router';
-import { View } from 'react-native';
 
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-import { HeaderAction } from '../HeaderAction';
+import { renderHeaderToolbarItem } from '../HeaderAction';
 import type { HeaderActionGroupProps } from './HeaderActionGroup';
 
 /** Delegates the action surface and adjacent-item grouping to the iOS native toolbar. */
@@ -14,7 +13,7 @@ export function HeaderActionGroup({ actions, placement, tone }: HeaderActionGrou
     return null;
   }
 
-  const actionSurfaceClassName = isLiquidGlassAvailable
+  const surfaceClassName = isLiquidGlassAvailable
     ? undefined
     : tone === 'inverse'
       ? 'rounded-full bg-constant-black/55'
@@ -22,14 +21,7 @@ export function HeaderActionGroup({ actions, placement, tone }: HeaderActionGrou
 
   return (
     <Stack.Toolbar placement={placement}>
-      {/* Expo converts toolbar children before rendering them, so View stays direct here. */}
-      {actions.map((action) => (
-        <Stack.Toolbar.View key={action.key}>
-          <View className={actionSurfaceClassName}>
-            <HeaderAction action={action} tone={tone} />
-          </View>
-        </Stack.Toolbar.View>
-      ))}
+      {actions.map((action) => renderHeaderToolbarItem(action, { surfaceClassName, tone }))}
     </Stack.Toolbar>
   );
 }

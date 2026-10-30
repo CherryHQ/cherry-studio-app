@@ -63,10 +63,6 @@ import {
 } from './runtime';
 import { createChatShareHandoff, type ChatShareTranslations } from './share/chatShareHandoff';
 
-// The folder glyphs as template images, for the native header button.
-const WORKSPACE_ICON = require('@/assets/header-toolbar/folder.png');
-const WORKSPACE_LINKED_ICON = require('@/assets/header-toolbar/folder-check.png');
-
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
 
@@ -122,7 +118,8 @@ function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
                   type: 'icon',
                   // The check marks a linked workspace, matching the selection in its sheet.
                   icon: workspace.folderId ? FolderCheckIcon : FolderIcon,
-                  nativeIcon: workspace.folderId ? WORKSPACE_LINKED_ICON : WORKSPACE_ICON,
+                  // SF Symbols has no checked folder; the filled one marks it on iOS.
+                  nativeIcon: workspace.folderId ? 'folder.fill' : 'folder',
                   accessibilityLabel: workspaceName
                     ? t('workspace.openCurrent', { name: workspaceName })
                     : t('workspace.open'),

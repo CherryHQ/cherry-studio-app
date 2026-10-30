@@ -66,7 +66,8 @@ export function MainHeaderView({
         style={{ height: mainHeaderRowHeight, paddingHorizontal: horizontalInset }}
       >
         {/* The chat route is a drawer root, so the route policy resolves this
-            leading action to the sidebar button, or to none beside a permanent sidebar. */}
+            leading action to the sidebar button, or to none when the file pane or a fold
+            holds the column. */}
         <View className="shrink-0 items-start">
           <HeaderActionGroup actions={leadingAction ? [leadingAction] : []} placement="left" />
         </View>

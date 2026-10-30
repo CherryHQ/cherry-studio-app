@@ -1,10 +1,11 @@
-import { resolveSidebarColumn } from '../resolveSidebarColumn';
+import { resolveSidebarColumn, resolveSidebarToggleAction } from '../resolveSidebarColumn';
 
 const wide = {
   content: 'sidebar' as const,
   fold: null,
   insetLeft: 0,
   insetRight: 0,
+  isCollapsed: false,
   isPaneInColumn: false,
   isWide: true,
   windowWidth: 951,
@@ -39,8 +40,28 @@ describe('resolveSidebarColumn', () => {
     expect(resolveSidebarColumn({ ...wide, isPaneInColumn: true })).toEqual({ kind: 'yielded' });
   });
 
-  test('reaches across an active fold down the window', () => {
-    const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+  test('hides a collapsed column until the window narrows or the file pane takes it', () => {
+    const collapsed = { ...wide, isCollapsed: true };
+    expect(resolveSidebarColumn(collapsed)).toEqual({ kind: 'collapsed' });
+    expect(resolveSidebarColumn({ ...collapsed, isWide: false })).toEqual({ kind: 'overlay' });
+    expect(resolveSidebarColumn({ ...collapsed, isPaneInColumn: true })).toEqual({
+      kind: 'yielded',
+    });
+  });
+
+  test('keeps a collapsed column on the leading side of a fold that divides the window', () => {
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
+    expect(resolveSidebarColumn({ ...wide, fold, isCollapsed: true })).toMatchObject({
+      kind: 'permanent',
+      width: 495,
+    });
+    expect(resolveSidebarColumn({ ...wide, fold: null, isCollapsed: true })).toEqual({
+      kind: 'collapsed',
+    });
+  });
+
+  test('reaches across a fold down the window', () => {
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
     expect(resolveSidebarColumn({ ...wide, fold })).toEqual({
       content: 'sidebar',
       foldGap: 40,
@@ -49,14 +70,27 @@ describe('resolveSidebarColumn', () => {
     });
   });
 
-  test('ignores a flat fold, a fold across the window, and a fold at the window edge', () => {
-    const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+  test('ignores a fold across the window and a fold at the window edge', () => {
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
     for (const ignored of [
-      { ...fold, isActive: false },
-      { height: 40, isActive: true, width: 951, x: 0, y: 300 },
+      { height: 40, width: 951, x: 0, y: 300 },
       { ...fold, x: 0 },
     ]) {
       expect(resolveSidebarColumn({ ...wide, fold: ignored })).toMatchObject({ width: 280 });
     }
+  });
+});
+
+describe('resolveSidebarToggleAction', () => {
+  test('opens an overlay and hides or shows a wide column', () => {
+    expect(resolveSidebarToggleAction({ kind: 'overlay' })).toBe('open');
+    expect(resolveSidebarToggleAction(resolveSidebarColumn(wide))).toBe('hide');
+    expect(resolveSidebarToggleAction({ kind: 'collapsed' })).toBe('show');
+  });
+
+  test('offers no button while the file pane or a fold holds the column', () => {
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
+    expect(resolveSidebarToggleAction({ kind: 'yielded' })).toBeUndefined();
+    expect(resolveSidebarToggleAction(resolveSidebarColumn({ ...wide, fold }))).toBeUndefined();
   });
 });

@@ -71,6 +71,7 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
             ? [
                 {
                   key: 'connection-actions',
+                  nativeIcon: 'ellipsis',
                   type: 'menu',
                   icon: EllipsisIcon,
                   accessibilityLabel: t('common.more'),

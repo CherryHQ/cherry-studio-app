@@ -144,6 +144,7 @@ function SkillDetailView({ skill }: { skill: SkillListItem }) {
               icon: EllipsisIcon,
               items: menuItems,
               key: 'skill-actions',
+              nativeIcon: 'ellipsis',
               type: 'menu',
             },
           ]

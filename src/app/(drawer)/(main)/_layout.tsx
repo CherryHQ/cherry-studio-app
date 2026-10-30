@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
-import { useIsSidebarPersistent } from '@/frontend/appShell/layout';
+import { useCanDockSidebar } from '@/frontend/appShell/layout';
 import { getRootHeaderStyle, paintingRouteId } from '@/frontend/appShell/navigation';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
@@ -11,22 +11,22 @@ export const unstable_settings = { initialRouteName: '(chat)' };
 
 /**
  * The content region beside the sidebar. In a wide window the sidebar stays beside every page here,
- * so its first-level destinations replace one another without a back step or push animation; a
- * compact window pushes the same pages over the chat. One tree serves both, so crossing between
- * them keeps every page mounted.
+ * so its first-level destinations replace one another without a back step or push animation and
+ * lead with the button that hides or shows the sidebar; a compact window pushes the same pages over
+ * the chat. One tree serves both, so crossing between them keeps every page mounted.
  */
 export default function MainStackLayout() {
   const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
-  const isSidebarPersistent = useIsSidebarPersistent();
+  const canDockSidebar = useCanDockSidebar();
   // Opened from the sidebar, a first-level page swaps in place; deeper pages still push.
   const destination = {
-    animation: isSidebarPersistent ? ('none' as const) : undefined,
-    gestureEnabled: !isSidebarPersistent,
+    animation: canDockSidebar ? ('none' as const) : undefined,
+    gestureEnabled: !canDockSidebar,
     headerShown: false,
   };
 
   return (
-    <RouteHeaderProvider rootAction={isSidebarPersistent ? 'none' : 'back'}>
+    <RouteHeaderProvider rootAction={canDockSidebar ? 'drawer' : 'back'}>
       <Stack
         screenOptions={{
           ...headerScreenOptions,

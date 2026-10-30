@@ -479,6 +479,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
                 },
               ],
               key: 'mcp-server-actions',
+              nativeIcon: 'ellipsis',
               testID: 'mcp-server-actions',
               type: 'menu',
             },

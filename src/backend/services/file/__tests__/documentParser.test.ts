@@ -18,6 +18,7 @@ const file = (name: string) => ({
 const reader = () => ({
   readBytes: jest.fn(async () => new Uint8Array([1, 2, 3])),
   readDocumentText: jest.fn(async () => ({ text: 'A1: 2 [=1+1]', truncated: false })),
+  readImageText: jest.fn(async () => undefined),
 });
 const signal = () => new AbortController().signal;
 

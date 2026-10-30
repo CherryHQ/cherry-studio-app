@@ -1,5 +1,4 @@
 import {
-  createToolResultPreview,
   formatToolResultJson,
   getToolResultCopyText,
   parseJsonToolResultText,
@@ -21,56 +20,26 @@ describe('tool result content helpers', () => {
     expect(formatToolResultJson(circular)).toBe('[object Object]');
   });
 
-  it('shares a 4,000-character preview budget across text and JSON while keeping full copy text', () => {
+  it('copies every result block without a length budget', () => {
+    const first = 'a'.repeat(5_000);
+    const json = { answer: 'b'.repeat(5_000), tail: 'original tail' };
     const contents: ToolResultContent[] = [
-      { kind: 'text', content: 'a'.repeat(3_990) },
-      { kind: 'json', value: { answer: 'b'.repeat(100), tail: 'original tail' } },
-      { kind: 'text', content: 'hidden final block' },
+      { kind: 'text', content: first },
+      { kind: 'json', value: json },
+      { kind: 'text', content: 'final block' },
     ];
-    const preview = createToolResultPreview(contents);
-    const previewText = getToolResultCopyText(preview.contents);
-
-    expect(preview.isTruncated).toBe(true);
-    expect(preview.contents).toHaveLength(2);
-    expect(preview.contents[1]).toMatchObject({ kind: 'code', language: 'json' });
-    expect(previewText).toHaveLength(4_002); // Two-character separator is added only for copying.
-    expect(previewText).not.toContain('original tail');
-    expect(previewText).not.toContain('hidden final block');
-    expect(getToolResultCopyText(contents)).toContain('original tail');
-    expect(getToolResultCopyText(contents)).toContain('hidden final block');
+    expect(getToolResultCopyText(contents)).toBe(
+      [first, JSON.stringify(json, null, 2), 'final block'].join('\n\n'),
+    );
   });
 
-  it('leaves short and exact-limit output complete', () => {
-    for (const text of ['Short result', 'x'.repeat(4_000)]) {
-      const contents: ToolResultContent[] = [{ kind: 'text', content: text }];
-      expect(createToolResultPreview(contents)).toEqual({ contents, isTruncated: false });
-    }
-  });
-
-  it('does not split an emoji at the preview boundary or include image data in text copies', () => {
-    const image = { kind: 'image', data: 'image-payload', mimeType: 'image/png' } as const;
-    const contents: ToolResultContent[] = [
-      { kind: 'text', content: `${'a'.repeat(3_999)}😀tail` },
-      image,
-    ];
-    const preview = createToolResultPreview(contents);
-
-    expect(preview.contents).toEqual([{ kind: 'text', content: 'a'.repeat(3_999) }, image]);
-    expect(preview.isTruncated).toBe(true);
-    expect(getToolResultCopyText(contents)).toBe(`${'a'.repeat(3_999)}😀tail`);
-  });
-
-  it('does not serialize JSON blocks once the preview budget is exhausted', () => {
-    const toJSON = jest.fn(() => 'hidden output');
-    const contents: ToolResultContent[] = [
-      { kind: 'text', content: 'a'.repeat(4_000) },
-      { kind: 'json', value: { toJSON } },
-    ];
-    const preview = createToolResultPreview(contents);
-
-    expect(preview.contents).toHaveLength(1);
-    expect(preview.isTruncated).toBe(true);
-    expect(toJSON).not.toHaveBeenCalled();
-    expect(getToolResultCopyText(contents)).toContain('hidden output');
+  it('preserves emoji and trailing newlines without copying image data', () => {
+    const text = `${'a'.repeat(3_999)}😀tail\n\n`;
+    expect(
+      getToolResultCopyText([
+        { kind: 'text', content: text },
+        { kind: 'image', data: 'image-payload', mimeType: 'image/png' },
+      ]),
+    ).toBe(text);
   });
 });

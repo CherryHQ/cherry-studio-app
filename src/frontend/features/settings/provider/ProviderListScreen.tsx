@@ -298,6 +298,7 @@ function ProviderListView() {
         icon: EllipsisIcon,
         items: menuItems,
         key: 'provider-actions',
+        nativeIcon: 'ellipsis',
         testID: 'provider-actions',
         type: 'menu',
       },

@@ -11,6 +11,7 @@ export {
   useIsFormContentConstrained,
 } from './ScreenContentFrame';
 export {
+  type FoldRegion,
   FoldRegionProvider,
   FoldRegionReporter,
   useFoldRegion,
@@ -21,5 +22,5 @@ export {
 } from './FoldRegion';
 export { PaneChromeProvider, usePaneChrome } from './PaneChrome';
 export { isAcross, resolvePaneSplit, type PaneSplit } from './paneSplit';
-export { useIsSidebarPersistent, useWindowClass } from './useWindowClass';
+export { useCanDockSidebar, useWindowClass } from './useWindowClass';
 export { resolveFilePaneWidth, type WindowClass, windowRegionWidths } from './windowClass';

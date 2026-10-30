@@ -38,18 +38,26 @@ export const UserMessage = memo(function UserMessage({
     <View className="w-full items-end">
       <View className="w-[88%] items-end gap-2">
         {attachments || fileParts.length > 0 ? (
-          <UserMessageAttachments>
-            {attachments ?? fileParts.map(({ part }) => <FilePart key={part.url} part={part} />)}
-          </UserMessageAttachments>
-        ) : null}
-        {notices.length > 0 ? (
-          <View className="items-end gap-1">
-            {notices.map((notice) => (
-              <View className="flex-row items-start gap-1.5" key={notice.key}>
-                <TriangleAlertIcon className="mt-0.5 size-3.5 text-warning" />
-                <Text className="shrink text-muted-foreground text-xs">{notice.text}</Text>
+          <View className="w-full items-end gap-1">
+            <UserMessageAttachments>
+              {attachments ?? fileParts.map(({ part }) => <FilePart key={part.url} part={part} />)}
+            </UserMessageAttachments>
+            {notices.length > 0 ? (
+              <View className="w-full items-end gap-1">
+                {notices.map((notice) =>
+                  notice.tone === 'neutral' ? (
+                    <Text className="text-right text-muted-foreground text-xs" key={notice.key}>
+                      {notice.text}
+                    </Text>
+                  ) : (
+                    <View className="flex-row items-start gap-1.5" key={notice.key}>
+                      <TriangleAlertIcon className="mt-0.5 size-3.5 text-warning" />
+                      <Text className="shrink text-muted-foreground text-xs">{notice.text}</Text>
+                    </View>
+                  ),
+                )}
               </View>
-            ))}
+            ) : null}
           </View>
         ) : null}
         {bodyMessage ? (

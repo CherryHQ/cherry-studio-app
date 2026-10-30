@@ -20,7 +20,10 @@ export function useWindowClass(): WindowClass {
   });
 }
 
-/** Wide windows keep the sidebar as a column beside the content instead of an overlay. */
-export function useIsSidebarPersistent() {
+/**
+ * Wide windows have room for the sidebar as a column beside the content instead of an overlay. The
+ * sidebar decides whether the column is showing.
+ */
+export function useCanDockSidebar() {
   return useWindowClass() === 'wide';
 }

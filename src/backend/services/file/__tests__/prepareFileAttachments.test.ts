@@ -6,6 +6,7 @@ import {
 
 import { parseAnydocDocument } from '../anydocParser';
 import { DocumentTextError } from '../documentText';
+import { ImageTextError } from '../imageText';
 import { prepareFileAttachments } from '../prepareFileAttachments';
 
 jest.mock('../anydocParser', () => ({
@@ -29,6 +30,7 @@ function input(files: FileAttachmentFact[]) {
     availableFiles: new Map(files.map((file) => [file.fileEntryId, file])),
     currentFileEntryIds: files.map((file) => file.fileEntryId),
     readBytes: jest.fn(async () => new TextEncoder().encode('hello')),
+    readImageText: jest.fn(async () => undefined),
     signal: signal(),
     target: { purpose: 'chat' as const, acceptsImages: true },
   };
@@ -77,7 +79,6 @@ describe('prepareFileAttachments', () => {
       for (const [file, acceptsImages, code] of [
         [{ ...image, mediaType: 'image/heic' }, true, 'unsupported-type'],
         [{ ...image, size: MAX_IMAGE_ATTACHMENT_BYTES + 1 }, true, 'file-bytes'],
-        [image, false, 'model-unsupported'],
       ] as const) {
         await expect(
           prepareFileAttachments({ ...input([file]), target: { purpose, acceptsImages } }),
@@ -86,11 +87,71 @@ describe('prepareFileAttachments', () => {
     }
     await expect(
       prepareFileAttachments({
+        ...input([image]),
+        target: { purpose: 'painting', acceptsImages: false },
+      }),
+    ).rejects.toMatchObject({ issue: { code: 'model-unsupported' } });
+    await expect(
+      prepareFileAttachments({
         ...input([text]),
         target: { purpose: 'painting', acceptsImages: true },
       }),
     ).rejects.toMatchObject({ issue: { code: 'unsupported-type' } });
   });
+
+  test('sends bounded OCR text for current and historical images only when the model cannot see them', async () => {
+    const historical = { ...image, fileEntryId: SECOND_ID, name: 'earlier.png' };
+    const readImageText = jest.fn(async () => ({ text: '中文🍒extra', truncated: false }));
+    const request = {
+      ...input([image, historical]),
+      currentFileEntryIds: [FILE_ID],
+      historicalFileEntryIds: [SECOND_ID],
+      readImageText,
+      limits: { maxBytesPerFile: 1, maxCharactersPerFile: 3, maxTotalCharacters: 6 },
+    };
+    const prepared = await prepareFileAttachments({
+      ...request,
+      target: { purpose: 'chat', acceptsImages: false },
+    });
+    for (const id of [FILE_ID, SECOND_ID]) {
+      expect(prepared.get(id)).toMatchObject({
+        content: { kind: 'text', text: '中文🍒' },
+        report: {
+          mode: 'image-text',
+          parser: 'native-image-ocr',
+          requestTruncated: true,
+          includedCharacters: 3,
+        },
+      });
+    }
+    expect(request.readBytes).not.toHaveBeenCalled();
+    readImageText.mockClear();
+    const native = await prepareFileAttachments(request);
+    expect(native.get(FILE_ID)).toEqual({
+      file: image,
+      report: { mode: 'image', sourceTruncated: false, requestTruncated: false },
+    });
+    expect(readImageText).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['empty', 'image-ocr-empty'],
+    ['failed', 'image-ocr-failed'],
+    ['unsupported', 'image-ocr-unsupported'],
+  ] as const)(
+    'stops a send when image OCR is %s, preserving its actionable cause',
+    async (failure, code) => {
+      await expect(
+        prepareFileAttachments({
+          ...input([image]),
+          target: { purpose: 'chat', acceptsImages: false },
+          readImageText: async () => {
+            throw new ImageTextError(failure);
+          },
+        }),
+      ).rejects.toMatchObject({ issue: { code, fileEntryId: FILE_ID, name: image.name } });
+    },
+  );
 
   test('uses the painting model count limit for the entire selection', async () => {
     await expect(

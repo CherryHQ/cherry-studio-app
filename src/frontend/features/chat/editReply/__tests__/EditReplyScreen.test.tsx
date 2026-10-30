@@ -14,6 +14,10 @@ import { EditReplyScreen } from '../EditReplyScreen';
 const mockBack = jest.fn();
 const mockEditMessage = jest.fn();
 const mockToast = jest.fn();
+const mockConfirm = jest.fn();
+const mockAllowLeave = jest.fn();
+let mockPreventRemove = false;
+let mockOnPreventedRemove: (event: { repeat: () => void }) => void = () => {};
 let mockHeaderActions: readonly HeaderToolbarAction[] = [];
 
 const parts: AgentMessagePart[] = [
@@ -49,6 +53,11 @@ const mockMessage: AgentMessageView = {
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ sessionId: 'session', messageId: 'answer' }),
+  usePreventRemove: (prevent: boolean, callback: typeof mockOnPreventedRemove) => {
+    mockPreventRemove = prevent;
+    mockOnPreventedRemove = callback;
+    return mockAllowLeave;
+  },
   useRouter: () => ({ back: mockBack }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -74,6 +83,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
   ContentState: { Error: () => null, Loading: () => null },
   MessagePart: { Process: ({ children }: { children: ReactNode }) => children },
   Section: ({ children }: { children: ReactNode }) => children,
+  useAlert: () => ({ alert: { confirm: mockConfirm } }),
   useToast: () => ({ toast: { show: mockToast } }),
 }));
 jest.mock('@/frontend/data', () => ({
@@ -127,7 +137,33 @@ describe('EditReplyScreen', () => {
       label: 'chat.messageActions.editSaved',
       variant: 'success',
     });
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockAllowLeave.mock.invocationCallOrder[0]).toBeLessThan(
+      mockBack.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('confirms before leaving with unsaved edits', async () => {
+    expect(mockPreventRemove).toBe(false);
+    act(() => renderer.root.findAllByType(TextInput)[1]!.props.onChangeText('Corrected answer'));
+    expect(mockPreventRemove).toBe(true);
+
+    const repeat = jest.fn();
+    act(() => mockOnPreventedRemove({ repeat }));
+    expect(mockConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'chat.messageActions.editDiscardTitle' }),
+    );
+    act(() => mockConfirm.mock.calls[0][0].onConfirm());
+    expect(repeat).toHaveBeenCalled();
+    expect(mockPreventRemove).toBe(false);
+  });
+
+  it('holds the page without a prompt while a save is in flight', () => {
+    act(() => renderer.root.findAllByType(TextInput)[1]!.props.onChangeText('Corrected answer'));
+    mockEditMessage.mockReturnValueOnce(new Promise(() => {}));
+    act(() => void save().onPress());
+    expect(mockPreventRemove).toBe(true);
+    act(() => mockOnPreventedRemove({ repeat: jest.fn() }));
+    expect(mockConfirm).not.toHaveBeenCalled();
   });
 
   it('keeps the drafts on the page when the answer changed meanwhile', async () => {

@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { usePdfOcrState } from '@/frontend/hooks/file';
+import { useFileOcrState } from '@/frontend/hooks/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { FilePart } from '../FilePart';
@@ -11,7 +11,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
     jest.requireActual('react').createElement('View', props),
 }));
 
-jest.mock('@/frontend/hooks/file', () => ({ usePdfOcrState: jest.fn() }));
+jest.mock('@/frontend/hooks/file', () => ({ useFileOcrState: jest.fn() }));
 
 jest.mock('@/frontend/components/FileEntryPreview', () => {
   const { createElement } = jest.requireActual('react');
@@ -42,13 +42,13 @@ describe('FilePart', () => {
       providerMetadata: { cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' } },
     };
     jest
-      .mocked(usePdfOcrState)
-      .mockReturnValue({ status: 'recognizing', completedPages: 12, totalPages: 40 });
+      .mocked(useFileOcrState)
+      .mockReturnValue({ status: 'recognizing', kind: 'pdf', completedPages: 12, totalPages: 40 });
     const preview = render(<FilePart part={part} />).root.findByType('FileEntryPreview');
     expect(preview.props.transfer).toMatchObject({ state: 'processing', progress: 0.3 });
     expect(render(preview.props.badge).toJSON()).toMatchObject({ children: ['12/40'] });
 
-    jest.mocked(usePdfOcrState).mockReturnValue(undefined);
+    jest.mocked(useFileOcrState).mockReturnValue(undefined);
     const idle = render(<FilePart part={part} />).root.findByType('FileEntryPreview');
     expect(idle.props.transfer).toBeUndefined();
     expect(idle.props.badge).toBeUndefined();

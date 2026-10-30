@@ -2,6 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import {
+  ContextMenu,
   ContentState,
   SelectionIndicator,
   Spinner,
@@ -376,7 +377,7 @@ function SidebarSessionRow({
     });
   }
   const row = (
-    <Pressable
+    <ContextMenu.Trigger
       accessibilityLabel={session.title || t('session.list.untitled')}
       accessibilityRole={isSelecting ? 'checkbox' : 'link'}
       accessibilityState={
@@ -417,7 +418,7 @@ function SidebarSessionRow({
           ) : null}
         </SidebarRowContent>
       )}
-    </Pressable>
+    </ContextMenu.Trigger>
   );
   return (
     <Animated.View layout={rowLayout} exiting={rowExit}>
