@@ -19,6 +19,32 @@ import {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
+  test('keeps DeepSeek search on the Mobile endpoint without broadening model membership', () => {
+    const provider = { id: 'deepseek-copy', presetProviderId: 'deepseek' };
+    expect(
+      providerRegistryService.resolveServerTools(
+        provider,
+        'deepseek-v4-pro',
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      ),
+    ).toEqual(['web-search']);
+    for (const endpoint of [
+      ENDPOINT_TYPE.OPENAI_RESPONSES,
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    ]) {
+      expect(
+        providerRegistryService.resolveServerTools(provider, 'deepseek-v4-pro', endpoint),
+      ).toEqual([]);
+    }
+    expect(
+      providerRegistryService.resolveServerTools(
+        provider,
+        'deepseek-v3',
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      ),
+    ).toEqual([]);
+  });
+
   test('keeps QwenCloud native tool membership bound to the requested endpoint', () => {
     const provider = { id: 'qwencloud-copy', presetProviderId: 'qwencloud' };
     expect(

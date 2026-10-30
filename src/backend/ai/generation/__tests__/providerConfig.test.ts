@@ -9,6 +9,39 @@ import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../providerConfig';
 
 describe('providerToAiSdkConfig', () => {
+  it.each(['dashscope', 'qwencloud'])(
+    'derives the %s image origin from a full chat endpoint override',
+    async (presetProviderId) => {
+      const provider = createProvider({
+        id: `${presetProviderId}-copy`,
+        presetProviderId,
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            adapterFamily: 'openai-compatible',
+            baseUrl: 'https://proxy.example.com/qwen/compatible-mode/v1/chat/completions#',
+          },
+        },
+      });
+      const config = await providerToAiSdkConfig(
+        provider,
+        {
+          ...createModel(provider.id, 'qwen-image-2.0'),
+          capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        },
+        createRuntime(),
+      );
+      expect(config).toMatchObject({
+        providerId: 'dashscope',
+        endpoint: 'chat/completions',
+        providerSettings: {
+          baseURL: 'https://proxy.example.com/qwen/compatible-mode/v1',
+          imageBaseURL: 'https://proxy.example.com/qwen',
+        },
+      });
+    },
+  );
+
   it.each([
     ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
     ENDPOINT_TYPE.ANTHROPIC_MESSAGES,

@@ -656,11 +656,13 @@ function buildDmxapiConfig(ctx: BuilderContext): ProviderConfig<'dmxapi'> {
 }
 
 function buildDashScopeConfig(ctx: BuilderContext): ProviderConfig<'dashscope'> {
-  const chatBaseURL = formatBaseURL(
-    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
-    ctx.actualProvider,
-    ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ).replace(/\/+$/, '');
+  const { baseURL: chatBaseURL } = routeToEndpoint(
+    formatBaseURL(
+      getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+      ctx.actualProvider,
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    ),
+  );
   return {
     providerId: 'dashscope',
     endpoint: ctx.endpoint,
