@@ -1,7 +1,0 @@
-{
-  "platforms": ["apple"],
-  "apple": {
-    "podspecPath": "ios/FoldRegion.podspec",
-    "modules": ["FoldRegionModule"]
-  }
-}

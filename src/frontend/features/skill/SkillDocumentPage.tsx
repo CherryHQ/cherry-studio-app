@@ -105,6 +105,12 @@ function DocumentContent({
                 ? FileTextIcon
                 : LanguagesIcon,
             key: 'skill-translation',
+            // The progress glyph animates, so translating keeps the custom view.
+            nativeIcon: translation.isFetching
+              ? undefined
+              : showTranslation
+                ? 'doc.text'
+                : 'translate',
             testID: 'skill-translation',
             ...(translation.data
               ? { onPress: () => setShowTranslation((shown) => !shown), type: 'icon' as const }

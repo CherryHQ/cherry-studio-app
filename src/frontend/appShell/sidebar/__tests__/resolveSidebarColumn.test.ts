@@ -50,18 +50,18 @@ describe('resolveSidebarColumn', () => {
   });
 
   test('keeps a collapsed column on the leading side of a fold that divides the window', () => {
-    const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
     expect(resolveSidebarColumn({ ...wide, fold, isCollapsed: true })).toMatchObject({
       kind: 'permanent',
       width: 495,
     });
-    expect(
-      resolveSidebarColumn({ ...wide, fold: { ...fold, isActive: false }, isCollapsed: true }),
-    ).toEqual({ kind: 'collapsed' });
+    expect(resolveSidebarColumn({ ...wide, fold: null, isCollapsed: true })).toEqual({
+      kind: 'collapsed',
+    });
   });
 
-  test('reaches across an active fold down the window', () => {
-    const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+  test('reaches across a fold down the window', () => {
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
     expect(resolveSidebarColumn({ ...wide, fold })).toEqual({
       content: 'sidebar',
       foldGap: 40,
@@ -70,11 +70,10 @@ describe('resolveSidebarColumn', () => {
     });
   });
 
-  test('ignores a flat fold, a fold across the window, and a fold at the window edge', () => {
-    const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+  test('ignores a fold across the window and a fold at the window edge', () => {
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
     for (const ignored of [
-      { ...fold, isActive: false },
-      { height: 40, isActive: true, width: 951, x: 0, y: 300 },
+      { height: 40, width: 951, x: 0, y: 300 },
       { ...fold, x: 0 },
     ]) {
       expect(resolveSidebarColumn({ ...wide, fold: ignored })).toMatchObject({ width: 280 });
@@ -90,7 +89,7 @@ describe('resolveSidebarToggleAction', () => {
   });
 
   test('offers no button while the file pane or a fold holds the column', () => {
-    const fold = { height: 669, isActive: true, width: 40, x: 455, y: 0 };
+    const fold = { height: 669, width: 40, x: 455, y: 0 };
     expect(resolveSidebarToggleAction({ kind: 'yielded' })).toBeUndefined();
     expect(resolveSidebarToggleAction(resolveSidebarColumn({ ...wide, fold }))).toBeUndefined();
   });

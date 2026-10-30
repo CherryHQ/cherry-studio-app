@@ -668,10 +668,27 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
    if (tmp_fontSize != map.end()) {
      fromRawValue(context, tmp_fontSize->second, result.fontSize);
 diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
-index 828077550fab215bec1bb94639279da768367b67..d9ebfc3adf901f8b4554d383a5c6517330a9ee44 100644
+index 828077550fab215bec1bb94639279da768367b67..dc4e4ffef0d67e18795d19c47d87b2cd875a99a6 100644
 --- a/ios/input/ENRMInputFormatter.mm
 +++ b/ios/input/ENRMInputFormatter.mm
-@@ -144,6 +144,9 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+@@ -118,7 +118,15 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+                         style:(ENRMInputFormatterStyle *)style
+                 scopedToRange:(NSRange)scope
+ {
+-  NSTextStorage *textStorage = textView.textStorage;
++  [self applyFormattingRanges:ranges toTextStorage:textView.textStorage style:style scopedToRange:scope];
++  ENRMSetNeedsDisplay(textView);
++}
++
++- (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
++                 toTextStorage:(NSTextStorage *)textStorage
++                         style:(ENRMInputFormatterStyle *)style
++                 scopedToRange:(NSRange)scope
++{
+   NSUInteger textLength = textStorage.length;
+ 
+   if (textLength == 0) {
+@@ -144,6 +152,9 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
    ENRMRemoveAttributeIfPresent(textStorage, NSUnderlineStyleAttributeName, scopeRange, changed);
    ENRMRemoveAttributeIfPresent(textStorage, NSStrikethroughStyleAttributeName, scopeRange, changed);
    ENRMRemoveAttributeIfPresent(textStorage, NSBackgroundColorAttributeName, scopeRange, changed);
@@ -681,6 +698,46 @@ index 828077550fab215bec1bb94639279da768367b67..d9ebfc3adf901f8b4554d383a5c65173
  
    UIFontDescriptorSymbolicTraits *traitMap =
        (UIFontDescriptorSymbolicTraits *)calloc(scopeLength, sizeof(UIFontDescriptorSymbolicTraits));
+@@ -211,8 +222,6 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+     }];
+     [layoutManager ensureLayoutForCharacterRange:scopeRange];
+   }
+-
+-  ENRMSetNeedsDisplay(textView);
+ }
+ 
+ - (void)applyBlockRanges:(NSArray<ENRMBlockRange *> *)blockRanges
+@@ -229,12 +238,20 @@ - (void)applyBlockRanges:(NSArray<ENRMBlockRange *> *)blockRanges
+               toTextView:(ENRMPlatformTextView *)textView
+                    style:(ENRMInputFormatterStyle *)style
+            scopedToRange:(NSRange)scope
++{
++  [self applyBlockRanges:blockRanges toTextStorage:textView.textStorage style:style scopedToRange:scope];
++  ENRMSetNeedsDisplay(textView);
++}
++
++- (void)applyBlockRanges:(NSArray<ENRMBlockRange *> *)blockRanges
++            toTextStorage:(NSTextStorage *)textStorage
++                    style:(ENRMInputFormatterStyle *)style
++            scopedToRange:(NSRange)scope
+ {
+   if (_blockHandlers.count == 0) {
+     return;
+   }
+ 
+-  NSTextStorage *textStorage = textView.textStorage;
+   NSUInteger textLength = textStorage.length;
+   if (textLength == 0) {
+     return;
+@@ -338,8 +355,6 @@ - (void)applyBlockRanges:(NSArray<ENRMBlockRange *> *)blockRanges
+   }
+ 
+   [textStorage endEditing];
+-
+-  ENRMSetNeedsDisplay(textView);
+ }
+ 
+ /// Applies `blockFont` over `range` while preserving the symbolic traits already
 diff --git a/ios/input/ENRMInputFormatterStyle.h b/ios/input/ENRMInputFormatterStyle.h
 index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcdb6516526 100644
 --- a/ios/input/ENRMInputFormatterStyle.h
@@ -694,10 +751,113 @@ index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcd
  @property (nonatomic, assign) BOOL underline;
  @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
 diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
-index 7e72cff2624c636d78192c02a7f5db79d79f37b6..478c1d002bb6dab05e2f70d30904052f5a6d69bd 100644
+index 7e72cff2624c636d78192c02a7f5db79d79f37b6..5772cd2e2c29668cdbd2a07a01741a20e27e79f7 100644
 --- a/ios/input/EnrichedMarkdownTextInput.mm
 +++ b/ios/input/EnrichedMarkdownTextInput.mm
-@@ -1682,6 +1682,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
+@@ -13,6 +13,7 @@
+ #import "ENRMInputEventEmitter.h"
+ #import "ENRMInputFormatter.h"
+ #import "ENRMInputLayoutManager.h"
++#import "ENRMInputMeasurement.h"
+ #import "ENRMInputLinkPrompt.h"
+ #import "ENRMInputListMarkerDrawer.h"
+ #import "ENRMInputParser.h"
+@@ -42,7 +43,7 @@
+ #import <ReactNativeEnrichedMarkdown/RCTComponentViewHelpers.h>
+ 
+ #import "EnrichedMarkdownTextInputShadowNode.h"
+-#import "HeightUpdateUtils.h"
++#import <react/utils/ManagedObjectWrapper.h>
+ #import "RCTFabricComponentsPlugins.h"
+ #import <React/RCTConversions.h>
+ 
+@@ -316,7 +317,11 @@ - (void)updateState:(const facebook::react::State::Shared &)state
+ 
+ - (void)requestHeightUpdate
+ {
+-  ENRMRequestHeightUpdate<EnrichedMarkdownTextInputState>(_state, _heightUpdateCounter, self);
++  if (!_state) return;
++  // UIKit owns editing on main. Publish an immutable measurement snapshot in
++  // Fabric state so background layout never has to synchronously call us back.
++  NSAttributedString *text = ENRMInputMeasurementText(ENRMGetAttributedText(_textView), _textView.typingAttributes);
++  _state->updateState(EnrichedMarkdownTextInputState(++_heightUpdateCounter, wrapManagedObject(text)));
+ }
+ 
+ /// Yoga-resolved direction inherited from any ancestor `direction` style.
+@@ -338,6 +343,7 @@ - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+     _resolvedLayoutDirection = resolved;
+     if (_writingDirectionMode == ENRMWritingDirectionModeFirstStrong && _textView.textStorage.length > 0) {
+       [self applyFormatting];
++      [self requestHeightUpdate];
+     }
+   }
+ }
+@@ -346,32 +352,8 @@ - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+ 
+ - (CGSize)measureSize:(CGFloat)maxWidth
+ {
+-  NSMutableAttributedString *measuredText =
+-      [[NSMutableAttributedString alloc] initWithAttributedString:ENRMGetAttributedText(_textView)];
+-
+-  // Empty input should still be the height of a single line.
+-  // Use typingAttributes so the measurement matches the actual configured font.
+-  if (measuredText.length == 0) {
+-    [measuredText appendAttributedString:[[NSAttributedString alloc] initWithString:@"I"
+-                                                                         attributes:_textView.typingAttributes]];
+-  }
+-
+-  // Trailing newlines are not counted by boundingRectWithSize — append
+-  // a mock character so the extra line is included in the height.
+-  if (measuredText.length > 0) {
+-    unichar lastChar = [measuredText.string characterAtIndex:measuredText.length - 1];
+-    if ([[NSCharacterSet newlineCharacterSet] characterIsMember:lastChar]) {
+-      [measuredText appendAttributedString:[[NSAttributedString alloc] initWithString:@"I"
+-                                                                           attributes:_textView.typingAttributes]];
+-    }
+-  }
+-
+-  CGRect boundingBox =
+-      [measuredText boundingRectWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)
+-                                 options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+-                                 context:nil];
+-
+-  return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
++  return ENRMMeasureInputText(ENRMInputMeasurementText(ENRMGetAttributedText(_textView), _textView.typingAttributes),
++                              maxWidth);
+ }
+ 
+ #pragma mark - Props
+@@ -515,10 +497,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     writingDirectionChanged = YES;
+   }
+ 
++  BOOL importedDefaultValue = NO;
+   if (newViewProps.defaultValue != oldViewProps.defaultValue) {
+     if (!newViewProps.defaultValue.empty() && oldViewProps.defaultValue.empty()) {
+       NSString *markdown = [NSString stringWithUTF8String:newViewProps.defaultValue.c_str()];
+       [self importMarkdown:markdown];
++      importedDefaultValue = YES;
+     }
+   }
+ 
+@@ -530,12 +514,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     if (_formattingStore.allRanges.count > 0) {
+       [self applyFormatting];
+     }
+-
+-    [self requestHeightUpdate];
+   } else if (writingDirectionChanged && _textView.textStorage.length > 0) {
+     [self applyFormatting];
+   }
+ 
++  if (styleChanged || writingDirectionChanged || importedDefaultValue) {
++    [self requestHeightUpdate];
++  }
++
+   [super updateProps:props oldProps:oldProps];
+ }
+ 
+@@ -1682,6 +1668,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
  - (void)handleTextChanged
  {
    if (_editSession.isComposing) {
@@ -706,10 +866,20 @@ index 7e72cff2624c636d78192c02a7f5db79d79f37b6..478c1d002bb6dab05e2f70d30904052f
    }
  
 diff --git a/ios/input/InputStylePropsUtils.h b/ios/input/InputStylePropsUtils.h
-index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa00e998c6 100644
+index 1d28946d1ec4e46fc0d502d35adec208645674ed..740f65a1046fb98308442b7bd1673d89d46fb5d2 100644
 --- a/ios/input/InputStylePropsUtils.h
 +++ b/ios/input/InputStylePropsUtils.h
-@@ -133,7 +133,8 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
+@@ -48,7 +48,8 @@ static BOOL applyHeadingLevelProps(ENRMInputFormatterStyle *style, NSInteger lev
+ }
+ 
+ template <typename InputProps>
+-BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newProps, const InputProps &oldProps)
++BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newProps, const InputProps &oldProps,
++                         bool renderLinkIcons = true)
+ {
+   BOOL changed = NO;
+ 
+@@ -133,7 +134,8 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
          const auto &newVariant = newProps.markdownStyle.linkVariants[i];
          const auto &oldVariant = oldProps.markdownStyle.linkVariants[i];
          if (newVariant.pattern != oldVariant.pattern || newVariant.color != oldVariant.color ||
@@ -719,7 +889,7 @@ index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa
            linkVariantsChanged = YES;
            break;
          }
-@@ -147,6 +148,21 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
+@@ -147,6 +149,21 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
          variant.pattern = [[NSString alloc] initWithUTF8String:entry.pattern.c_str()];
          variant.color = RCTUIColorFromSharedColor(entry.color);
          variant.underline = entry.underline;
@@ -727,10 +897,10 @@ index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa
 +        NSData *iconData = [[NSData alloc] initWithBase64EncodedString:iconBase64 options:0];
 +        RCTUIImage *icon = iconData ? [[RCTUIImage alloc] initWithData:iconData] : nil;
 +#if !TARGET_OS_OSX
-+        if (icon && entry.iconTint) {
++        if (renderLinkIcons && icon && entry.iconTint) {
 +          icon = [icon imageWithTintColor:variant.color renderingMode:UIImageRenderingModeAlwaysOriginal];
 +        }
-+        if (icon) {
++        if (renderLinkIcons && icon) {
 +          RCTUIGraphicsImageRenderer *renderer = ImageRendererForSize(icon.size);
 +          icon = [renderer imageWithActions:^(RCTUIGraphicsImageRendererContext *context) {
 +            [icon drawAtPoint:CGPointZero blendMode:kCGBlendModeNormal alpha:0.8];
@@ -1886,6 +2056,306 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b03
  }
  
  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender
+diff --git a/ios/input/ENRMInputFormatter.h b/ios/input/ENRMInputFormatter.h
+index f7166a42af2ae4c07f7f3e192c5b7e91c3a5c22d..86353ab2ba682c42a35c776e67be45b81215c1a2 100644
+--- a/ios/input/ENRMInputFormatter.h
++++ b/ios/input/ENRMInputFormatter.h
+@@ -11,6 +11,18 @@ NS_ASSUME_NONNULL_BEGIN
+ 
+ @interface ENRMInputFormatter : NSObject
+ 
++/// Shared by the live editor and its view-free initial measurement. A detached
++/// storage belongs to the calling thread and has no view or layout manager.
++- (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
++                 toTextStorage:(NSTextStorage *)textStorage
++                         style:(ENRMInputFormatterStyle *)style
++                 scopedToRange:(NSRange)scope;
++
++- (void)applyBlockRanges:(NSArray<ENRMBlockRange *> *)blockRanges
++            toTextStorage:(NSTextStorage *)textStorage
++                    style:(ENRMInputFormatterStyle *)style
++            scopedToRange:(NSRange)scope;
++
+ - (nullable id<ENRMStyleHandler>)handlerForStyleType:(ENRMInputStyleType)type;
+ - (nullable id<ENRMBlockHandler>)handlerForBlockType:(ENRMInputBlockType)type;
+ 
+diff --git a/ios/input/ENRMInputMeasurement.h b/ios/input/ENRMInputMeasurement.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..9757495b5a9e176e228b47b4915e13716069ab38
+--- /dev/null
++++ b/ios/input/ENRMInputMeasurement.h
+@@ -0,0 +1,14 @@
++#pragma once
++
++#import "ENRMUIKit.h"
++
++NS_ASSUME_NONNULL_BEGIN
++
++/// Capture on the text view's thread. The result owns immutable layout attributes,
++/// never the editor's mutable text storage, paragraph styles or attachments.
++NSAttributedString *ENRMInputMeasurementText(NSAttributedString *text, NSDictionary *typingAttributes);
++
++/// Can run on any thread without consulting a view or waiting for the main queue.
++CGSize ENRMMeasureInputText(NSAttributedString *text, CGFloat maxWidth);
++
++NS_ASSUME_NONNULL_END
+diff --git a/ios/input/ENRMInputMeasurement.mm b/ios/input/ENRMInputMeasurement.mm
+new file mode 100644
+--- /dev/null
++++ b/ios/input/ENRMInputMeasurement.mm
+@@ -0,0 +1,83 @@
++#import "ENRMInputMeasurement.h"
++
++#if !TARGET_OS_OSX
++static NSAttributedStringKey const ENRMInputAttachmentBounds = @"ENRMInputAttachmentBounds";
++#endif
++
++static NSDictionary *ENRMInputLayoutAttributes(NSDictionary *attributes)
++{
++  // NSAttributedString interns equal attribute dictionaries. Distinguish these
++  // runs from live text so an immutable paragraph copy cannot be substituted
++  // with an equal, already-interned NSMutableParagraphStyle from the editor.
++  NSMutableDictionary *result = [@{@"ENRMInputMeasurement" : @YES} mutableCopy];
++  // Keep only layout data. In particular, never carry a live attachment (or a
++  // view-backed attachment provider) across threads with an attributed string.
++  for (NSAttributedStringKey key in @[
++         NSFontAttributeName, NSKernAttributeName, NSLigatureAttributeName, NSBaselineOffsetAttributeName,
++         NSObliquenessAttributeName, NSExpansionAttributeName, NSVerticalGlyphFormAttributeName,
++         NSParagraphStyleAttributeName, NSWritingDirectionAttributeName, @"NSOriginalFont"
++       ]) {
++    id value = attributes[key];
++    if (value) {
++      result[key] = [value copy];
++    }
++  }
++#if !TARGET_OS_OSX
++  NSTextAttachment *attachment = attributes[NSAttachmentAttributeName];
++  if (attachment) {
++    result[ENRMInputAttachmentBounds] = [NSValue valueWithCGRect:attachment.bounds];
++  }
++#endif
++  return result;
++}
++
++NSAttributedString *ENRMInputMeasurementText(NSAttributedString *text, NSDictionary *typingAttributes)
++{
++  NSMutableAttributedString *snapshot = [[NSMutableAttributedString alloc] initWithString:text.string];
++  [text enumerateAttributesInRange:NSMakeRange(0, text.length)
++                          options:0
++                       usingBlock:^(NSDictionary *attributes, NSRange range, BOOL *stop) {
++                         [snapshot setAttributes:ENRMInputLayoutAttributes(attributes) range:range];
++                       }];
++
++  // Match the editor's existing measurement: empty input has one line, and a
++  // trailing newline contributes a final line using the current typing font.
++  if (snapshot.length == 0 ||
++      [[NSCharacterSet newlineCharacterSet] characterIsMember:[snapshot.string characterAtIndex:snapshot.length - 1]]) {
++    [snapshot appendAttributedString:[[NSAttributedString alloc]
++                                         initWithString:@"I"
++                                             attributes:ENRMInputLayoutAttributes(typingAttributes)]];
++  }
++  return [snapshot copy];
++}
++
++CGSize ENRMMeasureInputText(NSAttributedString *text, CGFloat maxWidth)
++{
++  @autoreleasepool {
++    NSAttributedString *measuredText = text;
++#if !TARGET_OS_OSX
++    // TextKit may mutate attachment bookkeeping during layout. Materialize
++    // independent, geometry-only attachments for this measurement, not shared
++    // NSTextAttachment instances retained by the editor or another measure.
++    __block NSMutableAttributedString *withAttachments = nil;
++    [text enumerateAttribute:ENRMInputAttachmentBounds
++                     inRange:NSMakeRange(0, text.length)
++                     options:0
++                  usingBlock:^(NSValue *bounds, NSRange range, BOOL *stop) {
++                    if (!bounds) return;
++                    if (!withAttachments) withAttachments = [text mutableCopy];
++                    NSTextAttachment *attachment = [NSTextAttachment new];
++                    attachment.bounds = bounds.CGRectValue;
++                    [withAttachments addAttribute:NSAttachmentAttributeName value:attachment range:range];
++                    [withAttachments removeAttribute:ENRMInputAttachmentBounds range:range];
++                  }];
++    if (withAttachments) measuredText = withAttachments;
++#endif
++    NSStringDrawingContext *context = [NSStringDrawingContext new];
++    CGRect boundingBox =
++        [measuredText boundingRectWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)
++                                   options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
++                                   context:context];
++    return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
++  }
++}
+diff --git a/ios/input/internals/EnrichedMarkdownTextInputShadowNode.h b/ios/input/internals/EnrichedMarkdownTextInputShadowNode.h
+index 1488126f99c0499320e7e0950a9df18da8ece543..ab0da9cfaca3645cca077f30cd17ba832913805b 100644
+--- a/ios/input/internals/EnrichedMarkdownTextInputShadowNode.h
++++ b/ios/input/internals/EnrichedMarkdownTextInputShadowNode.h
+@@ -34,7 +34,6 @@ public:
+ 
+ private:
+   int localHeightRecalculationCounter_{0};
+-  id setupMockInputView_(CGFloat width) const;
+ };
+ 
+ } // namespace facebook::react
+diff --git a/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm b/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm
+index bf1992c2fd84edc078d107f2ff045da5d124f177..274c21d179050c127235609ae33c89eb9547471a 100644
+--- a/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm
++++ b/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm
+@@ -1,6 +1,9 @@
+ #import "EnrichedMarkdownTextInputShadowNode.h"
+-#import "ENRMEditSession.h"
+-#import "EnrichedMarkdownTextInput.h"
++#import "ENRMInputFormatter.h"
++#import "ENRMInputMeasurement.h"
++#import "ENRMInputParser.h"
++#import "InputStylePropsUtils.h"
++#import "ParagraphStyleUtils.h"
+ #import <react/utils/ManagedObjectWrapper.h>
+ #import <yoga/Yoga.h>
+ 
+@@ -33,52 +36,50 @@
+   }
+ }
+ 
+-id EnrichedMarkdownTextInputShadowNode::setupMockInputView_(CGFloat width) const
++static NSAttributedString *initialMeasurementText(const EnrichedMarkdownTextInputProps &props,
++                                                 const LayoutConstraints &constraints)
+ {
+-  EnrichedMarkdownTextInput *mockView =
+-      [[EnrichedMarkdownTextInput alloc] initWithFrame:CGRectMake(20000, 20000, width, 1000)];
+-
+-  [mockView.editSession enterPhase:ENRMEditPhaseImporting];
+-
+-  const auto props = this->getProps();
+-  [mockView updateProps:props oldProps:nullptr];
+-
+-  return mockView;
++  ENRMInputFormatterStyle *style = [ENRMInputFormatterStyle new];
++  static const EnrichedMarkdownTextInputProps defaultProps;
++  // Initial layout runs before a native view exists. Reuse the input parser and
++  // formatter on detached data; image rendering is unnecessary for icon bounds.
++  applyInputStyleProps(style, props, defaultProps, false);
++  ENRMParseResult *parsed = [[ENRMInputParser new]
++      parseToPlainTextAndRanges:[NSString stringWithUTF8String:props.defaultValue.c_str()] ?: @""];
++  NSDictionary *typingAttributes = @{NSFontAttributeName : style.baseFont};
++  NSTextStorage *storage = [[NSTextStorage alloc] initWithString:parsed.plainText attributes:typingAttributes];
++  ENRMInputFormatter *formatter = [ENRMInputFormatter new];
++  NSRange range = NSMakeRange(0, storage.length);
++  [formatter applyFormattingRanges:parsed.formattingRanges toTextStorage:storage style:style scopedToRange:range];
++  [formatter applyBlockRanges:parsed.blockRanges toTextStorage:storage style:style scopedToRange:range];
++  ENRMWritingDirectionMode mode =
++      ENRMResolveWritingDirectionMode([NSString stringWithUTF8String:props.writingDirection.c_str()]);
++  NSWritingDirection direction = constraints.layoutDirection == LayoutDirection::RightToLeft
++                                     ? NSWritingDirectionRightToLeft
++                                     : NSWritingDirectionLeftToRight;
++  ENRMApplyWritingDirectionMode(storage, mode, direction);
++  ENRMPinLineMetricsToStyledFonts(storage, range);
++  return ENRMInputMeasurementText(storage, typingAttributes);
+ }
+ 
+ Size EnrichedMarkdownTextInputShadowNode::measureContent(const LayoutContext &layoutContext,
+                                                          const LayoutConstraints &layoutConstraints) const
+ {
+-  CGFloat maxWidth = layoutConstraints.maximumSize.width;
+-
+-  RCTInternalGenericWeakWrapper *weakWrapper =
+-      (RCTInternalGenericWeakWrapper *)unwrapManagedObject(getStateData().getComponentViewRef());
+-  EnrichedMarkdownTextInput *view = weakWrapper ? (EnrichedMarkdownTextInput *)weakWrapper.object : nil;
+-
+-  __block CGSize size;
+-
+-  void (^measureBlock)(void) = ^{
+-    if (view) {
+-      size = [view measureSize:maxWidth];
+-    } else {
+-      EnrichedMarkdownTextInput *mockView = setupMockInputView_(maxWidth);
+-      size = [mockView measureSize:maxWidth];
++  @autoreleasepool {
++    // RN can synchronously wait for this layout from main (flushSync or a
++    // locked ShadowTree commit). Never read a live view or dispatch to main.
++    auto snapshot = getStateData().getMeasurementText();
++    NSAttributedString *text = snapshot ? (NSAttributedString *)unwrapManagedObject(snapshot)
++                                        : initialMeasurementText(getConcreteProps(), layoutConstraints);
++    CGSize size = ENRMMeasureInputText(text, layoutConstraints.maximumSize.width);
++    Float clampedWidth = std::max((Float)size.width, layoutConstraints.minimumSize.width);
++    clampedWidth = std::min(clampedWidth, layoutConstraints.maximumSize.width);
++    Float clampedHeight = std::max((Float)size.height, layoutConstraints.minimumSize.height);
++    if (std::isfinite(layoutConstraints.maximumSize.height)) {
++      clampedHeight = std::min(clampedHeight, layoutConstraints.maximumSize.height);
+     }
+-  };
+-
+-  if ([NSThread isMainThread]) {
+-    measureBlock();
+-  } else {
+-    dispatch_sync(dispatch_get_main_queue(), measureBlock);
+-  }
+-
+-  Float clampedWidth = std::max((Float)size.width, layoutConstraints.minimumSize.width);
+-  clampedWidth = std::min(clampedWidth, layoutConstraints.maximumSize.width);
+-  Float clampedHeight = std::max((Float)size.height, layoutConstraints.minimumSize.height);
+-  if (std::isfinite(layoutConstraints.maximumSize.height)) {
+-    clampedHeight = std::min(clampedHeight, layoutConstraints.maximumSize.height);
++    return {clampedWidth, clampedHeight};
+   }
+-  return {clampedWidth, clampedHeight};
+ }
+ 
+ } // namespace facebook::react
+diff --git a/ios/input/internals/EnrichedMarkdownTextInputState.h b/ios/input/internals/EnrichedMarkdownTextInputState.h
+index 2b517afd23d4bb6b1db5fd6489333d3b68d1822d..9677c1076875de633a8bc1e38cf1e575255da293 100644
+--- a/ios/input/internals/EnrichedMarkdownTextInputState.h
++++ b/ios/input/internals/EnrichedMarkdownTextInputState.h
+@@ -1,23 +1,25 @@
+ #pragma once
+ #include <memory>
++#include <utility>
+ 
+ namespace facebook::react {
+ 
+ class EnrichedMarkdownTextInputState {
+ public:
+   EnrichedMarkdownTextInputState() = default;
+-  EnrichedMarkdownTextInputState(int counter, std::shared_ptr<void> ref) : counter_(counter), viewRef_(ref) {}
++  EnrichedMarkdownTextInputState(int counter, std::shared_ptr<void> measurementText)
++      : counter_(counter), measurementText_(std::move(measurementText)) {}
+ 
+   int getHeightRecalculationCounter() const {
+     return counter_;
+   }
+-  std::shared_ptr<void> getComponentViewRef() const {
+-    return viewRef_;
++  std::shared_ptr<void> getMeasurementText() const {
++    return measurementText_;
+   }
+ 
+ private:
+   int counter_{0};
+-  std::shared_ptr<void> viewRef_{nullptr};
++  std::shared_ptr<void> measurementText_{nullptr};
+ };
+ 
+ } // namespace facebook::react
+diff --git a/ios/internals/ShadowMeasurementUtils.h b/ios/internals/ShadowMeasurementUtils.h
+index 9904ae55fa14919e7c41fcc2d445268e5b673b70..bd4e1ba4678b709d36a948320d9f0e59dc350700 100644
+--- a/ios/internals/ShadowMeasurementUtils.h
++++ b/ios/internals/ShadowMeasurementUtils.h
+@@ -19,10 +19,9 @@ namespace facebook::react {
+ // for main, main waits for the mutex JS holds (watchdog kill 0x8BADF00D).
+ // Nothing in the measurement path may wait on the main thread.
+ // EnrichedMarkdownText and EnrichedMarkdown both measure view-free
+-// (ENRMViewFreeMeasurement.h) and comply fully. The one known remaining
+-// violation is the text input's own measureContent
+-// (EnrichedMarkdownTextInputShadowNode.mm), which measures live editable
+-// UITextView state and needs its own strategy.
++// (ENRMViewFreeMeasurement.h). The input publishes immutable attributed text
++// in Fabric state and measures that snapshot (ENRMInputMeasurement.h), with a
++// view-free parser/formatter path before its first native mount.
+ 
+ /**
+  * Font scale (Dynamic Type multiplier) for measurement, without touching the
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt
 index 907389bf69f6efdcc603d1d076200493826eb714..d2a9335517c5b489d680452cab128add7c4d412b 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/styles/CodeBlockStyle.kt

@@ -41,6 +41,7 @@ export function PaintingOverviewChrome({
           },
         ],
         key: 'more',
+        nativeIcon: 'ellipsis',
         type: 'menu',
       },
     ],
