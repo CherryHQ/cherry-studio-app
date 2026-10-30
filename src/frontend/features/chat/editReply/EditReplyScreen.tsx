@@ -1,5 +1,11 @@
-import { ContentState, MessagePart, Section, useToast } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  ContentState,
+  MessagePart,
+  Section,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
+import { useLocalSearchParams, usePreventRemove, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -71,6 +77,7 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
+  const { alert } = useAlert();
   const agent = useBackendModule('agent');
   const insets = useSafeAreaInsets();
   const { answer, parts, process, stats } = useMemo(() => replyEditorItems(message), [message]);
@@ -88,6 +95,22 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
       : [{ id: item.key, expectedText: item.text, text: draft }];
   });
   const canSave = changed.length > 0 && changed.every((part) => part.text.trim().length > 0);
+  // Leaving drops unsaved edits only after confirmation; a save in flight holds the page.
+  const [leaving, setLeaving] = useState(false);
+  const allowLeave = usePreventRemove(!leaving && (saving || changed.length > 0), ({ repeat }) => {
+    if (saving) return;
+    Keyboard.dismiss();
+    alert.confirm({
+      confirmLabel: t('common.discard'),
+      description: t('chat.messageActions.editDiscardMessage'),
+      onConfirm: () => {
+        setLeaving(true);
+        repeat();
+      },
+      role: 'destructive',
+      title: t('chat.messageActions.editDiscardTitle'),
+    });
+  });
 
   const save = async () => {
     if (!canSave || saving) return;
@@ -96,6 +119,8 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
     try {
       await agent.editMessage({ ...target, parts: changed });
       toast.show({ label: t('chat.messageActions.editSaved'), variant: 'success' });
+      setLeaving(true);
+      allowLeave();
       router.back();
     } catch (error) {
       toast.show({
