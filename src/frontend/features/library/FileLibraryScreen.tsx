@@ -103,6 +103,7 @@ function FileLibraryScreenBody() {
           },
         ],
         key: 'library-actions',
+        nativeIcon: 'ellipsis',
         type: 'menu',
       },
     ],

@@ -59,6 +59,7 @@ function FeedbackStatusDetail({ reportId, language }: { reportId: string; langua
         rightActions={[
           {
             key: 'copy',
+            nativeIcon: 'doc.on.doc',
             type: 'icon',
             icon: CopyIcon,
             accessibilityLabel: t('settings.about.feedback.copyId'),
@@ -67,6 +68,7 @@ function FeedbackStatusDetail({ reportId, language }: { reportId: string; langua
           },
           {
             key: 'refresh',
+            nativeIcon: 'arrow.clockwise',
             type: 'icon',
             icon: RefreshCwIcon,
             accessibilityLabel: t('settings.about.feedback.history.refresh'),

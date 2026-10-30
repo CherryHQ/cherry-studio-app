@@ -2,6 +2,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FileTextBody } from '../FileTextBody';
 
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 0 }),
 }));

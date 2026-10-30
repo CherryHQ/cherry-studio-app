@@ -28,6 +28,7 @@ export function RouteHeader({
           accessibilityLabel: t('common.cancel'),
           icon: ArrowLeftIcon,
           key: 'exit-selection',
+          nativeIcon: 'chevron.left',
           onPress: selection.onExit,
           type: 'icon',
         },

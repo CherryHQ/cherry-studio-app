@@ -86,6 +86,7 @@ export function PaintingFocusChrome({
         icon: EllipsisIcon,
         items: menuItems,
         key: 'more',
+        nativeIcon: 'ellipsis',
         type: 'menu',
       });
     }

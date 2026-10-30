@@ -9,7 +9,7 @@ import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/uti
 import type { AgentQueuedInput } from '@/shared/contracts/agent';
 import { fileEntryUrl } from '@/shared/data/types/file';
 
-import { useChatQuoteActions } from '../../../quotes/ChatQuoteContext';
+import { useChatQuoteActions, useChatQuoteState } from '../../../quotes/ChatQuoteContext';
 import { messageQuoteLine } from '../../../quotes/MessageQuotePreview';
 import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
 import { QueuedInputPreview } from './QueuedInputSheets';
@@ -22,18 +22,19 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   const composer = useComposerState();
   const { setDraft, setAttachments } = useComposerActions();
   const quoteActions = useChatQuoteActions();
+  const quote = useChatQuoteState().fields;
   const [preview, setPreview] = useState<AgentQueuedInput>();
   const [conflict, setConflict] = useState(false);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const locks = useRef(new Set<string>());
   const withdrawn = useRef(new Set<string>());
-  const latest = useRef({ composer, sessionId, mounted: true });
+  const latest = useRef({ composer, quote, sessionId, mounted: true });
   useLayoutEffect(() => {
-    latest.current = { composer, sessionId, mounted: true };
+    latest.current = { composer, quote, sessionId, mounted: true };
     return () => {
       latest.current.mounted = false;
     };
-  }, [composer, sessionId]);
+  }, [composer, quote, sessionId]);
   const [previewSession, setPreviewSession] = useState(sessionId);
   if (previewSession !== sessionId) {
     setPreviewSession(sessionId);
@@ -48,7 +49,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
     if (locks.current.has(key) || (!restore && withdrawn.current.has(key))) return;
     locks.current.add(key);
     setPending((previous) => ({ ...previous, [input.turnId]: true }));
-    const before = latest.current.composer;
+    const before = latest.current;
     let completed = false;
     try {
       // If newer composer content delayed restoration, retry only that local restoration.
@@ -69,8 +70,9 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
         const current = latest.current;
         if (!current.mounted || current.sessionId !== targetSession) return;
         if (
-          current.composer.draft !== before.draft ||
-          current.composer.attachments !== before.attachments
+          current.composer.draft !== before.composer.draft ||
+          current.composer.attachments !== before.composer.attachments ||
+          current.quote !== before.quote
         ) {
           toast.show({ label: t('chat.queue.draftChanged'), variant: 'danger' });
           return;
@@ -118,7 +120,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   function takeBack() {
     if (!preview || composer.isSubmitting || pending[preview.turnId]) return;
     if (locks.current.has(JSON.stringify([sessionId, preview.turnId]))) return;
-    if (composer.draft.length > 0 || composer.attachments.length > 0) {
+    if (composer.draft.length > 0 || composer.attachments.length > 0 || quote.quotes?.length) {
       setConflict(true);
     } else {
       void withdraw(preview, true);
@@ -172,7 +174,6 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
               if (preview) void withdraw(preview, true);
             },
           },
-          { label: t('chat.queue.keepDraft'), onPress: () => setConflict(false) },
           {
             label: t('chat.queue.cancelTakeBack'),
             role: 'cancel',

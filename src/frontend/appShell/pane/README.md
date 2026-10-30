@@ -7,11 +7,11 @@ pane closes or a page covers the chat.
 
 - `FilePaneProvider` sits in the drawer layout so the sidebar and chat share one pane state:
   whether it is open and which file it previews. It is available only for the local chat source,
-  outside compact windows or where a fold runs across the window. Pages above the chat in the content
-  region share the provider but keep opening their own viewer pages; `useOpenFileEntry` uses the
-  pane only while the chat is focused.
+  outside compact windows or where a partly folded device's fold runs across the window. Pages above
+  the chat in the content region share the provider but keep opening their own viewer pages;
+  `useOpenFileEntry` uses the pane only while the chat is focused.
 - `FilePaneHost` lays the pane out beside the chat stack in the `(chat)` layout, which composes the
-  library and viewer pages. It reads the complete native layout snapshot and splits with `resolvePaneSplit`,
+  library and viewer pages. It reads the host's fold snapshot and splits with `resolvePaneSplit`,
   so on a foldable the pane and chat meet at the fold, side by side or stacked. Stacked, the
   keyboard fills the half below the fold, so while the chat is typed into, the pane fades aside and
   the chat takes the window. A preview replaces the list in place and returns to it. The pane stays

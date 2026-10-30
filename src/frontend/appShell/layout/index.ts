@@ -11,6 +11,7 @@ export {
   useIsFormContentConstrained,
 } from './ScreenContentFrame';
 export {
+  type FoldRegion,
   FoldRegionProvider,
   FoldRegionReporter,
   useFoldRegion,

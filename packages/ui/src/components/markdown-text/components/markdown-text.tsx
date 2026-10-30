@@ -139,8 +139,14 @@ function createMarkdownTypographyStyle(
   };
 }
 
-export function MarkdownText({
+export function MarkdownText(props: MarkdownTextProps) {
+  return <MarkdownContent {...props} />;
+}
+
+/** Private shared renderer. Standalone CodeBlock owns its header and exact-source copy. */
+export function MarkdownContent({
   citationLinkPrefix,
+  externalCodeBlockControls = false,
   fontSizeStep,
   isStreaming = false,
   markdown,
@@ -149,7 +155,7 @@ export function MarkdownText({
   selectable = true,
   selectionAction,
   selectionMenuLabels,
-}: MarkdownTextProps) {
+}: MarkdownTextProps & { externalCodeBlockControls?: boolean }) {
   const { theme } = useUniwind();
   const [
     foregroundValue,
@@ -238,6 +244,7 @@ export function MarkdownText({
       },
       codeBlock: {
         ...typography.codeBlock,
+        externalControls: externalCodeBlockControls,
         backgroundColor: codeBlock,
         borderColor: border,
         color: foreground,
@@ -287,6 +294,7 @@ export function MarkdownText({
     border,
     citationLinkPrefix,
     codeBlock,
+    externalCodeBlockControls,
     fontSizeStep,
     foreground,
     foregroundTertiary,

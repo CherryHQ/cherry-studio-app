@@ -1,12 +1,15 @@
 import type { MenuItem } from '@cherrystudio/ui/components';
-import type { ComponentType, ReactElement } from 'react';
-import type { ImageSourcePropType } from 'react-native';
+import type { Stack } from 'expo-router';
+import type { ComponentProps, ComponentType, ReactElement } from 'react';
 
 export type HeaderActionIconProps = {
   className?: string;
 };
 
 export type HeaderActionTone = 'default' | 'inverse';
+
+/** An SF Symbol name for the native iOS toolbar item. */
+export type HeaderNativeIcon = Extract<ComponentProps<typeof Stack.Toolbar.Button>['icon'], string>;
 
 export type HeaderActionTargetSize = 'surface' | 'touch-target';
 
@@ -21,11 +24,11 @@ export type HeaderToolbarAction =
       disabled?: boolean;
       icon: ComponentType<HeaderActionIconProps>;
       /**
-       * The same glyph as a template image. With it, the iOS chat header draws a standard toolbar
-       * button instead of a custom view, which the system can move, such as into an iPhone Duo's
+       * The SF Symbol for this action. With it, the iOS header draws a standard toolbar item
+       * instead of a custom view, which the system can move, such as into an iPhone Duo's
        * vertical rail.
        */
-      nativeIcon?: ImageSourcePropType;
+      nativeIcon?: HeaderNativeIcon;
       onPress: () => void;
       type: 'icon';
     })
@@ -41,6 +44,8 @@ export type HeaderToolbarAction =
       disabled?: boolean;
       icon: ComponentType<HeaderActionIconProps>;
       items: readonly MenuItem[];
+      /** The SF Symbol for a native toolbar menu; see the icon action's `nativeIcon`. */
+      nativeIcon?: HeaderNativeIcon;
       type: 'menu';
     })
   | (HeaderActionBase & {

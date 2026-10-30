@@ -163,6 +163,19 @@ defaults:
 />;
 ```
 
+`CodeBlock` presents one complete standalone source with a title, optional language, and one copy
+action. It shares Markdown's native highlighting, theme, typography, and two-axis scroll viewport.
+It passes the original `code` to `onCopy`, retaining trailing newlines and text beyond the visible
+viewport; callers own clipboard writes, labels, and feedback. It never clips the source. The native
+adapter's `codeBlock.externalControls` mode removes its header, copy menus, and accessibility copy
+action so the shared accessible button is the sole whole-code copy owner. Ordinary Markdown code
+blocks keep their native controls. Native scroll recognition continues to own drags; standalone
+blocks do not install a competing text-selection or long-press copy action. This mode requires an
+updated development client. Mount large detail content only while its host is open.
+
+`createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` wraps raw source in a safe fence. It is a
+pure helper shared by code presentation, message copying/translation, and Agent input formatting.
+
 `renderMermaid` is an optional presentation slot for complete top-level Mermaid fences. With it,
 `MarkdownText` splits the document around those fences, keeps each text segment on its own native
 renderer, and passes the caller the diagram source plus the fence as an ordinary code block for
@@ -269,6 +282,19 @@ neutral padded reading surface for prose and fact rows; code renderers with thei
 composed directly below the section heading. `TextSection` and `ValueSection` use these same
 primitives. The app supplies translated copy controls and highlighted code, so the UI package never
 reads the clipboard or imports application preferences.
+
+`MessagePart.TextBody` is the complete plain-text reading surface for tool output and diagnostic
+details. Short text keeps the ordinary padded surface and natural height. Long text uses a 192-point
+inner scroll viewport with at most 1000 characters and 20 source lines per native text block;
+LegendList mounts only nearby blocks. Partial selection is local to a block, so native text views
+are not recycled between blocks. Native scroll and selection recognizers own cancellation; Android enables
+nested scrolling inside the detail sheet. There is no row tap or custom long-press handler. The
+section's explicit copy action always uses the original value, including text outside the viewport
+and original line endings. Gesture cancellation still requires acceptance on both platforms.
+
+`splitTextBlocks` from `@cherrystudio/ui/utils` owns bounded reader chunks for `TextBody` and the file
+reader. It normalizes line endings for display and continues very long lines without splitting
+UTF-16 surrogate pairs; callers retain the original string for copying.
 
 `MessagePart.Pending` owns the empty-response loader and its stable text-line height. An optional
 `reason` names local work that delays the reply, such as attachment text recognition, while
