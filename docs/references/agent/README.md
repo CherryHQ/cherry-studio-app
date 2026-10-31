@@ -80,8 +80,8 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 - Cherry SQLite is the complete settled local record; Pi preserves unfinished execution until
   settlement. The retired
   Assistant/Topic/Message tables and Chat Runtime are not compatibility paths.
-- The Host combines the shared system capability catalog, the Agent's capability-group deny-list,
-  and the current Agent's persisted MCP bindings into a frozen tool snapshot before each turn. An
+- The Host combines the shared system capability catalog and the current Agent's persisted MCP
+  bindings, subject to model, platform, permission and service gates, into a frozen tool snapshot before each turn. An
   empty snapshot is ordinary conversation.
 - The Host builds the mobile-owned application prompt for every turn. Fixed Runtime rules define
   truthful capability use, approval and permission behavior, untrusted-content handling, mobile

@@ -1,6 +1,5 @@
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { Agent } from '@/shared/data/types/agent';
-import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
 import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
 
 import type { RuntimeJsonValue } from '../../runtime';
@@ -89,7 +88,7 @@ describe('Agent management tools', () => {
     }
   });
 
-  test('creation leaves default-model resolution to storage and uses the manual form capability defaults', async () => {
+  test('creation leaves default-model resolution to storage without capability switches', async () => {
     const { data, invoke } = setup();
     const result = await invoke('agent_create', {
       name: ' Writer ',
@@ -98,10 +97,10 @@ describe('Agent management tools', () => {
     expect(data.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Writer',
-        disabledCapabilities: [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
       }),
     );
     expect(data.create.mock.calls[0][0].model).toBeUndefined();
+    expect(data.create.mock.calls[0][0]).not.toHaveProperty('disabledCapabilities');
     expect(result.value).toEqual({ status: 'created', agent: AgentToolRecordSchema.parse(agent) });
     expect(result.value).not.toHaveProperty('agent.avatar');
     expect(result.value).not.toHaveProperty('agent.avatarUri');

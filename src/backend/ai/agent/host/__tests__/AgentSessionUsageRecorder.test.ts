@@ -9,7 +9,6 @@ describe('AgentSessionUsageRecorder', () => {
 
     recorder.record({
       agent: {
-        disabledCapabilities: [],
         id: 'agent-1',
         instructions: '',
         mode: 'standard',

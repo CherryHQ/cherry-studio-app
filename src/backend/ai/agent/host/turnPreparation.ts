@@ -551,7 +551,6 @@ export async function prepareResolvedTurn(
           workspaceFolderId: session.workspaceFolderId ?? null,
           agentId: agent.id,
           askUser: dependencies.askUser,
-          disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           acceptsImages: modelPreflight.inputModalities.includes('image'),
           resources,
@@ -667,10 +666,9 @@ export async function prepareResolvedTurn(
       ),
     );
   }
-  const webTools =
-    runtime.descriptor.capabilities.tools && !agent.disabledCapabilities.includes('web')
-      ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
-      : undefined;
+  const webTools = runtime.descriptor.capabilities.tools
+    ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
+    : undefined;
   const inferenceModel = await resolveInferenceModel();
   const inferenceSnapshot = createAgentInferenceSnapshot({
     model: inferenceModel,

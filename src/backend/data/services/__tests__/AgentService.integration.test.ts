@@ -223,11 +223,10 @@ describe('AgentService persistence', () => {
     }
   });
 
-  it('persists mode switches without resetting capability or approval preferences', async () => {
+  it('persists mode switches without resetting approval preferences', async () => {
     const agent = await agentService.create({
       name: 'Chat',
       mode: 'minimal',
-      disabledCapabilities: ['calendar', 'web'],
       toolApprovalMode: 'default',
     });
     await expect(agentService.getById(agent.id)).resolves.toMatchObject({ mode: 'minimal' });
@@ -236,7 +235,6 @@ describe('AgentService persistence', () => {
     await agentService.update(agent.id, { mode: 'standard' });
     await expect(agentService.getById(agent.id)).resolves.toMatchObject({
       mode: 'standard',
-      disabledCapabilities: ['calendar', 'web'],
       toolApprovalMode: 'default',
     });
   });
@@ -374,24 +372,28 @@ describe('AgentService persistence', () => {
     expect((await agentService.list()).items).toEqual([]);
   });
 
-  it('persists the capability deny-list and drops unknown ids on read', async () => {
-    const agent = await agentService.create({
-      disabledCapabilities: ['calendar', 'web'],
-      name: 'Researcher',
-    });
-    expect(agent.disabledCapabilities).toEqual(['calendar', 'web']);
-
-    await expect(
-      agentService.update(agent.id, { disabledCapabilities: ['health'] }),
-    ).resolves.toMatchObject({ disabledCapabilities: ['health'] });
-
-    // A build that no longer knows an id must drop it rather than fail the row.
-    sqlite
-      .prepare('UPDATE agent SET disabled_capabilities = ? WHERE id = ?')
-      .run(JSON.stringify(['health', 'retired-group']), agent.id);
+  it('ignores retired capability switches without rewriting the stored row', async () => {
+    const agent = await agentService.create({ name: 'Researcher' });
+    expect(agent.disabledCapabilities).toEqual([]);
+    const stored = JSON.stringify([
+      'health',
+      'reminders',
+      'agents',
+      'calendar',
+      'fileLibrary',
+      'image',
+      'location',
+      'web',
+      'retired-group',
+    ]);
+    sqlite.prepare('UPDATE agent SET disabled_capabilities = ? WHERE id = ?').run(stored, agent.id);
     await expect(agentService.getById(agent.id)).resolves.toMatchObject({
-      disabledCapabilities: ['health'],
+      disabledCapabilities: [],
     });
+    await agentService.update(agent.id, { name: 'Renamed' });
+    expect(
+      sqlite.prepare('SELECT disabled_capabilities FROM agent WHERE id = ?').get(agent.id),
+    ).toMatchObject({ disabled_capabilities: stored });
   });
 
   it('persists an explicit tool approval mode and lets the user change it', async () => {

@@ -48,8 +48,8 @@ export function createGenerateImageTool(
     displayName: 'Generate image',
     description: buildGenerateImageToolDescription(strategy),
     inputSchema: toRuntimeInputSchema(inputSchema),
-    // Generation spends the user's provider quota, so it asks unless an Agent
-    // binding says otherwise (agent-tools-and-resources.md, Image Generation).
+    deferred: true,
+    // Generation spends provider quota, so the catalog preserves explicit consent.
     approval: 'ask',
     async execute({ input, signal }) {
       const parsed = inputSchema.safeParse(input);
