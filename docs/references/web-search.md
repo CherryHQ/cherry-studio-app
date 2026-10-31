@@ -23,8 +23,8 @@ the model request; a failed request never starts an automatic alternate-provider
 ## Native Tools And Selection
 
 Native tools run inside the Pi Durable conversation loop for every provider endpoint in the
-adapter table below. Each adapter is covered against the installed provider SDK over a scripted
-transport; none has been exercised against a live provider.
+adapter table below. Scripted-transport regression cases cover these adapters; the Qwen additions
+have not yet been run. Live-provider acceptance remains separate.
 
 `chat.web_search.model_tools_preferred` defaults to true on new installs. Seeding preserves the
 external-first behavior of existing installations and never overwrites a saved choice. The setting
@@ -48,14 +48,17 @@ Adapters, by the endpoint the model is actually requested on:
 
 | Provider / endpoint | Search | Page reading | Sources shown | Boundaries |
 | --- | --- | --- | --- | --- |
-| OpenAI, Doubao, Bailian (Qwen3) / Responses | `web_search` | External service | URL annotations | No minimal reasoning |
+| OpenAI, Doubao, Qwen AI Platform (Qwen3 and hosted GLM/Kimi) / Responses | `web_search` | External service | URL annotations | No minimal reasoning |
 | Azure OpenAI, Poe / Responses | `web_search_preview` | External service | URL annotations | No minimal reasoning; Poe for OpenAI models only |
 | Grok / Responses | `web_search` and `x_search` | External service | URL annotations | |
 | Anthropic / Messages | `web_search_20250305` | `web_fetch_20250910` | Result blocks and citations | Five uses per request |
 | DeepSeek / Anthropic Messages | `web_search_20250305` | External service | Result blocks and citations | Its Responses endpoint ignores the tool |
 | Gemini / Generate Content | `googleSearch` | `urlContext` | Grounding metadata | Beside functions from Gemini 3 only |
 | Zhipu / Chat Completions | `web_search` tool entry | External service | Result list, no inline markers | |
-| Bailian / Chat Completions | `enable_search` | External service | Result list when returned, no inline markers | |
+| Qwen AI Platform / Chat Completions | `enable_search` | External service | Result list when returned, no inline markers | |
+| QwenCloud / Chat Completions | `enable_search`, model-specific strategy | External service | No sources in the documented Chat API | Shared endpoint-specific eligibility; no forced search |
+| QwenCloud / Responses | `web_search` | External service | URL annotations | Only the published hosted-model declarations |
+| Qwen AI Platform, QwenCloud / Anthropic Messages | `web_search_20250305` | `web_fetch_20250910` | Result blocks and citations | Required system identifier; fetch requires search; exact supported SKUs |
 | OpenRouter / Chat Completions | `openrouter:web_search` | External service | URL annotations | All chat models |
 | Perplexity / Chat Completions | Built into Sonar | External service | Numbered citations | Nothing is added to the request |
 | CherryIN, AiHubMix, New API | The vendor's tool on its own endpoint | Claude and Gemini only | As the vendor | Chat Completions endpoint stays external |
@@ -81,10 +84,18 @@ the Responses endpoint, which conflicts with that contract; Mobile declares the 
 
 The published `@cherrystudio/provider-registry` package owns the `serverTools` declarations, the
 per-provider model eligibility, and the models that accept functions beside a native tool; Mobile
-follows it. `mobileProviderCatalog.ts` holds the two corrections: DeepSeek's endpoint, and Poe,
+passes the actual endpoint to its eligibility query. `mobileProviderCatalog.ts` holds the two corrections: DeepSeek's endpoint, and Poe,
 which documents web search for OpenAI bots on its Responses endpoint only. Remote model flags cannot
 enable native tools. A host's `vendor/model` ID matches by the vendor ID behind its namespace, and a
 host passes a tool through only for the vendor families its declaration names.
+
+Qwen Anthropic requests prepend the documented client identifier only when native web tools are
+selected, preserving system text and cache controls. Native page reading requires native search
+in the same request; when search needs approval or is denied, page reading falls back to the
+external reader or is unavailable. Returned `urls` and `goal` inputs remain intact in the stored
+provider content. The package owns model membership; Pi additionally restricts the documented
+DeepSeek dated aliases and keeps hosted GLM/Kimi off the mainland Chat search switch. See the
+[QwenCloud web-search contract](https://docs.qwencloud.com/developer-guides/tool-calling/web-search).
 
 Gemini before 3 rejects functions beside its native tools: the selector keeps the other functions
 and falls back to external web tools, or chooses one compatible web source with the most available
@@ -197,7 +208,7 @@ Cherry Studio desktop.
 | Provider | Search | Page reading | Credentials |
 | --- | --- | --- | --- |
 | `zhipu` | yes | | Zhipu model provider key |
-| `tavily`, `exa`, `bocha`, `parallel`, `serply`, `searchapi` | yes | | API key required |
+| `tavily`, `exa`, `bocha`, `parallel`, `serply`, `searchapi`, `desearch` | yes | | API key required |
 | `querit`, `deepseek` | yes | yes | API key required |
 | `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
 | `jina` | yes | yes | API key required to search, optional to read pages |

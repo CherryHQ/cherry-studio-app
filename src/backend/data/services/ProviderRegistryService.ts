@@ -489,8 +489,12 @@ export class ProviderRegistryService {
       // A host passes a tool through for the vendor families it names.
       const vendor = tool.vendors?.length ? matchVendor(normalizeModelId(wireModelId)) : undefined;
       if (tool.vendors?.length && !(vendor && tool.vendors.includes(vendor))) return [];
+      // Mobile's catalog above owns DeepSeek's corrected search endpoint; the shared
+      // catalog still owns its model membership, but declares the wrong endpoint.
+      const eligibilityEndpointType =
+        preset.id === 'deepseek' && tool.id === 'web-search' ? undefined : endpointType;
       return tool.modelScope === 'all-chat-models' ||
-        isServerToolModelEligible(wireModelId, preset.id, tool.id)
+        isServerToolModelEligible(wireModelId, preset.id, tool.id, eligibilityEndpointType)
         ? [tool.id]
         : [];
     });
