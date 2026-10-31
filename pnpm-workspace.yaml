@@ -86,6 +86,7 @@ patchedDependencies:
   react-native-enriched-markdown@1.1.1: patches/react-native-enriched-markdown@1.1.1.patch
   react-native-drawer-layout@4.2.12: patches/react-native-drawer-layout@4.2.12.patch
   expo-calendar@58.0.6: patches/expo-calendar@58.0.6.patch
+  expo-modules-core@58.0.26: patches/expo-modules-core@58.0.26.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
   expo-app-metrics@58.0.14: patches/expo-app-metrics@58.0.14.patch
   react-native-screens@4.30.0: patches/react-native-screens@4.30.0.patch
