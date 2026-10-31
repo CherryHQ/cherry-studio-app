@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import PDFKit
+import UIKit
 import os
 
 // Expo's default AsyncFunction queue is one serial queue shared by every module.
@@ -35,6 +36,89 @@ public class PdfTextExtractorModule: Module {
       self.requestsLock.unlock()
       active.forEach { $0.cancel() }
     }
+
+    AsyncFunction("readPdfPages") {
+      (filePath: String, maxPages: Int, requestId: String, pageNumbers: [Int]?) -> [String: Any] in
+      try self.withRequest(requestId) { request in
+        let url = try self.parseFileURL(filePath)
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        guard let document = PDFDocument(url: url), !document.isEncrypted else {
+          throw FailedToLoadDocumentException()
+        }
+        let count = min(max(0, min(maxPages, self.defaultMaxPages)), document.pageCount)
+        let selected = pageNumbers ?? (0..<count).map { $0 + 1 }
+        guard selected.count <= self.defaultMaxPages,
+              Set(selected).count == selected.count,
+              selected.allSatisfy({ $0 >= 1 && $0 <= min(document.pageCount, self.defaultMaxPages) }) else {
+          throw InvalidFilePathException()
+        }
+        var pages: [[String: Any]] = []
+        var remaining = maxPdfTextCharacters
+        var truncated = pageNumbers == nil && count < document.pageCount
+        for number in selected {
+          let index = number - 1
+          try request.checkCancellation()
+          let result: [String: Any] = try autoreleasepool {
+            guard let page = document.page(at: index) else { throw FailedToLoadDocumentException() }
+            let text = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let needsOcr = !hasUsablePdfText(text) || (isSparsePdfText(text) && pdfPageHasImages(page))
+            let value = text as NSString
+            var end = min(value.length, remaining)
+            if end > 0 && (0xD800...0xDBFF).contains(value.character(at: end - 1)) { end -= 1 }
+            remaining -= end
+            if end < value.length { truncated = true }
+            return ["page": number, "text": value.substring(to: end), "needsOcr": needsOcr,
+                    "isTruncated": end < value.length]
+          }
+          pages.append(result)
+        }
+        return ["totalPages": document.pageCount, "pages": pages, "isTruncated": truncated]
+      }
+    }.runOnQueue(extractionQueue)
+
+    AsyncFunction("renderPdfPage") {
+      (filePath: String, pageIndex: Int, outputUri: String, requestId: String) -> Bool in
+      try self.withRequest(requestId) { request in
+        try autoreleasepool {
+          let url = try self.parseFileURL(filePath)
+          let didAccess = url.startAccessingSecurityScopedResource()
+          defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+          guard let document = PDFDocument(url: url), !document.isEncrypted,
+                pageIndex >= 0, pageIndex < document.pageCount,
+                let page = document.page(at: pageIndex) else { throw InvalidFilePathException() }
+          let destination = try self.cacheOutputURL(outputUri)
+          guard let image = try renderPdfPageImage(page, request: request, maxDimension: 2048) else {
+            return false
+          }
+          try request.checkCancellation()
+          guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.95) else {
+            throw FailedToLoadDocumentException()
+          }
+          try data.write(to: destination, options: .atomic)
+          try request.checkCancellation()
+          return true
+        }
+      }
+    }.runOnQueue(extractionQueue)
+
+    AsyncFunction("prepareOcrImage") { (filePath: String, outputUri: String, requestId: String) in
+      try self.withRequest(requestId) { request in
+        try autoreleasepool {
+          let url = try self.parseFileURL(filePath)
+          let didAccess = url.startAccessingSecurityScopedResource()
+          defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+          let destination = try self.cacheOutputURL(outputUri)
+          let image = try decodeImageForOcr(url, request: request)
+          guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.95) else {
+            throw FailedToLoadImageException()
+          }
+          try request.checkCancellation()
+          try data.write(to: destination, options: .atomic)
+          try request.checkCancellation()
+        }
+      }
+    }.runOnQueue(extractionQueue)
 
     AsyncFunction("extractText") {
       (filePath: String, options: ExtractOptions?, requestId: String) -> [String: Any] in
@@ -91,6 +175,22 @@ public class PdfTextExtractorModule: Module {
   }
 
   // MARK: - PDF 文本提取核心逻辑
+
+  private func withRequest<T>(_ id: String, work: (PdfExtractionRequest) throws -> T) throws -> T {
+    requestsLock.lock()
+    let request = requests[id]
+    requestsLock.unlock()
+    guard let request else { throw PdfExtractionCancelledException() }
+    defer {
+      requestsLock.lock()
+      requests.removeValue(forKey: id)
+      requestsLock.unlock()
+    }
+    try request.checkCancellation()
+    let result = try work(request)
+    try request.checkCancellation()
+    return result
+  }
 
   private func extractTextFromPDF(
     filePath: String, options: ExtractOptions?, requestId: String, request: PdfExtractionRequest
@@ -195,6 +295,15 @@ public class PdfTextExtractorModule: Module {
   }
 
   // MARK: - 辅助方法
+
+  private func cacheOutputURL(_ uri: String) throws -> URL {
+    let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    guard let destination = URL(string: uri), destination.isFileURL,
+          destination.standardizedFileURL.path.hasPrefix(cache.standardizedFileURL.path + "/") else {
+      throw InvalidFilePathException()
+    }
+    return destination
+  }
 
   private func parseFileURL(_ filePath: String) throws -> URL {
     let url: URL

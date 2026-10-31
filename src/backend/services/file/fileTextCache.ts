@@ -1,10 +1,11 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as z from 'zod';
 
+import { documentExtractionUnitSchema } from '@/shared/contracts/documentExtraction';
 import type { FileEntry } from '@/shared/data/types/file';
 import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 
-import type { ExtractResult } from '../../../../modules/pdf-text-extractor';
+import type { FileTextResult } from './fileTextExtraction';
 
 // Increment when native extraction policy changes. Cached text is disposable, never canonical.
 const CACHE_VERSION = 4;
@@ -22,6 +23,7 @@ const resultSchema = z.object({
   unrecognizedPages: z
     .array(z.number().int().min(1).max(MAX_PDF_ATTACHMENT_PAGES))
     .max(MAX_PDF_ATTACHMENT_PAGES),
+  pages: z.array(documentExtractionUnitSchema).max(MAX_PDF_ATTACHMENT_PAGES).optional(),
 });
 
 function directory(): Directory {
@@ -33,14 +35,17 @@ export function fileTextCacheFile(
   source: File,
   language: string,
   kind: 'pdf' | 'image' = 'pdf',
+  engine = 'system',
+  requestKey?: string,
 ): File {
+  const engineSuffix = engine === 'system' ? '' : `.${engine}`;
   return new File(
     directory(),
-    `${source.name}.v${CACHE_VERSION}.${kind}.${source.size}.${source.modificationTime ?? 0}.${MAX_PDF_ATTACHMENT_PAGES}.${language}.json`,
+    `${source.name}.v${CACHE_VERSION}.${kind}.${source.size}.${source.modificationTime ?? 0}.${MAX_PDF_ATTACHMENT_PAGES}.${language}${engineSuffix}${requestKey ? `.${requestKey}` : ''}.json`,
   );
 }
 
-export async function readFileTextCache(file: File): Promise<ExtractResult | undefined> {
+export async function readFileTextCache(file: File): Promise<FileTextResult | undefined> {
   try {
     if (!file.exists || file.size > MAX_ENTRY_BYTES) return undefined;
     return resultSchema.parse(JSON.parse(await file.text()));
@@ -50,7 +55,7 @@ export async function readFileTextCache(file: File): Promise<ExtractResult | und
   }
 }
 
-export function writeFileTextCache(file: File, result: ExtractResult): void {
+export function writeFileTextCache(file: File, result: FileTextResult): void {
   if (result.extractionError || result.ocrError) return;
   try {
     const folder = directory();

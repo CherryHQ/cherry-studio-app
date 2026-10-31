@@ -136,6 +136,49 @@ describe('Office generation contracts', () => {
     expect(strFromU8(files['[Content_Types].xml'])).toContain('image/png');
   });
 
+  test('writes merged cells while retaining literal OCR strings at their origins', async () => {
+    const files = await render({
+      format: 'xlsx',
+      filename: 'table.xlsx',
+      spec: {
+        version: 1,
+        sheets: [
+          {
+            name: 'Scan',
+            rows: [
+              ['001', null],
+              ['=1+1', '12.00'],
+            ],
+            merges: [{ row: 0, column: 0, rows: 1, columns: 2 }],
+          },
+        ],
+      },
+    });
+    const sheet = strFromU8(files['xl/worksheets/sheet1.xml']);
+    expect(sheet).toContain('<mergeCell ref="A1:B1"');
+    expect(sheet).toContain('001');
+    expect(sheet).toContain('12.00');
+    expect(sheet).not.toMatch(/<f[ >]/);
+  });
+
+  test('rejects merged ranges that overlap, escape the sheet or hide nonempty values', () => {
+    const merge = { row: 0, column: 0, rows: 1, columns: 2 };
+    const input = (rows: (string | null)[][], merges: (typeof merge)[]) => ({
+      filename: 'table.xlsx',
+      spec: { version: 1, sheets: [{ name: 'Scan', rows, merges }] },
+    });
+    expect(officeInputSchemas.xlsx.safeParse(input([['001', null]], [merge])).success).toBe(true);
+    expect(officeInputSchemas.xlsx.safeParse(input([['001', 'lost']], [merge])).success).toBe(
+      false,
+    );
+    expect(
+      officeInputSchemas.xlsx.safeParse(input([['001', null]], [{ ...merge, rows: 2 }])).success,
+    ).toBe(false);
+    expect(officeInputSchemas.xlsx.safeParse(input([['001', null]], [merge, merge])).success).toBe(
+      false,
+    );
+  });
+
   test('creates editable PPTX text/table elements and embeds image bytes', async () => {
     const files = await render(
       {

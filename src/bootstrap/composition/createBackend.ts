@@ -90,6 +90,7 @@ export type BackendComposition = {
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
+  disposeLocalOcr(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -331,6 +332,7 @@ export function createBackend(
 
   return {
     disposeAppUpdate: appUpdate.dispose,
+    disposeLocalOcr: services.localOcr.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -357,6 +359,8 @@ export function createBackend(
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
       file: {
+        localOcr: services.localOcr.module,
+        extractDocument: services.fileContent.extractDocument,
         observeFileOcr: services.fileContent.observeFileOcr,
         createInternalEntry: services.fileContent.createInternalEntry,
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,

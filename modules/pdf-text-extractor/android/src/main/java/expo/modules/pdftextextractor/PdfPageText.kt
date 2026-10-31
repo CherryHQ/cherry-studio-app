@@ -9,23 +9,26 @@ import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import java.io.Writer
 
 internal const val MAX_PDF_TEXT_CHARACTERS = 1_000_000
-internal data class PdfPageText(val text: String = "", val hasImages: Boolean = false)
+internal data class PdfPageText(val text: String = "", val hasImages: Boolean = false, val truncated: Boolean = false)
 internal data class PdfNativeTextPages(val pages: List<PdfPageText>, val truncated: Boolean)
 
 /** PDFBox invokes endPage while making one traversal; getText per page rescans the page tree. */
 internal fun readPdfTextPages(
-    document: PDDocument, maxPages: Int, checkCancelled: () -> Unit
+    document: PDDocument, maxPages: Int, pageNumbers: List<Int>? = null, checkCancelled: () -> Unit
 ): PdfNativeTextPages {
-    val pages = MutableList(maxPages) { PdfPageText() }
+    val selected = pageNumbers ?: (1..maxPages).toList()
+    val positions = selected.withIndex().associate { it.value to it.index }
+    val pages = MutableList(selected.size) { PdfPageText() }
     val writer = object : Writer() {
         val page = StringBuilder()
         var remaining = MAX_PDF_TEXT_CHARACTERS
         var truncated = false
+        var pageTruncated = false
         override fun write(buffer: CharArray, offset: Int, length: Int) {
             val count = minOf(length, remaining)
             page.append(buffer, offset, count)
             remaining -= count
-            if (count < length) truncated = true
+            if (count < length) { truncated = true; pageTruncated = true }
         }
         override fun flush() {}
         override fun close() {}
@@ -34,10 +37,11 @@ internal fun readPdfTextPages(
         var hasImages = false
         override fun processPage(page: PDPage) {
             checkCancelled()
-            super.processPage(page)
+            if (positions.containsKey(currentPageNo)) super.processPage(page)
         }
         override fun startPage(page: PDPage) {
             hasImages = false
+            writer.pageTruncated = false
             super.startPage(page)
         }
         override fun processOperator(operator: Operator, operands: MutableList<COSBase>) {
@@ -52,13 +56,15 @@ internal fun readPdfTextPages(
             if (writer.page.lastOrNull()?.isHighSurrogate() == true) {
                 writer.page.setLength(writer.page.length - 1)
             }
-            pages[currentPageNo - 1] = PdfPageText(writer.page.toString().trim(), hasImages)
+            positions[currentPageNo]?.let { position ->
+                pages[position] = PdfPageText(writer.page.toString().trim(), hasImages, writer.pageTruncated)
+            }
             writer.page.setLength(0)
             super.endPage(page)
         }
     }
     stripper.startPage = 1
-    stripper.endPage = maxPages
+    stripper.endPage = selected.maxOrNull() ?: 0
     stripper.writeText(document, writer)
     checkCancelled()
     return PdfNativeTextPages(pages, writer.truncated)

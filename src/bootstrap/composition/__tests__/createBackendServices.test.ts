@@ -23,6 +23,10 @@ const mockDataServices = {
 };
 
 const mockCreateDataServices = jest.fn((_dependencies: unknown) => mockDataServices);
+const mockLocalOcr = { module: {}, resolveEngine: async () => undefined, dispose: jest.fn() };
+jest.mock('@/backend/services/file/createLocalOcrModule', () => ({
+  createLocalOcrModule: () => mockLocalOcr,
+}));
 
 jest.mock('../createDataServices', () => ({
   createDataServices: (dependencies: unknown) => mockCreateDataServices(dependencies),
@@ -68,6 +72,7 @@ describe('createBackendServices', () => {
       ai,
       devicePermissions,
       fileContent,
+      localOcr: mockLocalOcr,
       jobRuntime,
       mcpRuntime,
       webSearch,

@@ -82,6 +82,18 @@ const result: ExtractResult = {
   unrecognizedPages: [1],
 };
 const source = () => new File('file:///documents/00000000-0000-7000-8000-000000000001.pdf');
+test('keeps existing system cache keys and isolates local model revisions', async () => {
+  const file = source();
+  const system = fileTextCacheFile(file, 'en-US');
+  expect(fileTextCacheFile(file, 'en-US', 'pdf', 'system').uri).toBe(system.uri);
+  const local = fileTextCacheFile(file, 'en-US', 'pdf', 'xiaomi-v1');
+  expect(local.uri).not.toBe(system.uri);
+  expect(fileTextCacheFile(file, 'en-US', 'pdf', 'xiaomi-v2').uri).not.toBe(local.uri);
+  writeFileTextCache(system, result);
+  writeFileTextCache(local, { ...result, text: 'Structured table' });
+  await expect(readFileTextCache(system)).resolves.toMatchObject({ text: result.text });
+  await expect(readFileTextCache(local)).resolves.toMatchObject({ text: 'Structured table' });
+});
 beforeEach(() => {
   mockFiles.clear();
   mockDirectories.clear();

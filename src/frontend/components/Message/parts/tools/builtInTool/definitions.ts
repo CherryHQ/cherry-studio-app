@@ -63,6 +63,7 @@ export const builtInToolIconNames = {
   reminder_update_item: 'reminders',
   edit_file: 'fileEdit',
   read_file: 'fileText',
+  extract_document: 'fileText',
   write_file: 'fileText',
   generate_image: 'image',
   web_search: 'web',

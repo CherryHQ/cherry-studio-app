@@ -57,6 +57,8 @@ allowBuilds:
   react-native-enriched-markdown: true
   # Downloads the published iOS AnyDoc XCFramework; Android downloads at native build time.
   react-native-anydoc: true
+  # Downloads published llama.cpp binaries; does not compile the application.
+  llama.rn: true
   # Jest's watcher ships prebuilt binaries; its install script only builds from source on request.
   '@parcel/watcher': false
   '@google/genai': false

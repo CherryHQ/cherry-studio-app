@@ -6,13 +6,22 @@ import type {
   ExtractResult,
   ExtractionControl,
   PdfTextExtractorModule,
+  PdfTextPages,
 } from './src/PdfTextExtractor.types';
 
-export type { ExtractOptions, ExtractResult, ExtractionControl };
+export type { ExtractOptions, ExtractResult, ExtractionControl, PdfTextPages };
 export type { ExtractionProgress } from './src/PdfTextExtractor.types';
 
 const NativeModule: PdfTextExtractorModule | null =
   Platform.OS === 'web' ? null : requireOptionalNativeModule('PdfTextExtractor');
+
+export function supportsLocalOcrImages(): boolean {
+  return (
+    typeof NativeModule?.prepareOcrImage === 'function' &&
+    typeof NativeModule?.readPdfPages === 'function' &&
+    typeof NativeModule?.renderPdfPage === 'function'
+  );
+}
 
 const getNativeModule = (): PdfTextExtractorModule => {
   if (!NativeModule) {
@@ -23,6 +32,60 @@ const getNativeModule = (): PdfTextExtractorModule => {
 
   return NativeModule;
 };
+
+/** The caller owns the temporary path, including deletion after cancellation or failure. */
+export function prepareOcrImage(
+  filePath: string,
+  outputUri: string,
+  signal: AbortSignal,
+): Promise<void> {
+  return withPdfRequest(signal, (native, id) => native.prepareOcrImage(filePath, outputUri, id));
+}
+
+/** The caller owns the temporary path, including deletion after cancellation or failure. */
+export function renderPdfPage(
+  filePath: string,
+  pageIndex: number,
+  outputUri: string,
+  signal: AbortSignal,
+): Promise<boolean> {
+  return withPdfRequest(signal, (native, id) =>
+    native.renderPdfPage(filePath, pageIndex, outputUri, id),
+  );
+}
+
+export function readPdfPages(
+  filePath: string,
+  maxPages: number,
+  signal: AbortSignal,
+  pageNumbers?: number[],
+): Promise<PdfTextPages> {
+  return withPdfRequest(signal, (native, id) =>
+    native.readPdfPages(filePath, maxPages, id, pageNumbers ?? null),
+  );
+}
+
+async function withPdfRequest<T>(
+  signal: AbortSignal,
+  run: (native: PdfTextExtractorModule, requestId: string) => Promise<T>,
+): Promise<T> {
+  signal.throwIfAborted();
+  const native = getNativeModule();
+  const id = native.createRequest();
+  const cancel = () => native.cancelRequest(id);
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    const result = await run(native, id);
+    signal.throwIfAborted();
+    return result;
+  } catch (error) {
+    signal.throwIfAborted();
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    cancel();
+  }
+}
 
 /**
  * 提取 PDF 文本内容

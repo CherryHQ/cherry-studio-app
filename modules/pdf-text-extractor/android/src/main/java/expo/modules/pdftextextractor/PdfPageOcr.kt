@@ -48,12 +48,44 @@ internal class PdfPageOcr(file: File) : Closeable {
 
     fun read(pageIndex: Int, checkCancelled: () -> Unit): PdfPageRecognition {
         checkCancelled()
-        val bitmap = renderer.openPage(pageIndex).use { page ->
+        val bitmap = render(pageIndex)
+        try {
+            checkCancelled()
+            if (!hasVisibleContent(bitmap)) return PdfPageRecognition("")
+            val reader = recognizer ?: ImageTextRecognizer().also { recognizer = it }
+            val text = reader.read(bitmap, checkCancelled)
+            return if (hasUsablePdfText(text)) PdfPageRecognition(text)
+                else PdfPageRecognition("", unrecognized = true)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    /** False denotes a blank page; callers own the temporary JPEG's lifetime. */
+    fun renderToFile(pageIndex: Int, output: File, checkCancelled: () -> Unit): Boolean {
+        checkCancelled()
+        val bitmap = render(pageIndex, 2048.0)
+        try {
+            checkCancelled()
+            if (!hasVisibleContent(bitmap)) return false
+            output.outputStream().use {
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it))
+                    throw IOException("PDF page encoding failed")
+            }
+            checkCancelled()
+            return true
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun render(pageIndex: Int, maxDimension: Double = 2560.0): Bitmap =
+        renderer.openPage(pageIndex).use { page ->
             val width = page.width.toDouble()
             val height = page.height.toDouble()
             if (width <= 0 || height <= 0) throw IOException("Invalid PDF page dimensions")
             val scale = min(
-                3.0, min(2560.0 / maxOf(width, height), sqrt(4_000_000.0 / (width * height)))
+                3.0, min(maxDimension / maxOf(width, height), sqrt(4_000_000.0 / (width * height)))
             )
             Bitmap.createBitmap(
                 (width * scale).toInt().coerceAtLeast(1),
@@ -69,18 +101,6 @@ internal class PdfPageOcr(file: File) : Closeable {
                 }
             }
         }
-        try {
-            checkCancelled()
-            if (!hasVisibleContent(bitmap)) return PdfPageRecognition("")
-            val reader = recognizer ?: ImageTextRecognizer().also { recognizer = it }
-            val text = reader.read(bitmap, checkCancelled)
-            // A successful OCR call with no text may be a photograph, cover or scan noise.
-            return if (hasUsablePdfText(text)) PdfPageRecognition(text)
-                else PdfPageRecognition("", unrecognized = true)
-        } finally {
-            bitmap.recycle()
-        }
-    }
 
     private fun hasVisibleContent(bitmap: Bitmap): Boolean {
         val row = IntArray(bitmap.width)

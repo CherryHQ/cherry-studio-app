@@ -6,6 +6,11 @@ import ImageIO
 internal func recognizeImageFile(
   _ url: URL, request: PdfExtractionRequest, languages: [String]
 ) throws -> String {
+  let image = try decodeImageForOcr(url, request: request)
+  return try request.recognize(image, languages: languages)
+}
+
+internal func decodeImageForOcr(_ url: URL, request: PdfExtractionRequest) throws -> CGImage {
   try request.checkCancellation()
   guard let source = CGImageSourceCreateWithURL(
     url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary
@@ -34,7 +39,7 @@ internal func recognizeImageFile(
   context.draw(image, in: rect)
   guard let opaque = context.makeImage() else { throw FailedToLoadImageException() }
   try request.checkCancellation()
-  return try request.recognize(opaque, languages: languages)
+  return opaque
 }
 
 internal class FailedToLoadImageException: Exception {

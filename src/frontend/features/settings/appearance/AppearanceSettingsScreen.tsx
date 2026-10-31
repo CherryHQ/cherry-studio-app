@@ -12,6 +12,7 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
+import { LocalOcrSetting } from './components/LocalOcrSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -78,6 +79,7 @@ export default function AppearanceSettingsScreen() {
             value={isWatermarkEnabled}
           />
           <DocumentParserSetting />
+          <LocalOcrSetting />
         </Section>
       </SettingsScrollPage>
       <OptionPickerBottomSheet

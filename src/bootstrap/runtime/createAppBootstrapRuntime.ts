@@ -171,6 +171,7 @@ export function createAppBootstrapRuntime(
     dataApiDependencies,
     disposeSystemEntry,
     disposeAppUpdate,
+    disposeLocalOcr,
     disposeSkills,
     initializeSkills,
     hasPendingSkillStorageWork,
@@ -255,7 +256,12 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await Promise.all([disposeSystemEntry(), disposeSkills(), disposeAppUpdate()]);
+        await Promise.all([
+          disposeSystemEntry(),
+          disposeSkills(),
+          disposeAppUpdate(),
+          disposeLocalOcr(),
+        ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;

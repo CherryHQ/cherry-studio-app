@@ -67,6 +67,7 @@ export const BUILT_IN_TOOL_TITLE_KEYS = {
   health_list_workouts: 'chat.builtinTool.health.listWorkouts',
   edit_file: 'chat.builtinTool.file.edit',
   read_file: 'chat.builtinTool.file.read',
+  extract_document: 'chat.builtinTool.file.extract',
   write_file: 'chat.builtinTool.file.write',
   generate_image: 'chat.builtinTool.media.generateImage',
   web_search: 'chat.builtinTool.web.search',

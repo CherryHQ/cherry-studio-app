@@ -173,7 +173,7 @@ not logged.
   data-plane traffic continue to use `expo/fetch` or a specialized streaming client. Ordinary
   non-streaming Web Search provider APIs and provider account OAuth use this transport through
   their domain adapters.
-- Whole-APK transfers use Expo FileSystem's native streaming downloader for bounded memory, progress
+- Whole-APK and local OCR model transfers use Expo FileSystem's native streaming downloader for bounded memory, progress
   and cancellation. Release metadata and checksum text still use this HTTP client.
 - Device discovery such as mDNS or UDP, raw TCP, platform local-network permissions, cleartext HTTP
   policy, and certificate trust remain outside this module.
