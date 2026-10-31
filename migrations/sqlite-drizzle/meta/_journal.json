@@ -92,6 +92,13 @@
       "when": 1792209852632,
       "tag": "0012_message_tree",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793348599902,
+      "tag": "0013_ssh_profiles",
+      "breakpoints": true
     }
   ]
 }

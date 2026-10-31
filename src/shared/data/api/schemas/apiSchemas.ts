@@ -14,9 +14,11 @@ import type { PluginConnectionSchemas } from './pluginConnections';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
 import type { SkillSchemas } from './skills';
+import type { SshProfileSchemas } from './sshProfiles';
 import type { TrashSchemas } from './trash';
 
-export type ApiSchemas = TrashSchemas &
+export type ApiSchemas = SshProfileSchemas &
+  TrashSchemas &
   AgentSchemas &
   AgentToolBindingSchemas &
   AgentSessionMessageSchemas &

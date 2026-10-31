@@ -72,6 +72,7 @@ import {
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
+import type { SshRuntime } from '@/backend/services/ssh';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
@@ -111,6 +112,7 @@ export function createBackend(
     backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
+    ssh: SshRuntime;
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
     diagnostics: DiagnosticsModule;
@@ -354,6 +356,7 @@ export function createBackend(
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
+      ssh: infrastructure.ssh,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
       file: {

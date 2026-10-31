@@ -67,6 +67,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'reminder_list_items',
   'reminder_update_item',
   'run_js',
+  'ssh_execute',
   'web_fetch',
   'web_search',
   'write_file',
@@ -124,6 +125,7 @@ function describe(
  * mode.
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
+  describe('ssh_execute', 'ask', { autoApprovalEligible: false, platforms: ['ios', 'android'] }),
   describe('agent_create', 'ask', { agentCapability: 'agents' }),
   describe('agent_get', 'auto', { agentCapability: 'agents', effect: 'read' }),
   describe('agent_list', 'auto', { agentCapability: 'agents', effect: 'read' }),

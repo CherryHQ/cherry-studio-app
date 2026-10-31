@@ -66,6 +66,18 @@ describe('shared chat route contract', () => {
     });
   });
 
+  test('carries an SSH selection only with its draft and rejects malformed identities', () => {
+    const sshDraftId = '00000000-0000-7000-8000-000000000001';
+    const target = { kind: 'draft' as const, agentId: 'agent-1', sshDraftId };
+    expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
+    expect(chatRouteParams({ kind: 'session', sessionId: 'session-1' }).sshDraftId).toBeUndefined();
+    expect(parseChatRoute({ sessionId: 'session-1', sshDraftId })).toEqual({
+      status: 'ready',
+      target: { kind: 'session', sessionId: 'session-1' },
+    });
+    expect(parseChatRoute({ agentId: 'agent-1', sshDraftId: 'invalid' }).status).toBe('invalid');
+  });
+
   test('preserves a message destination and repeated-navigation identity', () => {
     const target = {
       kind: 'session' as const,

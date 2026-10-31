@@ -8,5 +8,7 @@ module.exports = {
     '**/node_modules/react-native-anydoc/ios/AnydocCore.xcframework/**/*',
     // pnpm generates executable shims with absolute install paths inside workspace packages.
     '**/node_modules/.bin/**/*',
+    // The committed SSH source pin determines compatibility, not its local download cache.
+    'modules/ssh/.cache/**/*',
   ],
 };

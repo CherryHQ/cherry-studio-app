@@ -5,6 +5,7 @@ import type { DevicePermissionScope, SystemPermissionState } from '@/shared/cont
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import type { SshTarget } from '@/shared/data/types/ssh';
 
 import type { TurnToolResources } from '../../resources/managedFileResolver';
 import { managedFileResolver } from '../../resources/managedFileResolver';
@@ -62,6 +63,43 @@ describe('createSystemCapabilitySource', () => {
       'read_file',
       'write_file',
     ]);
+  });
+
+  test('exposes SSH only for a selected target and preserves only its explicit scoped grant', async () => {
+    let target: SshTarget | null = null;
+    const ssh: NonNullable<SystemCapabilityServices['ssh']> = {
+      isAvailable: () => true,
+      resolveAgentTarget: async () => target,
+      executeForAgent: jest.fn(),
+    };
+    const options = { ssh, sessionId: 'conversation' };
+    expect(capabilityIds(await resolve({}, options))).not.toContain('ssh_execute');
+    target = {
+      selectionId: 'selection',
+      profile: {
+        id: 'connection',
+        revision: 'revision',
+        name: 'Router',
+        host: 'router.local',
+        port: 22,
+        username: 'admin',
+        authMethod: 'password',
+        fingerprint: 'SHA256:key',
+      },
+      grant: null,
+    };
+    const command = (tools: readonly RuntimeTool[]) =>
+      tools.find((tool) => tool.providerName === 'ssh_execute');
+    expect(command(await resolve({}, options))).toMatchObject({
+      approval: 'ask',
+      autoApprovalEligible: false,
+    });
+    target = { ...target, grant: { id: 'grant', expiresAt: Date.now() + 3600000 } };
+    expect(command(await resolve({}, options))).toMatchObject({
+      approval: 'auto',
+      autoApprovalEligible: false,
+    });
+    expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
   });
 
   test('applies the shared read/mutation approval to file-library tools, defers management, and honors the group deny-list', async () => {
@@ -761,13 +799,22 @@ type Scenario = {
 
 async function resolve(
   scenario: Scenario,
-  options: { askUser?: AskUserQuestion; platform?: string } = {},
+  options: {
+    askUser?: AskUserQuestion;
+    platform?: string;
+    ssh?: SystemCapabilityServices['ssh'];
+    sessionId?: string;
+  } = {},
 ): Promise<readonly RuntimeTool[]> {
-  const source = createSystemCapabilitySource(SERVICES, {
-    ...dependencies(scenario),
-    platform: options.platform ?? 'ios',
-  });
+  const source = createSystemCapabilitySource(
+    { ...SERVICES, ssh: options.ssh },
+    {
+      ...dependencies(scenario),
+      platform: options.platform ?? 'ios',
+    },
+  );
   return source.getTools({
+    sessionId: options.sessionId,
     acceptsImages: true,
     askUser: options.askUser ?? noAskUser,
     documentParserMode: 'builtin',
