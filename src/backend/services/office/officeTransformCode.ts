@@ -1,10 +1,6 @@
 // Trusted code for a fresh QuickJS compute job. No model-written code, paths, network or DOM UI.
-// The algorithms follow Desktop's office-transform patch-copy and run-edit recipes.
 import { officeImageTransformCode } from './officeImageTransformCode';
-import { OFFICE_MAX_FILE_BYTES } from './officePackageCode';
-
-/** Decompressed package bytes one job may hold. */
-const OFFICE_MAX_EXPANDED_BYTES = 2 * OFFICE_MAX_FILE_BYTES;
+import { officeInventoryCode } from './officeInventoryCode';
 /**
  * Largest XML part parsed into a tree. xmldom takes about 180 bytes of heap and 3.5 s per MiB on a
  * Mac; 2 MiB of sheet XML is roughly 10,000 rows of four cells.
@@ -21,30 +17,9 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const fail = message => { throw new Error(message); };
 const bytes = readInput(0);
-const seen = new Set();
-let inflated = 0;
-const parts = zip.unzipSync(bytes, { filter: entry => {
-  inflated += entry.originalSize;
-  if (seen.has(entry.name) || seen.size >= 4096 || !Number.isSafeInteger(entry.originalSize) ||
-      entry.originalSize > ${OFFICE_MAX_FILE_BYTES} || inflated > ${OFFICE_MAX_EXPANDED_BYTES} ||
-      entry.name.includes('\\') || entry.name.startsWith('/') || ['__proto__', 'constructor', 'prototype'].includes(entry.name) || entry.name.split('/').includes('..'))
-    fail('The Office package has duplicate, unsafe or oversized parts.');
-  seen.add(entry.name);
-  return true;
-}});
+const { parts } = readOfficePackage(bytes);
 const docs = new Map();
 const dirty = new Set();
-function decode(data) {
-  if (data[0] === 255 && data[1] === 254 || data[0] === 254 && data[1] === 255) {
-    const little = data[0] === 255;
-    if (data.length % 2) fail('Malformed UTF-16 XML.');
-    let value = '';
-    for (let i = 2; i < data.length; i += 2) value += String.fromCharCode(little ? data[i] | data[i+1] << 8 : data[i] << 8 | data[i+1]);
-    return value;
-  }
-  if (data.subarray(0, 100).includes(0)) fail('XML must be UTF-8 or UTF-16 with a byte-order mark.');
-  return zip.strFromU8(data).replace(/^\ufeff/, '');
-}
 function parse(text) {
   if (/<!DOCTYPE/i.test(text)) fail('Office XML with a DOCTYPE is unsupported.');
   const doc = new xml.DOMParser({ onError: (level, message) => fail('Invalid Office XML: ' + message) }).parseFromString(text, 'application/xml');
@@ -57,7 +32,7 @@ function document(path) {
     if (!Object.prototype.hasOwnProperty.call(parts, path)) fail('Missing Office part: ' + path);
     // An XML tree takes many times its text in memory; media and other parts are only copied.
     if (parts[path].length > ${OFFICE_MAX_XML_PART_BYTES}) fail('The Office part ' + path + ' has ' + (parts[path].length / 1048576).toFixed(1) + ' MiB of XML; this device can parse at most ${OFFICE_MAX_XML_PART_BYTES / 1048576} MiB per part. Use run_office_script to read large sheets.');
-    docs.set(path, parse(decode(parts[path])));
+    docs.set(path, parse(decodeOfficeXml(parts[path])));
   }
   return docs.get(path);
 }
@@ -241,7 +216,8 @@ function sheetCells(root) {
 let sharedStrings;
 function valueOfCell(cell) {
   if (!cell) return { value: null };
-  const raw = children(cell, S, 'v')[0]?.textContent || '';
+  const savedValue = children(cell, S, 'v')[0];
+  const raw = savedValue?.textContent || '';
   const type = cell.getAttribute('t');
   let value = raw;
   if (type === 's') {
@@ -254,7 +230,7 @@ function valueOfCell(cell) {
   else if (type === 'b') { if (!['0', '1'].includes(raw)) fail('Invalid boolean cell.'); value = raw === '1'; }
   else if (!type || type === 'n') { value = raw === '' ? null : Number(raw); if (value !== null && !Number.isFinite(value)) fail('Invalid numeric cell.'); }
   const formula = children(cell, S, 'f')[0];
-  return { value, type: type || 'n', ...(formula ? { formula: formula.textContent, cached: true } : {}) };
+  return { value, type: type || 'n', ...(formula ? { formula: formula.textContent, cached: !!savedValue && (type === 'str' || raw !== '') } : {}) };
 }
 function editSheet() {
   const path = sheetPath(request.sheet);
@@ -326,6 +302,7 @@ function editSheet() {
 }
 function inspect() {
   if (request.kind === 'images') return inspectPictures();
+  if (request.kind === 'structure') return inspectOfficeStructure();
   const offset = request.offset, limit = request.limit;
   if (request.format === 'xlsx') {
     const list = sheets();
@@ -357,6 +334,7 @@ function read() {
   const range = paragraphRange(text, anchor);
   return { anchor, text, ...(anchor.charRange ? { selected_text: text.slice(range[0], range[1]) } : {}) };
 }
+${officeInventoryCode}
 if (request.operation === 'inspect') return inspect();
 if (request.operation === 'read') return read();
 if (Object.keys(parts).some(path => path.startsWith('_xmlsignatures/'))) fail('Signed Office documents cannot be edited without invalidating their signatures.');
@@ -380,5 +358,5 @@ for (const path of dirty) {
   parts[path] = zip.strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + text);
 }
 if (Object.keys(parts).length > 4096) fail('Edited Office package has too many parts.');
-return { size: saveOffice(zip.zipSync(parts, { level: 6 }), request.format) };
+return { size: saveOffice(zip.zipSync(parts, { level: 6 }), request.format, bytes) };
 `;

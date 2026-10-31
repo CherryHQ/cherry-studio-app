@@ -243,3 +243,67 @@ test('cancellation after native completion prevents publication', async () => {
   expect(files.createFileEntry).not.toHaveBeenCalled();
   expect(files.discard).toHaveBeenCalledWith('file:///cache/1.docx');
 });
+
+test('comparison is independently authorized before reading either package', async () => {
+  const { tools, files, sandbox } = setup();
+  const tool = tools.find((tool) => tool.providerName === 'inspect_office_file')!;
+  await expect(
+    tool.execute({
+      input: { file_entry_id: SOURCE, kind: 'check', against_file_entry_id: IMAGE },
+      signal: new AbortController().signal,
+      turnId: 'turn',
+      toolCallId: 'check',
+    }),
+  ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+  expect(files.resolveAvailable).not.toHaveBeenCalled();
+  expect(sandbox.run).not.toHaveBeenCalled();
+});
+
+test('check passes the untouched comparison snapshot to the package checker and preserves finding totals', async () => {
+  const { tools, sandbox } = setup();
+  sandbox.run.mockImplementationOnce(async ({ onSettled }) => {
+    onSettled?.();
+    return {
+      status: 'ok',
+      result: JSON.stringify({
+        kind: 'check',
+        errors: 3,
+        warnings: 0,
+        existing: 1,
+        compared: true,
+        total: 3,
+        offset: 2,
+        findings: [],
+      }),
+      logs: '',
+      logsTruncated: false,
+      durationMs: 1,
+    };
+  });
+  const result = await tools
+    .find((tool) => tool.providerName === 'inspect_office_file')!
+    .execute({
+      input: {
+        file_entry_id: SOURCE,
+        kind: 'check',
+        against_file_entry_id: SOURCE,
+        offset: 2,
+        limit: 1,
+      },
+      signal: new AbortController().signal,
+      turnId: 'turn',
+      toolCallId: 'check',
+    });
+  expect(result.value).toMatchObject({
+    status: 'read',
+    kind: 'check',
+    compared: true,
+    errors: 3,
+    total: 3,
+    against_file_entry_id: SOURCE,
+  });
+  expect(sandbox.run.mock.calls[0][0].files?.inputs).toEqual([
+    `file:///managed/${SOURCE}`,
+    `file:///managed/${SOURCE}`,
+  ]);
+});

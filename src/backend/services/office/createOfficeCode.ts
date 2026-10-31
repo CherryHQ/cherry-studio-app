@@ -144,12 +144,23 @@ const docxCode = docx.code.replace(
   return data => { const ids = typeof data === 'string' ? texts : objects; if (!ids.has(data)) ids.set(data, (++next).toString(16).padStart(40, '0')); return ids.get(data); }; })();`,
 );
 
+// PptxGenJS 4.0.1 writes one master, but declares a different master for every slide. Keep its
+// content types aligned with the actual parts; package checks must still reject dangling entries.
+const PPTX_MASTER_OVERRIDE =
+  '`<Override PartName="/ppt/slideMasters/slideMaster${t+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>`';
+if (!pptxgenjs.code.includes(PPTX_MASTER_OVERRIDE))
+  throw new Error('The pinned PptxGenJS master declaration changed.');
+const pptxCode = pptxgenjs.code.replace(
+  PPTX_MASTER_OVERRIDE,
+  `(t===0?${PPTX_MASTER_OVERRIDE.replace('${t+1}', '1')}:"")`,
+);
+
 /** An expression evaluating to the pinned generator library for one format. */
 export function officeLibraryCode(format: OfficeFormat): string {
   if (format === 'docx')
     return `(() => { const module = { exports: {} }; const exports = module.exports;\n${docxCode}\n${storeDocumentMedia}\nreturn module.exports; })()`;
   if (format === 'xlsx') return `(() => {\n${xlsx.code}\nreturn XLSX; })()`;
-  return `(() => { const window = globalThis;\n${pptxgenjs.code}\nreturn PptxGenJS; })()`;
+  return `(() => { const window = globalThis;\n${pptxCode}\nreturn PptxGenJS; })()`;
 }
 
 const renderers: Record<OfficeFormat, string> = {

@@ -25,6 +25,7 @@ export function createOfficeScriptCode(
   format: OfficeFormat,
   script: string,
   inputs: Readonly<Record<string, Pick<OfficeScriptInput, 'name' | 'mediaType' | 'size'>>>,
+  againstId?: string,
 ): string {
   const described = Object.fromEntries(
     Object.entries(inputs).map(([id, input], index) => [
@@ -53,11 +54,16 @@ const inputs = (() => {
     },
   });
 })();
+// Keep the comparison snapshot outside the script's mutable inputs and byte views.
+const publishOfficeOutput = (() => {
+  const original = ${againstId ? `readInput(${described[againstId].index}).slice()` : 'undefined'};
+  return output => saveOffice(output, '${format}', original);
+})();
 const output = await (async () => {
 ${script}
 })();
 if (output === undefined || output === null) return null;
-return saveOffice(output, '${format}', true);
+return publishOfficeOutput(output);
 `;
 }
 
@@ -66,6 +72,7 @@ export async function runOfficeScript(input: {
   format: OfficeFormat;
   script: string;
   inputs: Readonly<Record<string, OfficeScriptInput>>;
+  againstId?: string;
   output: string;
   sandbox: JsSandbox;
   signal: AbortSignal;
@@ -74,7 +81,7 @@ export async function runOfficeScript(input: {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
-    const code = createOfficeScriptCode(input.format, input.script, input.inputs);
+    const code = createOfficeScriptCode(input.format, input.script, input.inputs, input.againstId);
     const files = Object.values(input.inputs);
     submitted = true;
     const outcome = await input.sandbox.run({
