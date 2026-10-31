@@ -12,6 +12,7 @@ export type BuiltInToolIconName =
   | 'web';
 
 export const builtInToolIconNames = {
+  ssh_execute: 'code',
   inspect_office_file: 'fileText',
   read_office_content: 'fileText',
   edit_document: 'fileEdit',

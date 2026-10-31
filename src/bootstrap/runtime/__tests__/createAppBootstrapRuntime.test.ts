@@ -25,6 +25,7 @@ const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
 const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
+const mockSsh = { kind: 'ssh', hasPendingStorageWork: () => false };
 const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime', hasPendingStorageWork: () => false };
 const mockMcpRuntime = { kind: 'mcp-runtime', hasPendingStorageWork: jest.fn(() => false) };
@@ -149,6 +150,7 @@ const createRuntime = () =>
     BackupRuntime: mockBackup,
     TrashRuntime: mockTrash,
     DesktopConnectionRuntime: mockDesktopConnections,
+    SshRuntime: mockSsh,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,
     DiagnosticBundleService: mockDiagnostics,
@@ -325,6 +327,7 @@ describe('createAppBootstrapRuntime', () => {
       backup: mockBackup,
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
+      ssh: mockSsh,
       remoteAgent: mockRemoteAgent,
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,

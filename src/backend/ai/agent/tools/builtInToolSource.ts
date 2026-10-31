@@ -1,3 +1,4 @@
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 /**
  * The Host's built-in tool catalog, resolved once per turn.
  *
@@ -14,8 +15,6 @@
  * change outside Cherry, so a catalog cached across turns would offer tools the
  * user just revoked.
  */
-
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
@@ -71,6 +70,7 @@ import {
 import { createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
 import { createTranscribeAudioTool } from './transcribeAudioTool';
+import { createSshTool, type SshToolAccess } from './sshTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
 import { createWriteFileTool } from './writeFileTool';
@@ -100,6 +100,7 @@ export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
     workspaceFolderId?: string | null;
+    sessionId?: string;
     agentId?: string;
     /** The Host's response channel for `ask_user_question`. */
     askUser: AskUserQuestion;
@@ -133,6 +134,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  */
 export type SystemCapabilityServices = {
   voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
+  ssh?: SshToolAccess;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
@@ -147,6 +149,7 @@ export function createSystemCapabilitySource(
   return {
     async getTools({
       workspaceFolderId,
+      sessionId,
       agentId,
       askUser,
       model,
@@ -183,13 +186,23 @@ export function createSystemCapabilitySource(
         acceptsImages,
         transcriptionReady ?? false,
       );
+      if (sessionId && services.ssh?.isAvailable()) {
+        const target = await services.ssh.resolveAgentTarget(sessionId);
+        if (target) catalog.set('ssh_execute', createSshTool(services.ssh, sessionId, target));
+      }
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
         return policy && tool
           ? [
               bindTurnResources(
-                { ...tool, ...policy, effect: descriptor.effect ?? 'write' },
+                {
+                  ...tool,
+                  ...policy,
+                  effect: descriptor.effect ?? 'write',
+                  // Only this explicitly scoped user grant can promote SSH approval.
+                  ...(descriptor.capabilityId === 'ssh_execute' ? { approval: tool.approval } : {}),
+                },
                 resources,
               ),
             ]
@@ -272,7 +285,7 @@ function createCatalog(
   workspaceName: string | undefined,
   acceptsImages: boolean,
   transcriptionReady: boolean,
-): ReadonlyMap<string, RuntimeTool> {
+): Map<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
     createAskUserQuestionTool(askUser),

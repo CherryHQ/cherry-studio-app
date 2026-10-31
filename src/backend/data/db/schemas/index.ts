@@ -15,9 +15,11 @@ import { paintingTable } from './painting';
 import { paintingBoardTable } from './paintingBoard';
 import { pluginAuthorizationTable } from './pluginAuthorization';
 import { preferenceTable } from './preference';
+import { sshProfileTable } from './sshProfile';
 import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
 
+export * from './sshProfile';
 export * from './agent';
 export * from './agentGlobalSkill';
 export * from './agentSkill';
@@ -48,6 +50,7 @@ export type PreferenceRow = typeof preferenceTable.$inferSelect;
 export type InsertPreferenceRow = typeof preferenceTable.$inferInsert;
 
 export const schema = {
+  sshProfileTable,
   agentTable,
   agentGlobalSkillTable,
   agentSkillTable,

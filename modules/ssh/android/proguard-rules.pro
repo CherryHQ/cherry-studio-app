@@ -1,0 +1,3 @@
+-keep class expo.modules.ssh.SshNative { *; }
+-keep interface expo.modules.ssh.SshOutput { *; }
+-keepclassmembers class * implements expo.modules.ssh.SshOutput { public void emit(...); }

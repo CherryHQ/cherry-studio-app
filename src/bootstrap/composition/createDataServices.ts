@@ -16,6 +16,7 @@ import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { sshProfileService } from '@/backend/data/services/SshProfileService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
 
@@ -46,6 +47,7 @@ export function createDataServices({
     cache,
     contentSearch: contentSearchService,
     desktopConnection: desktopConnectionService,
+    sshProfile: sshProfileService,
     entitySearch: entitySearchService,
     fileEntry: fileEntryService,
     job: jobService,

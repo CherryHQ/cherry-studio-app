@@ -264,12 +264,14 @@ export function useAgentChatDraftHandoff(
 
 export function useAgentChatControls(input: {
   agentId?: string;
+  sshDraftId?: string;
   workspaceFolderId?: string | null;
   sessionId?: string;
   composerKey: number;
 }) {
   const { client, sendMessage } = useAgentChatContext();
-  const { agentId, composerKey, sessionId, workspaceFolderId } = input;
+  const { agentId, composerKey, sessionId, workspaceFolderId, sshDraftId } = input;
+  const ssh = useBackendModule('ssh');
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
@@ -373,6 +375,7 @@ export function useAgentChatControls(input: {
         ...(state && selectRunningAnswerId(state) ? {} : { send: pending }),
       });
       try {
+        if (!sessionId && sshDraftId) await ssh.attachDraftTarget(sshDraftId, request.sessionId);
         await sendMessage({
           ...request,
           agentId,
@@ -380,6 +383,8 @@ export function useAgentChatControls(input: {
           isNewSession: pending.isNewSession,
           ...(!sessionId && workspaceFolderId ? { workspaceFolderId } : {}),
         });
+        if (!sessionId && sshDraftId)
+          void ssh.selectTarget(`draft:${sshDraftId}`, null).catch(() => {});
         if (isCurrent()) {
           setSubmission((current) =>
             current?.composerKey === composerKey && current.userMessageId === request.userMessageId
@@ -388,6 +393,8 @@ export function useAgentChatControls(input: {
           );
         }
       } catch (error) {
+        if (!sessionId && sshDraftId)
+          void ssh.selectTarget(request.sessionId, null).catch(() => {});
         if (isCurrent())
           setSubmission((current) =>
             current?.composerKey === composerKey && current.userMessageId === request.userMessageId
@@ -400,7 +407,7 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId],
+    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId, sshDraftId, ssh],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {

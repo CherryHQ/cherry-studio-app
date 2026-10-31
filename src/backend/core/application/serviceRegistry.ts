@@ -29,6 +29,7 @@ import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import { SshRuntime } from '@/backend/services/ssh';
 import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -68,6 +69,7 @@ export const services = {
   AndroidBackgroundActivityRuntime,
   IosBackgroundExecutionSource,
   KeepAliveCoordinator,
+  SshRuntime,
   RemoteConnectionNotificationRuntime,
   BackgroundActivityManager,
   BackgroundReplyRuntime,

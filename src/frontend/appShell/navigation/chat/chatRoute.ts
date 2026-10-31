@@ -7,6 +7,7 @@ const ChatRouteParamsSchema = z.strictObject({
   composerHandoff: z.string().trim().min(1).optional(),
   selectionHandoff: z.string().trim().min(1).optional(),
   workspaceDraftId: z.uuid().optional(),
+  sshDraftId: z.uuid().optional(),
   sessionId: z.string().trim().min(1).optional(),
   messageId: z.string().trim().min(1).optional(),
   messageRequestId: z.string().trim().min(1).optional(),
@@ -23,6 +24,7 @@ export type ChatTarget =
       selectionHandoff?: string;
       /** Identifies the unsent conversation's optional workspace selection. */
       workspaceDraftId?: string;
+      sshDraftId?: string;
     }
   | {
       kind: 'session';
@@ -38,6 +40,7 @@ export type ChatRouteParamsInput = {
   composerHandoff?: string | string[];
   selectionHandoff?: string | string[];
   workspaceDraftId?: string | string[];
+  sshDraftId?: string | string[];
   sessionId?: string | string[];
   messageId?: string | string[];
   messageRequestId?: string | string[];
@@ -55,6 +58,7 @@ export function chatRouteParams(target: ChatTarget) {
         composerHandoff: undefined,
         selectionHandoff: target.selectionHandoff,
         workspaceDraftId: undefined,
+        sshDraftId: undefined,
         sessionId: target.sessionId,
         messageId: target.messageId,
         messageRequestId: target.messageRequestId,
@@ -64,6 +68,7 @@ export function chatRouteParams(target: ChatTarget) {
         composerHandoff: target.composerHandoff,
         selectionHandoff: target.selectionHandoff,
         workspaceDraftId: target.workspaceDraftId,
+        sshDraftId: target.sshDraftId,
         sessionId: undefined,
         messageId: undefined,
         messageRequestId: undefined,
@@ -90,6 +95,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     composerHandoff: getSingleRouteParam(input.composerHandoff),
     selectionHandoff: getSingleRouteParam(input.selectionHandoff),
     workspaceDraftId: getSingleRouteParam(input.workspaceDraftId),
+    sshDraftId: getSingleRouteParam(input.sshDraftId),
     sessionId: getSingleRouteParam(input.sessionId),
     messageId: getSingleRouteParam(input.messageId),
     messageRequestId: getSingleRouteParam(input.messageRequestId),
@@ -104,6 +110,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     composerHandoff,
     selectionHandoff,
     workspaceDraftId,
+    sshDraftId,
     sessionId,
     messageId,
     messageRequestId,
@@ -128,6 +135,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
         ...(composerHandoff ? { composerHandoff } : {}),
         ...(selectionHandoff ? { selectionHandoff } : {}),
         ...(workspaceDraftId ? { workspaceDraftId } : {}),
+        ...(sshDraftId ? { sshDraftId } : {}),
       },
     };
   }
