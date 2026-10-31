@@ -39,6 +39,7 @@ function setup(
   ready = Promise.resolve(),
 ) {
   let candidateSession = session;
+  const identityTokens = { accessToken: 'identity-access-token', idToken: 'identity-id-token' };
   const portal = {
     ready,
     getState: jest.fn(() => session),
@@ -48,6 +49,8 @@ function setup(
       if (candidateSession._tag !== 'signedIn') throw new Error('Missing callback session');
       await options?.validate?.({
         state: candidateSession,
+        getIdentityTokens: async () => identityTokens,
+        withIdentityTokens: async (operation) => operation(identityTokens),
         getProductToken: portal.getProductToken,
         getAccount: async () =>
           candidateSession._tag === 'signedIn' ? (candidateSession.account ?? {}) : {},

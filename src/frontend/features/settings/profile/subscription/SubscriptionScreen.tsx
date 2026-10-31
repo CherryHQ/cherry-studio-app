@@ -29,7 +29,7 @@ export default function SubscriptionScreen() {
             key: 'refresh',
             type: 'icon',
             icon: RefreshCwIcon,
-            nativeIcon: 'arrow.clockwise',
+            nativeIcon: require('@/assets/header-toolbar/refresh-cw.png'),
             accessibilityLabel: t(state.isRefreshing ? 'cloud.loading' : 'cloud.refresh'),
             disabled: state.isRefreshing || state.phase === 'signed_out',
             onPress: refresh,

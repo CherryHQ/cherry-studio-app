@@ -1,11 +1,9 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
 import type { AccountsPortal, AccountsPortalOptions } from '@cherryinternal/accounts-portal/client';
 
-const patch = 'patches/@cherryinternal__accounts-portal@0.2.0.patch';
 const directory = dirname(require.resolve('@cherryinternal/accounts-portal/client'));
 
 /** Execute the installed SDK, with only its pure claim/identity helpers supplied by the fixture. */
@@ -70,15 +68,6 @@ async function portal(
   return sdk;
 }
 const response = (body: object) => new Response(JSON.stringify(body), { status: 200 });
-
-test('registers the patch and locks its hash', () => {
-  const hash = createHash('sha256').update(readFileSync(patch)).digest('hex');
-  expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(patch);
-  expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(hash);
-  expect(readFileSync(join(directory, 'AccountsPortal.d.ts'), 'utf8')).toContain(
-    'getIdentityTokens()',
-  );
-});
 
 test('returns the refreshed matched pair instead of mixing old ID and new access tokens', async () => {
   const fetch: NonNullable<AccountsPortalOptions['fetch']> = async () =>

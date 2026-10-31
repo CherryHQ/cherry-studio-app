@@ -14,10 +14,10 @@ any enterprise audience. No geographic region, price, SKU or model name is hardc
 invalid Cloud configuration leaves ordinary local/provider use available and reports subscription
 information as unavailable. This feature has no purchase or renewal entry point.
 
-The pinned Accounts Portal 0.2.0 patch adds `getIdentityTokens()`. It returns a matched access/ID
-pair after refresh and checks the SDK's session and profile generations. `AccountRuntime` also
-checks its community identity before and after the read. Remove the patch when the upstream SDK
-provides this contract; its installed-source regression is
+Accounts Portal 0.2.1 provides `getIdentityTokens()` without a local patch. It returns a matched
+access/ID pair after refresh and checks the SDK's session, profile and sign-in generations.
+`AccountRuntime` also checks its community identity before and after the read. Its installed-SDK
+regressions for matched token refresh and sign-out isolation remain in
 `scripts/__tests__/accountsPortalIdentityTokens.test.ts`.
 
 ## Session and transport

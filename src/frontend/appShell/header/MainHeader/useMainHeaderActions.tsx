@@ -18,7 +18,7 @@ export function useMainHeaderActions(
       accessibilityLabel: t('navigation.newChat'),
       icon: NewConversationIcon,
       key: 'new-chat',
-      nativeIcon: 'square.and.pencil',
+      nativeIcon: require('@/assets/header-toolbar/new-chat.png'),
       onPress: openNewSession,
       testID: 'main-header-new-chat',
       type: 'icon',

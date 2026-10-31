@@ -129,7 +129,6 @@ patchedDependencies:
   '@ai-sdk/openai-compatible@2.0.72': 8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69
   '@ai-sdk/openai@3.0.109': 2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f
   '@anthropic-ai/vertex-sdk@0.22.0': dc49494cc694489210145cb544aa2dce2ab41f237b8b761da036f1b8875b121b
-  '@cherryinternal/accounts-portal@0.2.0': dc150be2d38c7642a83a79d36b4860f712c4ebf3a2c1d6021d7e54bd8876acb7
   '@earendil-works/chord@1.4.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
   '@earendil-works/pi-ai@1.4.0': 79574ee04e0ef57610aa2096ff4b355336eb3cdf076e3420cd2c00e2d261b6bb
   '@earendil-works/pi-codemode@1.4.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
@@ -223,8 +222,8 @@ importers:
         specifier: ^7.29.2
         version: 7.29.7
       '@cherryinternal/accounts-portal':
-        specifier: 0.2.0
-        version: 0.2.0(patch_hash=dc150be2d38c7642a83a79d36b4860f712c4ebf3a2c1d6021d7e54bd8876acb7)
+        specifier: 0.2.1
+        version: 0.2.1
       '@cherrystudio/ai-core':
         specifier: 2.4.3
         version: 2.4.3(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
@@ -1781,8 +1780,8 @@ packages:
   '@chainsafe/netmask@2.0.0':
     resolution: {integrity: sha512-I3Z+6SWUoaljh3TBzCnCxjlUyN8tA+NAk5L6m9IxvCf1BENQTePzPMis97CoN/iMW1St3WN+AWCCRp+TTBRiDg==}
 
-  '@cherryinternal/accounts-portal@0.2.0':
-    resolution: {integrity: sha512-EpwGClZ5qRCNrkVEBBg+wAxz7HsJAk0cL9VhfXZRmyaNxXmOidDL6MeEEhj5xiajwkrhTlAxl+RL49CyR6Jyag==}
+  '@cherryinternal/accounts-portal@0.2.1':
+    resolution: {integrity: sha512-9OWqVKtmFXbW8pXxAlHRrIA5NGL7C3er+EhXWZNkXpkg4yPCrA8d+wzCfKCqr/9+BwuvW0TAmh7MqwMv4PwnFA==}
 
   '@cherrystudio/ai-core@2.4.3':
     resolution: {integrity: sha512-28pZ+gTmWByvdiu9dXOeh0lG7ZW7yW5e99OIMLJpZI2FsAIF0INMi3uw2rE5dBgnB0n4rD8Jb7gFNHRb12IqtQ==}
@@ -11894,7 +11893,7 @@ snapshots:
     dependencies:
       '@chainsafe/is-ip': 2.1.0
 
-  '@cherryinternal/accounts-portal@0.2.0(patch_hash=dc150be2d38c7642a83a79d36b4860f712c4ebf3a2c1d6021d7e54bd8876acb7)': {}
+  '@cherryinternal/accounts-portal@0.2.1': {}
 
   '@cherrystudio/ai-core@2.4.3(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
     dependencies:

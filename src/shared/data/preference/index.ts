@@ -13,6 +13,7 @@ export type {
 export {
   ENTERPRISE_DEFAULT_MODEL_KEYS,
   FONT_SIZE_STEPS,
+  INHERITABLE_PREFERENCE_KEYS,
   PreferenceDefaults,
 } from './preferenceSchema';
 export type { LanguageVarious, PreferenceUpdateOptions } from './preferenceTypes';

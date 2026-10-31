@@ -1,15 +1,29 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { getActiveProfile, LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
+import { PreferenceDefaults, ThemeMode } from '@/shared/data/preference';
 
 import { installationProfiles, selectActiveProfile } from '../installationProfiles';
 
 const mockStorage = new Map<string, string>();
+const mockPreferences = {
+  ...PreferenceDefaults,
+  'ui.theme_mode': ThemeMode.dark,
+  'app.user.name': 'Do not inherit',
+};
 const mockFiles = new Set<string>();
 let mockDeletionFails = false;
 const profileId = '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60';
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60' }));
+jest.mock('@/backend/core/application/Application', () => ({
+  application: {
+    get: () => ({
+      getMultipleRawCached: (keys: (keyof typeof mockPreferences)[]) =>
+        Object.fromEntries(keys.map((key) => [key, mockPreferences[key]])),
+    }),
+  },
+}));
 jest.mock('react-native-mmkv', () => ({
   createMMKV: () => ({
     getString: (key: string) => mockStorage.get(key),
@@ -99,6 +113,10 @@ test('clears content when the selected profile changes and retains the new profi
   installationProfiles().setActive(profile);
   selectActiveProfile();
   expect(getActiveProfile().id).toBe(profileId);
+  expect(getActiveProfile()).toMatchObject({
+    initialPreferences: { 'ui.theme_mode': ThemeMode.dark },
+  });
+  expect(getActiveProfile()).not.toHaveProperty(['initialPreferences', 'app.user.name']);
   expect(mockFiles.has('cache/PdfText/fixture')).toBe(false);
   expect(mockStorage.get('cache-owner')).toBe(profileId);
   mockFiles.add('cache/PdfText/current.json');
