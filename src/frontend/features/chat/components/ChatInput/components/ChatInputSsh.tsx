@@ -1,42 +1,46 @@
+import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import { BottomSheet, Button, ContentState, Section, useAlert } from '@cherrystudio/ui/components';
-import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import { useSshAction, useSshProfiles, useSshTarget } from '@/frontend/hooks/ssh';
 
-export function SshChatControl({ sessionId, draftId }: { sessionId?: string; draftId?: string }) {
-  const { t } = useTranslation();
-  const router = useRouter();
-  const ssh = useBackendModule('ssh');
-  const [pickerContext, setPickerContext] = useState<string | null>(null);
-  const contextId = sessionId ?? (draftId ? `draft:${draftId}` : undefined);
+export function ChatInputSshTarget({
+  contextId,
+  onPress,
+}: {
+  contextId?: string;
+  onPress: () => void;
+}) {
   const target = useSshTarget(contextId);
-  if (!ssh.isAvailable()) return null;
-  function open() {
-    if (contextId) setPickerContext(contextId);
-    else {
-      const id = randomUUID();
-      router.setParams({ sshDraftId: id });
-      setPickerContext(`draft:${id}`);
-    }
-  }
+  if (!target) return null;
   return (
-    <View className="items-start px-3 py-1">
-      <Button variant="ghost" size="sm" onPress={open} accessibilityLabel={t('ssh.selectTarget')}>
-        {target ? `SSH · ${target.profile.username}@${target.profile.host}` : t('ssh.selectTarget')}
+    <View className="max-w-full self-start">
+      <Button
+        variant="secondary"
+        size="sm"
+        shape="pill"
+        onPress={onPress}
+        icon={<NetworkIcon className="size-4 text-foreground" />}
+        testID="chat-ssh-target"
+      >
+        <Button.Label numberOfLines={1}>
+          {`SSH · ${target.profile.username}@${target.profile.host}:${target.profile.port}`}
+        </Button.Label>
       </Button>
-      {pickerContext ? (
-        <SshTargetPicker contextId={pickerContext} onClose={() => setPickerContext(null)} />
-      ) : null}
     </View>
   );
 }
 
-function SshTargetPicker({ contextId, onClose }: { contextId: string; onClose: () => void }) {
+export function ChatInputSshSheet({
+  contextId,
+  onClose,
+}: {
+  contextId: string;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const router = useRouter();
@@ -62,7 +66,24 @@ function SshTargetPicker({ contextId, onClose }: { contextId: string; onClose: (
     else apply();
   }
   return (
-    <BottomSheet open onClose={onClose} size="large" title={t('ssh.selectTarget')}>
+    <BottomSheet
+      open
+      onClose={onClose}
+      size="large"
+      title={t('ssh.selectTarget')}
+      testID="chat-ssh-picker"
+      footer={
+        <Button
+          variant="secondary"
+          onPress={() => {
+            onClose();
+            router.push('/settings/ssh');
+          }}
+        >
+          {t('ssh.manage')}
+        </Button>
+      }
+    >
       <ScrollView contentContainerClassName="gap-5 px-4 pb-6">
         <Text className="text-sm text-muted-foreground">{t('ssh.targetNotice')}</Text>
         {profiles.isLoading ? (
@@ -72,6 +93,8 @@ function SshTargetPicker({ contextId, onClose }: { contextId: string; onClose: (
             title={t('ssh.loadFailed')}
             primaryAction={{ children: t('common.retry'), onPress: () => void profiles.refetch() }}
           />
+        ) : profiles.data?.length === 0 ? (
+          <ContentState.Empty title={t('ssh.empty')} description={t('ssh.description')} />
         ) : (
           <Section>
             <Section.RadioItem
@@ -110,15 +133,6 @@ function SshTargetPicker({ contextId, onClose }: { contextId: string; onClose: (
             />
           </Section>
         ) : null}
-        <Button
-          variant="secondary"
-          onPress={() => {
-            onClose();
-            router.push('/settings/ssh');
-          }}
-        >
-          {t('ssh.manage')}
-        </Button>
       </ScrollView>
     </BottomSheet>
   );

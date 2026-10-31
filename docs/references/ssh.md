@@ -2,8 +2,11 @@
 
 SSH is a local connection capability separate from Cherry desktop pairing. Settings > SSH
 connections owns saved profiles, identity verification and the manual command panel. A connection
-can open a new Agent draft, or the chat composer can select one for its conversation. Opening a draft
-does not send a message or run a command.
+can open a new Agent draft, or the chat composer's plus menu can open the SSH target sheet for its
+conversation. The sheet selects a saved connection, controls the one-hour command grant, and links
+back to Settings to manage profiles. The composer shows a target indicator only after selection;
+tapping it reopens the sheet. Opening a draft or selecting a target does not send a message or run
+a command.
 
 ## Owners
 
