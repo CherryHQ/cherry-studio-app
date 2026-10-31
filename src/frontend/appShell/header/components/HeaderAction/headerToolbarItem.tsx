@@ -1,13 +1,17 @@
 import type { MenuIcon, MenuItem } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
+import type { ComponentProps } from 'react';
 import { View } from 'react-native';
 
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { HeaderAction } from './HeaderAction';
-import type { HeaderActionTone, HeaderNativeIcon, HeaderToolbarAction } from './HeaderAction.types';
+import type { HeaderActionTone, HeaderToolbarAction } from './HeaderAction.types';
 
-const MENU_ICONS: Record<MenuIcon, HeaderNativeIcon> = { branch: 'arrow.triangle.branch' };
+const MENU_ICONS = { branch: 'arrow.triangle.branch' } satisfies Record<
+  MenuIcon,
+  ComponentProps<typeof Stack.Toolbar.MenuAction>['icon']
+>;
 
 /**
  * One action as a direct child of an iOS `Stack.Toolbar`. With the native toolbar's shared glass
@@ -27,6 +31,7 @@ export function renderHeaderToolbarItem(
         accessibilityLabel={action.accessibilityLabel}
         disabled={action.disabled}
         icon={action.nativeIcon}
+        iconRenderingMode="template"
         onPress={action.onPress}
       />
     );
@@ -39,6 +44,7 @@ export function renderHeaderToolbarItem(
         accessibilityLabel={action.accessibilityLabel}
         disabled={action.disabled}
         icon={action.nativeIcon}
+        iconRenderingMode="template"
       >
         {renderMenuSections(action.items)}
       </Stack.Toolbar.Menu>
