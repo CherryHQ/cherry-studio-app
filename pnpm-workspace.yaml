@@ -100,3 +100,4 @@ patchedDependencies:
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
   nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
   react-native-gesture-handler@3.3.0: patches/react-native-gesture-handler@3.3.0.patch
+  expo-modules-core@58.0.26: patches/expo-modules-core@58.0.26.patch
