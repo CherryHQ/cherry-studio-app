@@ -126,6 +126,9 @@ localized content. Library cards show the complete filename so its type remains 
 attachment tiles may omit the extension from the title while retaining the complete accessible
 label and type metadata.
 
+Audio cards use a neutral waveform icon. Compact audio attachments show their extension below
+the filename; opening and transcription state remain caller-owned.
+
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
 file-specific adapters in `@cherrystudio/app-icons` retain the desktop Lucide 0.525.0 vector paths

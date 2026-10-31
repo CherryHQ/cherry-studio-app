@@ -16,7 +16,6 @@ export async function resolveManagedContentAttachments(
   const result = new Map<string, RuntimeTextAttachmentPart | RuntimeDocumentAttachmentPart>();
   for (const [id, attachment] of prepared) {
     const { content, file, report } = attachment;
-    if (!content) continue;
     const metadata = {
       fileEntryId: id,
       mediaType: file.mediaType,
@@ -24,6 +23,16 @@ export async function resolveManagedContentAttachments(
       trust: 'untrusted-user-content' as const,
       attachmentReport: report,
     };
+    if (report.mode === 'audio') {
+      result.set(id, {
+        ...metadata,
+        type: 'text-attachment',
+        text: 'Audio recording attached as a file reference. Audio bytes have not been sent to the model. If transcribe_audio is available, use it and then read_file to access the generated transcript. Otherwise ask the user to transcribe it from the audio file menu after configuring audio-file transcription in Voice settings.',
+        truncated: false,
+      });
+      continue;
+    }
+    if (!content) continue;
     if (content.kind === 'text') {
       result.set(id, {
         ...metadata,

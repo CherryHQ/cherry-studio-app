@@ -196,33 +196,11 @@ function toModel(apiModelId: string, provider: Provider, extra?: Partial<Model>)
     ownedBy: extra?.ownedBy,
     description: extra?.description,
     capabilities: [],
-    ...getOpenAIVoiceModelMetadata(apiModelId),
     supportsStreaming: true,
     isEnabled: true,
     isHidden: false,
     ...extra,
   };
-}
-
-/** /models omits modalities. Keep known audio API families typed before catalog enrichment. */
-function getOpenAIVoiceModelMetadata(modelId: string): Partial<Model> | undefined {
-  const id = modelId.replace(/^openai\//, '');
-  // https://developers.openai.com/api/reference/typescript/resources/audio
-  if (/^(?:tts-1(?:-hd)?(?:-\d{4})?|gpt-4o-mini-tts(?:-\d{4}-\d{2}-\d{2})?)$/.test(id)) {
-    return {
-      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
-      inputModalities: ['text'],
-      outputModalities: ['audio'],
-    };
-  }
-  if (/^(?:whisper-1|gpt-4o(?:-mini)?-transcribe(?:-\d{4}-\d{2}-\d{2})?)$/.test(id)) {
-    return {
-      capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
-      inputModalities: ['audio'],
-      outputModalities: ['text'],
-    };
-  }
-  return undefined;
 }
 
 function dedup<T>(items: T[], getId: (item: T) => string | undefined): T[] {
@@ -770,7 +748,6 @@ const EXCLUDED_OPENAI_MODEL_KEYWORDS = [
 ] as const;
 
 function isSupportedOpenAIModel(modelId: string): boolean {
-  if (getOpenAIVoiceModelMetadata(modelId)) return true;
   const id = modelId.toLowerCase();
   return !EXCLUDED_OPENAI_MODEL_KEYWORDS.some((keyword) => id.includes(keyword));
 }

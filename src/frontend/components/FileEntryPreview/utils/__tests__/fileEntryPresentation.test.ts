@@ -3,6 +3,8 @@ import { canPreviewDocument, fileEntryPreviewKind } from '../fileEntryPresentati
 describe('fileEntryPreviewKind', () => {
   it.each([
     ['image/png', 'image'],
+    ['audio/mpeg', 'audio'],
+    ['AUDIO/MP4; codecs=mp4a', 'audio'],
     ['application/pdf', 'document'],
     ['application/rtf', 'document'],
     ['Text/Rtf; charset=utf-8', 'document'],
@@ -20,12 +22,9 @@ describe('fileEntryPreviewKind', () => {
     expect(fileEntryPreviewKind({ mediaType })).toBe(kind);
   });
 
-  it.each(['audio/mpeg', 'video/quicktime'])(
-    'leaves %s a document until something previews it',
-    (mediaType) => {
-      expect(fileEntryPreviewKind({ mediaType })).toBe('document');
-    },
-  );
+  it.each(['video/quicktime'])('leaves %s a document until something previews it', (mediaType) => {
+    expect(fileEntryPreviewKind({ mediaType })).toBe('document');
+  });
 
   it('ignores media type parameters and casing', () => {
     expect(fileEntryPreviewKind({ mediaType: 'Text/Plain; charset=utf-8' })).toBe('text');

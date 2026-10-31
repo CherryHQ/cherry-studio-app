@@ -38,6 +38,27 @@ describe('createSystemCapabilitySource', () => {
     jest.restoreAllMocks();
   });
 
+  test.each(['needs-model', 'unsupported', 'ready'] as const)(
+    'offers audio transcription only when ready: %s',
+    async (status) => {
+      const source = createSystemCapabilitySource(SERVICES, {
+        ...dependencies({}),
+        platform: 'ios',
+        voice: { getTranscriptionStatus: async () => status, transcribeAudio: jest.fn() },
+      });
+      const tools = await source.getTools({
+        acceptsImages: false,
+        askUser: noAskUser,
+        documentParserMode: 'builtin',
+        disabledCapabilities: [],
+        model: MODEL,
+        resources: TURN_RESOURCES,
+      });
+      expect(capabilityIds(tools).includes('transcribe_audio')).toBe(status === 'ready');
+      if (status === 'ready') expect(approvalOf(tools, 'transcribe_audio')).toBe('auto');
+    },
+  );
+
   test('offers the always-available catalog when nothing is granted or configured', async () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 

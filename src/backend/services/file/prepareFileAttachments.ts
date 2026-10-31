@@ -89,7 +89,7 @@ export async function prepareFileAttachments(
   for (const [id, count] of counts) {
     const file = input.availableFiles.get(id)!;
     const mode = fileAttachmentMode(file)!;
-    if (mode === 'image' && input.target.acceptsImages) {
+    if (mode === 'audio' || (mode === 'image' && input.target.acceptsImages)) {
       result.set(id, { file, report: { mode, sourceTruncated: false, requestTruncated: false } });
       continue;
     }

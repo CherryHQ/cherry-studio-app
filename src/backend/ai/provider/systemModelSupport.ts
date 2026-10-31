@@ -1,16 +1,11 @@
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 import { isImageTransportDescriptorSupported } from '@cherrystudio/ai-runtime/image';
-import { getAiSdkProviderId, resolveVoiceEndpoint } from '@cherrystudio/ai-runtime/provider';
+import { getAiSdkProviderId } from '@cherrystudio/ai-runtime/provider';
 
 import type { ProviderAccountAdapter } from '@/backend/services/providers/account/providerAccountAdapter';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import {
-  isImageGenerationModel,
-  isSpeechToTextModel,
-  isTextGenerationModel,
-  isTextToSpeechModel,
-} from '@/shared/utils/modelPurpose';
+import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 /**
  * Conversation-serving support as answered by the bound Agent Runtime. The
@@ -29,9 +24,10 @@ export interface LanguageServingSupport {
 
 export interface SystemModelSupport {
   /**
-   * Whether one configured model can be offered by product model management.
-   * Conversation support is owned by the
-   * bound Runtime; image generation and voice use independent AI SDK capabilities.
+   * Whether one configured model can be executed by at least one product
+   * feature currently shipped on mobile. Conversation support is owned by the
+   * bound Runtime; image generation remains an independent AI SDK capability,
+   * so either path is sufficient to admit the model.
    */
   isModelSupportedBySystem(provider: Provider, model: Model): boolean;
   filterModelsSupportedBySystem(models: readonly Model[], providers: readonly Provider[]): Model[];
@@ -45,10 +41,6 @@ export function createSystemModelSupport(language: LanguageServingSupport): Syst
     }
     if (isImageGenerationModel(model) && isImageGenerationSupported(provider, model)) {
       return true;
-    }
-
-    if (isTextToSpeechModel(model) || isSpeechToTextModel(model)) {
-      return resolveVoiceEndpoint(provider) !== undefined;
     }
 
     return isTextGenerationModel(model) && language.supportsLanguageModel(provider, model);

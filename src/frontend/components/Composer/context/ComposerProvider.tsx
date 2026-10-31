@@ -34,6 +34,10 @@ type ComposerStateContextValue = {
 type ComposerActionsContextValue = {
   beginSendAttempt: () => number | null;
   endSendAttempt: () => void;
+  /** User edits relinquish any caller-owned draft operation before changing the text. */
+  editDraft: (draft: string) => void;
+  /** Announces user edits and accepted send attempts, including changes to an empty draft. */
+  subscribeDraftEdits: (listener: () => void) => () => void;
   subscribeAttachmentChanges?: (
     listener: (attachments: readonly ComposerAttachmentDraft[]) => void,
   ) => () => void;
@@ -48,7 +52,8 @@ type ComposerActionsContextValue = {
   ) => boolean;
   /**
    * Replaces the whole draft. Only for the cases that own it wholesale — send
-   * clearing it, a failed send restoring it with a functional update to preserve newer text. Anything that *adds* to what the
+   * clearing it, a failed send restoring it with a functional update to preserve newer text,
+   * dictation rewriting its live text only while the draft is still what it wrote. Anything that *adds* to what the
    * user wrote goes through `inputRef` instead: the field owns the buffer and
    * the caret, and a string handed in here would land at neither.
    */
@@ -108,6 +113,17 @@ export function ComposerProvider({
   const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const draftEditListeners = useRef(new Set<() => void>());
+  const subscribeDraftEdits = useCallback((listener: () => void) => {
+    draftEditListeners.current.add(listener);
+    return () => {
+      draftEditListeners.current.delete(listener);
+    };
+  }, []);
+  const editDraft = useCallback((next: string) => {
+    draftEditListeners.current.forEach((listener) => listener());
+    setDraft(next);
+  }, []);
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
   // The surface may remount while file preparation or draft recovery is pending.
@@ -115,6 +131,7 @@ export function ComposerProvider({
     if (activeSendAttemptIdRef.current !== null) return null;
     const attemptId = ++nextSendAttemptIdRef.current;
     activeSendAttemptIdRef.current = attemptId;
+    draftEditListeners.current.forEach((listener) => listener());
     setIsSubmitting(true);
     return attemptId;
   }, []);
@@ -142,6 +159,8 @@ export function ComposerProvider({
     () => ({
       beginSendAttempt,
       endSendAttempt,
+      editDraft,
+      subscribeDraftEdits,
       addAttachments,
       clearAttachments,
       removeAttachment,
@@ -153,6 +172,8 @@ export function ComposerProvider({
     [
       beginSendAttempt,
       endSendAttempt,
+      editDraft,
+      subscribeDraftEdits,
       addAttachments,
       clearAttachments,
       removeAttachment,

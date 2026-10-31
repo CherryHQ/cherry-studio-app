@@ -170,11 +170,7 @@ export function ProviderModelPullPreviewContent({
           value={searchText}
         >
           {showsModelPurposeTabs ? (
-            <ProviderModelPurposeTabs
-              counts={modelPurposeCounts}
-              onChange={setModelPurpose}
-              value={effectiveModelPurpose}
-            />
+            <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
           ) : null}
         </ModelSearchControls>
       }

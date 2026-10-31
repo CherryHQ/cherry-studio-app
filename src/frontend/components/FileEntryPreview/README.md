@@ -16,13 +16,13 @@ logging, and the single opening policy shared by the composer, messages, and fil
   deliverables are hidden after resolution, including files moved to trash.
 - `FileEntryImage`: the same inline image for callers that already hold a resolved entry and URI.
 - `FileEntrySkeleton` and `FileEntryAttachmentSkeleton`: loading placeholders owned by the adapter.
-- `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
+- `fileEntryPreviewKind`: one `mediaType` classifier for `audio`, `image`, `markdown`, `text`, `html`, and
   `document`. JSON, XML, and YAML belong to `text`; PDF, Office, RTF and unsupported types belong
   to `document`.
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
 - `useOpenFileEntry`: `openFileEntry` opens supported kinds in the file pane beside chat when the
   drawer group has room for one, otherwise routes them to `/files/[fileEntryId]`, and hands
-  unsupported documents to the platform; PDF, Office Open XML and RTF open in the app. It reports
+  audio and unsupported documents to the platform; PDF, Office Open XML and RTF open in the app. It reports
   where the file opened. Previews opened from a chat, or from a library page that carries the chat
   it was opened from, retain that chat's route identity so Office selections and added files return
   to its existing composer. `openFileEntryWithSystem` is the viewer's
@@ -60,6 +60,10 @@ text and unsupported documents.
 The composer's `attachment` and library's `card` variants use the shared file icon/title layout.
 Extension-based icon routing changes artwork only; it never changes product classification or
 opening. Text excerpts remain a separate follow-up.
+
+Audio uses the shared waveform icon and retains its format label in compact attachment cards.
+Opening still delegates to the system. Chat message attachments project the voice module's
+file-scoped transcription progress into the existing progress frame and badge.
 
 The viewer and export behavior are documented in
 [File Preview And Viewer](../../../../docs/references/file-preview-and-viewer.md).

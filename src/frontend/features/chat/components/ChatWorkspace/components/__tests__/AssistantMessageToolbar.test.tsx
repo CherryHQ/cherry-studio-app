@@ -11,6 +11,15 @@ jest.mock('../../translation/MessageTranslationProvider', () => ({
   useMessageTranslationStore: () => null,
 }));
 
+const mockToggleSpeech = jest.fn();
+const mockSpeech = jest.fn((_messageId: string, _text: string | undefined) => ({
+  isSpeaking: false,
+  toggle: mockToggleSpeech,
+}));
+jest.mock('../../../../voice/useMessageSpeech', () => ({
+  useMessageSpeech: (messageId: string, text: string | undefined) => mockSpeech(messageId, text),
+}));
+
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockShare = jest.fn();
@@ -225,6 +234,17 @@ describe('AssistantMessageToolbar', () => {
     expect(menuItem('translate')).toBeUndefined();
     act(() => menuItem('share')?.onPress());
     expect(mockShare).toHaveBeenCalledWith('assistant-1', undefined);
+  });
+
+  test('reads the answer text aloud from the toolbar', () => {
+    renderToolbar(createMessage('success', 'Answer'));
+
+    expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer');
+    const button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
+    expect(button?.props.accessibilityLabel).toBe('voice.speech.start');
+    act(() => button?.props.onPress());
+    expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
+    expect(menuItem('read-aloud')).toBeUndefined();
   });
 
   test('adds an answer from the model chosen with @', async () => {

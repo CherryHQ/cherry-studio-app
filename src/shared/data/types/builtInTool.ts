@@ -66,6 +66,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'reminder_list_items',
   'reminder_update_item',
   'run_js',
+  'transcribe_audio',
   'web_fetch',
   'web_search',
   'write_file',
@@ -222,6 +223,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('library_list_trash', 'auto', { effect: 'read' }),
   describe('library_restore_item', 'ask'),
   describe('read_file', 'auto', { effect: 'read' }),
+  describe('transcribe_audio', 'auto', { platforms: ['android', 'ios'] }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
 ];

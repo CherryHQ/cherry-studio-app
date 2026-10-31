@@ -39,6 +39,7 @@ import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoor
 import { skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import type { VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
@@ -198,8 +199,16 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     return (this.lazyAgents ??= createAgentTableDefinitionSource());
   }
 
+  private voice: VoiceModule | undefined;
+
+  configureVoice(voice: VoiceModule): void {
+    this.voice = voice;
+    this.lazyTools = undefined;
+  }
+
   get tools(): SystemCapabilitySource {
     return (this.lazyTools ??= createSystemCapabilitySource({
+      voice: this.voice,
       ai: this.aiService,
       model: modelService,
       preference: this.preferenceService,

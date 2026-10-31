@@ -14,6 +14,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
 import type { ChatShareTranslations } from '../../share/chatShareHandoff';
+import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
@@ -109,6 +110,7 @@ export function ChatWorkspace({
     feedbackHintBottomOffset,
   );
   const listKey = sessionId ?? pendingSend?.sessionId;
+  useEndReadingWithConversation(sessionId);
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
   useEffect(() => {

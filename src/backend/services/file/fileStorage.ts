@@ -18,6 +18,7 @@ import {
   SafeNameSchema,
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
+import { resolveAudioImportMediaType } from '@/shared/utils/audioFileTypes';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
@@ -130,6 +131,7 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
       filename,
       resolveDocumentImportMediaType(filename, resolveMediaType(input.mediaType, source.type)),
     );
+    mediaType = resolveAudioImportMediaType(filename, mediaType);
     write = (destination) => source.copy(destination);
   } else if (input.source === 'base64') {
     mediaType = resolveMediaType(input.mediaType);

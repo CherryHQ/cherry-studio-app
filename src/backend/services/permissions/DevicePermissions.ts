@@ -111,6 +111,7 @@ function isSystemPermissionScope(scope: DevicePermissionScope): scope is SystemP
 
 export class DevicePermissions implements PermissionsModule {
   private requestQueue = Promise.resolve();
+  private presentingSystemPrompts = 0;
 
   constructor(
     private readonly loadHealthAccess: () => HealthAccessModule | null = getHealthAccess,
@@ -157,15 +158,29 @@ export class DevicePermissions implements PermissionsModule {
     }, signal);
   }
 
-  /** Serialize native operations that may present a system authorization sheet. */
-  private runWithSystemPrompt<TResult>(
+  /**
+   * Backend-only: whether a system authorization sheet may be on screen. Android pauses the app
+   * behind permission dialogs, which React Native reports as `background`.
+   */
+  isPresentingSystemPrompt(): boolean {
+    return this.presentingSystemPrompts > 0;
+  }
+
+  /** Backend-only: serialize native operations that may present a system authorization sheet. */
+  runWithSystemPrompt<TResult>(
     operation: () => Promise<TResult>,
     signal?: AbortSignal,
   ): Promise<TResult> {
     const result = this.requestQueue.then(async () => {
       signal?.throwIfAborted();
       // Await native settlement even after cancellation; an open sheet still owns the queue.
-      const value = await operation();
+      this.presentingSystemPrompts += 1;
+      let value: TResult;
+      try {
+        value = await operation();
+      } finally {
+        this.presentingSystemPrompts -= 1;
+      }
       signal?.throwIfAborted();
       return value;
     });

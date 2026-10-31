@@ -115,6 +115,20 @@ ordering, cancellation, rearming, pressed feedback, and accessibility activation
 acceptance still owns native arbitration. `gestureHandlerPressablePatch.test.ts` and
 `patchReapplication.test.ts` guard installation and both published entry paths.
 
+### Android Offline Model Storage Patch
+
+`patches/expo-modules-core@58.0.26.patch` includes `noBackupFilesDir` in Expo's canonical internal
+storage roots. The offline voice model lives there to survive cache eviction without entering OS
+backups. Upstream only recognizes `filesDir` and `cacheDir`; other paths fall back to `canRead()` /
+`canWrite()` on the target itself. A new model directory or file therefore fails permission checks
+before the download starts, and legacy cleanup of absent files fails for the same reason.
+
+The patch preserves canonical path containment and the existing model location. Remove it when
+upstream includes this private storage root. `expoFilePermissions.test.ts` guards the installed
+source and patch hash in PR CI; `patchReapplication.test.ts` guards repeat installation. These
+checks do not establish device behavior. Delivering this fix requires a new Android package;
+acceptance must cover first download, cancellation, retry, deletion and download after deletion.
+
 ### Pi Dependency Upgrades
 
 The pinned Pi family includes scheduler/recovery behavior patches as well as mobile compatibility

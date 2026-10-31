@@ -36,7 +36,7 @@ jest.mock('@/frontend/hooks/plugin', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachments: () => null,
   useComposerActions: () => ({ setDraft: mockNoop }),
-  useComposerState: () => ({ draft: '' }),
+  useComposerState: () => ({ draft: '', attachments: [] }),
 }));
 jest.mock('@/frontend/components/McpApp', () => ({
   useMcpAppConversation: () => undefined,
