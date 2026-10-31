@@ -38,10 +38,12 @@ import {
   resolveProviderConnection,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
+import { application } from '@/backend/core/application/Application';
 import type {
   ProviderService,
   ResolvedProviderApiKey,
 } from '@/backend/data/services/ProviderService';
+import { CLOUD_PROVIDER_ID, CloudAccessError } from '@/shared/contracts/cloud';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -221,6 +223,29 @@ export async function resolveProviderAiSdkConfig(
     resolveProviderConnection(provider, model, { resolvedEndpoint: options?.resolvedEndpoint });
   const connection = resolvedConnection;
   const { endpointType, baseUrl } = connection;
+
+  if (provider.id === CLOUD_PROVIDER_ID) {
+    if (
+      endpointType !== ENDPOINT_TYPE.ANTHROPIC_MESSAGES &&
+      endpointType !== ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS
+    )
+      throw new CloudAccessError('not_entitled');
+    const settings = {
+      apiKey: 'managed-by-cherry-cloud',
+      baseURL: `${new URL(baseUrl).origin}/v1`,
+      fetch: application.get('CloudRuntime').createModelFetch(connection.wireModelId, 'general'),
+    };
+    return {
+      config:
+        endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES
+          ? { providerId: 'anthropic', providerSettings: settings }
+          : {
+              providerId: 'openai-compatible',
+              providerSettings: { ...settings, name: CLOUD_PROVIDER_ID, includeUsage: true },
+            },
+      credentialReceipt: { attribution: 'unknown' },
+    };
+  }
 
   const aiSdkProviderId = resolveConnectionAiSdkProviderId(connection);
 

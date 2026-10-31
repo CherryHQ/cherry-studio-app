@@ -14,6 +14,7 @@ import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActi
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { BackupRuntime } from '@/backend/services/backup';
+import { CloudRuntime } from '@/backend/services/cloud';
 import {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -78,6 +79,7 @@ export const services = {
   DiagnosticBundleService,
   McpRuntimeService,
   EnterpriseSyncService,
+  CloudRuntime,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,

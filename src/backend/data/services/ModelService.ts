@@ -21,7 +21,7 @@ import {
 } from '@/shared/data/types/model';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
-import { guardMethods, providerSettingsChecks } from './managedResources';
+import { assertUserOwnedProvider, guardMethods, providerSettingsChecks } from './managedResources';
 import { assertCustomProviderModelEndpointTypes } from './providerModelEndpointIntegrity';
 import {
   createCustomModel,
@@ -885,6 +885,19 @@ guardMethods(
     'createFromRegistry',
   ]),
 );
+
+guardMethods(ModelService, {
+  create: (input) => assertUserOwnedProvider(input.providerId),
+  batchCreate: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+  createDtos: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+  update: (id) => assertUserOwnedProvider(id),
+  bulkUpdate: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+  delete: (id) => assertUserOwnedProvider(id),
+  deleteByKey: (id) => assertUserOwnedProvider(id),
+  bulkDelete: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+  reconcileProviderModels: (id) => assertUserOwnedProvider(id),
+  createFromRegistry: (input) => assertUserOwnedProvider(input.providerId),
+});
 
 export const modelService = new ModelService();
 

@@ -96,6 +96,7 @@ function ModelSettingsView() {
       </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer
+          cloudUse={activeKind === 'default' ? 'agent' : 'general'}
           modelType={activeKind === 'painting' ? 'image' : 'text'}
           open
           onAddProvider={handleAddProvider}
