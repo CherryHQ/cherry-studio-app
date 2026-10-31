@@ -43,7 +43,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 64
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 65
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -59,6 +59,7 @@ block leaves when upstream ships an equivalent.
 | Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
 | iOS nested display math fitted to the column | Bug fix | #1484 | Not fixed in 1.1.1 | Upstream fits nested display math |
 | Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
+| Android display math retained during R8 shrinking | Bug fix | [Upstream #1042](https://github.com/software-mansion/enriched-markdown/issues/1042) | Backports [#1101](https://github.com/software-mansion/enriched-markdown/pull/1101); 1.1.1 still keeps the old class package | Upstream ships the `segments.MathContainerView` keep rule |
 | iOS asynchronous clipboard paste keeping Markdown | Bug fix | #1467, #1476 | Not fixed in 1.1.1 | Upstream reads the clipboard asynchronously |
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
 | iOS code text drawn only around the visible window | Bug fix | #1530 | Not fixed in 1.1.1; a full-size backing store leaves a code block of a few thousand lines blank | Upstream draws long code blocks without a full-size backing store |
