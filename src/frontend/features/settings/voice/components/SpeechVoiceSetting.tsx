@@ -15,9 +15,15 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
   const voice = useBackendModule('voice');
   const [selected, setSelected] = usePreference('feature.voice.system_voice');
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const status = useQuery({
+    queryKey: ['voice', 'engine-status', 'speech', engine],
+    queryFn: ({ signal }) => voice.getEngineStatus('speech', engine, { signal }),
+  });
+  const unavailable = status.data === 'unsupported';
   const voices = useQuery({
     queryKey: ['voice', 'voices', engine, i18n.resolvedLanguage],
     queryFn: ({ signal }) => voice.listVoices(engine, { signal }),
+    enabled: status.data === 'ready',
   });
   const options = [
     { value: '', label: t('settings.voice.defaultVoice') },
@@ -36,15 +42,18 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
       <Section.SelectItem
         label={t('settings.voice.voice')}
         description={
-          voices.isError
-            ? t('settings.voice.loadVoicesFailed')
-            : invalid
-              ? t('voice.error.invalidVoice')
-              : undefined
+          unavailable
+            ? t('settings.voice.speech.systemUnavailable')
+            : status.isError || voices.isError
+              ? t('settings.voice.loadVoicesFailed')
+              : invalid
+                ? t('voice.error.invalidVoice')
+                : undefined
         }
-        disabled={voices.isLoading}
+        disabled={status.isPending || voices.isLoading || unavailable}
         onPress={() => {
-          if (voices.isError) void voices.refetch();
+          if (status.isError) void status.refetch();
+          else if (voices.isError) void voices.refetch();
           else setIsPickerOpen(true);
         }}
         testID="settings-voice-speech-voice"

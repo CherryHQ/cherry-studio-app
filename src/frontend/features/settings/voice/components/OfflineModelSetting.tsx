@@ -1,17 +1,15 @@
-import { Section, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Button, Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import { VoiceError, type VoiceModelModule } from '@/shared/contracts/voice';
 
 const STATUS_KEYS = {
-  'not-downloaded': 'settings.voice.model.notDownloaded',
   checking: 'settings.voice.model.checking',
-  downloading: 'settings.voice.model.downloading',
   verifying: 'settings.voice.model.verifying',
-  ready: 'settings.voice.model.ready',
   removing: 'settings.voice.model.removing',
 } as const;
 const FAILURE_KEYS = {
@@ -38,20 +36,23 @@ export function OfflineModelSetting() {
     queryFn: ({ signal }) => voice.getEngineStatus('dictation', 'sensevoice', { signal }),
     staleTime: 0,
   });
-  const available = status.data !== 'unsupported' && !!status.data;
+  const unavailable = status.data === 'unsupported';
   const transferring = state.status === 'downloading' || state.status === 'verifying';
   const busy = transferring || state.status === 'checking' || state.status === 'removing';
   const size = Math.ceil(state.totalBytes / 1_000_000);
-  const formatBytes = (bytes: number) =>
-    (bytes / 1_000_000).toLocaleString(i18n.language, { maximumFractionDigits: 1 });
-  const description =
-    state.status === 'failed'
+  const percent =
+    state.totalBytes > 0
+      ? Math.min(100, Math.floor((100 * state.receivedBytes) / state.totalBytes))
+      : 0;
+  const description = unavailable
+    ? t('settings.voice.engine.unavailable')
+    : state.status === 'failed'
       ? t(FAILURE_KEYS[state.failure ?? 'storage'])
-      : t(STATUS_KEYS[state.status], {
-          size,
-          received: formatBytes(state.receivedBytes),
-          total: formatBytes(state.totalBytes),
-        });
+      : state.status === 'downloading'
+        ? (percent / 100).toLocaleString(i18n.resolvedLanguage, { style: 'percent' })
+        : state.status === 'not-downloaded' || state.status === 'ready'
+          ? t('settings.voice.model.size', { size: size.toLocaleString(i18n.resolvedLanguage) })
+          : t(STATUS_KEYS[state.status]);
   const run = (operation: Promise<void>) => {
     void operation
       .catch((error: unknown) => {
@@ -71,49 +72,62 @@ export function OfflineModelSetting() {
       });
   };
   return (
-    <>
-      <Section.Item
-        label={t('settings.voice.model.title')}
-        description={available ? description : t('settings.voice.engine.unavailable')}
-        showChevron={false}
-      />
-      <Section.Item
-        label="SenseVoiceSmall"
-        description={t('settings.voice.model.description')}
-        showChevron={false}
-      />
-      {transferring ? (
-        <Section.Item
-          label={t('common.cancel')}
-          onPress={() => run(model.cancel())}
-          testID="voice-model-cancel"
-        />
-      ) : state.status === 'ready' ? (
-        <Section.Item
-          destructive
-          label={t('settings.voice.model.delete')}
-          testID="voice-model-delete"
-          onPress={() =>
-            alert.confirm({
-              title: t('settings.voice.model.delete'),
-              description: t('settings.voice.model.deleteDescription'),
-              confirmLabel: t('common.delete'),
-              onConfirm: () => run(model.remove()),
-            })
-          }
-        />
-      ) : (
-        <Section.Item
-          disabled={busy || !available}
-          label={
-            state.status === 'failed'
-              ? t('common.retry')
-              : t('settings.voice.model.download', { size })
-          }
-          onPress={() => run(model.download())}
-          testID="voice-model-download"
-        />
-      )}
-    </>
+    <Section.Item density="comfortable">
+      <View className="gap-3">
+        <View className="flex-row items-center gap-3">
+          <View className="min-w-0 flex-1 gap-1">
+            <Text className="font-medium text-base text-foreground">SenseVoiceSmall</Text>
+            <Text className="text-xs text-muted-foreground">{description}</Text>
+          </View>
+          <View className="max-w-[45%] shrink">
+            {transferring ? (
+              <Button
+                onPress={() => run(model.cancel())}
+                size="sm"
+                testID="voice-model-cancel"
+                variant="outline"
+              >
+                {t('common.cancel')}
+              </Button>
+            ) : state.status === 'ready' ? (
+              <Button
+                onPress={() =>
+                  alert.confirm({
+                    title: t('settings.voice.model.delete', { name: 'SenseVoiceSmall' }),
+                    confirmLabel: t('common.delete'),
+                    role: 'destructive',
+                    onConfirm: () => run(model.remove()),
+                  })
+                }
+                size="sm"
+                testID="voice-model-delete"
+                variant="tonal"
+              >
+                {t('common.delete')}
+              </Button>
+            ) : (
+              <Button
+                disabled={busy || unavailable || !status.data}
+                onPress={() => run(model.download())}
+                size="sm"
+                testID="voice-model-download"
+              >
+                {state.status === 'failed' ? t('common.retry') : t('settings.voice.model.download')}
+              </Button>
+            )}
+          </View>
+        </View>
+        {state.status === 'downloading' ? (
+          <View
+            accessibilityLabel={t('settings.voice.model.downloading')}
+            accessibilityRole="progressbar"
+            accessibilityValue={{ max: 100, min: 0, now: percent }}
+            className="h-1 overflow-hidden rounded-full bg-secondary"
+          >
+            <View className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+          </View>
+        ) : null}
+      </View>
+    </Section.Item>
   );
 }

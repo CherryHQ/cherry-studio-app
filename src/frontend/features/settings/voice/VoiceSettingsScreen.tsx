@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -37,13 +38,22 @@ export default function VoiceSettingsScreen() {
   const speechEngine = useEffectiveEngine('speech');
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.voice.title') }}>
-      <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null}>
+      <VoiceEngineSection effectiveEngine={dictationEngine ?? null}>
         {dictationEngine === 'system' ? <DictationLanguageSetting /> : null}
         {dictationEngine === 'sensevoice' ? <OfflineModelSetting /> : null}
       </VoiceEngineSection>
-      <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
-        {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}
-      </VoiceEngineSection>
+      <Section title={t('settings.voice.speech.title')}>
+        {speechEngine ? (
+          <SpeechVoiceSetting engine={speechEngine} key={speechEngine} />
+        ) : (
+          <Section.Item
+            label={t('settings.voice.voice')}
+            description={
+              speechEngine === null ? t('settings.voice.speech.systemUnavailable') : undefined
+            }
+          />
+        )}
+      </Section>
     </SettingsScrollPage>
   );
 }

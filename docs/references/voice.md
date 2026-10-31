@@ -84,19 +84,19 @@ engine checks `isRecognitionAvailable()` and uses the configured default `Recogn
 including vendor implementations. It does not select a Google package or use a vendor allowlist.
 An installed Android service without a selected default reports `needs-setup`, not unsupported.
 The enabled composer action remains available to explain the missing system setup before requesting
-microphone access. Android voice settings also offer a guidance entry. Both explain the device-wide
-scope and service-dependent languages/network use, then open system settings only on the user's
+microphone access. Android voice settings offer a guidance entry when system input is selected.
+Both use a short, device-independent instruction, then open system settings only on the user's
 action. The app never selects a service or writes Android's default-service setting.
 
 Settings navigation lets the device resolve the public voice-input settings action, falling back
 to default-app settings and then system settings when that action is unavailable. Xiaomi devices
-open system settings directly with separate guidance: HyperOS 4 / Android 17 on the tested M610BB
+open system settings directly: HyperOS 4 / Android 17 on the tested M610BB
 resolves voice-input settings to the default digital assistant screen, which offers no recognition
 service selector. The app does not guess OEM-private component names or treat opening a settings
 activity as proof that a service can be selected. Some devices do not expose a service selector;
-guidance includes settings search terms and keyboard dictation as an alternative. Returning from
-settings refreshes engine status through the shared query focus bridge. Other manufacturers and
-system versions still require device acceptance.
+guidance includes a settings search term. Keyboard dictation remains an independent alternative.
+Returning from settings refreshes engine status through the shared query focus bridge. Other
+manufacturers and system versions still require device acceptance.
 
 The config plugin declares the generic `android.speech.RecognitionService` query for package
 visibility. Recognition quality and support for languages, partial results and continuous mode
@@ -110,6 +110,7 @@ resolved ID also avoids `expo-speech` 58's Android language-tag parsing fallback
 language. A speech error or an unexpected stop, such as an audio interruption, fails reading.
 Cancellation also settles when native stop completes, even if no utterance callback arrives.
 
+Settings exposes the installed voice selection directly, without a single-option engine picker.
 System voices are filtered by the app language and deduplicated by their native selection ID.
 Different IDs with the same display name remain selectable with language/ID details. The voice
 list refreshes when the app language changes and when returning to voice settings.
@@ -126,7 +127,8 @@ SenseVoiceSmall INT8 supports iOS and Android through `@siteed/sherpa-onnx.rn` 1
 unsupported while system voice remains available. The Expo packaging plugin uses this app's SDK 58
 config-plugin version; its installation script downloads prebuilt libraries rather than compiling.
 
-The user downloads the model in **Settings → Voice → SenseVoice (offline)**. The pinned
+The user selects **Settings → Voice → Input method → Offline**, then downloads the model from its
+row. The row groups the model name, size or current status, and download/cancel/delete action. The pinned
 `senseVoiceAssets.ts` manifest contains a ModelScope revision, exact sizes and SHA-256 values for
 `model.int8.onnx` and `tokens.txt`, totaling 239,549,735 bytes (about 240 MB). The model source is
 [pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue](https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue);

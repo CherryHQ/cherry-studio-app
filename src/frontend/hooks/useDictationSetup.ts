@@ -20,14 +20,7 @@ export function useDictationSetup() {
           : undefined;
     alert.confirm({
       title: t('settings.voice.dictation.systemSettings'),
-      description: [
-        reason,
-        isXiaomi
-          ? t('settings.voice.dictation.setupGuideXiaomi')
-          : t('settings.voice.dictation.setupGuide'),
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+      description: [reason, t('settings.voice.dictation.setupGuide')].filter(Boolean).join('\n\n'),
       confirmLabel: t('settings.permissions.openSystemSettings'),
       onConfirm: async () => {
         // Xiaomi HyperOS can resolve voice-input settings to assistant-role selection, which
