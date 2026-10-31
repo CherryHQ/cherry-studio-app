@@ -1,5 +1,5 @@
 import { ContentState } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { useNavigation } from 'expo-router';
 import { type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -12,7 +12,12 @@ import { ChatEmptyState } from '../ChatWorkspace';
 
 export function ChatRouteResolver() {
   const { t } = useTranslation();
-  const router = useRouter();
+  // Screen-scoped rather than `router.setParams`: the root router drops actions until the stack
+  // registers in an effect, which runs after this one when the agents are already cached, as
+  // when the account gate opens over a mounted app.
+  const navigation = useNavigation<{
+    setParams(params: ReturnType<typeof chatRouteParams>): void;
+  }>();
   const agents = useAgentsApi();
   const restoreState = resolveChatRestoreState({
     agents: { error: agents.error, isLoading: agents.isLoading, items: agents.agents },
@@ -23,8 +28,8 @@ export function ChatRouteResolver() {
       return;
     }
 
-    router.setParams(chatRouteParams(restoreState.target));
-  }, [restoreState, router]);
+    navigation.setParams(chatRouteParams(restoreState.target));
+  }, [restoreState, navigation]);
 
   if (restoreState.status === 'loading' || restoreState.status === 'ready') {
     return (

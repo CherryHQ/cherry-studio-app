@@ -8,7 +8,12 @@ const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
-const mockAgent = { kind: 'agent', quiesce: jest.fn(), hasPendingStorageWork: () => false };
+const mockAgent = {
+  kind: 'agent',
+  quiesce: jest.fn(),
+  interrupt: jest.fn(async (_reason: Error) => {}),
+  hasPendingStorageWork: () => false,
+};
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
@@ -16,6 +21,23 @@ const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
 const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
+const mockEnterpriseSync = {
+  configure: jest.fn(),
+  hasPendingStorageWork: jest.fn(() => false),
+  stop: jest.fn(async () => {}),
+};
+const mockAccountState = { isEnterprise: true, needsSignIn: false };
+const mockAccountListeners = new Set<() => void>();
+const mockEnterpriseAccount = {
+  kind: 'enterprise-account',
+  verify: jest.fn(async () => {}),
+  admit: jest.fn(async () => {}),
+  getState: () => mockAccountState,
+  subscribe: (listener: () => void) => {
+    mockAccountListeners.add(listener);
+    return () => mockAccountListeners.delete(listener);
+  },
+};
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
 const mockFailStorageBoot = jest.fn();
@@ -85,6 +107,9 @@ jest.mock('@/backend/services/file/fileTextCache', () => ({
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
 }));
+jest.mock('@/bootstrap/profile/installationAccount', () => ({
+  installationAccount: () => mockEnterpriseAccount,
+}));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
 }));
@@ -147,6 +172,7 @@ const createRuntime = () =>
     RemoteAgentRuntime: mockRemoteAgent,
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
+    EnterpriseSyncService: mockEnterpriseSync,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
@@ -158,6 +184,7 @@ const createRuntime = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAccountListeners.clear();
   mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false });
 });
 
@@ -176,6 +203,42 @@ describe('createAppBootstrapRuntime', () => {
     } finally {
       mockMcpRuntime.hasPendingStorageWork.mockReturnValue(false);
       await runtime.dispose();
+    }
+  });
+
+  test('includes pending enterprise sync in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockEnterpriseSync.hasPendingStorageWork.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockEnterpriseSync.hasPendingStorageWork.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
+
+  test('drains first enterprise sync before uninstalling its host', async () => {
+    let finish!: () => void;
+    mockEnterpriseSync.stop.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      uninstall.mockRestore();
     }
   });
 
@@ -300,6 +363,7 @@ describe('createAppBootstrapRuntime', () => {
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
+      account: mockEnterpriseAccount,
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,
@@ -309,6 +373,24 @@ describe('createAppBootstrapRuntime', () => {
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
     expect(runtime.preference).toBe(mockPreference);
+  });
+
+  test('interrupts Agent work once when the enterprise session is refused', async () => {
+    const runtime = createRuntime();
+    const notify = () => mockAccountListeners.forEach((listener) => listener());
+    mockAccountState.needsSignIn = true;
+    notify();
+    notify();
+    expect(mockAgent.interrupt).toHaveBeenCalledTimes(1);
+    expect(mockAgent.interrupt.mock.calls[0]![0]).toMatchObject({ code: 'rejected' });
+    mockAccountState.needsSignIn = false;
+    notify();
+    await runtime.dispose();
+    expect(mockAccountListeners.size).toBe(0);
+    mockAccountState.needsSignIn = true;
+    notify();
+    expect(mockAgent.interrupt).toHaveBeenCalledTimes(1);
+    mockAccountState.needsSignIn = false;
   });
 
   test('applies the shared presentation switch only to iOS Live Activities', () => {

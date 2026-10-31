@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { PluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
+import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 
 import { PluginCredentialStore } from '../PluginCredentialStore';
 
@@ -37,6 +38,7 @@ const sqlCredentials = () => db.sqlite.prepare('SELECT * FROM plugin_authorizati
 
 beforeEach(async () => {
   jest.resetAllMocks();
+  setActiveProfile(LOCAL_PROFILE);
   secrets = new Map();
   native.getItemAsync.mockImplementation(async (key) => secrets.get(key) ?? null);
   native.setItemAsync.mockImplementation(async (key, value) => {
@@ -54,6 +56,7 @@ afterEach(async () => {
   await storage.stop();
   await uninstallTestHost();
   db.sqlite.close();
+  setActiveProfile(LOCAL_PROFILE);
   jest.restoreAllMocks();
 });
 
@@ -71,6 +74,32 @@ it('keeps secrets out of SQLite and reuses the application and grant after resta
   storage = new PluginCredentialStore(database, native);
   expect(await method().readApplication()).toEqual(application);
   expect(await method().getGrant(grant.id)).toEqual(grant);
+});
+
+it('cannot reuse another profile’s secret even when its grant reference is copied', async () => {
+  await storage.connect(input);
+  const original = (await method().getGrant())!;
+  const localSecrets = new Map(secrets);
+  // Local keys retain their released format; entering an enterprise profile must not read them.
+  expect([...localSecrets.keys()][0]).toMatch(/^plugin-secret\./);
+  await storage.stop();
+  setActiveProfile({
+    id: '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
+    identity: { authentication: 'password', deployment: 'server', subject: 'user' },
+    address: 'https://enterprise.example.com',
+  });
+  // Keep the same SQL reference to model an imported row; native credentials stay device-local.
+  storage = new PluginCredentialStore(database, native);
+  await expect(method().getGrant(original.id)).rejects.toMatchObject({ reason: 'authorization' });
+  const credential = { version: 1, token: 'enterprise-token' };
+  await method().updateCredential(original.id, credential, new AbortController().signal);
+  expect(await method().getGrant(original.id)).toEqual({ id: original.id, credential });
+  for (const [key, value] of localSecrets) expect(secrets.get(key)).toBe(value);
+
+  await storage.stop();
+  setActiveProfile(LOCAL_PROFILE);
+  storage = new PluginCredentialStore(database, native);
+  expect(await method().getGrant(original.id)).toEqual(original);
 });
 
 it('does not activate a connection when native storage fails', async () => {

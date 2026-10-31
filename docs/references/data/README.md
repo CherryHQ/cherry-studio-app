@@ -210,6 +210,10 @@ bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do no
 Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
 journaled under `app_state` keys prefixed with `seed:`.
 
+Enterprise profiles seed preferences only; their providers and models come from organization
+synchronization. Keep this exception when adding seeders or import paths. See
+[Enterprise Edition](../enterprise.md) for profile scope and managed-resource write rules.
+
 `ProviderRegistryUpdaterService` restores the newest compatible saved model catalog after startup.
 When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
 in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with

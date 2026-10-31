@@ -7,12 +7,6 @@ export function diagnosticDirectory(kind: 'logs'): Directory {
   return new Directory(Paths.document, 'Diagnostics', `${kind}-v1`);
 }
 
-export function createDiagnosticTemporaryDirectory(id: string): Directory {
-  const directory = new Directory(Paths.cache, 'Diagnostics', id);
-  directory.create({ intermediates: true });
-  return directory;
-}
-
 export function appendBytes(file: File, bytes: Uint8Array): void {
   if (!file.exists) file.create({ intermediates: true });
   const handle = file.open();

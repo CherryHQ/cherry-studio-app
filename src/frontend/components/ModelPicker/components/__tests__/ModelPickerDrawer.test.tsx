@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { PolicyScope } from '@/frontend/components/Policy';
+import { agentPolicy } from '@/shared/data/managedPolicy';
+
 import type { ModelPickerGroup } from '../../utils/modelPickerData';
 import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
@@ -47,17 +50,24 @@ jest.mock('@cherrystudio/ui/components', () => {
       size: string;
       testID: string;
       title: string;
-    }) => (
-      <MockView
-        accessibilityLabel={title}
-        accessibilityValue={{ text: size }}
-        testID={`${testID}-surface`}
-      >
-        {headerAction}
-        {children}
-        {footer}
-      </MockView>
-    ),
+    }) => {
+      // Like the real portal, the sheet's content sits outside the screen's PolicyScope.
+      const { PolicyScope: MockPolicyScope } = jest.requireActual(
+        '@/frontend/components/Policy/PolicyScope',
+      );
+      const { OPEN_POLICY } = jest.requireActual('@/shared/data/managedPolicy');
+      return (
+        <MockView
+          accessibilityLabel={title}
+          accessibilityValue={{ text: size }}
+          testID={`${testID}-surface`}
+        >
+          {headerAction}
+          <MockPolicyScope policy={OPEN_POLICY}>{children}</MockPolicyScope>
+          {footer}
+        </MockView>
+      );
+    },
     Button,
     SearchField: (props: Record<string, unknown>) => <MockTextInput {...props} />,
   };
@@ -159,6 +169,46 @@ describe('ModelPickerDrawer', () => {
         .map((item) => item.item.modelId),
     ).toEqual(['provider::compatible']);
     expect(mockListProps?.emptyText).toBe('No compatible models');
+  });
+
+  test('offers only the models of an enclosing scope', () => {
+    act(() => renderer.unmount());
+    mockGroups = [
+      {
+        items: [
+          { key: 'pooled', modelId: 'provider::pooled' } as never,
+          { key: 'other', modelId: 'provider::other' } as never,
+        ],
+        key: 'provider',
+        provider: {} as never,
+        title: 'Provider',
+      },
+    ];
+
+    act(() => {
+      renderer = create(
+        <PolicyScope
+          policy={agentPolicy({
+            isManaged: true,
+            allowedModelIds: ['provider::pooled', 'provider::elsewhere'],
+          })}
+        >
+          <ModelPickerDrawer
+            modelType="text"
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+          />
+        </PolicyScope>,
+      );
+    });
+
+    expect(
+      mockListProps?.listItems
+        .filter((item) => item.type === 'model')
+        .map((item) => item.item.modelId),
+    ).toEqual(['provider::pooled']);
   });
 
   test('offers a multi-select mode entered and left from the header', () => {

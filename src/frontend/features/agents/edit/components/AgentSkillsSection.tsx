@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { withPolicy } from '@/frontend/components/Policy';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
@@ -14,39 +15,47 @@ type AgentSkillsSectionProps = {
   /** Draft binding state keyed by Skill id; absent means unbound. */
   bindings: ReadonlyMap<string, boolean>;
   onChange: (updates: AgentSkillUpdate[]) => void;
+  /** Lists only the bound Skills, without descriptions or the library link. */
+  readOnly?: boolean;
 };
 
 /**
  * Per-Agent Skill bindings. The switch expresses the user's intent; the caption
  * reports a missing package. Installation and updates live in the Skill library,
- * linked from the footer.
+ * linked from the footer. A managed Agent's bindings belong to the enterprise server; its editor
+ * lists them read-only inside a locked group, where the switches render locked.
  */
-export function AgentSkillsSection({
+function SkillsSection({
   agentId,
   bindings,
   onChange,
+  readOnly = false,
   skills,
 }: AgentSkillsSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  // A locked Agent without bound Skills has nothing to show.
+  if (readOnly && !skills.some((skill) => bindings.get(skill.id) === true)) return null;
 
   return (
     <Section footer={t('agent.skills.usageHint')} title={t('agent.skills.section')}>
       {skills.map((skill) => {
         const isEnabled = bindings.get(skill.id) === true;
+        const description = (
+          <View className="gap-0.5">
+            <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+              {skill.description}
+            </Text>
+            {skill.isPackageMissing ? (
+              <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
+            ) : null}
+          </View>
+        );
+        if (readOnly && !isEnabled) return null;
         return (
           <Section.SwitchItem
             accessibilityLabel={skill.name}
-            description={
-              <View className="gap-0.5">
-                <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-                  {skill.description}
-                </Text>
-                {skill.isPackageMissing ? (
-                  <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
-                ) : null}
-              </View>
-            }
+            description={readOnly ? undefined : description}
             key={skill.id}
             label={skill.name}
             onValueChange={(value) => onChange([{ isEnabled: value, skillId: skill.id }])}
@@ -54,11 +63,18 @@ export function AgentSkillsSection({
           />
         );
       })}
-      <Section.Item
-        label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
-        onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
-        trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
-      />
+      {readOnly ? null : (
+        <Section.Item
+          label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
+          onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
+          trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
+        />
+      )}
     </Section>
   );
 }
+
+/** Only the read-only listing appears once the organization owns the bindings. */
+export const AgentSkillsSection = withPolicy(SkillsSection, (policy, { readOnly }) =>
+  readOnly || policy.canBind ? {} : null,
+);

@@ -7,6 +7,7 @@ import {
   type PluginAuthorizationService,
 } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
+import { profileScopedName } from '@/shared/data/activeProfile';
 
 import type { PluginAuthorizationStore } from './pluginAuthorization';
 import {
@@ -21,7 +22,8 @@ type Database = Pick<
 >;
 type NativeStorage = Pick<typeof SecureStore, 'getItemAsync' | 'setItemAsync' | 'deleteItemAsync'>;
 const OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
-const secretKey = (reference: PluginSecretReference) => `plugin-secret.${reference.id}`;
+const secretKey = (reference: PluginSecretReference) =>
+  profileScopedName(`plugin-secret.${reference.id}`);
 
 /** Local credentials only. The manager owns this queue and drains it before the database closes. */
 export class PluginCredentialStore {
@@ -114,7 +116,7 @@ export class PluginCredentialStore {
     method: string,
     serverName: string,
   ): PluginAuthorizationStore {
-    const applicationKey = `plugin-application.${pluginId}.${method}`;
+    const applicationKey = profileScopedName(`plugin-application.${pluginId}.${method}`);
     return {
       notifyChanged: () => this.notifyChanged(),
       getCurrentAuthorizationId: () =>

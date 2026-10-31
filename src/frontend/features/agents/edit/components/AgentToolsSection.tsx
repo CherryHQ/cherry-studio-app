@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { withPolicy } from '@/frontend/components/Policy';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -27,21 +28,25 @@ type AgentToolsSectionProps = {
   bindings: readonly WriteAgentToolBinding[];
   onChange: (bindings: WriteAgentToolBinding[]) => void;
   originalBindings: readonly AgentToolBinding[];
+  /** Shows only the stored bindings, with locked switches and no remove or restore actions. */
+  readOnly?: boolean;
   servers: readonly McpServer[];
 };
 
-export function AgentToolsSection({
+function ToolsSection({
   bindings,
   onChange,
   originalBindings,
+  readOnly = false,
   servers,
 }: AgentToolsSectionProps) {
   const { t } = useTranslation();
   const mcp = useBackendModule('mcp');
-  const serverOptions = useMemo(
-    () => buildAgentMcpServerOptions({ bindings, originalBindings, servers }),
-    [bindings, originalBindings, servers],
-  );
+  const serverOptions = useMemo(() => {
+    const options = buildAgentMcpServerOptions({ bindings, originalBindings, servers });
+    // A managed Agent's bindings belong to the enterprise server: show what is bound, nothing to add.
+    return readOnly ? options.filter((option) => option.binding !== undefined) : options;
+  }, [bindings, originalBindings, readOnly, servers]);
   const perToolBindings = useMemo(
     () =>
       bindings.filter(
@@ -91,6 +96,9 @@ export function AgentToolsSection({
     }),
   );
 
+  // Nothing bound and nothing to add: a locked Agent, or no MCP server yet.
+  if (bindings.length === 0 && (readOnly || servers.length === 0)) return null;
+
   return (
     <View className="gap-6">
       <Section title={t('agent.tools.section')}>
@@ -115,7 +123,7 @@ export function AgentToolsSection({
               label={displayName}
               trailing={
                 <View className="flex-row items-center gap-1">
-                  {canEnable ? (
+                  {canEnable || readOnly ? (
                     <Switch
                       accessibilityLabel={accessibilityLabel}
                       onValueChange={(enabled) =>
@@ -124,7 +132,7 @@ export function AgentToolsSection({
                       value={isEnabled}
                     />
                   ) : null}
-                  {isStored && (!canEnable || !isEnabled) ? (
+                  {readOnly ? null : isStored && (!canEnable || !isEnabled) ? (
                     <Button
                       accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
                         id: option.serverId,
@@ -171,18 +179,20 @@ export function AgentToolsSection({
                 description={statusCaption(t, 'agent.tools.toolStatus', status)}
                 label={`${displayName} · ${binding.rawToolName}`}
                 trailing={
-                  <Button
-                    accessibilityLabel={t('agent.tools.toolAccessibilityLabel', {
-                      id: binding.serverId,
-                      server: displayName,
-                      status: t(`agent.tools.toolStatus.${status}`),
-                      tool: binding.rawToolName,
-                    })}
-                    icon={<TrashIcon />}
-                    onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
-                    size="xs"
-                    variant="ghost"
-                  />
+                  readOnly ? undefined : (
+                    <Button
+                      accessibilityLabel={t('agent.tools.toolAccessibilityLabel', {
+                        id: binding.serverId,
+                        server: displayName,
+                        status: t(`agent.tools.toolStatus.${status}`),
+                        tool: binding.rawToolName,
+                      })}
+                      icon={<TrashIcon />}
+                      onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
+                      size="xs"
+                      variant="ghost"
+                    />
+                  )
                 }
               />
             );
@@ -220,3 +230,11 @@ function statusCaption(
 function toolBindingKey(binding: McpToolBindingDraft): string {
   return JSON.stringify([binding.serverId, binding.rawToolName]);
 }
+
+/**
+ * A managed Agent's bindings belong to the organization: the editor shows them read-only inside its
+ * locked group, so the editable section stays away.
+ */
+export const AgentToolsSection = withPolicy(ToolsSection, (policy, { readOnly }) =>
+  readOnly || policy.canBind ? {} : null,
+);

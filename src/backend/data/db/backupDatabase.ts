@@ -3,11 +3,17 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { BackupError } from '@/shared/contracts/backup';
-import { DEVICE_LOCAL_PREFERENCE_KEYS } from '@/shared/data/preference/preferenceSchema';
+import { getActiveProfile, isSameEnterpriseIdentity } from '@/shared/data/activeProfile';
+import {
+  DEVICE_LOCAL_PREFERENCE_KEYS,
+  ENTERPRISE_DEFAULT_MODEL_KEYS,
+} from '@/shared/data/preference/preferenceSchema';
 
+import { EnterpriseIdentitySchema } from '../profile';
 import { customSqlStatements } from './customSql';
 import { validateFileLibraryDatabase } from './fileLibraryValidation';
 import { migrations } from './migrations';
+import { BACKUP_PROFILE_KEY, ENTERPRISE_SYNC_STATE_KEY } from './schemas/appState';
 
 export type BackupMigration = { when: number; sha256: string };
 export type BackupDatabaseVersion = { migrations: BackupMigration[] };
@@ -57,12 +63,86 @@ export async function withBackupDatabase<T>(
   }
 }
 
+/** A sealed snapshot of any SQLite database; its source stays open. */
 export async function captureDatabase(source: SQLiteDatabase, target: File): Promise<void> {
   await withBackupDatabase(target, async (destination) => {
     await backupDatabaseAsync({ sourceDatabase: source, destDatabase: destination });
     await sealDatabase(destination);
   });
   assertNoSidecars(target);
+}
+
+/** The user database for a backup archive. */
+export async function captureBackupDatabase(source: SQLiteDatabase, target: File): Promise<void> {
+  await withBackupDatabase(target, async (destination) => {
+    await backupDatabaseAsync({ sourceDatabase: source, destDatabase: destination });
+    await prepareEnterpriseBackup(destination);
+    await sealDatabase(destination);
+  });
+  assertNoSidecars(target);
+}
+
+/**
+ * An enterprise copy records whose data it is, so only the same identity can restore it. It keeps
+ * conversations and Agents, delivered ones included, but none of the organization's own content:
+ * providers stay only as the model references Agents and messages hold, without keys; delivered
+ * Agents lose their instructions; delivered MCP servers, Skills and default models are left out.
+ * Without a sync state, a restore opens only after the first sync has delivered them again.
+ */
+export async function prepareEnterpriseBackup(db: SQLiteDatabase): Promise<void> {
+  // Restore always removes the stamp, so a live database never carries one.
+  const { identity } = getActiveProfile();
+  if (!identity) return;
+  const now = Date.now();
+  await db.execAsync('PRAGMA foreign_keys = ON; BEGIN IMMEDIATE');
+  try {
+    await db.runAsync("UPDATE user_provider SET api_keys = '[]'");
+    await db.runAsync("UPDATE agent SET instructions = '' WHERE managed_remote_id IS NOT NULL");
+    await db.runAsync(
+      'DELETE FROM agent_tool_binding WHERE mcp_server_id IN (SELECT id FROM mcp_server WHERE managed_remote_id IS NOT NULL)',
+    );
+    await db.runAsync('DELETE FROM mcp_server WHERE managed_remote_id IS NOT NULL');
+    await db.runAsync('DELETE FROM agent_global_skill WHERE managed_remote_id IS NOT NULL');
+    await db.runAsync(
+      `DELETE FROM preference WHERE scope = 'default' AND key IN (${ENTERPRISE_DEFAULT_MODEL_KEYS.map(() => '?').join(',')})`,
+      ...ENTERPRISE_DEFAULT_MODEL_KEYS,
+    );
+    await db.runAsync('DELETE FROM app_state WHERE key = ?', ENTERPRISE_SYNC_STATE_KEY);
+    await db.runAsync(
+      'INSERT INTO app_state (key, value, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+      BACKUP_PROFILE_KEY,
+      JSON.stringify(identity),
+      now,
+      now,
+    );
+    await db.execAsync('COMMIT');
+  } catch (error) {
+    await db.execAsync('ROLLBACK');
+    throw error;
+  }
+  // Free pages keep removed rows, including keys the live database replaced earlier.
+  await db.execAsync('VACUUM');
+}
+
+async function readBackupProfile(db: SQLiteDatabase) {
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM app_state WHERE key = ?',
+    BACKUP_PROFILE_KEY,
+  );
+  if (!row) return null;
+  try {
+    return EnterpriseIdentitySchema.parse(JSON.parse(row.value));
+  } catch {
+    throw new BackupError('invalid');
+  }
+}
+
+/** A backup restores only into the data it came from: local data or the same enterprise identity. */
+export async function assertBackupBelongsToActiveProfile(db: SQLiteDatabase): Promise<void> {
+  const source = await readBackupProfile(db);
+  const { identity } = getActiveProfile();
+  if (source ? !(identity && isSameEnterpriseIdentity(source, identity)) : identity)
+    throw new BackupError('other-account');
 }
 
 async function sealDatabase(db: SQLiteDatabase): Promise<void> {
@@ -217,6 +297,7 @@ export async function restoreDeviceState(
       'UPDATE agent_session SET workspace_folder_id = NULL WHERE workspace_folder_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_folder WHERE id = agent_session.workspace_folder_id)',
     );
     await db.runAsync('DELETE FROM desktop_connection');
+    await db.runAsync('DELETE FROM app_state WHERE key = ?', BACKUP_PROFILE_KEY);
     await db.runAsync(
       "UPDATE agent_session_message SET status = 'interrupted', updated_at = ? WHERE status IN ('pending','streaming')",
       now,
@@ -231,6 +312,18 @@ export async function restoreDeviceState(
       await db.runAsync(
         'UPDATE plugin_authorization SET credential = ? WHERE id = ?',
         JSON.stringify({ storage: 'secure-store-v1', id: randomUUID() }),
+        grant.id,
+      );
+    }
+    const mcpGrants = await db.getAllAsync<{ id: string }>(
+      "SELECT id FROM mcp_server WHERE origin = 'remote' AND oauth IS NOT NULL",
+    );
+    for (const grant of mcpGrants) {
+      // Preserve the OAuth/client configuration, but never reuse a source profile's grant.
+      await db.runAsync(
+        "UPDATE mcp_server SET oauth = json_set(oauth, '$.authorizationId', ?), is_active = 0, updated_at = ? WHERE id = ?",
+        randomUUID(),
+        now,
         grant.id,
       );
     }

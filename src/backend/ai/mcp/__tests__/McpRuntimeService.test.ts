@@ -254,6 +254,24 @@ afterEach(() => {
 });
 
 describe('getServerInfo', () => {
+  it('rejects managed connection authorization before OAuth discovery starts', async () => {
+    const server = makeServer({ isManaged: true });
+    const begin = jest.spyOn(McpOAuthRuntime.prototype, 'begin');
+    const { service } = makeService([server]);
+    try {
+      await expect(
+        service.beginOAuth({
+          serverId: server.id,
+          name: server.name,
+          endpointUrl: server.endpointUrl,
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+      expect(begin).not.toHaveBeenCalled();
+    } finally {
+      await service._doStop();
+    }
+  });
+
   it('cancels temporary inspection and rejects new work after service stop', async () => {
     mockCreateMCPClient.mockReturnValue(new Promise(() => {}));
     const { service } = makeService([]);

@@ -21,6 +21,8 @@ focusable.
 
 ## Setup Ownership
 
+- A new installation passes the App Shell sign-in page (`/login`) first when the build supports
+  accounts; signing in to the community account or skipping continues here.
 - App Shell's `FirstUseGate` checks `app.onboarding.status` before chat restoration. An unseen
   installation with saved models or Sessions keeps its existing entry behavior. New users can
   skip. Chat greetings and empty states contain no onboarding or provider-connection entry.

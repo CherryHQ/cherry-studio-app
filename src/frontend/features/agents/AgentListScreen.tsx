@@ -12,6 +12,12 @@ import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/heade
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import {
+  ManagedMark,
+  useManagedLabel,
+  withPolicy,
+  withResourcePolicy,
+} from '@/frontend/components/Policy';
+import {
   SelectionControls,
   SelectionProvider,
   type SelectionSource,
@@ -22,6 +28,7 @@ import {
   useSelectionState,
 } from '@/frontend/components/Selection';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent } from '@/shared/data/types/agent';
 
 const agentSelectionScope = 'agents';
@@ -73,7 +80,9 @@ function AgentListScreenBody() {
       deleteSelected: async (ids) => {
         await deleteAgents(ids);
       },
-      getAllIds: () => listedAgents.map((agent) => agent.id),
+      // Selection deletes, so it skips Agents the user cannot delete.
+      getAllIds: () =>
+        listedAgents.flatMap((agent) => (agentPolicy(agent).canDelete ? [agent.id] : [])),
     }),
     [deleteAgents, listedAgents],
   );
@@ -233,38 +242,45 @@ type AgentListRowProps = {
   agent: Agent;
   isEditing: boolean;
   isSelected: boolean;
+  /** Selection deletes, so only a deletable Agent joins it. */
+  isSelectable?: boolean;
   onEdit: (agentId: string) => void;
   onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
 };
 
-const AgentListRow = memo(function AgentListRow({
+const AgentListRowView = memo(function AgentListRow({
   agent,
   isEditing,
+  isSelectable = true,
   isSelected,
   onEdit,
   onStartSelection,
   onToggle,
 }: AgentListRowProps) {
   const { t } = useTranslation();
+  const accessibilityLabel = useManagedLabel(agent.name);
 
   // Keep the press target and long-press handler mounted when selection starts,
   // so releasing that same touch cannot also toggle the row or open the editor.
   return (
     <Pressable
       accessibilityActions={
-        isEditing ? undefined : [{ name: 'longpress', label: t('agent.selection.start') }]
+        isEditing || !isSelectable
+          ? undefined
+          : [{ name: 'longpress', label: t('agent.selection.start') }]
       }
-      accessibilityLabel={agent.name}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
-      accessibilityState={isEditing ? { checked: isSelected } : undefined}
+      accessibilityState={isEditing ? { checked: isSelected, disabled: !isSelectable } : undefined}
       className="w-full active:bg-foreground/5"
+      disabled={isEditing && !isSelectable}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'longpress') {
           onStartSelection(agent.id);
         }
       }}
-      onLongPress={() => onStartSelection(agent.id)}
+      onLongPress={isSelectable ? () => onStartSelection(agent.id) : undefined}
       onPress={() => {
         if (isEditing) {
           onToggle(agent.id);
@@ -277,15 +293,18 @@ const AgentListRow = memo(function AgentListRow({
       <View className="min-w-0 flex-row items-center gap-3 px-4 py-3">
         <AgentAvatar avatar={agent.avatar} name={agent.name} uri={agent.avatarUri} />
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="text-base text-foreground" numberOfLines={1}>
-            {agent.name}
-          </Text>
+          <View className="min-w-0 flex-row items-center gap-2">
+            <Text className="shrink text-base text-foreground" numberOfLines={1}>
+              {agent.name}
+            </Text>
+            <ManagedMark />
+          </View>
           <Text className="text-muted-foreground text-sm" numberOfLines={1}>
             {agent.modelName ?? t('agent.model.none')}
           </Text>
         </View>
         {isEditing ? (
-          <SelectionIndicator selected={isSelected} />
+          <SelectionIndicator locked={!isSelectable} selected={isSelected} />
         ) : (
           <ChevronRightIcon className="size-5 text-muted-foreground" />
         )}
@@ -293,6 +312,12 @@ const AgentListRow = memo(function AgentListRow({
     </Pressable>
   );
 });
+
+/** Each row follows its own Agent's policy. */
+const AgentListRow = withResourcePolicy(
+  withPolicy(AgentListRowView, (policy) => ({ isSelectable: policy.canDelete })),
+  ({ agent }) => agentPolicy(agent),
+);
 
 const styles = StyleSheet.create({
   cardSlice: { borderCurve: 'continuous' },

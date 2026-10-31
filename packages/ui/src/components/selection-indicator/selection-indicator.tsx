@@ -3,6 +3,7 @@ import type { ComponentPropsWithRef } from 'react';
 import { View } from 'react-native';
 
 import { cn } from '../../utils';
+import { LockedMark } from '../locked/locked-mark';
 
 export type SelectionIndicatorVariant = 'default' | 'overlay';
 /** Omitted for a list selection mark; a form picks the shape that tells single from multiple. */
@@ -15,6 +16,8 @@ export type SelectionIndicatorProps = Omit<
   className?: string;
   control?: SelectionIndicatorControl;
   disabled?: boolean;
+  /** The item cannot be selected because someone else owns it: the owner's mark takes its place. */
+  locked?: boolean;
   selected: boolean;
   variant?: SelectionIndicatorVariant;
 };
@@ -24,11 +27,25 @@ export function SelectionIndicator({
   className,
   control,
   disabled = false,
+  locked = false,
   ref,
   selected,
   variant = 'default',
   ...props
 }: SelectionIndicatorProps) {
+  if (locked) {
+    return (
+      <View
+        {...props}
+        accessibilityElementsHidden
+        className={cn('size-6 shrink-0 items-center justify-center', className)}
+        importantForAccessibility="no"
+        ref={ref}
+      >
+        <LockedMark />
+      </View>
+    );
+  }
   return (
     <View
       {...props}

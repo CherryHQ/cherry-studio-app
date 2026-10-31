@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
+import { PolicyGroup } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
@@ -120,8 +121,13 @@ function DocumentContent({
         ],
       }}
     >
-      {children}
-      <MarkdownText markdown={showTranslation && translation.data ? translation.data : markdown} />
+      {/* An organization's Skill reads inside its locked group; its menu offers no changes. */}
+      <PolicyGroup contentClassName="gap-4 px-4 pt-3 pb-3">
+        {children}
+        <MarkdownText
+          markdown={showTranslation && translation.data ? translation.data : markdown}
+        />
+      </PolicyGroup>
     </SkillPage>
   );
 }

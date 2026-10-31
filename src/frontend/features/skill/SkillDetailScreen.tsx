@@ -7,11 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
 import type { RouteHeaderProps } from '@/frontend/appShell/header';
+import { usePermittedItems, withResourcePolicy } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { isSkillsError } from '@/shared/contracts/skills';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
 import { SkillDocumentPage } from './SkillDocumentPage';
@@ -51,7 +53,7 @@ export function SkillDetailScreen() {
   return <SkillDetail key={skill.id} skill={skill} />;
 }
 
-function SkillDetail({ skill }: { skill: SkillListItem }) {
+function SkillDetailView({ skill }: { skill: SkillListItem }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
@@ -96,46 +98,57 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
     }
   }
 
-  const headerProps: RouteHeaderProps = {
-    rightActions: [
-      {
-        accessibilityLabel: t('common.more'),
-        disabled: isBusy,
-        icon: EllipsisIcon,
-        items: [
-          ...(skill.sourceUrl
-            ? [
-                {
-                  id: 'skill-update',
-                  label: t('skills.detail.update'),
-                  onPress: () => void update(),
-                },
-                {
-                  id: 'skill-source',
-                  label: t('skills.detail.openSource'),
-                  onPress: () => void openExternalUrl(skill.sourceUrl!),
-                },
-              ]
-            : []),
+  // The enterprise server owns a managed Skill's installation, so only its source stays reachable.
+  const menuItems = usePermittedItems([
+    ...(skill.sourceUrl
+      ? [
           {
-            destructive: true,
-            id: 'skill-uninstall',
-            label: t('skills.detail.uninstall'),
-            onPress: () =>
-              alert.confirm({
-                confirmLabel: t('skills.detail.uninstall'),
-                description: t('skills.detail.uninstallMessage'),
-                onConfirm: () => void uninstall(),
-                role: 'destructive',
-                title: t('skills.detail.uninstallTitle', { name: skill.name }),
-              }),
+            id: 'skill-update',
+            label: t('skills.detail.update'),
+            onPress: () => void update(),
+            requires: 'change' as const,
           },
-        ],
-        key: 'skill-actions',
-        nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
-        type: 'menu',
-      },
-    ],
+        ]
+      : []),
+    ...(skill.sourceUrl
+      ? [
+          {
+            id: 'skill-source',
+            label: t('skills.detail.openSource'),
+            onPress: () => void openExternalUrl(skill.sourceUrl!),
+          },
+        ]
+      : []),
+    {
+      destructive: true,
+      id: 'skill-uninstall',
+      label: t('skills.detail.uninstall'),
+      onPress: () =>
+        alert.confirm({
+          confirmLabel: t('skills.detail.uninstall'),
+          description: t('skills.detail.uninstallMessage'),
+          onConfirm: () => void uninstall(),
+          role: 'destructive',
+          title: t('skills.detail.uninstallTitle', { name: skill.name }),
+        }),
+      requires: 'delete' as const,
+    },
+  ]);
+  const headerProps: RouteHeaderProps = {
+    rightActions:
+      menuItems.length > 0
+        ? [
+            {
+              accessibilityLabel: t('common.more'),
+              disabled: isBusy,
+              icon: EllipsisIcon,
+              items: menuItems,
+              key: 'skill-actions',
+              nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
+              type: 'menu',
+            },
+          ]
+        : [],
     title: skill.name,
   };
 
@@ -180,3 +193,8 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
     </SkillPage>
   );
 }
+
+/** The detail follows its Skill's policy. */
+const SkillDetail = withResourcePolicy(SkillDetailView, ({ skill }) =>
+  managedResourcePolicy(skill),
+);

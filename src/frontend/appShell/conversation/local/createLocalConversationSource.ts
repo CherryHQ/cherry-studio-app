@@ -113,6 +113,7 @@ export function createLocalConversationSource(input: {
             modelName: agent.modelName,
             avatar: agent.avatar,
             avatarUri: agent.avatarUri,
+            ...(agent.isManaged && { isManaged: true }),
           })),
           ...(page * 100 < result.total
             ? { next: refs.issue<CatalogCursor>('agents', String(page + 1)) }

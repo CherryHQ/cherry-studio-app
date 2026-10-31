@@ -10,6 +10,10 @@ const FALLBACK_COPY = {
   'recovery.startupFailed.description':
     'Something stopped the app from starting. Try again. If this keeps happening, close Cherry Studio completely and reopen it.',
   'recovery.startupFailed.title': "Cherry Studio couldn't start",
+  'enterprise.startupFailed.description':
+    'The first visit needs a connection to load your organization’s configuration. Check your network and try again, or sign out.',
+  'enterprise.startupFailed.title': "Couldn't reach your organization",
+  'account.signOut': 'Sign out',
 } as const;
 
 function translate(key: keyof typeof FALLBACK_COPY) {
@@ -17,17 +21,29 @@ function translate(key: keyof typeof FALLBACK_COPY) {
 }
 
 /** Shown instead of the app when bootstrap fails, so a failed start never becomes a crash loop. */
-export function StartupFailureScreen({ onRetry }: { onRetry: () => void }) {
+export function StartupFailureScreen({
+  onRetry,
+  onSignOut,
+}: {
+  onRetry: () => void;
+  /** Offered when an enterprise profile could not complete its first sync. */
+  onSignOut?: () => void;
+}) {
   // The startup cover waits for content to lay out; this screen is that content.
   const reportReady = useStartupReadyAfterFrames();
 
   return (
     <RecoveryScreen
-      description={translate('recovery.startupFailed.description')}
+      description={translate(
+        onSignOut ? 'enterprise.startupFailed.description' : 'recovery.startupFailed.description',
+      )}
       onLayout={reportReady}
       onRetry={onRetry}
       retryLabel={translate('common.retry')}
-      title={translate('recovery.startupFailed.title')}
+      secondaryAction={onSignOut && { label: translate('account.signOut'), onPress: onSignOut }}
+      title={translate(
+        onSignOut ? 'enterprise.startupFailed.title' : 'recovery.startupFailed.title',
+      )}
     />
   );
 }

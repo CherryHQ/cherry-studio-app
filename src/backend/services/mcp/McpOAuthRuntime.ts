@@ -26,13 +26,14 @@ import {
   type McpConnectionConfig,
   type McpOAuthStartInput,
 } from '@/shared/contracts/mcp';
+import { profileScopedName } from '@/shared/data/activeProfile';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { assertMcpOAuthUrl, createMcpOAuthFetch } from './mcpOAuthFetch';
 
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const ATTEMPT_LIFETIME_MS = 10 * 60 * 1000;
-const secretKey = (id: string) => `mcp-oauth.${z.uuidv4().parse(id)}`;
+const secretKey = (id: string) => profileScopedName(`mcp-oauth.${z.uuidv4().parse(id)}`);
 const secret = z.string().min(1).max(65_536).regex(/^\S+$/);
 
 const GrantSchema = z.object({

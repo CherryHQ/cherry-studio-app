@@ -14,13 +14,15 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/ModelPicker';
+import { PolicyGroup, PolicySelectItem, withResourcePolicy } from '@/frontend/components/Policy';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
 // 快速模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
 const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter((kind) => kind !== 'fast');
 
-export default function ModelSettingsScreen() {
+function ModelSettingsView() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { saveSelections, selections } = useModelSettingSelections();
@@ -66,9 +68,12 @@ export default function ModelSettingsScreen() {
         return {
           key: kind,
           disabled: isSaving,
+          empty: !selections[kind],
           label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
           onPress: () => setActiveKind(kind),
-          value: item?.model.name ?? t('settings.select.placeholder'),
+          value:
+            item?.model.name ??
+            t(selections[kind] ? 'settings.model.unavailable' : 'settings.select.placeholder'),
           valueLeading: item ? (
             <ModelAvatar model={item.model} provider={item.provider} />
           ) : undefined,
@@ -81,11 +86,13 @@ export default function ModelSettingsScreen() {
   return (
     <>
       <SettingsScrollPage headerProps={{ title: t('settings.pages.model.title') }}>
-        <Section>
-          {items.map(({ key, ...item }) => (
-            <Section.SelectItem key={key} {...item} />
-          ))}
-        </Section>
+        <PolicyGroup>
+          <Section>
+            {items.map(({ key, ...item }) => (
+              <PolicySelectItem field="defaultModel" key={key} {...item} />
+            ))}
+          </Section>
+        </PolicyGroup>
       </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer
@@ -101,3 +108,6 @@ export default function ModelSettingsScreen() {
     </>
   );
 }
+
+/** Enterprise sync writes these preferences; the organization owns the choice. */
+export default withResourcePolicy(ModelSettingsView, () => capabilityPolicy('modelSettings'));

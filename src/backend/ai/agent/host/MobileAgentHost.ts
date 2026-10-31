@@ -69,6 +69,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.host.quiesce();
   }
 
+  /** Stops spending provider credentials now, as a refused enterprise session requires. */
+  interrupt(reason: Error) {
+    return this.host.suspend(reason);
+  }
+
   getWorkingStorageSize = () => this.host.getWorkingStorageSize();
   clearWorkingStorage = () => this.host.clearWorkingStorage();
   getSessionStatus = (sessionId: string) => this.host.getSessionStatus(sessionId);

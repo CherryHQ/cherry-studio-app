@@ -57,6 +57,8 @@ manual creation: name, type and endpoint; reasoning, tool use and streaming swit
 and video input switches; token limits (not for drawing models); pricing; group and notes (notes on
 saved models only). Switches change in place. Names, limits, notes and pricing open a sheet that
 edits a copy and applies it on Save; a rejected value keeps the sheet open with its error.
+Under a policy that locks models, such as an organization's provider, the rows show the same
+values without opening anything and switches stay at full contrast.
 
 Model details keep their introduction (avatar, name, provider and purpose, model ID) and put these
 rows under it. `useSavedModelSettings` writes each change immediately: it is the former edit draft

@@ -162,6 +162,27 @@ describe('Agent management tools', () => {
     },
   );
 
+  test('neither reads nor changes an organization-delivered Agent, and marks it in the list', async () => {
+    const { data, invoke } = setup();
+    const managed = { ...agent, isManaged: true };
+    data.getById.mockResolvedValue(managed);
+    data.list.mockResolvedValue({ items: [managed], page: 1, total: 1 });
+    const read = await invoke('agent_get', { agent_id: 'current' });
+    expect(read.value).toMatchObject({ status: 'error', code: 'agent_managed' });
+    expect(JSON.stringify(read.value)).not.toContain(agent.instructions);
+    expect(
+      await invoke('agent_update', {
+        agent_id: agent.id,
+        expected_updated_at: agent.updatedAt,
+        changes: { mode: 'standard' },
+      }),
+    ).toMatchObject({ value: { code: 'agent_managed' } });
+    expect(data.update).not.toHaveBeenCalled();
+    expect(data.listSkillBindings).not.toHaveBeenCalled();
+    const listed = await invoke('agent_list', {});
+    expect(listed.value).toMatchObject({ items: [{ id: agent.id, isManaged: true }] });
+  });
+
   test('rejects an invented Agent id before reading', async () => {
     const { data, invoke } = setup();
     expect(await invoke('agent_get', { agent_id: 'invented' })).toHaveProperty('failure');

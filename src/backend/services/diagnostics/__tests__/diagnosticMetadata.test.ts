@@ -1,3 +1,4 @@
+import { installDiagnosticContextReader } from '@/backend/utils/diagnosticContext';
 import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { PluginError } from '@/shared/contracts/plugins';
@@ -23,6 +24,26 @@ const trace: TraceSpanRecord = {
   endedAt: 200,
   durationMs: 100,
 };
+
+test('exports captured context without attributing legacy records to the submitting account', () => {
+  installDiagnosticContextReader(() => ({ accountSubjectId: 'submitter', jsVersion: '0.6.0' }));
+  try {
+    const environment = { profileId: 'profile-a', profileSubjectId: 'user-a', appVersion: '0.5.0' };
+    const log = projectDiagnosticLog({
+      ...createLogRecord('error', 'HTTP request failed.', 'HttpTransport', {}, []),
+      environment: { ...environment, email: 'private@example.com', token: 'secret' },
+    });
+    expect(projectDiagnosticLog(log!)?.environment).toEqual(environment);
+    expect(
+      projectDiagnosticTrace({ ...trace, environment: { ...environment, phone: 'private' } })
+        ?.environment,
+    ).toEqual(environment);
+    expect(projectDiagnosticLog({ ...log, environment: undefined })?.environment).toBeUndefined();
+    expect(projectDiagnosticTrace(trace)?.environment).toBeUndefined();
+  } finally {
+    installDiagnosticContextReader(() => ({}));
+  }
+});
 
 test('retains admission rejection codes through log persistence and export without private text', () => {
   const error = new AgentProtocolError({

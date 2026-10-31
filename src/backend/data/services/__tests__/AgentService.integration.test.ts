@@ -12,6 +12,7 @@ import { subscribeDataApiChanges } from '../../dataApiChanges';
 import type { PreferenceService } from '../../PreferenceService';
 import { agentGlobalSkillService } from '../AgentGlobalSkillService';
 import { agentService } from '../AgentService';
+import { providerRegistryService } from '../ProviderRegistryService';
 import { applyMigrations } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
@@ -71,6 +72,20 @@ describe('AgentService persistence', () => {
     await uninstallTestHost();
     jest.restoreAllMocks();
     sqlite.close();
+  });
+
+  it('seeds an organization default before the public model catalog is available', async () => {
+    insertUserModel(sqlite, 'organization', 'default-model');
+    preferenceGet.mockResolvedValue('organization::default-model');
+    providerRegistryService.clearRemoteSnapshot();
+
+    const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+    expect(initial).toMatchObject({
+      model: 'organization::default-model',
+      modelName: 'default-model',
+    });
+    expect(providerRegistryService.isReady()).toBe(false);
+    await expect(agentService.createInitialAgent({ name: 'Duplicate' })).resolves.toBeNull();
   });
 
   it('creates with definition defaults and inherits the default-model preference', async () => {
@@ -223,6 +238,94 @@ describe('AgentService persistence', () => {
     }
   });
 
+  it('lets the user adjust only the allowed fields of an enterprise-managed Agent', async () => {
+    insertUserModel(sqlite, 'openai', 'gpt-4');
+    const agent = await agentService.create({ name: 'Managed', instructions: 'Hidden' });
+    sqlite.prepare("UPDATE agent SET managed_remote_id = '7' WHERE id = ?").run(agent.id);
+    sqlite.exec(`
+      CREATE TRIGGER preserve_organization_fields BEFORE UPDATE OF name, instructions ON agent
+      WHEN OLD.managed_remote_id IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'organization fields must not be written'); END;
+    `);
+
+    // The editor resubmits unchanged locked fields alongside the allowed change.
+    await expect(
+      agentService.update(agent.id, {
+        name: 'Managed',
+        instructions: 'Hidden',
+        toolApprovalMode: 'default',
+      }),
+    ).resolves.toMatchObject({
+      isManaged: true,
+      toolApprovalMode: 'default',
+    });
+    await expect(agentService.update(agent.id, { instructions: 'Leaked' })).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+    await expect(agentService.delete(agent.id)).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+  });
+
+  it('lets the user pick a managed Agent model only from a pool of several', async () => {
+    insertUserModel(sqlite, 'openai', 'gpt-4');
+    insertUserModel(sqlite, 'claude', 'sonnet');
+    insertUserModel(sqlite, 'gemini', 'pro');
+    const agent = await agentService.create({ name: 'Managed', model: 'openai::gpt-4' });
+    const setPool = (pool: string[]) =>
+      sqlite
+        .prepare("UPDATE agent SET managed_remote_id = '7', allowed_model_ids = ? WHERE id = ?")
+        .run(JSON.stringify(pool), agent.id);
+
+    setPool(['openai::gpt-4', 'claude::sonnet']);
+    await expect(agentService.getById(agent.id)).resolves.toMatchObject({
+      allowedModelIds: ['openai::gpt-4', 'claude::sonnet'],
+    });
+    await expect(agentService.update(agent.id, { model: 'claude::sonnet' })).resolves.toMatchObject(
+      { model: 'claude::sonnet' },
+    );
+    await expect(agentService.update(agent.id, { model: 'gemini::pro' })).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+
+    setPool(['claude::sonnet']);
+    await expect(agentService.update(agent.id, { model: 'openai::gpt-4' })).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+  });
+
+  it.each([false, true])(
+    'checks current ownership and locked values inside the write transaction (already managed: %s)',
+    async (alreadyManaged) => {
+      const agent = await agentService.create({ name: 'Agent', instructions: 'Original' });
+      if (alreadyManaged) {
+        sqlite.prepare("UPDATE agent SET managed_remote_id = '7' WHERE id = ?").run(agent.id);
+      }
+      const write = dbService.withWriteTx.bind(dbService);
+      jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce(async (callback) => {
+        // A queued enterprise projection commits after an editor's preflight read.
+        sqlite
+          .prepare(
+            "UPDATE agent SET managed_remote_id = '7', instructions = 'Organization update', updated_at = updated_at + 1 WHERE id = ?",
+          )
+          .run(agent.id);
+        return write(callback);
+      });
+
+      await expect(
+        agentService.update(agent.id, {
+          instructions: alreadyManaged ? 'Original' : 'User edit',
+          toolApprovalMode: 'default',
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+      expect(await agentService.getById(agent.id)).toMatchObject({
+        isManaged: true,
+        instructions: 'Organization update',
+        toolApprovalMode: 'auto',
+      });
+    },
+  );
+
   it('persists mode switches without resetting capability or approval preferences', async () => {
     const agent = await agentService.create({
       name: 'Chat',
@@ -364,6 +467,19 @@ describe('AgentService persistence', () => {
 
     await expect(agentService.createInitialAgent({ name: 'Cherry Agent' })).resolves.toBeNull();
     expect((await agentService.list()).items).toEqual([existing]);
+  });
+
+  it('adds the initial Agent beside organization-managed Agents', async () => {
+    const managed = await agentService.create({ name: 'Organization Agent' });
+    sqlite.prepare('UPDATE agent SET managed_remote_id = ? WHERE id = ?').run('7', managed.id);
+
+    const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+
+    expect(initial).toMatchObject({ avatar: '🍒', name: 'Cherry Agent' });
+    expect((await agentService.list()).items.map((agent) => agent.id)).toEqual([
+      managed.id,
+      initial!.id,
+    ]);
   });
 
   it('does not recreate the initial Agent after the user deletes it', async () => {

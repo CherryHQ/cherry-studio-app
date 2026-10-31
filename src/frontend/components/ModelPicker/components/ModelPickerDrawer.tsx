@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { useModelChoice } from '@/frontend/components/Policy';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import {
@@ -68,6 +70,8 @@ export function ModelPickerDrawer({
   const [searchText, setSearchText] = useState('');
   const [selectedBadge, setSelectedBadge] = useState<ModelPickerBadge | null>(null);
   const deferredSearchText = useDeferredValue(searchText);
+  // The sheet renders through a portal at the app root, outside the screen's PolicyScope.
+  const { allowedModelIds } = useModelChoice();
   const isSearchExpanded = isSearchFocused || searchText.trim().length > 0;
   const handleClose = useCallback(() => {
     setIsSearchFocused(false);
@@ -105,6 +109,7 @@ export function ModelPickerDrawer({
     >
       <ModelRegistryGate>
         <ModelPickerDrawerContent
+          allowedModelIds={allowedModelIds}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
@@ -128,6 +133,7 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
+  allowedModelIds,
   deferredSearchText,
   emptyText,
   isModelVisible,
@@ -157,6 +163,7 @@ function ModelPickerDrawerContent({
   | 'multiSelect'
   | 'variant'
 > & {
+  allowedModelIds: ReadonlySet<string> | null;
   deferredSearchText: string;
   onSearchFocusChange: (isFocused: boolean) => void;
   onSearchTextChange: (value: string) => void;
@@ -184,19 +191,23 @@ function ModelPickerDrawerContent({
   );
   const visibleGroups = useMemo(
     () =>
-      isModelVisible
+      isModelVisible || allowedModelIds
         ? filteredGroups.flatMap((group) => {
-            const items = group.items.filter(isModelVisible);
+            const items = group.items.filter(
+              (item) =>
+                (allowedModelIds?.has(item.modelId) ?? true) && (isModelVisible?.(item) ?? true),
+            );
             return items.length > 0 ? [{ ...group, items }] : [];
           })
         : filteredGroups,
-    [filteredGroups, isModelVisible],
+    [allowedModelIds, filteredGroups, isModelVisible],
   );
   const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
   const hasSearch = deferredSearchText.trim().length > 0;
   const hasActiveFilters = selectedBadge !== null;
   const emptyAction =
-    !hasSearch && !hasActiveFilters && onAddProvider
+    // Enterprise providers come from the organization and cannot be added here.
+    !hasSearch && !hasActiveFilters && onAddProvider && editionCapabilities().providerSettings
       ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
       : undefined;
 

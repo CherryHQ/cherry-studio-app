@@ -122,6 +122,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
+      // Public Accounts Portal inputs are supplied by the environment for every build profile.
+      accountsPortal: {
+        origin: process.env.ACCOUNTS_PORTAL_ORIGIN ?? '',
+        issuer: process.env.ACCOUNTS_PORTAL_ISSUER ?? '',
+        clientId: process.env.ACCOUNTS_PORTAL_CLIENT_ID ?? '',
+        scopes: (process.env.ACCOUNTS_PORTAL_SCOPES ?? '').split(/\s+/).filter(Boolean),
+        enterpriseAddress: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API ?? '',
+      },
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
       // Native APK installation capability is separately embedded by withAppUpdates.
       isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',

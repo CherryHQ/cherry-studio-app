@@ -3,6 +3,8 @@
 This directory owns frontend infrastructure that applies across the application rather than one
 page.
 
+- `account/` owns the Accounts Portal sign-in page, its `/login` route and the gate that returns an
+  enterprise profile with a rejected session to sign-in.
 - `appUpdate/` owns the package-update dialog, cold-start offer and entry state across channels.
 - `fileExport/` owns watermark preparation, system file sharing and photo saving.
 - `documentExport/` owns the source-neutral document export navigation handoff.

@@ -49,6 +49,8 @@ export const RemoteMcpServerSchema = McpServerBaseSchema.extend({
   endpointUrl: z.url(),
   headers: z.record(z.string(), z.string()).optional(),
   oauth: McpOAuthReferenceSchema.optional(),
+  /** Delivered and owned by the enterprise server. */
+  isManaged: z.boolean().optional(),
 });
 
 export const BuiltInMcpServerSchema = McpServerBaseSchema.extend({

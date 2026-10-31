@@ -82,6 +82,7 @@
     "@ai-sdk/xai": "3.0.126",
     "@anthropic-ai/vertex-sdk": "0.22.0",
     "@babel/runtime": "^7.29.2",
+    "@cherryinternal/accounts-portal": "0.2.1",
     "@cherrystudio/ai-core": "2.4.3",
     "@cherrystudio/ai-runtime": "workspace:*",
     "@cherrystudio/ai-sdk-provider": "0.1.9",

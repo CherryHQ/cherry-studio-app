@@ -1,4 +1,4 @@
-import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import {
   DEFAULT_AGENT_MODE,
@@ -52,10 +52,19 @@ export const agentTable = sqliteTable(
     // pattern): a group id absent from the list is enabled. Stores group ids,
     // never tool names; reads sanitize unknown ids instead of failing.
     disabledCapabilities: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
+    // Enterprise remote id when the enterprise server owns this definition; NULL for user data.
+    managedRemoteId: text(),
+    // Enterprise default model and model pool, as the desktop names them; NULL for user data.
+    defaultModelId: text(),
+    allowedModelIds: text({ mode: 'json' }).$type<string[]>(),
     ...orderKeyColumns,
     ...createUpdateDeleteTimestamps,
   },
-  (t) => [index('agent_created_at_idx').on(t.createdAt), orderKeyIndex('agent')(t)],
+  (t) => [
+    index('agent_created_at_idx').on(t.createdAt),
+    orderKeyIndex('agent')(t),
+    uniqueIndex('agent_managed_remote_id_idx').on(t.managedRemoteId),
+  ],
 );
 
 export type AgentRow = typeof agentTable.$inferSelect;

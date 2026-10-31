@@ -21,6 +21,7 @@ import {
 } from '@/shared/data/types/model';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
+import { guardMethods, providerSettingsChecks } from './managedResources';
 import { assertCustomProviderModelEndpointTypes } from './providerModelEndpointIntegrity';
 import {
   createCustomModel,
@@ -867,6 +868,23 @@ export class ModelService {
     return new Set(values.filter((id): id is string => typeof id === 'string' && id.length > 0));
   }
 }
+
+// The organization supplies an enterprise profile's models.
+guardMethods(
+  ModelService,
+  providerSettingsChecks<ModelService>('model', [
+    'create',
+    'batchCreate',
+    'createDtos',
+    'update',
+    'bulkUpdate',
+    'delete',
+    'deleteByKey',
+    'bulkDelete',
+    'reconcileProviderModels',
+    'createFromRegistry',
+  ]),
+);
 
 export const modelService = new ModelService();
 

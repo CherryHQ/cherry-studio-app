@@ -41,6 +41,7 @@
 import { loggerService } from '@logger';
 import { createMMKV } from 'react-native-mmkv';
 
+import { profileScopedName } from '@/shared/data/activeProfile';
 import type {
   InferUseCacheValue,
   PersistCacheKey,
@@ -67,7 +68,7 @@ interface KvStorage {
 }
 
 function createMmkvStorage(): KvStorage {
-  const mmkv = createMMKV({ id: 'cherry-cache-persist' });
+  const mmkv = createMMKV({ id: profileScopedName('cherry-cache-persist') });
   return {
     delete: (key) => {
       mmkv.remove(key);
