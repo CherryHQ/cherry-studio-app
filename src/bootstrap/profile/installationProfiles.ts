@@ -1,8 +1,10 @@
 import { randomUUID } from 'expo-crypto';
 import { createMMKV } from 'react-native-mmkv';
 
+import { application } from '@/backend/core/application/Application';
 import { ProfileRegistry, resetProfileCaches } from '@/backend/data/profile';
 import { setActiveProfile } from '@/shared/data/activeProfile';
+import { INHERITABLE_PREFERENCE_KEYS } from '@/shared/data/preference';
 
 import { setDiagnosticProfile } from '../runtime/diagnosticContext';
 
@@ -15,6 +17,7 @@ export function installationProfiles(): ProfileRegistry {
     registry = new ProfileRegistry(
       { read: () => store.getString('registry'), write: (value) => store.set('registry', value) },
       randomUUID,
+      () => application.get('PreferenceService').getMultipleRawCached(INHERITABLE_PREFERENCE_KEYS),
     );
   }
   return registry;

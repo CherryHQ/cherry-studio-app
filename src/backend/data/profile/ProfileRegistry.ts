@@ -6,6 +6,7 @@ import {
   isSameEnterpriseIdentity,
   LOCAL_PROFILE,
 } from '@/shared/data/activeProfile';
+import type { INHERITABLE_PREFERENCE_KEYS, PreferenceSchema } from '@/shared/data/preference';
 
 export const EnterpriseIdentitySchema = z.union([
   z.strictObject({
@@ -28,6 +29,7 @@ const RegistrySchema = z.strictObject({
       identity: EnterpriseIdentitySchema,
       address: z.string().min(1),
       displayName: z.string().min(1).optional(),
+      initialPreferences: z.record(z.string(), z.unknown()).optional(),
     }),
   ),
   active: z.union([z.literal('local'), z.uuid()]),
@@ -51,6 +53,10 @@ export class ProfileRegistry {
   constructor(
     private readonly storage: ProfileRegistryStorage,
     private readonly createId: () => string,
+    private readonly readInitialPreferences?: () => Pick<
+      PreferenceSchema,
+      (typeof INHERITABLE_PREFERENCE_KEYS)[number]
+    >,
   ) {}
 
   /** The profile this launch serves. An unreadable selection must stop startup. */
@@ -65,7 +71,7 @@ export class ProfileRegistry {
   /**
    * Reuses the profile of a known identity and records the address it was reached at, so a
    * server that moves keeps its data. An unknown display name keeps the recorded one. The local
-   * profile is never adopted by a login.
+   * profile is never adopted by a login. Only a new identity captures application preferences.
    */
   resolve(identity: EnterpriseIdentity, address: string, displayName?: string): ActiveProfile {
     const data = this.readRegistry();
@@ -79,6 +85,7 @@ export class ProfileRegistry {
       identity: parsed,
       address,
       ...(name && { displayName: name }),
+      initialPreferences: existing ? existing.initialPreferences : this.readInitialPreferences?.(),
     };
     this.write({
       ...data,

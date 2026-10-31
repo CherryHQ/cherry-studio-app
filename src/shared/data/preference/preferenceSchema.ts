@@ -141,6 +141,25 @@ export const PreferenceDefaults = {
 
 export type PreferenceKeyType = keyof PreferenceSchema;
 
+/** Application choices inherited once by a newly created account/organization profile. */
+export const INHERITABLE_PREFERENCE_KEYS = [
+  'app.background_run_guidance.seen',
+  'app.feedback.shake_enabled',
+  'app.feedback.shake_hint_decision',
+  'app.language',
+  'app.privacy.data_collection.enabled',
+  'app.privacy.policy_version',
+  'chat.background_reply.enabled',
+  'chat.completion_notifications.enabled',
+  'file.document_parser.mode',
+  'file.export.watermark_enabled',
+  'ui.font_size_step',
+  'ui.library.view_mode',
+  'ui.sidebar.collapsed',
+  'ui.sidebar.recent_view_mode',
+  'ui.theme_mode',
+] as const satisfies readonly PreferenceKeyType[];
+
 /**
  * Preferences that describe this device or its consent rather than the user's content.
  * Restoring a backup keeps the target device's values for these keys.

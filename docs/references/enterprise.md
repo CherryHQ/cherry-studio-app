@@ -38,6 +38,14 @@ so it never shares a profile with a cloud identity. Existing cloud identities ke
 Tokens, roles and display names are not part of it. The registry also records the address each
 enterprise profile was last reached at, so a moved server keeps its data.
 
+When a new enterprise or private profile is registered, it captures the current profile's
+application preferences listed in `INHERITABLE_PREFERENCE_KEYS`: language, appearance and layout,
+notifications and background presentation, feedback, privacy choices, background guidance,
+document parsing and export watermark. Its first database seeds those values before the UI reads
+preferences. This is one-time inheritance: existing profiles retain their settings, including when
+switching back, signing in again or reopening after a restart. Account identity, onboarding,
+models and organization configuration are not inherited. Community accounts keep sharing `local`.
+
 | Owner | Location |
 | --- | --- |
 | Installation directory of profiles (`ProfileRegistry`) | MMKV `cherry-installation-profiles` |

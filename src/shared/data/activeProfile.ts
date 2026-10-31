@@ -21,6 +21,8 @@ export type ActiveProfile =
       address: string;
       /** The organization's display name from Accounts Portal; private deployments have none. */
       displayName?: string;
+      /** Serialized application choices used only to seed this profile's first database. */
+      initialPreferences?: Readonly<Record<string, unknown>>;
     }>;
 
 export const LOCAL_PROFILE: ActiveProfile = Object.freeze({
