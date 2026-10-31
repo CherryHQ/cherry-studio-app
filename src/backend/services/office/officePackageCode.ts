@@ -1,14 +1,9 @@
+import { officeCheckCode } from './officeCheckCode';
 import fflate from './vendor/fflate.json';
 import xmldom from './vendor/xmldom.json';
 
 /** Largest Office source or output file; see the README for the measured memory behind it. */
 export const OFFICE_MAX_FILE_BYTES = 64 * 1024 * 1024;
-
-const MAIN_PARTS = {
-  docx: 'word/document.xml',
-  xlsx: 'xl/workbook.xml',
-  pptx: 'ppt/presentation.xml',
-};
 
 // Byte/string conversions use indexed loops: QuickJS materializes `Uint8Array.from(string, fn)`
 // as an array of one-character strings first, about 70 bytes of heap per input byte.
@@ -66,7 +61,7 @@ const xml = (() => {
 /**
  * Takes the host's `__files` before any other code runs and keeps it in a closure, so later code,
  * including a model script, only sees `readInput(index)`, which returns an input file's bytes read
- * once, and `saveOffice(output, format, checkXml)`, which validates and writes the finished package
+ * once, and `saveOffice(output, format, original)`, which validates and writes the finished package
  * and returns its size. Requires the byte, ZIP and XML code above.
  */
 const officeFilesCode = String.raw`
@@ -77,7 +72,7 @@ const { readInput, saveOffice } = (() => {
   const loaded = [];
   const mebibytes = size => (size / 1048576).toFixed(1) + ' MiB';
   const readInput = index => loaded[index] ??= new Uint8Array(files.read(index));
-  const saveOffice = (output, format, checkXml) => {
+  const saveOffice = (output, format, original) => {
     const label = format.toUpperCase();
     let bytes;
     if (typeof output === 'string') {
@@ -88,22 +83,7 @@ const { readInput, saveOffice } = (() => {
     else if (ArrayBuffer.isView(output)) bytes = new Uint8Array(output.buffer, output.byteOffset, output.byteLength);
     else throw new Error('Return the ' + label + ' file as a Uint8Array, ArrayBuffer or base64 string.');
     if (bytes.length > ${OFFICE_MAX_FILE_BYTES}) throw new Error('The ' + label + ' file is ' + mebibytes(bytes.length) + ', over the ${OFFICE_MAX_FILE_BYTES / 1048576} MiB limit.');
-    const main = ${JSON.stringify(MAIN_PARTS)}[format];
-    let parts;
-    try { parts = zip.unzipSync(bytes, { filter: entry => !checkXml ? entry.name === main : entry.name === main || /[.](xml|rels)$/.test(entry.name) && entry.originalSize <= 1048576 }); }
-    catch { throw new Error('The returned value is not a ZIP package.'); }
-    if (!parts[main]) throw new Error('The returned package is not a ' + label + ' file: ' + main + ' is missing.');
-    // Hand-edited package XML is the common way to corrupt a file; refuse it before it is saved.
-    // Parts over 1 MiB are skipped to keep large sheets within the run's memory and time budget.
-    for (const [name, data] of checkXml ? Object.entries(parts) : []) {
-      let problem;
-      try {
-        new xml.DOMParser({ onError: (level, message) => { if (level !== 'warning') problem ??= message; } })
-          .parseFromString(zip.strFromU8(data), 'application/xml');
-      } catch (error) { problem ??= String(error && error.message || error); }
-      if (problem) throw new Error('Invalid XML in ' + name + ': ' + problem);
-    }
-    parts = undefined;
+    assertOfficePackage(bytes, format, original);
     return files.write(bytes);
   };
   return { readInput, saveOffice };
@@ -111,4 +91,4 @@ const { readInput, saveOffice } = (() => {
 `;
 
 /** The full host prelude of an Office job, in dependency order. */
-export const officeRuntimeCode = `${officeBytesCode}\n${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${officeFilesCode}`;
+export const officeRuntimeCode = `${officeBytesCode}\n${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${officeCheckCode}\n${officeFilesCode}`;
