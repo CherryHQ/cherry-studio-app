@@ -522,9 +522,9 @@ snapshot is turn-local and is never written to Agent configuration. Omitting eit
 the Agent definition loaded for that turn; an explicit reasoning `default` uses the selected model's
 default instead of the Agent's configured effort.
 
-Capability enablement is Agent configuration, not submission state: the Agent record carries a
-capability-group deny-list (`disabledCapabilities`), and the Host resolves it together with the
-other system gates when it freezes the turn's tool snapshot. The assistant's inference snapshot
+Built-in tool availability is resolved from model support, platform, permissions and service
+configuration when the Host freezes the turn's tool snapshot; it has no per-Agent capability
+switches or submission flags. The assistant's inference snapshot
 records the concrete tools frozen for the turn, so history does not depend on reconstructing
 configuration state.
 

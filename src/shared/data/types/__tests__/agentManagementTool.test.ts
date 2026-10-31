@@ -7,7 +7,6 @@ const agent = {
   mode: 'standard',
   model: 'provider::model',
   modelName: 'Model',
-  disabledCapabilities: [],
   toolApprovalMode: 'auto',
   updatedAt: '2026-09-22T00:00:00.000Z',
 };
@@ -15,6 +14,25 @@ const agent = {
 test('reads historical tool results without a mode as standard', () => {
   const { mode: _mode, ...historical } = agent;
   expect(AgentToolRecordSchema.parse(historical)).toEqual(agent);
+});
+
+test('reads released capability switches without rewriting historical tool results', () => {
+  const historical = {
+    ...agent,
+    disabledCapabilities: [
+      'agents',
+      'calendar',
+      'fileLibrary',
+      'image',
+      'location',
+      'web',
+      'health',
+      'reminders',
+    ],
+  };
+  const stored = JSON.stringify(historical);
+  expect(AgentToolRecordSchema.parse(historical)).toEqual(agent);
+  expect(JSON.stringify(historical)).toBe(stored);
 });
 
 test('emits model and reads historical mutation results without rewriting their payloads', () => {

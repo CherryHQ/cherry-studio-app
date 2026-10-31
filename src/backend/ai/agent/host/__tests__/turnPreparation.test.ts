@@ -56,7 +56,6 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['health'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -148,7 +147,7 @@ describe('turn preparation', () => {
         throw new Error('Skills unavailable');
       });
       harness.dependencies.skills = { resolve: resolveSkills };
-      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
       harness.getSystemTools.mockRejectedValue(new Error('Tools unavailable'));
       harness.resolveRuntimeTools.mockRejectedValue(new Error('Plugin connection unavailable'));
       harness.preflightModel.mockResolvedValue({
@@ -512,7 +511,6 @@ describe('turn preparation', () => {
       workspaceFolderId: null,
       agentId: AGENT.id,
       askUser: harness.askUser,
-      disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       acceptsImages: true,
       resources: plan.resources,
@@ -710,7 +708,7 @@ describe('turn preparation', () => {
     expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
   });
 
-  test('freezes the web policy only for an Agent that may use the web', async () => {
+  test('freezes the web policy independently of Agent mode', async () => {
     const harness = createHarness();
     const policy = {
       modelToolsPreferred: true,
@@ -722,10 +720,10 @@ describe('turn preparation', () => {
       (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal)).webTools;
 
     expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
     expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, disabledCapabilities: ['web'] });
-    expect(await prepare()).toBeUndefined();
+    harness.getAgent.mockResolvedValue({ ...AGENT });
+    expect(await prepare()).toEqual(policy);
   });
 
   test('stops at session admission when the session does not exist', async () => {

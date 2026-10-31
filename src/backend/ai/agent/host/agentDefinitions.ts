@@ -3,7 +3,7 @@
  *
  * Tool bindings and the fixed built-in catalog are resolved separately from the
  * definition. Agent lookup owns the fixed mode boundary, model, instructions,
- * capability preferences and interactive tool-approval preference.
+ * and interactive tool-approval preference.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';
@@ -12,10 +12,6 @@ import { application } from '@/backend/core/application/Application';
 import { agentTable } from '@/backend/data/db/schemas';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import type { AgentMode, AgentToolApprovalMode } from '@/shared/data/types/agent';
-import {
-  type AgentCapability,
-  sanitizeDisabledAgentCapabilities,
-} from '@/shared/data/types/agentCapability';
 import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
 import type { RuntimeModel, RuntimeOptions } from '../runtime';
@@ -28,8 +24,6 @@ export type AgentDefinition = {
   model: RuntimeModel;
   options: RuntimeOptions;
   toolApprovalMode: AgentToolApprovalMode;
-  /** Capability-group deny-list; a group absent from the list is enabled. */
-  disabledCapabilities: readonly AgentCapability[];
 };
 
 export interface AgentDefinitionSource {
@@ -68,7 +62,6 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         model: { providerId, modelId },
         options: {},
         toolApprovalMode: agent.toolApprovalMode,
-        disabledCapabilities: sanitizeDisabledAgentCapabilities(agent.disabledCapabilities),
       };
     },
   };

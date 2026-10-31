@@ -10,7 +10,6 @@ import { type OrderEndpoints } from './endpointHelpers';
  * Creation may select the built-in Cherry emoji without creating a file.
  */
 const AGENT_MUTABLE_FIELDS = {
-  disabledCapabilities: true,
   instructions: true,
   mode: true,
   model: true,
