@@ -103,7 +103,7 @@ function FileLibraryScreenBody() {
           },
         ],
         key: 'library-actions',
-        nativeIcon: 'ellipsis',
+        nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
         type: 'menu',
       },
     ],

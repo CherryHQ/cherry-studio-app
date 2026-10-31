@@ -110,8 +110,8 @@ function DocumentContent({
             nativeIcon: translation.isFetching
               ? undefined
               : showTranslation
-                ? 'doc.text'
-                : 'translate',
+                ? require('@/assets/header-toolbar/file-text.png')
+                : require('@/assets/header-toolbar/languages.png'),
             testID: 'skill-translation',
             ...(translation.data
               ? { onPress: () => setShowTranslation((shown) => !shown), type: 'icon' as const }
