@@ -50,7 +50,6 @@ import {
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
-import { SshChatControl } from './components/SshChatControl';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import { ChatQuoteProvider } from './quotes/ChatQuoteProvider';
@@ -321,12 +320,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               >
                 <View>
                   {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
-                  {agent.agent?.mode === 'standard' ? (
-                    <SshChatControl
-                      sessionId={sessionId}
-                      draftId={target.kind === 'draft' ? target.sshDraftId : undefined}
-                    />
-                  ) : null}
                   <ChatInput
                     agentId={resolvedAgentId}
                     controls={controls}
@@ -342,6 +335,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
                     }
                     sessionId={sessionId}
+                    sshDraftId={target.kind === 'draft' ? target.sshDraftId : undefined}
                     selectionHandoff={target.selectionHandoff}
                   />
                   <ChatDockFooter>

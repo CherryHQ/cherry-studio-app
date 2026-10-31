@@ -91,6 +91,12 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
   its previous/next navigation and retained answers. Required fields gate submission; optional
   fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
+- In standard mode, the plus menu also offers SSH when the native runtime is available. It uses
+  the shared input-replacement action before opening the target sheet. Saved connections, trust and
+  credentials remain in Settings > SSH connections, reached through the sheet's fixed management
+  action. Only a selected target adds a composer indicator; tapping it reopens the same sheet.
+  Selecting a connection and changing its one-hour grant keep the existing conversation/draft
+  scope and never send a message or execute a command.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or

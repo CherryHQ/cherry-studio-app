@@ -1,4 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
@@ -19,12 +20,14 @@ export function ChatInputMenu({
   onPickPlugins,
   onPickPrompts,
   onPickSkills,
+  onPickSsh,
   triggerRef,
 }: {
   media?: 'all' | 'images';
   onPickPlugins?: () => void;
   onPickPrompts?: () => void;
   onPickSkills?: () => void;
+  onPickSsh?: () => void;
   triggerRef: RefObject<ViewInstance | null>;
 }) {
   const { t } = useTranslation();
@@ -72,6 +75,14 @@ export function ChatInputMenu({
             label={t('skills.title')}
             onPress={onPickSkills}
             testID="chat-composer-skills"
+          />
+        ) : null}
+        {onPickSsh ? (
+          <Composer.Menu.Item
+            icon={<NetworkIcon className="size-5 text-foreground" />}
+            label={t('ssh.title')}
+            onPress={onPickSsh}
+            testID="chat-composer-ssh"
           />
         ) : null}
       </ComposerMenu>
