@@ -48,7 +48,6 @@ import type { SkillListItem } from '@/shared/data/types/skill';
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
-import { AgentCapabilitiesSection } from './components/AgentCapabilitiesSection';
 import { AgentSkillsSection } from './components/AgentSkillsSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
 import { useAgentAutoSave } from './useAgentAutoSave';
@@ -463,14 +462,14 @@ function AgentEditForm({
           <TextInput
             accessibilityLabel={t('agent.form.instructions')}
             autoCorrect
-            className="min-h-28 px-4 py-3 text-base text-foreground"
+            className="min-h-28 max-h-120 px-4 py-3 text-base text-foreground"
             cursorColor={mutedForegroundColor}
             multiline
             onBlur={flush}
             onChangeText={(value) => updateForm('instructions', value)}
             placeholder={t('agent.form.instructionsPlaceholder')}
             placeholderTextColor={mutedForegroundColor}
-            scrollEnabled={false}
+            scrollEnabled
             selectionColor={mutedForegroundColor}
             textAlignVertical="top"
             value={form.instructions}
@@ -520,15 +519,7 @@ function AgentEditForm({
             </Button>
           ) : null}
         </View>
-        {/* Capability groups gate which built-in tools a turn may offer; the
-            approval setting above changes interaction policy only. */}
         {form.mode === 'standard' ? (
-          <AgentCapabilitiesSection
-            disabledCapabilities={form.disabledCapabilities}
-            onChange={(next) => updateForm('disabledCapabilities', next)}
-          />
-        ) : null}
-        {form.mode === 'standard' && (servers.length > 0 || toolBindings.length > 0) ? (
           <AgentToolsSection
             bindings={toolBindings}
             onChange={handleToolBindingsChange}

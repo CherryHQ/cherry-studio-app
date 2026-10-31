@@ -8,7 +8,6 @@ import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { useBackendModule, useMultiplePreferences, useMutation } from '@/frontend/data';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import { type Agent, CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
-import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
 import { type Model, createUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -112,10 +111,6 @@ export function useCompleteOnboarding() {
       } else {
         agent = await createAgent({
           avatar: CHERRY_AGENT_AVATAR,
-          // The initial Agent has Agent management and health; editor-created Agents opt in.
-          disabledCapabilities: DEFAULT_DISABLED_AGENT_CAPABILITIES.filter(
-            (capability) => capability !== 'agents' && capability !== 'health',
-          ),
           model: modelId,
           name: t('agent.default.name'),
         });

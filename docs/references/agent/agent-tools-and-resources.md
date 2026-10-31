@@ -7,10 +7,11 @@ generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `r
 `create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
-Host resolves that catalog against model tool support, platform, OS permission, app
-configuration, and the Agent's capability-group deny-list, then combines it with
-globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the file tools, Office tools and `run_js`
+Host resolves that catalog against model tool support, platform, OS permission and app
+configuration, then combines it with globally connected plugins and the Agent's persisted executable
+remote MCP bindings. Built-in tools, including Health and Reminders, follow the user's conversation
+task without per-Agent editor switches. System permission, service configuration, approval and
+managed-resource gates still apply. The file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
@@ -73,11 +74,10 @@ historical UI remains understandable after configuration changes.
 Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its provider alias,
 which is unambiguous because the catalog is Cherry-owned and collision-free.
 `src/shared/data/types/builtInTool.ts` is the single catalog consumed by the Host. Its descriptors
-own platform, permission, application-configuration, base approval, capability-group membership,
-and auto-approval eligibility. The Agent editor enables or disables capability groups
-(`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
-only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota. Personal-health
+own platform, permission, application-configuration, base approval and auto-approval eligibility.
+The Agent editor cannot change the base policies; its approval preference only changes whether
+effective `ask` calls show an interactive prompt. `generate_image` is never
+auto-approval eligible: tool availability is not consent to spend provider quota. Personal-health
 reads are also ineligible: each call requires explicit consent to share health data with AI.
 Public HealthKit type discovery contains no personal data and can run automatically.
 
@@ -91,8 +91,8 @@ content. See [Web Search](../web-search.md) for the request and partial-result p
 that can still be requested keeps a device tool available as `ask`; execution prompts after
 in-app approval, including after a denial when the OS allows another request. Permanently denied,
 unavailable, or unreadable permission states remove dependent tools for the turn.
-The inference snapshot records the tools that entered the immutable turn. Enabling an Agent
-capability changes its preference; it does not itself request OS permission.
+The inference snapshot records the tools that entered the immutable turn. Discovering a tool
+does not itself request OS permission.
 
 The logical binding model is:
 
@@ -116,6 +116,14 @@ next turn.
 
 Connected plugins are system-wide: permitted tools and their bundled guides are available to every
 Agent, independent of legacy plugin bindings or composer mentions. A mention adds message intent.
+
+Custom remote MCP bindings retain their per-Agent isolation. The editor shows only enabled bindings;
+Add MCP opens a separate picker of enabled, supported servers. Server connection management remains
+on the plugin page. Disabled bindings and per-tool rules are not implicitly enabled by discovery.
+
+All retired built-in capability deny-list entries, including Health and Reminders, are ignored
+when reading old Agents. Historical Agent tool results omit these switches on read without
+rewriting their stored payloads.
 
 For remote MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
 server-level disabled-tool list; a specific `(serverId, rawToolName)` binding overrides that
@@ -142,14 +150,13 @@ tool.
 Before admitting a turn, the Host resolves tools in this order:
 
 1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
-2. Read the Agent's capability-group deny-list from its definition.
-3. Project only system capabilities implemented and available on the current mobile platform.
-4. Resolve executable descriptors for globally connected plugins and the current Agent's enabled
+2. Project only system capabilities implemented and available on the current mobile platform.
+3. Resolve executable descriptors for globally connected plugins and the current Agent's enabled
    remote MCP bindings, then select plugin guide sections whose tool prerequisites are available.
-5. Apply system permission state, model tool-calling support, and application policy.
-6. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
+4. Apply system permission state, model tool-calling support, and application policy.
+5. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
    automatic mode; `deny` remains denied).
-7. Freeze stable refs, provider-safe aliases, callbacks, and effective approval modes into `RuntimeTool[]` for
+6. Freeze stable refs, provider-safe aliases, callbacks, and effective approval modes into `RuntimeTool[]` for
    the turn.
 
 Configuration changes affect the next turn. Permission and resource checks that can change outside
@@ -190,7 +197,7 @@ The snapshot contains the real executable callbacks. Pi cannot execute arbitrary
 functions: every target must still exist in the current authorized catalog.
 
 MCP capabilities and built-in tools marked `deferred` (Skill creation/installation/adaptation,
-library management, Office operations, Health and Agent management) register as upstream `deferred`
+library management, Office operations, Health, Reminders, Calendar, Location, image generation and Agent management) register as upstream `deferred`
 tools. The system prompt's Tools On Demand section names each deferred built-in tool of the turn,
 because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
@@ -577,7 +584,7 @@ must describe the supported health categories and selected AI service.
 - Successful output is imported into managed file storage before the tool reports an artifact.
 - Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
   `generate_image` is never auto-approval eligible, so even an Agent in automatic approval mode
-  confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
+  confirms each call; the tool is absent unless a drawing
   model is configured. A disabled, hidden or non-drawing model counts as unconfigured, so it omits
   the tool rather than failing approved calls. Its description, input schema and request admission
   use one model capability snapshot and the same `createPaintingGenerationStrategy` as painting jobs
@@ -943,12 +950,10 @@ background execution or recovery after the operating system terminates the app.
 
 ## Agent Management
 
-The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
-All four are deferred and loaded through `tool_search`.
-The editor lists it as Agent management alongside the other capability groups; it needs no OS
-permission. New Agents start with it disabled,
-whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
-fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
+Agent management contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+All four are deferred and loaded through `tool_search` for user-directed conversation tasks.
+There is no per-Agent switch and no OS permission requirement. Reads use automatic approval;
+writes start at `ask` and follow the current Agent's approval
 preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
 or change MCP bindings.
 

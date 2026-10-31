@@ -117,8 +117,9 @@ function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
                   type: 'icon',
                   // The check marks a linked workspace, matching the selection in its sheet.
                   icon: workspace.folderId ? FolderCheckIcon : FolderIcon,
-                  // SF Symbols has no checked folder; the filled one marks it on iOS.
-                  nativeIcon: workspace.folderId ? 'folder.fill' : 'folder',
+                  nativeIcon: workspace.folderId
+                    ? require('@/assets/header-toolbar/folder-check.png')
+                    : require('@/assets/header-toolbar/folder.png'),
                   accessibilityLabel: workspaceName
                     ? t('workspace.openCurrent', { name: workspaceName })
                     : t('workspace.open'),

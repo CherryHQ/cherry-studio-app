@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "engines": {
     "node": "24.x"
   },
@@ -82,7 +82,7 @@
     "@ai-sdk/xai": "3.0.126",
     "@anthropic-ai/vertex-sdk": "0.22.0",
     "@babel/runtime": "^7.29.2",
-    "@cherrystudio/ai-core": "2.4.2",
+    "@cherrystudio/ai-core": "2.4.3",
     "@cherrystudio/ai-runtime": "workspace:*",
     "@cherrystudio/ai-sdk-provider": "0.1.9",
     "@cherrystudio/analytics-client": "^1.4.0",
@@ -91,12 +91,12 @@
     "@cherrystudio/file-preview-webview": "workspace:*",
     "@cherrystudio/mcp-app-webview": "workspace:*",
     "@cherrystudio/mermaid-webview": "workspace:*",
-    "@cherrystudio/provider-registry": "0.2.8",
+    "@cherrystudio/provider-registry": "0.3.1",
     "@cherrystudio/remote-protocol": "0.7.0",
     "@cherrystudio/remote-transport": "0.2.5",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
-    "@cherrystudio/web-search": "0.4.0",
+    "@cherrystudio/web-search": "0.5.0",
     "@e965/xlsx": "0.20.3",
     "@earendil-works/chord": "1.4.0",
     "@earendil-works/pi-ai": "1.4.0",

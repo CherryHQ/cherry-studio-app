@@ -113,6 +113,33 @@ test('retains hostless local extraction separately from remote protocols', () =>
   ]);
 });
 
+test('offers Desearch only for keywords and retains its credentials and custom host', () => {
+  expect(getWebSearchProviderPresetsByCapability('searchKeywords')).toContainEqual({
+    id: 'desearch',
+    name: 'Desearch',
+    type: 'api',
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.desearch.ai',
+      },
+    ],
+  });
+  expect(
+    getWebSearchProviderPresetsByCapability('fetchUrls').some(({ id }) => id === 'desearch'),
+  ).toBe(false);
+  const saved = {
+    jina: { apiKeys: ['existing-key'] },
+    desearch: {
+      apiKeys: ['desearch-key'],
+      capabilities: { searchKeywords: { apiHost: 'https://search.example.com' } },
+    },
+  };
+  expect(WebSearchProviderOverridesSchema.parse(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+});
+
 test('requires a Jina key for searches while allowing anonymous page reads', () => {
   expect(WEB_SEARCH_PROVIDER_PRESET_MAP.jina.capabilities).toEqual([
     expect.objectContaining({ feature: 'searchKeywords', requiresApiKey: true }),

@@ -10,12 +10,13 @@ export const AgentToolRecordSchema = AgentSchema.pick({
   mode: true,
   model: true,
   modelName: true,
-  disabledCapabilities: true,
   toolApprovalMode: true,
   updatedAt: true,
 })
   // Tool results saved before modes existed remain readable as standard Agents.
-  .extend({ mode: AgentModeSchema.default(DEFAULT_AGENT_MODE) })
+  .extend({
+    mode: AgentModeSchema.default(DEFAULT_AGENT_MODE),
+  })
   .strip();
 
 export const AgentMutationToolResultSchema = z.strictObject({

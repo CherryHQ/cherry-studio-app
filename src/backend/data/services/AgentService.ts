@@ -24,7 +24,6 @@ import {
   CHERRY_AGENT_AVATAR,
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
 } from '@/shared/data/types/agent';
-import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { agentGlobalSkillService } from './AgentGlobalSkillService';
@@ -44,7 +43,8 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     avatar: row.avatar,
     avatarUri: null,
     createdAt: timestampToISO(row.createdAt),
-    disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
+    // Old switch values stay in storage but no longer constrain task-driven tools.
+    disabledCapabilities: [],
     id: row.id,
     instructions: row.instructions,
     mode: row.mode,

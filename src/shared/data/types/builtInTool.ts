@@ -5,8 +5,8 @@
  * per-turn `RuntimeTool[]` snapshot.
  *
  * A descriptor states only what is true everywhere. Whether a tool can actually
- * run this turn depends on the Agent's capability-group deny-list, OS
- * permission, and application configuration.
+ * run this turn depends on model support, platform, OS permission, and
+ * application configuration.
  */
 
 import type { AgentToolRef } from '@/shared/contracts/agent';
@@ -16,7 +16,6 @@ import {
   HEALTH_PERMISSION_SCOPES,
 } from '@/shared/contracts/permissions';
 import { healthPermissionScope } from '@/shared/contracts/permissions';
-import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
 import type { AgentToolApproval } from './agentToolBinding';
@@ -80,11 +79,6 @@ export type BuiltInToolDescriptor = {
   /** Application-owned approval policy shared by every Agent. */
   defaultApproval: AgentToolApproval;
   /**
-   * The Agent-configurable capability group this tool belongs to. Omit for
-   * core tools that every Agent turn gets.
-   */
-  agentCapability?: AgentCapability;
-  /**
    * False keeps the Agent's global `auto` approval mode from promoting this
    * tool's `ask`: enabling a capability is not consent to spend or destroy.
    */
@@ -126,80 +120,66 @@ function describe(
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('ssh_execute', 'ask', { autoApprovalEligible: false, platforms: ['ios', 'android'] }),
-  describe('agent_create', 'ask', { agentCapability: 'agents' }),
-  describe('agent_get', 'auto', { agentCapability: 'agents', effect: 'read' }),
-  describe('agent_list', 'auto', { agentCapability: 'agents', effect: 'read' }),
-  describe('agent_update', 'ask', { agentCapability: 'agents' }),
+  describe('agent_create', 'ask'),
+  describe('agent_get', 'auto', { effect: 'read' }),
+  describe('agent_list', 'auto', { effect: 'read' }),
+  describe('agent_update', 'ask'),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
-    agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
     effect: 'read',
   }),
   describe('calendar_list_events', 'auto', {
-    agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
     effect: 'read',
   }),
   describe('calendar_create_event', 'ask', {
-    agentCapability: 'calendar',
     permissionScopes: ['calendar.write'],
   }),
   describe('calendar_update_event', 'ask', {
-    agentCapability: 'calendar',
     permissionScopes: ['calendar.read', 'calendar.write'],
   }),
   describe('calendar_delete_event', 'ask', {
-    agentCapability: 'calendar',
     permissionScopes: ['calendar.read', 'calendar.write'],
   }),
   describe('reminder_list_collections', 'auto', {
-    agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
     effect: 'read',
   }),
   describe('reminder_list_items', 'auto', {
-    agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
     effect: 'read',
   }),
   describe('reminder_create_item', 'ask', {
-    agentCapability: 'reminders',
     permissionScopes: ['reminders.write'],
     platforms: ['ios'],
   }),
   describe('reminder_update_item', 'ask', {
-    agentCapability: 'reminders',
     permissionScopes: ['reminders.read', 'reminders.write'],
     platforms: ['ios'],
   }),
   describe('reminder_delete_item', 'ask', {
-    agentCapability: 'reminders',
     permissionScopes: ['reminders.read', 'reminders.write'],
     platforms: ['ios'],
   }),
   describe('health_get_summary', 'ask', {
-    agentCapability: 'health',
     autoApprovalEligible: false,
     permissionScopes: HEALTH_SUMMARY_METRICS.map(healthPermissionScope),
     permissionMatch: 'any',
     platforms: ['ios'],
   }),
   describe('health_list_workouts', 'ask', {
-    agentCapability: 'health',
     autoApprovalEligible: false,
     permissionScopes: ['health.workouts.read'],
     platforms: ['ios'],
   }),
   describe('health_list_data_types', 'auto', {
-    agentCapability: 'health',
     platforms: ['ios'],
   }),
   ...(['health_query_data', 'health_get_record'] as const).map((id) =>
     describe(id, 'ask', {
-      agentCapability: 'health',
       autoApprovalEligible: false,
       permissionScopes: HEALTH_PERMISSION_SCOPES,
       permissionMatch: 'any',
@@ -207,22 +187,18 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     }),
   ),
   describe('location_get_current', 'auto', {
-    agentCapability: 'location',
     permissionScopes: ['location.read'],
     effect: 'read',
   }),
   describe('web_search', 'auto', {
-    agentCapability: 'web',
     requiresWebSearchCapability: 'searchKeywords',
     effect: 'read',
   }),
   describe('web_fetch', 'auto', {
-    agentCapability: 'web',
     requiresWebSearchCapability: 'fetchUrls',
     effect: 'read',
   }),
   describe('generate_image', 'ask', {
-    agentCapability: 'image',
     autoApprovalEligible: false,
     requiresPaintingModel: true,
   }),
@@ -239,53 +215,24 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('list_workspace', 'auto', { effect: 'read' }),
   describe('find_workspace_files', 'auto', { effect: 'read' }),
   describe('create_workspace_folder', 'auto'),
-  describe('library_search_files', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
-  describe('library_read_file', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
-  describe('library_list_folders', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
-  describe('library_move_item', 'ask', { agentCapability: 'fileLibrary' }),
-  describe('library_rename_item', 'ask', { agentCapability: 'fileLibrary' }),
-  describe('library_trash_item', 'ask', { agentCapability: 'fileLibrary' }),
-  describe('library_list_trash', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
-  describe('library_restore_item', 'ask', { agentCapability: 'fileLibrary' }),
+  describe('library_search_files', 'auto', { effect: 'read' }),
+  describe('library_read_file', 'auto', { effect: 'read' }),
+  describe('library_list_folders', 'auto', { effect: 'read' }),
+  describe('library_move_item', 'ask'),
+  describe('library_rename_item', 'ask'),
+  describe('library_trash_item', 'ask'),
+  describe('library_list_trash', 'auto', { effect: 'read' }),
+  describe('library_restore_item', 'ask'),
   describe('read_file', 'auto', { effect: 'read' }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
 ];
 
 const HEALTH_TOOL_IDS = new Set<string>(
-  BUILT_IN_TOOL_DESCRIPTORS.filter((tool) => tool.agentCapability === 'health').map(
-    (tool) => tool.capabilityId,
-  ),
+  BUILT_IN_TOOL_CAPABILITY_IDS.filter((id) => id.startsWith('health_')),
 );
 
 /** Approvals for these tools must disclose the receiving model service in the app. */
 export function isHealthToolRef(toolRef: AgentToolRef): boolean {
   return toolRef.source === 'builtin' && HEALTH_TOOL_IDS.has(toolRef.capabilityId);
-}
-
-export type AgentCapabilityAvailability = {
-  /** Union of the member tools' OS permission scopes; empty when none apply. */
-  permissionScopes: readonly DevicePermissionScope[];
-  /** `null` when any member tool runs on every platform. */
-  platforms: readonly ('android' | 'ios')[] | null;
-};
-
-/**
- * Availability facts for one capability group, derived from its member tools.
- * The Agent editor uses this to drive permission requests and to hide groups
- * a platform cannot serve.
- */
-export function getAgentCapabilityAvailability(
-  capability: AgentCapability,
-): AgentCapabilityAvailability {
-  const members = BUILT_IN_TOOL_DESCRIPTORS.filter(
-    (descriptor) => descriptor.agentCapability === capability,
-  );
-  const permissionScopes = [
-    ...new Set(members.flatMap((descriptor) => descriptor.permissionScopes)),
-  ];
-  const platforms = members.some((descriptor) => descriptor.platforms === null)
-    ? null
-    : [...new Set(members.flatMap((descriptor) => descriptor.platforms ?? []))];
-  return { permissionScopes, platforms };
 }

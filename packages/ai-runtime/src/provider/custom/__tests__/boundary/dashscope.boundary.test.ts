@@ -2,7 +2,10 @@ import type { ImageGenerationMode } from '@cherrystudio/universal/data/types/mod
 import { describe, expect, it, vi } from 'vitest';
 import * as z from 'zod';
 
-import { createDashScopeProvider } from '../../dashscope/dashscopeProvider';
+import {
+  buildDashScopeTransport,
+  createDashScopeProvider,
+} from '../../dashscope/dashscopeProvider';
 import { createDashScopeTransport } from '../../dashscope/dashscopeTransport';
 import type { ImageGenerationSubmitInput } from '../../imageGenerationModel';
 import { captureImageRequest } from './captureRequest';
@@ -179,6 +182,56 @@ const CASES: Case[] = [
 ];
 
 describe('DashScope request boundary', () => {
+  it.each(['qwen-image-2.0', 'qwen-image-2-0', 'qwen-image-2.0-pro'])(
+    'sends %s through the injected QwenCloud image transport with provider headers',
+    async (modelId) => {
+      const fetch = vi.fn(
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
+          new Response(
+            JSON.stringify({
+              output: {
+                choices: [
+                  { message: { content: [{ image: 'https://images.example.com/result.png' }] } },
+                ],
+              },
+            }),
+          ),
+      );
+      const transport = buildDashScopeTransport({
+        apiKey: 'regional-key',
+        imageBaseURL: 'https://proxy.example.com/qwen',
+        fetch,
+        headers: { 'X-Provider': 'custom' },
+      });
+      const result = await transport.submit({
+        ...base,
+        modelId,
+        prompt: 'a fox',
+        n: 2,
+        size: '2048x2048',
+        providerParams: {},
+        modelDescriptor: {
+          id: modelId,
+          endpoint: '/api/v1/services/aigc/multimodal-generation/generation',
+          isSync: true,
+        },
+      });
+      expect(result).toEqual({ imageUrls: ['https://images.example.com/result.png'] });
+      expect(fetch.mock.calls[0][0]).toBe(
+        'https://proxy.example.com/qwen/api/v1/services/aigc/multimodal-generation/generation',
+      );
+      expect(fetch.mock.calls[0][1]?.headers).toMatchObject({
+        Authorization: 'Bearer regional-key',
+        'X-Provider': 'custom',
+      });
+      expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+        model: modelId,
+        input: { messages: [{ role: 'user', content: [{ text: 'a fox' }] }] },
+        parameters: { size: '2048*2048', n: 2 },
+      });
+    },
+  );
+
   const transport = createDashScopeTransport({ apiKey: 'ds-key', imageBaseURL: host });
 
   for (const c of CASES) {

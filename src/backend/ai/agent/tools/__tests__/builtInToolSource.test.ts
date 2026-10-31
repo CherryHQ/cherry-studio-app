@@ -2,7 +2,6 @@ import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
-import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { SshTarget } from '@/shared/data/types/ssh';
@@ -102,7 +101,7 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
   });
 
-  test('applies the shared read/mutation approval to file-library tools, defers management, and honors the group deny-list', async () => {
+  test('keeps file-library task tools available with their read/mutation approval', async () => {
     const tools = await resolve({});
     const reads = ['library_search_files', 'library_read_file'];
     const management = {
@@ -113,7 +112,6 @@ describe('createSystemCapabilitySource', () => {
       library_list_trash: 'auto',
       library_restore_item: 'ask',
     };
-    const names = [...reads, ...Object.keys(management)];
     for (const name of reads) {
       const tool = tools.find((item) => item.providerName === name);
       expect(tool).toMatchObject({ approval: 'auto', autoApprovalEligible: true });
@@ -126,18 +124,17 @@ describe('createSystemCapabilitySource', () => {
         deferred: true,
       });
     }
-    const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
-    for (const name of names) expect(capabilityIds(disabled)).not.toContain(name);
-    expect(capabilityIds(disabled)).toContain('read_file');
+    expect(capabilityIds(tools)).toContain('read_file');
   });
 
-  test('defers occasional health and Agent management tools while device schedules stay direct', async () => {
+  test('defers occasional device and Agent management tools while questions stay direct', async () => {
     const tools = await resolve({
       deviceAccess: {
         'calendar.read': 'granted',
         'calendar.write': 'granted',
         'health.steps.read': 'granted',
         'health.workouts.read': 'granted',
+        'location.read': 'granted',
       },
     });
     const deferred = (name: string) => tools.find((tool) => tool.providerName === name)?.deferred;
@@ -149,9 +146,10 @@ describe('createSystemCapabilitySource', () => {
       'health_get_summary',
       'health_list_workouts',
       'health_list_data_types',
+      'calendar_list_events',
+      'location_get_current',
     ])
       expect(deferred(name)).toBe(true);
-    expect(deferred('calendar_list_events')).toBeUndefined();
     expect(deferred('ask_user_question')).toBeUndefined();
   });
 
@@ -266,31 +264,22 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(tools)).not.toContain('calendar_create_event');
   });
 
-  test('omits a device group the Agent disabled even when access is granted', async () => {
+  test('offers reminders on demand with the existing read and mutation approvals', async () => {
     const tools = await resolve({
-      deviceAccess: { 'calendar.read': 'granted', 'calendar.write': 'granted' },
-      disabledCapabilities: ['calendar'],
+      deviceAccess: { 'reminders.read': 'granted', 'reminders.write': 'granted' },
     });
-
-    expect(capabilityIds(tools)).toEqual([
-      'agent_create',
-      'agent_get',
-      'agent_list',
-      'agent_update',
-      'ask_user_question',
-      'health_list_data_types',
-      'edit_file',
-      'library_search_files',
-      'library_read_file',
-      'library_list_folders',
-      'library_move_item',
-      'library_rename_item',
-      'library_trash_item',
-      'library_list_trash',
-      'library_restore_item',
-      'read_file',
-      'write_file',
-    ]);
+    for (const name of ['reminder_list_collections', 'reminder_list_items']) {
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        deferred: true,
+        approval: 'auto',
+      });
+    }
+    for (const name of ['reminder_create_item', 'reminder_update_item', 'reminder_delete_item']) {
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        deferred: true,
+        approval: 'ask',
+      });
+    }
   });
 
   test('reads mutations as ask and lookups as auto', async () => {
@@ -336,8 +325,8 @@ describe('createSystemCapabilitySource', () => {
       });
     }
     expect(approvalOf(tools, 'health_list_data_types')).toBe('auto');
-    const disabled = await resolve({ disabledCapabilities: ['health'] });
-    expect(capabilityIds(disabled)).not.toContain('health_list_data_types');
+    const publicCatalog = await resolve({});
+    expect(capabilityIds(publicCatalog)).toContain('health_list_data_types');
   });
 
   test('offers each web tool only when its provider is configured', async () => {
@@ -351,21 +340,20 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(searchOnly, 'web_search')).toBe('auto');
   });
 
-  test('omits web tools when the Agent disables the group', async () => {
+  test('offers both configured web tools', async () => {
     const tools = await resolve({
-      disabledCapabilities: ['web'],
       webSearchProviders: { fetchUrls: true, searchKeywords: true },
     });
 
-    expect(capabilityIds(tools)).not.toContain('web_search');
-    expect(capabilityIds(tools)).not.toContain('web_fetch');
+    expect(capabilityIds(tools)).toContain('web_search');
+    expect(capabilityIds(tools)).toContain('web_fetch');
   });
 
-  test('omits Agent management tools when the Agent disables the group', async () => {
-    const tools = await resolve({ disabledCapabilities: ['agents'] });
+  test('offers Agent management for conversation tasks', async () => {
+    const tools = await resolve({});
 
-    expect(capabilityIds(tools)).not.toEqual(
-      expect.arrayContaining([expect.stringMatching(/^agent_/)]),
+    expect(capabilityIds(tools)).toEqual(
+      expect.arrayContaining(['agent_create', 'agent_get', 'agent_list', 'agent_update']),
     );
     expect(capabilityIds(tools)).toContain('ask_user_question');
   });
@@ -453,22 +441,19 @@ describe('createSystemCapabilitySource', () => {
     });
   });
 
-  test('offers generate_image only with a drawing model and the group enabled', async () => {
+  test('offers image generation on demand only with a drawing model and explicit consent', async () => {
     const withoutModel = await resolve({ paintingModel: null });
     expect(capabilityIds(withoutModel)).not.toContain('generate_image');
 
-    const disabled = await resolve({
-      disabledCapabilities: ['image'],
+    const enabled = await resolve({
       paintingModel: paintingModel(),
     });
-    expect(capabilityIds(disabled)).not.toContain('generate_image');
-
-    const enabled = await resolve({ paintingModel: paintingModel() });
     expect(capabilityIds(enabled)).toContain('generate_image');
     expect(approvalOf(enabled, 'generate_image')).toBe('ask');
     // Spending provider quota needs consent even under the global auto mode.
     const tool = enabled.find((candidate) => candidate.providerName === 'generate_image');
     expect(tool?.autoApprovalEligible).toBe(false);
+    expect(tool?.deferred).toBe(true);
   });
 
   test('omits iOS-only capabilities on Android', async () => {
@@ -530,7 +515,6 @@ describe('createSystemCapabilitySource', () => {
       acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
-      disabledCapabilities: [],
       model: MODEL,
       resources,
     });
@@ -588,7 +572,6 @@ describe('createSystemCapabilitySource', () => {
       acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
-      disabledCapabilities: [],
       model: MODEL,
       resources: {
         availableFiles: new Map(),
@@ -657,7 +640,6 @@ describe('createSystemCapabilitySource', () => {
       acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
-      disabledCapabilities: [],
       model: MODEL,
       resources: { ...TURN_RESOURCES, grantFile },
       workspaceFolderId: folderId,
@@ -714,7 +696,6 @@ describe('createSystemCapabilitySource', () => {
       acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
-      disabledCapabilities: [],
       model: MODEL,
       resources: {
         availableFiles: new Map(),
@@ -761,7 +742,6 @@ describe('createSystemCapabilitySource', () => {
       acceptsImages: true,
       askUser: noAskUser,
       documentParserMode: 'builtin',
-      disabledCapabilities: [],
       model: MODEL,
       resources: { ...TURN_RESOURCES, fileEntryIds: new Set([knownId]) },
     });
@@ -790,7 +770,6 @@ describe('createSystemCapabilitySource', () => {
 type Scenario = {
   deviceAccess?: Partial<Record<DevicePermissionScope, SystemPermissionState>>;
   jsSandbox?: JsSandbox;
-  disabledCapabilities?: AgentCapability[];
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
   webSearchProviders?: { fetchUrls?: boolean; searchKeywords?: boolean };
@@ -818,7 +797,6 @@ async function resolve(
     acceptsImages: true,
     askUser: options.askUser ?? noAskUser,
     documentParserMode: 'builtin',
-    disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
     resources: TURN_RESOURCES,
     workspaceFolderId: scenario.workspaceFolderId,

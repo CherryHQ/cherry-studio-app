@@ -45,7 +45,7 @@ export function TrashScreen() {
       accessibilityLabel: t('common.more'),
       icon: EllipsisIcon,
       key: 'trash-menu',
-      nativeIcon: 'ellipsis',
+      nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
       type: 'menu',
       items: [
         {

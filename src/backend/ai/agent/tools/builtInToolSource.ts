@@ -4,7 +4,7 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
  *
  * Snapshot resolution in miniature (agent-tools-and-resources.md): the Host asks
  * for the tools a turn may use, and the source projects only the capabilities
- * that this model can call, this platform implements, this Agent has enabled,
+ * that this model can call, this platform implements,
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
  * present and broken. A permission the OS can still request keeps the tool
@@ -32,7 +32,6 @@ import {
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isDataApiError } from '@/shared/data/api/errors';
-import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
@@ -88,7 +87,6 @@ type WebSearchAvailability = Readonly<Record<WebSearchCapability, boolean>>;
 /** Everything outside the tool definitions that decides what a turn may use. */
 export type BuiltInToolScope = {
   deviceAccess: DeviceAccess;
-  disabledCapabilities: ReadonlySet<AgentCapability>;
   paintingModel: ConfiguredPaintingModel | null;
   platform: string;
   webSearchAvailability: WebSearchAvailability;
@@ -105,7 +103,6 @@ export type SystemCapabilitySource = {
     /** The Host's response channel for `ask_user_question`. */
     askUser: AskUserQuestion;
     documentParserMode: DocumentParserMode;
-    disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     acceptsImages: boolean;
     resources: TurnToolResources;
@@ -151,7 +148,6 @@ export function createSystemCapabilitySource(
       sessionId,
       agentId,
       askUser,
-      disabledCapabilities,
       model,
       acceptsImages,
       resources,
@@ -164,7 +160,7 @@ export function createSystemCapabilitySource(
         return [];
       }
 
-      const scope = await resolveScope(deps, new Set(disabledCapabilities));
+      const scope = await resolveScope(deps);
       const fileAccess = new WorkspaceFileAccess(workspaceFolderId ?? null, resources);
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
@@ -213,8 +209,8 @@ export type ResolvedToolPolicy = {
 };
 
 /**
- * Application policy is shared by every Agent; the Agent contributes only its
- * capability-group deny-list. `null` means the tool is absent for this turn.
+ * Application policy is shared by every Agent. `null` means the tool is absent
+ * for this turn.
  * A requestable permission keeps the tool present as `ask`, so in-app approval
  * precedes the system prompt and cannot be bypassed by global auto mode.
  */
@@ -223,9 +219,6 @@ export function resolveApproval(
   scope: BuiltInToolScope,
 ): ResolvedToolPolicy | null {
   if (!isPlatformSupported(descriptor, scope.platform)) {
-    return null;
-  }
-  if (descriptor.agentCapability && scope.disabledCapabilities.has(descriptor.agentCapability)) {
     return null;
   }
   if (descriptor.requiresPaintingModel && !scope.paintingModel) {
@@ -371,24 +364,18 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
   };
 }
 
-async function resolveScope(
-  deps: SystemCapabilitySourceDependencies,
-  disabledCapabilities: ReadonlySet<AgentCapability>,
-): Promise<BuiltInToolScope> {
+async function resolveScope(deps: SystemCapabilitySourceDependencies): Promise<BuiltInToolScope> {
   const [deviceAccess, paintingModel, webSearchAvailability] = await Promise.all([
-    resolveDeviceAccess(deps, disabledCapabilities),
-    disabledCapabilities.has('image')
-      ? null
-      : resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
-          logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
-          return null;
-        }),
-    resolveWebSearchAvailability(deps, !disabledCapabilities.has('web')),
+    resolveDeviceAccess(deps),
+    resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
+      logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
+      return null;
+    }),
+    resolveWebSearchAvailability(deps),
   ]);
 
   return {
     deviceAccess,
-    disabledCapabilities,
     paintingModel,
     platform: deps.platform,
     webSearchAvailability,
@@ -402,11 +389,7 @@ async function resolveScope(
  */
 async function resolveWebSearchAvailability(
   deps: SystemCapabilitySourceDependencies,
-  enabled: boolean,
 ): Promise<WebSearchAvailability> {
-  if (!enabled) {
-    return { fetchUrls: false, searchKeywords: false };
-  }
   const [fetchProvider, searchProvider] = await Promise.all([
     readWebSearchProvider(deps, 'fetchUrls'),
     readWebSearchProvider(deps, 'searchKeywords'),
@@ -431,14 +414,11 @@ async function readWebSearchProvider(
 
 async function resolveDeviceAccess(
   deps: SystemCapabilitySourceDependencies,
-  disabledCapabilities: ReadonlySet<AgentCapability>,
 ): Promise<DeviceAccess> {
   const scopes = [
     ...new Set(
-      BUILT_IN_TOOL_DESCRIPTORS.filter(
-        (descriptor) =>
-          isPlatformSupported(descriptor, deps.platform) &&
-          (!descriptor.agentCapability || !disabledCapabilities.has(descriptor.agentCapability)),
+      BUILT_IN_TOOL_DESCRIPTORS.filter((descriptor) =>
+        isPlatformSupported(descriptor, deps.platform),
       ).flatMap((descriptor) => descriptor.permissionScopes),
     ),
   ];

@@ -1,6 +1,6 @@
 import type { Agent } from '@/shared/data/types/agent';
 
-import { buildAgentDto, createAgentFormState, setAgentCapabilityEnabled } from '../agentForm';
+import { buildAgentDto, createAgentFormState } from '../agentForm';
 
 const baseForm = createAgentFormState();
 
@@ -9,7 +9,7 @@ describe('createAgentFormState', () => {
     const state = createAgentFormState({
       avatar: 'agent-avatar-file:a.b.webp',
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
-      disabledCapabilities: ['calendar'],
+      disabledCapabilities: ['reminders'],
       instructions: 'sys',
       mode: 'minimal',
       model: 'openai::gpt-5',
@@ -22,7 +22,6 @@ describe('createAgentFormState', () => {
     // also what the form renders.
     expect(state).toEqual({
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
-      disabledCapabilities: ['calendar'],
       instructions: 'sys',
       mode: 'minimal',
       model: 'openai::gpt-5',
@@ -31,26 +30,12 @@ describe('createAgentFormState', () => {
     });
   });
 
-  it('starts a new agent with no avatar draft and the device groups and Agent management off', () => {
+  it('starts a new agent with no avatar draft and standard mode', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
-      disabledCapabilities: ['agents', 'calendar', 'health', 'location', 'reminders'],
       mode: 'standard',
       toolApprovalMode: 'auto',
     });
-  });
-
-  it('keeps a stored empty deny-list instead of reseeding the create default', () => {
-    const state = createAgentFormState({
-      avatarUri: null,
-      disabledCapabilities: [],
-      instructions: '',
-      model: null,
-      name: 'Assistant',
-      toolApprovalMode: 'default',
-    } as unknown as Agent);
-
-    expect(state.disabledCapabilities).toEqual([]);
   });
 });
 
@@ -81,7 +66,6 @@ describe('buildAgentDto', () => {
       // Present in the draft but never in the DTO: the create/update schemas are
       // strict, so leaking it would make the request fail outright.
       avatarUri: 'file:///picker/avatar.jpg',
-      disabledCapabilities: ['web'],
       instructions: 'system prompt',
       model: 'openai::gpt-5',
       name: '  Researcher  ',
@@ -92,7 +76,6 @@ describe('buildAgentDto', () => {
     }
 
     expect(dto.value).toEqual({
-      disabledCapabilities: ['web'],
       instructions: 'system prompt',
       mode: 'standard',
       model: 'openai::gpt-5',
@@ -101,28 +84,16 @@ describe('buildAgentDto', () => {
     });
   });
 
-  it('keeps standard capability and approval preferences when saving minimal mode', () => {
+  it('keeps the approval preference when saving minimal mode', () => {
     const result = buildAgentDto({
       ...baseForm,
       name: 'Chat',
       mode: 'minimal',
-      disabledCapabilities: ['web'],
       toolApprovalMode: 'default',
     });
     expect(result).toMatchObject({
       ok: true,
-      value: { mode: 'minimal', disabledCapabilities: ['web'], toolApprovalMode: 'default' },
+      value: { mode: 'minimal', toolApprovalMode: 'default' },
     });
-  });
-});
-
-describe('setAgentCapabilityEnabled', () => {
-  it('removes an enabled group from the deny-list and adds a disabled one once', () => {
-    expect(setAgentCapabilityEnabled(['agents', 'location'], 'agents', true)).toEqual(['location']);
-    expect(setAgentCapabilityEnabled(['location'], 'agents', false)).toEqual([
-      'location',
-      'agents',
-    ]);
-    expect(setAgentCapabilityEnabled(['agents'], 'agents', false)).toEqual(['agents']);
   });
 });

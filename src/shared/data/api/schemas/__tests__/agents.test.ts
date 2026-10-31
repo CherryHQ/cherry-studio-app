@@ -1,6 +1,27 @@
 import { CreateAgentSchema, ListAgentsQuerySchema, UpdateAgentSchema } from '../agents';
 
 describe('agent api schemas', () => {
+  test.each([CreateAgentSchema, UpdateAgentSchema])(
+    'rejects retired per-Agent capability switches',
+    (schema) => {
+      expect(schema.safeParse({ name: 'Agent' }).success).toBe(true);
+      for (const capability of [
+        'health',
+        'reminders',
+        'agents',
+        'fileLibrary',
+        'calendar',
+        'location',
+        'image',
+        'web',
+      ]) {
+        expect(
+          schema.safeParse({ name: 'Agent', disabledCapabilities: [capability] }).success,
+        ).toBe(false);
+      }
+    },
+  );
+
   test.each([CreateAgentSchema, UpdateAgentSchema])('accepts only fixed Agent modes', (schema) => {
     for (const mode of ['standard', 'minimal']) {
       expect(schema.safeParse({ name: 'Agent', mode }).success).toBe(true);
