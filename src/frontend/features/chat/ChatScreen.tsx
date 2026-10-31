@@ -164,6 +164,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     agentId: resolvedAgentId,
     sessionId,
     composerKey: composerSession.key,
+    sshDraftId: target.kind === 'draft' ? target.sshDraftId : undefined,
     workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
   const agent = useAgentApiById(resolvedAgentId);
@@ -326,6 +327,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
                     }
                     sessionId={sessionId}
+                    sshDraftId={target.kind === 'draft' ? target.sshDraftId : undefined}
                     selectionHandoff={target.selectionHandoff}
                   />
                   <ChatDockFooter>

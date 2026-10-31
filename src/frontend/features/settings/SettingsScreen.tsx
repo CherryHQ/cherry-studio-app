@@ -76,6 +76,11 @@ export default function SettingsScreen() {
               onPress={() => router.push('/settings/permissions')}
             />
             <Section.Item
+              label={t('ssh.title')}
+              leading={<NetworkIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/ssh')}
+            />
+            <Section.Item
               label={t('settings.items.deviceConnections')}
               leading={<NetworkIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/device-connections')}

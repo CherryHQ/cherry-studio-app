@@ -91,3 +91,24 @@ test('workspace package fingerprints ignore generated command shims but track na
   writeFileSync(nativeFile, 'class ChangedView {}');
   expect((await createFingerprintAsync(projectRoot, options)).hash).not.toBe(before.hash);
 });
+
+test('SSH fingerprints ignore downloaded sources but track the committed version pin', async () => {
+  const modulePath = 'modules/ssh';
+  const pin = join(projectRoot, modulePath, 'upstream.json');
+  const cachedSource = join(projectRoot, modulePath, '.cache/libssh2-digest/src/session.c');
+  mkdirSync(dirname(pin), { recursive: true });
+  writeFileSync(pin, JSON.stringify({ archiveSha256: 'first' }));
+  const options = {
+    platforms: [],
+    useRNCoreAutolinkingFromExpo: true,
+    extraSources: [
+      { type: 'dir' as const, filePath: modulePath, reasons: ['expoAutolinkingAndroid'] },
+    ],
+  };
+  const before = await createFingerprintAsync(projectRoot, options);
+  mkdirSync(dirname(cachedSource), { recursive: true });
+  writeFileSync(cachedSource, 'downloaded source');
+  expect((await createFingerprintAsync(projectRoot, options)).hash).toBe(before.hash);
+  writeFileSync(pin, JSON.stringify({ archiveSha256: 'second' }));
+  expect((await createFingerprintAsync(projectRoot, options)).hash).not.toBe(before.hash);
+});

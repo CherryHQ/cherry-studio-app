@@ -509,6 +509,7 @@ describe('turn preparation', () => {
 
     expect(harness.getSystemTools).toHaveBeenCalledWith({
       workspaceFolderId: null,
+      sessionId: SESSION_ID,
       agentId: AGENT.id,
       askUser: harness.askUser,
       model: OVERRIDE_MODEL,

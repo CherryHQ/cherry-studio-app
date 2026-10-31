@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+import { useRouter } from 'expo-router';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewInstance } from 'react-native';
@@ -10,6 +12,7 @@ import {
   ComposerAttachments,
   type ComposerSendPayload,
   useComposerActions,
+  useComposerPresentationActions,
   useComposerState,
 } from '@/frontend/components/Composer';
 import {
@@ -27,6 +30,7 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
+import { useBackendModule } from '@/frontend/data';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -47,6 +51,7 @@ import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
+import { ChatInputSshSheet, ChatInputSshTarget } from './components/ChatInputSsh';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
@@ -61,7 +66,7 @@ import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
 
-type ChatInputPicker = 'plugin' | 'prompt' | 'skill';
+type ChatInputPicker = 'plugin' | 'prompt' | 'skill' | 'ssh';
 
 type ChatInputProps = {
   agentId?: string;
@@ -71,6 +76,7 @@ type ChatInputProps = {
   /** Replaces the default prompt, as when it names the answer the next message continues. */
   placeholder?: string;
   sessionId?: string;
+  sshDraftId?: string;
   selectionHandoff?: string;
 };
 
@@ -84,6 +90,7 @@ export function ChatInput({
   imageResult,
   placeholder,
   sessionId,
+  sshDraftId,
   selectionHandoff,
 }: ChatInputProps) {
   const quoteActions = useChatQuoteActions();
@@ -213,6 +220,8 @@ export function ChatInput({
           <TextChatInput
             mode={mode}
             agentId={agentId}
+            sessionId={sessionId}
+            sshDraftId={sshDraftId}
             skillAction={skillAction}
             controls={controls}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -236,6 +245,8 @@ export function ChatInput({
 function TextChatInput({
   mode,
   agentId,
+  sessionId,
+  sshDraftId,
   agentModelAnswersInParallel,
   skillAction,
   controls,
@@ -249,7 +260,7 @@ function TextChatInput({
   selectedModelItem,
   selectModel,
   setReplyModels,
-}: Omit<ChatInputProps, 'sessionId'> & {
+}: ChatInputProps & {
   mode: AgentMode;
   skillAction?: SkillAction;
   providerSetupReturnTo: string;
@@ -268,6 +279,11 @@ function TextChatInput({
 }) {
   const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
+  const router = useRouter();
+  const ssh = useBackendModule('ssh');
+  const { runInputReplacement } = useComposerPresentationActions();
+  const sshContextId = sessionId ?? (sshDraftId ? `draft:${sshDraftId}` : undefined);
+  const [sshPickerContext, setSshPickerContext] = useState<string | null>(null);
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
@@ -295,7 +311,24 @@ function TextChatInput({
   const closePluginPicker = useCallback(() => closePicker('plugin'), [closePicker]);
   const closeSkillPicker = useCallback(() => closePicker('skill'), [closePicker]);
   const closePromptPicker = useCallback(() => closePicker('prompt'), [closePicker]);
+  const closeSshPicker = () => closePicker('ssh');
+  function openSshPicker() {
+    void runInputReplacement(() => {
+      let contextId = sshContextId;
+      if (!contextId) {
+        const id = randomUUID();
+        router.setParams({ sshDraftId: id });
+        contextId = `draft:${id}`;
+      }
+      setSshPickerContext(contextId);
+      setOpenPicker('ssh');
+    }).catch((error: unknown) => {
+      logger.warn('SSH picker failed', error instanceof Error ? error : { error });
+    });
+  }
   const isPickerAvailable = mode === 'standard' && !isApprovalPending;
+  const isSshAvailable = mode === 'standard' && ssh.isAvailable();
+  const isSshPickerVisible = isPickerAvailable && isSshAvailable && openPicker === 'ssh';
   const isPluginPickerVisible = isPickerAvailable && openPicker === 'plugin';
   const isSkillPickerVisible = isPickerAvailable && openPicker === 'skill' && Boolean(agentId);
   const isPromptPickerVisible = isPickerAvailable && openPicker === 'prompt' && prompts.length > 0;
@@ -457,6 +490,9 @@ function TextChatInput({
                         <DraftMessageQuotePreview />
                         <ComposerAttachments />
                         {mode === 'standard' ? <McpAppContextNotice /> : null}
+                        {isSshAvailable ? (
+                          <ChatInputSshTarget contextId={sshContextId} onPress={openSshPicker} />
+                        ) : null}
                       </View>
                     </ChatInputAccessories>
                     <ChatInputSurface
@@ -486,6 +522,7 @@ function TextChatInput({
                               ? () => setOpenPicker('prompt')
                               : undefined
                           }
+                          onPickSsh={isSshAvailable ? openSshPicker : undefined}
                           triggerRef={pluginMenuRef}
                         />
                       }
@@ -506,6 +543,9 @@ function TextChatInput({
           </ChatInputPluginPopover>
         </ChatInputSkillPopover>
       </ChatInputPromptPopover>
+      {isSshPickerVisible && sshPickerContext ? (
+        <ChatInputSshSheet contextId={sshPickerContext} onClose={closeSshPicker} />
+      ) : null}
       {modelPicker.isOpen ? (
         <ModelPickerDrawer
           // Parallel answers refuse image generation, so several models are chosen among text ones.
