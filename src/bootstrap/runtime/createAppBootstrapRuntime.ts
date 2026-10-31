@@ -1,4 +1,5 @@
 import { loggerService } from '@logger';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
@@ -30,6 +31,7 @@ import { createLiveActivityPresenter } from '@/backend/services/backgroundActivi
 import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
 import { type BackupRuntime, validateRestoringStorage } from '@/backend/services/backup';
+import type { CloudRuntime } from '@/backend/services/cloud';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -163,6 +165,16 @@ export function createAppBootstrapRuntime(
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const account = installationAccount();
+  const cloud = host.container.get<CloudRuntime>('CloudRuntime');
+  cloud.configure(
+    {
+      getIdentity: account.getCommunityIdentity,
+      getTokens: account.getCommunityTokens,
+      subscribe: account.subscribe,
+    },
+    Constants.expoConfig?.extra?.accountsPortal?.cloudAddress ?? '',
+    Constants.expoConfig?.version ?? '0.0.0',
+  );
   const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
   enterpriseSync.configure({
     getProductToken: account.getProductToken,
@@ -222,6 +234,7 @@ export function createAppBootstrapRuntime(
     providerRegistryUpdater,
     trash,
     account,
+    cloud,
   });
   backup.configure(
     () =>
@@ -230,6 +243,7 @@ export function createAppBootstrapRuntime(
       hasPendingSkillStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
       enterpriseSync.hasPendingStorageWork() ||
+      cloud.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });

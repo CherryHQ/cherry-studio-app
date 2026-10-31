@@ -40,6 +40,7 @@ type Portal = Pick<
   | 'beginSignIn'
   | 'completeSignIn'
   | 'getProductToken'
+  | 'getIdentityTokens'
   | 'getAccount'
   | 'listProfiles'
   | 'signOut'
@@ -100,6 +101,8 @@ export class AccountRuntime implements AccountModule {
   private isPrivateSessionClosed = false;
   private callback: { url: string; result: Promise<boolean> } | undefined;
   private redirectRouted = false;
+  private communityRevision = 0;
+  private isCloudSessionClosing = false;
 
   constructor(private readonly options: AccountRuntimeOptions) {
     const { active, portal } = options;
@@ -237,6 +240,7 @@ export class AccountRuntime implements AccountModule {
           target = this.options.profiles.resolve(target.identity, target.address, organization);
       }
       if (target.id === this.options.active.id) {
+        this.communityRevision++;
         this.update({ needsSignIn: false });
         this.updateCloudSession(session);
         return true;
@@ -278,16 +282,48 @@ export class AccountRuntime implements AccountModule {
    * credentials even when the server is unreachable; the browser may then still remember it.
    */
   private async endCloudSession(): Promise<void> {
+    this.isCloudSessionClosing = true;
+    this.update({ isSignedIn: false, name: undefined, maskedIdentifier: undefined });
     const { loggedOut } = await this.requirePortal()
       .signOut()
       .catch(() => ({ loggedOut: false }));
     if (!loggedOut) this.options.browserSession.setStale(true);
+    this.isCloudSessionClosing = false;
   }
 
   readonly dismissPrompt = () => {
     if (this.state.hasPrompted) return;
     this.options.prompt.write();
     this.update({ hasPrompted: true });
+  };
+
+  /** Backend-only identity boundary for the device-bound community product session. */
+  readonly getCommunityIdentity = () => {
+    const session = this.options.portal?.getState();
+    if (
+      this.options.active.identity ||
+      !this.state.isSignedIn ||
+      this.state.needsSignIn ||
+      session?._tag !== 'signedIn' ||
+      session.profile?.product !== 'cloud'
+    )
+      return null;
+    return {
+      key: JSON.stringify([
+        this.options.issuer,
+        session.subject,
+        session.profile.profileId,
+        this.communityRevision,
+      ]),
+      profileId: session.profile.profileId,
+    };
+  };
+
+  readonly getCommunityTokens = async (key: string) => {
+    if (this.getCommunityIdentity()?.key !== key) throw new AccountError('rejected');
+    const tokens = await this.requirePortal().getIdentityTokens();
+    if (this.getCommunityIdentity()?.key !== key) throw new AccountError('rejected');
+    return tokens;
   };
 
   /** A token for the active enterprise profile; private tokens rotate on an API's 401 response. */
@@ -453,7 +489,11 @@ export class AccountRuntime implements AccountModule {
     const matchesProfile = this.state.isEnterprise
       ? this.matchesCloudProfile(session)
       : session._tag === 'signedIn' && session.profile?.product === 'cloud';
-    const isSignedIn = session._tag === 'signedIn' && matchesProfile && !this.state.needsSignIn;
+    const isSignedIn =
+      session._tag === 'signedIn' &&
+      matchesProfile &&
+      !this.state.needsSignIn &&
+      !this.isCloudSessionClosing;
     this.update({
       isSignedIn,
       name: isSignedIn ? (session.account?.displayName ?? session.name) : undefined,

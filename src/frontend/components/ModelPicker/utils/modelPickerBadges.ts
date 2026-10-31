@@ -1,5 +1,6 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { Model } from '@/shared/data/types/model';
 
 /** The compact model traits that are useful while choosing a chat model. */
@@ -9,10 +10,10 @@ export type ModelPickerBadge = (typeof MODEL_PICKER_BADGES)[number];
 
 const FREE_MARKER_PATTERN = /(?:^|[^a-z0-9])free(?:$|[^a-z0-9])/i;
 
-export function getModelPickerBadges(model: Model): ModelPickerBadge[] {
+export function getModelPickerBadges(model: Model, isCloudFree = false): ModelPickerBadge[] {
   const badges: ModelPickerBadge[] = [];
 
-  if (isFreeModel(model)) {
+  if (model.providerId === CLOUD_PROVIDER_ID ? isCloudFree : isFreeModel(model)) {
     badges.push('free');
   }
   if (model.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION)) {
@@ -26,8 +27,9 @@ export function getModelPickerBadges(model: Model): ModelPickerBadge[] {
 export function matchesModelPickerBadges(
   model: Model,
   badges: readonly ModelPickerBadge[],
+  isCloudFree = false,
 ): boolean {
-  return badges.every((badge) => getModelPickerBadges(model).includes(badge));
+  return badges.every((badge) => getModelPickerBadges(model, isCloudFree).includes(badge));
 }
 
 function isFreeModel(model: Model): boolean {

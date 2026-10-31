@@ -58,6 +58,7 @@ function setup(
     }),
     getAccount: jest.fn(async () => (session._tag === 'signedIn' ? (session.account ?? {}) : {})),
     getProductToken: jest.fn(async () => 'product-token'),
+    getIdentityTokens: jest.fn(async () => ({ accessToken: 'idp-access', idToken: 'idp-id' })),
     listProfiles: jest.fn(async () => ({
       profiles: [
         {
@@ -867,5 +868,46 @@ describe('AccountRuntime', () => {
     await signOut;
     expect(options.createPrivateApi).not.toHaveBeenCalled();
     expect(options.credentials.write).not.toHaveBeenCalled();
+  });
+});
+
+describe('community Cloud identity admission', () => {
+  it('discards a token pair returned after the community account changed', async () => {
+    const { runtime, options, publish } = setup(signedIn('cloud'));
+    await options.portal.ready;
+    const identity = runtime.getCommunityIdentity()!;
+    let finish!: (value: { accessToken: string; idToken: string }) => void;
+    options.portal.getIdentityTokens.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = runtime.getCommunityTokens(identity.key);
+    publish({
+      ...signedIn('cloud'),
+      subject: 'user-2',
+      profile: { product: 'cloud', profileId: 'other' },
+    });
+    finish({ accessToken: 'old-access', idToken: 'old-id' });
+    await expect(pending).rejects.toMatchObject({ code: 'rejected' });
+    expect(runtime.getCommunityIdentity()?.key).not.toBe(identity.key);
+  });
+
+  it('withdraws community identity while sign-out is still contacting the server', async () => {
+    const { runtime, options } = setup(signedIn('cloud'));
+    await options.portal.ready;
+    let finish!: (value: { revoked: boolean; loggedOut: boolean }) => void;
+    options.portal.signOut.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const signingOut = runtime.signOut();
+    expect(runtime.getCommunityIdentity()).toBeNull();
+    finish({ revoked: true, loggedOut: true });
+    await signingOut;
+    expect(runtime.getCommunityIdentity()).toBeNull();
   });
 });

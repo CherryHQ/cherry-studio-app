@@ -1,0 +1,33 @@
+diff --git a/dist/AccountsPortal.d.ts b/dist/AccountsPortal.d.ts
+index 6eb11f556d0ac5223a5573ab33e6e0e27a771722..48c41026f84858fd308f9a1bd86ffd4fd0558579 100644
+--- a/dist/AccountsPortal.d.ts
++++ b/dist/AccountsPortal.d.ts
+@@ -108,6 +108,8 @@ export interface AccountsPortal {
+     switchProfile(choice: ProfileChoice, options?: CompleteSignInOptions): Promise<AuthState>;
+     /** A valid IdP access token, refreshed when it is about to expire. */
+     getAccessToken(): Promise<string>;
++    /** A matched IdP token pair for device-bound product entry. Never persist or expose to UI. */
++    getIdentityTokens(): Promise<{ accessToken: string; idToken: string }>;
+     /** Loads OIDC userinfo, with claim-based fallback during a temporary outage. */
+     getAccount(): Promise<AccountIdentity>;
+     /**
+diff --git a/dist/AccountsPortal.js b/dist/AccountsPortal.js
+index 0a44315e59590e4c9057cf9eb8679b428497f284..baf8565b2911b236cd6d1948454708751b814e1c 100644
+--- a/dist/AccountsPortal.js
++++ b/dist/AccountsPortal.js
+@@ -587,6 +587,15 @@ export const createAccountsPortal = (options) => {
+             }
+         },
+         getAccessToken,
++        getIdentityTokens: async () => {
++            await ready;
++            const started = generation;
++            const selected = selectionGeneration;
++            await getAccessToken();
++            if (closing || switching || started !== generation || selected !== selectionGeneration || !tokens)
++                throw new AccountsPortalError("session_changed", "the session changed while reading identity tokens");
++            return { accessToken: tokens.accessToken, idToken: tokens.idToken };
++        },
+         getAccount: async () => {
+             await getAccessToken();
+             const current = tokens;

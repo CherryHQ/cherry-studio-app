@@ -4,6 +4,7 @@ import {
   resolveVertexUrls,
 } from '@cherrystudio/ai-runtime/provider';
 
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
 import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -16,6 +17,7 @@ export function getProviderConfigurationIssue(
   auth?: AuthConfig | null,
   oauthSignedIn = false,
 ): ProviderConfigurationIssue | null {
+  if (provider.id === CLOUD_PROVIDER_ID) return null;
   const supportsOAuth = Boolean(getPiOAuthProviderId(provider));
   if (
     supportsOAuth &&

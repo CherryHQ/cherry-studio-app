@@ -83,7 +83,8 @@ portal lists the community account and organizations to switch between; the app 
 community account, the organization name or the private server host, and opens the profile page,
 which holds the account rows, switching and sign-out. Signing out of an organization asks for
 confirmation; a community sign-out does not. A community account uses the installation's own data whether or not it is signed in;
-signing in adds only the account identity, and its entitlements are not designed yet. An
+signing in also enables the [community Cloud subscription](../../src/backend/services/cloud/README.md)
+status, quota details and managed models when Cloud is configured. An
 enterprise or private account's data is visible only while that account is signed in. In the local
 profile, only a community session counts as signed in.
 
