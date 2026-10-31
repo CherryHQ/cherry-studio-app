@@ -31,6 +31,7 @@ import {
   type PermissionStatuses,
 } from '@/shared/contracts';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import type { VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isDataApiError } from '@/shared/data/api/errors';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
@@ -70,6 +71,7 @@ import {
 } from './painting';
 import { createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
+import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
 import { createWriteFileTool } from './writeFileTool';
@@ -115,6 +117,7 @@ export type SystemCapabilitySource = {
 
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
+    voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
@@ -132,6 +135,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
@@ -166,6 +170,10 @@ export function createSystemCapabilitySource(
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
+      const transcriptionReady = await deps.voice
+        ?.getTranscriptionStatus()
+        .then((status) => status === 'ready')
+        .catch(() => false);
       const catalog = createCatalog(
         deps,
         scope,
@@ -177,6 +185,7 @@ export function createSystemCapabilitySource(
         fileAccess,
         workspaceName,
         acceptsImages,
+        transcriptionReady ?? false,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -269,6 +278,7 @@ function createCatalog(
   fileAccess: WorkspaceFileAccess,
   workspaceName: string | undefined,
   acceptsImages: boolean,
+  transcriptionReady: boolean,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -292,6 +302,9 @@ function createCatalog(
       acceptsImages,
     ),
     createWriteFileTool(fileContent, fileAccess),
+    ...(transcriptionReady && deps.voice
+      ? [createTranscribeAudioTool(deps.voice, fileAccess)]
+      : []),
     ...createFileLibraryTools(
       fileAccess,
       managedFileResolver,
@@ -442,6 +455,7 @@ function resolveDependencies(
   overrides: Partial<SystemCapabilitySourceDependencies>,
 ): SystemCapabilitySourceDependencies {
   return {
+    voice: overrides.voice ?? services.voice,
     agents: overrides.agents ?? agentService,
     trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,

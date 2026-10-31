@@ -5,6 +5,7 @@ import type { BackgroundActivityEnvironmentConfig } from '@/backend/services/bac
 import { createAppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
+const mockAgentHostDependencies = { configureVoice: jest.fn() };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
@@ -130,6 +131,7 @@ jest.mock('@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActiv
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
+    AgentHostDependencies: mockAgentHostDependencies,
     AgentRuntime: mockAgentRuntime,
     AiService: mockAi,
     TraceStorageService: mockTraces,
@@ -310,6 +312,7 @@ describe('createAppBootstrapRuntime', () => {
       translate: expect.any(Function),
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
+      agentHostDependencies: mockAgentHostDependencies,
       resourceScopes: mockResourceScopes,
       backgroundExecution: mockKeepAlive,
       remoteBackground: {

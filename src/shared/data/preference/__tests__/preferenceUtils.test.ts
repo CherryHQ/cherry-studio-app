@@ -44,11 +44,14 @@ test('dictation is opt-in and voice engine choices stay on the device', () => {
   expect(getDefaultValue('feature.voice.dictation_engine')).toBeNull();
   expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();
   expect(getDefaultValue('feature.voice.system_voice')).toBe('');
+  expect(getDefaultValue('feature.voice.transcription_engine')).toBe('sensevoice');
+  expect(getDefaultValue('feature.voice.transcription_language')).toBeNull();
   // Engine support and system voices are facts of this device, not of a restored backup.
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toEqual(
     expect.arrayContaining([
       'feature.voice.dictation_engine',
       'feature.voice.speech_engine',
+      'feature.voice.transcription_engine',
       'feature.voice.system_voice',
     ]),
   );

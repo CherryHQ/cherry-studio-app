@@ -4,8 +4,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
-
-import { voiceErrorLabelKey } from './voiceErrorLabel';
+import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
 
 /** Read-aloud state of one message; starting another message replaces it. */
 export function useMessageSpeech(messageId: string, text: string | undefined) {

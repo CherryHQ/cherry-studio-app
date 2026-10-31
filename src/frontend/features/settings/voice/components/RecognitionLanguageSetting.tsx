@@ -1,4 +1,5 @@
 import { OptionPickerBottomSheet, Section, useToast } from '@cherrystudio/ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,10 +10,24 @@ import { APP_LANGUAGES } from '@/shared/utils/languages';
 const FOLLOW_APP = 'app';
 
 /** Selects the system recognizer's language, with the app language as the default. */
-export function DictationLanguageSetting() {
+export function RecognitionLanguageSetting({
+  capability,
+}: {
+  capability: 'dictation' | 'transcription';
+}) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [selected, setSelected] = usePreference('feature.voice.dictation_language');
+  const queryClient = useQueryClient();
+  const label = t(
+    capability === 'dictation'
+      ? 'settings.voice.dictationLanguage'
+      : 'settings.voice.transcription.language',
+  );
+  const [selected, setSelected] = usePreference(
+    capability === 'dictation'
+      ? 'feature.voice.dictation_language'
+      : 'feature.voice.transcription_language',
+  );
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const options = [
     { value: FOLLOW_APP, label: t('settings.voice.followAppLanguage') },
@@ -20,16 +35,18 @@ export function DictationLanguageSetting() {
   ];
   const value = selected ?? FOLLOW_APP;
   const change = (next: string) => {
-    void setSelected(next === FOLLOW_APP ? null : (next as LanguageVarious)).catch(() => {
-      toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
-    });
+    void setSelected(next === FOLLOW_APP ? null : (next as LanguageVarious))
+      .then(() => queryClient.invalidateQueries({ queryKey: ['voice'] }))
+      .catch(() => {
+        toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
+      });
   };
   return (
     <>
       <Section.SelectItem
-        label={t('settings.voice.dictationLanguage')}
+        label={label}
         onPress={() => setIsPickerOpen(true)}
-        testID="settings-voice-dictation-language"
+        testID={`settings-voice-${capability}-language`}
         value={options.find((option) => option.value === value)?.label ?? value}
       />
       <OptionPickerBottomSheet<string>
@@ -39,7 +56,7 @@ export function DictationLanguageSetting() {
         options={options}
         selectedValue={value}
         size="medium"
-        title={t('settings.voice.dictationLanguage')}
+        title={label}
       />
     </>
   );

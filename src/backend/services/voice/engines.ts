@@ -1,4 +1,7 @@
 import type {
+  AudioTranscriptionInput,
+  AudioTranscriptionOptions,
+  AudioTranscriptionResult,
   DictationSession,
   SpeechVoice,
   VoiceEngineId,
@@ -38,8 +41,17 @@ export interface SpeechEngine {
   speak(input: SpeechRequest): Promise<void>;
 }
 
+export interface TranscriptionEngine {
+  status(signal: AbortSignal): Promise<VoiceEngineStatus>;
+  run(
+    input: AudioTranscriptionInput,
+    options: AudioTranscriptionOptions & { signal: AbortSignal },
+  ): Promise<AudioTranscriptionResult>;
+}
+
 /** An engine may serve only one capability; a missing entry is unsupported. */
 export type VoiceEngines = {
   dictation: Partial<Record<VoiceEngineId, DictationEngine>>;
   speech: Partial<Record<VoiceEngineId, SpeechEngine>>;
+  transcription: Partial<Record<VoiceEngineId, TranscriptionEngine>>;
 };

@@ -8,8 +8,8 @@ import { useBackendModule, usePreference } from '@/frontend/data';
 import { VOICE_ENGINE_PREFERENCE, type VoiceCapability } from '@/shared/contracts/voice';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
-import { DictationLanguageSetting } from './components/DictationLanguageSetting';
 import { OfflineModelSetting } from './components/OfflineModelSetting';
+import { RecognitionLanguageSetting } from './components/RecognitionLanguageSetting';
 import { SpeechVoiceSetting } from './components/SpeechVoiceSetting';
 import { VoiceEngineSection } from './components/VoiceEngineSection';
 
@@ -35,12 +35,23 @@ export default function VoiceSettingsScreen() {
     }, [queryClient]),
   );
   const dictationEngine = useEffectiveEngine('dictation');
+  const transcriptionEngine = useEffectiveEngine('transcription');
   const speechEngine = useEffectiveEngine('speech');
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.voice.title') }}>
-      <VoiceEngineSection effectiveEngine={dictationEngine ?? null}>
-        {dictationEngine === 'system' ? <DictationLanguageSetting /> : null}
+      <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null}>
+        {dictationEngine === 'system' ? (
+          <RecognitionLanguageSetting capability="dictation" />
+        ) : null}
         {dictationEngine === 'sensevoice' ? <OfflineModelSetting /> : null}
+      </VoiceEngineSection>
+      <VoiceEngineSection capability="transcription" effectiveEngine={transcriptionEngine ?? null}>
+        {transcriptionEngine === 'system' ? (
+          <RecognitionLanguageSetting capability="transcription" />
+        ) : null}
+        {transcriptionEngine === 'sensevoice' && dictationEngine !== 'sensevoice' ? (
+          <OfflineModelSetting />
+        ) : null}
       </VoiceEngineSection>
       <Section title={t('settings.voice.speech.title')}>
         {speechEngine ? (

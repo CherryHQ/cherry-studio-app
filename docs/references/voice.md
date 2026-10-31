@@ -1,6 +1,7 @@
 # Voice Input And Speech
 
-> Status: system dictation, system speech and downloadable SenseVoice dictation are implemented.
+> Status: system dictation, system speech, downloadable SenseVoice dictation and offline audio-file
+> transcription are implemented in source.
 > The offline native integration and current settings layout still need builds and iOS/Android
 > device acceptance. Source implementation does not establish device behavior.
 
@@ -10,10 +11,11 @@
 | --- | --- | --- |
 | Dictation into the composer draft | Off until enabled | System speech recognition or downloaded SenseVoiceSmall |
 | Reading an assistant reply aloud | Enabled | System text-to-speech |
+| Transcribing an audio file into a text document | Explicit file action or Agent tool; SenseVoice by default | Downloaded SenseVoiceSmall or system on-device recognition |
 
 Voice needs no Cherry provider account. Users select system dictation or download the optional
-SenseVoiceSmall model for offline dictation. Cloud voice adapters and audio attachment transcription
-are outside this implementation.
+SenseVoiceSmall model for offline dictation and file transcription. Cloud voice adapters remain
+outside this implementation.
 
 System engines do not guarantee offline execution: the configured recognition service, installed
 voices and language support determine whether the platform uses a network. The current adapters do
@@ -41,8 +43,8 @@ conversation ends reading, including when another route covers a still-mounted c
 ## Module Boundaries
 
 `Backend.voice` (`VoiceModule` in `src/shared/contracts/voice.ts`) is the only surface callers use.
-Callers start dictation, read text and observe activity; the runtime resolves the engine from
-preferences. The module has no dependency on `AiService`, provider accounts or model catalogs.
+Callers start dictation, read text, transcribe managed audio files and observe activity; the runtime
+resolves live voice engines from preferences. File transcription has an independent engine preference, defaults to SenseVoice, and never falls back between engines or to online recognition. The module has no dependency on `AiService`, provider accounts or model catalogs.
 
 `src/backend/services/voice` owns the implementation:
 
@@ -52,8 +54,9 @@ preferences. The module has no dependency on `AiService`, provider accounts or m
   selection, dictation is off and speech uses the first supported entry. `system` and `sensevoice`
   are registered for dictation; only `system` reads aloud. The runtime allows one activity at a time:
   dictation stops reading, reading replaces
-  reading, and reading cannot start during dictation. Backgrounding and host disposal abort the
-  activity. A permission dialog opened through the system prompt queue does not count as leaving
+  reading, and reading cannot start during dictation or file transcription. Backgrounding aborts
+  capture/playback; file transcription follows its caller’s cancellation signal so Agent work can
+  use the existing turn execution lease. Host disposal aborts every activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
 - `speechText.ts` turns Markdown into prose and splits speech into utterances within the system's
   input limit, preserving sentence boundaries where possible.
@@ -61,7 +64,10 @@ preferences. The module has no dependency on `AiService`, provider accounts or m
   `systemSpeech.ts` owns `expo-speech`, installed voice selection and speech cancellation.
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
   with the iOS ring switch silenced.
-- `senseVoiceDictation.ts` owns local recording, lazy native inference, model-use leases and cleanup.
+- `senseVoiceDictation.ts` owns local recording and cleanup. `senseVoiceRecognition.ts` shares lazy
+  native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and
+  recognizes bounded file windows. `transcribeAudioFile.ts` validates managed sources and publishes
+  the generated text through the existing file commit boundary.
   `voiceModel.ts` owns the optional model's download, integrity and deletion through `localModel`.
 - `createVoice.ts` assembles the engines, model owner and background listener for the host. Adding a
   future engine requires an adapter, a `VOICE_ENGINES` entry and registration here.
@@ -151,6 +157,67 @@ not need a separate VAD model. It does not stream partial text. Audio is process
 after completion/cancellation, and never sent to a provider. Native inference cannot be interrupted
 mid-decode: cancellation discards its result and joins it before releasing the recognizer/model.
 
+## Audio File Transcription
+
+The audio file menu in the library starts transcription, shows progress, and offers cancellation.
+Closing its panel or unmounting the library cancels its operation. Keep the app foregrounded until
+it finishes. Success creates a separate `.txt` file beside the recording and opens through the
+existing text viewer; the source audio is unchanged. Missing models link to voice settings rather
+than starting a download automatically. Dictation does not need to be enabled for file transcription.
+
+Audio attachments enter local Agent turns as metadata and managed file references, never raw audio
+bytes. The built-in `transcribe_audio` tool is offered only with tool calling, a ready selected
+transcription engine and a native decoder. It accepts an attached file ID or a relative workspace path, uses the same voice
+module as the UI, and creates a text artifact in the captured workspace (library root otherwise).
+The Host grants that artifact for subsequent `read_file` calls. Like `write_file`, this local
+document-producing tool is auto-approved.
+Models without the tool receive an explanation of how to transcribe from the file menu.
+
+Chat audio attachments use a waveform icon and format label, with the existing remove and
+system-open actions. The local composer explains engine availability and links to voice settings
+when the selected engine needs configuration. A ready engine still requires a chat model that can call tools;
+sending an attachment does not itself run transcription before the Agent receives the turn.
+`VoiceActivity` publishes the active file, optional caller key, and completed/total audio seconds.
+Chat attachment tiles observe their own file and tool rows observe their own call, so a cancelled
+or completed operation cannot show progress on an unrelated message. The tool receipt presents
+the saved filename or localized failure; its managed TXT artifact uses the normal file card.
+Common audio extensions are inferred only at import when no specific media type is available.
+
+Sources are limited to 100 MiB and two hours. `VoiceInput.decodeAudioChunk` reads at most 30 seconds
+into a temporary mono PCM16 WAV, using AVAudioFile on iOS and MediaExtractor/MediaCodec on Android.
+Supported containers and codecs depend on the platform; WAV, MP3 and M4A are intended common inputs.
+The recognizer consumes one window at a time and releases each temporary file before decoding the
+next. Cancellation waits for the active decode/inference to settle, discards the result and releases
+native resources (and the SenseVoice model lease). Partial transcripts are not published. A source removed or changed during
+recognition fails before publication; destination liveness is checked by file storage.
+
+The **Audio file transcription** section in Voice settings owns a separate engine and recording
+language. Engine choice is device-local and defaults to SenseVoice; system language follows the app
+unless selected explicitly. It does not change dictation or reading settings. Both engines use the
+same chunk loop, file limits, progress, cancellation and managed artifact publication.
+
+The system engine uses `VoiceInput.systemTranscriptionStatus`, `transcribeAudioChunk` and
+`cancelTranscription`. iOS checks `SFSpeechRecognizer` for the selected locale and always sets
+`requiresOnDeviceRecognition` on `SFSpeechURLRecognitionRequest`; it requests Speech authorization,
+not microphone access. Android requires API 33+, an on-device recognition service and the exact
+language in `installedOnDeviceLanguages`. It checks recognition support for the file request and
+streams the decoder's mono PCM16 payload through `EXTRA_AUDIO_SOURCE`, with the actual sample rate.
+Only segmented completion after the complete input is accepted. Android's system API requires
+`RECORD_AUDIO` permission even for supplied audio; the app does not start its capture module.
+A missing language pack or uncheckable service fails without online or SenseVoice fallback.
+Each system window has a 60-second deadline; cancellation closes native work before cleanup.
+
+Android services own file-source support: the platform may ignore unsupported input extras and
+open its microphone. Capability checks and rejection of non-segmented results cannot prove vendor
+behavior. Device acceptance must establish supplied-file use, offline operation, denied permissions,
+unsupported languages, cancellation and repeated windows on each supported service. See the
+[Android file-source contract](https://developer.android.com/reference/android/speech/RecognizerIntent#EXTRA_AUDIO_SOURCE)
+and [Apple on-device request contract](https://developer.apple.com/documentation/speech/sfspeechrecognitionrequest/requiresondevicerecognition).
+
+SenseVoice detects its supported languages automatically. This implementation produces plain text,
+without speaker identification or word timestamps. Fixed window boundaries may affect words at a
+boundary. A new native client is required; older clients report transcription as unavailable.
+
 ## Native Configuration And Acceptance
 
 `expo-speech-recognition` adds the speech recognition purpose string, `RECORD_AUDIO`, and package
@@ -172,3 +239,9 @@ services:
 - Composer send fallback with dictation off or no available system recognition service.
 - System voice deduplication, same-name voice labels and language changes.
 - Reading long replies, reading in silent mode, interruption and leaving the conversation.
+
+- Audio-file WAV/MP3/M4A decoding on both platforms, stereo input, long recordings across window
+  boundaries, silence, corrupt files, cancellation during inference, model deletion while busy,
+  source deletion, and generated transcript opening.
+- Audio attachment → `transcribe_audio` → `read_file` with a text-only model, denied file access,
+  missing model, and unavailable native decoder.

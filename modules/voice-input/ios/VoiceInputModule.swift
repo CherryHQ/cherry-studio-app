@@ -4,6 +4,7 @@ import UIKit
 
 public class VoiceInputModule: Module {
   private var capture: VoiceCapture?
+  private var transcription: SystemAudioTranscription?
 
   public func definition() -> ModuleDefinition {
     Name("VoiceInput")
@@ -19,6 +20,34 @@ public class VoiceInputModule: Module {
       try directory.setResourceValues(values)
       return directory.absoluteString
     }
+
+    AsyncFunction("decodeAudioChunk") { (uri: String, start: Double, duration: Double) in
+      try AudioFileDecoder.decode(uri: uri, start: start, duration: duration)
+    }
+
+    AsyncFunction("systemTranscriptionStatus") { (language: String) in
+      SystemAudioTranscription.status(language: language)
+    }.runOnQueue(.main)
+
+    AsyncFunction("transcribeAudioChunk") { (id: String, uri: String, language: String, promise: Promise) in
+      guard self.transcription == nil else {
+        promise.resolve(["error": "busy"])
+        return
+      }
+      guard let transcription = SystemAudioTranscription(id: id, language: language, complete: { [weak self] result in
+        self?.transcription = nil
+        promise.resolve(result)
+      }) else {
+        promise.resolve(["error": "unsupported"])
+        return
+      }
+      self.transcription = transcription
+      transcription.start(uri: uri)
+    }.runOnQueue(.main)
+
+    AsyncFunction("cancelTranscription") { (id: String) in
+      if self.transcription?.id == id { self.transcription?.cancel() }
+    }.runOnQueue(.main)
 
     AsyncFunction("start") { (id: String) in
       guard self.capture == nil else { throw VoiceCaptureError.busy }
@@ -50,6 +79,7 @@ public class VoiceInputModule: Module {
       DispatchQueue.main.async {
         self.capture?.cancel()
         self.capture = nil
+        self.transcription?.cancel()
       }
     }
   }

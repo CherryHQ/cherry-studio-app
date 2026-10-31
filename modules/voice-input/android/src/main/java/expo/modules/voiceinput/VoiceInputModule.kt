@@ -6,7 +6,12 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -21,6 +26,7 @@ private const val MAX_SAMPLES = SAMPLE_RATE * 30
 
 class VoiceInputModule : Module() {
   private val lock = Any()
+  private var transcription: SystemAudioTranscription? = null
   private var capture: VoiceCapture? = null
 
   override fun definition() = ModuleDefinition {
@@ -33,6 +39,39 @@ class VoiceInputModule : Module() {
       check(directory.isDirectory || directory.mkdirs()) { "Model storage unavailable" }
       Uri.fromFile(directory).toString() + "/"
     }
+
+    AsyncFunction("decodeAudioChunk") { uri: String, start: Double, duration: Double ->
+      AudioFileDecoder.decode(requireNotNull(appContext.reactContext).cacheDir, uri, start, duration)
+    }
+
+    AsyncFunction("systemTranscriptionStatus") { language: String, promise: Promise ->
+      val context = requireNotNull(appContext.reactContext)
+      if (Build.VERSION.SDK_INT < 33 || !SystemAudioTranscription.available(context)) {
+        promise.resolve("unsupported")
+      } else {
+        SystemAudioTranscription.status(context, language) { promise.resolve(it) }
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("transcribeAudioChunk") { id: String, uri: String, language: String, promise: Promise ->
+      val context = requireNotNull(appContext.reactContext)
+      if (Build.VERSION.SDK_INT < 33 || !SystemAudioTranscription.available(context)) {
+        promise.resolve(mapOf("error" to "unsupported"))
+      } else if (transcription != null) {
+        promise.resolve(mapOf("error" to "busy"))
+      } else {
+        val next = SystemAudioTranscription(id, context) { result ->
+          transcription = null
+          promise.resolve(result)
+        }
+        transcription = next
+        next.start(uri, language)
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("cancelTranscription") { id: String ->
+      if (transcription?.id == id) transcription?.cancel()
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("start") { id: String ->
       synchronized(lock) {
@@ -70,6 +109,7 @@ class VoiceInputModule : Module() {
     }
     OnDestroy {
       synchronized(lock) { capture }?.cancel()
+      Handler(Looper.getMainLooper()).post { transcription?.cancel() }
     }
   }
 }

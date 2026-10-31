@@ -29,6 +29,7 @@ it already exists.
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
 | Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
+| Audio media-type classification, import-time type inference, and transcription source limits | `src/shared/utils/audioFileTypes.ts` |
 | Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `importManagedFile` in `src/backend/services/file/importManagedFile.ts`, used by `fileContent.createInternalEntry` and system share import |
 | Reading and writing ZIP archives | `readZipDirectory`, `extractZipEntries` in `src/backend/utils/zipReader.ts`; `writeZipFile` in `src/backend/utils/zipWriter.ts` |
@@ -42,7 +43,7 @@ it already exists.
 | PDF text extraction and on-device PDF/image OCR | `modules/pdf-text-extractor`; `src/backend/services/file/fileTextExtraction.ts` shares extraction and derived disk results across `documentText.ts` and `imageText.ts` readers; `FileModule.observeFileOcr` reports one file's recognition progress |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
-| Dictation, reading aloud, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
+| Dictation, reading aloud, offline audio-file transcription, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |
 | Quoted answer text on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquote in `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
@@ -77,6 +78,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Bounded plain-text reader blocks | `splitTextBlocks` from `@cherrystudio/ui/utils`, shared by message details and the file reader |
 | Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
+| Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Feedback entry and context handoff | `useFeedbackActions`, `useFeedbackSource` and safe failure projection in `src/frontend/appShell/feedback`; settings owns the form |

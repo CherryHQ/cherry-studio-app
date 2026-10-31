@@ -176,6 +176,7 @@ export function createAppBootstrapRuntime(
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
+    agentHostDependencies: host.container.get('AgentHostDependencies'),
     resourceScopes: host.container.get('ResourceScopeCoordinator'),
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {

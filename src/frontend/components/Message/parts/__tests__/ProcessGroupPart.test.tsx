@@ -19,7 +19,10 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('@/frontend/hooks/file', () => ({ useFileOcrState: () => undefined }));
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileOcrState: () => undefined,
+  useAudioTranscriptionActivity: () => undefined,
+}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

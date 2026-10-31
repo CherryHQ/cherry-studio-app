@@ -1,19 +1,26 @@
 import { AppState } from 'react-native';
 
-import type { VoiceEngineId } from '@/shared/contracts/voice';
+import { fileContent } from '@/backend/services/file/fileContent';
+import type {
+  VOICE_ENGINE_PREFERENCE,
+  VoiceCapability,
+  VoiceEngineId,
+} from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
+import type { TranscriptionEngine } from './engines';
 import type { SystemPromptQueue } from './microphoneAccess';
 import { createSenseVoiceDictationEngine } from './senseVoiceDictation';
+import { createSenseVoiceTranscription } from './senseVoiceTranscription';
 import { createSystemDictationEngine } from './systemDictation';
 import { createSystemSpeechEngine } from './systemSpeech';
+import { createSystemTranscription } from './systemTranscription';
+import { transcribeAudioFile } from './transcribeAudioFile';
 import { createVoiceModel } from './voiceModel';
 import { createVoiceRuntime } from './VoiceRuntime';
 
 type VoicePreferences = {
-  get(
-    key: 'feature.voice.dictation_engine' | 'feature.voice.speech_engine',
-  ): Promise<VoiceEngineId | null>;
+  get(key: (typeof VOICE_ENGINE_PREFERENCE)[VoiceCapability]): Promise<VoiceEngineId | null>;
   get(key: 'feature.voice.system_voice'): Promise<string>;
 };
 
@@ -26,15 +33,29 @@ export function createVoice({
   permissions,
   language,
   dictationLanguage,
+  transcriptionLanguage,
 }: {
   preference: VoicePreferences;
   permissions: SystemPromptQueue;
   language(): AppLanguage;
   dictationLanguage(): AppLanguage;
+  transcriptionLanguage(): AppLanguage;
 }) {
   const model = createVoiceModel();
+  const bindTranscription = (
+    engine: ReturnType<typeof createSenseVoiceTranscription>,
+  ): TranscriptionEngine => ({
+    status: engine.status,
+    run: (input, options) => transcribeAudioFile(fileContent, engine.transcribe, input, options),
+  });
   const runtime = createVoiceRuntime({
     engines: {
+      transcription: {
+        sensevoice: bindTranscription(createSenseVoiceTranscription(model)),
+        system: bindTranscription(
+          createSystemTranscription({ permissions, language: transcriptionLanguage }),
+        ),
+      },
       dictation: {
         system: createSystemDictationEngine({ permissions }),
         sensevoice: createSenseVoiceDictationEngine(model, permissions),

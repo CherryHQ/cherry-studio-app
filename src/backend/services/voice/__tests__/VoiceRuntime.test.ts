@@ -1,11 +1,14 @@
 import {
   VoiceError,
+  type AudioTranscriptionOptions,
+  type AudioTranscriptionResult,
   type DictationSession,
   type VoiceEngineId,
   type VoiceEngineStatus,
 } from '@/shared/contracts/voice';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-import type { DictationEngine, SpeechEngine } from '../engines';
+import type { DictationEngine, SpeechEngine, TranscriptionEngine } from '../engines';
 import { createVoiceRuntime } from '../VoiceRuntime';
 
 function deferred<T = void>() {
@@ -52,17 +55,29 @@ function setup({
   dictation = {},
   speech = {},
   selected = {},
+  transcription,
+  systemTranscription,
 }: {
+  transcription?: TranscriptionEngine;
+  systemTranscription?: TranscriptionEngine;
   dictation?: Partial<Record<VoiceEngineId, DictationEngine>>;
   speech?: Partial<Record<VoiceEngineId, SpeechEngine>>;
-  selected?: Partial<Record<'dictation' | 'speech', VoiceEngineId>>;
+  selected?: Partial<Record<'dictation' | 'speech' | 'transcription', VoiceEngineId>>;
 }) {
   let background: (() => void) | undefined;
   const runtime = createVoiceRuntime({
-    engines: { dictation, speech },
+    engines: {
+      dictation,
+      speech,
+      transcription: { sensevoice: transcription, system: systemTranscription },
+    },
     preference: {
       get: async (key) =>
-        (key === 'feature.voice.dictation_engine' ? selected.dictation : selected.speech) ?? null,
+        (key === 'feature.voice.dictation_engine'
+          ? selected.dictation
+          : key === 'feature.voice.transcription_engine'
+            ? selected.transcription
+            : selected.speech) ?? null,
     },
     language: () => 'zh-CN',
     dictationLanguage: () => 'en-US',
@@ -77,6 +92,45 @@ function setup({
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('publishes transcription progress for its file and caller without reviving a cancelled task', async () => {
+  const entered = deferred<NonNullable<AudioTranscriptionOptions['onProgress']>>();
+  const native = deferred<AudioTranscriptionResult>();
+  const runtime = setup({
+    transcription: {
+      status: async () => 'ready',
+      run: async (_input, options) => {
+        entered.resolve(options.onProgress!);
+        return native.promise;
+      },
+    },
+  });
+  const controller = new AbortController();
+  const fileEntryId = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
+  const task = runtime.module.transcribeAudio(
+    { fileEntryId },
+    { signal: controller.signal, key: 'call-1' },
+  );
+  const report = await entered.promise;
+  const initial = runtime.module.getActivity();
+  report({ completedSeconds: 30, totalSeconds: 60 });
+  expect(runtime.module.getActivity()).toEqual({
+    kind: 'transcribing',
+    fileEntryId,
+    key: 'call-1',
+    progress: { completedSeconds: 30, totalSeconds: 60 },
+  });
+  expect(initial).toEqual({ kind: 'transcribing', fileEntryId, key: 'call-1' });
+  controller.abort();
+  const cancelled = runtime.module.getActivity();
+  report({ completedSeconds: 60, totalSeconds: 60 });
+  expect(runtime.module.getActivity()).toBe(cancelled);
+  native.reject(controller.signal.reason);
+  await expect(task).rejects.toBe(controller.signal.reason);
+  report({ completedSeconds: 60, totalSeconds: 60 });
+  expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+  await runtime.dispose();
+});
 
 describe('engine choice', () => {
   test('offline voice needs a downloaded model and never falls back to a network-capable system service', async () => {
@@ -223,4 +277,98 @@ describe('one voice activity at a time', () => {
     await expect(runtime.module.speak('again')).rejects.toBeDefined();
     expect(listener).toHaveBeenCalled();
   });
+});
+
+test('file transcription holds the shared voice activity until native work drains on disposal', async () => {
+  const entered = deferred<AbortSignal>();
+  const native = deferred<never>();
+  const transcription = {
+    status: async () => 'ready' as const,
+    run: async (_input: unknown, { signal }: { signal: AbortSignal }) => {
+      entered.resolve(signal);
+      return native.promise;
+    },
+  };
+  const runtime = setup({ transcription });
+  const fileEntryId = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
+  const task = runtime.module.transcribeAudio({ fileEntryId });
+  const signal = await entered.promise;
+  expect(runtime.module.getActivity()).toEqual({ kind: 'transcribing', fileEntryId });
+  await expect(runtime.module.startDictation()).rejects.toMatchObject({ code: 'busy' });
+  await expect(runtime.module.transcribeAudio({ fileEntryId })).rejects.toMatchObject({
+    code: 'busy',
+  });
+  await expect(runtime.module.speak('hello')).rejects.toMatchObject({ code: 'busy' });
+  runtime.background();
+  expect(signal.aborted).toBe(false);
+  let disposed = false;
+  const disposal = runtime.dispose().then(() => {
+    disposed = true;
+  });
+  expect(signal.aborted).toBe(true);
+  await Promise.resolve();
+  expect(disposed).toBe(false);
+  native.reject(signal.reason);
+  await expect(task).rejects.toBe(signal.reason);
+  await disposal;
+  expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+});
+
+test('audio transcription defaults to SenseVoice even when system recognition is ready', async () => {
+  const systemTranscription: TranscriptionEngine = {
+    status: jest.fn(async () => 'ready'),
+    run: jest.fn(),
+  };
+  const runtime = setup({
+    transcription: { status: async () => 'needs-model', run: jest.fn() },
+    systemTranscription,
+  });
+  await expect(runtime.module.getEffectiveEngine('transcription')).resolves.toBe('sensevoice');
+  await expect(runtime.module.getTranscriptionStatus()).resolves.toBe('needs-model');
+  await expect(
+    runtime.module.transcribeAudio({
+      fileEntryId: FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001'),
+    }),
+  ).rejects.toMatchObject({ code: 'model-not-downloaded' });
+  expect(systemTranscription.run).not.toHaveBeenCalled();
+  await runtime.dispose();
+});
+
+test('the selected system file engine reports offline setup without falling back to SenseVoice', async () => {
+  const localRun = jest.fn();
+  const runtime = setup({
+    transcription: { status: async () => 'ready', run: localRun },
+    systemTranscription: { status: async () => 'needs-setup', run: jest.fn() },
+    selected: { transcription: 'system' },
+  });
+  await expect(runtime.module.getTranscriptionStatus()).resolves.toBe('needs-setup');
+  await expect(
+    runtime.module.transcribeAudio({
+      fileEntryId: FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001'),
+    }),
+  ).rejects.toMatchObject({ code: 'offline-recognition-unavailable' });
+  expect(localRun).not.toHaveBeenCalled();
+  expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+  await runtime.dispose();
+});
+
+test('the chosen system engine runs without a downloaded SenseVoice model', async () => {
+  const localRun = jest.fn();
+  const systemRun = jest.fn(async () => {
+    throw new VoiceError('no-speech', 'Silent file');
+  });
+  const runtime = setup({
+    transcription: { status: async () => 'needs-model', run: localRun },
+    systemTranscription: { status: async () => 'ready', run: systemRun },
+    selected: { transcription: 'system' },
+  });
+  await expect(runtime.module.getTranscriptionStatus()).resolves.toBe('ready');
+  await expect(
+    runtime.module.transcribeAudio({
+      fileEntryId: FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001'),
+    }),
+  ).rejects.toMatchObject({ code: 'no-speech' });
+  expect(systemRun).toHaveBeenCalledTimes(1);
+  expect(localRun).not.toHaveBeenCalled();
+  await runtime.dispose();
 });

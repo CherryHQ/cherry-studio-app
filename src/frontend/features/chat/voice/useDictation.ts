@@ -6,10 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
 import { useDictationSetup } from '@/frontend/hooks/useDictationSetup';
+import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
 import { VoiceError, type DictationSession } from '@/shared/contracts/voice';
 import { appendUtterance } from '@/shared/utils/dictationText';
-
-import { voiceErrorLabelKey } from './voiceErrorLabel';
 
 export type DictationState = 'idle' | 'starting' | 'listening' | 'finishing';
 

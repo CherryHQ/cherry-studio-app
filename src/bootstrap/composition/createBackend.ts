@@ -1,6 +1,7 @@
 import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
+import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import {
@@ -107,6 +108,7 @@ export type BackendComposition = {
 export function createBackend(
   services: BackendServices,
   infrastructure: {
+    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice'>;
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
@@ -337,12 +339,19 @@ export function createBackend(
     preference: services.preference,
     permissions: services.devicePermissions,
     language: () => appLanguage(services.preference.readCached('app.language')),
+    transcriptionLanguage: () =>
+      appLanguage(
+        services.preference.readCached('feature.voice.transcription_language') ??
+          services.preference.readCached('app.language'),
+      ),
     dictationLanguage: () =>
       appLanguage(
         services.preference.readCached('feature.voice.dictation_language') ??
           services.preference.readCached('app.language'),
       ),
   });
+
+  infrastructure.agentHostDependencies.configureVoice(voice.module);
 
   const appUpdate = createAppUpdateModule({
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),

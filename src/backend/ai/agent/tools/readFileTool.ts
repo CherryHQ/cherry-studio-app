@@ -25,6 +25,7 @@ import {
 } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { isAudioMediaType } from '@/shared/utils/audioFileTypes';
 import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 import {
   MAX_IMAGE_ATTACHMENT_BYTES,
@@ -208,6 +209,10 @@ export function createReadFileTool(
       if (!source) {
         return invalid('The managed file is unavailable.');
       }
+      if (isAudioMediaType(source.mediaType))
+        return invalid(
+          'Audio has no readable text yet. Use transcribe_audio first, then read_file on its generated transcript. If that tool is unavailable, ask the user to transcribe the recording from the file menu.',
+        );
       if (isAiSupportedImageMediaType(source.mediaType) && acceptsImages) {
         if (source.size > MAX_IMAGE_ATTACHMENT_BYTES)
           return invalid('The image exceeds the attachment byte limit.');

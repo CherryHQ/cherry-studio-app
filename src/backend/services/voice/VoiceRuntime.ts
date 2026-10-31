@@ -11,7 +11,7 @@ import {
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
-import type { DictationEngine, SpeechEngine, VoiceEngines } from './engines';
+import type { DictationEngine, SpeechEngine, TranscriptionEngine, VoiceEngines } from './engines';
 import { speakableText } from './speechText';
 
 export type VoiceRuntimeDependencies = {
@@ -31,8 +31,8 @@ type Activity = { activity: VoiceActivity; controller: AbortController };
 const IDLE: VoiceActivity = { kind: 'idle' };
 
 /**
- * The only place that chooses an engine. It owns the one active dictation or speech, its
- * cancellation on replacement, backgrounding and disposal; engines own their native resources.
+ * Chooses live voice engines and owns the single dictation, speech or transcription activity.
+ * Callers cancel file work; capture/playback also end on backgrounding. Engines own native resources.
  */
 export function createVoiceRuntime({
   engines,
@@ -71,6 +71,11 @@ export function createVoiceRuntime({
     listeners.forEach((listener) => listener());
     return {
       signal: linked.signal,
+      update(next: VoiceActivity) {
+        if (current !== owner || linked.signal.aborted) return;
+        owner.activity = next;
+        listeners.forEach((listener) => listener());
+      },
       release() {
         linked.dispose();
         if (current !== owner) return;
@@ -81,16 +86,18 @@ export function createVoiceRuntime({
   }
 
   function registry(capability: VoiceCapability) {
-    return (capability === 'dictation' ? engines.dictation : engines.speech) as Partial<
-      Record<VoiceEngineId, DictationEngine | SpeechEngine>
+    return engines[capability] as Partial<
+      Record<VoiceEngineId, DictationEngine | SpeechEngine | TranscriptionEngine>
     >;
   }
 
-  /** Dictation is opt-in; speech defaults to the first supported engine. */
+  /** Dictation is opt-in; transcription defaults to SenseVoice; speech finds a supported engine. */
   async function effectiveEngine(capability: VoiceCapability, signal: AbortSignal) {
     const stored = await preference.get(VOICE_ENGINE_PREFERENCE[capability]);
     signal.throwIfAborted();
-    const selected = VOICE_ENGINES.find((engine) => engine === stored);
+    const selected =
+      VOICE_ENGINES.find((engine) => engine === stored) ??
+      (capability === 'transcription' ? 'sensevoice' : undefined);
     if (capability === 'dictation' && !selected) return null;
     for (const id of selected ? [selected] : VOICE_ENGINES) {
       const status = (await registry(capability)[id]?.status(signal)) ?? 'unsupported';
@@ -100,7 +107,7 @@ export function createVoiceRuntime({
     return null;
   }
 
-  async function resolve<T extends DictationEngine | SpeechEngine>(
+  async function resolve<T extends DictationEngine | SpeechEngine | TranscriptionEngine>(
     capability: VoiceCapability,
     signal: AbortSignal,
   ): Promise<T> {
@@ -109,8 +116,10 @@ export function createVoiceRuntime({
       throw new VoiceError('not-configured', 'Select a dictation engine first.');
     if (effective?.status === 'needs-setup')
       throw new VoiceError(
-        'recognition-not-configured',
-        'Configure system speech recognition first.',
+        capability === 'transcription'
+          ? 'offline-recognition-unavailable'
+          : 'recognition-not-configured',
+        'Configure system speech recognition for the selected language first.',
       );
     if (effective?.status === 'needs-model')
       throw new VoiceError(
@@ -136,9 +145,46 @@ export function createVoiceRuntime({
     }
   }
 
-  const unsubscribeBackground = onBackground(() => current?.controller.abort());
+  const unsubscribeBackground = onBackground(() => {
+    // File work has no capture/playback session. Its caller owns cancellation; an Agent turn
+    // can keep working under the Host's existing background execution lease.
+    if (current?.activity.kind !== 'transcribing') current?.controller.abort();
+  });
 
   const module: Omit<VoiceModule, 'localModel'> = {
+    getTranscriptionStatus: (options) =>
+      run(
+        options,
+        async (signal) => (await effectiveEngine('transcription', signal))?.status ?? 'unsupported',
+      ),
+    async transcribeAudio(input, options) {
+      if (current && current.activity.kind !== 'speaking')
+        throw new VoiceError('busy', 'Another voice operation is running.');
+      const transcribing: VoiceActivity = {
+        kind: 'transcribing',
+        fileEntryId: input.fileEntryId,
+        ...(options?.key ? { key: options.key } : {}),
+      };
+      const activity = claim(transcribing, options?.signal);
+      try {
+        const transcription = await track(
+          resolve<TranscriptionEngine>('transcription', activity.signal),
+        );
+        activity.signal.throwIfAborted();
+        return await track(
+          transcription.run(input, {
+            ...options,
+            signal: activity.signal,
+            onProgress(progress) {
+              activity.update({ ...transcribing, progress });
+              options?.onProgress?.(progress);
+            },
+          }),
+        );
+      } finally {
+        activity.release();
+      }
+    },
     getEngineStatus: (capability, engine, options) =>
       run(
         options,
@@ -154,8 +200,8 @@ export function createVoiceRuntime({
       }),
 
     async startDictation(options) {
-      if (current?.activity.kind === 'dictating')
-        throw new VoiceError('busy', 'Dictation is already running.');
+      if (current && current.activity.kind !== 'speaking')
+        throw new VoiceError('busy', 'Another voice operation is running.');
       const activity = claim({ kind: 'dictating' }, options?.signal);
       try {
         const engine = await track(resolve<DictationEngine>('dictation', activity.signal));
@@ -178,8 +224,8 @@ export function createVoiceRuntime({
     },
 
     async speak(text, options) {
-      if (current?.activity.kind === 'dictating')
-        throw new VoiceError('busy', 'Reading aloud cannot start during dictation.');
+      if (current && current.activity.kind !== 'speaking')
+        throw new VoiceError('busy', 'Reading aloud cannot start during recognition.');
       const prose = speakableText(text);
       if (!prose) return;
       const activity = claim({ kind: 'speaking', key: options?.key ?? null }, options?.signal);
