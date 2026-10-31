@@ -24,7 +24,18 @@ without claiming completion.
   invocation. Outside that dependency, `diagnose` remains explicit opt-in. Both skills are required
   project copies. If either is missing, restore the repository installation instead of substituting
   a same-named personal skill.
-- **Device acceptance:** Follow [Parallel Device Testing](../../docs/guides/parallel-device-testing.md)
+- **Main-path benchmark:** [mobile-acceptance](mobile-acceptance/SKILL.md) owns the shared
+  benchmark, scenario drafts and report template described in
+  [Mobile Acceptance](../../docs/guides/mobile-acceptance.md). For an actual run, ask the initiating
+  user for unresolved code target, environment, device and dedicated-data choices. Discovery only
+  provides candidates. Asset preparation does not start tests or require device tools to be installed.
+  When executing with [agent-device](agent-device/SKILL.md), read its current help and apply the
+  relevant ownership/compatibility rules; fixed workspace devices are not benchmark inputs.
+  Automated runs use the e2e tests under `scripts/mobileAcceptance`. The coding agent reads their
+  report; untested cases and divergence remain reported gaps instead of triggering manual UI
+  fallback. The repository-owned `mobile-acceptance` skill is maintained with these tests; upstream
+  device and other third-party skills remain unchanged.
+- **Existing simulator workflow:** Follow [Parallel Device Testing](../../docs/guides/parallel-device-testing.md)
   with `agent-device >= 0.21.27`. Read the installed CLI's `help workflow` before planning commands;
   it owns the version-specific syntax. Reuse the workspace session across active iterations and
   batch known steps; the guide owns device claims, state directories, evidence, and cleanup.

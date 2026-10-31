@@ -12,6 +12,7 @@ expo-tailwind-setup
 gh-stack
 improve-react
 legend-list-best-practices
+mobile-acceptance
 native-data-fetching
 react-coding-style
 react-devtools

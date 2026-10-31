@@ -1,0 +1,47 @@
+CHERRY ACCEPTANCE TEXT START
+
+Optional caller-selected test data.
+This file contains no accounts, credentials or network references.
+
+Line 01: Cherry Mobile readable text sample.
+Line 02: Cherry Mobile readable text sample.
+Line 03: Cherry Mobile readable text sample.
+Line 04: Cherry Mobile readable text sample.
+Line 05: Cherry Mobile readable text sample.
+Line 06: Cherry Mobile readable text sample.
+Line 07: Cherry Mobile readable text sample.
+Line 08: Cherry Mobile readable text sample.
+Line 09: Cherry Mobile readable text sample.
+Line 10: Cherry Mobile readable text sample.
+Line 11: Cherry Mobile readable text sample.
+Line 12: Cherry Mobile readable text sample.
+Line 13: Cherry Mobile readable text sample.
+Line 14: Cherry Mobile readable text sample.
+Line 15: Cherry Mobile readable text sample.
+Line 16: Cherry Mobile readable text sample.
+Line 17: Cherry Mobile readable text sample.
+Line 18: Cherry Mobile readable text sample.
+Line 19: Cherry Mobile readable text sample.
+Line 20: Cherry Mobile readable text sample.
+Line 21: Cherry Mobile readable text sample.
+Line 22: Cherry Mobile readable text sample.
+Line 23: Cherry Mobile readable text sample.
+Line 24: Cherry Mobile readable text sample.
+Line 25: Cherry Mobile readable text sample.
+Line 26: Cherry Mobile readable text sample.
+Line 27: Cherry Mobile readable text sample.
+Line 28: Cherry Mobile readable text sample.
+Line 29: Cherry Mobile readable text sample.
+Line 30: Cherry Mobile readable text sample.
+Line 31: Cherry Mobile readable text sample.
+Line 32: Cherry Mobile readable text sample.
+Line 33: Cherry Mobile readable text sample.
+Line 34: Cherry Mobile readable text sample.
+Line 35: Cherry Mobile readable text sample.
+Line 36: Cherry Mobile readable text sample.
+Line 37: Cherry Mobile readable text sample.
+Line 38: Cherry Mobile readable text sample.
+Line 39: Cherry Mobile readable text sample.
+Line 40: Cherry Mobile readable text sample.
+
+CHERRY ACCEPTANCE TEXT END
