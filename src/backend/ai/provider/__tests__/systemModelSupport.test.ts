@@ -29,6 +29,7 @@ describe('createSystemModelSupport', () => {
   });
   it.each([
     ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/multimodal-generation/generation'],
+    ['qwencloud', 'qwen-image-2.0', '/api/v1/services/aigc/multimodal-generation/generation'],
     ['ppio', 'seedream-4-0', '/v3/seedream-4.0'],
     ['tokenhub', 'hy-image-v3', '/v1/wand/hunyuan-image/v3-generation'],
   ])(
@@ -50,6 +51,7 @@ describe('createSystemModelSupport', () => {
 
   it.each([
     ['dashscope', 'future-image', '/api/v1/services/aigc/multimodal-generation/generation'],
+    ['qwencloud', 'future-image', '/api/v1/services/aigc/multimodal-generation/generation'],
     ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/future-image/generation'],
     ['ppio', 'seedream-4-0', '/v3/new-image-protocol'],
     ['tokenhub', 'hy-image-v3', '/v1/api/image/submit'],
@@ -84,6 +86,34 @@ describe('createSystemModelSupport', () => {
 
     supportsLanguageModel.mockReturnValue(false);
     expect(isModelSupportedBySystem(provider, model)).toBe(false);
+  });
+
+  it('keeps QwenCloud images available when Anthropic serves its text models', () => {
+    const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(false));
+    expect(
+      isModelSupportedBySystem(
+        createProvider({
+          presetProviderId: 'qwencloud',
+          defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+          endpointConfigs: { [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { adapterFamily: 'anthropic' } },
+        }),
+        createModel({
+          endpointTypes: [ENDPOINT_TYPE.ANTHROPIC_MESSAGES],
+          apiModelId: 'qwen-image-2.0',
+          capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+          imageGeneration: {
+            modes: {
+              generate: {
+                supports: {},
+                vendorTransport: {
+                  endpoint: '/api/v1/services/aigc/multimodal-generation/generation',
+                },
+              },
+            },
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('accepts endpoint-declared image models without consulting language serving', () => {

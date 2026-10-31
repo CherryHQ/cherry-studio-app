@@ -245,6 +245,11 @@ export async function resolveProviderAiSdkConfig(
     { match: (p) => isOllamaProvider(p), build: withSelectedApiKey(buildOllamaConfig) },
     { match: (p) => isAzureOpenAIProvider(p), build: withSelectedApiKey(buildAzureConfig) },
     {
+      // QwenCloud's native image transport is independent of the selected text endpoint.
+      match: (p) => isPreset(p, 'qwencloud') && isImageGenerationModel(model),
+      build: withSelectedApiKey(buildDashScopeConfig),
+    },
+    {
       match: (p, id) => isPreset(p, 'dashscope') && id === 'openai-compatible',
       build: withSelectedApiKey(buildDashScopeConfig),
     },
@@ -651,11 +656,19 @@ function buildDmxapiConfig(ctx: BuilderContext): ProviderConfig<'dmxapi'> {
 }
 
 function buildDashScopeConfig(ctx: BuilderContext): ProviderConfig<'dashscope'> {
+  const { baseURL: chatBaseURL } = routeToEndpoint(
+    formatBaseURL(
+      getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+      ctx.actualProvider,
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    ),
+  );
   return {
     providerId: 'dashscope',
     endpoint: ctx.endpoint,
     providerSettings: {
       ...ctx.baseConfig,
+      imageBaseURL: chatBaseURL.replace(/\/compatible-mode\/v1$/, ''),
       headers: { ...ctx.connection.headers },
       includeUsage: resolveEndpointDialect(ctx.actualProvider, ctx.endpointType).streamOptions,
     },

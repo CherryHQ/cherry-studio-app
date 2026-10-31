@@ -367,6 +367,7 @@ export class PiWebResponse {
         return;
       }
       case 'anthropic':
+      case 'qwen-anthropic':
         return this.anthropicEvent(event);
       case 'openrouter':
         for (const value of array(record(record(array(event.choices)[0])?.delta)?.annotations)) {
@@ -379,6 +380,7 @@ export class PiWebResponse {
           this.addSource(record(value)?.link, record(value)?.title);
         return;
       case 'dashscope':
+      case 'qwencloud':
         for (const value of array(record(event.search_info)?.search_results))
           this.addSource(record(value)?.url, record(value)?.title);
         return;

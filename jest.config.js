@@ -34,7 +34,7 @@ module.exports = {
     // architecture rules and the native patch guards that protect every PR.
     ...(process.env.PRCI
       ? [
-          '/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoFilePermissions|enrichedMarkdownMathWidth|enrichedMarkdownInputMeasurement)\\.test\\.ts$)',
+          '/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoFilePermissions|expoModulesCoreSwiftCompatibility|enrichedMarkdownMathWidth|enrichedMarkdownInputMeasurement)\\.test\\.ts$)',
         ]
       : []),
   ],
