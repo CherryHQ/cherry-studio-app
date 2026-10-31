@@ -100,7 +100,7 @@ export function FeedbackHistoryScreen() {
           rightActions: [
             {
               key: 'refresh',
-              nativeIcon: 'arrow.clockwise',
+              nativeIcon: require('@/assets/header-toolbar/refresh-cw.png'),
               type: 'icon',
               icon: RefreshCwIcon,
               accessibilityLabel: t('settings.about.feedback.history.refresh'),
