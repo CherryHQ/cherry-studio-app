@@ -12,6 +12,11 @@ The route carries identity only. `FileEntryPreview` owns classification and the 
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.
 
+Document workflows start from chat attachments or the existing preview selection handoff.
+The viewer does not expose a separate extraction form or export workflow. The Agent can request
+structured content through [Document Extraction](../../../backend/services/file/README.md), then
+use the existing Office tools to create a file or modify a copy using verified source anchors.
+
 Complete HTML also offers Share as image and Share as PPT actions. `useHtmlConversion` owns progress,
 cancellation and opening the system share sheet as soon as conversion finishes, using the shared
 file export helper without an intermediate result panel. A compact spinner, progress label and cancel

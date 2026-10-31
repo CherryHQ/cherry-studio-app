@@ -3,6 +3,12 @@ import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
+import {
+  DocumentExtractionError,
+  extractDocumentInputSchema,
+  type ExtractDocumentInput,
+  type DocumentExtractionResult,
+} from '@/shared/contracts/documentExtraction';
 import type {
   PrepareFileAttachmentsInput,
   PreparedFile,
@@ -23,6 +29,7 @@ import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
 import { readDocumentUriText } from './documentText';
 import { editFileImage } from './editFileImage';
+import { extractDocument } from './extractDocument';
 import { FileHashError, hashLocalFile } from './fileHash';
 import {
   createInternalEntryWithPreview,
@@ -87,6 +94,22 @@ async function resolveCreatedEntry(entry: FileEntry): Promise<ResolvedFile> {
  */
 export const fileContent = {
   observeFileOcr,
+  async extractDocument(
+    input: ExtractDocumentInput,
+    signal = new AbortController().signal,
+  ): Promise<DocumentExtractionResult> {
+    const parsed = extractDocumentInputSchema.safeParse(input);
+    if (!parsed.success) throw new DocumentExtractionError('invalid-input');
+    const source = await resolveFileEntry(fileEntryService, parsed.data.fileEntryId);
+    if (!source) throw new DocumentExtractionError('unavailable');
+    try {
+      return await extractDocument(source, parsed.data.options, signal);
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof DocumentExtractionError) throw error;
+      throw new DocumentExtractionError('failed');
+    }
+  },
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {

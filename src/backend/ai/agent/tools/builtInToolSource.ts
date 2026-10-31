@@ -55,6 +55,7 @@ import {
   type DeviceToolDependencies,
 } from './device';
 import { createEditFileTool } from './editFileTool';
+import { createExtractDocumentTool } from './extractDocumentTool';
 import {
   createFileLibraryManagementTools,
   type FileLibraryTrashAccess,
@@ -292,6 +293,13 @@ function createCatalog(
       acceptsImages,
     ),
     createWriteFileTool(fileContent, fileAccess),
+    createExtractDocumentTool(
+      {
+        extractDocument: fileContent.extractDocument,
+        resolveAvailable: managedFileResolver.resolveAvailable,
+      },
+      fileAccess,
+    ),
     ...createFileLibraryTools(
       fileAccess,
       managedFileResolver,

@@ -39,6 +39,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'edit_file',
   'edit_presentation',
   'edit_workbook',
+  'extract_document',
   'list_workspace',
   'find_workspace_files',
   'create_workspace_folder',
@@ -246,6 +247,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('library_list_trash', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
   describe('library_restore_item', 'ask', { agentCapability: 'fileLibrary' }),
   describe('read_file', 'auto', { effect: 'read' }),
+  describe('extract_document', 'auto', { effect: 'read' }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
 ];

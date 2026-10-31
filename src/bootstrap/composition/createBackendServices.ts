@@ -5,8 +5,12 @@ import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { createLocalOcrModule } from '@/backend/services/file/createLocalOcrModule';
 import { fileContent } from '@/backend/services/file/fileContent';
-import { configureFileOcrLanguage } from '@/backend/services/file/fileTextExtraction';
+import {
+  configureFileOcrEngine,
+  configureFileOcrLanguage,
+} from '@/backend/services/file/fileTextExtraction';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -42,6 +46,11 @@ export function createBackendServices({
   webSearch,
 }: BackendInfrastructure) {
   const data = createDataServices({ cache, preference });
+  const localOcr = createLocalOcrModule({
+    readEngine: () => preference.readCached('file.ocr.engine'),
+    writeEngine: (engine) => preference.set('file.ocr.engine', engine),
+  });
+  configureFileOcrEngine(localOcr.resolveEngine);
   configureFileOcrLanguage(() =>
     resolveAppLanguage(
       preference.readCached('app.language'),
@@ -55,6 +64,7 @@ export function createBackendServices({
     // Module singletons, spread here only so the routing table reads one object.
     devicePermissions,
     fileContent,
+    localOcr,
     jobRuntime,
     mcpRuntime,
     webSearch,

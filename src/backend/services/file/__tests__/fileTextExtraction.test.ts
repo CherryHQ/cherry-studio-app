@@ -8,10 +8,13 @@ import {
 import { readFileTextCache, writeFileTextCache } from '../fileTextCache';
 import {
   configureFileOcrLanguage,
+  configureFileOcrEngine,
   linkFileOcr,
   observeFileOcr,
   readPdfText,
   readImageText,
+  readDocumentPages,
+  type FileTextEngine,
 } from '../fileTextExtraction';
 
 jest.mock('expo-file-system', () => ({ File: jest.fn() }));
@@ -20,8 +23,14 @@ jest.mock('../../../../../modules/pdf-text-extractor', () => ({
   extractImageText: jest.fn(),
 }));
 jest.mock('../fileTextCache', () => ({
-  fileTextCacheFile: (source: File, language: string) => ({
-    uri: `${source.uri}.${language}.cache`,
+  fileTextCacheFile: (
+    source: File,
+    language: string,
+    _kind: string,
+    engine?: string,
+    request?: string,
+  ) => ({
+    uri: `${source.uri}.${language}${engine ? `.${engine}` : ''}${request ? `.${request}` : ''}.cache`,
   }),
   readFileTextCache: jest.fn(),
   writeFileTextCache: jest.fn(),
@@ -51,9 +60,23 @@ function deferred<T>() {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  configureFileOcrEngine(async () => undefined);
   jest.mocked(readFileTextCache).mockResolvedValue(undefined);
   jest.mocked(extractPdfText).mockResolvedValue(result);
   jest.mocked(extractImageText).mockResolvedValue({ ...result, totalPages: 1, extractedPages: 1 });
+});
+
+test('a consumer can cancel while the local model availability check is still pending', async () => {
+  const checking = deferred<undefined>();
+  configureFileOcrEngine(() => checking.promise);
+  const controller = new AbortController();
+  const reading = readPdfText(source, controller.signal);
+  const rejected = expect(reading).rejects.toThrow('cancelled check');
+  controller.abort(new Error('cancelled check'));
+  await rejected;
+  checking.resolve(undefined);
+  await Promise.resolve();
+  expect(extractPdfText).not.toHaveBeenCalled();
 });
 
 test('image consumers share one recognition and reuse its disk result after an independent cancellation', async () => {
@@ -376,4 +399,67 @@ test('keeps the body with unrecognized pages, and clears file activity on engine
   await expect(readPdfText(source, signal())).rejects.toThrow('engine failed');
   expect(states).toHaveBeenLastCalledWith(undefined);
   stop();
+});
+
+test('task caches separate page selections, field definitions and questions', async () => {
+  const disk = new Map<string, ExtractResult>();
+  jest.mocked(readFileTextCache).mockImplementation(async (file) => disk.get(file.uri));
+  jest.mocked(writeFileTextCache).mockImplementation((file, value) => {
+    disk.set(file.uri, value);
+  });
+  const extract = jest.fn<
+    ReturnType<FileTextEngine['extract']>,
+    Parameters<FileTextEngine['extract']>
+  >(async () => result);
+  configureFileOcrEngine(async () => ({ cacheKey: 'model-v1', extract }));
+  const requests = [
+    { task: 'tables' as const, pages: [1] },
+    { task: 'tables' as const, pages: [2] },
+    { task: 'fields' as const, fields: ['invoice'] },
+    { task: 'fields' as const, fields: ['amount'] },
+    { task: 'question' as const, question: 'Invoice number?' },
+    { task: 'question' as const, question: 'Total?' },
+  ];
+  for (const options of requests) await readDocumentPages(source, 'pdf', options, signal());
+  await readDocumentPages(source, 'pdf', requests[0]!, signal());
+  expect(disk.size).toBe(requests.length);
+  expect(extract).toHaveBeenCalledTimes(requests.length);
+});
+
+test('embedded image cancellation keeps its temporary source until native extraction settles', async () => {
+  const started = deferred<AbortSignal>();
+  const native = deferred<ExtractResult>();
+  configureFileOcrEngine(async () => ({
+    cacheKey: 'model-v1',
+    extract: (_uri, _kind, signal) => {
+      started.resolve(signal);
+      return native.promise;
+    },
+  }));
+  const dispose = jest.fn();
+  const controller = new AbortController();
+  const reading = readDocumentPages(
+    source,
+    'image',
+    { task: 'document', assetRef: 'image.png' },
+    controller.signal,
+    { cacheSource: source, cacheKey: 'asset-digest', dispose },
+  );
+  const aborted = expect(reading).rejects.toThrow('cancel asset');
+  const nativeSignal = await started.promise;
+  controller.abort(new Error('cancel asset'));
+  await aborted;
+  expect(nativeSignal.aborted).toBe(true);
+  expect(dispose).not.toHaveBeenCalled();
+  native.resolve(result);
+  await new Promise(setImmediate);
+  expect(dispose).toHaveBeenCalledTimes(1);
+  expect(writeFileTextCache).not.toHaveBeenCalled();
+});
+
+test('structural tasks never silently fall back to plain system text', async () => {
+  await expect(
+    readDocumentPages(source, 'pdf', { task: 'tables' }, signal()),
+  ).rejects.toMatchObject({ code: 'model-unavailable' });
+  expect(extractPdfText).not.toHaveBeenCalled();
 });

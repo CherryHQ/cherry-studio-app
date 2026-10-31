@@ -1,5 +1,6 @@
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
+import type { ExtractDocumentInput, DocumentExtractionResult } from './documentExtraction';
 import type {
   DocumentParserMode,
   FileAttachmentContent,
@@ -7,6 +8,7 @@ import type {
   FileAttachmentTarget,
 } from './fileAttachment';
 import type { EditFileImageInput } from './fileImageEdit';
+import type { LocalOcrModule } from './localOcr';
 
 export type ResolvedFile = {
   entry: FileEntry;
@@ -47,6 +49,12 @@ export type FileOcrState =
   | { status: 'recognizing'; kind: 'pdf' | 'image'; completedPages: number; totalPages: number };
 
 export interface FileModule {
+  localOcr: LocalOcrModule;
+  /** Explicit on-device extraction; does not send anything to a chat model or publish a file. */
+  extractDocument(
+    input: ExtractDocumentInput,
+    signal?: AbortSignal,
+  ): Promise<DocumentExtractionResult>;
   /**
    * Recognition of one file, keyed by its entry ID or by the running read_file call reading it.
    * Calls back immediately, then on change. Undefined when idle.

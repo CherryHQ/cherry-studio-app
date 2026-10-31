@@ -1,6 +1,7 @@
 package expo.modules.pdftextextractor
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.contentstream.operator.Operator
@@ -96,6 +97,56 @@ class PdfTextExtractorModule : Module() {
             initializePdfBox()
         }
 
+        AsyncFunction("readPdfPages") Coroutine { filePath: String, maxPages: Int, requestId: String, pageNumbers: List<Int>? ->
+            withRequestFile(filePath, requestId) { file, checkCancelled ->
+                loadDocument(file).use { doc ->
+                    if (doc.isEncrypted) throw FailedToLoadDocumentException()
+                    val count = minOf(maxPages.coerceIn(0, defaultMaxPages), doc.numberOfPages)
+                    val selected = pageNumbers ?: (1..count).toList()
+                    if (selected.size > defaultMaxPages || selected.distinct().size != selected.size ||
+                        selected.any { it < 1 || it > minOf(doc.numberOfPages, defaultMaxPages) }) throw InvalidFilePathException()
+                    val result = readPdfTextPages(doc, count, selected, checkCancelled)
+                    mapOf(
+                        "totalPages" to doc.numberOfPages,
+                        "isTruncated" to ((pageNumbers == null && count < doc.numberOfPages) || result.truncated),
+                        "pages" to result.pages.mapIndexed { index, page ->
+                            mapOf(
+                                "page" to selected[index],
+                                "isTruncated" to page.truncated,
+                                "text" to page.text,
+                                "needsOcr" to (!hasUsablePdfText(page.text) ||
+                                    (page.hasImages && isSparsePdfText(page.text)))
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        AsyncFunction("renderPdfPage") Coroutine {
+            filePath: String, pageIndex: Int, outputUri: String, requestId: String ->
+            withRequestFile(filePath, requestId) { file, checkCancelled ->
+                val output = cacheOutputFile(outputUri)
+                PdfPageOcr(file).use { it.renderToFile(pageIndex, output, checkCancelled) }
+            }
+        }
+
+        AsyncFunction("prepareOcrImage") Coroutine { filePath: String, outputUri: String, requestId: String ->
+            withRequestFile(filePath, requestId) { file, checkCancelled ->
+                val output = cacheOutputFile(outputUri)
+                val bitmap = decodeImageForOcr(file, checkCancelled)
+                try {
+                    output.outputStream().use {
+                        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it))
+                            throw IOException("Image encoding failed")
+                    }
+                    checkCancelled()
+                } finally {
+                    bitmap.recycle()
+                }
+            }
+        }
+
         // Plain AsyncFunctions share one serial thread with every Expo module.
         AsyncFunction("extractText") Coroutine { filePath: String, options: ExtractOptions?, requestId: String ->
             val cancelled = requests[requestId] ?: throw PdfExtractionCancelledException()
@@ -159,6 +210,30 @@ class PdfTextExtractorModule : Module() {
         }
     }
 
+    private suspend fun <T> withRequestFile(
+        filePath: String, requestId: String, work: (File, () -> Unit) -> T
+    ): T {
+        val cancelled = requests[requestId] ?: throw PdfExtractionCancelledException()
+        fun checkCancelled() { if (cancelled.get()) throw PdfExtractionCancelledException() }
+        try {
+            return withContext(Dispatchers.IO) {
+                documentMutex.withLock {
+                    checkCancelled()
+                    val file = parseFilePath(filePath)
+                    try {
+                        val result = work(file, ::checkCancelled)
+                        checkCancelled()
+                        result
+                    } finally {
+                        if (filePath.startsWith("content://")) file.delete()
+                    }
+                }
+            }
+        } finally {
+            requests.remove(requestId)
+        }
+    }
+
     private fun extractTextFromPDF(
         filePath: String,
         options: ExtractOptions?,
@@ -184,7 +259,7 @@ class PdfTextExtractorModule : Module() {
                     (options?.maxPages ?: defaultMaxPages).coerceIn(0, defaultMaxPages), totalPages
                 )
                 // One PDFBox traversal, with page boundaries and image operators retained.
-                val nativePages = readPdfTextPages(doc, endPage, ::checkCancelled)
+                val nativePages = readPdfTextPages(doc, endPage, checkCancelled = ::checkCancelled)
                 val pages = mutableListOf<String>()
                 val unrecognizedPages = mutableListOf<Int>()
                 var characterCount = 0
@@ -277,6 +352,15 @@ class PdfTextExtractorModule : Module() {
             .setupMixed(maxStreamMemoryBytes, maxStreamStorageBytes)
             .setTempDir(context.cacheDir)
         return PDDocument.load(file, memoryUsage)
+    }
+
+    private fun cacheOutputFile(outputUri: String): File {
+        val uri = Uri.parse(outputUri)
+        if (uri.scheme != "file") throw InvalidFilePathException()
+        val output = File(uri.path ?: throw InvalidFilePathException()).canonicalFile
+        if (!output.path.startsWith(context.cacheDir.canonicalPath + File.separator))
+            throw InvalidFilePathException()
+        return output
     }
 
     private fun parseFilePath(filePath: String): File {

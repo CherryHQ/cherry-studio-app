@@ -89,6 +89,18 @@ internal struct PdfPageRecognition {
 internal func recognizePdfPage(
   _ page: PDFPage, request: PdfExtractionRequest, languages: [String]
 ) throws -> PdfPageRecognition {
+  guard let image = try renderPdfPageImage(page, request: request) else {
+    return PdfPageRecognition(text: "")
+  }
+  let text = try request.recognize(image, languages: languages)
+  return hasUsablePdfText(text) ? PdfPageRecognition(text: text)
+    : PdfPageRecognition(text: "", unrecognized: true)
+}
+
+/// Shared bounded renderer. Nil means blank paper and must not be passed to a generative model.
+internal func renderPdfPageImage(
+  _ page: PDFPage, request: PdfExtractionRequest, maxDimension: CGFloat = 2560
+) throws -> CGImage? {
   try request.checkCancellation()
   guard let source = page.pageRef else { throw FailedToLoadDocumentException() }
   let bounds = source.getBoxRect(.cropBox)
@@ -100,7 +112,7 @@ internal func recognizePdfPage(
     throw FailedToLoadDocumentException()
   }
   // At most 4M pixels / 16 MB for the rendered page, independent of source dimensions.
-  let scale = min(3, min(2560 / max(width, height), sqrt(4_000_000 / (width * height))))
+  let scale = min(3, min(maxDimension / max(width, height), sqrt(4_000_000 / (width * height))))
   let pixelWidth = max(1, Int(width * scale))
   let pixelHeight = max(1, Int(height * scale))
   guard let context = CGContext(
@@ -140,10 +152,7 @@ internal func recognizePdfPage(
     }
   }
   // Blank pages are legitimate and must not make mixed documents fail.
-  if ink < 32 { return PdfPageRecognition(text: "") }
+  if ink < 32 { return nil }
   guard let image = context.makeImage() else { throw FailedToLoadDocumentException() }
-  let text = try request.recognize(image, languages: languages)
-  // Successful recognition with no text may be a photograph, cover or scan noise.
-  return hasUsablePdfText(text) ? PdfPageRecognition(text: text)
-    : PdfPageRecognition(text: "", unrecognized: true)
+  return image
 }

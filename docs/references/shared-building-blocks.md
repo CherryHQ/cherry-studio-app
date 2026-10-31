@@ -39,6 +39,8 @@ it already exists.
 | Whether a Provider may send requests without a key | `resolveAuthOptional` in `src/shared/utils/providerAuth.ts` |
 | Provider API key selection and rotation | `ProviderService.resolveApiKey` and `getRotatedApiKey` in `src/backend/data/services/ProviderService.ts` |
 | PDF text extraction and on-device PDF/image OCR | `modules/pdf-text-extractor`; `src/backend/services/file/fileTextExtraction.ts` shares extraction and derived disk results across `documentText.ts` and `imageText.ts` readers; `FileModule.observeFileOcr` reports one file's recognition progress |
+| Optional local document recognition model | `createLocalOcrModule` in `src/backend/services/file`; `FileModule.localOcr` owns download/pause/removal, while the existing file extraction queue owns inference scheduling |
+| Task-based document extraction for the Agent | `fileContent.extractDocument` in the existing file owner; [Document Extraction](../../src/backend/services/file/README.md) covers source locations, structured tables/fields, embedded assets and `extract_document`; the existing Office tools own file generation and edits |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Quoted answer text on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquote in `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |

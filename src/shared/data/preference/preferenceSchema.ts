@@ -15,6 +15,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
 } from '@/shared/contracts/fileAttachment';
+import type { FileOcrEngine } from '@/shared/contracts/localOcr';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -69,6 +70,7 @@ export interface PreferenceSchema {
   'feature.translate.model_id': string | null;
 
   'file.document_parser.mode': DocumentParserMode;
+  'file.ocr.engine': FileOcrEngine;
   'file.export.watermark_enabled': boolean;
 
   'agent.session_naming.enabled': boolean;
@@ -115,6 +117,7 @@ export const PreferenceDefaults = {
   'feature.translate.model_id': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
+  'file.ocr.engine': 'system',
   'file.export.watermark_enabled': true,
 
   'agent.session_naming.enabled': true,

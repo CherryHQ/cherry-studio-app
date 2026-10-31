@@ -70,32 +70,71 @@ export const workbookSpecSchema = z.strictObject({
   version: z.literal(1),
   sheets: z
     .array(
-      z.strictObject({
-        name: officeText(31, String.raw`\[\]:*?/\\`)
-          .min(1)
-          .refine(
-            (name) =>
-              !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history',
-            'Use an Excel sheet name without edge apostrophes or the reserved name History.',
-          )
-          .describe(
-            'Excel sheet name: 1–31 characters; no [ ] : * ? / \\, no leading/trailing apostrophe, and not History (case-insensitive).',
+      z
+        .strictObject({
+          name: officeText(31, String.raw`\[\]:*?/\\`)
+            .min(1)
+            .refine(
+              (name) =>
+                !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history',
+              'Use an Excel sheet name without edge apostrophes or the reserved name History.',
+            )
+            .describe(
+              'Excel sheet name: 1–31 characters; no [ ] : * ? / \\, no leading/trailing apostrophe, and not History (case-insensitive).',
+            ),
+          images: z
+            .array(imageSchema.extend({ cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/) }))
+            .max(50)
+            .optional(),
+          rows: rectangularRows(
+            z.union([officeText(16_000), z.number().finite(), z.boolean(), z.null()]),
+            1000,
+            50,
           ),
-        images: z
-          .array(imageSchema.extend({ cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/) }))
-          .max(50)
-          .optional(),
-        rows: rectangularRows(
-          z.union([officeText(16_000), z.number().finite(), z.boolean(), z.null()]),
-          1000,
-          50,
-        ),
-        column_widths: z.array(z.number().min(4).max(80)).max(50).optional(),
-        column_formats: z
-          .array(z.enum(['general', 'integer', 'decimal', 'percent']))
-          .max(50)
-          .optional(),
-      }),
+          merges: z
+            .array(
+              z.strictObject({
+                row: z.int().min(0).max(999),
+                column: z.int().min(0).max(49),
+                rows: z.int().min(1).max(1000),
+                columns: z.int().min(1).max(50),
+              }),
+            )
+            .max(1000)
+            .optional()
+            .describe(
+              'Zero-based merged cell origins and spans. Covered cells must be null or empty; only the origin keeps a value.',
+            ),
+          column_widths: z.array(z.number().min(4).max(80)).max(50).optional(),
+          column_formats: z
+            .array(z.enum(['general', 'integer', 'decimal', 'percent']))
+            .max(50)
+            .optional(),
+        })
+        .refine((sheet) => {
+          const occupied = new Set<number>();
+          for (const merge of sheet.merges ?? []) {
+            if (
+              merge.row + merge.rows > sheet.rows.length ||
+              merge.column + merge.columns > sheet.rows[0]!.length
+            )
+              return false;
+            for (let row = merge.row; row < merge.row + merge.rows; row++) {
+              for (let column = merge.column; column < merge.column + merge.columns; column++) {
+                const key = row * 50 + column;
+                if (occupied.has(key)) return false;
+                occupied.add(key);
+                if (
+                  (row !== merge.row || column !== merge.column) &&
+                  sheet.rows[row]![column] !== null &&
+                  sheet.rows[row]![column] !== ''
+                )
+                  return false;
+              }
+            }
+          }
+          return true;
+        }, 'Merged ranges must be in bounds, must not overlap and must not discard covered cell values.'),
     )
     .min(1)
     .max(16)

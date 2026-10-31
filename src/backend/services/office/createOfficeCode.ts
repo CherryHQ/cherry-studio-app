@@ -63,6 +63,10 @@ const formats = { general: 'General', integer: '0', decimal: '0.00', percent: '0
 for (const input of spec.sheets) {
   // aoa_to_sheet preserves scalar types: strings beginning with '=' are text, never formulas.
   const sheet = library.utils.aoa_to_sheet(input.rows);
+  if (input.merges?.length) sheet['!merges'] = input.merges.map(merge => ({
+    s: { r: merge.row, c: merge.column },
+    e: { r: merge.row + merge.rows - 1, c: merge.column + merge.columns - 1 }
+  }));
   if (input.column_widths) sheet['!cols'] = input.column_widths.map(wch => ({ wch }));
   if (input.column_formats) {
     for (let row = 0; row < input.rows.length; row++) {

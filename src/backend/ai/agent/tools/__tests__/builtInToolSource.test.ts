@@ -60,6 +60,7 @@ describe('createSystemCapabilitySource', () => {
       'library_list_trash',
       'library_restore_item',
       'read_file',
+      'extract_document',
       'write_file',
     ]);
   });
@@ -199,6 +200,7 @@ describe('createSystemCapabilitySource', () => {
       'library_list_trash',
       'library_restore_item',
       'read_file',
+      'extract_document',
       'write_file',
     ]);
 
@@ -251,6 +253,7 @@ describe('createSystemCapabilitySource', () => {
       'library_list_trash',
       'library_restore_item',
       'read_file',
+      'extract_document',
       'write_file',
     ]);
   });

@@ -47,7 +47,7 @@ const formats: readonly {
     name: 'create_workbook',
     displayName: 'Create workbook',
     description:
-      'Create an Excel (.xlsx) file from version 1 sheets of typed scalar cells, with optional column widths, numeric formats and managed PNG/JPEG images anchored to cells. Strings are literal text; formulas and charts are unsupported.',
+      'Create an Excel (.xlsx) file from version 1 sheets of typed scalar cells, with optional merged ranges, column widths, numeric formats and managed PNG/JPEG images anchored to cells. Strings are literal text; formulas and charts are unsupported. Use extract_document in Code Mode to read scanned tables, build rows from cells at zero-based row/column, and pass merged cells as merges with row/column/rows/columns. Leave covered cells null. Pass data directly without retyping the table.',
   },
   {
     format: 'pptx',

@@ -23,6 +23,12 @@ export type ExtractionControl = {
   onProgress?: (progress: ExtractionProgress) => void;
 };
 
+export type PdfTextPages = {
+  totalPages: number;
+  isTruncated: boolean;
+  pages: { page: number; text: string; needsOcr: boolean; isTruncated: boolean }[];
+};
+
 /**
  * Native text extraction result. A standalone image is one recognition page.
  */
@@ -64,6 +70,22 @@ export interface ExtractResult {
  * PDF 文本提取模块接口
  */
 export interface PdfTextExtractorModule {
+  /** Bounded first-frame decode with EXIF orientation and a white alpha background. */
+  prepareOcrImage(filePath: string, outputUri: string, requestId: string): Promise<void>;
+  /** Bounded text-layer inspection; does not run the system recognizer. */
+  readPdfPages(
+    filePath: string,
+    maxPages: number,
+    requestId: string,
+    pageNumbers: number[] | null,
+  ): Promise<PdfTextPages>;
+  /** Renders one nonblank page into a caller-owned temporary JPEG. */
+  renderPdfPage(
+    filePath: string,
+    pageIndex: number,
+    outputUri: string,
+    requestId: string,
+  ): Promise<boolean>;
   /** Reserve before dispatch so cancellation cannot overtake a queued extraction. */
   createRequest(): string;
   cancelRequest(requestId: string): void;

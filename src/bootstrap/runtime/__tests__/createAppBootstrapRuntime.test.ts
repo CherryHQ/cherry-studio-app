@@ -52,6 +52,7 @@ const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined
 const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockDisposeSkills = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
+const mockDisposeLocalOcr = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -61,6 +62,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   disposeSystemEntry: mockDisposeSystemEntry,
   disposeSkills: mockDisposeSkills,
   disposeAppUpdate: mockDisposeAppUpdate,
+  disposeLocalOcr: mockDisposeLocalOcr,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({

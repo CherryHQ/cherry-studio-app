@@ -12,7 +12,7 @@ There is no remote service or job queue.
 | Tool | Supported input | Output |
 | --- | --- | --- |
 | `create_document` | Paragraphs (`normal`, `title`, `heading1`, `heading2`), ordered/unordered lists, rectangular tables, PNG/JPEG images | DOCX |
-| `create_workbook` | Unique named sheets, rectangular rows of string/number/boolean/null cells, column widths, numeric formats and PNG/JPEG images anchored to cells | XLSX |
+| `create_workbook` | Unique named sheets, rectangular rows of string/number/boolean/null cells, merged ranges, column widths, numeric formats and PNG/JPEG images anchored to cells | XLSX |
 | `create_presentation` | Widescreen title, bullet, table and image slides; light/dark theme | PPTX with editable supported elements |
 | `inspect_office_file` | Managed source, `kind` (`content` or `images`), item offset/limit and optional PPTX shape offset | Content outline or picture anchors/metadata and replacement eligibility; source SHA-256 |
 | `read_office_content` | Managed source and one structural anchor | Exact paragraph text or up to 1000 cells with saved formula values; source SHA-256 |
@@ -29,6 +29,13 @@ there is no formula authoring or calculation. Creation images require an authori
 inside the document/slide area. Workbook images additionally specify `cell` (A1 address), with
 size in pixels and a one-cell DrawingML anchor. Images cannot name paths, URLs or arbitrary data URIs.
 Presentations have up to 100 slides and workbooks up to 50 images per sheet.
+
+Workbook `merges` use zero-based `row`/`column` origins and `rows`/`columns` spans. They must fit
+the supplied grid without overlapping. Covered cells must be null or empty, so merging cannot
+silently hide a nonempty value. The Agent can pass structured results from the
+[document extraction owner](../file/README.md) to these tools, retaining literal field values.
+Recognition finishes and releases the model before a subsequent Office operation. Filling an
+existing workbook still uses its exact anchors and source hash through the existing edit tools.
 
 Example:
 
@@ -231,6 +238,9 @@ to the model's VM. Generation layout is
 app-owned, but ZIP timestamps and library-generated identifiers are not byte-deterministic.
 
 ## Remaining Acceptance
+
+The added merged-range regression sources have not been executed.
+The earlier focused-test results below do not validate those additions or the local OCR workflow.
 
 This is a bounded mobile implementation, not feature parity with unrestricted Desktop Python
 scripting or a full Office editor.
