@@ -12,7 +12,7 @@ import {
 } from '@cherrystudio/ui/components';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
@@ -95,10 +95,14 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
                   : 'chat.translation.show'
                 : 'chat.translation.translate',
             ),
-            onPress: () =>
-              hasTranslation
-                ? translation.store.toggle(translation.source)
-                : setIsTranslationLanguagePickerOpen(true),
+            onPress: () => {
+              if (hasTranslation) {
+                translation.store.toggle(translation.source);
+              } else {
+                Keyboard.dismiss();
+                setIsTranslationLanguagePickerOpen(true);
+              }
+            },
           },
         ]
       : []),
