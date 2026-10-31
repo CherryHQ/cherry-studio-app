@@ -82,11 +82,12 @@ There is no fifth. A new literal must state in its commit which case it falls un
 
 Mobile follows desktop's neutral-first interface with green action emphasis. These roles are independent:
 
-- `--control-active` is the fixed desktop switch green, `oklch(0.67 0.192 146)` (`brand-600`).
-  Switches use it in both themes; the iOS adapter applies it explicitly as the native tint.
+- `--control-active` defaults to desktop switch green, `oklch(0.67 0.192 146)` (`brand-600`).
+  The selected runtime palette supplies its control fill in both themes; the iOS adapter applies
+  it explicitly as the native tint.
   Switch thumbs use `constant-white`. Android and Web add a one-point outline with
   `constant-black/30` over the track so the white thumb has a distinct edge.
-- `--primary` uses `--green-900`: dark green in light mode, bright green in dark mode. These
+- `--primary` defaults to `--green-900`: dark green in light mode, bright green in dark mode. These
   mode-aware steps preserve readable emphasized text and icons.
 - `--primary-foreground` uses `--background-100`: white on the light-mode green, black on the dark-mode green.
 - `--brand` is the fixed Cherry logo red (`#ff5757`), reserved for brand artwork. Actions, selections,
@@ -108,16 +109,24 @@ Use `control-active` for switch fills, `primary` for emphasized actions and adju
 and neutral `secondary` / `border-selected` for ordinary selection. Default buttons remain neutral.
 HeroUI's `accent` adapter follows `primary`; the underlying Shadcn `accent` remains a neutral overlay.
 
-Mobile currently exposes no custom action-color setting. Keep defaults in the token package;
-introduce runtime color inputs together with a real setting and its paired foreground.
+General settings exposes one row of six palette swatches under Theme. Palette names are
+accessibility labels, not visible captions. `packages/design-tokens/src/palettes.ts` owns their
+light/dark emphasis colors, paired foregrounds, and control fills. The default green preserves the
+existing CSS colors. Swatches preview the registry's colors directly; all other components keep
+reading semantic roles. Runtime overrides change the source variables so their existing aliases
+and derived colors follow automatically.
+
+`ui.theme_palette` is independent of light/dark/system mode. Bootstrap applies both palette variants
+before first content, and the navigation theme host observes subsequent preference changes,
+including failed optimistic writes rolling back. Apply the currently active theme's variables last.
 
 ### Contrast
 
 Body text (`text-sm` / `text-base`, including semibold) needs **4.5:1**. Graphics and borders need **3:1**.
 
 Check the actual foreground/background pair before choosing. The desktop switch uses `brand-600`,
-independently of the `#00b96b` theme preference. The fixed control green is not a text color;
-Mobile retains the mode-aware green emphasis step for `primary`. Control position and accessible
+independently of the `#00b96b` theme preference. The control fill is not a text color;
+Mobile uses the selected palette's mode-aware emphasis step for `primary`. Control position and accessible
 state also communicate on/off and progress. Logo artwork is not a substitute for readable content.
 
 ### The Gray Ramp Is Not Monotonic

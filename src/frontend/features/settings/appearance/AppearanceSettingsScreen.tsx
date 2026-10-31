@@ -12,6 +12,7 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
+import { ThemePaletteSetting } from './components/ThemePaletteSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -41,7 +42,7 @@ export default function AppearanceSettingsScreen() {
         contentClassName="gap-6"
         headerProps={{ title: t('settings.general.title') }}
       >
-        <Section title={t('settings.items.theme')}>
+        <Section>
           <Section.Item testID="theme-preview-section-item">
             <ThemePreviewSelector
               onThemeChange={settingPreferences.theme.onValueChange}
@@ -49,6 +50,8 @@ export default function AppearanceSettingsScreen() {
             />
           </Section.Item>
         </Section>
+
+        <ThemePaletteSetting />
 
         <Section>
           <Section.SelectItem
