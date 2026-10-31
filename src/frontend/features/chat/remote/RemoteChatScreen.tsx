@@ -29,9 +29,11 @@ import {
   conversationShareHref,
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
+  type RemoteChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import { useSidebarPresence } from '@/frontend/appShell/sidebar';
+import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -97,10 +99,27 @@ function RemoteChatUnavailable({ state }: { state: 'loading' | 'error' | 'unpair
 }
 function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInstance | null> }) {
   const { startRemoteChat } = useChatSource();
-  return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
+  const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
+  const action = useRemoteDesktopAction(target);
+  return (
+    <MainHeaderView
+      actions={action ? [action] : []}
+      blurTarget={blurTarget}
+      onNewChat={() => startRemoteChat()}
+    />
+  );
+}
+
+function useRemoteDesktopAction(target: RemoteChatTarget) {
+  return useUuRemoteAction(
+    target.connectionId
+      ? { ...target, connectionId: target.connectionId, page: 'chat' }
+      : undefined,
+  ).action;
 }
 const HeaderContext = createContext<{
   agent?: AgentSummary;
+  returnTarget: RemoteChatTarget;
   selectAgent(agentId: string): void;
   startNewChat(agentId?: string): void;
 } | null>(null);
@@ -114,9 +133,11 @@ function RemoteHeader({
   const header = use(HeaderContext)!;
   const catalog = useConversationAgents();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const desktopAction = useRemoteDesktopAction(header.returnTarget);
   return (
     <>
       <MainHeaderView
+        actions={desktopAction ? [desktopAction] : []}
         agent={header.agent}
         blurTarget={blurTarget}
         hidden={hidden}
@@ -151,7 +172,7 @@ function RemoteChatSession() {
     (height: number) => composerHeight.set(height),
     [composerHeight],
   );
-  const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
+  const { draftId, identity, returnTarget, selectAgent, startNewChat, onSessionCreated } =
     useRemoteChatNavigation(target, source);
   const opened = useConversation(
     target.sessionId ? { source: source.ref, sessionId: target.sessionId } : undefined,
@@ -201,7 +222,7 @@ function RemoteChatSession() {
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
   return (
-    <HeaderContext value={{ agent, selectAgent, startNewChat }}>
+    <HeaderContext value={{ agent, returnTarget, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider
           key={`${source.scope}:${identity}`}

@@ -16,6 +16,11 @@ export function configureObserve() {
     environment: policy.environment,
     dispatchingEnabled: policy.enabled,
     dispatchInDebug: false,
-    integrations: { 'expo-router': true },
+    integrations: {
+      'expo-router': {
+        // Router records focus before callback screens can remove their query parameters.
+        filteredParams: ['anonymous_device_id', 'nonce', 'request_id'],
+      },
+    },
   });
 }

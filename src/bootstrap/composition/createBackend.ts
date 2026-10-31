@@ -75,6 +75,7 @@ import {
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
+import { createUuRemoteModule } from '@/backend/services/uuRemote';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -90,6 +91,7 @@ export type BackendComposition = {
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
+  disposeUuRemote(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -328,9 +330,16 @@ export function createBackend(
   const appUpdate = createAppUpdateModule({
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
   });
+  const uuRemote = createUuRemoteModule({
+    connectionExists: async (id) => {
+      const connection = await desktopStore.getById(id).catch(() => null);
+      return connection !== null;
+    },
+  });
 
   return {
     disposeAppUpdate: appUpdate.dispose,
+    disposeUuRemote: uuRemote.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -354,6 +363,7 @@ export function createBackend(
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
+      uuRemote: uuRemote.module,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
       file: {

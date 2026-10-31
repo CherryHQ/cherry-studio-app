@@ -6,6 +6,7 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
+import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,
@@ -22,6 +23,9 @@ export function DeviceConnectionDetailScreen() {
   const { alert } = useAlert();
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
   const { isRemoving, remove } = useDesktopConnectionActions();
+  const remoteDesktop = useUuRemoteAction(
+    connection ? { page: 'device', connectionId: connection.id } : undefined,
+  );
 
   const requestRemove = useCallback(() => {
     if (!connectionId || !connection) {
@@ -67,7 +71,13 @@ export function DeviceConnectionDetailScreen() {
   }
 
   return (
-    <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
+    <SettingsScrollPage
+      contentClassName="gap-6"
+      headerProps={{
+        title: connection.name,
+        rightActions: remoteDesktop.action ? [remoteDesktop.action] : [],
+      }}
+    >
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
         <Section.Item
           label={t('settings.deviceConnections.capabilities.label')}
@@ -115,6 +125,15 @@ export function DeviceConnectionDetailScreen() {
           ) : null}
         </Section>
       ) : null}
+
+      <Section>
+        <Section.Item
+          label={t('uuRemote.bind.title')}
+          description={t('uuRemote.rebind.description')}
+          disabled={remoteDesktop.isOpening}
+          onPress={remoteDesktop.bind}
+        />
+      </Section>
 
       <Section>
         <Section.Item

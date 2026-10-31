@@ -249,6 +249,7 @@
         }
       ],
       "expo-web-browser",
+      "./scripts/withUuRemote.js",
       [
         "expo-build-properties",
         {

@@ -27,7 +27,11 @@ test.each([false, true])('optional Observe SDK (linked: %s)', (isLinked) => {
         environment: 'preview',
         dispatchingEnabled: false,
         dispatchInDebug: false,
-        integrations: { 'expo-router': true },
+        integrations: {
+          'expo-router': {
+            filteredParams: ['anonymous_device_id', 'nonce', 'request_id'],
+          },
+        },
       });
     }
   });
