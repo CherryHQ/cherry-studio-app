@@ -17,6 +17,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, Google Play AAB builds, TestFlight uploads, and retry procedures |
 | [Application Updates](./guides/app-updates.md) | EAS incremental code/asset updates, distribution channels, staged rollout, and rollback |
 | [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, shared resident and temporary devices, development-client reuse, and cleanup |
+| [Mobile Acceptance](./guides/mobile-acceptance.md) | Main-path benchmark, caller-selected environment/device/data, e2e tests with recorded replay, and report templates |
 | [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
 | [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
 

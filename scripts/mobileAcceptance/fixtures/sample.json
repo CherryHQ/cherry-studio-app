@@ -1,0 +1,156 @@
+{
+  "title": "CHERRY ACCEPTANCE JSON START",
+  "items": [
+    {
+      "id": 1,
+      "name": "Sample item 1",
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "name": "Sample item 2",
+      "enabled": false
+    },
+    {
+      "id": 3,
+      "name": "Sample item 3",
+      "enabled": true
+    },
+    {
+      "id": 4,
+      "name": "Sample item 4",
+      "enabled": false
+    },
+    {
+      "id": 5,
+      "name": "Sample item 5",
+      "enabled": true
+    },
+    {
+      "id": 6,
+      "name": "Sample item 6",
+      "enabled": false
+    },
+    {
+      "id": 7,
+      "name": "Sample item 7",
+      "enabled": true
+    },
+    {
+      "id": 8,
+      "name": "Sample item 8",
+      "enabled": false
+    },
+    {
+      "id": 9,
+      "name": "Sample item 9",
+      "enabled": true
+    },
+    {
+      "id": 10,
+      "name": "Sample item 10",
+      "enabled": false
+    },
+    {
+      "id": 11,
+      "name": "Sample item 11",
+      "enabled": true
+    },
+    {
+      "id": 12,
+      "name": "Sample item 12",
+      "enabled": false
+    },
+    {
+      "id": 13,
+      "name": "Sample item 13",
+      "enabled": true
+    },
+    {
+      "id": 14,
+      "name": "Sample item 14",
+      "enabled": false
+    },
+    {
+      "id": 15,
+      "name": "Sample item 15",
+      "enabled": true
+    },
+    {
+      "id": 16,
+      "name": "Sample item 16",
+      "enabled": false
+    },
+    {
+      "id": 17,
+      "name": "Sample item 17",
+      "enabled": true
+    },
+    {
+      "id": 18,
+      "name": "Sample item 18",
+      "enabled": false
+    },
+    {
+      "id": 19,
+      "name": "Sample item 19",
+      "enabled": true
+    },
+    {
+      "id": 20,
+      "name": "Sample item 20",
+      "enabled": false
+    },
+    {
+      "id": 21,
+      "name": "Sample item 21",
+      "enabled": true
+    },
+    {
+      "id": 22,
+      "name": "Sample item 22",
+      "enabled": false
+    },
+    {
+      "id": 23,
+      "name": "Sample item 23",
+      "enabled": true
+    },
+    {
+      "id": 24,
+      "name": "Sample item 24",
+      "enabled": false
+    },
+    {
+      "id": 25,
+      "name": "Sample item 25",
+      "enabled": true
+    },
+    {
+      "id": 26,
+      "name": "Sample item 26",
+      "enabled": false
+    },
+    {
+      "id": 27,
+      "name": "Sample item 27",
+      "enabled": true
+    },
+    {
+      "id": 28,
+      "name": "Sample item 28",
+      "enabled": false
+    },
+    {
+      "id": 29,
+      "name": "Sample item 29",
+      "enabled": true
+    },
+    {
+      "id": 30,
+      "name": "Sample item 30",
+      "enabled": false
+    }
+  ],
+  "finalMarker": "CHERRY ACCEPTANCE JSON END"
+}

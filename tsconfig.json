@@ -32,5 +32,10 @@
     ".rnstorybook/**/*.tsx",
     "expo-env.d.ts"
   ],
-  "exclude": [".context", "packages/ai-runtime", "packages/file-preview-webview"]
+  "exclude": [
+    ".context",
+    "packages/ai-runtime",
+    "packages/file-preview-webview",
+    "scripts/mobileAcceptance"
+  ]
 }

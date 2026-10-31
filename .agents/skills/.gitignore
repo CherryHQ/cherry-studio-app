@@ -28,6 +28,8 @@
 !improve-react/**
 !legend-list-best-practices/
 !legend-list-best-practices/**
+!mobile-acceptance/
+!mobile-acceptance/**
 !native-data-fetching/
 !native-data-fetching/**
 !react-coding-style/

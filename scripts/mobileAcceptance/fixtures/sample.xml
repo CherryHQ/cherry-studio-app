@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sample title="CHERRY ACCEPTANCE XML START">
+  <item id="1">Cherry Mobile sample item 1</item>
+  <item id="2">Cherry Mobile sample item 2</item>
+  <item id="3">Cherry Mobile sample item 3</item>
+  <item id="4">Cherry Mobile sample item 4</item>
+  <item id="5">Cherry Mobile sample item 5</item>
+  <item id="6">Cherry Mobile sample item 6</item>
+  <item id="7">Cherry Mobile sample item 7</item>
+  <item id="8">Cherry Mobile sample item 8</item>
+  <item id="9">Cherry Mobile sample item 9</item>
+  <item id="10">Cherry Mobile sample item 10</item>
+  <item id="11">Cherry Mobile sample item 11</item>
+  <item id="12">Cherry Mobile sample item 12</item>
+  <item id="13">Cherry Mobile sample item 13</item>
+  <item id="14">Cherry Mobile sample item 14</item>
+  <item id="15">Cherry Mobile sample item 15</item>
+  <item id="16">Cherry Mobile sample item 16</item>
+  <item id="17">Cherry Mobile sample item 17</item>
+  <item id="18">Cherry Mobile sample item 18</item>
+  <item id="19">Cherry Mobile sample item 19</item>
+  <item id="20">Cherry Mobile sample item 20</item>
+  <item id="21">Cherry Mobile sample item 21</item>
+  <item id="22">Cherry Mobile sample item 22</item>
+  <item id="23">Cherry Mobile sample item 23</item>
+  <item id="24">Cherry Mobile sample item 24</item>
+  <item id="25">Cherry Mobile sample item 25</item>
+  <item id="26">Cherry Mobile sample item 26</item>
+  <item id="27">Cherry Mobile sample item 27</item>
+  <item id="28">Cherry Mobile sample item 28</item>
+  <item id="29">Cherry Mobile sample item 29</item>
+  <item id="30">Cherry Mobile sample item 30</item>
+  <item id="31">Cherry Mobile sample item 31</item>
+  <item id="32">Cherry Mobile sample item 32</item>
+  <item id="33">Cherry Mobile sample item 33</item>
+  <item id="34">Cherry Mobile sample item 34</item>
+  <item id="35">Cherry Mobile sample item 35</item>
+  <finalMarker>CHERRY ACCEPTANCE XML END</finalMarker>
+</sample>

@@ -43,6 +43,7 @@
     "skills:sync": "tsx scripts/skillsSync.ts",
     "skills:check": "tsx scripts/skillsCheck.ts",
     "docs:check-links": "tsx scripts/checkDocLinks.ts",
+    "acceptance": "E2E_TELEMETRY_DISABLED=1 pnpm --dir scripts/mobileAcceptance exec e2e",
     "i18n:check": "tsx scripts/i18n.ts check",
     "i18n:sync": "tsx scripts/i18n.ts sync",
     "test": "pnpm test:packages && pnpm test:app",
