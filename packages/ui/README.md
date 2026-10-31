@@ -431,8 +431,9 @@ value and persistence. The default grouped `Section` supplies its surface and se
 `Switch` and `Slider` keep one controlled CherryUI contract. Android and Web use Cherry-owned
 controls with circular switch thumbs, thin slider tracks, and mobile touch targets. Their geometry
 follows the desktop visual direction while colors use Mobile theme tokens. Switches use
-`control-active`, matching the desktop switch's fixed `brand-600` green. The white thumb has a
-one-point darkened outline on Android and Web; iOS applies the same green to its native toggle.
+`control-active`, supplied by the selected palette and defaulting to desktop's `brand-600` green.
+The white thumb has a one-point darkened outline on Android and Web; iOS applies the same palette
+fill to its native toggle.
 iOS retains its private SwiftUI adapters. Feature code never imports a platform UI SDK or branches
 on the operating system.
 
