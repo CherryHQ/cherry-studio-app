@@ -13,13 +13,13 @@ import {
   type OfficeFormat,
   type OfficeRequest,
 } from '@/backend/services/office';
-import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
 import type { RuntimeTool } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
 import { createOfficeScriptTool } from './officeScriptTool';
 import {
   mebibytes,
+  normalizeOfficeFilename,
   officeFailure as invalid,
   prepareOfficeImages,
   startOfficeOperation,
@@ -82,11 +82,8 @@ export function createOfficeTools(
         }
         const parsed = officeInputSchemas[format].safeParse(input);
         if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
-        const extension = filenameExtension(parsed.data.filename);
-        const filename = extension ? parsed.data.filename : `${parsed.data.filename}.${format}`;
-        if ((extension && extension !== format) || !SafeNameSchema.safeParse(filename).success) {
-          return invalid(`Use a plain filename ending in .${format}.`);
-        }
+        const filename = normalizeOfficeFilename(parsed.data.filename, format);
+        if (!filename) return invalid(`Use a plain filename ending in .${format}.`);
         // The schema and format are selected together from officeInputSchemas above.
         const request = { ...parsed.data, filename, format } as OfficeRequest;
         const ids = officeImageIds(request);

@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MarkdownText } from '../components/markdown-text';
@@ -90,6 +90,7 @@ describe('MarkdownText', () => {
             fontSize: 18,
           }),
           codeBlock: expect.objectContaining({
+            externalControls: false,
             backgroundColor: 'code-block',
             borderColor: 'border',
             color: 'foreground',
@@ -199,7 +200,61 @@ describe('MarkdownText', () => {
 
     act(() => renderer.unmount());
   });
+
+  test('keeps Mermaid fences as code blocks without a diagram presenter', () => {
+    const markdown = 'Intro\n\n```mermaid\nflowchart LR\nA --> B\n```\n';
+    const renderer = render(
+      <MarkdownText fontSizeStep={0} markdown={markdown} onLinkPress={jest.fn()} />,
+    );
+
+    expect(renderer.root.findByType('EnrichedMarkdownText').props.markdown).toBe(markdown);
+    act(() => renderer.unmount());
+  });
+
+  test('presents a completed streamed fence without remounting the text before it', () => {
+    const renderMermaid = jest.fn(({ source }: { source: string }) => (
+      <MermaidDiagram source={source} />
+    ));
+    const intro = 'Intro\n\n';
+    const fence = '```mermaid\nflowchart LR\nA --> B\n```';
+    const renderer = render(
+      <MarkdownText
+        fontSizeStep={0}
+        isStreaming
+        markdown={`${intro}${fence}`}
+        onLinkPress={jest.fn()}
+        renderMermaid={renderMermaid}
+      />,
+    );
+    const [streamed] = renderer.root.findAllByType('StreamdownText');
+    expect(renderMermaid).not.toHaveBeenCalled();
+
+    act(() => {
+      renderer.update(
+        <MarkdownText
+          fontSizeStep={0}
+          isStreaming
+          markdown={`${intro}${fence}\nAfter`}
+          onLinkPress={jest.fn()}
+          renderMermaid={renderMermaid}
+        />,
+      );
+    });
+
+    const texts = renderer.root.findAllByType('StreamdownText');
+    expect(texts[0]).toBe(streamed);
+    expect(texts.map((text) => [text.props.markdown, text.props.streamingAnimation])).toEqual([
+      [intro, false],
+      ['After', true],
+    ]);
+    expect(renderer.root.findByType('MermaidDiagram').props.source).toBe('flowchart LR\nA --> B\n');
+    act(() => renderer.unmount());
+  });
 });
+
+function MermaidDiagram(props: { source: string }) {
+  return createElement('MermaidDiagram', props);
+}
 
 function render(element: ReactElement): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;

@@ -36,6 +36,7 @@
     ".context",
     "packages/ai-runtime",
     "packages/file-preview-webview",
+    "packages/mermaid-webview",
     "scripts/mobileAcceptance"
   ]
 }

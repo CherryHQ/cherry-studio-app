@@ -575,7 +575,7 @@ describe('useFileEntries', () => {
 
 function notifyFileChange(entryId: FileEntryId) {
   for (const listener of fileChangeListeners)
-    listener(['/files/library', '/files/entries', `/files/entries/${entryId}`]);
+    listener(['/files/library', `/files/entries/${entryId}`]);
 }
 
 /** One window lets DataApiProvider coalesce the change; the next lets the refetch it starts land. */

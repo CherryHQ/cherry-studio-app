@@ -36,7 +36,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   ) {
     super();
     if (!runtime.conversations) throw new Error('The local Agent requires a persistent runtime.');
-    this.host = new DurableAgentHost(store, ports, background, runtime, runtime.conversations);
+    this.host = new DurableAgentHost(store, ports, background, runtime.conversations);
   }
 
   protected override async onInit(signal?: AbortSignal) {
@@ -78,6 +78,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   submitMessage: AgentProtocol['submitMessage'] = (input) => this.host.submitMessage(input);
   forkSession: AgentProtocol['forkSession'] = (input) => this.host.forkSession(input);
   retryMessage: AgentProtocol['retryMessage'] = (input) => this.host.retryMessage(input);
+  editMessage: AgentProtocol['editMessage'] = (input) => this.host.editMessage(input);
   selectMessage: AgentProtocol['selectMessage'] = (input) => this.host.selectMessage(input);
   deleteTurn: AgentProtocol['deleteTurn'] = (input) => this.host.deleteTurn(input);
   deleteSession: AgentProtocol['deleteSession'] = (input) => this.host.deleteSession(input);

@@ -43,13 +43,14 @@ export function FileViewerHeader({
 
   return (
     <HeaderChrome
-      leftActions={[leadingAction]}
+      leftActions={leadingAction ? [leadingAction] : []}
       rightActions={[
         {
           accessibilityLabel: t('common.more'),
           icon: EllipsisIcon,
           items: menuItems,
           key: 'more',
+          nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
           type: 'menu',
         },
       ]}

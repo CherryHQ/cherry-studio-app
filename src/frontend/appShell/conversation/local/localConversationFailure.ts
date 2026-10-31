@@ -10,6 +10,7 @@ export function localConversationFailure(error: unknown): ConversationFailure {
     const detail = { code: error.view.code };
     switch (error.view.code) {
       case 'SESSION_BUSY':
+      case 'MESSAGE_CONFLICT':
         return { detail, code: 'conflict', retry: 'read-again' };
       case 'AGENT_NOT_FOUND':
       case 'SESSION_NOT_FOUND':

@@ -62,7 +62,8 @@ export function applyPiWebReplay(
   if (!body) return payload;
   if (model.api === 'openai-responses' || model.api === 'azure-openai-responses')
     return replayOpenAIItems(body, messages);
-  if (model.api === 'google-generative-ai') return replayGoogleParts(body, model, messages);
+  if (model.api === 'google-generative-ai' || model.api === 'google-vertex')
+    return replayGoogleParts(body, model, messages);
   if (model.api === 'anthropic-messages') return replayAnthropicContent(body, model, messages);
   return payload;
 }
@@ -366,6 +367,7 @@ export class PiWebResponse {
         return;
       }
       case 'anthropic':
+      case 'qwen-anthropic':
         return this.anthropicEvent(event);
       case 'openrouter':
         for (const value of array(record(record(array(event.choices)[0])?.delta)?.annotations)) {
@@ -378,6 +380,7 @@ export class PiWebResponse {
           this.addSource(record(value)?.link, record(value)?.title);
         return;
       case 'dashscope':
+      case 'qwencloud':
         for (const value of array(record(event.search_info)?.search_results))
           this.addSource(record(value)?.url, record(value)?.title);
         return;

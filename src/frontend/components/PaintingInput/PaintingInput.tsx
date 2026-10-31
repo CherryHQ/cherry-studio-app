@@ -1,7 +1,7 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
 import { Button, Composer } from '@cherrystudio/ui/components';
-import { useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -59,6 +59,8 @@ type PaintingModelSelection = {
 };
 
 type PaintingInputProps = {
+  /** Chat presentation only: context the prompt carries, shown above everything else. */
+  accessory?: ReactNode;
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
   initialParamValues?: ImageParamDraft;
@@ -66,6 +68,7 @@ type PaintingInputProps = {
   onCancel: () => void;
   onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
   preparePrompt?: PaintingPromptPreparation;
+  onSubmissionSettled?: () => void;
   placeholder?: string;
   painting?: Painting;
   status: 'idle' | 'generating';
@@ -82,6 +85,7 @@ export function PaintingWorkspaceInput(
 }
 
 function PaintingInputControls({
+  accessory,
   canSend,
   dismissKeyboardOnSend,
   initialParamValues,
@@ -90,6 +94,7 @@ function PaintingInputControls({
   onGenerate,
   onRatioChange,
   preparePrompt,
+  onSubmissionSettled,
   placeholder,
   painting,
   status,
@@ -120,6 +125,7 @@ function PaintingInputControls({
     initialParamValues: selectedModelId === initialModelId ? initialParamValues : undefined,
     onGenerate,
     preparePrompt,
+    onSubmissionSettled,
   });
   const { reference, strategy } = input;
   const openProviderSetup = useOpenProviderSetup(
@@ -182,6 +188,7 @@ function PaintingInputControls({
         </PaintingWorkspaceEditor>
       ) : (
         <>
+          {accessory}
           {isReferenceVisible && reference.isPickerOpen && strategy.acceptsImages ? (
             <PaintingReferencePicker reference={reference} />
           ) : null}

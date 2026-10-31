@@ -256,31 +256,55 @@ describe('turn attachments', () => {
         ),
       ),
     ).toMatchObject({ view: { code: 'ATTACHMENT_INVALID' } });
+  });
 
-    const image = fact(FIRST_ID, 'photo.png', 'image/png');
-    expect(
-      captureProtocolError(() =>
-        assertAttachmentRequestSupported(
-          new FakeRuntime(),
-          [
-            {
-              type: 'file',
-              fileEntryId: FIRST_ID,
-              mediaType: image.mediaType,
-              filename: image.name,
-            },
-          ],
-          [],
-          createTurnResourceLedger(new Map([[FIRST_ID, image]]), []),
-          TEXT_MODEL,
-        ),
-      ),
-    ).toMatchObject({
-      view: {
-        code: 'CAPABILITY_UNSUPPORTED',
-        attachmentIssue: { code: 'model-unsupported' },
-      },
+  test('retains OCR text through materialization for current images and history replay on a text model', async () => {
+    const image = fact(FIRST_ID, 'receipt.png', 'image/png');
+    const facts = new Map([[FIRST_ID, image]]);
+    const resources = createTurnResourceLedger(facts, []);
+    const input: AgentInputPart[] = [
+      { type: 'file', fileEntryId: FIRST_ID, mediaType: image.mediaType, filename: image.name },
+    ];
+    const files = resolver(facts, {
+      readImageText: async () => ({ text: 'Total: 42', truncated: false }),
     });
+    for (const replay of [false, true]) {
+      const inputParts = replay ? [] : input;
+      const history = replay ? [messageWithFile(image)] : [];
+      assertAttachmentRequestSupported(
+        new FakeRuntime(),
+        inputParts,
+        history,
+        resources,
+        TEXT_MODEL,
+      );
+      const contentAttachments = await resolveRuntimeContentAttachments(
+        files,
+        inputParts,
+        history,
+        resources,
+        new AbortController().signal,
+        TEXT_MODEL,
+        'builtin',
+      );
+      const materialized = await materializeRuntimeAttachments({
+        files,
+        inputParts,
+        history,
+        resources,
+        contentAttachments,
+        modelPreflight: TEXT_MODEL,
+        signal: new AbortController().signal,
+      });
+      expect(materialized.get(FIRST_ID)).toMatchObject({
+        type: 'text-attachment',
+        text: 'Total: 42',
+        trust: 'untrusted-user-content',
+        attachmentReport: { mode: 'image-text', parser: 'native-image-ocr' },
+      });
+    }
+    expect(files.readAsDataUrl).not.toHaveBeenCalled();
+    expect(files.readAsBytes).not.toHaveBeenCalled();
   });
 
   test('projects invalid current text content to an attachment protocol error', async () => {
@@ -380,7 +404,10 @@ function messageWithFile(file: ManagedFileFact): AgentMessageView {
 function resolver(
   facts: ReadonlyMap<string, ManagedFileFact>,
   overrides: Partial<
-    Pick<ManagedFileResolver, 'readAsBytes' | 'readAsDataUrl' | 'readDocumentText'>
+    Pick<
+      ManagedFileResolver,
+      'readAsBytes' | 'readAsDataUrl' | 'readDocumentText' | 'readImageText'
+    >
   > = {},
 ): ManagedFileResolver {
   return {
@@ -390,6 +417,7 @@ function resolver(
     ),
     readAsBytes: jest.fn(overrides.readAsBytes ?? (async () => undefined)),
     readDocumentText: jest.fn(overrides.readDocumentText ?? (async () => undefined)),
+    readImageText: jest.fn(overrides.readImageText ?? (async () => undefined)),
     readAsDataUrl: jest.fn(overrides.readAsDataUrl ?? (async () => undefined)),
   };
 }

@@ -14,11 +14,11 @@ config.watchFolders.push(path.resolve(__dirname, 'packages'));
 // libp2p packages pick their Node or browser entry through the legacy package.json `browser`
 // file map, which Metro ignores once a package declares `exports`. Apply that map for relative
 // imports inside those packages so the pure-JS entries win (node:os, node:crypto never bundle).
-// Pi uses the same map to select its native manual OAuth callback adapter.
+// Pi uses the same map to select its native manual OAuth callback adapter; Anthropic Vertex
+// maps its Node Google auth dependency to a guard that requires host-injected credentials.
 const legacyBrowserMapPackages =
-  /\/node_modules\/(@libp2p|@chainsafe|@multiformats|@earendil-works)\/[^/]+\//;
+  /\/node_modules\/(@libp2p|@chainsafe|@multiformats|@earendil-works|@anthropic-ai)\/[^/]+\//;
 const browserRedirect = (context, moduleName) => {
-  if (!moduleName.startsWith('.')) return null;
   const match = legacyBrowserMapPackages.exec(context.originModulePath);
   if (!match) return null;
   const packageRoot = context.originModulePath.slice(0, match.index + match[0].length - 1);
@@ -29,13 +29,22 @@ const browserRedirect = (context, moduleName) => {
     return null;
   }
   if (typeof browser !== 'object' || browser === null) return null;
-  const target = path.resolve(path.dirname(context.originModulePath), moduleName);
-  const key = `./${path.relative(packageRoot, target)}`;
+  const key = moduleName.startsWith('.')
+    ? `./${path.relative(packageRoot, path.resolve(path.dirname(context.originModulePath), moduleName))}`
+    : moduleName;
   const replacement = browser[key];
   return typeof replacement === 'string' ? path.join(packageRoot, replacement) : null;
 };
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // The nested web/package.json only declares `module`, which Metro's native main fields omit.
+  // Resolve this explicit web entry through the parent package's exports instead.
+  if (moduleName === '@google/genai/web' && (platform === 'android' || platform === 'ios')) {
+    return {
+      type: 'sourceFile',
+      filePath: require.resolve(moduleName, { paths: [path.dirname(context.originModulePath)] }),
+    };
+  }
   // Native fetch has no browser CORS, and Hermes needs a validator without dynamic codegen.
   if (
     moduleName === '@modelcontextprotocol/client/_shims' &&

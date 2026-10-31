@@ -14,7 +14,12 @@ import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
-import type { RuntimeDurableSubmission, RuntimeDurableTurn, RuntimeLane } from '../durableTypes';
+import {
+  DURABLE_IMAGE_TOOL_NAME,
+  type RuntimeDurableSubmission,
+  type RuntimeDurableTurn,
+  type RuntimeLane,
+} from '../durableTypes';
 import { RuntimeJsonValueSchema, RuntimeOptionsSchema } from '../runtimeSchemas';
 import {
   createDeniedToolResult,
@@ -31,7 +36,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
-import { PI_IMAGE_TOOL_NAME } from './piDurableImageModel';
+import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -288,7 +293,8 @@ export function projectPiTurn(options: {
   >;
 }): RuntimeDurableTurn {
   const stored = readPiSubmission(options.metadata);
-  const { record, entries } = options;
+  const { record } = options;
+  const entries = applyPiReplyEdits(options.entries);
   const parts: RuntimeOutputPart[] = [];
   const toolsByCall = new Map<string, Extract<RuntimeOutputPart, { type: 'tool' }>>();
   const usage: RuntimeUsage = {};
@@ -327,7 +333,7 @@ export function projectPiTurn(options: {
       const imageTool =
         message.api === 'cherry-image'
           ? parts.findLast(
-              (part) => part.type === 'tool' && part.providerName === PI_IMAGE_TOOL_NAME,
+              (part) => part.type === 'tool' && part.providerName === DURABLE_IMAGE_TOOL_NAME,
             )
           : undefined;
       // The image scheduling message carries no new provider response. Its tool receipt owns
@@ -650,7 +656,7 @@ export function projectPiTurn(options: {
     inputBoundary: record.entry !== undefined ? `pi:${record.entry}` : null,
     answerBoundary:
       answerVisible && record.type === 'input' && record.status === 'done'
-        ? `pi:${record.answer}`
+        ? `pi:${entries.findLast((entry) => entry.kind === PI_REPLY_EDIT_KIND)?.id ?? record.answer}`
         : null,
     metadata: stored.metadata,
     status,

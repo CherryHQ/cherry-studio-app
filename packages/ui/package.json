@@ -110,6 +110,7 @@
     "expo-paste-input": "*",
     "expo-widgets": "*",
     "heroui-native": "*",
+    "markdown-it": "*",
     "@cherrystudio/app-icons": "workspace:*",
     "react": "*",
     "react-native": "*",

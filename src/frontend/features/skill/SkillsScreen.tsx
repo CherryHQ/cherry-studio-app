@@ -30,6 +30,7 @@ export function SkillsScreen() {
         accessibilityLabel: t(tab === 'library' ? 'skills.search' : 'skills.discover.search'),
         icon: SearchIcon,
         key: 'skill-search',
+        nativeIcon: require('@/assets/header-toolbar/search.png'),
         onPress: tab === 'library' ? searchLibrary : searchDiscovery,
         testID: 'skills-search',
         type: 'icon',
@@ -41,6 +42,7 @@ export function SkillsScreen() {
               disabled: isOpening,
               icon: EllipsisIcon,
               key: 'skill-actions',
+              nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
               testID: 'skills-more',
               type: 'menu' as const,
               items: [

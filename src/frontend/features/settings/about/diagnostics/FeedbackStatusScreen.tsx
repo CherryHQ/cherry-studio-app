@@ -59,6 +59,7 @@ function FeedbackStatusDetail({ reportId, language }: { reportId: string; langua
         rightActions={[
           {
             key: 'copy',
+            nativeIcon: require('@/assets/header-toolbar/copy.png'),
             type: 'icon',
             icon: CopyIcon,
             accessibilityLabel: t('settings.about.feedback.copyId'),
@@ -67,6 +68,7 @@ function FeedbackStatusDetail({ reportId, language }: { reportId: string; langua
           },
           {
             key: 'refresh',
+            nativeIcon: require('@/assets/header-toolbar/refresh-cw.png'),
             type: 'icon',
             icon: RefreshCwIcon,
             accessibilityLabel: t('settings.about.feedback.history.refresh'),

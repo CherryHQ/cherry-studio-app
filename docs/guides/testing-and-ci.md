@@ -122,7 +122,10 @@ runs the same workflow on the tagged commit before building.
   dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
   React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard
   the Screens Material dependency patch. `scripts/__tests__/nitroIosCompatibility.test.ts` guards
-  Nitro's iOS 17 exception compatibility patch. Other `scripts/__tests__/` suites, including
+  Nitro's iOS 17 exception compatibility patch. `expoModulesCoreSwiftCompatibility.test.ts` guards
+  Expo's Swift consuming-result compiler workaround. `enrichedMarkdownInputMeasurement.test.ts` guards
+  the iOS input measurement patch; its native regression requires an explicitly selected simulator
+  as described in [Development](./development.md#enriched-markdown-patch). Other `scripts/__tests__/` suites, including
   instruction-tooling regressions, remain excluded. Run the affected tooling suites locally without
   `PRCI` when changing those tools; remote success does not cover them.
 - `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.

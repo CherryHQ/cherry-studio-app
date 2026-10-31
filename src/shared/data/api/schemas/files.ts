@@ -39,17 +39,6 @@ export const MoveLibraryFilesSchema = z.strictObject({
   folderId: z.uuid().nullable(),
 });
 
-/**
- * One time-ordered stream of active entries; trash has a separate cursor stream. Media-type filtering is deliberately
- * absent: the library's kind tabs partition what the client has already paged
- * in, so a per-kind cursor walk here would fragment that one stream into three
- * that cannot share their pages.
- */
-export type FileEntryListQuery = {
-  cursor?: string;
-  limit?: number;
-};
-
 export type FileSchemas = {
   '/files/library': {
     GET: {
@@ -89,12 +78,6 @@ export type FileSchemas = {
       params: { id: string };
       body: { folderId: string | null };
       response: FileFolder | null;
-    };
-  };
-  '/files/entries': {
-    GET: {
-      query?: FileEntryListQuery;
-      response: CursorPaginationResponse<FileEntry>;
     };
   };
   '/files/entries/:id': {

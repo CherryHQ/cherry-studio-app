@@ -39,6 +39,10 @@ export interface SystemModelSupport {
 
 export function createSystemModelSupport(language: LanguageServingSupport): SystemModelSupport {
   const isModelSupportedBySystem = (provider: Provider, model: Model): boolean => {
+    // Native service-account support currently belongs to the language binding only.
+    if (provider.authType === 'iam-gcp') {
+      return isTextGenerationModel(model) && language.supportsLanguageModel(provider, model);
+    }
     if (isImageGenerationModel(model) && isImageGenerationSupported(provider, model)) {
       return true;
     }
@@ -64,9 +68,11 @@ export function createSystemModelSupport(language: LanguageServingSupport): Syst
 }
 
 function isImageGenerationSupported(provider: Provider, model: Model): boolean {
-  const extension = extensionRegistry.get(getAiSdkProviderId(provider, model));
-  if (extension?.config.supportsImageGeneration !== true) return false;
   const providerId = provider.presetProviderId ?? provider.id;
+  const extension = extensionRegistry.get(
+    providerId === 'qwencloud' ? 'dashscope' : getAiSdkProviderId(provider, model),
+  );
+  if (extension?.config.supportsImageGeneration !== true) return false;
   const modes = Object.values(model.imageGeneration?.modes ?? {});
   if (modes.length === 0) return isImageTransportDescriptorSupported(providerId, undefined);
   return modes.some((definition) =>

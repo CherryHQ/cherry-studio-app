@@ -2,8 +2,10 @@
 
 Use `pnpm build:local` to create an Android or iOS installation package on your machine. It runs
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
-`pnpm install` also generates the document preview page through the `postinstall` script of
-[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md); EAS installs
+`pnpm install` also generates the document preview page and the Mermaid renderer page through the
+`postinstall` scripts of
+[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md) and
+[`@cherrystudio/mermaid-webview`](../../packages/mermaid-webview/README.md); EAS installs
 dependencies the same way, so no separate build hook is needed.
 
 | Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map, R8 mapping, source-context, and debug-symbol uploads |
@@ -377,11 +379,23 @@ entry. Expo Asset 58 resolves bundled resources through that public export; with
 preview fails before loading its HTML page. Keep the forwarding until Uniwind includes it upstream.
 `scripts/__tests__/uniwindAssetRegistry.test.ts` guards the installed entry and patch registration.
 
-Android builds compile `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
+Android builds compile `expo-app-metrics` and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+
+### Expo Modules Core Swift Compiler Compatibility Patch
+
+`expo-modules-core@58.0.26` casts a failure value to `any Error` while consuming a result whose
+success value is noncopyable. Xcode 27.2 / Swift 6.4.2 crashes during SIL generation for that
+pattern in `AsyncFunctionDefinition.swift`. The patch backports
+[Expo #52631](https://github.com/expo/expo/pull/52631), removing the redundant cast while preserving
+Promise resolution and rejection. Remove it when the installed Expo Modules Core includes that fix.
+
+`scripts/__tests__/expoModulesCoreSwiftCompatibility.test.ts` guards patch registration, the hash,
+and Expo's installed native source in PR CI. A new iOS build with the affected toolchain is required
+to verify compilation; source guards alone do not establish compiler or runtime compatibility.
 
 ### iOS 17 Nitro Exception Compatibility Patch
 

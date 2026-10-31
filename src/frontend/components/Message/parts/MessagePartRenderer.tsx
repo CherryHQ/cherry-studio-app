@@ -45,6 +45,7 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
       return (
         <TextPart
           isStreaming={isStreaming && part.state !== 'done'}
+          messageId={messageId}
           part={part}
           renderMode={renderMode}
           resolvedText={resolvedText}
@@ -57,7 +58,7 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
     case 'data-compact':
       return <CompactPart isStreaming={isStreaming} part={part} />;
     case 'data-error':
-      return <ErrorPart part={part} />;
+      return <ErrorPart messageId={messageId} part={part} />;
     case 'data-translation':
       return <TranslationPart isStreaming={isStreaming} part={part} />;
     case 'data-video':

@@ -1,0 +1,13 @@
+diff --git a/ios/Core/Functions/AsyncFunctionDefinition.swift b/ios/Core/Functions/AsyncFunctionDefinition.swift
+index 48ee585ff3c7c5f71eceda36a3384619834e6e6e..7b5e16836bae015bba0100c5523d12b54c0002d5 100644
+--- a/ios/Core/Functions/AsyncFunctionDefinition.swift
++++ b/ios/Core/Functions/AsyncFunctionDefinition.swift
+@@ -197,7 +197,7 @@ public class AsyncFunctionDefinition<Args, FirstArgType, ReturnType>: AnyAsyncFu
+         switch consume result {
+         case .success(let value):
+           promise.resolve(value)
+-        case .failure(let error as any Error):
++        case .failure(let error):
+           promise.reject(error)
+         }
+       }

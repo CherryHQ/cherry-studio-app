@@ -370,6 +370,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
                 },
               ],
               key: 'mcp-server-actions',
+              nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
               testID: 'mcp-server-actions',
               type: 'menu',
             },

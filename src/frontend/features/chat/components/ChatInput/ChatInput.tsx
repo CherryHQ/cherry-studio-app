@@ -35,6 +35,9 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
+import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
+import { attachMessageQuote } from '../../quotes/messageQuoteInput';
+import { DraftMessageQuotePreview } from '../../quotes/MessageQuotePreview';
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
@@ -57,6 +60,8 @@ import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
+
+type ChatInputPicker = 'plugin' | 'prompt' | 'skill';
 
 type ChatInputProps = {
   agentId?: string;
@@ -81,6 +86,21 @@ export function ChatInput({
   sessionId,
   selectionHandoff,
 }: ChatInputProps) {
+  const quoteActions = useChatQuoteActions();
+  const imageAttempt = useRef<ReturnType<NonNullable<typeof quoteActions>['capture']> | undefined>(
+    undefined,
+  );
+  const prepareImagePrompt = useCallback(
+    (text: string) => {
+      imageAttempt.current = quoteActions?.capture();
+      return text;
+    },
+    [quoteActions],
+  );
+  const finishImageAttempt = useCallback(() => {
+    imageAttempt.current?.finish(false);
+    imageAttempt.current = undefined;
+  }, []);
   useChatSelectionHandoff(selectionHandoff);
   const { draft } = useComposerState();
   const { setDraft } = useComposerActions();
@@ -145,12 +165,24 @@ export function ChatInput({
     [providerSetupReturnTo, selectModel, selectedModelId],
   );
   const generateImage = useCallback(
-    (input: PaintingInputSubmission) =>
-      sendMessage({
-        parts: toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
-        modelId: input.modelId,
-        imageGeneration: { mode: input.mode, paramValues: input.paramValues },
-      }),
+    async (input: PaintingInputSubmission) => {
+      const attempt = imageAttempt.current;
+      try {
+        const result = await sendMessage({
+          parts: attachMessageQuote(
+            toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
+            attempt?.fields ?? {},
+          ),
+          modelId: input.modelId,
+          imageGeneration: { mode: input.mode, paramValues: input.paramValues },
+        });
+        attempt?.finish(true);
+        return result;
+      } finally {
+        attempt?.finish(false);
+        imageAttempt.current = undefined;
+      }
+    },
     [sendMessage],
   );
   const cancelGeneration = useCallback(() => {
@@ -167,11 +199,14 @@ export function ChatInput({
         isImageGenerationModel(selectedModelItem.model) &&
         !skillAction ? (
           <PaintingInput
+            accessory={<DraftMessageQuotePreview />}
             canSend={canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             modelSelection={modelSelection}
             onCancel={cancelGeneration}
             onGenerate={generateImage}
+            preparePrompt={prepareImagePrompt}
+            onSubmissionSettled={finishImageAttempt}
             status={isBusy ? 'generating' : 'idle'}
           />
         ) : (
@@ -231,22 +266,21 @@ function TextChatInput({
   selectModel: (modelId: UniqueModelId) => void;
   setReplyModels: (models: readonly UniqueModelId[] | null) => void;
 }) {
+  const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
-  const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
-  const [isPromptPickerOpen, setIsPromptPickerOpen] = useState(false);
+  // One picker at a time; each closes only itself, so a late close never hides the next one.
+  const [openPicker, setOpenPicker] = useState<ChatInputPicker | null>(null);
   const prompts = useChatInputMcpPrompts(mode === 'standard' ? agentId : undefined);
   const [pickerAgentId, setPickerAgentId] = useState(agentId);
   if (pickerAgentId !== agentId) {
     setPickerAgentId(agentId);
-    setIsSkillPickerOpen(false);
-    setIsPromptPickerOpen(false);
+    if (openPicker === 'skill' || openPicker === 'prompt') setOpenPicker(null);
   }
-  const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
   const pluginCatalog = usePluginCatalog();
   const pluginConnections = usePluginConnections();
   const connectedPlugins =
@@ -254,21 +288,20 @@ function TextChatInput({
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
   const pluginMenuRef = useRef<ViewInstance>(null);
-  const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
-  const closeSkillPicker = useCallback(() => setIsSkillPickerOpen(false), []);
-  const closePromptPicker = useCallback(() => setIsPromptPickerOpen(false), []);
-  const isPluginPickerVisible = mode === 'standard' && isPluginPickerOpen && !isApprovalPending;
-  const isSkillPickerVisible =
-    mode === 'standard' && isSkillPickerOpen && Boolean(agentId) && !isApprovalPending;
-  const isPromptPickerVisible =
-    mode === 'standard' && isPromptPickerOpen && prompts.length > 0 && !isApprovalPending;
+  const closePicker = useCallback(
+    (picker: ChatInputPicker) => setOpenPicker((current) => (current === picker ? null : current)),
+    [],
+  );
+  const closePluginPicker = useCallback(() => closePicker('plugin'), [closePicker]);
+  const closeSkillPicker = useCallback(() => closePicker('skill'), [closePicker]);
+  const closePromptPicker = useCallback(() => closePicker('prompt'), [closePicker]);
+  const isPickerAvailable = mode === 'standard' && !isApprovalPending;
+  const isPluginPickerVisible = isPickerAvailable && openPicker === 'plugin';
+  const isSkillPickerVisible = isPickerAvailable && openPicker === 'skill' && Boolean(agentId);
+  const isPromptPickerVisible = isPickerAvailable && openPicker === 'prompt' && prompts.length > 0;
   const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible || isPromptPickerVisible;
-  if (isPromptPickerOpen && prompts.length === 0) setIsPromptPickerOpen(false);
-  if (isApprovalPending || mode === 'minimal') {
-    if (isPluginPickerOpen) setIsPluginPickerOpen(false);
-    if (isSkillPickerOpen) setIsSkillPickerOpen(false);
-    if (isPromptPickerOpen) setIsPromptPickerOpen(false);
-  }
+  if (openPicker && (!isPickerAvailable || (openPicker === 'prompt' && prompts.length === 0)))
+    setOpenPicker(null);
   const { fontScale } = useWindowDimensions();
   const inputTextStyle = useResolveClassNames('text-base');
   const compactInputStyle = {
@@ -290,58 +323,66 @@ function TextChatInput({
   }, [closeModelPicker, openProviderSetup]);
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
-      setIsPluginPickerOpen(false);
-      setIsSkillPickerOpen(false);
-      setIsPromptPickerOpen(false);
-      const plugins =
-        mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
-      // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
-      const {
-        skills,
-        skillAction,
-        skillReferences,
-        pluginReferences,
-        text: prompt,
-      } = mode === 'standard'
-        ? readSkillMentions(plugins.text, plugins.pluginReferences)
-        : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
-      // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
-      const selections = readSelectionMentions(prompt);
-      const shifted = <T extends { offset: number }>(references: T[]) =>
-        references.map((reference) => ({
-          ...reference,
-          offset: selections.shift(reference.offset),
-        }));
-      const parts = toAgentInputParts(
-        { attachments, text: selections.text },
-        shifted(pluginReferences),
-        shifted(skillReferences),
-        selections.selectionReferences,
-      );
-      const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
-      for (const context of appContexts)
-        parts.push({ type: 'text', text: toMcpAppContextText(context) });
-      const modelId = replyModels?.[0] ?? selectedModelId;
-      const result = await sendMessage({
-        parts,
-        ...(skillAction ? { skillAction } : {}),
-        ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
-        ...(modelId ? { modelId } : {}),
-        ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
-        ...(reasoningEfforts.length > 0
-          ? {
-              reasoningEffort: getChatInputReasoningEffortSnapshot(
-                reasoningEffort,
-                isReasoningEffortSelected,
-                reasoningEfforts,
-              ),
-            }
-          : {}),
-      });
-      mcpApps?.consumed(appContexts);
-      return result;
+      const attempt = quoteActions?.capture();
+      try {
+        setOpenPicker(null);
+        const plugins =
+          mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
+        // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
+        const {
+          skills,
+          skillAction,
+          skillReferences,
+          pluginReferences,
+          text: prompt,
+        } = mode === 'standard'
+          ? readSkillMentions(plugins.text, plugins.pluginReferences)
+          : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+        // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
+        const selections = readSelectionMentions(prompt);
+        const shifted = <T extends { offset: number }>(references: T[]) =>
+          references.map((reference) => ({
+            ...reference,
+            offset: selections.shift(reference.offset),
+          }));
+        const parts = attachMessageQuote(
+          toAgentInputParts(
+            { attachments, text: selections.text },
+            shifted(pluginReferences),
+            shifted(skillReferences),
+            selections.selectionReferences,
+          ),
+          attempt?.fields ?? {},
+        );
+        const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
+        for (const context of appContexts)
+          parts.push({ type: 'text', text: toMcpAppContextText(context) });
+        const modelId = replyModels?.[0] ?? selectedModelId;
+        const result = await sendMessage({
+          parts,
+          ...(skillAction ? { skillAction } : {}),
+          ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
+          ...(modelId ? { modelId } : {}),
+          ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
+          ...(reasoningEfforts.length > 0
+            ? {
+                reasoningEffort: getChatInputReasoningEffortSnapshot(
+                  reasoningEffort,
+                  isReasoningEffortSelected,
+                  reasoningEfforts,
+                ),
+              }
+            : {}),
+        });
+        mcpApps?.consumed(appContexts);
+        attempt?.finish(true);
+        return result;
+      } finally {
+        attempt?.finish(false);
+      }
     },
     [
+      quoteActions,
       isReasoningEffortSelected,
       mcpApps,
       mode,
@@ -413,6 +454,7 @@ function TextChatInput({
                         pointerEvents={isPickerVisible ? 'none' : 'auto'}
                         style={isPickerVisible ? foldedAttachmentsStyle : undefined}
                       >
+                        <DraftMessageQuotePreview />
                         <ComposerAttachments />
                         {mode === 'standard' ? <McpAppContextNotice /> : null}
                       </View>
@@ -431,29 +473,17 @@ function TextChatInput({
                           media={mode === 'minimal' ? 'images' : 'all'}
                           onPickSkills={
                             mode === 'standard' && agentId && !isParallel
-                              ? () => {
-                                  setIsPluginPickerOpen(false);
-                                  setIsPromptPickerOpen(false);
-                                  setIsSkillPickerOpen(true);
-                                }
+                              ? () => setOpenPicker('skill')
                               : undefined
                           }
                           onPickPlugins={
                             mode === 'standard' && !isParallel
-                              ? () => {
-                                  setIsSkillPickerOpen(false);
-                                  setIsPromptPickerOpen(false);
-                                  setIsPluginPickerOpen(true);
-                                }
+                              ? () => setOpenPicker('plugin')
                               : undefined
                           }
                           onPickPrompts={
                             mode === 'standard' && prompts.length > 0
-                              ? () => {
-                                  setIsPluginPickerOpen(false);
-                                  setIsSkillPickerOpen(false);
-                                  setIsPromptPickerOpen(true);
-                                }
+                              ? () => setOpenPicker('prompt')
                               : undefined
                           }
                           triggerRef={pluginMenuRef}

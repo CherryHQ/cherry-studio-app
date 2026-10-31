@@ -92,6 +92,109 @@ describe('WebSearchService', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  test.each([undefined, 'https://search.example.com'])(
+    'searches with saved SearchApi credentials, result limits and host %s',
+    async (apiHost) => {
+      request.mockResolvedValue(
+        jsonResponse({
+          organic_results: [
+            { title: 'Result', snippet: 'Search content', link: 'https://example.com/first' },
+            { title: 'Extra', snippet: 'Outside the limit', link: 'https://example.com/second' },
+          ],
+        }),
+      );
+      const service = new WebSearchService(
+        createPreferenceService({
+          'chat.web_search.default_search_keywords_provider': 'searchapi',
+          'chat.web_search.max_results': 1,
+          'chat.web_search.provider_overrides': {
+            searchapi: {
+              apiKeys: ['searchapi-key'],
+              capabilities: { searchKeywords: { apiHost } },
+            },
+          },
+        }),
+      );
+      const response = await service.searchKeywords({ keywords: [' 中文 & query '] });
+      expect(response).toMatchObject({
+        providerId: 'searchapi',
+        capability: 'searchKeywords',
+        results: [
+          {
+            title: 'Result',
+            content: 'Search content',
+            url: 'https://example.com/first',
+            sourceInput: '中文 & query',
+          },
+        ],
+      });
+      expect(response.failures).toBeUndefined();
+      expect(request).toHaveBeenCalledTimes(1);
+      const call = request.mock.calls[0][0];
+      const url = new URL(call.url);
+      expect(`${url.origin}${url.pathname}`).toBe(
+        `${apiHost ?? 'https://www.searchapi.io'}/api/v1/search`,
+      );
+      expect(Object.fromEntries(url.searchParams)).toEqual({ engine: 'google', q: '中文 & query' });
+      expect(call).toMatchObject({
+        method: 'GET',
+        headers: { Authorization: 'Bearer searchapi-key' },
+      });
+    },
+  );
+
+  test.each([{ apiKeys: [] }, { apiKeys: ['searchapi-key'] }])(
+    'checks SearchApi credentials locally: $apiKeys',
+    async ({ apiKeys }) => {
+      const service = new WebSearchService(
+        createPreferenceService({
+          'chat.web_search.default_search_keywords_provider': 'searchapi',
+          'chat.web_search.provider_overrides': { searchapi: { apiKeys } },
+        }),
+      );
+      await expect(service.isConfigured('searchKeywords')).resolves.toBe(apiKeys.length > 0);
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  test('keeps Querit failed-page statuses out of content while retaining successful pages', async () => {
+    request
+      .mockResolvedValueOnce(
+        jsonResponse({
+          error_code: 200,
+          error_msg: '',
+          results: [{ id: 'first', url: 'https://example.com/a', content: 'Readable page' }],
+          statuses: [{ id: 'first', status: 'success' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          error_code: 200,
+          error_msg: '',
+          results: [{ id: 'second', url: 'https://example.com/b', content: 'Error page content' }],
+          statuses: [{ id: 'second', status: 'failed' }],
+        }),
+      );
+    const service = new WebSearchService(
+      createPreferenceService({
+        'chat.web_search.default_fetch_urls_provider': 'querit',
+        'chat.web_search.provider_overrides': { querit: { apiKeys: ['querit-key'] } },
+      }),
+    );
+    const response = await service.fetchUrls({
+      urls: ['https://example.com/a', 'https://example.com/b'],
+    });
+    expect(response.results.map((item) => item.content)).toEqual(['Readable page']);
+    expect(response.failures).toEqual([
+      expect.objectContaining({
+        input: 'https://example.com/b',
+        kind: 'provider',
+        code: 'page_fetch_failed',
+      }),
+    ]);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   test('keeps partial results and the selected provider when another page fails', async () => {
     request
       .mockResolvedValueOnce(mcpResponse('# Page\nURL: https://example.com/a\n\nFirst'))

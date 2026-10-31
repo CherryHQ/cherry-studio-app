@@ -52,9 +52,41 @@ public class PdfTextExtractorModule: Module {
       )
     }.runOnQueue(extractionQueue)
 
-    // 异步函数：获取 PDF 页数
-    AsyncFunction("getPageCount") { (filePath: String) -> Int in
-      return self.getPageCount(filePath: filePath)
+    AsyncFunction("extractImageText") {
+      (filePath: String, options: ExtractOptions?, requestId: String) -> [String: Any] in
+      self.requestsLock.lock()
+      let request = self.requests[requestId]
+      self.requestsLock.unlock()
+      guard let request else { throw PdfExtractionCancelledException() }
+      defer {
+        self.requestsLock.lock()
+        self.requests.removeValue(forKey: requestId)
+        self.requestsLock.unlock()
+      }
+      return try autoreleasepool {
+        try request.checkCancellation()
+        let url = try self.parseFileURL(filePath)
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        let languages = try pdfOcrLanguages(for: options?.language)
+        var text = ""
+        if let languages {
+          self.sendEvent("onProgress", [
+            "requestId": requestId, "completedPages": 0, "totalPages": 1, "phase": "ocr"
+          ])
+          text = try recognizeImageFile(url, request: request, languages: languages)
+        }
+        try request.checkCancellation()
+        if !hasUsablePdfText(text) { text = "" }
+        let value = text as NSString
+        var end = min(value.length, maxPdfTextCharacters)
+        if end > 0 && (0xD800...0xDBFF).contains(value.character(at: end - 1)) { end -= 1 }
+        return [
+          "text": value.substring(to: end), "totalPages": 1, "extractedPages": 1,
+          "isTruncated": end < value.length, "extractionError": false, "ocrError": false,
+          "ocrUnavailable": languages == nil, "unrecognizedPages": text.isEmpty ? [1] : []
+        ]
+      }
     }.runOnQueue(extractionQueue)
   }
 
@@ -160,26 +192,6 @@ public class PdfTextExtractorModule: Module {
       "ocrUnavailable": ocrUnavailable,
       "unrecognizedPages": unrecognizedPages
     ]
-  }
-
-  private func getPageCount(filePath: String) -> Int {
-    do {
-      let url = try parseFileURL(filePath)
-      let didAccess = url.startAccessingSecurityScopedResource()
-      defer {
-        if didAccess {
-          url.stopAccessingSecurityScopedResource()
-        }
-      }
-      guard let document = PDFDocument(url: url) else {
-        os_log("PdfTextExtractor: failed to load PDF at %{public}@", log: .default, type: .error, filePath)
-        return 0
-      }
-      return document.pageCount
-    } catch {
-      os_log("PdfTextExtractor: getPageCount error for %{public}@: %{public}@", log: .default, type: .error, filePath, String(describing: error))
-      return 0
-    }
   }
 
   // MARK: - 辅助方法

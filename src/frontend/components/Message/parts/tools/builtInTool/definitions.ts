@@ -1,3 +1,5 @@
+import type { BuiltInToolTitleName } from '@/shared/data/types/builtInToolTitles';
+
 export type BuiltInToolIconName =
   | 'calendar'
   | 'code'
@@ -9,131 +11,62 @@ export type BuiltInToolIconName =
   | 'reminders'
   | 'web';
 
-type BuiltInToolDefinition = {
-  iconName: BuiltInToolIconName;
-  titleKey: string;
-};
-
-export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
-  inspect_office_file: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.inspect' },
-  read_office_content: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.read' },
-  edit_document: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editDocument' },
-  edit_workbook: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editWorkbook' },
-  edit_presentation: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editPresentation' },
-  create_document: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.document' },
-  create_workbook: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.workbook' },
-  create_presentation: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.presentation' },
-  run_office_script: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.script' },
-  list_workspace: { iconName: 'fileText', titleKey: 'workspace.list' },
-  find_workspace_files: { iconName: 'fileText', titleKey: 'workspace.find' },
-  create_workspace_folder: { iconName: 'fileEdit', titleKey: 'library.folders.create' },
-  library_search_files: { iconName: 'fileText', titleKey: 'library.search' },
-  library_read_file: { iconName: 'fileText', titleKey: 'library.read' },
-  library_list_folders: { iconName: 'fileText', titleKey: 'chat.builtinTool.library.findFolders' },
-  library_move_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.move' },
-  library_rename_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.rename' },
-  library_trash_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.trash' },
-  library_list_trash: { iconName: 'fileText', titleKey: 'chat.builtinTool.library.listTrash' },
-  library_restore_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.restore' },
-  create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
-  adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
-  find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
-  install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },
-  list_local_skills: { iconName: 'fileText', titleKey: 'skills.activity.list' },
-  load_skill: { iconName: 'fileText', titleKey: 'skills.activity.load' },
-  list_skill_files: { iconName: 'fileText', titleKey: 'skills.activity.listFiles' },
-  read_skill_file: { iconName: 'fileText', titleKey: 'chat.builtinTool.file.read' },
-  agent_create: { iconName: 'fileEdit', titleKey: 'chat.agentTool.create' },
-  agent_update: { iconName: 'fileEdit', titleKey: 'chat.agentTool.update' },
-  agent_get: { iconName: 'fileText', titleKey: 'chat.agentTool.get' },
-  agent_list: { iconName: 'fileText', titleKey: 'chat.agentTool.list' },
-  ask_user_question: { iconName: 'reminders', titleKey: 'chat.question.title' },
-  calendar_create_event: {
-    iconName: 'calendar',
-    titleKey: 'chat.builtinTool.calendar.createEvent',
-  },
-  reminder_create_item: {
-    iconName: 'reminders',
-    titleKey: 'chat.builtinTool.reminders.create',
-  },
-  calendar_delete_event: {
-    iconName: 'calendar',
-    titleKey: 'chat.builtinTool.calendar.deleteEvent',
-  },
-  reminder_delete_item: {
-    iconName: 'reminders',
-    titleKey: 'chat.builtinTool.reminders.delete',
-  },
-  location_get_current: {
-    iconName: 'location',
-    titleKey: 'chat.builtinTool.location.current',
-  },
-  health_list_data_types: { iconName: 'health', titleKey: 'chat.builtinTool.health.listDataTypes' },
-  health_query_data: { iconName: 'health', titleKey: 'chat.builtinTool.health.queryData' },
-  health_get_record: { iconName: 'health', titleKey: 'chat.builtinTool.health.getRecord' },
-  health_get_summary: {
-    iconName: 'health',
-    titleKey: 'chat.builtinTool.health.summary',
-  },
-  calendar_list_events: {
-    iconName: 'calendar',
-    titleKey: 'chat.builtinTool.calendar.listEvents',
-  },
-  calendar_list_collections: {
-    iconName: 'calendar',
-    titleKey: 'chat.builtinTool.calendar.listCalendars',
-  },
-  reminder_list_collections: {
-    iconName: 'reminders',
-    titleKey: 'chat.builtinTool.reminders.listLists',
-  },
-  reminder_list_items: {
-    iconName: 'reminders',
-    titleKey: 'chat.builtinTool.reminders.list',
-  },
-  health_list_workouts: {
-    iconName: 'health',
-    titleKey: 'chat.builtinTool.health.listWorkouts',
-  },
-  calendar_update_event: {
-    iconName: 'calendar',
-    titleKey: 'chat.builtinTool.calendar.updateEvent',
-  },
-  reminder_update_item: {
-    iconName: 'reminders',
-    titleKey: 'chat.builtinTool.reminders.update',
-  },
-  edit_file: {
-    iconName: 'fileEdit',
-    titleKey: 'chat.builtinTool.file.edit',
-  },
-  read_file: {
-    iconName: 'fileText',
-    titleKey: 'chat.builtinTool.file.read',
-  },
-  write_file: {
-    iconName: 'fileText',
-    titleKey: 'chat.builtinTool.file.write',
-  },
-  generate_image: {
-    iconName: 'image',
-    titleKey: 'chat.builtinTool.media.generateImage',
-  },
-  web_search: {
-    iconName: 'web',
-    titleKey: 'chat.builtinTool.web.search',
-  },
-  run_js: {
-    iconName: 'code',
-    titleKey: 'chat.builtinTool.code.runJs',
-  },
-  // Pi's Code Mode executes the JavaScript capability.
-  codemode: {
-    iconName: 'code',
-    titleKey: 'chat.builtinTool.code.runJs',
-  },
-  web_fetch: {
-    iconName: 'web',
-    titleKey: 'chat.builtinTool.web.fetch',
-  },
-};
+export const builtInToolIconNames = {
+  inspect_office_file: 'fileText',
+  read_office_content: 'fileText',
+  edit_document: 'fileEdit',
+  edit_workbook: 'fileEdit',
+  edit_presentation: 'fileEdit',
+  create_document: 'fileText',
+  create_workbook: 'fileText',
+  create_presentation: 'fileText',
+  run_office_script: 'fileText',
+  list_workspace: 'fileText',
+  find_workspace_files: 'fileText',
+  create_workspace_folder: 'fileEdit',
+  library_search_files: 'fileText',
+  library_read_file: 'fileText',
+  library_list_folders: 'fileText',
+  library_move_item: 'fileEdit',
+  library_rename_item: 'fileEdit',
+  library_trash_item: 'fileEdit',
+  library_list_trash: 'fileText',
+  library_restore_item: 'fileEdit',
+  create_skill: 'fileText',
+  adapt_skill: 'fileEdit',
+  find_skills: 'fileText',
+  install_skill: 'fileText',
+  list_local_skills: 'fileText',
+  load_skill: 'fileText',
+  list_skill_files: 'fileText',
+  read_skill_file: 'fileText',
+  agent_create: 'fileEdit',
+  agent_update: 'fileEdit',
+  agent_get: 'fileText',
+  agent_list: 'fileText',
+  ask_user_question: 'reminders',
+  calendar_create_event: 'calendar',
+  reminder_create_item: 'reminders',
+  calendar_delete_event: 'calendar',
+  reminder_delete_item: 'reminders',
+  location_get_current: 'location',
+  health_list_data_types: 'health',
+  health_query_data: 'health',
+  health_get_record: 'health',
+  health_get_summary: 'health',
+  calendar_list_events: 'calendar',
+  calendar_list_collections: 'calendar',
+  reminder_list_collections: 'reminders',
+  reminder_list_items: 'reminders',
+  health_list_workouts: 'health',
+  calendar_update_event: 'calendar',
+  reminder_update_item: 'reminders',
+  edit_file: 'fileEdit',
+  read_file: 'fileText',
+  write_file: 'fileText',
+  generate_image: 'image',
+  web_search: 'web',
+  run_js: 'code',
+  codemode: 'code',
+  web_fetch: 'web',
+} as const satisfies Record<BuiltInToolTitleName, BuiltInToolIconName>;

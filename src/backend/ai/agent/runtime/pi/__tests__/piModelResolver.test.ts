@@ -115,6 +115,88 @@ describe('Pi model resolver', () => {
     resolver = createPiModelResolver();
   });
 
+  test.each([
+    {
+      endpoint: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      family: 'google-vertex',
+      api: 'google-vertex',
+      modelId: 'google/gemini-2.5-pro',
+      expectedModelId: 'gemini-2.5-pro',
+      expectedBaseUrl: 'https://aiplatform.googleapis.com/v1/projects/project-id/locations/global',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      family: 'google-vertex-anthropic',
+      api: 'anthropic-messages',
+      modelId: 'anthropic/claude-sonnet-4-5@20250929',
+      expectedModelId: 'claude-sonnet-4-5@20250929',
+      expectedBaseUrl: 'https://aiplatform.googleapis.com/v1',
+    },
+  ])(
+    'resolves $family tokens per invocation without selecting keys or persisting tokens',
+    async ({ endpoint, family, api, modelId, expectedModelId, expectedBaseUrl }) => {
+      jest.spyOn(providerRegistryService, 'resolveServerTools').mockReturnValue(['web-search']);
+      const provider = makeProvider(endpoint, '', family);
+      provider.authType = 'iam-gcp';
+      provider.settings.extraHeaders = {
+        Authorization: 'wrong-auth',
+        'X-Goog-Api-Key': 'wrong-key',
+        'X-Custom': 'kept',
+      };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { apiModelId: modelId }));
+      mockGetAuthConfig.mockResolvedValue({
+        type: 'iam-gcp',
+        project: 'project-id',
+        location: 'global',
+        credentials: {
+          client_email: 'svc@example.com',
+          private_key: '-----BEGIN PRIVATE KEY-----\nYWJjZA==\n-----END PRIVATE KEY-----',
+        },
+      });
+      const getAccessToken = jest
+        .fn()
+        .mockResolvedValueOnce('token-one')
+        .mockResolvedValueOnce('token-two');
+      const vertexResolver = createPiModelResolver(undefined, { getAccessToken });
+      const first = await resolve(vertexResolver);
+      const second = await resolve(vertexResolver);
+      expect(mockResolveApiKey).not.toHaveBeenCalled();
+      expect(mockListApiKeys).not.toHaveBeenCalled();
+      expect(getAccessToken).toHaveBeenCalledTimes(2);
+      expect(first.model).toMatchObject({
+        api,
+        baseUrl: expectedBaseUrl,
+        id: expectedModelId,
+        headers: { 'X-Custom': 'kept' },
+      });
+      expect(first.model.headers).not.toHaveProperty('Authorization');
+      expect(first.model.headers).not.toHaveProperty('X-Goog-Api-Key');
+      expect(JSON.stringify(first.model)).not.toContain('token-one');
+      expect(first.usageContext?.credentialReceipt).toEqual({
+        attribution: 'auth',
+        method: 'iam-gcp',
+      });
+      expect(first.nativeWebTools).toEqual({
+        search: false,
+        fetch: false,
+        functionToolMixing: false,
+      });
+      expect(second.redactionValues).toContain('token-two');
+      expect(mockBindPiStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({ api, supportsCustomFetch: true }),
+        expect.objectContaining({
+          apiKey: undefined,
+          accessToken: 'token-two',
+          maxRetries: 0,
+          ...(api === 'anthropic-messages'
+            ? { vertex: { projectId: 'project-id', location: 'global' } }
+            : {}),
+        }),
+      );
+    },
+  );
+
   test('translates with the OpenAI OAuth account and Codex transport when no API key exists', async () => {
     const oauthModel = Object.values(OPENAI_CODEX_MODELS)[0];
     jest.spyOn(piOAuthModels, 'resolveOAuthPiModel').mockResolvedValueOnce(oauthModel);
@@ -1150,6 +1232,7 @@ describe('Pi model resolver', () => {
 
   test.each([
     ['anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'claude-sonnet-4-5', 'anthropic', true],
+    ['openai', ENDPOINT_TYPE.OPENAI_RESPONSES, 'gpt-6.1-terra', 'openai-responses', false],
     ['deepseek', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-v4-pro', 'anthropic', false],
     // DeepSeek ignores the tool on Responses, so that endpoint keeps the external service.
     ['deepseek', ENDPOINT_TYPE.OPENAI_RESPONSES, 'deepseek-v4-pro', undefined, false],
@@ -1159,6 +1242,37 @@ describe('Pi model resolver', () => {
     ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen3-max', 'openai-responses', false],
     ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen-plus', undefined, false],
     ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'qwen-plus', 'dashscope', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-2', undefined, false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'kimi-k3', undefined, false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'glm-5.2', 'openai-responses', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'kimi-k3', 'openai-responses', false],
+    ['dashscope', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'qwen3.8-flash', 'qwen-anthropic', true],
+    ['dashscope', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'qwen-plus', undefined, false],
+    ['dashscope', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-v4-flash', undefined, false],
+    [
+      'dashscope',
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'deepseek-v4-flash-0731',
+      'qwen-anthropic',
+      true,
+    ],
+    ['qwencloud', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'qwen3.8-flash', 'qwencloud', false],
+    ['qwencloud', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'qwen3.8-max-preview', undefined, false],
+    ['qwencloud', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5.2', undefined, false],
+    ['qwencloud', ENDPOINT_TYPE.OPENAI_RESPONSES, 'glm-5.2', 'openai-responses', false],
+    ['qwencloud', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen3.8-flash', undefined, false],
+    ['qwencloud', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'qwen3.8-max', 'qwen-anthropic', true],
+    ['qwencloud', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'qwen3.8-flash', undefined, false],
+    ['qwencloud', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-v4.1-flash', undefined, false],
+    [
+      'qwencloud',
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'deepseek-v4.1-flash-1017',
+      'qwen-anthropic',
+      true,
+    ],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-3', undefined, false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'kimi-k2-5', undefined, false],
     ['zhipu', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-2', 'zhipu', false],
     ['openrouter', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'vendor/any-model', 'openrouter', false],
     ['perplexity', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'sonar-pro', 'perplexity', false],

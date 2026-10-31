@@ -2,12 +2,14 @@ import type { WebSearchProviderModule } from '@cherrystudio/web-search';
 import { bocha } from '@cherrystudio/web-search/providers/bocha';
 import { crawl4ai } from '@cherrystudio/web-search/providers/crawl4ai';
 import { deepseek } from '@cherrystudio/web-search/providers/deepseek';
+import { desearch } from '@cherrystudio/web-search/providers/desearch';
 import { exa } from '@cherrystudio/web-search/providers/exa';
 import { exaMcp } from '@cherrystudio/web-search/providers/exa-mcp';
 import { firecrawl } from '@cherrystudio/web-search/providers/firecrawl';
 import { jina } from '@cherrystudio/web-search/providers/jina';
 import { parallel } from '@cherrystudio/web-search/providers/parallel';
 import { querit } from '@cherrystudio/web-search/providers/querit';
+import { searchapi } from '@cherrystudio/web-search/providers/searchapi';
 import { searxng } from '@cherrystudio/web-search/providers/searxng';
 import { serply } from '@cherrystudio/web-search/providers/serply';
 import { tavily } from '@cherrystudio/web-search/providers/tavily';
@@ -31,4 +33,6 @@ export const REMOTE_WEB_SEARCH_PROVIDERS = {
   crawl4ai,
   parallel,
   serply,
+  searchapi,
+  desearch,
 } satisfies Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderModule>;

@@ -32,13 +32,19 @@ let mockAgentChatSession: {
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
   pendingQuestion: null;
-  retryingMessageId?: string;
   sessionId: string;
   status: 'ready';
 };
 
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
+
 jest.mock('../hooks/useConversationFeedbackHint', () => ({
   useConversationFeedbackHint: jest.fn(),
+}));
+jest.mock('../hooks/useConversationFeedback', () => ({
+  useConversationFeedback: () => undefined,
 }));
 
 jest.mock('../translation/MessageTranslationProvider', () => ({
@@ -100,6 +106,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+    useComposerExpansion: () => null,
     useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
@@ -113,6 +120,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/Message', () => ({
+  MessageFailureReportProvider: ({ children }: { children: ReactNode }) => children,
   AssistantMessage: ({ children, message }: { children: ReactNode; message: MessageListItem }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('AssistantMessage', { message }, children);
@@ -198,7 +206,10 @@ function project(message: AgentMessageView): ConversationMessage {
 }
 // Feed the same scenarios through the public consumption views, preserving the existing assertions.
 function ChatWorkspace(
-  props: Omit<ComponentProps<typeof Workspace>, 'snapshot' | 'messageWindow' | 'messages'> & {
+  props: Omit<
+    ComponentProps<typeof Workspace>,
+    'snapshot' | 'messageWindow' | 'messages' | 'executionSource'
+  > & {
     messageWindow: Omit<
       ComponentProps<typeof Workspace>['messageWindow'],
       'messages' | 'dataKey' | 'hasOlderMessages'
@@ -216,7 +227,6 @@ function ChatWorkspace(
     interactions: [],
     liveMessages: mockAgentChatSession.liveMessages.map(project),
     enteringMessageKey: mockAgentChatSession.enteringUserMessageId,
-    retryingMessageKey: mockAgentChatSession.retryingMessageId,
     hasHistoryBeforeExecution: mockAgentChatSession.hasHistoryBeforeActiveTurn,
   };
   const history = props.messageWindow.messages;
@@ -230,6 +240,7 @@ function ChatWorkspace(
   return (
     <Workspace
       {...props}
+      executionSource="local"
       snapshot={snapshot}
       messages={merged}
       messageWindow={{
@@ -242,6 +253,12 @@ function ChatWorkspace(
     />
   );
 }
+
+jest.mock('../components/ChatComposerClearance', () => ({
+  ChatComposerClearance: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('../../../quotes/MessageQuoteHighlight', () => ({ MessageQuoteHighlight: () => null }));
 
 jest.mock('../components/ChatInitialRenderCover', () => ({
   ChatInitialRenderCover: ({ isVisible }: { isVisible: boolean }) => {
@@ -656,18 +673,6 @@ describe('ChatWorkspace message rendering integration', () => {
     ]);
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
     expect(mockMessageListProps?.extraData).toBe(extraData);
-  });
-
-  test('empties the retrying answer while admission runs, so the wait reads as pending', () => {
-    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
-    mockAgentChatSession = { ...mockAgentChatSession, retryingMessageId: 'assistant-1' };
-
-    renderer = renderWorkspace(false, messages);
-
-    expect(mockMessageListProps?.messages).toEqual([
-      expect.objectContaining({ id: 'user-1', status: 'success' }),
-      expect.objectContaining({ id: 'assistant-1', status: 'pending', data: { parts: [] } }),
-    ]);
   });
 
   test('composes the assistant toolbar for settled assistant messages', () => {

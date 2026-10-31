@@ -4,8 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { AiFailureMessage } from '@/frontend/components/AiFailure';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-export function ErrorPart({ part }: { part: Extract<CherryMessagePart, { type: 'data-error' }> }) {
+import { useMessageFailureReport } from './MessageFailureReportContext';
+
+export function ErrorPart({
+  messageId,
+  part,
+}: {
+  messageId?: string;
+  part: Extract<CherryMessagePart, { type: 'data-error' }>;
+}) {
   const { t } = useTranslation();
+  const report = useMessageFailureReport();
   if (part.data.code === 'MESSAGE_UNREADABLE') {
     return (
       <ContextMenuExclusion>
@@ -38,7 +47,10 @@ export function ErrorPart({ part }: { part: Extract<CherryMessagePart, { type: '
   }
   return (
     <ContextMenuExclusion>
-      <AiFailureMessage data={part.data} />
+      <AiFailureMessage
+        data={part.data}
+        onReport={report && messageId ? () => report(messageId) : undefined}
+      />
     </ContextMenuExclusion>
   );
 }

@@ -18,8 +18,7 @@ Provider + Model records
 ResolvedProviderConnection
         |
         +-- Language serving
-        |     +-- Pi binding (conversation, tool loop, product chat checks, translation, and naming)
-        |     `-- AI SDK binding (generateText and SDK-only probes)
+        |     `-- Pi binding (conversation, tool loop, product chat checks, translation, and naming)
         |
         `-- Image serving
               `-- image parameters, edit input, transport, polling, and artifact handling
@@ -77,8 +76,8 @@ The provider layer owns the runtime-agnostic language control plane: `ResolvedPr
 plus the shared language transport policy. The typed Pi compatibility decision
 (`resolvePiLanguageBinding`) lives with the Pi binding and consumes those facts; the provider layer
 never sees the decision. System model support asks the bound Runtime through
-`LanguageServingSupport`, so replacing the Runtime replaces that answer with it. AI SDK language
-configuration and image models consume the connection facts directly.
+`LanguageServingSupport`, so replacing the Runtime replaces that answer with it. Model listing and
+image models consume the connection facts directly; no text request goes through the AI SDK.
 
 Mobile's standard configurable chat protocol vocabulary lives in
 `shared/utils/providerEndpoints.ts`. Forms and data integrity checks share it; it is not a Runtime
@@ -149,15 +148,12 @@ The Pi binding owns only Pi mechanics:
 - `PiModel` construction and `streamFn` loading;
 - Pi context, reasoning, tools, events, cancellation, and usage conversion.
 
-The AI SDK binding owns only AI SDK mechanics:
+The AI SDK serves model listing and image generation only. Its Provider construction owns AI SDK
+mechanics: Provider selection and settings, SDK-specific auth materialization and request hooks,
+and AI SDK result, error, and usage behavior.
 
-- AI SDK Provider selection and settings construction;
-- SDK-specific auth materialization and request hooks;
-- provider-options namespaces and generation parameters;
-- AI SDK result, error, and usage behavior.
-
-Provider-specific auth, header, or JSON-body behavior that both bindings need should be promoted to
-a shared transport policy. Do not promote an SDK-specific workaround merely because it names a
+Provider-specific auth, header, or JSON-body behavior that Pi and the AI SDK both need should be
+promoted to a shared transport policy. Do not promote an SDK-specific workaround merely because it names a
 Provider.
 
 ### Image serving

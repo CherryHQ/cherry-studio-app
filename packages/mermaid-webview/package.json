@@ -1,0 +1,28 @@
+{
+  "name": "@cherrystudio/mermaid-webview",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Offline WebView page that renders Mermaid source to SVG inside Cherry Mobile",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./protocol": {
+      "types": "./src/protocol.ts",
+      "react-native": "./src/protocol.ts",
+      "import": "./src/protocol.ts",
+      "default": "./src/protocol.ts"
+    },
+    "./mermaid.html": "./dist/mermaid.html"
+  },
+  "scripts": {
+    "build": "vite build",
+    "postinstall": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "mermaid": "12.2.0",
+    "typescript": "~6.0.3",
+    "vite": "7.3.3"
+  }
+}

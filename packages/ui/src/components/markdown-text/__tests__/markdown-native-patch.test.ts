@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 const patch = readFileSync(
-  `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
+  `${process.cwd()}/patches/react-native-enriched-markdown@1.1.1.patch`,
   'utf8',
 );
 
@@ -10,12 +10,62 @@ describe('native Markdown code-block menu patch', () => {
   test('cancels ancestor recognizers before either code target presents its menu', () => {
     const codeBlockPatch = patch
       .split(
-        '+++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt',
+        '+++ b/android/src/main/java/com/swmansion/enriched/markdown/segments/CodeBlockContainerView.kt',
       )[1]
       ?.split('diff --git ')[0];
     expect(codeBlockPatch).toMatch(
-      /private fun showContextMenu\(anchor: View\): Boolean \{\n     if \(pending\) return false\n(?:\+[^\n]*\n)*\+    anchor\.parent\?\.requestDisallowInterceptTouchEvent\(true\)\n     ContextMenuPopup\.show\(anchor, this\)/,
+      /\+    if \(!dynamicProps\.enableBlockContextMenu \|\| pending \|\| codeBlockStyle\.externalControls\) return false\n(?:\+[^\n]*\n)*\+    anchor\.parent\?\.requestDisallowInterceptTouchEvent\(true\)\n     ContextMenuPopup\.show\(anchor, this\)/,
     );
+  });
+});
+
+describe('standalone code-block controls patch', () => {
+  test('removes the native header from both platforms without changing code extent', () => {
+    expect(patch).toContain(
+      '+    copyButton.visibility = if (codeBlockStyle.externalControls) View.GONE else View.VISIBLE',
+    );
+    expect(patch).toContain('+      if (style.externalControls) return 0');
+    expect(patch).toContain('+    _copyButton.hidden = [config codeBlockExternalControls];');
+    expect(patch).toContain(
+      '+  return [_config codeBlockExternalControls] ? 0 : [self contentInset] + _headerLabelLineHeight;',
+    );
+    expect(patch).toContain('+  CGFloat headerH = [config codeBlockExternalControls]');
+  });
+
+  test('disables native menu and accessibility copy actions when the caller owns copying', () => {
+    expect(patch).toContain(
+      '+    if (!dynamicProps.enableBlockContextMenu || pending || codeBlockStyle.externalControls) return false',
+    );
+    expect(patch).toContain(
+      '+  if (!self.dynamicProps.enableBlockContextMenu || _pending || [_config codeBlockExternalControls]) {',
+    );
+    expect(patch).toContain(
+      '+  if (_pending || [_config codeBlockExternalControls] || self.dynamicProps.menuCopyLabel.length == 0) {',
+    );
+  });
+
+  // A backing store the size of the whole code is dropped by Core Animation once it is too
+  // large, so complete tool output would render blank.
+  test('draws iOS code text only around the visible scroll window', () => {
+    expect(patch).toContain('+@interface ENRMCodeBlockCanvasView : UIView');
+    expect(patch).toContain('+  [self.owner drawCodeInRect:rect canvasOrigin:self.frame.origin];');
+    expect(patch).toContain('+  _scrollView.delegate = self;');
+    expect(patch).toContain('+  _codeContentView.visibleRect = scrollView.bounds;');
+    expect(patch).toContain('+  [self drawCodeInRect:rect canvasOrigin:CGPointZero];');
+  });
+
+  // Android compiles generated Props with RN_SERIALIZABLE_STATE, so a field serialized by
+  // another struct's toDynamic breaks the native build.
+  test('serializes the generated prop only from code-block structs', () => {
+    const hunks = patch
+      .split(/^(?=@@ )/m)
+      .filter((hunk) => hunk.includes('+    result["externalControls"] = externalControls;'));
+    expect(hunks).toHaveLength(4);
+    for (const hunk of hunks) {
+      expect(hunk.split('\n')[0]).toMatch(
+        / struct EnrichedMarkdown(?:Text)?MarkdownStyleCodeBlockStruct \{$/,
+      );
+    }
   });
 });
 
@@ -50,7 +100,7 @@ describe('native Markdown code-block height patch', () => {
       '+  return MIN(_codeSize.height + inset * 2 + [self headerHeight], kENRMCodeBlockMaxHeight);',
     );
     expect(patch).toContain(
-      '+  return MIN(ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH, kENRMCodeBlockMaxHeight);',
+      '+  return MIN(codeHeight + inset * 2 + headerH, kENRMCodeBlockMaxHeight);',
     );
   });
 
@@ -105,55 +155,55 @@ describe('native Markdown code-block divider patch', () => {
 });
 
 describe('native Markdown streaming work patch', () => {
-  const streamingPatch = patch.split(
-    '+++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt',
-  )[1];
+  const streamingPatch = patch
+    .split('+++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt')[1]
+    ?.split('diff --git ')[0];
 
   test('coalesces native work before submitting another full render', () => {
-    expect(streamingPatch).toContain('+      if (renderInFlight) {');
-    expect(streamingPatch).toContain('+        renderRequested = true');
-    expect(streamingPatch).toContain('+        return');
-    expect(streamingPatch).toContain('+            if (renderRequested) scheduleRender()');
-    expect(streamingPatch).toContain('+      disposed = true');
+    expect(streamingPatch).toContain('+    if (renderInFlight) {');
+    expect(streamingPatch).toContain('+      renderRequested = true');
+    expect(streamingPatch).toContain('+      return');
+    expect(streamingPatch).toContain('+          if (renderRequested) scheduleRender()');
+    expect(streamingPatch).toContain('+    disposed = true');
   });
 
   test('releases the render slot when the worker throws an Error', () => {
     expect(streamingPatch).not.toMatch(/^[ +]\s+\} catch \(e: Exception\) \{$/m);
     expect(streamingPatch).toMatch(
-      /\+ {8}\} catch \(e: Throwable\) \{\n(?:\+[^\n]*\n)*?\+ {8}\}\n\+\n\+ {8}mainHandler\.post \{\n\+ {10}renderInFlight = false\n/,
+      /\+ {6}\} catch \(e: Throwable\) \{\n(?:\+[^\n]*\n)*?\+ {6}\}\n[ +]\n(?:-[^\n]*\n)*\+ {6}mainHandler\.post \{\n\+ {8}renderInFlight = false\n/,
     );
   });
 
   test('allows repaired suffix changes within the native view generation', () => {
-    expect(streamingPatch).toContain('+              isStreaming && streamingAnimation &&');
+    expect(streamingPatch).toContain('+            isStreaming && streamingAnimation &&');
     expect(streamingPatch).not.toContain('currentMarkdown.startsWith(markdown)');
     expect(streamingPatch).toContain(
-      '+            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {',
+      '+          if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {',
     );
-    expect(streamingPatch).toContain('+      val flags = md4cFlags');
+    expect(streamingPatch).toContain('+    val flags = md4cFlags');
   });
 
   test('schedules and remeasures status-only finalization while invalidating old jobs', () => {
-    expect(streamingPatch).toContain('+        streamingGeneration++');
-    expect(streamingPatch).toContain('+        dirtyFlags += DirtyFlag.FORCE_HEIGHT');
-    expect(streamingPatch).toContain('+        renderPending = true');
-    expect(streamingPatch).toContain('+      val generation = streamingGeneration');
-    expect(streamingPatch).toContain('+      if (forceHeight) {');
-    expect(streamingPatch).toContain('+        MeasurementStore.invalidate(id)');
+    expect(streamingPatch).toContain('+      streamingGeneration++');
+    expect(streamingPatch).toContain('+      dirtyFlags += DirtyFlag.FORCE_HEIGHT');
+    expect(streamingPatch).toContain('+      renderPending = true');
+    expect(streamingPatch).toContain('+    val generation = streamingGeneration');
+    expect(streamingPatch).toContain('+    if (forceHeight) {');
+    expect(streamingPatch).toContain('+      MeasurementStore.invalidate(id)');
     expect(streamingPatch).toContain(
-      '+          state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)',
+      '+        state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)',
     );
-    expect(streamingPatch).toContain('+          wrapper.updateState(state)');
+    expect(streamingPatch).toContain('+        wrapper.updateState(state)');
   });
 
   test('limits animation without disabling native streaming parsing', () => {
     expect(streamingPatch).toContain(
-      '+      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024',
+      '+    private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024',
     );
     expect(streamingPatch).toContain(
-      '+      get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH',
+      '+    get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH',
     );
-    expect(streamingPatch).toContain('+      if (!shouldAnimateStreaming) return');
-    expect(streamingPatch).not.toContain('+      streamingAnimation = false');
+    expect(streamingPatch).toContain('+    if (!shouldAnimateStreaming) return');
+    expect(streamingPatch).not.toContain('+    streamingAnimation = false');
   });
 });

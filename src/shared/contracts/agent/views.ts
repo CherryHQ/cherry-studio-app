@@ -23,6 +23,7 @@ import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
 import { FileAttachmentIssueSchema, FileAttachmentReportSchema } from '../fileAttachment';
+import { hasQuotePair, invalidQuoteCarriers, quoteFields } from './messageQuote';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -179,6 +180,7 @@ export const AgentErrorViewSchema = z
       'SESSION_NOT_FOUND',
       'MESSAGE_NOT_FOUND',
       'MESSAGE_UNREADABLE',
+      'MESSAGE_CONFLICT',
       'SESSION_BUSY',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',
@@ -373,9 +375,23 @@ export const AgentMessagePartSchema = z.union([
     type: z.literal('data-compaction-anchor'),
     data: CompactionAnchorDataSchema,
   }),
+  z
+    .strictObject({
+      id: z.string().min(1),
+      type: z.literal('text'),
+      text: z.string(),
+      ...quoteFields,
+      pluginReferences: z.array(PluginTextReferenceSchema).optional(),
+      skillReferences: z.array(SkillTextReferenceSchema).optional(),
+      selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
+      skillSelections: z.array(SkillActivationSchema).max(8).optional(),
+      skillAction: SkillActionSchema.optional(),
+      state: z.enum(['streaming', 'done']),
+    })
+    .refine(hasQuotePair, { message: 'Quote and author must occur together.' }),
   z.strictObject({
     id: z.string().min(1),
-    type: z.enum(['text', 'reasoning']),
+    type: z.literal('reasoning'),
     text: z.string(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
@@ -411,30 +427,39 @@ export const AgentMessageSiblingSchema = z.strictObject({
 });
 export type AgentMessageSibling = z.infer<typeof AgentMessageSiblingSchema>;
 
-export const AgentMessageViewSchema = z.strictObject({
-  id: z.string().min(1),
-  sessionId: z.string().min(1),
-  /** Previous message in the tree; absent on live projections that do not carry it. */
-  parentId: z.string().min(1).nullable().optional(),
-  /** 0 for an ordinary branch; >0 for answers of one multi-model question. */
-  siblingsGroupId: z.number().int().nonnegative().optional(),
-  /**
-   * Every child of this message's parent, this one included, when there is more
-   * than one. Transcript reads attach it so the client can offer branch switching.
-   */
-  siblings: z.array(AgentMessageSiblingSchema).min(2).optional(),
-  turnId: z.string().min(1).nullable(),
-  role: z.enum(['user', 'assistant', 'system']),
-  status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
-  parts: z.array(AgentMessagePartSchema),
-  // Local reading aids; execution and replay consume only parts.
-  translations: MessageTranslationsSchema.optional(),
-  stats: MessageStatsSchema.nullable(),
-  modelId: UniqueModelIdSchema.nullable(),
-  inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-});
+export const AgentMessageViewSchema = z
+  .strictObject({
+    id: z.string().min(1),
+    sessionId: z.string().min(1),
+    /** Previous message in the tree; absent on live projections that do not carry it. */
+    parentId: z.string().min(1).nullable().optional(),
+    /** 0 for an ordinary branch; >0 for answers of one multi-model question. */
+    siblingsGroupId: z.number().int().nonnegative().optional(),
+    /**
+     * Every child of this message's parent, this one included, when there is more
+     * than one. Transcript reads attach it so the client can offer branch switching.
+     */
+    siblings: z.array(AgentMessageSiblingSchema).min(2).optional(),
+    turnId: z.string().min(1).nullable(),
+    role: z.enum(['user', 'assistant', 'system']),
+    status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
+    parts: z.array(AgentMessagePartSchema),
+    // Local reading aids; execution and replay consume only parts.
+    translations: MessageTranslationsSchema.optional(),
+    stats: MessageStatsSchema.nullable(),
+    modelId: UniqueModelIdSchema.nullable(),
+    inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .superRefine((message, context) => {
+    for (const index of invalidQuoteCarriers(message.parts, message.role))
+      context.addIssue({
+        code: 'custom',
+        message: 'Quote must belong to the primary user text carrier.',
+        path: ['parts', index],
+      });
+  });
 export type AgentMessageView = z.infer<typeof AgentMessageViewSchema>;
 
 export const AgentInputPartSchema = z.union([
@@ -442,10 +467,12 @@ export const AgentInputPartSchema = z.union([
     .strictObject({
       type: z.literal('text'),
       text: z.string(),
+      ...quoteFields,
       pluginReferences: z.array(PluginTextReferenceSchema).optional(),
       skillReferences: z.array(SkillTextReferenceSchema).optional(),
       selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
     })
+    .refine(hasQuotePair, { message: 'Quote and author must occur together.' })
     .refine(
       ({ text, pluginReferences, skillReferences, selectionReferences }) => {
         let end = 0;
@@ -502,3 +529,26 @@ export const AgentCapabilitiesSchema = z.strictObject({
   attachments: z.boolean(),
 });
 export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
+
+export const AgentInputPartsSchema = z
+  .array(AgentInputPartSchema)
+  .min(1)
+  .superRefine((parts, context) => {
+    for (const index of invalidQuoteCarriers(parts))
+      context.addIssue({
+        code: 'custom',
+        message: 'Quote must belong to the primary user text carrier.',
+        path: [index],
+      });
+  });
+
+export const AgentUserPartsSchema = z
+  .array(AgentMessagePartSchema)
+  .superRefine((parts, context) => {
+    for (const index of invalidQuoteCarriers(parts))
+      context.addIssue({
+        code: 'custom',
+        message: 'Quote must belong to the primary user text carrier.',
+        path: [index],
+      });
+  });

@@ -61,17 +61,17 @@ export async function prepareFileAttachments(
   const historicalIds = (input.historicalFileEntryIds ?? []).filter((id) => {
     const file = input.availableFiles.get(id);
     const mode = file && fileAttachmentMode(file);
-    return mode && (mode !== 'image' || input.target.acceptsImages);
+    return mode;
   });
   // Attached images, current and historical, are charged first; embedded document images get
   // what remains of their budget. Text files have their own budget below.
   const historicalImages = historicalIds.flatMap((id) => {
     const file = input.availableFiles.get(id)!;
-    return fileAttachmentMode(file) === 'image' ? [file] : [];
+    return input.target.acceptsImages && fileAttachmentMode(file) === 'image' ? [file] : [];
   });
   validateFileAttachments([...currentFiles, ...historicalImages], input.target);
   const directImages = [...currentFiles, ...historicalImages].filter(
-    (file) => fileAttachmentMode(file) === 'image',
+    (file) => input.target.acceptsImages && fileAttachmentMode(file) === 'image',
   );
   let imageCount = directImages.length;
   let imageBytes = directImages.reduce((total, file) => total + file.size, 0);
@@ -89,7 +89,7 @@ export async function prepareFileAttachments(
   for (const [id, count] of counts) {
     const file = input.availableFiles.get(id)!;
     const mode = fileAttachmentMode(file)!;
-    if (mode === 'image') {
+    if (mode === 'image' && input.target.acceptsImages) {
       result.set(id, { file, report: { mode, sourceTruncated: false, requestTruncated: false } });
       continue;
     }
@@ -194,7 +194,7 @@ export async function prepareFileAttachments(
         file,
         content: { kind: 'text', text: projected.value },
         report: {
-          mode: mode === 'document' ? 'document-text' : 'text',
+          mode: mode === 'image' ? 'image-text' : mode === 'document' ? 'document-text' : 'text',
           ...(content.parser ? { parser: content.parser } : {}),
           sourceTruncated: content.sourceTruncated,
           ...(content.unrecognizedPages ? { unrecognizedPages: content.unrecognizedPages } : {}),

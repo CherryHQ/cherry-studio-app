@@ -24,7 +24,7 @@ export type ExtractionControl = {
 };
 
 /**
- * PDF 文本提取结果
+ * Native text extraction result. A standalone image is one recognition page.
  */
 export interface ExtractResult {
   /**
@@ -78,10 +78,9 @@ export interface PdfTextExtractorModule {
    * @returns 提取结果
    */
   extractText(filePath: string, options: ExtractOptions, requestId: string): Promise<ExtractResult>;
-  /**
-   * 获取 PDF 页数（异步方法）
-   * @param filePath - PDF 文件路径
-   * @returns 页数，失败返回 0
-   */
-  getPageCount(filePath: string): Promise<number>;
+  extractImageText(
+    filePath: string,
+    options: ExtractOptions,
+    requestId: string,
+  ): Promise<ExtractResult>;
 }

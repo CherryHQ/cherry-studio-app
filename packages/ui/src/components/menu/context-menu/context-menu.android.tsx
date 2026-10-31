@@ -6,9 +6,10 @@ import {
   type ViewInstance,
 } from 'react-native';
 import {
-  Gesture,
   GestureDetector,
-  type LongPressGestureHandlerEventPayload,
+  GestureStateManager,
+  type LongPressGestureEvent,
+  useLongPressGesture,
 } from 'react-native-gesture-handler';
 import { callback } from 'react-native-nitro-modules';
 
@@ -18,6 +19,7 @@ import type { ContextMenuProps, MenuItem } from '../menu.types';
 import { useMenuState } from '../use-menu-state';
 import { type NativeCherryMenuRef, NativeCherryMenuView } from '../use-native-menu';
 import { ContextMenuExclusionContext, useContextMenuTouch } from './context-menu-exclusion';
+import { ContextMenuGestureContext, ContextMenuTrigger } from './context-menu-trigger';
 
 type AccessibilityInjectedProps = {
   accessibilityActions?: readonly AccessibilityActionInfo[];
@@ -42,7 +44,7 @@ const IGNORE_NATIVE_ACTION = callback(() => {});
  * and never presents a system popup. The child receives enabled items as
  * accessibility custom actions so the operations do not depend on long press.
  */
-export function ContextMenu({ children, items }: ContextMenuProps) {
+function ContextMenuRoot({ children, items }: ContextMenuProps) {
   const anchorRef = useRef<ViewInstance>(null);
   const { anchor, close, finishClose, isOpen, open } = useMenuState(anchorRef);
   const interaction = useScrollInteraction();
@@ -59,7 +61,7 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
   }, []);
   const hybridRef = useMemo(() => callback(handleMenuView), [handleMenuView]);
   const handleLongPress = useCallback(
-    ({ absoluteX, absoluteY }: LongPressGestureHandlerEventPayload) => {
+    ({ absoluteX, absoluteY }: LongPressGestureEvent) => {
       if (!interaction?.isRecognitionBlocked() && !touchInteraction.isRecognitionBlocked()) {
         open({ height: 0, pageX: absoluteX, pageY: absoluteY, width: 0 });
       }
@@ -68,16 +70,18 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
   );
   const isEnabled =
     menuBinding !== null && !touch.isTouchExcluded && items.some((item) => !item.disabled);
-  const longPress = useMemo(() => {
-    const gesture = Gesture.LongPress().enabled(isEnabled).runOnJS(true);
-    if (menuBinding) {
-      gesture
-        .minDuration(menuBinding.minDuration)
-        .maxDistance(menuBinding.maxDistance)
-        .onStart(handleLongPress);
-    }
-    return gesture;
-  }, [handleLongPress, isEnabled, menuBinding]);
+  const longPress = useLongPressGesture({
+    disableReanimated: true,
+    enabled: isEnabled,
+    maxDistance: menuBinding?.maxDistance,
+    minDuration: menuBinding?.minDuration,
+    onTouchesDown: ({ handlerTag }) => {
+      // An ineligible recognizer must fail before activation; otherwise it
+      // cancels the ScrollView and can swallow its drag/momentum end events.
+      if (interaction?.isActive()) GestureStateManager.fail(handlerTag);
+    },
+    onActivate: handleLongPress,
+  });
 
   return (
     <>
@@ -96,7 +100,9 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
               onTouchStart={touch.onTouchStart}
               ref={anchorRef}
             >
-              {withMenuAccessibilityActions(children, items)}
+              <ContextMenuGestureContext value={longPress}>
+                {withMenuAccessibilityActions(children, items)}
+              </ContextMenuGestureContext>
             </View>
           </GestureDetector>
         </NativeCherryMenuView>
@@ -113,6 +119,8 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
     </>
   );
 }
+
+export const ContextMenu = Object.assign(ContextMenuRoot, { Trigger: ContextMenuTrigger });
 
 function withMenuAccessibilityActions(
   children: ReactElement,

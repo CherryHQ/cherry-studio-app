@@ -76,6 +76,33 @@ test('requires a user-supplied SearXNG address instead of a desktop localhost de
   ]);
 });
 
+test('offers SearchApi only for search and retains its saved credentials and custom host', () => {
+  expect(getWebSearchProviderPresetsByCapability('searchKeywords')).toContainEqual({
+    id: 'searchapi',
+    name: 'SearchApi',
+    type: 'api',
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://www.searchapi.io',
+      },
+    ],
+  });
+  expect(
+    getWebSearchProviderPresetsByCapability('fetchUrls').some((item) => item.id === 'searchapi'),
+  ).toBe(false);
+  const saved = {
+    jina: { apiKeys: ['existing-key'] },
+    searchapi: {
+      apiKeys: ['searchapi-key'],
+      capabilities: { searchKeywords: { apiHost: 'https://search.example.com' } },
+    },
+  };
+  expect(WebSearchProviderOverridesSchema.parse(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+});
+
 test('retains hostless local extraction separately from remote protocols', () => {
   expect(WEB_SEARCH_PROVIDER_PRESET_MAP.fetch.capabilities).toEqual([
     {
@@ -84,6 +111,33 @@ test('retains hostless local extraction separately from remote protocols', () =>
       requiresApiKey: false,
     },
   ]);
+});
+
+test('offers Desearch only for keywords and retains its credentials and custom host', () => {
+  expect(getWebSearchProviderPresetsByCapability('searchKeywords')).toContainEqual({
+    id: 'desearch',
+    name: 'Desearch',
+    type: 'api',
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.desearch.ai',
+      },
+    ],
+  });
+  expect(
+    getWebSearchProviderPresetsByCapability('fetchUrls').some(({ id }) => id === 'desearch'),
+  ).toBe(false);
+  const saved = {
+    jina: { apiKeys: ['existing-key'] },
+    desearch: {
+      apiKeys: ['desearch-key'],
+      capabilities: { searchKeywords: { apiHost: 'https://search.example.com' } },
+    },
+  };
+  expect(WebSearchProviderOverridesSchema.parse(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
 });
 
 test('requires a Jina key for searches while allowing anonymous page reads', () => {

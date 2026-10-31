@@ -6,21 +6,34 @@ resolve credentials, refresh tokens, connect plugins or make discovery requests.
 
 ## Feedback flow
 
-Settings → About → Feedback opens the feedback form page. Shaking captures the visible page first
-and opens the same form. The user writes a required description
-(at most 4096 UTF-8 bytes after newline normalization), reviews the attached-data notice, and
-confirms submission. The same page shows indeterminate progress, then success or a failure.
-There is no range selector or file-save step. Desktop's current report
-form and IPC schema accept only a description, so Mobile does not invent issue categories.
+Settings → About → Feedback opens a form with required feature, problem type and description.
+Shaking captures the visible page and its available metadata before opening the same form.
+Chat and image-generation failure details offer a direct report action. These entries
+preselect their feature and problem type; users can change either and turn off the linked context.
+The existing upload API receives the choices as a fixed text header followed by the user description.
+Their combined length is at most 4096 UTF-8 bytes after newline normalization. The user reviews the
+attached-data notice and submits; the same page shows progress, success or a failure. There is no
+range selector or file-save step.
 
 Submission uses the last 24 hours with logs and traces included. The description draft survives
 failure and returning to the form; leaving the form discards it. Submission blocks navigation
 back until the operation settles. Retrying from the form creates a fresh archive.
 
-`uploadBundle` takes `DiagnosticReportInput`, which carries the description and optional selected
-screenshot ID; the backend validates it. The 24-hour range and the log/trace selection are service constants, recorded in the
-manifest. Archives include `feedback.txt` beside the manifest. Description text stays separate from
-technical metadata.
+`uploadBundle` takes `DiagnosticReportInput`, which carries the description, optional form choices,
+linked context and selected screenshot ID; the backend validates all fields. The 24-hour range and
+the log/trace selection remain service constants. `feedback.txt` contains the same normalized text
+as the upload's description field. The manifest's `feedback` also retains the choices as fixed enum
+values; `incident` contains app-authored metadata separately from the user description.
+
+Linked context records capture time, feature, entry and available source-local correlation IDs.
+Chat reports retain local versus desktop execution, available Session/Agent/execution/turn/message IDs, the message's
+creation time and captured model. Painting reports retain painting/job IDs and a recorded failure
+time when available. Failure projection keeps only bounded codes, classified reason, HTTP status,
+and model/provider. It excludes raw messages, response bodies, names,
+URLs, route parameters and credentials. A message creation time is not a failure time; a capture
+time is not a failure time. Desktop incidents identify a remote execution but this archive still
+contains only the phone's diagnostic sources. Older incidents may predate the retained 24-hour
+window. Retries retain the original incident while collecting a fresh archive.
 
 Desktop's current Doctor dialog owns checks, local export, and report submission. Its report flow
 also has a report URL, server processing status, and local submission history. Mobile implements

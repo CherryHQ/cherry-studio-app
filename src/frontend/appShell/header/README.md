@@ -11,11 +11,17 @@ This module owns Expo Router header adapters used by the app screens.
 ## Organization
 
 - Route layouts declare the root screen's leading behavior with `RouteHeaderProvider`. The root
-  stack uses back and the chat-only drawer stack uses the drawer action.
-- Only chat lives inside `app/(drawer)`, so only `MainHeader` can resolve to the drawer action.
-  Business screens live in the root Stack, declare only titles, right-side actions, and exceptional
-  back interception, and inherit back from the root provider. When no navigation history exists,
-  the default back action replaces to `/`.
+  stack uses back, the `(chat)` stack uses the drawer action, and the content region beside the
+  sidebar uses back in compact windows and the drawer action in wide ones, where the sidebar column
+  moves between first-level pages. Any screen above a stack's root resolves to back, and a page that
+  intercepts back keeps it even at a drawer root.
+- The drawer action is the sidebar button from `useSidebarToggle`
+  (`@/frontend/appShell/sidebar/toggle`): it opens the overlay in a compact window and hides or
+  shows the column in a wide one, with one glyph and a label for each. It is absent while the file
+  pane or a fold holds the column. `MainHeader` always ends with New chat, at every width.
+- Business screens declare only titles,
+  right-side actions, and exceptional back interception, and inherit their leading action from the
+  provider. When no navigation history exists, the default back action replaces to `/`.
 - The right side defaults to empty. Business screens choose `menu`, `icon`, or `label` according to
   the action semantics; multiple secondary actions belong in a menu, while save/done remain direct.
 - Management selection uses `RouteHeader.selection`: the header replaces the normal title and
@@ -36,7 +42,10 @@ This module owns Expo Router header adapters used by the app screens.
   newer sample the chat surface through Expo Blur; older releases fall back to the material tint.
   The Android blur fades to fully transparent at the lower edge so it does not split the header and
   message canvas into separate visual surfaces. Both adapters mount the same action lists from
-  `useMainHeaderActions`, so platform files only own how the surface is mounted.
+  `useMainHeaderActions`, so platform files only own how the surface is mounted. Each adapter also
+  exports `mainHeaderScreenOptions`, which the chat stack declares with its routes: Android never
+  creates the native toolbar, and iOS starts with the transparent one. The Android view sets no
+  screen options, and the iOS view only toggles that transparent toolbar for `hidden`.
 - `headerScreenOptions` owns native top-header invariants. Top headers are separator-free on both
   platforms, and self-drawn headers do not add bottom borders or elevation.
 - Top-bar controls share one Cherry action size and grouping contract. iOS lets the native toolbar
@@ -66,3 +75,19 @@ This module owns Expo Router header adapters used by the app screens.
 
 `MainHeader` supplies local Agent data to `MainHeaderView`; the remote chat supplies PC Agent data
 to the same view. The source adapters do not duplicate platform chrome.
+
+On iOS 26 and later, every native header renders icon and menu actions that carry a `nativeIcon`
+as standard `Stack.Toolbar.Button` and `Stack.Toolbar.Menu` items rather than custom views, through
+`renderHeaderToolbarItem`, so the system can place them where the window keeps its controls: on an
+iPhone Duo, the vertical rail under the status bar. `nativeIcon` is a template image of the same
+glyph as the action's React icon, never a substitute SF Symbol. The native adapter uses template
+rendering so toolbar tint follows the theme. Header-only images in `assets/header-toolbar` retain
+the existing 18pt glyphs at 1x, 2x and 3x; regenerate them with
+`pnpm exec tsx scripts/generateHeaderToolbarIcons.ts` when their source geometry changes.
+A native menu keeps the custom menu's
+sections, checked items and destructive items. The Agent capsule, labels, custom elements and
+actions without a native image (such as the GitHub mark, or a translation still in progress) stay
+custom views and remain at the top, as Apple's guidance keeps labeled controls in the horizontal
+bar. Toolbar items are written as direct children of `Stack.Toolbar`, because Expo reads them
+before rendering. Older systems keep the custom views with their fallback surfaces, and Android
+headers and pane headers render inline as before.

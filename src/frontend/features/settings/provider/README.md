@@ -6,7 +6,8 @@ This page branch owns the `/settings/provider` list and its child pages.
 
 - The list page is exported from this directory's `index.ts`; every child page has its own public
   `index.ts`.
-- `useProviderListNavigation` lets the parent settings page open and prefetch the provider list.
+- `useProviderListNavigation` lets the parent settings page open the list and prefetch its data
+  without preloading the route.
   Its route, query key, pagination, and cache policy remain private to this branch.
 - Provider avatar persistence stays private to this page branch under `hooks/`.
 
@@ -71,6 +72,10 @@ presets with no missing models. Only enabled PC models are compared by provider 
 missing models are added and existing model rows remain unchanged. Mobile-only providers and models
 are retained. Custom providers also retain endpoint entries absent from the PC so existing mobile
 models can keep using them; matching endpoint entries use the PC configuration.
+The PC lists every endpoint a model supports, but Mobile routes on the first entry: a custom
+provider's model moves the first endpoint that provider can serve to the front, and a model whose
+listed endpoints are all chat endpoints without a Base URL is left out of preview and import. A
+custom provider whose default chat endpoint has no Base URL is unavailable as `unsupported-endpoint`.
 Preview and import exclude CherryAI and desktop-local embeddings, including copies identified by
 their preset provider ID or legacy type. HTTP providers such as LM Studio, GPUStack, OpenVINO Model
 Server, and Ollama retain their exported addresses and protocol declarations. The conversation

@@ -28,6 +28,8 @@ export const WEB_SEARCH_PROVIDER_IDS = [
   'crawl4ai',
   'parallel',
   'serply',
+  'searchapi',
+  'desearch',
 ] as const;
 
 export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];

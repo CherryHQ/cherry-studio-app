@@ -17,26 +17,29 @@ import {
 } from '../../../apiService/utils/providerApiServiceApiKeys';
 import { useProviderModelCheck } from '../../../models/hooks/useProviderModelCheck';
 
+const NO_API_KEYS: readonly ApiKeyEntry[] = [];
+type ProviderCheckCredentials =
+  | { kind: 'api-key'; keys: readonly ApiKeyEntry[]; optional: boolean }
+  | { kind: 'account' }
+  | { kind: 'service-account'; ready: boolean };
+
 /**
  * One tap checks that the provider answers. It uses the first text model unless the user
  * picks another, and shows the outcome in the row instead of a separate block.
  */
 export function ProviderConnectionTestSection({
-  apiKeys,
-  authOptional = false,
+  credentials,
   disabled,
   models,
   providerId,
-  signedIn = false,
 }: {
-  apiKeys: readonly ApiKeyEntry[];
-  authOptional?: boolean;
+  credentials: ProviderCheckCredentials;
   disabled: boolean;
   models: readonly Model[];
   providerId: string;
-  signedIn?: boolean;
 }) {
   const { t } = useTranslation();
+  const apiKeys = credentials.kind === 'api-key' ? credentials.keys : NO_API_KEYS;
   const [selectedModelId, setSelectedModelId] = useState<string>();
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<string>();
   const [isKeyPickerOpen, setIsKeyPickerOpen] = useState(false);
@@ -62,7 +65,12 @@ export function ProviderConnectionTestSection({
     ? getProviderApiKeyLabel(selectableApiKey, unnamedLabel)
     : undefined;
 
-  if (!selectedModel || (!signedIn && !authOptional && !apiKeys.some((entry) => entry.isEnabled))) {
+  const hasCredentials =
+    credentials.kind === 'account' ||
+    (credentials.kind === 'service-account'
+      ? credentials.ready
+      : credentials.optional || apiKeys.some((entry) => entry.isEnabled));
+  if (!selectedModel || !hasCredentials) {
     return null;
   }
 

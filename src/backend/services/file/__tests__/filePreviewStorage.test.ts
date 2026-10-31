@@ -197,6 +197,49 @@ describe('filePreviewStorage', () => {
     });
   });
 
+  it('removes an imported entry, bytes, and preview when cancelled during thumbnail generation', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const entries = { create: jest.fn(), delete: jest.fn() };
+    jest.mocked(createInternalEntry).mockResolvedValueOnce(entry);
+    testState.files.add(sourceUri);
+    testState.files.add(temporaryUri);
+    const sourceImage = { height: 3000, width: 4000, release: jest.fn() };
+    const outputImage = {
+      release: jest.fn(),
+      saveAsync: jest.fn(async () => ({ uri: temporaryUri })),
+    };
+    ImageManipulator.manipulate
+      .mockReturnValueOnce({
+        release: jest.fn(),
+        renderAsync: async () => {
+          controller.abort(cancelled);
+          return sourceImage;
+        },
+      })
+      .mockReturnValueOnce({
+        release: jest.fn(),
+        resize: jest.fn(),
+        renderAsync: async () => outputImage,
+      });
+    const input: CreateInternalEntryInput = {
+      mediaType: entry.mediaType,
+      provenance: 'imported',
+      source: 'uri',
+      uri: 'file:///staged/photo.jpg',
+    };
+
+    await expect(createInternalEntryWithPreview(entries, input, controller.signal)).rejects.toBe(
+      cancelled,
+    );
+
+    expect(createInternalEntry).toHaveBeenCalledWith(entries, input, controller.signal);
+    expect(entries.delete).toHaveBeenCalledWith(entry.id);
+    expect(testState.files.size).toBe(0);
+    expect(sourceImage.release).toHaveBeenCalledTimes(1);
+    expect(outputImage.release).toHaveBeenCalledTimes(1);
+  });
+
   describe('new image outputs', () => {
     const generatedEntry = { ...entry, provenance: 'generated' as const };
     const input: CreateInternalEntryInput = {

@@ -7,7 +7,6 @@ export function publishFileEntryChanges(
 ): void {
   publishDataApiChanges([
     ...new Set([
-      '/files/entries',
       '/files/library',
       '/files/history',
       '/trash',

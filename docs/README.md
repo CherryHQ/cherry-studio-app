@@ -14,7 +14,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [Internationalization](./guides/internationalization.md) | Supported languages, shared resolution, translation resources, and PR checks |
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
-| [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, Google Play AAB builds, TestFlight uploads, and retry procedures |
+| [Cloud Releases](./guides/cloud-releases.md) | EAS release workflows, release preparation, channel delivery, retries, and status |
 | [Application Updates](./guides/app-updates.md) | EAS incremental code/asset updates, distribution channels, staged rollout, and rollback |
 | [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, shared resident and temporary devices, development-client reuse, and cleanup |
 | [Mobile Acceptance](./guides/mobile-acceptance.md) | Main-path benchmark, caller-selected environment/device/data, e2e tests with recorded replay, and report templates |

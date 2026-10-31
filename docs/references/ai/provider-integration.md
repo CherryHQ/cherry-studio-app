@@ -14,16 +14,48 @@ the currently implemented runtime paths until each migration phase lands.
 Agent conversation requests use one path:
 
 ```text
-MobileAgentHost -> PiRuntime -> piModelResolver -> provider/model services
+MobileAgentHost -> PiDurableAgentRuntime (pi-durable) -> piModelResolver -> provider/model services
 ```
 
-Pi is the only local Agent Runtime. It receives a normalized Agent transcript and resolves the
+`pi-durable` is the local conversation engine. Its `pi-ai` adapters implement provider protocols;
+they do not own another conversation loop. The engine receives a normalized Agent transcript and resolves the
 selected Agent model through the Host-owned provider adapter. The current Pi binding supports
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
 Providers declaring optional API-key authentication can use these endpoints without a saved key.
 The Pi adapter supplies the SDK-only placeholder and suppresses generated credentials while
 preserving explicitly configured authentication headers.
+
+Vertex AI Gemini and Claude use the same model resolver with `iam-gcp` service-account credentials. The
+configuration form imports a Google Cloud JSON key, edits project/location, and can override the
+derived service URL. `VertexAuthClient` owns native RS256 signing, bounded token exchange over the
+shared HTTP client, and a memory-only cache per provider and credential fingerprint. Model discovery
+shares that client. Replacing credentials invalidates cache identity; deleting a provider or stopping
+the application aborts its token requests. Concurrent callers cancel independently.
+
+Every model invocation, including recovery and compaction, resolves a current token. Tokens stay
+outside Pi's serialized model and working-copy input; the stream binding owns them and registers
+them for error redaction. Service-account invocations have `iam-gcp` usage attribution and do not
+select or rotate API keys. Their authoritative bearer credential replaces conflicting configured
+auth headers. The pinned Pi AI and Google GenAI Web patches expose instance-scoped token/auth and
+fetch injection, preserving upstream Google conversion and streaming. Ordinary API-key and Node
+ADC paths keep their existing behavior.
+
+Gemini uses Pi AI's `google-vertex` adapter. Claude uses Pi AI's public Anthropic `stream()` client
+injection with the official `@anthropic-ai/vertex-sdk`: Pi owns message conversion, tool calls,
+thinking signatures and stream parsing; the SDK owns Vertex publisher URLs and request shaping.
+The SDK receives a host-owned `authClient` and instance fetch. Its versioned browser-map patch only
+keeps Node Google auth out of the native graph and requires explicit credentials. Cherry's existing
+payload parameter resolver still owns reasoning selection; no second converter or conversation
+loop is introduced. The shared URL resolver supplies the versioned API root for Claude and the
+project collection for Gemini, preserving regional, multi-region and custom gateway addresses.
+
+Vertex currently admits Gemini and Claude text models. MaaS, image, audio and
+embedding models remain unavailable through the system capability gate. Provider-native web tools
+are not enabled for Vertex; application and MCP function tools retain the pi-durable loop. Adding
+other Vertex protocols requires explicit protocol adapters, not just opening the catalog filter.
+Pi AI's image-generation interface currently has only an OpenRouter implementation; it does not
+provide a direct Vertex image adapter. Image capabilities retain the separate service path below.
 
 Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
 Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,
@@ -197,7 +229,7 @@ requires a fixed loopback callback and additional identity-validation/platform i
 has no Mobile provider preset or `pi-messages` binding. `grok-cli` still requires an external CLI and
 remains excluded. Supporting the xAI subscription flow on the `grok` preset does not enable `grok-cli`.
 
-The versioned Pi 0.99.1 patch exposes `native-oauth`, injects app HTTP/PKCE primitives, and adds a
+The versioned Pi patch (see the [maintained patch inventory](../agent/pi-durable-migration.md#maintained-patch-contracts)) exposes `native-oauth`, injects app HTTP/PKCE primitives, and adds a
 native manual-callback adapter. Metro honors this package's browser file map. OAuth protocol polling,
 refresh, token parsing, and request-auth derivation remain upstream implementations. Update this
 patch and the native module-graph regression coverage together when upgrading Pi.

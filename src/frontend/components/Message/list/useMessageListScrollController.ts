@@ -31,6 +31,7 @@ type MessageListScrollControllerInputs = {
   listRef: RefObject<LegendListRef | null>;
   messages: readonly MessageListItem[];
   onReady: (() => void) | undefined;
+  onTargetRestored?: MessageListProps['onTargetRestored'];
   onReturnToLatest?: () => void;
 };
 
@@ -117,8 +118,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   }, [follow, isKeyboardTransitioning]);
 
   const scrollToLiveEdge = useCallback(
-    async (reason: FollowingReason, options: { animated: boolean }) => {
-      follow.enterFollowing(reason);
+    async (reason: FollowingReason | 'local-send', options: { animated: boolean }) => {
+      // Sending positions the new turn once; its growing reply must not pull
+      // the reader down or queue another end correction during this scroll.
+      if (reason === 'local-send') follow.enterReading(reason);
+      else follow.enterFollowing(reason);
+      // Native momentum events from this programmatic scroll must not complete
+      // an earlier drag and accidentally opt the reader back into following.
+      isMomentumScrollingRef.current = false;
+      userInteractionGenerationRef.current = null;
       clearStoredAnchor();
       liveEdgeScrollCountRef.current += 1;
 
@@ -127,8 +135,14 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         if (current.onReturnToLatest) {
           current.onReturnToLatest();
         } else {
-          await current.listRef.current?.scrollToEnd({
-            animated: options.animated,
+          const list = current.listRef.current;
+          const state = list?.getState();
+          // A no-op native animation may never report completion, which would
+          // leave later content growth waiting on liveEdgeScrollCountRef forever.
+          const isAtBottom =
+            state && isMessageListAtBottom(state.scroll, state.contentLength, state.scrollLength);
+          await list?.scrollToEnd({
+            animated: options.animated && !isAtBottom,
           });
         }
       } catch (error) {
@@ -227,7 +241,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         return;
       }
       processedEnteringMessageIdRef.current = messageId;
-      follow.enterFollowing('local-send');
+      follow.enterReading('local-send');
       clearStoredAnchor();
       cancelScheduledStick();
 
@@ -237,7 +251,10 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       const generation = restoreGenerationRef.current;
       sendFrameRef.current = requestAnimationFrame(() => {
         sendFrameRef.current = null;
-        if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
+        if (
+          generation !== restoreGenerationRef.current ||
+          pendingEnteringMessageIdRef.current !== messageId
+        ) {
           return;
         }
         // Keyboard dismissal can start after this frame was queued.
@@ -282,7 +299,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   );
 
   const reportReadyAfterRestore = useCallback(
-    (generation: number, shouldReportReady = true) => {
+    (generation: number, shouldReportReady = true, restoredMessageId?: string) => {
       if (generation !== restoreGenerationRef.current) {
         return;
       }
@@ -296,7 +313,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         }
 
         suppressSaveRef.current = false;
-        if (shouldReportReady) inputsRef.current.onReady?.();
+        const current = inputsRef.current;
+        if (
+          restoredMessageId &&
+          current.dataKey &&
+          current.initialLayoutReady &&
+          current.messages.some((message) => message.id === restoredMessageId)
+        )
+          current.onTargetRestored?.({ dataKey: current.dataKey, messageId: restoredMessageId });
+        if (shouldReportReady) current.onReady?.();
         const pendingMessageId = pendingEnteringMessageIdRef.current;
         if (pendingMessageId) {
           scheduleLocalSendScroll(pendingMessageId);
@@ -344,6 +369,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
           : current.dataKey
             ? cacheService.get(cacheKeyFor(current.dataKey))
             : null;
+    if (
+      current.onTargetRestored &&
+      explicitTarget &&
+      explicitTarget !== 'end' &&
+      !current.messages.some((message) => message.id === explicitTarget.messageId)
+    ) {
+      reportReadyAfterRestore(generation);
+      return;
+    }
     const target = resolveRestoreTarget(
       saved,
       (key) => current.messages.findIndex((message) => message.id === key),
@@ -365,7 +399,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         processedEnteringMessageIdRef.current = enteringMessageId;
         pendingEnteringMessageIdRef.current = undefined;
       }
-      restore = scrollToLiveEdge(pendingMessageId ? 'local-send' : 'restored-bottom', {
+      restore = scrollToLiveEdge(enteringMessageId ? 'local-send' : 'restored-bottom', {
         // Initial placement is hidden by the history cover. Android may not
         // emit an animation completion event when this target is already reached.
         animated: false,
@@ -373,7 +407,14 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     }
 
     void restore.then(
-      () => reportReadyAfterRestore(generation),
+      () =>
+        reportReadyAfterRestore(
+          generation,
+          true,
+          target.align === 'start' && explicitTarget && explicitTarget !== 'end'
+            ? explicitTarget.messageId
+            : undefined,
+        ),
       () => reportReadyAfterRestore(generation),
     );
   }, [follow, reportReadyAfterRestore, scrollToLiveEdge]);

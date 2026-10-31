@@ -57,6 +57,8 @@ product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_F
 and available source name/origin/status. The product reason may have been inferred from the
 caller-visible message; it is distinct from the request's structured-only `error.category`.
 Only the closed reason is copied, never the message or response body.
+Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
+facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
 `stream_disconnected`; both are network failures, and `no_response` also covers native timeouts
 and TLS errors because the rejection carries no cause. Adapters without a custom fetch (Google)

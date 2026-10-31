@@ -322,6 +322,45 @@ const matrix: MatrixSample[] = [
     },
   },
   {
+    group: '9 DeepSeek Flash thinking object',
+    providerId: 'deepseek',
+    modelId: 'deepseek-v4-flash',
+    endpointType: 'openai-chat-completions',
+    expected: {
+      default: {},
+      none: { 'thinking.type': 'disabled' },
+      low: { 'thinking.type': 'enabled', reasoningEffort: 'low' },
+      high: { 'thinking.type': 'enabled', reasoningEffort: 'high' },
+      max: { 'thinking.type': 'enabled', reasoningEffort: 'max' },
+    },
+  },
+  {
+    group: '9 DeepSeek Flash responses',
+    providerId: 'deepseek',
+    modelId: 'deepseek-v4-flash',
+    endpointType: 'openai-responses',
+    expected: {
+      default: {},
+      none: { reasoningEffort: 'none' },
+      low: { reasoningEffort: 'low' },
+      high: { reasoningEffort: 'high' },
+      max: { reasoningEffort: 'max' },
+    },
+  },
+  {
+    group: '9 DeepSeek Pro responses',
+    providerId: 'deepseek',
+    modelId: 'deepseek-v4-pro',
+    endpointType: 'openai-responses',
+    expected: {
+      default: {},
+      none: { reasoningEffort: 'none' },
+      low: { reasoningEffort: 'low' },
+      high: { reasoningEffort: 'high' },
+      max: { reasoningEffort: 'max' },
+    },
+  },
+  {
     group: '10 NVIDIA Qwen chat template',
     providerId: 'nvidia',
     modelId: 'qwen/qwen3.5-122b-a10b',
@@ -423,6 +462,21 @@ describe('reasoning registry wire matrix', () => {
       const { model, profile } = resolveSample({ providerId, modelId });
       const invocation = resolveReasoningInvocation({ model, profile, selection });
       expect(flattenWireObject(encodeReasoningInvocation(invocation))).toEqual(expected);
+    },
+  );
+
+  it.each(['deepseek-v4-flash', 'deepseek-v4-pro'])(
+    'maps automatic reasoning to a concrete Responses effort for %s',
+    (modelId) => {
+      const { model, profile } = resolveSample({
+        providerId: 'deepseek',
+        modelId,
+        endpointType: 'openai-responses',
+      });
+      const invocation = resolveReasoningInvocation({ model, profile, selection: 'auto' });
+      expect(flattenWireObject(encodeReasoningInvocation(invocation))).toEqual({
+        reasoningEffort: 'high',
+      });
     },
   );
 });

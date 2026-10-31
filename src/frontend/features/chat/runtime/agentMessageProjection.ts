@@ -172,10 +172,12 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
         part.skillReferences?.length ||
         part.selectionReferences?.length ||
         part.skillSelections?.length ||
-        part.skillAction
+        part.skillAction ||
+        part.quotes
         ? withCherryMeta(
             { type: 'text', text: part.text, state: part.state },
             {
+              ...(part.quotes ? { quotes: part.quotes, quoteAuthor: part.quoteAuthor } : {}),
               references: [
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
@@ -473,29 +475,6 @@ export function mergeAgentMessageViews(
   }
   merged.push(...newLive.slice(liveIndex));
   return merged;
-}
-
-/**
- * Show an answer awaiting its replacement turn the way a just-sent message
- * looks: empty and pending. Admission is too slow to leave the replaced answer
- * standing, and an empty pending row is the one state the list already renders
- * as "working on it". The Host's reserved view takes over as soon as it lands,
- * restoring any prefix the retry keeps.
- */
-export function projectRetryingMessage(
-  messages: readonly AgentMessageView[],
-  retryingMessageId: string | undefined,
-): readonly AgentMessageView[] {
-  if (!retryingMessageId) {
-    return messages;
-  }
-  const index = messages.findIndex((message) => message.id === retryingMessageId);
-  if (index < 0) {
-    return messages;
-  }
-  const projected = [...messages];
-  projected[index] = { ...messages[index], status: 'pending', parts: [] };
-  return projected;
 }
 
 export function toAgentMessageListItems(

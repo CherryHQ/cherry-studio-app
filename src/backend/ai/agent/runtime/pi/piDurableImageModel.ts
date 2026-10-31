@@ -1,9 +1,8 @@
 import type { Api, Model, TranscriptContext } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import { DURABLE_IMAGE_TOOL_NAME } from '../durableTypes';
 import { emptyAssistantMessage, providerErrorEvent } from './piStreamEvents';
-
-export const PI_IMAGE_TOOL_NAME = 'cherry_generate_image';
 
 /** Native tool scheduling protects image side effects; this adapter never calls a language API. */
 export function imageModelStream(model: Model<Api>, context: TranscriptContext) {
@@ -11,7 +10,9 @@ export function imageModelStream(model: Model<Api>, context: TranscriptContext) 
   const lastUser = context.messages.findLastIndex((message) => message.role === 'user');
   const result = context.messages
     .slice(lastUser + 1)
-    .find((message) => message.role === 'toolResult' && message.toolName === PI_IMAGE_TOOL_NAME);
+    .find(
+      (message) => message.role === 'toolResult' && message.toolName === DURABLE_IMAGE_TOOL_NAME,
+    );
   const failed = result?.role === 'toolResult' && result.isError;
   const hasResult = Boolean(result);
   const message = {
@@ -24,7 +25,7 @@ export function imageModelStream(model: Model<Api>, context: TranscriptContext) 
           {
             type: 'toolCall' as const,
             id: globalThis.crypto.randomUUID(),
-            name: PI_IMAGE_TOOL_NAME,
+            name: DURABLE_IMAGE_TOOL_NAME,
             arguments: {},
           },
         ],

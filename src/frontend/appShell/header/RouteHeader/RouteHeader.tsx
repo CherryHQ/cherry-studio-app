@@ -18,13 +18,17 @@ export function RouteHeader({
 }: RouteHeaderProps) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
-  const defaultLeftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
+  const defaultLeftActions = useMemo<HeaderToolbarAction[]>(
+    () => (leadingAction ? [leadingAction] : []),
+    [leadingAction],
+  );
   const selectionActions: HeaderToolbarAction[] | undefined = selection
     ? [
         {
           accessibilityLabel: t('common.cancel'),
           icon: ArrowLeftIcon,
           key: 'exit-selection',
+          nativeIcon: require('@/assets/header-toolbar/arrow-left.png'),
           onPress: selection.onExit,
           type: 'icon',
         },

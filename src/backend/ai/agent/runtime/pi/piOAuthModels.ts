@@ -55,7 +55,7 @@ export async function listPiOAuthModels(
       {
         getRotatedApiKey: () => auth.auth.apiKey ?? '',
         getAuthConfig: async () => undefined,
-        getVertexAuthHeaders: async () => {
+        getVertexAccessToken: async () => {
           throw new ProviderAccountError('unsupported');
         },
       },
@@ -114,6 +114,7 @@ export function endpointForPiApi(api: SupportedPiApi) {
     case 'openai-completions':
       return ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
     case 'google-generative-ai':
+    case 'google-vertex':
       return ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT;
     default:
       return ENDPOINT_TYPE.OPENAI_RESPONSES;

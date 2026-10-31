@@ -275,6 +275,46 @@ Deletion removes Cherry data immediately, while retired Pi bytes remain inside t
 file is never part of a backup, and switching or resetting storage deletes it with `cherry.db`.
 There is no raw SQL erasure, archive tombstone, hidden-turn document or descendant-reclamation chain.
 
+## Editing A Completed Reply
+
+`editMessage` edits text parts of any successful answer while the Session is idle: prose between
+tool calls and the final result. Reasoning, attachments, completed tool receipts, message identities
+and billed usage remain intact. Later turns are kept and not regenerated. Each part carries its
+original text for optimistic concurrency. The store checks the answer, absence of unfinished
+messages, every original text and the history revision again inside its write transaction.
+Translation caches are cleared, and so is every context checkpoint whose anchor is not strictly
+before the edited turn, because it may retain the old answer verbatim; the same rule protects
+deleted turns.
+
+Each native copy whose current context still contains the answer's text blocks stops background
+compaction and appends one public Pi `ContextEdit` replacement per changed entry at its tail; every
+part replaces only its own text block. The original entries remain immutable, and provider session
+identity, earlier signed content and tools are preserved.
+The copy's newest answer records the edit as its answer boundary, so forks after that answer keep
+the edit natively. A fork through an earlier answer cannot inherit an edit appended later, so that
+answer reports no native boundary and the new copy is rebuilt from the edited Cherry transcript.
+Changed text blocks no longer carry the original provider text signatures, except OpenAI Responses
+signatures, which identify the output item and phase rather than its content. Native web replay,
+imported parts, copies that do not hold the answer and compacted-away targets fall back to
+rebuilding. Context replacements clear the edited answer's obsolete measured usage; Pi measures
+context from the newest remaining usage, so editing an earlier answer is reflected only after the
+next request. Transcript projection and Cherry's invocation ledger retain the original billed usage.
+
+Following Pi semantics, an answer already summarized by compaction keeps its old meaning inside that
+summary in a native copy; only its displayed text changes. When an edited copy's context begins at a
+compaction or reset, its refreshed context is saved as the checkpoint of that copy's newest answer.
+Any other rebuild falls back to an earlier checkpoint and replays the edited Cherry transcript.
+
+The native replacements and binding revisions advance before the Cherry transaction commits the same
+revision with the edited text and refreshed checkpoints. A crash between those commits leaves
+mismatched working copies that recovery discards. Every copy that was not edited becomes stale;
+failed retirement cannot make it current. `message.edited` is published only after Cherry commits.
+
+Provider prompt caches can reuse an unchanged prefix before the edited answer; the edited portion and
+the following context need a new matching cache. Preserving native copies avoids an additional
+provider-session change. The fallback rebuild retains the reconstruction limitations described
+above.
+
 ## Clearing The Working File
 
 Pi Durable has no public conversation deletion. Copying only live conversations into a new file
@@ -362,6 +402,8 @@ storage-lifetime concern. Mobile's manual whole-file clearing
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
 | Pi AI incremental JSON preview | Performance adaptation: avoid quadratic partial parsing while final tool arguments still require a complete valid object | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts); require final-argument parity plus measurement before removing the optimization |
 | Pi AI native OAuth; Pi Durable declarations import ([upstream #11254](https://github.com/earendil-works/pi/issues/11254)); Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
+| Pi AI Vertex bearer token and Google GenAI Web auth/fetch injection | Platform compatibility: pi-durable resolves host-owned service-account tokens for each invocation; the Web SDK uses the injected stream transport without API-key placeholders, global fetch replacement or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts); retained until upstream provides equivalent explicit Web auth and instance fetch, followed by native acceptance. Google GenAI is separately pinned by [its 2.21.0 patch](../../../patches/@google__genai@2.21.0.patch) |
+| Anthropic Vertex native Google auth browser map | Platform compatibility: the official SDK receives host-owned `authClient` credentials; Metro redirects its `google-auth-library` import to a guard that requires injection. Node retains its ordinary auth path. Pi's public `stream()` client injection and the SDK's Vertex request shaping are unchanged | [piVertexAnthropic.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexAnthropic.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and local [metroResolution.test.ts](../../../scripts/__tests__/metroResolution.test.ts); the [0.22.0 patch](../../../patches/@anthropic-ai__vertex-sdk@0.22.0.patch) can retire when the official SDK offers a native-safe injected-auth entry, followed by native acceptance. This SDK version shares Pi's pinned Anthropic SDK 0.129.0 |
 | Chord numeric array keys | Hermes compatibility: JSON changes to array indexes are interpreted consistently | [piChordPatch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piChordPatch.test.ts); require the behavior on Hermes, not only Node |
 
 Three platform hunks were retired after checking the pristine 1.4.0 packages:
@@ -396,6 +438,10 @@ are not evidence that a candidate dependency or a device has passed. The 1.4.0 d
 and patch retirements above have not received runtime acceptance; nothing was published upstream.
 
 ## Validation Status
+
+Vertex Gemini's token, resolver, URL, UI credential-gating and published SDK contract regressions
+are authored but unrun. Native signing and real Google service acceptance remain pending; the
+versioned patches and static lint results alone do not establish runtime compatibility.
 
 Regression sources cover reservation ordering, recovery before reclamation, failed settlement,
 independent forks, revision invalidation, normalized history import, queued inputs and backup

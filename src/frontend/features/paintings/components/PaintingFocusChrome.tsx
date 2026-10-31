@@ -86,12 +86,13 @@ export function PaintingFocusChrome({
         icon: EllipsisIcon,
         items: menuItems,
         key: 'more',
+        nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
         type: 'menu',
       });
     }
     return actions;
   }, [menuItems, t]);
-  const leftActions = useMemo(() => [leadingAction], [leadingAction]);
+  const leftActions = useMemo(() => (leadingAction ? [leadingAction] : []), [leadingAction]);
 
   return (
     <HeaderChrome

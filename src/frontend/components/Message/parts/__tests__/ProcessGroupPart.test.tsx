@@ -19,7 +19,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('@/frontend/hooks/file', () => ({ usePdfOcrState: () => undefined }));
+jest.mock('@/frontend/hooks/file', () => ({ useFileOcrState: () => undefined }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

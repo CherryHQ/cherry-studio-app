@@ -1,15 +1,19 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "engines": {
     "node": "24.x"
   },
   "expo": {
+    "install": {
+      "exclude": [
+        "react-native-keyboard-controller"
+      ]
+    },
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-notifications",
           "expo-app-metrics",
           "expo-observe"
         ]
@@ -53,7 +57,7 @@
     "test:ai-runtime": "pnpm --filter @cherrystudio/ai-runtime test",
     "typecheck": "pnpm typecheck:packages && pnpm typecheck:app",
     "typecheck:app": "tsc --noEmit",
-    "typecheck:packages": "pnpm --filter @cherrystudio/ai-runtime typecheck && pnpm --filter @cherrystudio/file-preview-webview typecheck",
+    "typecheck:packages": "pnpm --filter @cherrystudio/ai-runtime typecheck && pnpm --filter @cherrystudio/file-preview-webview typecheck && pnpm --filter @cherrystudio/mermaid-webview typecheck",
     "lint": "oxlint && expo lint",
     "lint:fix": "oxlint --fix && expo lint --fix",
     "format": "oxfmt .",
@@ -77,8 +81,9 @@
     "@ai-sdk/provider-utils": "4.0.58",
     "@ai-sdk/togetherai": "^2.0.53",
     "@ai-sdk/xai": "3.0.126",
+    "@anthropic-ai/vertex-sdk": "0.22.0",
     "@babel/runtime": "^7.29.2",
-    "@cherrystudio/ai-core": "2.4.2",
+    "@cherrystudio/ai-core": "2.4.3",
     "@cherrystudio/ai-runtime": "workspace:*",
     "@cherrystudio/ai-sdk-provider": "0.1.9",
     "@cherrystudio/analytics-client": "^1.4.0",
@@ -86,12 +91,13 @@
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/file-preview-webview": "workspace:*",
     "@cherrystudio/mcp-app-webview": "workspace:*",
-    "@cherrystudio/provider-registry": "0.2.5",
+    "@cherrystudio/mermaid-webview": "workspace:*",
+    "@cherrystudio/provider-registry": "0.3.1",
     "@cherrystudio/remote-protocol": "0.7.0",
     "@cherrystudio/remote-transport": "0.2.5",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
-    "@cherrystudio/web-search": "0.3.0",
+    "@cherrystudio/web-search": "0.5.0",
     "@e965/xlsx": "0.20.3",
     "@earendil-works/chord": "1.4.0",
     "@earendil-works/pi-ai": "1.4.0",
@@ -178,16 +184,16 @@
     "react-native-anydoc": "0.4.1",
     "react-native-background-actions": "4.1.0",
     "react-native-chart-kit": "7.0.2",
-    "react-native-enriched-markdown": "1.0.1",
+    "react-native-enriched-markdown": "1.1.1",
     "react-native-gesture-handler": "~3.3.0",
-    "react-native-keyboard-controller": "1.22.7",
+    "react-native-keyboard-controller": "1.22.9",
     "react-native-mmkv": "4.3.2",
-    "react-native-nitro-healthkit": "1.0.0",
     "react-native-nitro-modules": "0.36.4",
     "react-native-nitro-theme-transition": "^1.0.0",
     "react-native-quick-base64": "3.0.0",
     "react-native-quick-crypto": "1.1.8",
     "react-native-reanimated": "4.7.1",
+    "react-native-reserved-regions": "0.2.0",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "4.30.0",
     "react-native-share": "12.3.1",
