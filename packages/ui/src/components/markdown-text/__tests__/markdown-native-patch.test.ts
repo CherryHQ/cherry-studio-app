@@ -5,6 +5,23 @@ const patch = readFileSync(
   'utf8',
 );
 
+// Source wiring only: R8-enabled builds still need device acceptance.
+describe('native Markdown display math shrinking rules', () => {
+  test('keeps the class and members loaded by reflection for display math', () => {
+    const androidRoot = `${process.cwd()}/node_modules/react-native-enriched-markdown/android`;
+    const viewCreators = readFileSync(
+      `${androidRoot}/src/main/java/com/swmansion/enriched/markdown/segments/SegmentViewCreators.kt`,
+      'utf8',
+    );
+    const mathClass = viewCreators.match(/Class\.forName\("([^"]+\.MathContainerView)"\)/)?.[1];
+
+    expect(mathClass).toBeDefined();
+    expect(readFileSync(`${androidRoot}/consumer-rules.pro`, 'utf8')).toContain(
+      `-keep class ${mathClass} { *; }`,
+    );
+  });
+});
+
 // Native-source patch guards; rendering and gestures still need device acceptance.
 describe('native Markdown code-block menu patch', () => {
   test('cancels ancestor recognizers before either code target presents its menu', () => {
