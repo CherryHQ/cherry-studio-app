@@ -29,8 +29,11 @@ retires any older pending request, and leaves navigation with UU; the user switc
 manually. Launching UU is not evidence that full-screen remote control connected successfully.
 The protocol cannot verify that the user selected the same physical computer as the Cherry device.
 
-The native visibility plugin `scripts/withUuRemote.js` requires a new installation package. UU
-Remote 4.42.0+ must be installed on the phone; the target computer needs UU Remote configured.
+The native visibility plugin `scripts/withUuRemote.js` requires a new installation package. Android
+queries must declare both the `uuremote` scheme and `external` host to match UU's entry; a scheme-only
+query can incorrectly report an installed UU app as missing.
+
+UU Remote 4.42.0+ must be installed on the phone; the target computer needs UU Remote configured.
 The module checks whether UU can be opened, but cannot verify its installed app version.
 iOS PiP additionally needs iOS 18+ and supported hardware. Older iOS versions can still associate
 and use the confirmed full-screen alternative. Android PiP availability is reported by UU and uses
