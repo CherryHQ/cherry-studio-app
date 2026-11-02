@@ -23,7 +23,16 @@ export function createOfficeTransformCode(
 ${officeRuntimeCode}
 const request = ${JSON.stringify(request)};
 const images = ${JSON.stringify(images)};
-try { return (() => { ${officeTransformCode} })(); }
+try {
+  ${
+    request.operation === 'inspect' && request.kind === 'check'
+      ? `const check = checkOfficePackage(readInput(0), request.format, request.against ? readInput(1) : undefined);
+  const { findings, ...summary } = check;
+  return { kind: 'check', ...summary, total: findings.length, offset: request.offset,
+    findings: findings.slice(request.offset, request.offset + request.limit) };`
+      : `return (() => { ${officeTransformCode} })();`
+  }
+}
 catch (error) { return { error: String(error.message || error).slice(0, 500) }; }
 `;
 }
@@ -31,6 +40,7 @@ catch (error) { return { error: String(error.message || error).slice(0, 500) }; 
 /** Reads `source`; an edit writes the new package to `output` and returns its size. */
 export async function transformOfficeFile(input: {
   source: { uri: string; size: number };
+  against?: { uri: string; size: number };
   request: OfficeTransformRequest;
   images?: Readonly<Record<string, OfficeImage>>;
   output?: string;
@@ -52,7 +62,11 @@ export async function transformOfficeFile(input: {
     const outcome = await input.sandbox.run({
       code,
       files: {
-        inputs: [input.source.uri, ...entries.map(([, image]) => image.uri)],
+        inputs: [
+          input.source.uri,
+          ...(input.against ? [input.against.uri] : []),
+          ...entries.map(([, image]) => image.uri),
+        ],
         output: input.output,
       },
       signal: input.signal,

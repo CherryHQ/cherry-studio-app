@@ -14,12 +14,12 @@ There is no remote service or job queue.
 | `create_document` | Paragraphs (`normal`, `title`, `heading1`, `heading2`), ordered/unordered lists, rectangular tables, PNG/JPEG images | DOCX |
 | `create_workbook` | Unique named sheets, rectangular rows of string/number/boolean/null cells, column widths, numeric formats and PNG/JPEG images anchored to cells | XLSX |
 | `create_presentation` | Widescreen title, bullet, table and image slides; light/dark theme | PPTX with editable supported elements |
-| `inspect_office_file` | Managed source, `kind` (`content` or `images`), item offset/limit and optional PPTX shape offset | Content outline or picture anchors/metadata and replacement eligibility; source SHA-256 |
+| `inspect_office_file` | Managed source, `kind` (`content`, `images`, `structure` or `check`), item offset/limit and optional PPTX shape offset | Content/picture outline, structural inventory, or paged package findings; source SHA-256 |
 | `read_office_content` | Managed source and one structural anchor | Exact paragraph text or up to 1000 cells with saved formula values; source SHA-256 |
 | `edit_document` | Version 1, source/hash, filename, exact paragraph replacements and/or existing picture replacements | New DOCX copy, retaining surrounding runs, hyperlinks and picture layout |
 | `edit_workbook` | Version 1, source/hash, filename, one sheet, up to 1000 scalar cell edits and/or existing picture replacements | New XLSX copy, retaining untouched package parts |
 | `edit_presentation` | Version 1, source/hash, filename, slide/shape/table-cell paragraph replacements and/or existing picture replacements | New PPTX copy, retaining surrounding runs, hyperlinks and picture layout |
-| `run_office_script` | Output filename, model-written JavaScript and up to 50 authorized managed file ids | New DOCX, XLSX or PPTX produced by the script |
+| `run_office_script` | Output filename, model-written JavaScript, up to 50 authorized managed file ids and optional `against_file_entry_id` | New DOCX, XLSX or PPTX produced by the script |
 
 Creation inputs have `filename` and `spec`, and every creation spec requires `version: 1`.
 Edit inputs require top-level `version: 1`. Unknown properties and
@@ -107,9 +107,14 @@ function and returns the file as `Uint8Array`, `ArrayBuffer` or base64. A script
 nothing only inspects its inputs: it reports `status: "read"` with its console output (16 KiB) and
 saves no file.
 
-The job rejects a result that is not a ZIP package containing the format's main part, or whose XML
-parts (each up to 1 MiB) do not parse, so hand-edited package XML cannot publish a corrupt file.
-The adapter then publishes the result like generation. Inputs are up to 50 authorized managed
+The job checks the format's main part, package XML, content types, relationships and selected IDs
+before writing. XML checks use a streaming parser and do not skip parts above the former 1 MiB
+cutoff. Generation rejects errors; fixed edits reject newly introduced errors against their source.
+For scripts, `against_file_entry_id` authorizes and includes an untouched comparison snapshot in
+the input list, and only new errors block publication. Without it, all errors block publication.
+Warnings remain inspectable. This is a bounded integrity check, not a full OOXML schema validator
+or proof that every Office application opens the file without repair. The adapter publishes the
+result like generation. Inputs are up to 50 authorized managed
 files; image inputs arrive as prepared copies. Script and console errors return as a failed call
 with `status: "error"` so the model can correct and retry; a memory failure says that rewriting the
 same work cannot fix it. Formula cells must carry their computed value because nothing in the app
@@ -120,13 +125,27 @@ existing file without losing untouched parts goes through its package XML or `do
 SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files. The fixed spec
 tools stay the cheaper path for work they cover.
 
-## Desktop Reference And Patch Contract
+## Local Delivery Loop
 
-The reference is Cherry Desktop's bundled
-[office-transform skill](https://github.com/CherryHQ/cherry-studio/blob/f0acf13588/resources/skills/office-transform/SKILL.md),
-its `office_patch_copy.py` and `office/` helpers, and its DOCX/PPTX run-edit recipes. Mobile ports
-those algorithms using the existing ZIP/XML libraries; it does not execute Desktop's Python or
-`uv` commands. Desktop's unrestricted library scripting is broader than these bounded tools.
+1. Inspect `kind: "structure"` before editing. Word inventories body paragraphs/tables and related
+   headers, footers, notes, comments, revisions and fields; only body paragraph entries carry the
+   existing editable anchors. IDs are stable within the source snapshot, not across structural edits.
+   XLSX inventories sheet counts, saved formula caches, missing caches and error cells without
+   evaluating formulas. PPTX inventories shape boxes after group transforms and layout/master
+   placeholder inheritance, plus explicit run fonts and overlap/off-slide findings. Boxes are
+   estimates; intentional overlaps and unresolved geometry need review, and they do not detect text overflow.
+2. Read the exact target and make a new copy. Untouched package-part contents remain preserved.
+3. Read back changed content, then inspect `kind: "check"`. Optional `against_file_entry_id`
+   reports only new findings against an independently authorized original. `errors` and `warnings`
+   count all findings before paging; findings are a successful read, not a tool execution failure.
+   The checker refuses incomplete scans above 4096 entries, 128 MiB expanded bytes, 1000 findings,
+   100,000 metadata records or 256 XML levels. External relationships are never fetched.
+
+Package integrity and structural findings do not establish visual fidelity or prove that every
+Office application opens a file without repair. Automated visual feedback, formula cache
+recalculation, cloud conversion, PDF export and automatic package repair are deferred.
+
+## Package-Preserving Edits
 
 `officeTransformCode.ts` copies the package's unmodified decompressed part contents unchanged,
 mutating only selected XML parts. ZIP compression, timestamps and entry metadata are not preserved
@@ -203,7 +222,7 @@ The file viewer's selection mode uses the already-shared `@cherrystudio/file-pre
 **Reference in new chat** opens an editable standard-Agent draft with the original attachment and a
 selection chip; it does not send. Runtime input turns the chip into a `selection-ref` block with its
 managed file id, structural anchor and excerpt.
-Following Desktop's workflow, the Agent reads the current referenced content and compares it with
+The Agent reads the current referenced content and compares it with
 the excerpt before editing. Selection references do not impose an additional backend digest check
 or grant file access. AnyDoc remains the reader; its intermediate representation is never the
 source for rewriting an imported package.
@@ -232,15 +251,15 @@ app-owned, but ZIP timestamps and library-generated identifiers are not byte-det
 
 ## Remaining Acceptance
 
-This is a bounded mobile implementation, not feature parity with unrestricted Desktop Python
-scripting or a full Office editor.
+This module exposes bounded Office generation, inspection and editing operations.
 
-Focused tests pass for serialized inputs, generated package content, scalar types, Unicode,
+Focused tests cover serialized inputs, generated package content, scalar types, Unicode,
 image embedding, workspace authorization and placement, cancellation, storage rollback, discovery,
 selection references and child-artifact retention. The JavaScript adapter fixture uses a minimal
 Node VM; it is not evidence of QuickJS compatibility, native budgets, Office visual fidelity, or
-device behavior. Before release, complete both-platform native acceptance, open
-the files in Office without a repair prompt, and check preview, text wrapping and editability.
+device behavior. Before release, complete both-platform native acceptance, open the files in
+Office without a repair prompt, and check complex preview, text wrapping, editability,
+cancellation and selection workflows.
 
 The fixed tools do not cover template filling, arbitrary layouts, formula authoring, chart
 authoring, editing Word table text/headers or inserting/deleting images in existing files; those go
