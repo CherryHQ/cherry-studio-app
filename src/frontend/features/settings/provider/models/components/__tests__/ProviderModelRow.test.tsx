@@ -63,20 +63,42 @@ describe('ProviderModelRow variants', () => {
     ).toBeDefined();
   });
 
-  it('keeps synchronization rows to the model name without management badges', () => {
-    act(() => {
-      renderer = create(
-        <ProviderModelRow model={model} provider={undefined} variant="synchronization" />,
-      );
-    });
+  it.each([
+    ['vendor/model(free)', 1, 'Display name, models.capability.free'],
+    ['vendor/model', 0, 'Display name'],
+  ])(
+    'distinguishes CherryIN %s in synchronization even when display names match',
+    (modelId, freeBadgeCount, accessibilityLabel) => {
+      const pulledModel: Model = {
+        ...model,
+        id: createUniqueModelId('cherryin', modelId),
+        modelId,
+        providerId: 'cherryin',
+      };
+      act(() => {
+        renderer = create(
+          <ProviderModelRow
+            model={pulledModel}
+            provider={undefined}
+            selection={{ isSelected: false, onToggle: jest.fn() }}
+            variant="synchronization"
+          />,
+        );
+      });
 
-    expect(renderer?.root.findAllByProps({ children: model.modelId })).toHaveLength(0);
-    expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-free' })).toHaveLength(0);
-    expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-vision' })).toHaveLength(
-      0,
-    );
-    expect(renderer?.root.findByProps({ accessibilityLabel: 'Display name' })).toBeDefined();
-  });
+      expect(
+        renderer?.root
+          .findAllByProps({ testID: 'provider-model-badge-free' })
+          .filter((node) => node.type === View),
+      ).toHaveLength(freeBadgeCount);
+      expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-vision' })).toHaveLength(
+        0,
+      );
+      expect(
+        renderer?.root.findByProps({ accessibilityRole: 'checkbox' }).props.accessibilityLabel,
+      ).toBe(accessibilityLabel);
+    },
+  );
 
   it('keeps availability visible and accessible when browsing changes to selection', () => {
     const onPress = jest.fn();
