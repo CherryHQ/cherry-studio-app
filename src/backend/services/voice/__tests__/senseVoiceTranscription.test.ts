@@ -6,7 +6,10 @@ import type { VoiceModel } from '../voiceModel';
 const mockFiles = new Set<string>();
 jest.mock('expo-file-system', () => ({
   File: class {
-    constructor(readonly uri: string) {}
+    readonly uri: string;
+    constructor(uri: string) {
+      this.uri = uri;
+    }
     get exists() {
       return mockFiles.has(this.uri);
     }

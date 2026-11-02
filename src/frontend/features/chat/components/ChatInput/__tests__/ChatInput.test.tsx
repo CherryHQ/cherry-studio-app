@@ -63,6 +63,7 @@ jest.mock('../ChatInputSurface', () => ({
     jest.requireActual('react').createElement('TextComposer', props),
   ChatInputSurface: () => null,
 }));
+jest.mock('../components/AudioAttachmentNotice', () => ({ AudioAttachmentNotice: () => null }));
 jest.mock('../components/ChatInputEffortOverlay', () => ({
   ChatInputEffortOverlay: ({ children }: { children: (value?: undefined) => ReactNode }) =>
     children(),

@@ -42,18 +42,8 @@ describe('createSystemCapabilitySource', () => {
   test.each(['needs-model', 'unsupported', 'ready'] as const)(
     'offers audio transcription only when ready: %s',
     async (status) => {
-      const source = createSystemCapabilitySource(SERVICES, {
-        ...dependencies({}),
-        platform: 'ios',
+      const tools = await resolve({
         voice: { getTranscriptionStatus: async () => status, transcribeAudio: jest.fn() },
-      });
-      const tools = await source.getTools({
-        acceptsImages: false,
-        askUser: noAskUser,
-        documentParserMode: 'builtin',
-        disabledCapabilities: [],
-        model: MODEL,
-        resources: TURN_RESOURCES,
       });
       expect(capabilityIds(tools).includes('transcribe_audio')).toBe(status === 'ready');
       if (status === 'ready') expect(approvalOf(tools, 'transcribe_audio')).toBe('auto');
@@ -776,6 +766,7 @@ type Scenario = {
   disabledCapabilities?: AgentCapability[];
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
+  voice?: SystemCapabilitySourceDependencies['voice'];
   webSearchProviders?: { fetchUrls?: boolean; searchKeywords?: boolean };
   workspaceFolderId?: string;
 };
@@ -851,6 +842,7 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
     } as unknown as SystemCapabilitySourceDependencies['preference'],
     jsSandbox: scenario.jsSandbox ?? null,
     supportsToolCalling: async () => scenario.supportsToolCalling ?? true,
+    voice: scenario.voice,
     webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
   };
 }

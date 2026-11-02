@@ -24,7 +24,7 @@ function setup() {
   const files = {
     resolve: jest.fn(async () => ({ entry: source, uri: 'file:///recording.m4a' })),
     createTextEntry: jest.fn(async () => transcript),
-    delete: jest.fn(async () => {}),
+    delete: jest.fn(async () => true),
   };
   const transcribe = jest.fn(async () => ({ text: 'Meeting notes.', durationSeconds: 45 }));
   const input = { fileEntryId: source.id, folderId: '00000000-0000-7000-8000-000000000003' };
@@ -81,21 +81,23 @@ test('does not publish a transcript after the source version changes', async () 
 
 test('cancellation after inference never publishes a partial document', async () => {
   const { controller, files, transcribe, run } = setup();
+  const reason = new Error('Transcription cancelled');
   transcribe.mockImplementation(async () => {
-    controller.abort();
+    controller.abort(reason);
     return { text: 'Partial', durationSeconds: 30 };
   });
-  await expect(run()).rejects.toBe(controller.signal.reason);
+  await expect(run()).rejects.toBe(reason);
   expect(files.createTextEntry).not.toHaveBeenCalled();
 });
 
 test('cancellation crossing the publication boundary removes only the new transcript', async () => {
   const { controller, files, run } = setup();
+  const reason = new Error('Transcription cancelled');
   files.createTextEntry.mockImplementation(async () => {
-    controller.abort();
+    controller.abort(reason);
     return transcript;
   });
-  await expect(run()).rejects.toBe(controller.signal.reason);
+  await expect(run()).rejects.toBe(reason);
   expect(files.delete).toHaveBeenCalledWith(transcript.id);
   expect(files.delete).not.toHaveBeenCalledWith(source.id);
 });

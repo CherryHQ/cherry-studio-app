@@ -3,7 +3,7 @@ import * as z from 'zod';
 import { VoiceError, type VoiceModule } from '@/shared/contracts/voice';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-import type { RuntimeTool } from '../runtime';
+import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
@@ -31,7 +31,7 @@ export function createTranscribeAudioTool(
       'Transcribe an attached or workspace audio recording using the user-selected on-device engine (SenseVoice by default, or system offline recognition). No audio is uploaded. Accepts platform-decodable audio up to 100 MiB and two hours. Saves a text document in the current workspace (library root otherwise); use read_file on its returned fileEntryId to read the transcript. Recognition can contain errors and does not identify speakers.',
     inputSchema: toRuntimeInputSchema(inputSchema),
     approval: 'auto',
-    async execute({ input, signal, toolCallId }) {
+    async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
       const parsed = inputSchema.safeParse(input);
       if (!parsed.success)
         return {
