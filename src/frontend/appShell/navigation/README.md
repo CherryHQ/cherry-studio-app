@@ -19,8 +19,10 @@ domains.
   destination. Background refreshes do not unmount the admitted chat.
 - Chat routes without an explicit target open a draft for the last-used local Agent, stored in
   the persistent UI cache. The focused, non-preview chat records its Agent for both drafts and
-  existing Sessions. If the remembered Agent is absent, restoration uses the first available
-  Agent; it never restores a previous Session.
+  existing Sessions. Restoration queries the remembered Agent by ID, independently of list
+  pagination. Only an absent saved selection or a successful empty lookup loads the first
+  available Agent in list order; lookup failures remain retryable errors. Remote-device Agents
+  never overwrite this local selection. It never restores a previous Session.
 - `getRootHeaderStyle` and `getTransparentHeaderStyle` expose the platform policy consumed by root
   stack configuration.
 
