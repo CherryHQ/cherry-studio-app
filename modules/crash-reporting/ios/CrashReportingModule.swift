@@ -72,9 +72,13 @@ private final class CrashReportingState {
     self.dsn = dsn
     canCapture = isCrashReportingAllowed && isProduction && !dsn.isEmpty
     if configured {
-      if version != consentVersion || (!canCapture && isActive) {
+      if version != consentVersion {
         gateLock.withLock { consentVersion = version }
         try revoke()
+      } else if !canCapture && isActive {
+        // A configuration error is not a user opt-out; retain consent and previously captured reports.
+        setGate(granted: isGranted, active: false)
+        SentrySDK.close()
       } else if canCapture && isGranted && !isActive {
         start()
       }
