@@ -3,11 +3,15 @@ import type { ExportImageLayout } from '@/shared/contracts/documentExport';
 import type { ImageCapturePlan } from './imageCapturePlan';
 import { IMAGE_PAGE_HEIGHT, IMAGE_PAGE_TOP_INSET, type ImagePageSlice } from './imagePagePlan';
 
-export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
+export function imageMeasurementScript(
+  id: number,
+  layout: ExportImageLayout,
+  pageHeight = IMAGE_PAGE_HEIGHT,
+) {
   return `(async function(){try{
     var main=document.querySelector('main');
     document.querySelectorAll('details').forEach(function(detail){detail.open=true;});
-    ${layout === 'pages' ? `var style=document.createElement('style');style.textContent='main img:not(.print-logo){max-height:${IMAGE_PAGE_HEIGHT - 48}px;object-fit:contain}';document.head.appendChild(style);` : ''}
+    ${layout === 'pages' ? `var style=document.createElement('style');style.textContent='main img:not(.print-logo){max-height:${pageHeight - 48}px;object-fit:contain}';document.head.appendChild(style);` : ''}
     await document.fonts.ready;
     await Promise.all(Array.from(document.images).map(async function(image){
       try{await image.decode();}catch(error){
@@ -19,7 +23,7 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
     }));
     main.querySelectorAll('[data-export-formula]').forEach(function(element){
       var math=element.querySelector('math');
-      if(math&&(Math.max(math.getBoundingClientRect().width,math.scrollWidth)>element.parentElement.clientWidth${layout === 'pages' ? `||math.getBoundingClientRect().height>${IMAGE_PAGE_HEIGHT}` : ''})){
+      if(math&&(Math.max(math.getBoundingClientRect().width,math.scrollWidth)>element.parentElement.clientWidth${layout === 'pages' ? `||math.getBoundingClientRect().height>${pageHeight}` : ''})){
         var source=document.createElement('code');source.className='formula-fallback';
         source.textContent=element.getAttribute('data-export-formula');element.replaceWith(source);
       }
@@ -52,7 +56,7 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
         if(element.matches('tr,.code-block')){
           // Adjacent fractional row borders must not merge into one indivisible table.
           // Text ranges still protect glyphs at either edge of the row.
-          if(rect.height<=${IMAGE_PAGE_HEIGHT})ink.push([Math.ceil(rect.top-origin),Math.floor(rect.bottom-origin)]);
+          if(rect.height<=${pageHeight})ink.push([Math.ceil(rect.top-origin),Math.floor(rect.bottom-origin)]);
         }else ink.push(bounds(rect));
       });
       var lines=ink.slice().sort(function(a,b){return a[0]-b[0];});
@@ -63,7 +67,7 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
         var low=0,high=lines.length;
         while(low<high){var middle=(low+high)>>>1;if(lines[middle][0]<heading[1])low=middle+1;else high=middle;}
         var next=lines[low];
-        if(next&&next[1]-heading[0]<${IMAGE_PAGE_HEIGHT})ink.push([heading[0],next[1]]);
+        if(next&&next[1]-heading[0]<${pageHeight})ink.push([heading[0],next[1]]);
       });
     }
     window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'measure',height:height,width:main.scrollWidth,ink:ink}));

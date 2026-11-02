@@ -14,10 +14,9 @@ validate this implementation.
 | `DocumentExportRuntime` | Foreground admission, live/closing sessions and host teardown |
 | `bootstrap/composition/createBackend.ts` | Managed-file dependencies bound to the originating database |
 | `frontend/appShell/fileExport` | Watermark configuration, finalized-file delivery, system availability and cancellation checks |
-| `frontend/appShell/documentExport` | Transient handoff; routes contain only the request ID |
-| `frontend/features/documentExport` | Format/layout choice, capture and user-triggered delivery |
-| `frontend/components/ArtifactPreview` | Actual-image reading shared with the file viewer |
-| `frontend/features/chat/share` | Selection, selected-history reads and thinking inclusion policy |
+| `frontend/features/chat/share/export` | Inline preview, format fallback and image capture |
+| `frontend/components/ArtifactPreview` | Actual-image reading in the file viewer |
+| `frontend/features/chat/share` | One bottom sheet, selection, immutable sessions, a carousel and delivery |
 | `frontend/features/library` | Existing file stream with a Sharing provenance filter |
 
 Follow [Code Organization](./code-organization.md), [Runtime Ownership](./runtime-ownership.md) and
@@ -56,7 +55,7 @@ image, attachment, detail or reference blocks. Optional bubble/message hints exp
 hierarchy; message sections may add an emoji avatar and a model display name to their heading. Assets refer to managed file IDs or eligible remote URLs.
 Markdown image references are discovered through parsed tokens so code examples never download
 resources. `{ kind: 'markdown', source, title?, labels? }` normalizes to the same model.
-The app-shell entry supplies localized content labels; programmatic callers may omit them for
+The chat adapter supplies localized content labels; programmatic callers may omit them for
 English defaults. Labels are copied and frozen with the document.
 
 Input is copied and deeply frozen. Successful image reads become reusable byte snapshots; failed
@@ -84,8 +83,8 @@ total. HTML/image targets receive validated logical width, resolved typography a
 The page freezes typography at opening. Images always use a 360-logical-pixel width; HTML
 uses a responsive reading column capped at 720 logical pixels. Theme changes regenerate the preview
 except during delivery.
-Image output uses the message-list hierarchy, theme surfaces and the shared Cherry brand/download
-footer inside the captured document.
+Image output uses the message-list hierarchy and current app colors, with the shared Cherry
+brand/download footer after the selected content.
 
 Markdown/HTML artifacts hold one file and source text. Image artifacts hold a layout (`pages` or
 `single`) and ordered `pages`, each containing its PNG descriptor, width and height. Artifacts,
@@ -108,8 +107,7 @@ frontend supplies the shared white footer used by painting and file image export
 Cherry red rule, with the brand and scan copy on the left and the QR code on the right.
 The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
-The image-only `imageFrame` uses the document background and supplies an accessible document label.
-Image content spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
+The image-only `imageFrame` supplies a resolved background and an accessible label. Image-to-HTML fallbacks
 retain the watermark. Markdown uses the same resolved watermark's brand name and download link in
 a separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
@@ -166,12 +164,12 @@ View Shot documents WebView support with a non-collapsible Android wrapper
 such as [html-to-image](https://github.com/bubkoo/html-to-image) also have large-output scaling and
 canvas/data-URL limits; swapping libraries does not establish unlimited image capacity.
 
-Default image layout is **paged PNG at fixed 3x density**. Content stays in one image until it reaches
-the capture budget, shared with HTML image conversion's 8192-pixel edge limit. After reserving
-16 logical pixels of top spacing, each content slice holds up to 2714 logical pixels. At the page's
-fixed width this yields 1080-pixel-wide images no taller than 8190 pixels, with no page-number footer.
-This is an application capture budget, not a detected device maximum. Content
-length adds pages rather than lowering resolution or truncating the selection.
+Default chat image layout is **paged PNG at fixed 3x density**. Chat content slices hold up to
+640 logical pixels plus 16 points of top spacing, producing 1080-pixel-wide images at most
+1968 pixels high. The exact content clip prevents later content from appearing in that spacing.
+Saved bytes contain no page numbers. Content length adds pages without reducing density or
+truncating the selection. The page planner retains its default 8192-pixel edge budget for callers
+that do not request the chat preview page size.
 
 Pagination fills each image to that limit and uses painted ranges to move a cut back only when
 needed to avoid splitting content. Message and paragraph boundaries do not trigger early cuts. Headings stay
@@ -181,7 +179,8 @@ cannot fit causes conversion failure instead of silent clipping. Table continuat
 not repeated by the current slicing implementation.
 
 Only the current slice enters the native screenshot viewport. Original layout coordinates stay
-fixed while the clipping window advances. CSS zoom maps logical layout into the chosen output
+fixed while the clipping window advances. Long-image tiles retain the same document coordinates.
+CSS zoom maps logical layout into the chosen output
 pixels independent of screen density. Native layout and browser frames settle before each capture.
 The frontend checks the PNG's 24-byte header and dimensions, not image sharpness. The screenshot
 is copied unchanged and released before the next one; paged capture allocates no full-document
@@ -209,10 +208,10 @@ the actual PNG for blank regions and tile seams.
 | Repeated embedded image bytes | No application cap |
 | Remote read | 15 seconds, no redirects, cancellable stream |
 | HTML width / type | 280–800 logical pixels / 12–40 font size and 12–56 line height |
-| Paged capture | 8192-pixel edge budget; 2714 logical content height plus 16 top spacing at 3x |
+| Paged capture | Chat: 640 content + 16 top spacing at 3x; default planner: 8192-pixel edge budget |
 | Single capture | Tiles fit measured native viewport in both axes at 3x; final PNG has no application height/pixel cap |
 | Capture wait | 60 seconds per page; physical lease includes native capture and file copy |
-| Sessions | Four live/closing sessions, one interactive request |
+| Sessions | Four live/closing sessions; chat owns the active checked/unchecked snapshots |
 
 The native lease prevents a closing capture from overlapping a replacement. Cancellation hides
 the surface immediately; capture completion waits for in-flight native work and page copying before
@@ -223,7 +222,8 @@ resulting format.
 
 ## Actual Image Reading
 
-`ArtifactImagePages` displays actual PNG files in the export page and document-export file viewer.
+Chat sharing fits actual PNG files into its lightweight horizontal carousel.
+`ArtifactImagePages` displays saved PNG files in the document-export file viewer.
 Pages within the viewer's original-pixel budget decode at original resolution; larger pages use
 display resolution. Pages fit reading width without initial pixel upscaling,
 scroll vertically and support pinch/pan/double-tap zoom. The list pauses scrolling during zoom.
@@ -248,7 +248,8 @@ source image decoding remains device-dependent.
 `DocumentExportRuntime` is a Gate service depending on `DbService`. Its host-bound dependencies
 prevent late work from switching databases. Teardown closes admission, cancels work and waits for
 all sessions to dispose. Session scratch lives under the OS cache and is removed on replacement or
-exit. A handoff has a 30-second route deadline; missing requests after process death are unavailable.
+exit. Chat owns its immutable sessions directly and disposes them on selection replacement or close;
+there is no independent export-route handoff.
 
 Share persists files sequentially into the existing managed store with `provenance: 'document-export'`.
 Multi-page filenames use sortable ordinal suffixes. Already committed pages survive later failure
@@ -275,15 +276,23 @@ encoder is introduced by this implementation.
 
 ## Chat Selection
 
-`/chat-share` starts with the clicked message selected and displays a paginated history summary.
+`/chat-share` is a transparent modal route opening a CherryUI bottom sheet. It starts with the
+clicked message selected and immediately renders images using the current app colors. The sheet
+opens at full available height so the preview and compact delivery row remain visible. Its selection
+subpage displays a paginated history summary. A lightweight native carousel previews generated
+images directly; it has no theme selector or separate full-preview page. One opaque foreground
+hides the capture surface, and one stable loading state covers image generation.
+
 Rows show role/time and up to four lines from a 240-character excerpt, without mounting Markdown
 or media. The original chat layout and composer remain mounted. Confirmation reads exactly the
 selected persisted IDs, restores chronological order, and rejects missing/unfinished messages or
 failed reads without silently omitting content. The selection is limited to 128 messages, not the
 whole conversation. Every nonempty selection offers image, HTML and Markdown.
 
-Closing export retains selection. Closing the system chooser dismisses to the source chat route.
-The page's optional checkbox switches between immutable thinking snapshots. Persisted citations
+Closing the system chooser retains the preview and applied selection. Closing the app's
+sharing sheet returns to chat. Selection, format/layout, thinking and watermark settings live inside
+the same sheet. Photos saving handles all pages with one add-only permission flow and can resume a
+partially saved batch without duplicating its completed pages. The thinking switch uses immutable snapshots. Persisted citations
 become numbered references, while unknown/code markers remain source text.
 
 ## Validation Status

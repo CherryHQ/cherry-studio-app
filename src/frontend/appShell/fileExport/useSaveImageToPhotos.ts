@@ -11,94 +11,110 @@ import type { FileEntryProvenance } from '@/shared/data/types/file';
 import { prepareImageExport } from './prepareImageExport';
 import { useExportWatermark } from './useExportWatermark';
 
-/** Shared add-only Photos permission flow for generated and managed images. */
-export function useSaveImageToPhotos(
-  { uri, provenance }: { uri: string; provenance?: FileEntryProvenance },
-  options: FileExportOptions = {},
-) {
+type PhotoSource = { uri: string; provenance?: FileEntryProvenance };
+
+export function useSaveImageToPhotos(source: PhotoSource, options: FileExportOptions = {}) {
+  const saveImages = useSaveImagesToPhotos(options);
+  const permissions = useBackendModule('permissions');
+  const { alert } = useAlert();
+  const { toast } = useToast();
+  const { t } = useTranslation();
+  const { uri, provenance } = source;
+  // Retain the existing permission explanation for ordinary file and painting downloads.
+  return useCallback(async () => {
+    try {
+      const permission = (await permissions.getStatuses(['photos.write']))['photos.write'];
+      const save = async () => {
+        await saveImages([{ uri, provenance }]);
+      };
+      if (
+        !canUseDevicePermission('photos.write', permission) &&
+        canRequestDevicePermission(permission)
+      ) {
+        alert.confirm({
+          confirmLabel: t('settings.permissions.action.request'),
+          description: t('imageActions.savePermissionDenied'),
+          onConfirm: save,
+          title: t('settings.permissions.accessRequired'),
+        });
+      } else await save();
+    } catch {
+      toast.show({ label: t('imageActions.saveFailed'), variant: 'danger' });
+    }
+  }, [alert, permissions, saveImages, uri, provenance, t, toast]);
+}
+
+/** One add-only permission request per batch; failed batches resume without duplicating saved pages. */
+export function useSaveImagesToPhotos(options: FileExportOptions = {}) {
   const { t } = useTranslation();
   const permissions = useBackendModule('permissions');
   const { toast } = useToast();
   const { alert } = useAlert();
   const createWatermark = useExportWatermark(options.watermark);
   const saving = useRef(false);
+  const completed = useRef(new Set<string>());
 
-  const saveToPhotos = useCallback(async () => {
-    if (saving.current) return;
-    saving.current = true;
-    let exported: Awaited<ReturnType<typeof prepareImageExport>> | undefined;
-    try {
-      exported = await prepareImageExport({ uri, provenance }, createWatermark());
-      await MediaLibrary.Asset.create(exported.uri);
-      toast.show({ label: t('imageActions.saved'), variant: 'success' });
-    } catch {
-      toast.show({ label: t('imageActions.saveFailed'), variant: 'danger' });
-    } finally {
-      saving.current = false;
-      exported?.release();
-    }
-  }, [uri, provenance, createWatermark, t, toast]);
-
-  const showOpenSettingsAlert = useCallback(() => {
-    alert.confirm({
-      confirmLabel: t('settings.permissions.openSystemSettings'),
-      description: t('imageActions.savePermissionDenied'),
-      onConfirm: () =>
-        permissions.openSystemSettings('photos').catch(() => {
-          toast.show({ label: t('imageActions.openSettingsFailed'), variant: 'danger' });
-        }),
-      title: t('settings.permissions.accessRequired'),
-    });
-  }, [alert, permissions, t, toast]);
-
-  const requestPhotoAccessAndSave = useCallback(async () => {
-    try {
-      const statuses = await permissions.request(['photos.write']);
-      const permission = statuses['photos.write'];
-      if (canUseDevicePermission('photos.write', permission)) {
-        await saveToPhotos();
-      } else if (permission?.state === 'denied' && !permission.canAskAgain) {
-        showOpenSettingsAlert();
-      } else {
-        toast.show({ label: t('imageActions.saveAccessDenied'), variant: 'danger' });
+  return useCallback(
+    async (sources: readonly PhotoSource[], signal?: AbortSignal) => {
+      if (saving.current || !sources.length) return false;
+      saving.current = true;
+      let saved = 0;
+      try {
+        signal?.throwIfAborted();
+        let permission = (await permissions.getStatuses(['photos.write']))['photos.write'];
+        if (
+          !canUseDevicePermission('photos.write', permission) &&
+          canRequestDevicePermission(permission)
+        ) {
+          permission = (await permissions.request(['photos.write'], signal))['photos.write'];
+        }
+        signal?.throwIfAborted();
+        if (!canUseDevicePermission('photos.write', permission)) {
+          if (permission?.state === 'denied' && !permission.canAskAgain) {
+            alert.confirm({
+              confirmLabel: t('settings.permissions.openSystemSettings'),
+              description: t('imageActions.savePermissionDenied'),
+              onConfirm: () =>
+                permissions.openSystemSettings('photos').catch(() => {
+                  toast.show({ label: t('imageActions.openSettingsFailed'), variant: 'danger' });
+                }),
+              title: t('settings.permissions.accessRequired'),
+            });
+          } else toast.show({ label: t('imageActions.saveAccessDenied'), variant: 'danger' });
+          return false;
+        }
+        const watermark = createWatermark();
+        for (const source of sources) {
+          signal?.throwIfAborted();
+          if (!completed.current.has(source.uri)) {
+            const exported = await prepareImageExport(source, watermark);
+            try {
+              signal?.throwIfAborted();
+              await MediaLibrary.Asset.create(exported.uri);
+              completed.current.add(source.uri);
+            } finally {
+              exported.release();
+            }
+          }
+          saved++;
+        }
+        signal?.throwIfAborted();
+        completed.current.clear();
+        toast.show({ label: t('imageActions.saved'), variant: 'success' });
+        return true;
+      } catch {
+        if (!signal?.aborted)
+          toast.show({
+            label: saved
+              ? t('imageActions.savePartially', { saved, total: sources.length })
+              : t('imageActions.saveFailed'),
+            variant: 'danger',
+          });
+        return false;
+      } finally {
+        saving.current = false;
       }
-    } catch {
-      toast.show({ label: t('imageActions.saveFailed'), variant: 'danger' });
-    }
-  }, [permissions, saveToPhotos, showOpenSettingsAlert, t, toast]);
-
-  const download = useCallback(async () => {
-    try {
-      // Write-only (add-only) access is enough to save; the legacy
-      // saveToLibraryAsync throws in SDK 57, so use the class-based Asset.create.
-      const statuses = await permissions.getStatuses(['photos.write']);
-      const permission = statuses['photos.write'];
-      if (canUseDevicePermission('photos.write', permission)) {
-        await saveToPhotos();
-      } else if (canRequestDevicePermission(permission)) {
-        alert.confirm({
-          confirmLabel: t('settings.permissions.action.request'),
-          description: t('imageActions.savePermissionDenied'),
-          onConfirm: requestPhotoAccessAndSave,
-          title: t('settings.permissions.accessRequired'),
-        });
-      } else if (permission?.state === 'denied') {
-        showOpenSettingsAlert();
-      } else {
-        toast.show({ label: t('imageActions.saveFailed'), variant: 'danger' });
-      }
-    } catch {
-      toast.show({ label: t('imageActions.saveFailed'), variant: 'danger' });
-    }
-  }, [
-    alert,
-    permissions,
-    requestPhotoAccessAndSave,
-    saveToPhotos,
-    showOpenSettingsAlert,
-    t,
-    toast,
-  ]);
-
-  return download;
+    },
+    [permissions, createWatermark, alert, t, toast],
+  );
 }

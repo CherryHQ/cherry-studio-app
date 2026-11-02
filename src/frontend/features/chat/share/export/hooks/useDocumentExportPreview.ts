@@ -19,7 +19,7 @@ type PreviewState =
   | { status: 'paused' };
 
 export function useDocumentExportPreview(
-  session: DocumentExportSession,
+  session: DocumentExportSession | undefined,
   format: ExportFormat,
   presentation: ExportPresentation,
   capture: CaptureExportHtml,
@@ -37,8 +37,9 @@ export function useDocumentExportPreview(
   }>();
   const [attempt, setAttempt] = useState(0);
   const tail = useRef<Promise<unknown>>(Promise.resolve());
-  const markdown = session.markdown + renderMarkdownSignature(presentation.watermark);
+  const markdown = (session?.markdown ?? '') + renderMarkdownSignature(presentation.watermark);
   useEffect(() => {
+    if (!session) return;
     const controller = new AbortController();
     const publish = (state: PreviewState) => {
       if (!controller.signal.aborted)
@@ -97,7 +98,8 @@ export function useDocumentExportPreview(
     return () => controller.abort();
   }, [attempt, capture, format, imageLayout, markdown, presentation, revision, session]);
   const state: PreviewState =
-    result?.session === session &&
+    result !== undefined &&
+    result.session === session &&
     result.format === format &&
     result.presentation === presentation &&
     result.attempt === attempt &&
@@ -108,6 +110,7 @@ export function useDocumentExportPreview(
 
   const getArtifact = async (signal: AbortSignal): Promise<DocumentExportArtifact> => {
     signal.throwIfAborted();
+    if (!session) throw new DocumentExportError('busy');
     if (state.status === 'ready') return state.artifact;
     if (state.status !== 'markdown') throw new DocumentExportError('busy');
     // A source-only fallback retries Markdown preparation after cancelled work has settled.

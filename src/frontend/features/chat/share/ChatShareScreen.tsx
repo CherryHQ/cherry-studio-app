@@ -1,11 +1,14 @@
-import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  BottomSheetProvider,
+  ContentState,
+  SelectionIndicator,
+} from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { memo, useMemo, useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type {
   ConversationMessage,
@@ -32,10 +35,10 @@ import { chatShareMessagePreview } from './chatShareMessagePreview';
 import {
   ChatShareSelectionProvider,
   useChatShareSelectionActions,
-  useChatShareSelectionCount,
   useChatShareSelectionState,
   useIsChatMessageSelected,
 } from './ChatShareSelectionProvider';
+import { ChatShareSheet, closeChatShare } from './ChatShareSheet';
 import type { ChatShareTarget } from './chatShareTarget';
 
 const LIST_STYLE = { flex: 1 };
@@ -55,31 +58,10 @@ export function ChatShareScreen() {
   const sessionId = getSingleRouteParam(params.sessionId);
   const messageId = getSingleRouteParam(params.messageId);
   const translationHandoff = getSingleRouteParam(params.translationHandoff);
-  const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-
   return (
-    <View
-      className="flex-1 bg-background"
-      style={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }}
-    >
-      <View className="flex-row items-center gap-3 px-5 py-3">
-        <Button
-          accessibilityLabel={t('common.cancel')}
-          icon={<XIcon />}
-          onPress={closeSelection}
-          variant="ghost"
-        />
-        <Text
-          accessibilityRole="header"
-          className="flex-1 text-center font-semibold text-foreground"
-        >
-          {t('chat.share.selectMessages')}
-        </Text>
-        <View className="size-11" />
-      </View>
+    <View className="flex-1 bg-background">
       {!sessionId ? (
-        <ContentState.Error title={t('chat.share.loadFailed')} />
+        <ShareLoadingState failed />
       ) : connectionId ? (
         <RemoteShareContent
           sessionId={sessionId}
@@ -156,13 +138,12 @@ function RemoteShareContent({
   expectedScope?: string;
   messageId?: string;
 }) {
-  const { t } = useTranslation();
   const { session, error, isLoading } = useConversation(
     conversationRefFromRoute(sessionId, connectionId),
   );
   if (error || (session && expectedScope && session.scope !== expectedScope))
-    return <ContentState.Error title={t('chat.share.loadFailed')} />;
-  if (isLoading || !session) return <ContentState.Loading />;
+    return <ShareLoadingState failed />;
+  if (isLoading || !session) return <ShareLoadingState />;
   return (
     <RemoteShareSelection
       key={JSON.stringify([session.scope, sessionId, messageId])}
@@ -203,26 +184,44 @@ function ConversationShareSelection({
   messageId?: string;
 }) {
   const { t } = useTranslation();
-  const located = history.messages.find((message) => message.key === messageId);
-  const locating = Boolean(messageId && !located && history.hasOlderMessages && !history.error);
-  const { isLoadingInitial, isLoadingOlder, loadOlder } = history;
-  useEffect(() => {
-    if (locating && !isLoadingInitial && !isLoadingOlder) void loadOlder();
-  }, [locating, isLoadingInitial, isLoadingOlder, loadOlder]);
-  if (history.isLoadingInitial || locating) return <ContentState.Loading />;
   return (
-    <ChatShareSelectionProvider
-      target={target}
-      initialMessageId={located && isExportable(located) ? messageId : undefined}
-    >
-      <Text className="px-5 pb-3 text-muted-foreground text-sm">
-        {t('chat.share.selectionHint')}
-      </Text>
-      <ChatShareMessages history={history} messageId={messageId} />
-      <ChatShareControls />
+    <ChatShareSelectionProvider target={target} initialMessageId={messageId}>
+      {/* The route-local portal must retain the selection context for its message rows. */}
+      <BottomSheetProvider>
+        <ChatShareSheet>
+          <Text className="px-5 pb-3 text-muted-foreground text-sm">
+            {t('chat.share.selectionHint')}
+          </Text>
+          <ChatShareMessages history={history} messageId={messageId} />
+        </ChatShareSheet>
+      </BottomSheetProvider>
     </ChatShareSelectionProvider>
   );
 }
+
+function ShareLoadingState({ failed = false }: { failed?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <BottomSheetProvider>
+      <BottomSheet
+        open
+        size="full"
+        title={t('chat.share.title')}
+        closeAction={{ accessibilityLabel: t('common.close') }}
+        onClose={closeChatShare}
+      >
+        <View className="flex-1 justify-center p-5">
+          {failed ? (
+            <ContentState.Error title={t('chat.share.loadFailed')} />
+          ) : (
+            <ContentState.Loading />
+          )}
+        </View>
+      </BottomSheet>
+    </BottomSheetProvider>
+  );
+}
+
 type ShareHistory = ConversationHistoryView;
 function isExportable(message: ConversationMessage) {
   return (
@@ -353,36 +352,9 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
   );
 });
 
-function ChatShareControls() {
-  const { t } = useTranslation();
-  const { bottom } = useSafeAreaInsets();
-  const { isSharing } = useChatShareSelectionState();
-  const { confirmSelection } = useChatShareSelectionActions();
-  const count = useChatShareSelectionCount();
-  return (
-    <View className="gap-3 px-5 pt-3" style={{ paddingBottom: Math.max(bottom, 12) }}>
-      <Text accessibilityLiveRegion="polite" className="text-center text-muted-foreground text-sm">
-        {t('common.selection.count', { count })}
-      </Text>
-      <Button
-        disabled={!count || isSharing}
-        loading={isSharing}
-        onPress={confirmSelection}
-        testID="chat-share-confirm"
-      >
-        {t('chat.share.confirmSelection')}
-      </Button>
-    </View>
-  );
-}
-
 function messageKey(message: ConversationMessage) {
   return message.key;
 }
 function renderMessage({ item }: LegendListRenderItemProps<ConversationMessage>) {
   return <ChatShareMessageRow message={item} />;
-}
-function closeSelection() {
-  if (router.canGoBack()) router.back();
-  else router.replace('/');
 }

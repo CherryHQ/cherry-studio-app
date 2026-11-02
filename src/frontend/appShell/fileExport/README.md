@@ -9,8 +9,8 @@ Application entry points accept `FileExportOptions`: `{ watermark?: 'cherry' | '
 Omitted styles follow the global Share watermark setting (`file.export.watermark_enabled`), which
 defaults to enabled and lives under Settings > General. `useExportWatermarkStyle` resolves this
 preference; explicit `cherry` or `none` options override it for that request.
-`useDocumentExport().open` freezes the resolved style for
-every offered format. `useHtmlConversion(options)` also uses it for PNG and PPTX. PPTX applies the
+Chat sharing initializes its per-share style from this preference and freezes the resolved
+presentation during delivery for every offered format. `useHtmlConversion(options)` also uses it for PNG and PPTX. PPTX applies the
 footer only to the final captured slide, without adding a slide.
 
 `useExportWatermark` resolves the selected style into an `ExportWatermark` once per operation.
@@ -62,7 +62,9 @@ without re-encoding, and a failed copy never opens a partial share sheet.
 
 `useShareFile` owns ordinary-file busy state, unmount cancellation and localized feedback.
 `useSaveImageToPhotos` owns add-only permission guidance and releases its prepared image after
-Photos copies it. System opening reuses `prepareFileExport`.
+Photos copies it. `useSaveImagesToPhotos` saves an ordered batch under one permission request and
+retains completed URIs only across partial-failure retries to avoid duplicate pages. System opening
+reuses `prepareFileExport`.
 
 Shared/system-open copies remain in the OS-managed cache because recipients may read after the
 chooser closes. Shared copies use one path per entry revision and watermark treatment, so sharing

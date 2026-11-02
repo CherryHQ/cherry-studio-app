@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 
 import { useHtmlCapture } from '@/frontend/components/HtmlCapture';
@@ -20,6 +20,7 @@ import { stitchCapturedPngPages } from '../utils/stitchCapturedPngPages';
 
 export function useDocumentExportHtmlCapture() {
   const { capture: captureHtml, surface } = useHtmlCapture();
+  const [revision, setRevision] = useState(0);
   const viewport = useRef<{ width: number; height: number } | undefined>(undefined);
   const layoutWaiters = useRef(new Set<() => void>());
   const pending = useRef(new Map<AbortController, { width: number; height: number } | undefined>());
@@ -28,9 +29,16 @@ export function useDocumentExportHtmlCapture() {
     if (previous?.width === layout.width && previous.height === layout.height) return;
     viewport.current = { width: layout.width, height: layout.height };
     // Never publish tiles captured against a viewport that changed midway through the operation.
+    let invalidated = false;
     for (const [controller, bounds] of pending.current) {
-      if (bounds && (bounds.width !== layout.width || bounds.height !== layout.height))
+      if (bounds && (bounds.width !== layout.width || bounds.height !== layout.height)) {
         controller.abort();
+        invalidated = true;
+      }
+    }
+    if (invalidated) {
+      // A sheet subpage can resize the capture viewport; resume against its settled bounds.
+      setRevision((value) => value + 1);
     }
     if (layout.width > 0 && layout.height > 0) {
       for (const ready of layoutWaiters.current) ready();
@@ -50,6 +58,7 @@ export function useDocumentExportHtmlCapture() {
       input.signal.addEventListener('abort', abort, { once: true });
       pending.current.set(controller, undefined);
       let tiles: ImageCaptureTile[] = [];
+      const pageHeight = 640;
       const capturePages = (onPage: Parameters<typeof captureHtml>[0]['onPage']) =>
         captureHtml({
           signal: controller.signal,
@@ -58,14 +67,18 @@ export function useDocumentExportHtmlCapture() {
             html: input.html,
             viewport: { width: input.width, height: 1 },
             contentMode: 'mobile',
-            setupScript: imageMeasurementScript(id, input.layout),
+            setupScript: imageMeasurementScript(id, input.layout, pageHeight),
             maxMessageLength: 2_000_000,
             timeout: { pageMs: 60_000 },
             readFrames(message) {
               if (message.phase !== 'measure') return;
               if (typeof message.width !== 'number' || message.width > input.width + 1)
                 throw new DocumentExportError('capture-failed');
-              const pages = imagePagePlan(message as ImagePageMeasurement, input.layout);
+              const pages = imagePagePlan(
+                message as ImagePageMeasurement,
+                input.layout,
+                pageHeight,
+              );
               if (input.layout === 'single') {
                 const captureViewport = viewport.current;
                 if (!captureViewport) throw new DocumentExportError('capture-failed');
@@ -77,7 +90,7 @@ export function useDocumentExportHtmlCapture() {
               return tiles.map((slice, index) => {
                 const plan = imageCapturePlan(
                   slice.width,
-                  slice.height + (input.layout === 'pages' ? IMAGE_PAGE_TOP_INSET : 0),
+                  input.layout === 'pages' ? slice.height + IMAGE_PAGE_TOP_INSET : slice.height,
                 );
                 return {
                   width: plan.width,
@@ -166,5 +179,5 @@ export function useDocumentExportHtmlCapture() {
     },
     [captureHtml],
   );
-  return { capture, surface, onCaptureLayout };
+  return { capture, surface, onCaptureLayout, revision };
 }

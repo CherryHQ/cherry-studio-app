@@ -3,4 +3,4 @@ export { useExportWatermark } from './useExportWatermark';
 export { useExportWatermarkStyle } from './useExportWatermarkStyle';
 export { shareFile, shareFiles, FileSharingError } from './shareFile';
 export { useShareFile } from './useShareFile';
-export { useSaveImageToPhotos } from './useSaveImageToPhotos';
+export { useSaveImageToPhotos, useSaveImagesToPhotos } from './useSaveImageToPhotos';

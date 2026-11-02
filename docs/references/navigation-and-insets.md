@@ -73,7 +73,7 @@ Before enabling it, verify:
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
 - The root Stack hosts the `(drawer)` group (header hidden) plus window-level `home`, `onboarding`,
-  `search`, `files/[fileEntryId]`, `chat-share`, and `document-export` flows, which cover the whole
+  `search` and `files/[fileEntryId]` flows, which cover the whole
   window, sidebar included.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`). Its only
   scene, `(main)`, is the content region: a Stack whose initial route is `(chat)`, with `agents`,
@@ -340,3 +340,8 @@ enabled.
 - A scroll that begins on an interactive row does not also navigate, open a contextual menu, or
   start native text selection.
 - Only screens with explicit product reasons use local back interception.
+
+The `chat-share` route uses `transparentModal` with no stack animation. CherryUI's single bottom
+sheet owns entry, dismissal, safe areas and the scrim while the originating chat remains mounted.
+Selection and settings are sheet-local subpages; the system chooser returns to that
+same preview. There is no separate `document-export` route.

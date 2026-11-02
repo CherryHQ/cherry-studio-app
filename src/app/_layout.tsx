@@ -173,17 +173,17 @@ function RootStack() {
         name="files/[fileEntryId]"
         options={{ headerTransparent: false }}
       />
-      <Stack.Screen name="chat-share" options={{ headerShown: false }} />
-      <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
-      <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
       <Stack.Screen
-        name="document-export"
+        name="chat-share"
         options={{
-          contentStyle: { backgroundColor },
           headerShown: false,
-          presentation: 'fullScreenModal',
+          presentation: 'transparentModal',
+          animation: 'none',
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
+      <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
     </Stack>
   );
 }

@@ -5,6 +5,7 @@ import {
   type PropsWithChildren,
   use,
   useCallback,
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -15,15 +16,18 @@ import { toggleSelection } from '@/frontend/components/Selection';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import type { ChatShareTarget } from './chatShareTarget';
-import { useShareChat } from './useShareChat';
+import { useShareChat, type ChatShareContent } from './useShareChat';
 
 type ChatShareSelectionState = {
   isSharing: boolean;
+  content?: ChatShareContent;
+  error?: string;
 };
 
 type ChatShareSelectionActions = {
   toggleMessage: (messageId: string) => void;
-  confirmSelection: () => void;
+  resetSelection: () => void;
+  confirmSelection: () => Promise<boolean>;
 };
 
 type SelectedMessageIds = ReadonlySet<string>;
@@ -41,7 +45,7 @@ export function ChatShareSelectionProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [store] = useState(() => createChatShareSelectionStore(initialMessageId));
-  const { shareChat, isSharing, cancelShare } = useShareChat(target);
+  const { shareChat, isSharing, cancelShare, content, error } = useShareChat(target);
   const toggleMessage = useCallback(
     (messageId: string) => {
       const selectedIds = store.getSnapshot();
@@ -59,15 +63,23 @@ export function ChatShareSelectionProvider({
   );
   const confirmSelection = useCallback(() => {
     const selectedIds = store.getSnapshot();
-    if (selectedIds.size && !isSharing) shareChat([...selectedIds]);
+    return selectedIds.size && !isSharing ? shareChat([...selectedIds]) : Promise.resolve(false);
   }, [isSharing, shareChat, store]);
+
+  useEffect(() => {
+    if (initialMessageId) void shareChat([initialMessageId]);
+    return cancelShare;
+  }, [initialMessageId, shareChat, cancelShare]);
 
   useFocusEffect(useCallback(() => cancelShare, [cancelShare]));
 
-  const state = useMemo(() => ({ isSharing }), [isSharing]);
+  const state = useMemo(() => ({ isSharing, content, error }), [isSharing, content, error]);
+  const resetSelection = useCallback(() => {
+    if (content) store.setSelectedIds(new Set(content.messageIds));
+  }, [content, store]);
   const actions = useMemo(
-    () => ({ toggleMessage, confirmSelection }),
-    [confirmSelection, toggleMessage],
+    () => ({ toggleMessage, confirmSelection, resetSelection }),
+    [confirmSelection, toggleMessage, resetSelection],
   );
 
   return (

@@ -23,6 +23,7 @@ export type ImagePageMeasurement = {
 export function imagePagePlan(
   measurement: ImagePageMeasurement,
   layout: ExportImageLayout,
+  pageHeight = IMAGE_PAGE_HEIGHT,
 ): ImagePageSlice[] {
   const { height, width, ink } = measurement;
   if (
@@ -64,7 +65,7 @@ export function imagePagePlan(
   const pages: ImagePageSlice[] = [];
   let top = 0;
   while (top < height) {
-    let end = Math.min(top + IMAGE_PAGE_HEIGHT, height);
+    let end = Math.min(top + pageHeight, height);
     if (end < height) end = safeCut(end);
     // Never hide, omit or cut through a painted object that cannot fit on one page.
     if (end <= top) throw new DocumentExportError('capture-failed');

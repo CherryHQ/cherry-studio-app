@@ -1,8 +1,8 @@
 # Chat Sharing
 
 The assistant toolbar and user/assistant message context menus open `/chat-share` with the session
-and clicked message IDs. The separate page initially selects that message and loads a paginated
-history window around it. User and assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
+and clicked message IDs. The transparent route opens one CherryUI bottom sheet, immediately previews that message,
+and loads a paginated history window for the in-sheet selection editor. User and assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
 attachment-name fallback. Pending/streaming messages cannot be selected. Whole-row presses select;
 scrolling retains ordinary native press cancellation. Excerpts do not render Markdown, media,
 tools or reasoning. The exported document still contains the complete selected messages.
@@ -23,9 +23,10 @@ safe to recycle: each reads its own selected boolean by message ID, while only t
 subscribe to the count. Individual toggles leave unrelated rows and action consumers stable.
 These are source-level guarantees; device rendering/scroll performance is not yet measured.
 
-`ChatShareSelectionProvider` owns IDs for one route identity. Cancel/native Back closes this page;
-closing the export preview retains the existing selection, while a closed system share sheet
-dismisses both pages to the chat. At most 128 messages can be selected; an empty selection cannot
+`ChatShareSelectionProvider` owns IDs and immutable export sessions for one route identity.
+Selection and settings are subpages of the same physical sheet. Returning from the
+selection editor without confirming restores the applied selection. Closing the system chooser
+returns to the current preview; closing the app sharing sheet returns to chat. At most 128 messages can be selected; an empty selection cannot
 be confirmed. Leaving the page cancels pending export reads.
 
 Confirmation calls the share target's `prepareSelection`. The local route reads messages, session
@@ -41,7 +42,7 @@ when thinking content is toggled. There is no image-size gate before conversion.
 The source adapter supplies two immutable document snapshots when thinking content exists: omitted
 by default, and included when the preview switch is enabled. Thinking covers the visible reasoning,
 intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
-the document. The export page receives only a source-owned label and documents; it has no chat reads.
+the document. The export preview receives immutable sessions and has no live chat reads.
 
 The adapter preserves plain user text and supplies source-owned role hints. Managed images retain
 their transcript position relative to the answer. Sharing and the message list reuse the same
@@ -58,7 +59,7 @@ fallbacks. Images and HTML show the opening code inside fixed 192-point panels; 
 code with internal scrolling, and Markdown keeps the complete authored source. Images and HTML show
 one compact source-count row with a single Globe icon and the same localized count as the chat,
 plus quiet superscript citations, without individual source cards.
-Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
+Inline code stays visible in every format. All formats initialize from the global Share watermark setting, with a per-share override. Images and HTML share the white
 Cherry brand/download footer with its QR area; Markdown uses the matching brand and download link.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
@@ -84,3 +85,13 @@ messages cannot be selected as complete export content.
 
 Local documents keep their existing managed-file references and the document renderer resolves
 them; the underlying bytes are not pinned for the duration of the export.
+
+The route owns a local sheet host above a neutral backdrop, so the underlying chat toolbar does not
+compete with the preview. The sheet opens at its full available height, keeping the preview and fixed
+footer visible.
+The preview is a native horizontal image carousel with a small position indicator. It follows the
+current app colors, without separate templates or a full-preview subpage. One opaque foreground
+covers the capture surface throughout rendering and subpage changes; loading uses one stable state.
+The compact footer places each icon and label on the same row and offers Photos saving,
+file-format options and the system share chooser. Format, image layout, thinking and watermark
+controls stay in the options subpage. See [Export capture](./export/README.md).

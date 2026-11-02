@@ -99,3 +99,23 @@ test('single-image output preserves the complete height independently of capture
 test.each([NaN, Infinity, 0, -1])('rejects malformed measurement height %s', (height) => {
   expect(() => imagePagePlan(measurement({ height }), 'pages')).toThrow();
 });
+
+test('card-sized pages retain every line and move the cut above a protected block', () => {
+  const pages = imagePagePlan(
+    measurement({
+      height: 1100,
+      ink: [
+        [460, 520],
+        [940, 980],
+      ],
+    }),
+    'pages',
+    480,
+  );
+  expect(pages).toEqual([
+    { top: 0, height: 460 },
+    { top: 460, height: 480 },
+    { top: 940, height: 160 },
+  ]);
+  expect(pages.reduce((sum, page) => sum + page.height, 0)).toBe(1100);
+});

@@ -2,29 +2,29 @@ import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { TranscriptSnapshot } from '@/frontend/appShell/conversation';
-import type { useDocumentExport } from '@/frontend/appShell/documentExport';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { DocumentExportInput } from '@/shared/contracts/documentExport';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { ChatShareTarget } from '../chatShareTarget';
 import { useShareChat } from '../useShareChat';
 
-const mockOpen = jest.fn(
-  async (_input: Parameters<ReturnType<typeof useDocumentExport>['open']>[0]) => 'closed' as const,
-);
+const mockCreateSession = jest.fn((input: DocumentExportInput) => ({
+  document: input.kind === 'document' ? input.document : undefined,
+  dispose: jest.fn(async () => {}),
+}));
+const mockModule = { createSession: mockCreateSession };
 const mockPrepare = jest.fn<Promise<TranscriptSnapshot>, [readonly string[], AbortSignal]>();
+const mockToast = { show: jest.fn() };
+const mockTranslate = (key: string) => key;
 const target: ChatShareTarget = {
   ref: { source: { kind: 'local' }, sessionId: 'session' },
   prepareSelection: mockPrepare,
 };
 
-jest.mock('@/frontend/appShell/documentExport', () => ({
-  useDocumentExport: () => ({ open: mockOpen }),
-}));
-jest.mock('@cherrystudio/ui/components', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
-}));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
+jest.mock('@cherrystudio/ui/components', () => ({ useToast: () => ({ toast: mockToast }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
 
 type ShareChat = ReturnType<typeof useShareChat>;
 function Probe({
@@ -57,7 +57,7 @@ function message(id: string, role: 'user' | 'assistant'): AgentMessageView {
 
 let renderer: ReactTestRenderer | undefined;
 beforeEach(() => {
-  mockOpen.mockClear();
+  mockCreateSession.mockClear();
   mockPrepare.mockReset().mockImplementation(async (ids) => ({
     title: 'Conversation',
     assistantName: 'Assistant',
@@ -71,49 +71,22 @@ afterEach(() => {
   renderer = undefined;
 });
 
-test('multiple selected messages open one image preview in chronological order with every format available', async () => {
+test('prepares the complete selection in chronological order for the inline preview', async () => {
   const ref = createRef<ShareChat>();
   await act(async () => {
     renderer = create(<Probe ref={ref} />);
   });
-  await act(async () => ref.current!.shareChat(['answer', 'question']));
-  expect(mockOpen).toHaveBeenCalledTimes(1);
-  expect(mockOpen).toHaveBeenCalledWith(
-    expect.objectContaining({
-      initialFormat: 'image',
-      allowedFormats: ['image', 'html', 'markdown'],
-      input: {
-        kind: 'document',
-        document: expect.objectContaining({
-          sections: [
-            expect.objectContaining({ id: 'question' }),
-            expect.objectContaining({ id: 'answer' }),
-          ],
-        }),
-      },
-    }),
-  );
+  await act(async () => {
+    await ref.current!.shareChat(['answer', 'question']);
+  });
+  expect(ref.current!.content?.session.document.sections.map((section) => section.id)).toEqual([
+    'question',
+    'answer',
+  ]);
+  expect(ref.current!.content?.messageIds).toEqual(['question', 'answer']);
 });
 
-test.each([{ ids: ['answer'] }, { ids: ['answer', 'answer'] }])(
-  'one distinct selected message retains image sharing ($ids)',
-  async ({ ids }) => {
-    const ref = createRef<ShareChat>();
-    await act(async () => {
-      renderer = create(<Probe ref={ref} />);
-    });
-    await act(async () => ref.current!.shareChat(ids));
-    expect(mockOpen).toHaveBeenCalledTimes(1);
-    expect(mockOpen).toHaveBeenCalledWith(
-      expect.objectContaining({
-        initialFormat: 'image',
-        allowedFormats: ['image', 'html', 'markdown'],
-      }),
-    );
-  },
-);
-
-test('the normal share flow retains expanded translations for every format and both thinking snapshots', async () => {
+test('retains captured translations in both thinking snapshots', async () => {
   const answer = message('answer', 'assistant');
   answer.parts.unshift({ id: 'thought', type: 'reasoning', text: 'Thought', state: 'done' });
   mockPrepare.mockResolvedValueOnce({ messages: [answer] });
@@ -127,16 +100,25 @@ test('the normal share flow retains expanded translations for every format and b
   await act(async () => {
     renderer = create(<Probe ref={ref} shareTarget={shareTarget} />);
   });
-  await act(async () => ref.current!.shareChat(['answer']));
-  const request = mockOpen.mock.calls[0][0];
-  expect(request.allowedFormats).toEqual(['image', 'html', 'markdown']);
-  expect(JSON.stringify(request.input)).toContain('译文');
-  expect(JSON.stringify(request.input)).toContain('Thought');
-  expect(JSON.stringify(request.option?.uncheckedInput)).toContain('译文');
-  expect(JSON.stringify(request.option?.uncheckedInput)).not.toContain('Thought');
+  await act(async () => {
+    await ref.current!.shareChat(['answer']);
+  });
+  const content = ref.current!.content;
+  expect(JSON.stringify(content?.session.document)).toContain('译文');
+  expect(JSON.stringify(content?.session.document)).toContain('Thought');
+  expect(JSON.stringify(content?.withoutProcess?.document)).toContain('译文');
+  expect(JSON.stringify(content?.withoutProcess?.document)).not.toContain('Thought');
 });
 
-test('does not open the export after preparation was cancelled', async () => {
+test('cancelled reads cannot replace the displayed content', async () => {
+  const ref = createRef<ShareChat>();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} />);
+  });
+  await act(async () => {
+    await ref.current!.shareChat(['question']);
+  });
+  const original = ref.current!.content;
   let finish!: (value: TranscriptSnapshot) => void;
   mockPrepare.mockImplementationOnce(
     () =>
@@ -144,13 +126,34 @@ test('does not open the export after preparation was cancelled', async () => {
         finish = resolve;
       }),
   );
+  let pending!: Promise<boolean>;
+  act(() => {
+    pending = ref.current!.shareChat(['answer']);
+  });
+  act(() => ref.current!.cancelShare());
+  await act(async () => {
+    finish({ messages: [message('answer', 'assistant')] });
+    await pending;
+  });
+  expect(ref.current!.content).toBe(original);
+  expect(ref.current!.isSharing).toBe(false);
+});
+
+test('replacement and unmount dispose their owned sessions', async () => {
   const ref = createRef<ShareChat>();
   await act(async () => {
     renderer = create(<Probe ref={ref} />);
   });
-  await act(async () => ref.current!.shareChat(['answer']));
-  act(() => ref.current!.cancelShare());
-  await act(async () => finish({ messages: [message('answer', 'assistant')] }));
-  expect(mockOpen).not.toHaveBeenCalled();
-  expect(ref.current!.isSharing).toBe(false);
+  await act(async () => {
+    await ref.current!.shareChat(['question']);
+  });
+  const original = ref.current!.content!.session;
+  await act(async () => {
+    await ref.current!.shareChat(['answer']);
+  });
+  expect(original.dispose).toHaveBeenCalledTimes(1);
+  const current = ref.current!.content!.session;
+  act(() => renderer!.unmount());
+  renderer = undefined;
+  expect(current.dispose).toHaveBeenCalledTimes(1);
 });

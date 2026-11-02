@@ -15,7 +15,7 @@ const target = {
   ref: { source: { kind: 'local' as const }, sessionId: 'session' },
   prepareSelection: jest.fn(),
 };
-const mockShareChat = jest.fn();
+const mockShareChat = jest.fn(async () => true);
 const mockCancelShare = jest.fn();
 const mockToastShow = jest.fn();
 const mockToast = { show: mockToastShow };
@@ -83,29 +83,36 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer.unmount()));
 
-test('preselects the clicked answer but opens the export only on confirmation', () => {
+test('previews the clicked answer immediately and confirms subsequent selection edits', async () => {
   expect(selection.current!.selectedCount).toBe(1);
-  expect(mockShareChat).not.toHaveBeenCalled();
+  expect(mockShareChat).toHaveBeenCalledWith(['answer']);
   act(() => selection.current!.toggleMessage('question'));
-  act(() => selection.current!.confirmSelection());
+  await act(async () => {
+    await selection.current!.confirmSelection();
+  });
   expect(mockShareChat).toHaveBeenCalledWith(['answer', 'question']);
 });
 
-test('an empty selection cannot be confirmed', () => {
+test('an empty selection cannot be confirmed', async () => {
+  mockShareChat.mockClear();
   act(() => selection.current!.toggleMessage('answer'));
-  act(() => selection.current!.confirmSelection());
+  await act(async () => {
+    await selection.current!.confirmSelection();
+  });
   expect(selection.current!.selectedCount).toBe(0);
   expect(mockShareChat).not.toHaveBeenCalled();
 });
 
-test('losing focus cancels pending reads but preserves selection on return from preview', () => {
+test('losing focus cancels pending reads but preserves selection on return from preview', async () => {
   act(() => selection.current!.toggleMessage('question'));
   const blur = mockFocusEffect();
   act(blur);
   expect(mockCancelShare).toHaveBeenCalledTimes(1);
   mockFocusEffect();
   expect(selection.current!.selectedCount).toBe(2);
-  act(() => selection.current!.confirmSelection());
+  await act(async () => {
+    await selection.current!.confirmSelection();
+  });
   expect(mockShareChat).toHaveBeenCalledWith(['answer', 'question']);
 });
 
