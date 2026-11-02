@@ -204,7 +204,6 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
               model: configuration.model,
               options: {},
               toolApprovalMode: 'default',
-              disabledCapabilities: [],
             }
           : null,
     },

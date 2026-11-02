@@ -25,9 +25,11 @@ local persistent UI cache by package content hash and language, and appear immed
 same document is reopened, including after an app restart. A changed package or another language
 uses its own translation; truncated, failed and cancelled requests are not saved. The existing
 update action is labeled **Update skill** because it applies the upstream content directly.
-Installed Skills are available by default, with no library enablement switch. Agent settings enable
-Skills individually for each Agent; the chat composer selects eligible bindings for a message.
-An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
+Installed Skills are available by default, with no library enablement switch. Agent settings retain
+individual bindings as the isolation boundary and show only enabled bindings. Add Skill opens a
+separate picker of installed, available packages; removing an entry unbinds it without uninstalling
+the package. Installation and updates stay in the Skill library, reachable from that picker.
+An enabled binding makes a Skill available for the model to choose when relevant. A composer reference
 requests its use and supplies its full instructions for that turn; it is not a request to install
 the Skill or open a file viewer.
 
@@ -119,7 +121,7 @@ loading. Scripts, references, templates and other accepted resources are preserv
 
 Limitations compare two fixed things: what the package asks of its host, and what this build of the
 app provides. Neither side depends on the user's configuration. A missing permission, web-search
-provider, drawing model, plugin connection or Agent capability is the user's to configure, and the
+provider, drawing model or plugin connection is the user's to configure, and the
 owning tool reports it when a step runs.
 
 - **The package's side** is two stored facts. Its script files come from the accepted manifest:

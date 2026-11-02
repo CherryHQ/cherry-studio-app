@@ -19,6 +19,7 @@ export const SENTRY_CONSENT_VERSION = policy.consentVersion;
 type SentryConsentStatus = CrashReportingStatus & { available: boolean };
 type SentryRuntime = { dsn: string | undefined; environment: string; isProduction: boolean };
 
+const logger = loggerService.withContext('Sentry');
 let status: SentryConsentStatus = { enabled: false, active: false, available: false };
 const listeners = new Set<() => void>();
 let nativeReporting: ReturnType<typeof getCrashReporting> = null;
@@ -98,6 +99,9 @@ export async function setSentryConsent(enabled: boolean): Promise<void> {
 export function configureSentry(): Promise<void> {
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
   const reporting = getReportingPolicy('sentry');
+  if (reporting.enabled && !dsn) {
+    logger.warn('Sentry configuration is unavailable', { code: 'sentry.missing_dsn' });
+  }
   runtime = {
     dsn,
     environment: reporting.environment,
@@ -113,15 +117,22 @@ export function configureSentry(): Promise<void> {
   try {
     native = getCrashReporting();
     if (!native) {
+      if (runtime.isProduction) {
+        logger.warn('Sentry configuration is unavailable', { code: 'sentry.native_unavailable' });
+      }
       return Promise.resolve();
     }
     const current = native.getStatus();
+    if (current.initialization === 'failed') {
+      logger.warn('Sentry initialization failed', { code: 'sentry.native_startup_failed' });
+    }
     if (current.consentVersion === SENTRY_CONSENT_VERSION && current.initialization === 'ready') {
       nativeReporting = native;
       publishStatus({ ...current, available: true });
       if (status.active) resumeJavaScriptReporting();
     }
   } catch {
+    logger.warn('Sentry configuration is unavailable', { code: 'sentry.native_status_failed' });
     return Promise.resolve();
   }
 
@@ -134,6 +145,9 @@ export function configureSentry(): Promise<void> {
           if (generation !== configureGeneration) return;
           nativeReporting = native;
           publishStatus({ ...next, available: true });
+          if (next.initialization === 'failed') {
+            logger.warn('Sentry initialization failed', { code: 'sentry.native_init_failed' });
+          }
           if (status.active) resumeJavaScriptReporting();
         });
     })
@@ -142,6 +156,7 @@ export function configureSentry(): Promise<void> {
       pauseJavaScriptReporting();
       publishStatus({ enabled: false, active: false, available: false });
       nativeReporting = null;
+      logger.warn('Sentry configuration failed', { code: 'sentry.native_configure_failed' });
     });
 }
 
@@ -149,7 +164,13 @@ function resumeJavaScriptReporting() {
   try {
     initializeJavaScriptReporting();
   } catch {
+    // The native SDK may still be running, but JS capture did not become ready.
+    logger.warn('Sentry initialization failed', {
+      code: 'sentry.javascript_init_failed',
+      reasonCode: status.active ? 'native_active' : 'native_inactive',
+    });
     pauseJavaScriptReporting();
+    publishStatus({ ...status, active: false });
   }
 }
 

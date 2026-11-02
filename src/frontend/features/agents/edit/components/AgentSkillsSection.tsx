@@ -1,8 +1,10 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Section } from '@cherrystudio/ui/components';
+import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
+import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Keyboard, ScrollView, Text, View } from 'react-native';
 
 import { withPolicy } from '@/frontend/components/Policy';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
@@ -20,10 +22,8 @@ type AgentSkillsSectionProps = {
 };
 
 /**
- * Per-Agent Skill bindings. The switch expresses the user's intent; the caption
- * reports a missing package. Installation and updates live in the Skill library,
- * linked from the footer. A managed Agent's bindings belong to the enterprise server; its editor
- * lists them read-only inside a locked group, where the switches render locked.
+ * Only enabled bindings appear in the editor. Adding an installed Skill is a
+ * separate choice; installation and updates remain in the Skill library.
  */
 function SkillsSection({
   agentId,
@@ -34,43 +34,94 @@ function SkillsSection({
 }: AgentSkillsSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
-  // A locked Agent without bound Skills has nothing to show.
-  if (readOnly && !skills.some((skill) => bindings.get(skill.id) === true)) return null;
+  const [isAdding, setIsAdding] = useState(false);
+  const enabledSkills = skills.filter((skill) => bindings.get(skill.id) === true);
+  const availableSkills = skills.filter(
+    (skill) => bindings.get(skill.id) !== true && skill.isEnabled && !skill.isPackageMissing,
+  );
+
+  if (readOnly && enabledSkills.length === 0) return null;
 
   return (
-    <Section footer={t('agent.skills.usageHint')} title={t('agent.skills.section')}>
-      {skills.map((skill) => {
-        const isEnabled = bindings.get(skill.id) === true;
-        const description = (
-          <View className="gap-0.5">
-            <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-              {skill.description}
-            </Text>
-            {skill.isPackageMissing ? (
-              <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
-            ) : null}
-          </View>
-        );
-        if (readOnly && !isEnabled) return null;
-        return (
-          <Section.SwitchItem
-            accessibilityLabel={skill.name}
-            description={readOnly ? undefined : description}
+    <>
+      <Section
+        footer={enabledSkills.length > 0 ? t('agent.skills.usageHint') : undefined}
+        title={enabledSkills.length > 0 ? t('agent.skills.section') : undefined}
+      >
+        {enabledSkills.map((skill) => (
+          <Section.Item
+            description={
+              readOnly ? undefined : (
+                <View className="gap-0.5">
+                  <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+                    {skill.description}
+                  </Text>
+                  {skill.isPackageMissing ? (
+                    <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
+                  ) : null}
+                </View>
+              )
+            }
             key={skill.id}
             label={skill.name}
-            onValueChange={(value) => onChange([{ isEnabled: value, skillId: skill.id }])}
-            value={isEnabled}
+            locked={readOnly}
+            trailing={
+              readOnly ? undefined : (
+                <Button
+                  accessibilityLabel={t('agent.skills.removeAccessibilityLabel', {
+                    name: skill.name,
+                  })}
+                  icon={<TrashIcon />}
+                  onPress={() => onChange([{ isEnabled: null, skillId: skill.id }])}
+                  size="xs"
+                  variant="ghost"
+                />
+              )
+            }
           />
-        );
-      })}
-      {readOnly ? null : (
-        <Section.Item
-          label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
-          onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
-          trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
-        />
-      )}
-    </Section>
+        ))}
+        {readOnly ? null : (
+          <Section.Item
+            label={t('agent.skills.add')}
+            onPress={() => {
+              Keyboard.dismiss();
+              setIsAdding(true);
+            }}
+          />
+        )}
+      </Section>
+      <BottomSheet
+        onClose={() => setIsAdding(false)}
+        open={!readOnly && isAdding}
+        size="medium"
+        title={t('agent.skills.add')}
+      >
+        <ScrollView contentContainerClassName="pt-2" showsVerticalScrollIndicator={false}>
+          <Section variant="plain">
+            {availableSkills.map((skill) => (
+              <Section.Item
+                description={skill.description}
+                key={skill.id}
+                label={skill.name}
+                onPress={() => {
+                  onChange([{ isEnabled: true, skillId: skill.id }]);
+                  setIsAdding(false);
+                }}
+                showChevron={false}
+              />
+            ))}
+            <Section.Item
+              label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
+              onPress={() => {
+                setIsAdding(false);
+                router.push({ pathname: '/skills', params: { agentId } });
+              }}
+              trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
+            />
+          </Section>
+        </ScrollView>
+      </BottomSheet>
+    </>
   );
 }
 

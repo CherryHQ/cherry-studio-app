@@ -19,16 +19,26 @@ surfaces.
 - The editor's model row opens the shared model-picker bottom sheet for text and image models. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
-  its two-mode tool-approval preference, and Agent-specific MCP extensions. Inference parameters
-  and system capability switches are not part of the Agent editor surface.
+  standard/minimal mode, and its two-mode tool-approval preference.
+  Inference parameters are not part of the Agent editor surface.
+- Skill and custom MCP bindings remain isolated per Agent. The editor lists only bound, enabled
+  entries; separate Add Skill and Add MCP sheets offer available entries. Removing a Skill binding
+  does not uninstall its package. Unavailable enabled bindings retain a status and removal action.
+  Installation and connection management stay in their existing library/plugin pages, reachable
+  from the add sheets. Connected built-in plugins retain their existing global scope.
 - Existing agents save edits automatically without a Save action. Name and instructions wait for
   600 ms of idle input, then save; blur, leaving the page, and backgrounding flush pending text.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
   field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
-- Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
-  when their system gates pass. The frontend keeps web search as a Session-scoped composer
-  selection. Selecting an image model saves that model on the Agent; image parameters belong to
+- The instructions input grows from 112 to a fixed maximum of 480 points, roughly filling the
+  remaining first-screen space on a typical phone without measuring the layout.
+  Longer instructions scroll internally without truncating the saved text. Native text selection
+  and scrolling stay owned by the input, while the outer scroll view moves the rest of the form.
+- Built-in tools, including Health and Reminders, are available for user-directed conversation
+  tasks when their model, system and service gates pass; they have no per-Agent switches. Health,
+  reminders, calendar, location and image-generation tools load on demand through tool search.
+  Selecting an image model saves that model on the Agent; image parameters belong to
   each submission. Image-model conversations remain ordinary Agent Sessions in the chat drawer.
 - New agents, including the initial Cherry Agent, default to automatic tool approval. Automatic
   approval promotes only eligible interactive `ask` tools for future turns; it cannot enable a
@@ -44,14 +54,14 @@ surfaces.
 
 ## Organization
 
-- `edit/components/` contains the editor's capability and MCP tool sections; they remain private to
+- `edit/components/` contains the editor's Skill and MCP binding sections; they remain private to
   the editor page.
 - `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screen.
 - The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page
-  background and switch rows carry no icons. Create and edit render the same form — a centered
-  avatar and underlined name, then instructions, model and approval, capabilities, and MCP
-  extensions. Only the header's Save action (create) and the delete row (edit) differ. Create
+  background. Create and edit render the same form — a centered
+  avatar and underlined name, then instructions, mode/model and approval, and MCP
+  bindings. Existing Agents also expose Skill bindings. Create
   writes the avatar and MCP bindings after the record exists; edit deletes after confirmation and
   returns to the previous screen.
 - The editor's route is the one screen in this stack with an opaque header, so the native stack owns
@@ -62,9 +72,9 @@ surfaces.
 - Cross-screen UI comes from neutral modules under `src/frontend/components`.
 
 
-Agents can also be created and edited through the conversation's built-in Agent management tools.
-The capabilities section toggles them per Agent through the `agents` capability group, in the same
-list as the device groups; new Agents start with it off, while the seeded default Agent keeps it on. The tools reuse `AgentService`; tool-created Agents inherit the global default model and the editor's
-capability defaults. Guarded tool updates preserve omitted fields and reject stale `updatedAt`
+Agents can also be created and edited through the conversation's deferred Agent management tools,
+without an editor switch. The tools reuse `AgentService`; tool-created Agents inherit the global
+default model. Guarded tool updates preserve omitted
+fields and reject stale `updatedAt`
 versions. Committed create/update operations publish Data API cache invalidations for the list and
 changed record. Existing editor drafts are not replaced by incoming cache refreshes.

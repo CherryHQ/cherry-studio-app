@@ -3,7 +3,7 @@
  *
  * Snapshot resolution in miniature (agent-tools-and-resources.md): the Host asks
  * for the tools a turn may use, and the source projects only the capabilities
- * that this model can call, this platform implements, this Agent has enabled,
+ * that this model can call, this platform implements,
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
  * present and broken. A permission the OS can still request keeps the tool
@@ -31,9 +31,9 @@ import {
   type PermissionStatuses,
 } from '@/shared/contracts';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import type { VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isDataApiError } from '@/shared/data/api/errors';
-import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
@@ -70,6 +70,7 @@ import {
 } from './painting';
 import { createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
+import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
 import { createWriteFileTool } from './writeFileTool';
@@ -88,7 +89,6 @@ type WebSearchAvailability = Readonly<Record<WebSearchCapability, boolean>>;
 /** Everything outside the tool definitions that decides what a turn may use. */
 export type BuiltInToolScope = {
   deviceAccess: DeviceAccess;
-  disabledCapabilities: ReadonlySet<AgentCapability>;
   paintingModel: ConfiguredPaintingModel | null;
   platform: string;
   webSearchAvailability: WebSearchAvailability;
@@ -104,7 +104,6 @@ export type SystemCapabilitySource = {
     /** The Host's response channel for `ask_user_question`. */
     askUser: AskUserQuestion;
     documentParserMode: DocumentParserMode;
-    disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     acceptsImages: boolean;
     resources: TurnToolResources;
@@ -115,6 +114,7 @@ export type SystemCapabilitySource = {
 
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
+    voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
@@ -132,6 +132,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
@@ -148,7 +149,6 @@ export function createSystemCapabilitySource(
       workspaceFolderId,
       agentId,
       askUser,
-      disabledCapabilities,
       model,
       acceptsImages,
       resources,
@@ -161,11 +161,15 @@ export function createSystemCapabilitySource(
         return [];
       }
 
-      const scope = await resolveScope(deps, new Set(disabledCapabilities));
+      const scope = await resolveScope(deps);
       const fileAccess = new WorkspaceFileAccess(workspaceFolderId ?? null, resources);
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
+      const transcriptionReady = await deps.voice
+        ?.getTranscriptionStatus()
+        .then((status) => status === 'ready')
+        .catch(() => false);
       const catalog = createCatalog(
         deps,
         scope,
@@ -177,6 +181,7 @@ export function createSystemCapabilitySource(
         fileAccess,
         workspaceName,
         acceptsImages,
+        transcriptionReady ?? false,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -200,8 +205,8 @@ export type ResolvedToolPolicy = {
 };
 
 /**
- * Application policy is shared by every Agent; the Agent contributes only its
- * capability-group deny-list. `null` means the tool is absent for this turn.
+ * Application policy is shared by every Agent. `null` means the tool is absent
+ * for this turn.
  * A requestable permission keeps the tool present as `ask`, so in-app approval
  * precedes the system prompt and cannot be bypassed by global auto mode.
  */
@@ -210,9 +215,6 @@ export function resolveApproval(
   scope: BuiltInToolScope,
 ): ResolvedToolPolicy | null {
   if (!isPlatformSupported(descriptor, scope.platform)) {
-    return null;
-  }
-  if (descriptor.agentCapability && scope.disabledCapabilities.has(descriptor.agentCapability)) {
     return null;
   }
   if (descriptor.requiresPaintingModel && !scope.paintingModel) {
@@ -269,6 +271,7 @@ function createCatalog(
   fileAccess: WorkspaceFileAccess,
   workspaceName: string | undefined,
   acceptsImages: boolean,
+  transcriptionReady: boolean,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -292,6 +295,9 @@ function createCatalog(
       acceptsImages,
     ),
     createWriteFileTool(fileContent, fileAccess),
+    ...(transcriptionReady && deps.voice
+      ? [createTranscribeAudioTool(deps.voice, fileAccess)]
+      : []),
     ...createFileLibraryTools(
       fileAccess,
       managedFileResolver,
@@ -358,24 +364,18 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
   };
 }
 
-async function resolveScope(
-  deps: SystemCapabilitySourceDependencies,
-  disabledCapabilities: ReadonlySet<AgentCapability>,
-): Promise<BuiltInToolScope> {
+async function resolveScope(deps: SystemCapabilitySourceDependencies): Promise<BuiltInToolScope> {
   const [deviceAccess, paintingModel, webSearchAvailability] = await Promise.all([
-    resolveDeviceAccess(deps, disabledCapabilities),
-    disabledCapabilities.has('image')
-      ? null
-      : resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
-          logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
-          return null;
-        }),
-    resolveWebSearchAvailability(deps, !disabledCapabilities.has('web')),
+    resolveDeviceAccess(deps),
+    resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
+      logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
+      return null;
+    }),
+    resolveWebSearchAvailability(deps),
   ]);
 
   return {
     deviceAccess,
-    disabledCapabilities,
     paintingModel,
     platform: deps.platform,
     webSearchAvailability,
@@ -389,11 +389,7 @@ async function resolveScope(
  */
 async function resolveWebSearchAvailability(
   deps: SystemCapabilitySourceDependencies,
-  enabled: boolean,
 ): Promise<WebSearchAvailability> {
-  if (!enabled) {
-    return { fetchUrls: false, searchKeywords: false };
-  }
   const [fetchProvider, searchProvider] = await Promise.all([
     readWebSearchProvider(deps, 'fetchUrls'),
     readWebSearchProvider(deps, 'searchKeywords'),
@@ -418,14 +414,11 @@ async function readWebSearchProvider(
 
 async function resolveDeviceAccess(
   deps: SystemCapabilitySourceDependencies,
-  disabledCapabilities: ReadonlySet<AgentCapability>,
 ): Promise<DeviceAccess> {
   const scopes = [
     ...new Set(
-      BUILT_IN_TOOL_DESCRIPTORS.filter(
-        (descriptor) =>
-          isPlatformSupported(descriptor, deps.platform) &&
-          (!descriptor.agentCapability || !disabledCapabilities.has(descriptor.agentCapability)),
+      BUILT_IN_TOOL_DESCRIPTORS.filter((descriptor) =>
+        isPlatformSupported(descriptor, deps.platform),
       ).flatMap((descriptor) => descriptor.permissionScopes),
     ),
   ];
@@ -442,6 +435,7 @@ function resolveDependencies(
   overrides: Partial<SystemCapabilitySourceDependencies>,
 ): SystemCapabilitySourceDependencies {
   return {
+    voice: overrides.voice ?? services.voice,
     agents: overrides.agents ?? agentService,
     trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,

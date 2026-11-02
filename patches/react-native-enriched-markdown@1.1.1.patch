@@ -1,3 +1,15 @@
+diff --git a/android/consumer-rules.pro b/android/consumer-rules.pro
+--- a/android/consumer-rules.pro
++++ b/android/consumer-rules.pro
+@@ -11,7 +11,7 @@
+ -keep class com.swmansion.enriched.markdown.spans.MathInlineSpan { *; }
+ -keep class com.swmansion.enriched.markdown.spans.MathInlinePlaceholderSpan { *; }
+ -keep class com.swmansion.enriched.markdown.spans.MathMeasureHelper { *; }
+--keep class com.swmansion.enriched.markdown.views.MathContainerView { *; }
++-keep class com.swmansion.enriched.markdown.segments.MathContainerView { *; }
+ -keep class com.swmansion.enriched.markdown.renderer.MathInlineRenderer { *; }
+ 
+ # Reflection: Video container loaded via Class.forName when enableVideo=true.
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
 index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b3b1c700b 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h

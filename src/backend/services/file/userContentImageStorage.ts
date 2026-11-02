@@ -11,6 +11,8 @@ const MAX_STORED_BYTES = 2 * 1024 * 1024;
 // The mobile profile photo expands into a large hero, so thumbnail-sized output
 // is visibly soft even though compact assistant avatars use the same asset.
 const AVATAR_DIMENSION = 1024;
+// Retain a 1024 px center crop up to a 4:1 aspect ratio while bounding panorama decoding.
+const MAX_SOURCE_DIMENSION = AVATAR_DIMENSION * 4;
 const WEBP_QUALITY = 0.82;
 
 /** Matches one UUID v4, for composing a directory's stored-name pattern. */
@@ -95,7 +97,10 @@ async function normalizeAvatarImage(sourceUri: string): Promise<string> {
   const sourceFile = new File(sourceUri);
   assertUsableFile(sourceFile, MAX_SOURCE_BYTES, 'Selected image');
 
-  const sourceContext = ImageManipulator.manipulate(sourceUri);
+  const sourceContext = ImageManipulator.manipulate(sourceUri, {
+    maxHeight: MAX_SOURCE_DIMENSION,
+    maxWidth: MAX_SOURCE_DIMENSION,
+  });
   let sourceImage: Awaited<ReturnType<typeof sourceContext.renderAsync>> | undefined;
   let outputContext: ReturnType<typeof ImageManipulator.manipulate> | undefined;
   let outputImage: Awaited<ReturnType<typeof sourceContext.renderAsync>> | undefined;

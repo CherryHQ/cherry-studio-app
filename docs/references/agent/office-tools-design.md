@@ -1,7 +1,8 @@
 # Office Tools Design
 
 > Status: bounded generation, inspection, reading, editing and preview-selection handoff are
-> implemented in source; focused tests pass and native/Office acceptance remains pending. All nine tools require
+> implemented in source, including package integrity checks and structural inventories. Microsoft Office
+> fidelity and broader device workflows remain separate acceptance work. All nine tools require
 > native QuickJS. `run_office_script` covers template filling, inserting or deleting pictures, layout
 > changes and other content the fixed tools do not express; no fixed tool is planned for them. The exact implemented
 > contract is in the [Office service](../../../src/backend/services/office/README.md) and
@@ -45,12 +46,12 @@ and [HTML Conversion](../html-conversion.md) for these current capabilities.
 | `edit_document` | Managed source id and `DocumentEditOperationV1[]` | New derived `.docx` |
 | `edit_workbook` | Managed source id and `WorkbookEditOperationV1[]` | New derived `.xlsx` |
 | `edit_presentation` | Managed source id and `PresentationEditOperationV1[]` | New derived `.pptx` |
-| `run_office_script` | Output filename, model-written JavaScript over pinned Office libraries, and authorized managed inputs | New `.docx`, `.xlsx` or `.pptx` |
+| `run_office_script` | Output filename, model-written JavaScript over pinned Office libraries, authorized managed inputs and optional original comparison | New `.docx`, `.xlsx` or `.pptx` |
 
-All nine names are registered in source. The eight fixed tools are the fast path for bounded
+All nine names are registered in source. The fixed generation/editing tools are the fast path for bounded
 changes; `run_office_script` handles everything else. Creation uses version 1 specs; edits require top-level
-version 1 and an exact source SHA-256. Current inspection lists body paragraphs, sheets, and
-slides/shapes with bounded paging; exact reads resolve one supported anchor. These are narrower
+version 1 and an exact source SHA-256. Current inspection additionally supports `structure` inventories and package `check` with
+comparison against an authorized original; exact reads resolve one supported anchor. These are narrower
 than the full target matrix above. Native and Office acceptance remain required before release.
 Image inspection and replacement are also implemented through these same tools: `kind: "images"`
 lists bounded picture anchors/metadata and replacement eligibility; each edit tool accepts an
@@ -125,7 +126,7 @@ Use two distinct roles for this existing environment:
 | Role | Proposed use | Boundary |
 | --- | --- | --- |
 | Model-written Code Mode script | Transform bounded source data, calculate values, construct a document spec or edit batch, and call Office tools | Existing script VM and durable nested-tool protocol; all effects pass through authorized tools |
-| Application-owned Office computation | Run pinned JavaScript renderers and the Desktop-derived patch algorithms in bounded native computations | Private implementation of the Office service; trusted, pinned library code, explicit input/output and cancellation budgets |
+| Application-owned Office computation | Run pinned JavaScript generators and package-preserving edits in bounded native computations | Private implementation of the Office service; trusted, pinned library code, explicit input/output and cancellation budgets |
 
 The first role is the integration baseline. For example, a script can read a sheet range, compute
 totals in JavaScript, and submit one range edit, or build slides from data and invoke
@@ -322,12 +323,11 @@ QuickJS compute pool. Inputs are bounded to 128 KiB JSON and 50 managed images, 
 for embedding; sources and outputs to 64 MiB. Jobs read and write files natively, with a 120-second
 deadline and a heap that grows with the bytes they read. See the service contract for exact shapes
 and the measured memory behind these limits.
-The patch engine ports Cherry Desktop's `office-transform` package-copy and run-edit rules using
-pinned `fflate` and `@xmldom/xmldom` assets. Excel image generation adds DrawingML parts to newly
+The patch engine preserves untouched package parts and edits selected XML nodes using pinned
+`fflate` and `@xmldom/xmldom` assets. Excel image generation adds DrawingML parts to newly
 created workbooks. Existing packages never round-trip through the generation libraries. The shared
 preview package already runs in Mobile's WebView; selection references carry managed file ids,
 structural anchors and excerpts for the Agent to compare with current content before editing.
-Desktop's Python execution and unrestricted library scripting are not available on Mobile.
 
 Remaining feasibility and acceptance work must settle:
 
@@ -361,4 +361,4 @@ target application where required. Follow [Testing And CI](../../guides/testing-
 [Parallel Device Testing](../../guides/parallel-device-testing.md).
 Focused generation, editing, workspace/file-publication, selection and Pi adapter tests pass.
 Their Node VM fixtures do not establish native QuickJS compatibility or Office visual fidelity.
-No builds or device/Office acceptance are claimed.
+Build and device evidence is recorded separately for each change; desktop Office acceptance remains required.

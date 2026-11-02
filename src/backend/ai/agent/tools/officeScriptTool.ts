@@ -43,6 +43,9 @@ const schema = z.strictObject({
     .describe(
       'Managed file ids from conversation attachments, generated images or the selected workspace, exposed as inputs[id].',
     ),
+  against_file_entry_id: FileEntryIdSchema.optional().describe(
+    'Untouched original of the same format when editing. It is included in inputs automatically; output validation rejects newly introduced package errors.',
+  ),
 });
 
 const formats = Object.keys(OFFICE_MEDIA_TYPES) as OfficeFormat[];
@@ -60,7 +63,7 @@ export function createOfficeScriptTool(
 Globals by output extension: docx = the docx 9.11 module (Document, Paragraph, TextRun, Table, ImageRun, Packer, patchDocument, ...); PptxGenJS = pptxgenjs 4.0 constructor; XLSX = SheetJS CE 0.20.3 mini (cell objects take f for formulas). Nothing calculates formulas, so also store each computed result: v beside f in SheetJS, or <v> after <f> in sheet XML; otherwise previews show blank cells. Always: zip = fflate 0.8 (unzipSync, zipSync, strFromU8, strToU8; zipSync stores already-compressed media), xml = @xmldom/xmldom 0.9 (DOMParser, XMLSerializer), atob, btoa, and inputs[id] = { name, mediaType, size, bytes, base64 } for each id listed in inputs; bytes and base64 are read on first use. There is no DOM, Node API, network, timer, fetch or file path.
 Return the file as a Uint8Array, ArrayBuffer or base64 string, or return nothing to only inspect inputs (console.log output comes back as logs and no file is saved): return docx.Packer.toArrayBuffer(doc); return pres.write({ outputType: 'uint8array' }); return XLSX.write(book, { bookType: 'xlsx', type: 'array' }); return zip.zipSync(parts). Images: new docx.ImageRun({ type: inputs[id].mediaType === 'image/png' ? 'png' : 'jpg', data: inputs[id].bytes, transformation: { width, height } }); slide.addImage({ data: 'data:' + inputs[id].mediaType + ';base64,' + inputs[id].base64, x, y, w, h }).
 Image inputs are existing files (attachments, generated images, workspace files): never regenerate an image to place it. Any image format is accepted; large or non-PNG/JPEG images arrive as a compressed JPEG copy, so read inputs[id].mediaType. To add a picture to an existing file, unzip it, add the media part, its relationship, a content type and the picture XML, then zip it again.
-To change an existing file without losing untouched parts, unzip inputs[id].bytes, edit its XML parts and zip it again, or use docx.patchDocument({ outputType: 'uint8array', data: inputs[id].bytes, patches }) for {{key}} placeholders. SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files.
+To change an existing file without losing untouched parts, pass its id as against_file_entry_id, unzip inputs[id].bytes, edit its XML parts with xml.DOMParser and XMLSerializer and zip it again, or use docx.patchDocument({ outputType: 'uint8array', data: inputs[id].bytes, patches }) for {{key}} placeholders. Never splice XML strings. Output package checks reject new XML, content-type, relationship and id errors before publication; inspect_office_file kind "check" returns the findings. SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files.
 Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_BYTES)} after image compression; the output is limited to ${mebibytes(OFFICE_MAX_FILE_BYTES)}. Memory grows with the files a run reads: avoid extra copies of large inputs. Saves in the selected workspace, or at the library root without a workspace, and never overwrites a source. Success is status "created" with fileEntryId and any console.log output (16 KiB) as logs, or status "read" with logs when nothing was returned. A failed run returns the script error to fix before retrying; in Code Mode it throws. A size or memory failure is not fixed by rewriting the same work: split it across runs.`,
     inputSchema: toRuntimeInputSchema(schema),
     outputSchema: officeToolOutputSchemas[RUN_OFFICE_SCRIPT_TOOL_NAME],
@@ -74,7 +77,9 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
       if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
       const format = formats.find((format) => format === filenameExtension(parsed.data.filename));
       if (!format) return invalid('Use a plain filename ending in .docx, .xlsx or .pptx.');
-      const ids = [...new Set(parsed.data.inputs ?? [])];
+      const againstId = parsed.data.against_file_entry_id;
+      const ids = [...new Set([...(parsed.data.inputs ?? []), ...(againstId ? [againstId] : [])])];
+      if (ids.length > OFFICE_MAX_IMAGES) return invalid('Use at most 50 distinct inputs.');
       // Authorize every input before reading any bytes.
       for (const id of ids) {
         signal.throwIfAborted();
@@ -85,6 +90,8 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
       try {
         const facts = await files.resolveAvailable(ids);
         signal.throwIfAborted();
+        if (againstId && facts.get(againstId)?.mediaType !== OFFICE_MEDIA_TYPES[format])
+          return invalid('The comparison must be an available Office file of the output format.');
         const images = await prepareOfficeImages(
           ids.filter((id) => facts.get(id)?.mediaType.startsWith('image/')),
           files,
@@ -116,6 +123,7 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
           format,
           script: parsed.data.code,
           inputs,
+          againstId,
           output,
           sandbox,
           signal,

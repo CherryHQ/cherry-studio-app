@@ -1,10 +1,10 @@
-import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
-import { Button, Section, Switch } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import { useQueries } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Keyboard, ScrollView, Text, View } from 'react-native';
 
 import { withPolicy } from '@/frontend/components/Policy';
 import { queryKeys, useBackendModule } from '@/frontend/data';
@@ -28,7 +28,7 @@ type AgentToolsSectionProps = {
   bindings: readonly WriteAgentToolBinding[];
   onChange: (bindings: WriteAgentToolBinding[]) => void;
   originalBindings: readonly AgentToolBinding[];
-  /** Shows only the stored bindings, with locked switches and no remove or restore actions. */
+  /** Shows only the stored bindings, with no add or remove actions. */
   readOnly?: boolean;
   servers: readonly McpServer[];
 };
@@ -41,6 +41,8 @@ function ToolsSection({
   servers,
 }: AgentToolsSectionProps) {
   const { t } = useTranslation();
+  const router = useRouter();
+  const [isAdding, setIsAdding] = useState(false);
   const mcp = useBackendModule('mcp');
   const serverOptions = useMemo(() => {
     const options = buildAgentMcpServerOptions({ bindings, originalBindings, servers });
@@ -51,10 +53,16 @@ function ToolsSection({
     () =>
       bindings.filter(
         (binding) =>
+          (readOnly || binding.enabled) &&
           binding.rawToolName !== undefined &&
           !servers.some((server) => server.id === binding.serverId && server.origin === 'builtin'),
       ),
-    [bindings, servers],
+    [bindings, readOnly, servers],
+  );
+  const enabledServers = serverOptions.filter((option) => readOnly || option.binding?.enabled);
+  const availableServers = serverOptions.filter(
+    (option) =>
+      !option.binding?.enabled && option.server?.isEnabled && isRunnableMcpServer(option.server),
   );
   const serversById = useMemo(
     () => new Map(servers.map((server) => [server.id, server])),
@@ -96,43 +104,29 @@ function ToolsSection({
     }),
   );
 
-  // Nothing bound and nothing to add: a locked Agent, or no MCP server yet.
-  if (bindings.length === 0 && (readOnly || servers.length === 0)) return null;
+  if (readOnly && bindings.length === 0) return null;
 
   return (
     <View className="gap-6">
-      <Section title={t('agent.tools.section')}>
-        {serverOptions.map((option) => {
-          const canEnable =
-            option.server !== undefined &&
-            option.server.isEnabled &&
-            isRunnableMcpServer(option.server);
-          const isEnabled = option.binding?.enabled === true;
-          const isStored = option.binding !== undefined;
-          const displayName = option.displayName || t('agent.tools.server');
-          const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
-            id: option.serverId,
-            server: displayName,
-            status: t(`agent.tools.serverStatus.${option.status}`),
-          });
+      {enabledServers.length > 0 || !readOnly ? (
+        <Section title={enabledServers.length > 0 ? t('agent.tools.section') : undefined}>
+          {enabledServers.map((option) => {
+            const displayName = option.displayName || t('agent.tools.server');
+            const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
+              id: option.serverId,
+              server: displayName,
+              status: t(`agent.tools.serverStatus.${option.status}`),
+            });
 
-          return (
-            <Section.Item
-              key={option.serverId}
-              description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
-              label={displayName}
-              trailing={
-                <View className="flex-row items-center gap-1">
-                  {canEnable || readOnly ? (
-                    <Switch
-                      accessibilityLabel={accessibilityLabel}
-                      onValueChange={(enabled) =>
-                        onChange(setAgentMcpServerEnabled(bindings, option, enabled))
-                      }
-                      value={isEnabled}
-                    />
-                  ) : null}
-                  {readOnly ? null : isStored && (!canEnable || !isEnabled) ? (
+            return (
+              <Section.Item
+                key={option.serverId}
+                description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
+                label={displayName}
+                locked={readOnly}
+                accessibilityLabel={accessibilityLabel}
+                trailing={
+                  readOnly ? undefined : (
                     <Button
                       accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
                         id: option.serverId,
@@ -143,24 +137,22 @@ function ToolsSection({
                       size="xs"
                       variant="ghost"
                     />
-                  ) : !isStored && option.originalBinding && !canEnable ? (
-                    <Button
-                      accessibilityLabel={t('agent.tools.restoreAccessibilityLabel', {
-                        id: option.serverId,
-                        server: displayName,
-                      })}
-                      icon={<RotateCcwIcon />}
-                      onPress={() => onChange(setAgentMcpServerEnabled(bindings, option, true))}
-                      size="xs"
-                      variant="ghost"
-                    />
-                  ) : null}
-                </View>
-              }
+                  )
+                }
+              />
+            );
+          })}
+          {readOnly ? null : (
+            <Section.Item
+              label={t('agent.tools.add')}
+              onPress={() => {
+                Keyboard.dismiss();
+                setIsAdding(true);
+              }}
             />
-          );
-        })}
-      </Section>
+          )}
+        </Section>
+      ) : null}
       {perToolBindings.length > 0 ? (
         <Section title={t('agent.tools.existingToolRules')}>
           {perToolBindings.map((binding) => {
@@ -178,6 +170,7 @@ function ToolsSection({
                 key={toolBindingKey(binding)}
                 description={statusCaption(t, 'agent.tools.toolStatus', status)}
                 label={`${displayName} · ${binding.rawToolName}`}
+                locked={readOnly}
                 trailing={
                   readOnly ? undefined : (
                     <Button
@@ -199,14 +192,42 @@ function ToolsSection({
           })}
         </Section>
       ) : null}
+      <BottomSheet
+        onClose={() => setIsAdding(false)}
+        open={!readOnly && isAdding}
+        size="medium"
+        title={t('agent.tools.add')}
+      >
+        <ScrollView contentContainerClassName="pt-2" showsVerticalScrollIndicator={false}>
+          <Section variant="plain">
+            {availableServers.map((option) => (
+              <Section.Item
+                key={option.serverId}
+                label={option.displayName || t('agent.tools.server')}
+                onPress={() => {
+                  onChange(setAgentMcpServerEnabled(bindings, option, true));
+                  setIsAdding(false);
+                }}
+                showChevron={false}
+              />
+            ))}
+            <Section.Item
+              label={t('agent.tools.manage')}
+              onPress={() => {
+                setIsAdding(false);
+                router.push('/plugins');
+              }}
+            />
+          </Section>
+        </ScrollView>
+      </BottomSheet>
     </View>
   );
 }
 
 /**
- * The switch already expresses healthy and merely-disabled states, and a
- * loading catalog resolves on its own; only a problem the row cannot express
- * otherwise earns a caption.
+ * The editor lists enabled bindings. A loading catalog resolves on its own;
+ * only unavailable tools or connections need a caption.
  */
 const QUIET_STATUSES: ReadonlySet<AgentMcpServerOptionStatus | AgentMcpToolBindingStatus> = new Set(
   ['available', 'binding-disabled', 'catalog-loading', 'enabled'],

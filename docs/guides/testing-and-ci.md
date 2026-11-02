@@ -121,7 +121,8 @@ runs the same workflow on the tagged commit before building.
 - With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
   dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
   React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard
-  the Screens Material dependency patch. `scripts/__tests__/nitroIosCompatibility.test.ts` guards
+  the Screens Material dependency patch. `scripts/__tests__/expoFilePermissions.test.ts` guards
+  Android no-backup model storage access. `scripts/__tests__/nitroIosCompatibility.test.ts` guards
   Nitro's iOS 17 exception compatibility patch. `expoModulesCoreSwiftCompatibility.test.ts` guards
   Expo's Swift consuming-result compiler workaround. `enrichedMarkdownInputMeasurement.test.ts` guards
   the iOS input measurement patch; its native regression requires an explicitly selected simulator
