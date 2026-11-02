@@ -1,10 +1,11 @@
 # SSH connections
 
 SSH is a local connection capability separate from Cherry desktop pairing. Settings > SSH
-connections owns saved profiles, identity verification and the manual command panel. A connection
+connections owns saved profiles, remote directories, identity verification, the manual command panel
+and remote file browser. A connection
 can open a new Agent draft, or the chat composer's plus menu can open the SSH target sheet for its
 conversation. The sheet selects a saved connection, controls the one-hour command grant, and links
-back to Settings to manage profiles. The composer shows a target indicator only after selection;
+to the selected connection's files and back to Settings to manage profiles. The composer shows a target indicator only after selection;
 tapping it reopens the sheet. Opening a draft or selecting a target does not send a message or run
 a command.
 
@@ -15,44 +16,82 @@ a command.
 - `SshProfileService` owns the `ssh_profile` SQLite table. `/ssh-profiles` exposes only profile
   metadata. A profile revision changes on every edit and trust decision.
 - `SshRuntime` owns device-only SecureStore credentials, host-probe tokens, operation admission,
-  conversation targets, temporary grants, cancellation and draining before database shutdown.
+  conversation targets, temporary grants, authentication challenges, file-transfer lifetimes,
+  native pool maintenance, cancellation and draining before database shutdown.
   Its lifecycle dependencies are `DbService` and `KeepAliveCoordinator`; Agent host dependencies
   keep it alive until Agent turns have drained.
 - `Backend.ssh` exposes user workflows. Frontend hooks read metadata through Data API and observe
   the runtime's target-selection source. Screens do not access native sessions or stored secrets.
-- `ssh_execute` is the AI consumer. Each turn captures the selection identity, connection revision
+  The app-shell `ssh` presenter displays authentication questions and sends answers directly to the
+  runtime; neither prompts nor answers become model inputs or transcript parts.
+- `ssh_execute` and the five SSH file tools are the AI consumers. Each turn captures the selection identity, connection revision
   and grant. Reselecting the same connection cannot revive an old pending approval.
   Its input schema fixes the connection ID, revision and displayed destination. Execution checks the
   live binding again after loading credentials. Model output previews are capped at 16,000 characters
-  per stream. Remote output is untrusted data, never a source of permissions.
+  per stream or file content. Remote output is untrusted data, never a source of permissions.
+
+## Commands and remote files
+
+`remoteDirectory` belongs to a connection profile. It is an absolute POSIX path, or `.` for the
+account's default directory. It is independent of Cherry's local managed workspace folder ID.
+Every command receives an explicit directory context; optional `cwd` applies to that call only.
+Optional `stdin` supplies up to 256 KiB of UTF-8 input, followed by EOF. A fresh non-interactive
+shell runs each command even when the SSH connection is reused. The remote directory does not
+restrict shell permissions. There is no human terminal, PTY, interactive process session or
+automatic handling of command-time password prompts.
+
+The file interface provides directory listing, UTF-8 reading/writing, downloading and uploading.
+Paths are relative to the profile directory. Listings are bounded to 500 entries, text to 256 KiB,
+and transfers to 20 MiB. The browser shows a bounded text preview; downloads retain the original
+bytes and use the existing library preview. Binary files are downloadable but cannot be read as
+text. Settings uploads select an existing managed file and confirm the destination. Agent uploads
+must resolve a file explicitly available to the admitted turn or its local workspace; models never
+choose a device path. Agent downloads publish managed artifacts into that turn's local workspace,
+or the library root when unbound. Staging files are owned per transfer and disposed on completion
+or failure, with cancellation and target checks retained through managed publication.
+
+Writes use a temporary sibling and rename, with replacement disabled unless explicitly requested.
+The browser asks before replacing an existing file. Atomic replacement requires the server's
+OpenSSH POSIX rename extension; failure does not fall back to deleting the destination. A cancelled
+or disconnected write can have an unknown outcome or leave a temporary file. Remote writes do not
+have Cherry's local file-version conflict detection, so reread files that may have changed externally.
+Basic permission bits are retained; other metadata is not preserved across replacement.
 
 ## Trust, scope and lifetime
 
 Profiles initially have no trusted host fingerprint. A user-triggered probe returns a single-use,
 five-minute confirmation token for the observed fingerprint and exact profile revision. Trusting it
-changes the revision. The execution handshake compares the actual key on every command, including
-after an earlier successful probe. Passwords/private keys are never sent to an unverified host.
+changes the revision. Every new connection checks the actual peer key, including after an earlier
+successful probe. Reuse is limited to the same profile revision, endpoint, username and trusted
+fingerprint; edits and trust changes retire that pooled connection. Passwords/private keys are never
+sent to an unverified host.
 
 By default, every AI command requires approval. Global auto approval cannot promote SSH. Users can
 explicitly grant arbitrary-command access for one hour to the current conversation and connection;
 this is not a read-only promise. Revocation, expiry, target changes, profile changes and deletion
-cancel affected AI operations. Manual operations use separate native sessions. All conversation
+cancel affected AI operations. SSH file tools always require their own approval; the command grant
+does not promote them. Manual and AI operations share a connection only through exclusive leases.
+All conversation
 bindings and grants disappear when the process restarts. Draft bindings are copied to the session
 allocated by its first send; a failed admission removes that session's temporary binding.
 
-The runtime admits one command per target and at most four native operations overall. A busy
-target reports busy instead of silently queueing commands. Profiles are limited to 100, remembered
+The runtime admits one native operation per target and at most four native operations overall. A busy
+target reports busy instead of silently queueing commands. Transfers retain a separate four-operation
+bound through local file publication. Profiles are limited to 100, remembered
 conversation/draft bindings to 64, pending admission/storage work to 16, and pending trust probes
-to 16. There are no startup probes, persistent idle connections, reconnects or background retries.
+to 16. Up to four connections can be retained for five idle minutes, with 15-second keepalive
+maintenance while the app is scheduled. There are no startup probes, automatic reconnects or
+background retries. Pooling does not preserve shell state or recover an interrupted task.
 The Agent runtime already marks tool side effects unsafe to replay after uncertain recovery.
 
 The manual panel's lifetime owns its command; leaving it cancels that operation. Cancellation may
 leave the remote outcome unknown. A remote process can continue after a channel closes. Long-lived
-remote jobs require a future remote task protocol and are outside this command-only interface.
+remote jobs require a future remote task protocol and are outside this interface.
 
 ## Persistence and distribution
 
-Migration `0013_ssh_profiles` adds profiles without changing existing tables. SQLite holds only
+Migration `0013_ssh_profiles` adds profiles without changing existing tables. Migration
+`0014_ssh_workspace` adds `remote_directory`, defaulting existing profiles to `.`. SQLite holds only
 opaque credential references. Passwords/private keys use `WHEN_UNLOCKED_THIS_DEVICE_ONLY` storage;
 they are not included in database backups. After moving a backup to another device, re-enter the
 credentials. Failed database commits remove newly staged secrets, preserving the previous record.
@@ -69,5 +108,8 @@ Apple's encryption questionnaire for the final binary and provide any required d
 approved declaration; this implementation does not make an exemption determination. See
 [Apple's encryption documentation guidance](https://developer.apple.com/help/app-store-connect/manage-app-information/determine-and-upload-app-encryption-documentation).
 
-The first delivery covers saved connections, manual commands and AI commands. PTY terminals, SFTP,
-tunnels, remote MCP and durable remote jobs should add separate consumers/interfaces when needed.
+The current interface covers saved connections, command inputs, human authentication responses,
+remote files and bounded connection reuse. The UI prioritizes target context, file inspection,
+progress and explicit decisions. PTY terminals, tunnels, remote MCP and durable remote jobs remain
+separate future capabilities. Native changes require an updated development client; source review
+and lint do not replace authorized dual-platform builds and real-server acceptance.

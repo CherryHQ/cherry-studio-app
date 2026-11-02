@@ -13,6 +13,7 @@ export const sshProfileTable = sqliteTable('ssh_profile', {
   authMethod: text('auth_method').$type<'password' | 'privateKey'>().notNull(),
   credentialReference: text('credential_reference').notNull(),
   fingerprint: text(),
+  remoteDirectory: text('remote_directory').notNull().default('.'),
   ...createUpdateTimestamps,
 });
 export type SshProfileRow = typeof sshProfileTable.$inferSelect;

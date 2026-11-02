@@ -68,6 +68,11 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'run_js',
   'transcribe_audio',
   'ssh_execute',
+  'ssh_list_files',
+  'ssh_read_file',
+  'ssh_write_file',
+  'ssh_download_file',
+  'ssh_upload_file',
   'web_fetch',
   'web_search',
   'write_file',
@@ -121,6 +126,25 @@ function describe(
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('ssh_execute', 'ask', { autoApprovalEligible: false, platforms: ['ios', 'android'] }),
+  describe('ssh_list_files', 'ask', {
+    effect: 'read',
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('ssh_read_file', 'ask', {
+    effect: 'read',
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('ssh_write_file', 'ask', { autoApprovalEligible: false, platforms: ['ios', 'android'] }),
+  describe('ssh_download_file', 'ask', {
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('ssh_upload_file', 'ask', {
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
   describe('agent_create', 'ask'),
   describe('agent_get', 'auto', { effect: 'read' }),
   describe('agent_list', 'auto', { effect: 'read' }),

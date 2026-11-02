@@ -113,7 +113,7 @@ export function ChatInputSshSheet({
                 disabled={action.busy || !profile.fingerprint}
                 description={
                   profile.fingerprint
-                    ? `${profile.username}@${profile.host}:${profile.port}`
+                    ? `${profile.username}@${profile.host}:${profile.port} · ${profile.remoteDirectory}`
                     : t('ssh.untrusted')
                 }
                 onPress={() => {
@@ -125,6 +125,17 @@ export function ChatInputSshSheet({
         )}
         {target ? (
           <Section footer={t(granted ? 'ssh.grant.active' : 'ssh.grant.ask')}>
+            <Section.Item
+              label={t('ssh.files.title')}
+              description={target.profile.remoteDirectory}
+              onPress={() => {
+                onClose();
+                router.push({
+                  pathname: '/settings/ssh/files',
+                  params: { profileId: target.profile.id },
+                });
+              }}
+            />
             <Section.SwitchItem
               label={t('ssh.grant.title')}
               value={granted}

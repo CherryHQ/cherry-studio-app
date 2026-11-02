@@ -19,16 +19,25 @@ import type {
   KeepAliveLease,
   KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
+import type { ResolvedFile } from '@/shared/contracts/file';
 import type { SshHostProbe, SshModule } from '@/shared/contracts/ssh';
 import {
   SaveSshProfileSchema,
-  SshCommandSchema,
+  SshCommandInputSchema,
+  SshFileRequestSchema,
+  SshFilePathSchema,
   SshCredentialSchema,
   SshError,
   SshErrorCodeSchema,
   SshReferenceSchema,
   type SaveSshProfile,
   type SshCommandResult,
+  type SshCommandInput,
+  type SshFileRequest,
+  type SshFileResult,
+  type SshAuthenticationRequest,
+  type SshTransferProgress,
   type SshCredential,
   type SshOutput,
   type SshProfile,
@@ -37,17 +46,43 @@ import {
 } from '@/shared/data/types/ssh';
 
 import { getSshNative, type SshNativeOptions } from '../../../../modules/ssh';
+import { createSshStagingFile, importSshDownload, stageSshUpload } from './sshFileStorage';
 
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const secretKey = (id: string) => `ssh-secret.${id}`;
 const NativeResultSchema = z.object({
-  state: z.enum(['not-started', 'exited', 'unknown', 'probed']),
+  state: z.enum(['not-started', 'exited', 'unknown', 'probed', 'completed']),
   stdout: z.string().max(350000),
   stderr: z.string().max(350000),
   exitCode: z.number().int().nullable(),
   truncated: z.boolean(),
   fingerprint: z.string().max(100),
   error: z.union([z.literal(''), SshErrorCodeSchema]),
+  path: z.string().max(6000).optional(),
+  entries: z
+    .array(
+      z.object({
+        name: z.string().max(6000),
+        type: z.enum(['directory', 'file', 'symlink', 'other']),
+        size: z.number().nonnegative().nullable(),
+        modifiedAt: z.number().nonnegative().nullable(),
+      }),
+    )
+    .max(500)
+    .optional(),
+  content: z.string().max(350000).optional(),
+  bytes: z.number().int().nonnegative().optional(),
+  diagnostics: z
+    .object({
+      phase: z.enum(['connect', 'handshake', 'authentication', 'command', 'sftp', 'transfer']),
+      code: z.number().int(),
+      hostKeyType: z.number().int(),
+      keyExchange: z.string().max(256),
+      cipher: z.string().max(256),
+      authenticationMethods: z.string().max(512),
+      reused: z.boolean(),
+    })
+    .optional(),
 });
 type NativeResult = z.infer<typeof NativeResultSchema>;
 type ActiveRun = {
@@ -56,13 +91,26 @@ type ActiveRun = {
   cancel(): void;
   settled: Promise<unknown>;
 };
+type AgentAccess = { sessionId: string; target: SshTarget };
+const decode = (value: string) => new TextDecoder().decode(toByteArray(value));
+const poolKey = (reference: SshReference) => `${reference.id}:${reference.revision}`;
+const AuthenticationEventSchema = z.object({
+  challenge: z.string().min(1).max(20),
+  name: z.string().max(1400),
+  instruction: z.string().max(5500),
+  waitMs: z.number().int().min(1).max(120000),
+  prompts: z
+    .array(z.object({ text: z.string().max(1400), echo: z.boolean() }))
+    .min(1)
+    .max(8),
+});
 const sameReference = (a: SshReference, b: SshReference) =>
   a.id === b.id && a.revision === b.revision;
 
 @Injectable('SshRuntime')
 @DependsOn(['DbService', 'KeepAliveCoordinator'])
 @ServicePhase(Phase.PostReady)
-@AppStatePolicy('not-applicable')
+@AppStatePolicy('continue')
 export class SshRuntime extends BaseService implements SshModule {
   private readonly profiles: SshProfileService;
   private readonly lifetime = new AbortController();
@@ -76,6 +124,15 @@ export class SshRuntime extends BaseService implements SshModule {
   private readonly targets = new Map<string, SshTarget>();
   private readonly grantTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly listeners = new Set<() => void>();
+  private readonly transfers = new Set<ActiveRun>();
+  private authenticationRequests: readonly SshAuthenticationRequest[] = [];
+  private readonly authenticationListeners = new Set<() => void>();
+  private readonly authenticationResponders = new Map<
+    string,
+    (responses: readonly string[] | null) => void
+  >();
+  private maintenance: ReturnType<typeof setTimeout> | undefined;
+  private maintenancePending: Promise<unknown> | undefined;
 
   constructor(
     database: DbService,
@@ -86,7 +143,61 @@ export class SshRuntime extends BaseService implements SshModule {
   }
 
   isAvailable = () => !!getSshNative();
-  hasPendingStorageWork = () => this.queued > 0 || this.active.size > 0;
+  hasPendingStorageWork = () => this.queued > 0 || this.active.size > 0 || this.transfers.size > 0;
+  getAuthenticationRequests = () => this.authenticationRequests;
+  subscribeAuthentication = (listener: () => void) => {
+    this.authenticationListeners.add(listener);
+    return () => {
+      this.authenticationListeners.delete(listener);
+    };
+  };
+  respondAuthentication = (id: string, responses: readonly string[] | null) => {
+    const request = this.authenticationRequests.find((item) => item.id === id);
+    if (!request) return;
+    if (
+      responses &&
+      (responses.length !== request.prompts.length ||
+        responses.some(
+          (value) => value.includes('\0') || new TextEncoder().encode(value).length > 4096,
+        ))
+    )
+      throw new SshError('invalid-input');
+    this.authenticationResponders.get(id)?.(responses);
+    this.removeAuthentication(id);
+  };
+  private notifyAuthentication() {
+    for (const listener of this.authenticationListeners) {
+      try {
+        listener();
+      } catch {
+        /* Observers do not own authentication. */
+      }
+    }
+  }
+  private removeAuthentication(id: string) {
+    this.authenticationResponders.delete(id);
+    const remaining = this.authenticationRequests.filter((item) => item.id !== id);
+    if (remaining.length === this.authenticationRequests.length) return;
+    this.authenticationRequests = remaining;
+    this.notifyAuthentication();
+  }
+  private scheduleMaintenance() {
+    if (this.maintenance || this.maintenancePending || this.lifetime.signal.aborted) return;
+    this.maintenance = setTimeout(() => {
+      this.maintenance = undefined;
+      const native = getSshNative();
+      if (!native || this.lifetime.signal.aborted) return;
+      this.maintenancePending = native
+        .maintain()
+        .then((count) => {
+          this.maintenancePending = undefined;
+          if (count > 0) this.scheduleMaintenance();
+        })
+        .catch(() => {
+          this.maintenancePending = undefined;
+        });
+    }, 15000);
+  }
   getTarget = (sessionId: string) => this.targets.get(sessionId) ?? null;
   subscribeTargets = (listener: () => void) => {
     this.listeners.add(listener);
@@ -119,7 +230,8 @@ export class SshRuntime extends BaseService implements SshModule {
           this.grantTimers.delete(contextId);
           const current = this.targets.get(contextId);
           if (current?.grant?.id !== grant.id) return;
-          for (const run of this.active) if (run.sessionId === contextId) run.cancel();
+          for (const run of [...this.active, ...this.transfers])
+            if (run.sessionId === contextId) run.cancel();
           this.targets.set(contextId, { ...current, grant: null });
           this.notifyTargets();
         },
@@ -153,6 +265,7 @@ export class SshRuntime extends BaseService implements SshModule {
   }
   private invalidate(profileId: string) {
     for (const run of this.active) if (run.profileId === profileId) run.cancel();
+    for (const run of this.transfers) if (run.profileId === profileId) run.cancel();
     for (const [sessionId, target] of this.targets)
       if (target.profile.id === profileId) {
         this.targets.delete(sessionId);
@@ -180,7 +293,10 @@ export class SshRuntime extends BaseService implements SshModule {
       )
         throw new SshError('credential');
       const reference = credential ? randomUUID() : old!.credentialReference;
-      if (previous) this.invalidate(previous.id);
+      if (previous) {
+        this.invalidate(previous.id);
+        getSshNative()?.closePool(poolKey(previous));
+      }
       let result: SshProfile;
       try {
         if (credential)
@@ -213,6 +329,7 @@ export class SshRuntime extends BaseService implements SshModule {
     this.serialize(async () => {
       const row = await this.profiles.getRow(SshReferenceSchema.parse(reference));
       this.invalidate(row.id);
+      getSshNative()?.closePool(poolKey(reference));
       await this.profiles.remove(reference);
       await this.removeSecret(row.credentialReference);
       this.changed();
@@ -256,6 +373,7 @@ export class SshRuntime extends BaseService implements SshModule {
       if (!probe || probe.expiresAt < Date.now()) throw new SshError('changed');
       const row = await this.profiles.getRow(probe.reference);
       this.invalidate(row.id);
+      getSshNative()?.closePool(poolKey(probe.reference));
       const { id: _id, ...profile } = toSshProfile(row);
       const result = await this.profiles.save(
         {
@@ -277,7 +395,8 @@ export class SshRuntime extends BaseService implements SshModule {
         ? await this.profiles.getRow(SshReferenceSchema.parse(reference))
         : null;
       if (row && !row.fingerprint) throw new SshError('host-key');
-      for (const run of this.active) if (run.sessionId === sessionId) run.cancel();
+      for (const run of [...this.active, ...this.transfers])
+        if (run.sessionId === sessionId) run.cancel();
       this.targets.delete(sessionId);
       this.clearGrantTimer(sessionId);
       if (row) {
@@ -299,7 +418,8 @@ export class SshRuntime extends BaseService implements SshModule {
       await this.profiles.getRow(expected.profile);
       this.assertActive();
       this.assertAgentTarget(sessionId, expected);
-      for (const run of this.active) if (run.sessionId === sessionId) run.cancel();
+      for (const run of [...this.active, ...this.transfers])
+        if (run.sessionId === sessionId) run.cancel();
       const target: SshTarget = {
         ...expected,
         selectionId: randomUUID(),
@@ -348,15 +468,217 @@ export class SshRuntime extends BaseService implements SshModule {
     });
   }
 
-  executeForAgent(sessionId: string, target: SshTarget, command: string, signal: AbortSignal) {
-    return this.runCommand(target.profile, command, signal, undefined, { sessionId, target });
+  executeForAgent(
+    sessionId: string,
+    target: SshTarget,
+    input: SshCommandInput,
+    signal: AbortSignal,
+  ) {
+    return this.runCommand(target.profile, input, signal, undefined, { sessionId, target });
   }
   execute = (
     reference: SshReference,
-    command: string,
+    input: SshCommandInput,
     signal: AbortSignal,
     onOutput?: (output: SshOutput) => void,
-  ) => this.runCommand(reference, command, signal, onOutput);
+  ) => this.runCommand(reference, input, signal, onOutput);
+
+  files = (reference: SshReference, input: SshFileRequest, signal: AbortSignal) =>
+    this.runFiles(reference, input, signal);
+
+  filesForAgent(sessionId: string, target: SshTarget, input: SshFileRequest, signal: AbortSignal) {
+    return this.runFiles(target.profile, input, signal, { sessionId, target });
+  }
+
+  private async runFiles(
+    reference: SshReference,
+    input: SshFileRequest,
+    signal: AbortSignal,
+    agent?: AgentAccess,
+  ): Promise<SshFileResult> {
+    const parsed = SshFileRequestSchema.safeParse(input);
+    if (!parsed.success) throw new SshError('invalid-input');
+    return this.fileResult(
+      await this.runOperation(reference, parsed.data, signal, undefined, agent),
+    );
+  }
+
+  private fileResult(result: NativeResult): SshFileResult {
+    return {
+      state:
+        result.state === 'completed'
+          ? 'completed'
+          : result.state === 'unknown'
+            ? 'unknown'
+            : 'not-started',
+      path: result.path ?? '',
+      entries: result.entries ?? [],
+      content: result.content ?? '',
+      bytes: result.bytes ?? 0,
+      truncated: result.truncated,
+      ...(result.error ? { error: result.error } : {}),
+      ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
+    };
+  }
+
+  download = (
+    reference: SshReference,
+    path: string,
+    signal: AbortSignal,
+    onProgress?: (progress: SshTransferProgress) => void,
+  ) => this.downloadFile(reference, path, signal, onProgress);
+
+  downloadForAgent(
+    sessionId: string,
+    target: SshTarget,
+    path: string,
+    folderId: string | null,
+    signal: AbortSignal,
+  ) {
+    return this.downloadFile(
+      target.profile,
+      path,
+      signal,
+      undefined,
+      { sessionId, target },
+      folderId,
+    );
+  }
+
+  private downloadFile(
+    reference: SshReference,
+    path: string,
+    signal: AbortSignal,
+    onProgress?: (progress: SshTransferProgress) => void,
+    agent?: AgentAccess,
+    folderId: string | null = null,
+  ): Promise<ResolvedFile> {
+    return this.trackTransfer(
+      reference,
+      signal,
+      async (transferSignal) => {
+        const parsed = SshFilePathSchema.safeParse(path);
+        if (!parsed.success) throw new SshError('invalid-input');
+        const stage = createSshStagingFile();
+        try {
+          const result = await this.runOperation(
+            reference,
+            { operation: 'download', path: parsed.data, localPath: stage.path },
+            transferSignal,
+            undefined,
+            agent,
+            onProgress,
+          );
+          if (result.state !== 'completed' || result.error)
+            throw new SshError(result.error || 'sftp');
+          // Admission remains counted through managed publication. A changed profile or
+          // revoked conversation cannot publish a download that finished late.
+          return await this.serialize(async () => {
+            await this.profiles.getRow(reference);
+            this.assertActive();
+            transferSignal.throwIfAborted();
+            if (agent) this.assertAgentTarget(agent.sessionId, agent.target);
+            return importSshDownload(
+              stage.file.uri,
+              result.path || parsed.data,
+              folderId,
+              transferSignal,
+            );
+          });
+        } finally {
+          stage.dispose();
+        }
+      },
+      agent?.sessionId,
+    );
+  }
+
+  upload = (
+    reference: SshReference,
+    input: { path: string; fileEntryId: string; overwrite: boolean },
+    signal: AbortSignal,
+    onProgress?: (progress: SshTransferProgress) => void,
+  ) => this.uploadFile(reference, input, signal, onProgress);
+
+  uploadForAgent(
+    sessionId: string,
+    target: SshTarget,
+    input: { path: string; fileEntryId: string; overwrite: boolean },
+    signal: AbortSignal,
+  ) {
+    return this.uploadFile(target.profile, input, signal, undefined, { sessionId, target });
+  }
+
+  private uploadFile(
+    reference: SshReference,
+    input: { path: string; fileEntryId: string; overwrite: boolean },
+    signal: AbortSignal,
+    onProgress?: (progress: SshTransferProgress) => void,
+    agent?: AgentAccess,
+  ): Promise<SshFileResult> {
+    return this.trackTransfer(
+      reference,
+      signal,
+      async (transferSignal) => {
+        const parsed = z
+          .strictObject({ path: SshFilePathSchema, fileEntryId: z.uuid(), overwrite: z.boolean() })
+          .safeParse(input);
+        if (!parsed.success) throw new SshError('invalid-input');
+        const stage = createSshStagingFile();
+        try {
+          await stageSshUpload(parsed.data.fileEntryId, stage.file, transferSignal);
+          return this.fileResult(
+            await this.runOperation(
+              reference,
+              {
+                operation: 'upload',
+                path: parsed.data.path,
+                overwrite: parsed.data.overwrite,
+                localPath: stage.path,
+              },
+              transferSignal,
+              undefined,
+              agent,
+              onProgress,
+            ),
+          );
+        } finally {
+          stage.dispose();
+        }
+      },
+      agent?.sessionId,
+    );
+  }
+
+  private trackTransfer<T>(
+    reference: SshReference,
+    signal: AbortSignal,
+    work: (signal: AbortSignal) => Promise<T>,
+    sessionId?: string,
+  ): Promise<T> {
+    this.assertActive();
+    if (this.transfers.size >= 4) return Promise.reject(new SshError('busy'));
+    const controller = new AbortController();
+    const linked = linkAbortSignals([signal, this.lifetime.signal, controller.signal]);
+    const transfer: ActiveRun = {
+      profileId: reference.id,
+      sessionId,
+      cancel: () => controller.abort(),
+      settled: Promise.resolve(),
+    };
+    this.transfers.add(transfer);
+    const pending = Promise.resolve()
+      .then(() => {
+        linked.signal.throwIfAborted();
+        return work(linked.signal);
+      })
+      .finally(() => {
+        this.transfers.delete(transfer);
+        linked.dispose();
+      });
+    transfer.settled = pending;
+    return pending;
+  }
 
   private assertAgentTarget(sessionId: string, target: SshTarget) {
     const current = this.targets.get(sessionId);
@@ -372,15 +694,51 @@ export class SshRuntime extends BaseService implements SshModule {
 
   private async runCommand(
     reference: SshReference,
-    command: string,
+    input: SshCommandInput,
     signal: AbortSignal,
     onOutput?: (output: SshOutput) => void,
-    agent?: { sessionId: string; target: SshTarget },
+    agent?: AgentAccess,
   ): Promise<SshCommandResult> {
+    const parsed = SshCommandInputSchema.safeParse(input);
+    if (!parsed.success) throw new SshError('invalid-input');
+    const result = await this.runOperation(
+      reference,
+      { ...parsed.data, operation: 'exec' },
+      signal,
+      onOutput,
+      agent,
+    );
+    return {
+      state:
+        result.state === 'exited'
+          ? 'exited'
+          : result.state === 'unknown'
+            ? 'unknown'
+            : 'not-started',
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      truncated: result.truncated,
+      ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
+      ...(result.error ? { error: result.error } : {}),
+    };
+  }
+
+  private async runOperation(
+    reference: SshReference,
+    operation: Partial<
+      Pick<
+        SshNativeOptions,
+        'operation' | 'command' | 'cwd' | 'stdin' | 'path' | 'localPath' | 'content' | 'overwrite'
+      >
+    >,
+    signal: AbortSignal,
+    onOutput?: (output: SshOutput) => void,
+    agent?: AgentAccess,
+    onProgress?: (progress: SshTransferProgress) => void,
+  ): Promise<NativeResult> {
     const { pending } = await this.serialize(async () => {
       signal.throwIfAborted();
-      const parsed = SshCommandSchema.safeParse(command);
-      if (!parsed.success) throw new SshError('invalid-input');
       const row = await this.profiles.getRow(SshReferenceSchema.parse(reference));
       if (!row.fingerprint) throw new SshError('host-key');
       if (agent) this.assertAgentTarget(agent.sessionId, agent.target);
@@ -411,25 +769,20 @@ export class SshRuntime extends BaseService implements SshModule {
             ...(credential.authMethod === 'password'
               ? { password: credential.password }
               : { privateKey: credential.privateKey, passphrase: credential.passphrase ?? '' }),
-            command: parsed.data,
+            ...operation,
+            directory: row.remoteDirectory,
+            poolKey: poolKey(reference),
             timeoutMs: 60000,
             probe: false,
           },
           signal,
           onOutput,
           agent?.sessionId,
+          onProgress,
         ),
       };
     });
-    const result = await pending;
-    return {
-      state: result.state === 'probed' ? 'not-started' : result.state,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      truncated: result.truncated,
-      ...(result.error ? { error: result.error } : {}),
-    };
+    return pending;
   }
 
   private start(
@@ -438,6 +791,7 @@ export class SshRuntime extends BaseService implements SshModule {
     signal: AbortSignal,
     onOutput?: (output: SshOutput) => void,
     sessionId?: string,
+    onProgress?: (progress: SshTransferProgress) => void,
   ): Promise<NativeResult> {
     this.assertActive();
     signal.throwIfAborted();
@@ -445,7 +799,9 @@ export class SshRuntime extends BaseService implements SshModule {
     if (!native) throw new SshError('unavailable');
     const id = randomUUID();
     if (!native.prepare(id)) throw new SshError('busy');
+    let authenticationId: string | undefined;
     const cancel = () => {
+      if (authenticationId) this.removeAuthentication(authenticationId);
       try {
         native.cancel(id);
       } catch {
@@ -456,6 +812,7 @@ export class SshRuntime extends BaseService implements SshModule {
     let listener: { remove(): void } | undefined;
     const active: ActiveRun = { profileId, sessionId, cancel, settled: Promise.resolve() };
     const cleanup = () => {
+      if (authenticationId) this.removeAuthentication(authenticationId);
       signal.removeEventListener('abort', cancel);
       this.active.delete(active);
       try {
@@ -468,20 +825,62 @@ export class SshRuntime extends BaseService implements SshModule {
       } catch {
         // Keep remaining local cleanup independent of the platform lease.
       }
+      if (!options.probe) this.scheduleMaintenance();
     };
     const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() };
     const partial = { stdout: '', stderr: '' };
     try {
       signal.addEventListener('abort', cancel, { once: true });
       lease = this.keepAlive.acquire('ssh.command', cancel);
-      listener = native.addListener('onOutput', (event) => {
+      listener = native.addListener('onEvent', (event) => {
         if (
           event.runId !== id ||
-          !Object.hasOwn(decoders, event.stream) ||
-          event.base64.length > 350000
+          event.base64.length > 350000 ||
+          signal.aborted ||
+          this.lifetime.signal.aborted
         )
           return;
         try {
+          if (event.stream === 'authentication') {
+            const challenge = AuthenticationEventSchema.parse(JSON.parse(decode(event.base64)));
+            if (authenticationId) this.removeAuthentication(authenticationId);
+            authenticationId = `${id}:${challenge.challenge}`;
+            const request: SshAuthenticationRequest = {
+              id: authenticationId,
+              destination: `${options.username}@${options.host}:${options.port}`,
+              name: decode(challenge.name),
+              instruction: decode(challenge.instruction),
+              prompts: challenge.prompts.map((prompt) => ({
+                text: decode(prompt.text),
+                echo: prompt.echo,
+              })),
+              expiresAt: Date.now() + challenge.waitMs,
+            };
+            this.authenticationResponders.set(request.id, (responses) => {
+              if (!responses || request.expiresAt <= Date.now()) cancel();
+              else {
+                try {
+                  native.respond(id, challenge.challenge, responses);
+                } catch {
+                  cancel();
+                }
+              }
+            });
+            this.authenticationRequests = [...this.authenticationRequests, request];
+            this.notifyAuthentication();
+            return;
+          }
+          if (event.stream === 'progress') {
+            const progress = z
+              .object({
+                transferred: z.number().int().nonnegative(),
+                total: z.number().int().nonnegative().nullable(),
+              })
+              .parse(JSON.parse(decode(event.base64)));
+            onProgress?.(progress);
+            return;
+          }
+          if (event.stream !== 'stdout' && event.stream !== 'stderr') return;
           const text = decoders[event.stream]
             .decode(toByteArray(event.base64), { stream: true })
             .slice(0, Math.max(0, 256 * 1024 - partial.stdout.length - partial.stderr.length));
@@ -501,10 +900,31 @@ export class SshRuntime extends BaseService implements SshModule {
       .then(() => native.run(id, options))
       .then((value) => {
         const result = NativeResultSchema.parse(JSON.parse(value));
+        let content: string | undefined;
+        if (result.content !== undefined) {
+          try {
+            content = new TextDecoder('utf-8', { fatal: true }).decode(toByteArray(result.content));
+            if (content.includes('\0')) throw new SshError('binary-file');
+          } catch {
+            content = '';
+            if (!result.error) result.error = 'binary-file';
+          }
+        }
         return {
           ...result,
-          stdout: new TextDecoder().decode(toByteArray(result.stdout)),
-          stderr: new TextDecoder().decode(toByteArray(result.stderr)),
+          stdout: decode(result.stdout),
+          stderr: decode(result.stderr),
+          path: result.path === undefined ? undefined : decode(result.path),
+          content,
+          entries: result.entries?.map((entry) => ({ ...entry, name: decode(entry.name) })),
+          diagnostics: result.diagnostics
+            ? {
+                ...result.diagnostics,
+                keyExchange: decode(result.diagnostics.keyExchange),
+                cipher: decode(result.diagnostics.cipher),
+                authenticationMethods: decode(result.diagnostics.authenticationMethods),
+              }
+            : undefined,
         };
       })
       .catch((): NativeResult => {
@@ -532,8 +952,18 @@ export class SshRuntime extends BaseService implements SshModule {
     this.notifyTargets();
     this.listeners.clear();
     for (const run of this.active) run.cancel();
+    for (const run of this.transfers) run.cancel();
+    if (this.maintenance) clearTimeout(this.maintenance);
+    this.maintenance = undefined;
+    getSshNative()?.closeAll();
     await this.tail.catch(() => {});
     await Promise.allSettled([...this.active].map((run) => run.settled));
+    await Promise.allSettled([...this.transfers].map((run) => run.settled));
+    await this.maintenancePending;
+    this.authenticationRequests = [];
+    this.authenticationResponders.clear();
+    this.notifyAuthentication();
+    this.authenticationListeners.clear();
     for (const timer of this.grantTimers.values()) clearTimeout(timer);
     this.grantTimers.clear();
     this.targets.clear();

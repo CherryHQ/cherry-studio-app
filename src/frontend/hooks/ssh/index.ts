@@ -1,1 +1,7 @@
-export { sshErrorLabel, useSshAction, useSshProfiles, useSshTarget } from './useSsh';
+export {
+  sshErrorLabel,
+  useSshAction,
+  useSshAuthentication,
+  useSshProfiles,
+  useSshTarget,
+} from './useSsh';

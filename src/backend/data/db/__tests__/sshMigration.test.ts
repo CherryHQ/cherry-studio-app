@@ -40,6 +40,7 @@ test('adds SSH metadata to an existing database without persisting credentials o
       'fingerprint',
       'created_at',
       'updated_at',
+      'remote_directory',
     ]);
     expect(columns).not.toEqual(expect.arrayContaining(['password', 'private_key']));
     database.exec(
@@ -48,6 +49,44 @@ test('adds SSH metadata to an existing database without persisting credentials o
     expect(database.prepare('SELECT port, fingerprint FROM ssh_profile').get()).toEqual({
       port: 22,
       fingerprint: null,
+    });
+  } finally {
+    database.close();
+  }
+});
+
+test('adds a remote directory to existing SSH profiles without changing trust or credential references', () => {
+  const directory = `${process.cwd()}/migrations/sqlite-drizzle`;
+  const journal = JSON.parse(readFileSync(`${directory}/meta/_journal.json`, 'utf8')) as {
+    entries: { tag: string }[];
+  };
+  const database = new DatabaseSync(':memory:');
+  const apply = (tag: string) => {
+    for (const statement of readFileSync(`${directory}/${tag}.sql`, 'utf8').split(
+      '--> statement-breakpoint',
+    ))
+      if (statement.trim()) database.exec(statement);
+  };
+  try {
+    const index = journal.entries.findIndex(({ tag }) => tag === '0014_ssh_workspace');
+    expect(index).toBeGreaterThan(0);
+    for (const { tag } of journal.entries.slice(0, index)) apply(tag);
+    database.exec(
+      "INSERT INTO ssh_profile (id, revision, name, host, username, auth_method, credential_reference, fingerprint, created_at, updated_at) VALUES ('ssh', 'revision', 'Server', 'server.example', 'user', 'password', 'device-key', 'SHA256:key', 1, 1)",
+    );
+    for (const { tag } of journal.entries.slice(index)) apply(tag);
+    expect(
+      database
+        .prepare(
+          'SELECT id, revision, credential_reference, fingerprint, remote_directory FROM ssh_profile',
+        )
+        .get(),
+    ).toEqual({
+      id: 'ssh',
+      revision: 'revision',
+      credential_reference: 'device-key',
+      fingerprint: 'SHA256:key',
+      remote_directory: '.',
     });
   } finally {
     database.close();

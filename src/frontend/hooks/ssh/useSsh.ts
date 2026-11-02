@@ -23,6 +23,15 @@ const errorKeys = {
   changed: 'ssh.error.changed',
   credential: 'ssh.error.credential',
   storage: 'ssh.error.storage',
+  sftp: 'ssh.error.sftp',
+  'not-found': 'ssh.error.notFound',
+  permission: 'ssh.error.permission',
+  'file-exists': 'ssh.error.fileExists',
+  'file-too-large': 'ssh.error.fileTooLarge',
+  'binary-file': 'ssh.error.binaryFile',
+  path: 'ssh.error.path',
+  'local-file': 'ssh.error.localFile',
+  'authentication-required': 'ssh.error.authenticationRequired',
 } as const satisfies Record<SshErrorCode, string>;
 
 export function sshErrorLabel(error: unknown, t: TFunction): string {
@@ -30,6 +39,11 @@ export function sshErrorLabel(error: unknown, t: TFunction): string {
 }
 export function useSshProfiles() {
   return useQuery('/ssh-profiles');
+}
+
+export function useSshAuthentication() {
+  const ssh = useBackendModule('ssh');
+  return useSyncExternalStore(ssh.subscribeAuthentication, ssh.getAuthenticationRequests);
 }
 
 /** React adapter for the host-owned, ephemeral target selection. */

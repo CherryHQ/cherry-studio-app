@@ -6,8 +6,9 @@ import { sshProfileTable, type SshProfileRow } from '@/backend/data/db/schemas';
 import { SshError, type SshProfile, type SshReference } from '@/shared/data/types/ssh';
 
 export function toSshProfile(row: SshProfileRow): SshProfile {
-  const { id, revision, name, host, port, username, authMethod, fingerprint } = row;
-  return { id, revision, name, host, port, username, authMethod, fingerprint };
+  const { id, revision, name, host, port, username, authMethod, fingerprint, remoteDirectory } =
+    row;
+  return { id, revision, name, host, port, username, authMethod, fingerprint, remoteDirectory };
 }
 
 export class SshProfileService {

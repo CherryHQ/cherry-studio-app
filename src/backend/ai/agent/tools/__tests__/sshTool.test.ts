@@ -13,12 +13,16 @@ const target: SshTarget = {
     username: 'admin',
     authMethod: 'password',
     fingerprint: 'SHA256:key',
+    remoteDirectory: '/srv/project',
   },
   grant: null,
 };
 const ssh: SshToolAccess = {
   isAvailable: () => true,
   resolveAgentTarget: async () => target,
+  filesForAgent: jest.fn(),
+  downloadForAgent: jest.fn(),
+  uploadForAgent: jest.fn(),
   executeForAgent: jest.fn(
     async () =>
       ({
@@ -73,4 +77,19 @@ test('keeps unknown remote outcomes and bounds model output', async () => {
     stdout: 'x'.repeat(16000),
   });
   expect(ssh.executeForAgent).toHaveBeenCalledTimes(1);
+});
+
+test('binds command data to the approved target without inserting it into the shell command', async () => {
+  const stdin = 'quotes: \' " $HOME\nsecond line\n';
+  await createSshTool(ssh, 'conversation', target).execute(call({ ...input, cwd: 'logs', stdin }));
+  expect(ssh.executeForAgent).toHaveBeenCalledWith(
+    'conversation',
+    target,
+    {
+      command: 'uname -a',
+      cwd: 'logs',
+      stdin,
+    },
+    expect.any(AbortSignal),
+  );
 });

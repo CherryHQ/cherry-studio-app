@@ -70,6 +70,7 @@ import {
 import { createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
 import { createTranscribeAudioTool } from './transcribeAudioTool';
+import { createSshFileTools } from './sshFileTools';
 import { createSshTool, type SshToolAccess } from './sshTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -188,7 +189,14 @@ export function createSystemCapabilitySource(
       );
       if (sessionId && services.ssh?.isAvailable()) {
         const target = await services.ssh.resolveAgentTarget(sessionId);
-        if (target) catalog.set('ssh_execute', createSshTool(services.ssh, sessionId, target));
+        if (target) {
+          for (const tool of [
+            createSshTool(services.ssh, sessionId, target),
+            ...createSshFileTools(services.ssh, sessionId, target, fileAccess),
+          ]) {
+            catalog.set(tool.providerName, tool);
+          }
+        }
       }
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);

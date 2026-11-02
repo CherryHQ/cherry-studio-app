@@ -17,6 +17,7 @@ import { sshErrorLabel, useSshAction, useSshProfiles } from '@/frontend/hooks/ss
 import { SshError, type SshCommandResult, type SshProfile } from '@/shared/data/types/ssh';
 
 import { SshAgentPicker } from './SshAgentPicker';
+import { SshDiagnosticsButton } from './SshDiagnosticsButton';
 
 export function SshProfileScreen() {
   const { profileId } = useLocalSearchParams<{ profileId: string }>();
@@ -108,6 +109,14 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
           onPress={() => void probe()}
         />
         <Section.Item
+          label={t('ssh.files.title')}
+          description={profile.remoteDirectory}
+          disabled={action.busy || !profile.fingerprint || !ssh.isAvailable()}
+          onPress={() =>
+            router.push({ pathname: '/settings/ssh/files', params: { profileId: profile.id } })
+          }
+        />
+        <Section.Item
           label={t('ssh.edit')}
           disabled={action.busy}
           onPress={() =>
@@ -141,15 +150,22 @@ function SshCommandPanel({ profile }: { profile: SshProfile }) {
   const ssh = useBackendModule('ssh');
   const action = useSshAction();
   const [command, setCommand] = useState('');
+  const [cwd, setCwd] = useState(profile.remoteDirectory);
+  const [stdin, setStdin] = useState('');
   const [output, setOutput] = useState({ stdout: '', stderr: '' });
   const [result, setResult] = useState<SshCommandResult | null>(null);
   async function execute() {
     setOutput({ stdout: '', stderr: '' });
     setResult(null);
     const completed = await action.run((signal) =>
-      ssh.execute(profile, command, signal, (chunk) => {
-        setOutput((value) => ({ ...value, [chunk.stream]: value[chunk.stream] + chunk.text }));
-      }),
+      ssh.execute(
+        profile,
+        { command, cwd: cwd || undefined, stdin: stdin || undefined },
+        signal,
+        (chunk) => {
+          setOutput((value) => ({ ...value, [chunk.stream]: value[chunk.stream] + chunk.text }));
+        },
+      ),
     );
     if (completed) {
       setResult(completed);
@@ -158,6 +174,18 @@ function SshCommandPanel({ profile }: { profile: SshProfile }) {
   }
   return (
     <View className="gap-4">
+      <TextField>
+        <TextField.Label>{t('ssh.command.cwd')}</TextField.Label>
+        <Input
+          accessibilityLabel={t('ssh.command.cwd')}
+          value={cwd}
+          onChangeText={setCwd}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={4096}
+          editable={!action.busy}
+        />
+      </TextField>
       <TextField>
         <TextField.Label>{t('ssh.command.label')}</TextField.Label>
         <Input
@@ -171,6 +199,19 @@ function SshCommandPanel({ profile }: { profile: SshProfile }) {
           editable={!action.busy}
         />
         <TextField.Description>{t('ssh.command.description')}</TextField.Description>
+      </TextField>
+      <TextField>
+        <TextField.Label>{t('ssh.command.stdin')}</TextField.Label>
+        <Input
+          accessibilityLabel={t('ssh.command.stdin')}
+          value={stdin}
+          onChangeText={setStdin}
+          multiline
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={262144}
+          editable={!action.busy}
+        />
       </TextField>
       {action.busy ? (
         <Button variant="secondary" onPress={action.cancel}>
@@ -199,6 +240,7 @@ function SshCommandPanel({ profile }: { profile: SshProfile }) {
           {result.truncated ? (
             <Text className="text-sm text-warning">{t('ssh.command.truncated')}</Text>
           ) : null}
+          {result.diagnostics ? <SshDiagnosticsButton diagnostics={result.diagnostics} /> : null}
         </View>
       ) : null}
       {output.stdout || output.stderr ? (

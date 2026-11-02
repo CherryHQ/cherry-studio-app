@@ -51,6 +51,7 @@ function SshProfileForm({ profile }: { profile?: SshProfile }) {
   const [host, setHost] = useState(profile?.host ?? '');
   const [port, setPort] = useState(String(profile?.port ?? 22));
   const [username, setUsername] = useState(profile?.username ?? '');
+  const [remoteDirectory, setRemoteDirectory] = useState(profile?.remoteDirectory ?? '.');
   const [authMethod, setAuthMethod] = useState(profile?.authMethod ?? 'password');
   const [secret, setSecret] = useState('');
   const [passphrase, setPassphrase] = useState('');
@@ -64,6 +65,7 @@ function SshProfileForm({ profile }: { profile?: SshProfile }) {
         port: Number(port),
         username,
         authMethod,
+        remoteDirectory: remoteDirectory.trim() || '.',
       },
       ...(profile ? { previous: { id: profile.id, revision: profile.revision } } : {}),
       ...(needsCredential
@@ -136,6 +138,18 @@ function SshProfileForm({ profile }: { profile?: SshProfile }) {
           />
         </TextField>
       </View>
+      <TextField>
+        <TextField.Label>{t('ssh.remoteDirectory')}</TextField.Label>
+        <Input
+          accessibilityLabel={t('ssh.remoteDirectory')}
+          value={remoteDirectory}
+          onChangeText={setRemoteDirectory}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={4096}
+        />
+        <TextField.Description>{t('ssh.remoteDirectoryHint')}</TextField.Description>
+      </TextField>
       <Section title={t('ssh.authentication')} footer={t('ssh.credentialNotice')}>
         <Section.RadioItem
           label={t('ssh.password')}

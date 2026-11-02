@@ -81,6 +81,9 @@ describe('createSystemCapabilitySource', () => {
       isAvailable: () => true,
       resolveAgentTarget: async () => target,
       executeForAgent: jest.fn(),
+      filesForAgent: jest.fn(),
+      downloadForAgent: jest.fn(),
+      uploadForAgent: jest.fn(),
     };
     const options = { ssh, sessionId: 'conversation' };
     expect(capabilityIds(await resolve({}, options))).not.toContain('ssh_execute');
@@ -95,6 +98,7 @@ describe('createSystemCapabilitySource', () => {
         username: 'admin',
         authMethod: 'password',
         fingerprint: 'SHA256:key',
+        remoteDirectory: '/srv/project',
       },
       grant: null,
     };
@@ -109,6 +113,12 @@ describe('createSystemCapabilitySource', () => {
       approval: 'auto',
       autoApprovalEligible: false,
     });
+    const fileTools = (await resolve({}, options)).filter(
+      (tool) => tool.providerName.startsWith('ssh_') && tool.providerName !== 'ssh_execute',
+    );
+    expect(fileTools).toHaveLength(5);
+    for (const tool of fileTools)
+      expect(tool).toMatchObject({ approval: 'ask', autoApprovalEligible: false });
     expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
   });
 
