@@ -143,9 +143,13 @@ function inheritedTransform(shape, path) {
   for (const type of ['slideLayout', 'slideMaster']) {
     path = relatedPart(path, type);
     if (!path || !parts[path]) return undefined;
-    const candidates = all(document(path), P, 'ph').filter(candidate => current.hasAttribute('idx')
-      ? candidate.getAttribute('idx') === current.getAttribute('idx')
-      : (candidate.getAttribute('type') || 'obj') === (current.getAttribute('type') || 'obj'));
+    const placeholderType = current.getAttribute('type') || 'obj';
+    const masterType = placeholderType === 'ctrTitle' ? 'title'
+      : ['obj', 'subTitle', 'chart', 'tbl', 'clipArt', 'dgm', 'media', 'pic'].includes(placeholderType) ? 'body' : placeholderType;
+    // Slides inherit by index (omitted means zero); layouts inherit by master placeholder type.
+    const candidates = all(document(path), P, 'ph').filter(candidate => type === 'slideLayout'
+      ? Number(candidate.getAttribute('idx') || 0) === Number(current.getAttribute('idx') || 0)
+      : (candidate.getAttribute('type') || 'obj') === masterType);
     if (candidates.length !== 1) return undefined;
     current = candidates[0];
     const transform = shapeTransform(current.parentNode.parentNode.parentNode);

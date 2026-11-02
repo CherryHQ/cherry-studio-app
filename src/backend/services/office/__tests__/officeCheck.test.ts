@@ -161,6 +161,63 @@ test('counts additional duplicates even when the original already contains one',
   expect(check(after, original)).toMatchObject({ errors: 1, existing: 1 });
 });
 
+const identifiedParagraph = '<w:p w14:paraId="1234ABCD"><w:r><w:t>Text</w:t></w:r></w:p>';
+const alternateContent = (choice: string, fallback = identifiedParagraph) =>
+  `<mc:AlternateContent><mc:Choice Requires="w14">${choice}</mc:Choice><mc:Fallback>${fallback}</mc:Fallback></mc:AlternateContent>`;
+function paragraphArchive(body: string) {
+  return archive({
+    'word/document.xml': `<w:document xmlns:w="${W}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w14"><w:body>${body}</w:body></w:document>`,
+  });
+}
+
+test('accepts paragraph IDs reused across mutually exclusive nested alternatives before publication', async () => {
+  const source = paragraphArchive(alternateContent(alternateContent(identifiedParagraph)));
+  expect(check(source)).toMatchObject({ errors: 0, findings: [] });
+  const { output } = await runOfficeJob(
+    createOfficeScriptCode('docx', `return inputs['${SOURCE}'].bytes;`, {
+      [SOURCE]: {
+        name: 'a.docx',
+        mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        size: source.length,
+      },
+    }),
+    [source],
+  );
+  expect(output).toEqual(source);
+});
+
+test.each([
+  ['same choice', alternateContent(identifiedParagraph + identifiedParagraph)],
+  [
+    'same fallback',
+    alternateContent(identifiedParagraph, identifiedParagraph + identifiedParagraph),
+  ],
+  ['before a block', identifiedParagraph + alternateContent(identifiedParagraph)],
+  ['after a block', alternateContent(identifiedParagraph) + identifiedParagraph],
+  [
+    'separate blocks',
+    alternateContent(identifiedParagraph) + alternateContent(identifiedParagraph),
+  ],
+  [
+    'nested active branch',
+    alternateContent(identifiedParagraph + alternateContent(identifiedParagraph)),
+  ],
+])('still rejects paragraph ID duplicates in %s', (_name, body) => {
+  expect(check(paragraphArchive(body)).findings).toContainEqual(
+    expect.objectContaining({ rule: 'duplicate-paraId', severity: 'error' }),
+  );
+});
+
+test('comparison reports a new paragraph ID duplicate within an existing alternative', () => {
+  const original = paragraphArchive(alternateContent(identifiedParagraph));
+  const edited = paragraphArchive(alternateContent(identifiedParagraph + identifiedParagraph));
+  expect(check(edited, original)).toMatchObject({
+    errors: 1,
+    existing: 0,
+    findings: [expect.objectContaining({ rule: 'duplicate-paraId' })],
+  });
+});
+
 test('rejects corrupt script output before writing while allowing unchanged baseline defects', async () => {
   const source = archive({
     'word/_rels/document.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="old" Type="${R}/image" Target="media/absent.png"/></Relationships>`,

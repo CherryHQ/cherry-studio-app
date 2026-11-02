@@ -194,3 +194,50 @@ test('reports unresolved geometry instead of silently claiming the slide passed'
     },
   });
 });
+
+test.each([
+  ['body', 'body'],
+  ['obj', 'body'],
+  ['ctrTitle', 'title'],
+])(
+  'inherits layout %s geometry from master %s by type, ignoring conflicting indexes',
+  (layoutType, masterType) => {
+    const result = inspect(
+      'pptx',
+      presentation(shape(2, '', '<p:ph idx="10"/>'), {
+        'ppt/slides/_rels/slide1.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="layout" Type="${R}/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`,
+        'ppt/slideLayouts/slideLayout1.xml': `<p:sldLayout xmlns:p="${P}" xmlns:a="${A}"><p:cSld><p:spTree>${shape(1, '', `<p:ph type="${layoutType}" idx="10"/>`)}</p:spTree></p:cSld></p:sldLayout>`,
+        'ppt/slideLayouts/_rels/slideLayout1.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="master" Type="${R}/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`,
+        'ppt/slideMasters/slideMaster1.xml': `<p:sldMaster xmlns:p="${P}" xmlns:a="${A}"><p:cSld><p:spTree>${shape(1, transform(2, 1, 3, 2), `<p:ph type="${masterType}" idx="1"/>`)}${shape(2, transform(-1, 0, 1, 1), '<p:ph type="ftr" idx="10"/>')}</p:spTree></p:cSld></p:sldMaster>`,
+      }),
+    );
+    expect(result).toMatchObject({
+      items: [
+        { shapes: [{ nodeId: '2', box: { x: 2, y: 1, width: 3, height: 2, source: 'master' } }] },
+      ],
+      findings: { total: 0, items: [] },
+    });
+  },
+);
+
+test.each([
+  ['', ' idx="0"'],
+  [' idx="0"', ''],
+])(
+  'matches slide and layout indexes with omitted zero values (%s, %s)',
+  (slideIndex, layoutIndex) => {
+    const result = inspect(
+      'pptx',
+      presentation(shape(2, '', `<p:ph type="title"${slideIndex}/>`), {
+        'ppt/slides/_rels/slide1.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="layout" Type="${R}/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`,
+        'ppt/slideLayouts/slideLayout1.xml': `<p:sldLayout xmlns:p="${P}" xmlns:a="${A}"><p:cSld><p:spTree>${shape(1, transform(2, 1, 3, 2), `<p:ph type="ctrTitle"${layoutIndex}/>`)}${shape(2, transform(-1, 0, 1, 1), '<p:ph type="title" idx="1"/>')}</p:spTree></p:cSld></p:sldLayout>`,
+      }),
+    );
+    expect(result).toMatchObject({
+      items: [
+        { shapes: [{ nodeId: '2', box: { x: 2, y: 1, width: 3, height: 2, source: 'layout' } }] },
+      ],
+      findings: { total: 0, items: [] },
+    });
+  },
+);

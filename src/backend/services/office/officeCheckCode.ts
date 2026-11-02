@@ -13,6 +13,7 @@ const OFFICE_NS = {
   drawing: 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
   presentation: 'http://schemas.openxmlformats.org/presentationml/2006/main',
   sheet: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+  compatibility: 'http://schemas.openxmlformats.org/markup-compatibility/2006',
 };
 const officeMainParts = { docx: 'word/document.xml', xlsx: 'xl/workbook.xml', pptx: 'ppt/presentation.xml' };
 const officeMainTypes = {
@@ -155,6 +156,8 @@ function collectOfficeFindings(bytes, format) {
   if (!names.has(officeMainParts[format])) add('missing-main-part', officeMainParts[format], '', officeMainParts[format] + ' is missing.');
   for (const [part, data] of Object.entries(parts)) {
     const ids = new Map();
+    const paragraphScopes = [new Set()];
+    const alternateParagraphIds = [];
     const rels = new Map();
     const refs = new Set();
     const isRels = /[.]rels$/i.test(part);
@@ -169,6 +172,12 @@ function collectOfficeFindings(bytes, format) {
       scanOfficeXml(data, {
         start(node, stack) {
           const ns = node.namespaceURI, name = node.localName;
+          if (ns === OFFICE_NS.compatibility) {
+            if (name === 'AlternateContent') alternateParagraphIds.push(new Set());
+            else if (['Choice', 'Fallback'].includes(name) &&
+                stack.at(-1)?.namespaceURI === OFFICE_NS.compatibility && stack.at(-1).localName === 'AlternateContent')
+              paragraphScopes.push(new Set());
+          }
           if (!stack.length) {
             if (part === '[Content_Types].xml' && (ns !== OFFICE_NS.content || name !== 'Types'))
               add('content-types-root', part, '', 'Content types part has an invalid root.');
@@ -214,8 +223,16 @@ function collectOfficeFindings(bytes, format) {
             if (value) idKind = 'paraId';
           }
           if (idKind) {
-            if (!ids.has(idKind)) ids.set(idKind, new Set());
-            unique(ids.get(idKind), value, 'duplicate-' + idKind, part, idKind);
+            let values;
+            if (idKind === 'paraId') {
+              // Mutually exclusive branches may reuse IDs, but duplicates in an active ancestor
+              // or the same branch are still errors (MS-DOCX 2.6.2.3).
+              values = paragraphScopes.find(scope => scope.has(value)) || paragraphScopes.at(-1);
+            } else {
+              if (!ids.has(idKind)) ids.set(idKind, new Set());
+              values = ids.get(idKind);
+            }
+            unique(values, value, 'duplicate-' + idKind, part, idKind);
             if (value && !(idKind === 'paraId' ? /^[0-9a-f]{8}$/i : /^\d+$/).test(value))
               add('invalid-' + idKind, part, value, idKind + ' has an invalid value.');
           }
@@ -229,6 +246,16 @@ function collectOfficeFindings(bytes, format) {
           if (node?.namespaceURI === OFFICE_NS.word && node.localName === 't' && /^\s|\s$/.test(value) &&
               node.getAttributeNS('http://www.w3.org/XML/1998/namespace', 'space') !== 'preserve')
             add('text-space', part, '', 'Word text has edge whitespace without xml:space="preserve".', 'warning');
+        },
+        end(node, stack) {
+          if (node.namespaceURI !== OFFICE_NS.compatibility) return;
+          if (['Choice', 'Fallback'].includes(node.localName) &&
+              stack.at(-2)?.namespaceURI === OFFICE_NS.compatibility && stack.at(-2).localName === 'AlternateContent') {
+            for (const id of paragraphScopes.pop()) alternateParagraphIds.at(-1).add(id);
+          } else if (node.localName === 'AlternateContent') {
+            // Only merge after all alternatives have been checked, so later content sees their IDs.
+            for (const id of alternateParagraphIds.pop()) paragraphScopes.at(-1).add(id);
+          }
         },
       });
     } catch (error) {
