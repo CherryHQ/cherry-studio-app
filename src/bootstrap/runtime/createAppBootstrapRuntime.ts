@@ -303,6 +303,7 @@ export function createAppBootstrapRuntime(
           resetFileTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
+        services.sshProfile.initialize();
         await initializeAppRuntime(services);
         await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();

@@ -13,12 +13,14 @@ a command.
 
 - `modules/ssh` owns libssh2 and the iOS/Android bridges; see its
   [native contract and source pin](../../modules/ssh/README.md).
-- `SshProfileService` owns the `ssh_profile` SQLite table. `/ssh-profiles` exposes only profile
-  metadata. A profile revision changes on every edit and trust decision.
+- `SshProfileService` owns durable profile configuration in a dedicated MMKV store under the
+  active storage generation's `ssh/` directory, separate from disposable caches. `/ssh-profiles`
+  exposes only metadata. A profile revision changes on every edit and trust decision.
 - `SshRuntime` owns device-only SecureStore credentials, host-probe tokens, operation admission,
   conversation targets, temporary grants, authentication challenges, file-transfer lifetimes,
   native pool maintenance, cancellation and draining before database shutdown.
-  Its lifecycle dependencies are `DbService` and `KeepAliveCoordinator`; Agent host dependencies
+  Its lifecycle dependencies are `DbService` (for managed-file operations) and
+  `KeepAliveCoordinator`; Agent host dependencies
   keep it alive until Agent turns have drained.
 - `Backend.ssh` exposes user workflows. Frontend hooks read metadata through Data API and observe
   the runtime's target-selection source. Screens do not access native sessions or stored secrets.
@@ -90,11 +92,18 @@ remote jobs require a future remote task protocol and are outside this interface
 
 ## Persistence and distribution
 
-Migration `0013_ssh_profiles` adds profiles without changing existing tables. Migration
-`0014_ssh_workspace` adds `remote_directory`, defaulting existing profiles to `.`. SQLite holds only
-opaque credential references. Passwords/private keys use `WHEN_UNLOCKED_THIS_DEVICE_ONLY` storage;
-they are not included in database backups. After moving a backup to another device, re-enter the
-credentials. Failed database commits remove newly staged secrets, preserving the previous record.
+Profiles use a versioned MMKV document, with at most 100 connections and a 1 MiB serialized bound.
+Only opaque credential references are stored alongside connection metadata. Passwords/private keys
+use `WHEN_UNLOCKED_THIS_DEVICE_ONLY` storage. Cache clearing does not remove profiles. Corrupt or
+unsupported stored configuration fails explicitly instead of silently resetting the connection list.
+
+Portable backups include a validated `ssh/profiles.json` snapshot without credential references or
+secret values. Restore initializes a separate MMKV store in the candidate storage generation before
+activation commits, retaining connection metadata and trust while regenerating credential references
+and revisions. Users re-enter credentials after restore, including on the same device. Older backups
+without the optional SSH snapshot restore an empty list. A later boot never reapplies the original
+restore snapshot over subsequent edits, and rollback retains the previous generation's profiles.
+Failed MMKV writes remove newly staged secrets, preserving the previous record.
 Backup/restore's storage gate rejects new work while stores are frozen and observes pending SSH
 storage/operations before proceeding.
 

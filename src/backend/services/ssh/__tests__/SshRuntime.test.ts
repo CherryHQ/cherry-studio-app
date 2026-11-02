@@ -1,9 +1,8 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
 
 import * as SecureStore from 'expo-secure-store';
 
-import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
+import type { DbService } from '@/backend/data/db/DbService';
 import { SshProfileService } from '@/backend/data/services/SshProfileService';
 import type { SaveSshProfile, SshProfile } from '@/shared/data/types/ssh';
 
@@ -47,7 +46,9 @@ const outcome = (state: string, error = '') =>
     exitCode: null,
     truncated: false,
   });
-let db: TestDb;
+let profileValues: Map<string, string>;
+let profiles: SshProfileService;
+let profileStorage: { getString(key: string): string | undefined; set: jest.Mock };
 let runtime: SshRuntime;
 let secrets: Map<string, string>;
 const native: jest.Mocked<SshNative> = {
@@ -78,12 +79,16 @@ beforeEach(() => {
   native.run.mockImplementation(async (_id, options) =>
     outcome(options.probe ? 'probed' : 'unknown'),
   );
-  db = createTestDb(new DatabaseSync(':memory:'));
-  runtime = new SshRuntime(db.dbService, { acquire: () => ({ release() {} }) });
+  profileValues = new Map();
+  profileStorage = {
+    getString: (key) => profileValues.get(key),
+    set: jest.fn((key: string, value: string) => profileValues.set(key, value)),
+  };
+  profiles = new SshProfileService(profileStorage);
+  runtime = new SshRuntime({} as DbService, { acquire: () => ({ release() {} }) }, profiles);
 });
 afterEach(async () => {
   await runtime._doStop();
-  db.sqlite.close();
   jest.restoreAllMocks();
 });
 
@@ -93,12 +98,10 @@ async function trusted(): Promise<SshProfile> {
   return runtime.trust(probe.token);
 }
 
-test('saves only a credential reference in SQLite and never authenticates a host probe', async () => {
+test('saves only a credential reference in MMKV and never authenticates a host probe', async () => {
   const profile = await runtime.save(input);
-  expect(JSON.stringify(db.sqlite.prepare('SELECT * FROM ssh_profile').all())).not.toContain(
-    'test-only-secret',
-  );
-  expect(await new SshProfileService(db.dbService).list()).toEqual([profile]);
+  expect([...profileValues.values()].join('')).not.toContain('test-only-secret');
+  expect(await new SshProfileService(profileStorage).list()).toEqual([profile]);
   await expect(
     runtime.execute(profile, { command: 'uname -a' }, new AbortController().signal),
   ).rejects.toMatchObject({ code: 'host-key' });
@@ -121,10 +124,12 @@ test('rejects invented trust tokens and a probe whose configuration changed', as
   await expect(runtime.trust(probe.token)).rejects.toMatchObject({ code: 'changed' });
 });
 
-test('rolls back a replacement secret if the database commit fails', async () => {
+test('rolls back a replacement secret if the MMKV write fails', async () => {
   const profile = await runtime.save(input);
   const oldSecrets = new Map(secrets);
-  db.failWriteTxCommit(new Error('disk full'));
+  profileStorage.set.mockImplementationOnce(() => {
+    throw new Error('disk full');
+  });
   await expect(
     runtime.save({
       ...input,
@@ -133,7 +138,7 @@ test('rolls back a replacement secret if the database commit fails', async () =>
     }),
   ).rejects.toMatchObject({ code: 'storage' });
   expect(secrets).toEqual(oldSecrets);
-  expect(await new SshProfileService(db.dbService).list()).toEqual([profile]);
+  expect(await new SshProfileService(profileStorage).list()).toEqual([profile]);
 });
 
 test('invalidates a frozen AI target when its profile changes', async () => {
@@ -258,12 +263,16 @@ test.each(['lease', 'subscription'] as const)(
     const profile = await trusted();
     const release = jest.fn();
     await runtime._doStop();
-    runtime = new SshRuntime(db.dbService, {
-      acquire: () => {
-        if (failure === 'lease') throw new Error('lease unavailable');
-        return { release };
+    runtime = new SshRuntime(
+      {} as DbService,
+      {
+        acquire: () => {
+          if (failure === 'lease') throw new Error('lease unavailable');
+          return { release };
+        },
       },
-    });
+      profiles,
+    );
     if (failure === 'subscription')
       native.addListener.mockImplementationOnce(() => {
         throw new Error('bridge detached');

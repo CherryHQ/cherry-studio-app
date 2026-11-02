@@ -23,9 +23,9 @@ export type DataServices = ReturnType<typeof createDataServices>;
 /**
  * Names the data-service singletons for the routing table.
  *
- * Every service here is a module singleton that resolves `DbService` through
- * `application` per call, so this builds nothing — it only gives the route
- * registrations one object to read from. `cache` and `preference` are the two
+ * Entity services resolve `DbService` through `application` per call; SSH profiles
+ * use their own durable MMKV store. This only names the module singletons for
+ * route registrations. `cache` and `preference` are the two
  * lifecycle-owned services the routes also expose; the host constructs those.
  */
 export function createDataServices({

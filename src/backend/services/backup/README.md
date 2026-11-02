@@ -8,7 +8,9 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
 `avatars/{user,agents,providers}/<name>`, plus
-`skills/<folder>/<digest>/<package path>` for every live Skill package. The manifest records product/version, migration SQL hashes,
+`skills/<folder>/<digest>/<package path>` for every live Skill package, and an optional
+`ssh/profiles.json` containing SSH configuration without device credential references.
+The manifest records product/version, migration SQL hashes,
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
@@ -52,7 +54,9 @@ selecting the backup again. Its database cancels unfinished
 jobs, marks partial replies interrupted, drops desktop pairing, rotates plugin credential references
 without copying their secret values, and retains the target device's identity/privacy/onboarding/
 background-notification preferences. Other settings and content come from the backup. Plugin rows
-and their tool bindings remain so users can reconnect them.
+and their tool bindings remain so users can reconnect them. SSH profiles are loaded into the new
+generation's dedicated MMKV store before activation commits. Their credential references and
+revisions are regenerated; users re-enter passwords or private keys even on the same device.
 
 After durable staging, Android restarts the native process automatically. iOS and Android clients
 without a working restart helper ask the user to completely close and reopen the application. The

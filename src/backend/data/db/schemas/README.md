@@ -17,8 +17,8 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
 - Mobile adds `agent_session_message_created_id_idx` to support bounded global history scans for
   short search terms that cannot use the trigram index. It changes no persisted message fields.
 
-- Mobile adds `ssh_profile` for native SSH connection metadata and device-only credential references;
-  it is independent of desktop pairing. See [SSH connections](../../../../../docs/references/ssh.md).
+- Native SSH connection configuration uses a dedicated MMKV store, outside the SQLite schema.
+  See [SSH connections](../../../../../docs/references/ssh.md).
 
 ## Migration Flow
 

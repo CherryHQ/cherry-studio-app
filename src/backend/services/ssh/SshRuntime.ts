@@ -14,7 +14,11 @@ import {
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
-import { SshProfileService, toSshProfile } from '@/backend/data/services/SshProfileService';
+import {
+  SshProfileService,
+  sshProfileService,
+  toSshProfile,
+} from '@/backend/data/services/SshProfileService';
 import type {
   KeepAliveLease,
   KeepAliveSource,
@@ -112,7 +116,6 @@ const sameReference = (a: SshReference, b: SshReference) =>
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('continue')
 export class SshRuntime extends BaseService implements SshModule {
-  private readonly profiles: SshProfileService;
   private readonly lifetime = new AbortController();
   private tail: Promise<unknown> = Promise.resolve();
   private queued = 0;
@@ -135,11 +138,12 @@ export class SshRuntime extends BaseService implements SshModule {
   private maintenancePending: Promise<unknown> | undefined;
 
   constructor(
-    database: DbService,
+    // Keep managed-file operations alive until the runtime drains, even though profiles use MMKV.
+    _database: DbService,
     private readonly keepAlive: KeepAliveSource,
+    private readonly profiles: SshProfileService = sshProfileService,
   ) {
     super();
-    this.profiles = new SshProfileService(database);
   }
 
   isAvailable = () => !!getSshNative();

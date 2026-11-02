@@ -48,6 +48,7 @@ const mockServices = {
   jobRuntime: mockJobRuntime,
   mcpRuntime: mockMcpRuntime,
   preference: mockPreference,
+  sshProfile: { initialize: jest.fn() },
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
@@ -251,6 +252,7 @@ describe('createAppBootstrapRuntime', () => {
     await Promise.race([initializing, boot]);
     expect(mockValidateRestoringStorage).toHaveBeenCalledTimes(1);
     expect(mockCache.resetForRestore).toHaveBeenCalledTimes(1);
+    expect(mockServices.sshProfile.initialize).toHaveBeenCalledTimes(1);
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     initialized();
     await boot;
@@ -282,6 +284,18 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
     expect(mockRejectStorageCandidate).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  test('does not commit a restored generation when its SSH configuration cannot initialize', async () => {
+    mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
+    mockServices.sshProfile.initialize.mockImplementationOnce(() => {
+      throw new Error('SSH configuration storage failed');
+    });
+    const runtime = createRuntime();
+    await expect(runtime.initialize()).rejects.toMatchObject({ code: 'restart-required' });
+    expect(mockCommitStorageBoot).not.toHaveBeenCalled();
+    expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
     await runtime.dispose();
   });
 
