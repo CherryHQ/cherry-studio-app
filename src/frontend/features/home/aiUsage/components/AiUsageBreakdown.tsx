@@ -21,6 +21,7 @@ import type {
   AiUsageRecordGroupBy,
   AiUsageRecordMetric,
   AiUsageRecordStatsBucket,
+  AiUsageRecordStatsGroupIdentity,
 } from '@/shared/data/api/schemas/aiUsageRecords';
 import type { Currency } from '@/shared/data/types/model';
 
@@ -48,7 +49,7 @@ export const GROUP_LABELS = {
   apiKey: 'settings.provider.apiService.apiKey',
 } as const;
 
-export function usageGroupLabel(bucket: AiUsageRecordStatsBucket, t: TFunction): string {
+export function usageGroupLabel(bucket: AiUsageRecordStatsGroupIdentity, t: TFunction): string {
   switch (bucket.groupBy) {
     case 'model':
       return bucket.modelId || t('aiUsage.unknownModel');

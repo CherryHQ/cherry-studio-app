@@ -4,7 +4,7 @@ import type {
   AiUsageRecordGroupIdentity,
   AiUsageRecordGranularity,
   AiUsageRecordMetric,
-  AiUsageRecordStatsBucket,
+  AiUsageRecordStatsGroupIdentity,
   AiUsageRecordStatsMetrics,
   AiUsageRecordTimelineBucket,
 } from '@/shared/data/api/schemas/aiUsageRecords';
@@ -68,7 +68,7 @@ export function usageKnownMetricValue(
   return usageMetricValue(item, metric);
 }
 
-export function usageGroupFilters(bucket: AiUsageRecordStatsBucket): AiUsageRecordFilters {
+export function usageGroupFilters(bucket: AiUsageRecordStatsGroupIdentity): AiUsageRecordFilters {
   switch (bucket.groupBy) {
     case 'provider':
       return { providerId: bucket.providerId };
@@ -86,7 +86,7 @@ export function usageGroupFilters(bucket: AiUsageRecordStatsBucket): AiUsageReco
   }
 }
 
-export function usageGroupKey(bucket: AiUsageRecordStatsBucket): string {
+export function usageGroupKey(bucket: AiUsageRecordStatsGroupIdentity): string {
   return usageIdentityKey(bucket.groupBy, bucket);
 }
 

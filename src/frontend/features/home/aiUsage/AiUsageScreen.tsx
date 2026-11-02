@@ -1,12 +1,10 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import SlidersHorizontalIcon from '@cherrystudio/app-icons/icons/sliders-horizontal';
 import {
   ActionMenu,
   BottomSheet,
   Button,
-  Chip,
   ContentState,
   DateRangePicker,
   type DateRangeValue,
@@ -26,18 +24,16 @@ import type {
   AiUsageRecordFilters,
   AiUsageRecordGroupBy,
   AiUsageRecordMetric,
-  AiUsageRecordStatsBucket,
 } from '@/shared/data/api/schemas/aiUsageRecords';
-import type { AiUsageRecordModality } from '@/shared/data/types/aiUsageRecord';
 
 import {
   AiUsageBreakdown,
   AiUsageComposition,
   usageGroupLabel,
 } from './components/AiUsageBreakdown';
-import { AiUsageFilters } from './components/AiUsageFilters';
+import { AiUsageFilters, type UsageFilterScopes } from './components/AiUsageFilters';
 import { AiUsagePerformance } from './components/AiUsagePerformance';
-import { AiUsageRecords, MODALITY_LABELS } from './components/AiUsageRecords';
+import { AiUsageRecords } from './components/AiUsageRecords';
 import { AiUsageTrend } from './components/AiUsageTrend';
 import {
   customUsageRange,
@@ -72,19 +68,13 @@ export function AiUsageScreen() {
   const [metric, setMetric] = useState<AiUsageRecordMetric>('tokens');
   const [rankingMetric, setRankingMetric] = useState<AiUsageRecordMetric>('tokens');
   const [groupBy, setGroupBy] = useState<AiUsageRecordGroupBy>('model');
-  const [scopes, setScopes] = useState<
-    Partial<Record<AiUsageRecordGroupBy, AiUsageRecordStatsBucket>>
-  >({});
-  const [modality, setModality] = useState<AiUsageRecordModality>();
-  const [search, setSearch] = useState('');
+  const [scopes, setScopes] = useState<UsageFilterScopes>({});
   const [recordSearch, setRecordSearch] = useState('');
   const [recordSearchDraft, setRecordSearchDraft] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const filters: AiUsageRecordFilters = Object.assign(
     {},
     ...Object.values(scopes).map(usageGroupFilters),
-    { modality, search: search || undefined },
   );
   const queryGroupBy = tab === 'composition' ? groupBy : 'model';
   const queryMetric = tab === 'composition' ? rankingMetric : metric;
@@ -106,11 +96,9 @@ export function AiUsageScreen() {
     if (range.period !== 'custom' && range.to === todayEnd) setRange(usageRange(range.period));
     void query.refetch();
   };
-  const activeScopes = Object.entries(scopes) as [AiUsageRecordGroupBy, AiUsageRecordStatsBucket][];
-  const hasFilters = activeScopes.length > 0 || modality !== undefined || search !== '';
   const openRecords = (next: NonNullable<typeof records>) => {
-    setRecordSearch(search);
-    setRecordSearchDraft(search);
+    setRecordSearch('');
+    setRecordSearchDraft('');
     setRecords(next);
   };
   const span =
@@ -141,7 +129,7 @@ export function AiUsageScreen() {
         testID="ai-usage-content"
       >
         {!records ? (
-          <View className={hasFilters ? 'px-4 pb-4' : 'px-4'}>
+          <View className="px-4 pb-3">
             <Tabs
               accessibilityLabel={t('aiUsage.title')}
               variant="underline"
@@ -204,51 +192,7 @@ export function AiUsageScreen() {
                 </View>
               ) : null}
             </View>
-            {hasFilters ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8 }}
-              >
-                {activeScopes.map(([group, bucket]) => (
-                  <Chip.Removable
-                    key={group}
-                    removeAccessibilityLabel={t('aiUsage.removeFilter', {
-                      name: usageGroupLabel(bucket, t),
-                    })}
-                    onRemove={() =>
-                      setScopes((current) => {
-                        const next = { ...current };
-                        delete next[group];
-                        return next;
-                      })
-                    }
-                  >
-                    {usageGroupLabel(bucket, t)}
-                  </Chip.Removable>
-                ))}
-                {modality ? (
-                  <Chip.Removable
-                    removeAccessibilityLabel={t('aiUsage.removeFilter', {
-                      name: t(MODALITY_LABELS[modality]),
-                    })}
-                    onRemove={() => setModality(undefined)}
-                  >
-                    {t(MODALITY_LABELS[modality])}
-                  </Chip.Removable>
-                ) : null}
-                {search ? (
-                  <Chip.Removable
-                    removeAccessibilityLabel={t('common.clear')}
-                    onRemove={() => {
-                      setSearch('');
-                    }}
-                  >
-                    {search}
-                  </Chip.Removable>
-                ) : null}
-              </ScrollView>
-            ) : null}
+            <AiUsageFilters range={range} scopes={scopes} onChange={setScopes} />
           </View>
         ) : null}
         {records ? (
@@ -364,20 +308,6 @@ export function AiUsageScreen() {
       <RouteHeader
         title={t(records ? 'aiUsage.callDetails' : 'aiUsage.title')}
         onBack={records ? closeRecords : undefined}
-        rightActions={
-          records
-            ? []
-            : [
-                {
-                  type: 'icon',
-                  key: 'filter',
-                  icon: SlidersHorizontalIcon,
-                  accessibilityLabel: t('common.filter'),
-                  testID: 'ai-usage-filter',
-                  onPress: () => setFilterOpen(true),
-                },
-              ]
-        }
       />
       {dateOpen ? (
         <AiUsageDateRange
@@ -386,21 +316,6 @@ export function AiUsageScreen() {
           onApply={(next) => {
             setRange(next);
             setDateOpen(false);
-          }}
-        />
-      ) : null}
-      {filterOpen ? (
-        <AiUsageFilters
-          range={range}
-          scopes={scopes}
-          modality={modality}
-          search={search}
-          onClose={() => setFilterOpen(false)}
-          onApply={(next) => {
-            setScopes(next.scopes);
-            setModality(next.modality);
-            setSearch(next.search);
-            setFilterOpen(false);
           }}
         />
       ) : null}
