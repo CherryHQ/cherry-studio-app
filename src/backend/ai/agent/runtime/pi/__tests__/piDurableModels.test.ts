@@ -247,6 +247,44 @@ describe('Pi durable model bridge', () => {
 
 describe('Pi durable request diagnostics', () => {
   test.each([
+    'SAFETY',
+    'MALFORMED_FUNCTION_CALL',
+    'UNEXPECTED_TOOL_CALL',
+    'TOO_MANY_TOOL_CALLS',
+    'OTHER',
+    undefined,
+    'private_finish_reason',
+  ])('records raw finish reason %s without changing error classification', async (raw) => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    const message: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      stopReason: 'error',
+      rawStopReason: raw,
+      errorMessage: 'private provider response',
+    };
+    const source = new AssistantMessageEventStream();
+    source.push({ type: 'error', reason: 'error', error: message });
+    bridge.streamFn.mockReturnValueOnce(source);
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+
+    expect(result.rawStopReason).toBe(raw);
+    expect(records.at(-1)?.attributes).toMatchObject({
+      'gen_ai.response.finish_reason': 'error',
+      'error.category': 'unknown',
+      'error.retryable': false,
+      'error.retry_scope': 'automatic',
+    });
+    expect(records.at(-1)?.attributes['gen_ai.response.raw_finish_reason']).toBe(
+      raw === 'private_finish_reason' ? undefined : raw,
+    );
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
+
+  test.each([
     { code: 'stream_disconnected', retryable: true, category: 'network' },
     { code: 'no_response', retryable: true, category: 'network' },
     { code: 'stream_idle_timeout', retryable: true, category: 'timeout' },

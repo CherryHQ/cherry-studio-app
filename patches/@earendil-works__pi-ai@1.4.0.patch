@@ -67,7 +67,6 @@ index c88f27ee93a6f267f6abf9f69b13d0ad2303c8b2..57485c1b51b58a587fdb17f75eb66cee
              stream.end();
          }
 diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
-index 1a33683db114ae21bda752d23fdc061fb6bbdbaf..bb82fc267399eca270c3a1c2347360b5bc6be3c8 100644
 --- a/dist/api/google-generative-ai.js
 +++ b/dist/api/google-generative-ai.js
 @@ -1,5 +1,6 @@
@@ -77,7 +76,23 @@ index 1a33683db114ae21bda752d23fdc061fb6bbdbaf..bb82fc267399eca270c3a1c2347360b5
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -226,7 +227,13 @@ export const stream = (model, context, options) => {
+@@ -33,14 +34,11 @@
+             timestamp: Date.now(),
+         };
+         try {
+-            if (options?.fetch && options.fetch !== globalThis.fetch) {
+-                throw new Error("Custom fetch is not supported by the Google Generative AI adapter");
+-            }
+             const apiKey = options?.apiKey;
+             if (!apiKey) {
+                 throw new Error(`No API key for provider: ${model.provider}`);
+             }
+-            const client = createClient(model, apiKey, options?.headers, options?.identity);
++            const client = createClient(model, apiKey, options?.headers, options?.identity, options?.fetch);
+             let params = buildParams(model, normalizedContext, options);
+             const nextParams = await options?.onPayload?.(params, model);
+             if (nextParams !== undefined) {
+@@ -226,7 +224,13 @@
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -92,6 +107,19 @@ index 1a33683db114ae21bda752d23fdc061fb6bbdbaf..bb82fc267399eca270c3a1c2347360b5
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
+@@ -267,8 +271,11 @@
+         },
+     });
+ };
+-function createClient(model, apiKey, optionsHeaders, identity) {
++function createClient(model, apiKey, optionsHeaders, identity, fetch) {
+     const httpOptions = {};
++    if (fetch) {
++        httpOptions.fetch = fetch;
++    }
+     if (model.baseUrl) {
+         httpOptions.baseUrl = model.baseUrl;
+         httpOptions.apiVersion = ""; // baseUrl already includes version path, don't append
 diff --git a/dist/api/google-vertex.d.ts b/dist/api/google-vertex.d.ts
 index 9ef58caf6a76cdece4643120045ba995307ce0f2..abb54348969c2f1ace298366a48506d47872a8c0 100644
 --- a/dist/api/google-vertex.d.ts
@@ -114,7 +142,6 @@ index 9ef58caf6a76cdece4643120045ba995307ce0f2..abb54348969c2f1ace298366a48506d4
  //# sourceMappingURL=google-vertex.d.ts.map
 \ No newline at end of file
 diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
-index d3cbcf530801c76ba777ba701179549ca7088ef8..9880025c43c89772b8e56c5fc40c8dde7018a59d 100644
 --- a/dist/api/google-vertex.js
 +++ b/dist/api/google-vertex.js
 @@ -1,5 +1,6 @@
@@ -124,7 +151,7 @@ index d3cbcf530801c76ba777ba701179549ca7088ef8..9880025c43c89772b8e56c5fc40c8dde
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -36,14 +37,15 @@ export const stream = (model, context, options) => {
+@@ -36,14 +37,15 @@
              timestamp: Date.now(),
          };
          try {
@@ -146,7 +173,7 @@ index d3cbcf530801c76ba777ba701179549ca7088ef8..9880025c43c89772b8e56c5fc40c8dde
              let params = buildParams(model, normalizedContext, options);
              const nextParams = await options?.onPayload?.(params, model);
              if (nextParams !== undefined) {
-@@ -228,7 +230,13 @@ export const stream = (model, context, options) => {
+@@ -228,7 +230,13 @@
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -161,7 +188,7 @@ index d3cbcf530801c76ba777ba701179549ca7088ef8..9880025c43c89772b8e56c5fc40c8dde
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -239,6 +247,7 @@ export const streamSimple = (model, context, options) => {
+@@ -239,6 +247,7 @@
      const base = {
          ...buildBaseOptions(model, context, options, undefined),
          toolChoice: options?.toolChoice,
@@ -169,7 +196,7 @@ index d3cbcf530801c76ba777ba701179549ca7088ef8..9880025c43c89772b8e56c5fc40c8dde
      };
      if (!options?.reasoning) {
          return stream(model, context, {
-@@ -271,6 +280,22 @@ export const streamSimple = (model, context, options) => {
+@@ -271,6 +280,21 @@
          },
      });
  };
@@ -184,9 +211,8 @@ index d3cbcf530801c76ba777ba701179549ca7088ef8..9880025c43c89772b8e56c5fc40c8dde
 +                headers.set("Authorization", `Bearer ${options.accessToken}`);
 +            },
 +        },
-+        fetch: options.fetch,
 +        // The host has already resolved the complete project collection and API version.
-+        httpOptions: { ...buildHttpOptions(model, options.headers, options.identity), apiVersion: "" },
++        httpOptions: { ...buildHttpOptions(model, options.headers, options.identity), apiVersion: "", fetch: options.fetch },
 +    });
 +}
  function createClient(model, project, location, optionsHeaders, env, identity) {

@@ -53,7 +53,7 @@ const PI_API_ADAPTERS = {
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/google-generative-ai'))
         .streamSimple as unknown as PiStreamFn,
-    supportsCustomFetch: false,
+    supportsCustomFetch: true,
   },
   [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
     api: 'openai-completions',

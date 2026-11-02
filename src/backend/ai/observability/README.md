@@ -57,13 +57,19 @@ product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_F
 and available source name/origin/status. The product reason may have been inferred from the
 caller-visible message; it is distinct from the request's structured-only `error.category`.
 Only the closed reason is copied, never the message or response body.
+`gen_ai.response.finish_reason` retains Pi's normalized outcome;
+`gen_ai.response.raw_finish_reason` on `pi.generate_content` retains a known provider enum such as
+`SAFETY` or `MALFORMED_FUNCTION_CALL`. The producer and archive exporter use the same closed
+allowlist. These facts support diagnostic analysis without changing error classification or Pi's
+automatic retry decision. Product failure context continues to use Pi's normalized `finishReason`.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
 `stream_disconnected`; both are network failures, and `no_response` also covers native timeouts
-and TLS errors because the rejection carries no cause. Adapters without a custom fetch (Google)
-do not receive these codes. Terminal model failures record Pi's retry classification of the
-error as `error.retryable`, qualified by `error.retry_scope: automatic`; whether a retry happened
+and TLS errors because the rejection carries no cause. Gemini and host-authenticated Vertex use
+the same injected transport as the other supported adapters. Terminal model failures record Pi's
+retry classification of the error as `error.retryable`, qualified by `error.retry_scope: automatic`;
+whether a retry happened
 also depends on the retry budget and context
 overflow handling. Cancellation remains a cancelled outcome. Correlate existing retry attempt logs
 with model requests and the final `ai.turn_state` to distinguish a failed attempt from a turn that

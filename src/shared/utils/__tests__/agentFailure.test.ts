@@ -38,6 +38,21 @@ describe('classifyAgentFailureReason', () => {
     [{ message: 'Connection error.' }, 'network'],
     [{ name: 'APIConnectionError', message: 'Connection error.' }, 'network'],
     [{ message: 'self-signed certificate' }, 'proxy_tls'],
+    [
+      {
+        code: 'no_response',
+        message: 'fetch failed: The certificate for this server is invalid.',
+      },
+      'proxy_tls',
+    ],
+    [
+      { code: 'no_response', message: 'fetch failed: Unable to connect to the proxy.' },
+      'proxy_tls',
+    ],
+    [{ code: 'no_response', message: 'fetch failed: 似乎已断开与互联网的连接。' }, 'network'],
+    [{ code: 'no_response', message: '似乎已断开与互联网的连接。' }, 'unknown'],
+    [{ code: 'no_response', message: '' }, 'unknown'],
+    [{ code: 'stream_disconnected', message: '网络连接已中断。' }, 'unknown'],
     [{ message: 'MCP transport timed out' }, 'mcp'],
     [{ message: 'request failed', statusCode: 503 }, 'provider_unavailable'],
     [{ message: '503: upstream temporarily unavailable' }, 'provider_unavailable'],

@@ -110,6 +110,61 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  test.each([
+    { raw: undefined, code: 'stream_disconnected' },
+    { raw: undefined, code: 'no_response' },
+    { raw: 'SAFETY' },
+    { raw: 'MALFORMED_FUNCTION_CALL' },
+    { raw: 'UNEXPECTED_TOOL_CALL' },
+    { raw: 'TOO_MANY_TOOL_CALLS' },
+    { raw: 'OTHER' },
+    { raw: undefined },
+    { raw: 'private_finish_reason' },
+  ])(
+    'keeps diagnostic reason $raw and code $code out of product classification',
+    ({ raw, code }) => {
+      const terminal: AssistantMessage = {
+        ...call('', 2000),
+        api: 'google-generative-ai',
+        content: [],
+        stopReason: 'error',
+        rawStopReason: raw,
+        errorMessage: 'Provider stopped.',
+        diagnostics: code
+          ? [
+              {
+                type: 'provider_response_failure',
+                timestamp: 1,
+                error: { code, message: 'Request failed.' },
+              },
+            ]
+          : undefined,
+      };
+      const turn = projectPiTurn({
+        lane: { sessionId: 'session', slot: 0 },
+        metadata,
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          reason: 'model_error',
+          entry: 1,
+        } as unknown as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+        ] as unknown as EntryRecord[],
+      });
+
+      expect(toAgentErrorView(turn.error!)).toMatchObject({
+        retryable: true,
+        failure: {
+          reasonCode: 'unknown',
+          context: { finishReason: 'error' },
+        },
+      });
+    },
+  );
+
   test.each(['provider_response_failure', 'pi_messages_response_failure'])(
     'preserves the terminal %s facts in the displayed failure',
     (type) => {
