@@ -30,6 +30,8 @@ configuration repair or an independent manual-add task with the same setup inten
 An empty directory also offers manual creation. Removal results report protected skipped models.
 The manual form and synchronization task mount independently under `detail/modelAdd/components/`;
 the synchronization preview lives with that task, while the legacy pull page only redirects.
+Synchronization rows retain the shared free-model badge and its accessible label, matching Desktop's
+pull preview; other model traits remain limited to management rows.
 
 Manual creation and editing offer text/image classification (embedding and rerank models cannot
 be used in chat, so they are only shown, never offered), reasoning and tool capabilities, image/audio/video inputs, group, streaming support metadata, and pricing. Existing list
