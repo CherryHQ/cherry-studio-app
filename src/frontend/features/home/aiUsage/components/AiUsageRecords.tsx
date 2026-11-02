@@ -1,7 +1,7 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   ActionMenu,
-  BottomSheet,
   Button,
   ContentState,
   Section,
@@ -9,10 +9,13 @@ import {
 } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AiUsageDetail, AiUsageDetailRow } from '@/frontend/components/AiUsageDetail';
+import { ModelAvatar } from '@/frontend/components/Avatar';
 import { useInfiniteQuery } from '@/frontend/data';
+import { formatAiUsageCost } from '@/frontend/utils/aiUsage';
 import type {
   AiUsageRecordFilters,
   AiUsageRecordListSortBy,
@@ -24,14 +27,7 @@ import {
 import type { Currency } from '@/shared/data/types/model';
 import { getAiUsageRecordTokensPerSecond } from '@/shared/utils/aiUsage';
 
-import {
-  formatUsageCost,
-  formatUsageDate,
-  formatUsageNumber,
-  type UsageRange,
-} from '../utils/aiUsageAnalytics';
-import { AiUsageValueRow } from './AiUsageBreakdown';
-import { PERFORMANCE_LABELS } from './AiUsagePerformance';
+import { formatUsageDate, formatUsageNumber, type UsageRange } from '../utils/aiUsageAnalytics';
 
 const SORT_LABELS = {
   createdAt: 'chat.messageUsage.createdAt',
@@ -194,58 +190,87 @@ export function AiUsageRecords({
             </View>
           ) : null
         }
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${item.modelName || item.modelId || t('aiUsage.unknownModel')}, ${t('aiUsage.viewDetails')}`}
-            onPress={() => setSelected(item)}
-          >
-            <View className="flex-row items-center gap-3 rounded-2xl bg-card p-4">
-              <View className="min-w-0 flex-1 gap-1">
-                <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
-                  {item.modelName || item.modelId || t('aiUsage.unknownModel')}
-                </Text>
-                <Text className="text-muted-foreground text-xs" numberOfLines={1}>
-                  {item.providerName || t('aiUsage.unknownProvider')}
-                </Text>
-                <Text className="text-muted-foreground text-xs" numberOfLines={1}>
-                  {item.sourceName || item.sourceId || t('aiUsage.unknownSource')}
-                </Text>
-                {!item.messageId ? (
-                  <Text className="text-muted-foreground text-xs">
-                    {t('aiUsage.noConversation')}
+        renderItem={({ item }) => {
+          const metric =
+            sortBy === 'timeFirstTokenMs'
+              ? item.timeFirstTokenMs === null
+                ? null
+                : item.timeFirstTokenMs / 1000
+              : sortBy === 'tokensPerSecond'
+                ? getAiUsageRecordTokensPerSecond(item)
+                : getAiUsageRecordTotalTokens(item);
+          const unit =
+            sortBy === 'timeFirstTokenMs'
+              ? t('aiUsage.secondsUnit')
+              : sortBy === 'tokensPerSecond'
+                ? t('aiUsage.tokensPerSecondUnit')
+                : t('aiUsage.tokens');
+          const summary = [
+            item.cost !== null && item.costCurrency
+              ? formatAiUsageCost(item.cost, item.costCurrency, locale)
+              : undefined,
+            item.timeCompletionMs !== null
+              ? `${formatUsageNumber(item.timeCompletionMs / 1000, locale, 2)} ${t('aiUsage.secondsUnit')}`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${item.modelName || item.modelId || t('aiUsage.unknownModel')}, ${t('aiUsage.viewDetails')}`}
+              onPress={() => setSelected(item)}
+            >
+              <View className="gap-3 py-4">
+                <View className="flex-row items-center gap-3">
+                  <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
+                    <ModelAvatar model={recordModel(item, t('aiUsage.unknownModel'))} size={28} />
+                    <View className="min-w-0 flex-1 gap-0.5">
+                      <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
+                        {item.modelName || item.modelId || t('aiUsage.unknownModel')}
+                      </Text>
+                      <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                        {item.providerName || item.providerId || t('aiUsage.unknownProvider')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="max-w-[45%] items-end gap-0.5">
+                    <Text
+                      adjustsFontSizeToFit
+                      className="font-medium text-foreground text-xl tabular-nums"
+                      minimumFontScale={0.6}
+                      numberOfLines={1}
+                    >
+                      {formatUsageNumber(
+                        metric,
+                        locale,
+                        sortBy === 'timeFirstTokenMs' || sortBy === 'tokensPerSecond' ? 2 : 0,
+                      )}
+                    </Text>
+                    <Text className="text-muted-foreground text-xs">{unit}</Text>
+                  </View>
+                </View>
+                <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
+                  <Text className="font-mono text-muted-foreground text-xs">
+                    {new Intl.DateTimeFormat(locale, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }).format(new Date(item.createdAt))}
                   </Text>
-                ) : null}
-                <Text className="text-muted-foreground text-xs">
-                  {new Intl.DateTimeFormat(locale, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }).format(new Date(item.createdAt))}
-                </Text>
-              </View>
-              <View className="max-w-[45%] items-end gap-1">
-                <Text className="text-foreground text-sm">
-                  {sortBy === 'timeFirstTokenMs'
-                    ? `${formatUsageNumber(item.timeFirstTokenMs === null ? null : item.timeFirstTokenMs / 1000, locale, 2)} ${t('aiUsage.secondsUnit')}`
-                    : sortBy === 'tokensPerSecond'
-                      ? `${formatUsageNumber(getAiUsageRecordTokensPerSecond(item), locale, 2)} ${t('aiUsage.tokensPerSecondUnit')}`
-                      : `${formatUsageNumber(getAiUsageRecordTotalTokens(item), locale)} ${t('aiUsage.tokens')}`}
-                </Text>
-                <Text className="text-muted-foreground text-xs">
-                  {item.costCurrency
-                    ? formatUsageCost(item.cost, item.costCurrency, locale)
-                    : t('aiUsage.unpriced')}
-                </Text>
+                  <Text className="min-w-0 flex-1 text-right text-muted-foreground text-xs tabular-nums">
+                    {summary}
+                  </Text>
+                  <ChevronRightIcon className="size-3.5 text-muted-foreground" />
+                </View>
                 {item.recordKind === 'legacy-aggregate' ? (
                   <Text className="text-muted-foreground text-xs">{t('aiUsage.legacy')}</Text>
                 ) : null}
               </View>
-              <ChevronRightIcon className="size-4 text-muted-foreground" />
-            </View>
-          </Pressable>
-        )}
+            </Pressable>
+          );
+        }}
       />
       {selected ? (
         <AiUsageRecordDetail
@@ -268,123 +293,121 @@ function AiUsageRecordDetail({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const number = (value: number | null) => formatUsageNumber(value, locale);
-  const tokenFields = [
-    ['chat.messageUsage.input', entry.inputTokens],
-    ['chat.messageUsage.output', entry.outputTokens],
-    ['chat.messageUsage.reasoning', entry.reasoningTokens],
-    ['chat.messageUsage.noCache', entry.noCacheTokens],
-    ['chat.messageUsage.cacheRead', entry.cacheReadTokens],
-    ['chat.messageUsage.cacheWrite', entry.cacheWriteTokens],
-    ['aiUsage.images', entry.imageCount],
-  ] as const;
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const costLabels = {
+    input: 'chat.messageUsage.input',
+    output: 'chat.messageUsage.output',
+    cacheRead: 'chat.messageUsage.cacheRead',
+    cacheWrite: 'chat.messageUsage.cacheWrite',
+    image: 'aiUsage.images',
+  } as const;
   return (
-    <BottomSheet
-      open
+    <AiUsageDetail
+      model={recordModel(entry, t('aiUsage.unknownModel'))}
+      providerName={entry.providerName || entry.providerId || t('aiUsage.unknownProvider')}
+      createdAt={entry.createdAt}
       onClose={onClose}
-      size="large"
       title={t('aiUsage.recordDetail')}
-      closeAction={{ accessibilityLabel: t('common.close') }}
-    >
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}>
-        <AiUsageValueRow
-          label={t('chat.messageUsage.model')}
-          value={entry.modelName || entry.modelId || t('aiUsage.unknownModel')}
-        />
-        {entry.modelName && entry.modelId ? (
-          <AiUsageValueRow label={t('aiUsage.modelId')} value={entry.modelId} />
-        ) : null}
-        <AiUsageValueRow
-          label={t('chat.messageUsage.provider')}
-          value={entry.providerName || entry.providerId || t('aiUsage.unknownProvider')}
-        />
-        <AiUsageValueRow
-          label={t('aiUsage.source')}
-          value={entry.sourceName || entry.sourceId || t('aiUsage.unknown')}
-        />
-        <AiUsageValueRow label={t('aiUsage.modality')} value={t(MODALITY_LABELS[entry.modality])} />
-        <AiUsageValueRow
-          label={t('settings.provider.apiService.apiKey')}
-          value={
-            [entry.apiKeyLabel, entry.apiKeyMasked].filter(Boolean).join(' · ') ||
-            entry.authMethod ||
-            t('aiUsage.unknown')
-          }
-        />
-        <AiUsageValueRow
-          label={t('chat.messageUsage.createdAt')}
-          value={new Intl.DateTimeFormat(locale, {
-            dateStyle: 'medium',
-            timeStyle: 'medium',
-          }).format(new Date(entry.createdAt))}
-        />
-        <AiUsageValueRow
-          label={t('chat.messageUsage.requests')}
-          value={number(entry.requestCount)}
-        />
-        {entry.recordKind === 'legacy-aggregate' ? (
-          <Text className="py-3 text-muted-foreground text-xs">{t('aiUsage.legacyHint')}</Text>
-        ) : null}
-        <Section.Header title={t('aiUsage.tokenComposition')} />
-        <AiUsageValueRow
-          label={t('chat.messageUsage.totalTokens')}
-          value={number(getAiUsageRecordTotalTokens(entry))}
-        />
-        {tokenFields.map(([key, value]) => (
-          <AiUsageValueRow key={key} label={t(key)} value={number(value)} />
-        ))}
-        <Section.Header title={t('aiUsage.cost')} />
-        <AiUsageValueRow
-          label={
-            entry.costSource === 'provider'
-              ? t('chat.messageUsage.costBilled')
-              : entry.costSource === 'computed'
-                ? t('chat.messageUsage.costEstimated')
-                : t('aiUsage.unpriced')
-          }
-          value={entry.costCurrency ? formatUsageCost(entry.cost, entry.costCurrency, locale) : '—'}
-        />
-        {entry.costBreakdown && entry.costCurrency
-          ? (['input', 'output', 'cacheRead', 'cacheWrite', 'image'] as const).map((key) => {
+      detail={{
+        totalTokens: getAiUsageRecordTotalTokens(entry) ?? undefined,
+        inputTokens: entry.inputTokens ?? undefined,
+        outputTokens: entry.outputTokens ?? undefined,
+        reasoningTokens: entry.reasoningTokens ?? undefined,
+        noCacheTokens: entry.noCacheTokens ?? undefined,
+        cacheReadTokens: entry.cacheReadTokens ?? undefined,
+        cacheWriteTokens: entry.cacheWriteTokens ?? undefined,
+        imageCount: entry.imageCount ?? undefined,
+        requestCount: entry.requestCount,
+        durationMs: entry.timeCompletionMs ?? undefined,
+        firstTokenMs: entry.timeFirstTokenMs ?? undefined,
+        thinkingMs: entry.timeThinkingMs ?? undefined,
+        modelTokensPerSecond: getAiUsageRecordTokensPerSecond(entry) ?? undefined,
+        costs:
+          entry.cost !== null && entry.costCurrency
+            ? [
+                {
+                  currency: entry.costCurrency,
+                  amount: entry.cost,
+                  providerReportedRequestCount:
+                    entry.costSource === 'provider' ? entry.requestCount : 0,
+                  computedRequestCount: entry.costSource === 'computed' ? entry.requestCount : 0,
+                },
+              ]
+            : [],
+      }}
+      costDetails={
+        entry.costBreakdown && entry.costCurrency ? (
+          <View className="gap-2">
+            {(Object.keys(costLabels) as (keyof typeof costLabels)[]).map((key) => {
               const value = entry.costBreakdown?.[key];
-              const labels = {
-                input: 'chat.messageUsage.input',
-                output: 'chat.messageUsage.output',
-                cacheRead: 'chat.messageUsage.cacheRead',
-                cacheWrite: 'chat.messageUsage.cacheWrite',
-                image: 'aiUsage.images',
-              } as const;
               return value === undefined ? null : (
-                <AiUsageValueRow
+                <AiUsageDetailRow
                   key={key}
-                  label={t(labels[key])}
-                  value={formatUsageCost(value, entry.costCurrency!, locale)}
+                  label={t(costLabels[key])}
+                  value={formatAiUsageCost(value, entry.costCurrency!, locale)}
                 />
               );
-            })
-          : null}
-        <Section.Header title={t('aiUsage.performance')} />
-        {(['timeFirstTokenMs', 'timeCompletionMs', 'timeThinkingMs'] as const).map((key) => (
-          <AiUsageValueRow
-            key={key}
-            label={t(PERFORMANCE_LABELS[key])}
-            value={
-              entry[key] === null
-                ? '—'
-                : `${formatUsageNumber(entry[key] / 1000, locale, 2)} ${t('aiUsage.secondsUnit')}`
-            }
+            })}
+          </View>
+        ) : null
+      }
+    >
+      {entry.recordKind === 'legacy-aggregate' ? (
+        <Text className="text-muted-foreground text-xs">{t('aiUsage.legacyHint')}</Text>
+      ) : null}
+      <View className="gap-4">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: metadataOpen }}
+          className="min-h-11 flex-row items-center justify-between gap-3"
+          onPress={() => setMetadataOpen(!metadataOpen)}
+        >
+          <Text className="font-medium text-foreground text-sm">{t('common.more')}</Text>
+          <ChevronDownIcon
+            className={`size-4 text-muted-foreground ${metadataOpen ? 'rotate-180' : ''}`}
           />
-        ))}
-        <AiUsageValueRow
-          label={t('chat.messageUsage.modelSpeed')}
-          value={`${formatUsageNumber(getAiUsageRecordTokensPerSecond(entry), locale, 2)} ${t('aiUsage.tokensPerSecondUnit')}`}
-        />
-        <Text className="py-3 text-muted-foreground text-xs">{t('aiUsage.compositionHint')}</Text>
-      </ScrollView>
-    </BottomSheet>
+        </Pressable>
+        {metadataOpen ? (
+          <View className="gap-4">
+            {entry.modelId ? (
+              <AiUsageDetailRow label={t('aiUsage.modelId')} value={entry.modelId} />
+            ) : null}
+            <AiUsageDetailRow
+              label={t('aiUsage.source')}
+              value={entry.sourceName || entry.sourceId || t('aiUsage.unknown')}
+            />
+            <AiUsageDetailRow
+              label={t('aiUsage.modality')}
+              value={t(MODALITY_LABELS[entry.modality])}
+            />
+            <AiUsageDetailRow
+              label={t('settings.provider.apiService.apiKey')}
+              value={
+                [entry.apiKeyLabel, entry.apiKeyMasked].filter(Boolean).join(' · ') ||
+                entry.authMethod ||
+                t('aiUsage.unknown')
+              }
+            />
+            <AiUsageDetailRow
+              label={t('chat.messageUsage.message')}
+              value={entry.messageId || t('aiUsage.noConversation')}
+            />
+          </View>
+        ) : null}
+      </View>
+    </AiUsageDetail>
   );
 }
 
+function recordModel(entry: AiUsageRecordEntry, unknownModel: string) {
+  return {
+    id: entry.modelId || entry.id,
+    modelId: entry.modelId || '',
+    name: entry.modelName || entry.modelId || unknownModel,
+    providerId: entry.providerId || '',
+  };
+}
+
 function RecordSeparator() {
-  return <View className="h-2" />;
+  return <View className="border-t border-border-subtle" />;
 }

@@ -1,7 +1,7 @@
+import { formatAiUsageCost } from '@/frontend/utils/aiUsage';
 import type { AiUsageRecordEntry } from '@/shared/data/types/aiUsageRecord';
 
 import {
-  formatMessageUsageCost,
   getMessageDurationMs,
   getMessageTokenUsage,
   getMessageUsageDetails,
@@ -163,8 +163,8 @@ describe('messageUsage', () => {
   });
 
   test('does not round a small positive charge to free', () => {
-    expect(formatMessageUsageCost(0.000001, 'USD', 'en-US')).toBe('<$0.0001');
-    expect(formatMessageUsageCost(0, 'USD', 'en-US')).toBe('$0.00');
+    expect(formatAiUsageCost(0.000001, 'USD', 'en-US')).toBe('<$0.0001');
+    expect(formatAiUsageCost(0, 'USD', 'en-US')).toBe('$0.00');
   });
 
   test('merges overlapping tool spans and keeps total throughput distinct from model speed', () => {
