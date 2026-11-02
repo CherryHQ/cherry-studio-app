@@ -5,7 +5,7 @@ Open XML documents, and RTF. `FileViewerPane` renders the same viewer in the fil
 only the route sets native screen options, and Office references go to the chat beside the pane.
 A preview opened from a chat, or from the file library opened beside one, offers Add to current
 chat: `useAddFileToChat` hands the whole file to that chat's composer once, keeping its draft text,
-and returns to it. The image viewer shows it as a toolbar action; documents and text show a footer,
+and returns to it. Images, documents and text use the same text-only footer action,
 which owns the bottom safe area in place of the content.
 A preview without a chat, or whose chat's Agent cannot take the file, does not offer it.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
@@ -24,8 +24,9 @@ See [HTML Conversion](../../../../docs/references/html-conversion.md)
 for format behavior, limits, selection evidence and pending acceptance.
 
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. Its
-  bottom toolbar offers sharing and saving to Photos; the header retains system opening. A
-  caller-owned image editing request also supplies Edit. Cropping, rotation, mirroring,
+  header menu offers saving to Photos, sharing and system opening. A caller-owned image editing
+  request also supplies Edit in that menu. The footer is reserved for Add to current chat, matching
+  the other file viewers. Cropping, rotation, mirroring,
   straightening and perspective adjustments create a new managed image through
   `Backend.file.editImage`. Only an accepted source-matching callback replaces the caller's
   attachment. The source file and existing messages retain their
