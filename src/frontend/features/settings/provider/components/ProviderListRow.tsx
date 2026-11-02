@@ -5,18 +5,23 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
+import { withPolicy } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderAccountBadge } from './ProviderAccountBadge';
 
-export const ProviderListRow = memo(function ProviderListRow({
+const ProviderListRowView = memo(function ProviderListRow({
+  canSignIn = true,
   isEnabled,
   isPending,
   onOpen,
   onToggle,
   provider,
 }: {
+  /** Offers the provider's account sign-in where it has one. */
+  canSignIn?: boolean;
   isEnabled: boolean;
   isPending: boolean;
   onOpen: (provider: Provider) => void;
@@ -25,7 +30,7 @@ export const ProviderListRow = memo(function ProviderListRow({
 }) {
   const { t } = useTranslation();
   const accounts = useBackendModule('providers').accounts;
-  const supportsSignIn = accounts.getCapabilities(provider).signIn;
+  const supportsSignIn = canSignIn && accounts.getCapabilities(provider).signIn;
   const statusLabel = t(
     isEnabled ? 'settings.provider.status.enabled' : 'settings.provider.status.disabled',
   );
@@ -48,6 +53,8 @@ export const ProviderListRow = memo(function ProviderListRow({
           {supportsSignIn ? <ProviderAccountBadge /> : null}
         </View>
       }
+      // Opening the details only reads them, so the row stays live inside a locked group.
+      locked={false}
       leading={
         <ProviderAvatar
           presetProviderId={provider.presetProviderId}
@@ -62,18 +69,22 @@ export const ProviderListRow = memo(function ProviderListRow({
       testID={`provider-row-${provider.id}`}
       trailing={
         <View className="flex-row items-center gap-2">
-          <Switch
-            accessibilityLabel={t(
-              isEnabled
-                ? 'settings.provider.disableProviderNamed'
-                : 'settings.provider.enableProviderNamed',
-              { name: provider.name },
-            )}
-            disabled={isPending}
-            onValueChange={(value) => onToggle(provider, value)}
-            testID={`provider-enabled-switch-${provider.id}`}
-            value={isEnabled}
-          />
+          {provider.id !== CLOUD_PROVIDER_ID ? (
+            <Switch
+              accessibilityLabel={t(
+                isEnabled
+                  ? 'settings.provider.disableProviderNamed'
+                  : 'settings.provider.enableProviderNamed',
+                { name: provider.name },
+              )}
+              disabled={isPending}
+              onValueChange={(value) => onToggle(provider, value)}
+              testID={`provider-enabled-switch-${provider.id}`}
+              value={isEnabled}
+            />
+          ) : (
+            <Text className="text-sm text-muted-foreground">{t('cloud.title')}</Text>
+          )}
           <View className="size-5 items-center justify-center">
             {isPending ? (
               <Spinner accessibilityLabel={t('settings.provider.status.updating')} size="sm" />
@@ -86,3 +97,8 @@ export const ProviderListRow = memo(function ProviderListRow({
     />
   );
 });
+
+/** Organization providers have no account to sign in to; their switch renders locked. */
+export const ProviderListRow = withPolicy(ProviderListRowView, (policy) =>
+  policy.canEdit('provider') ? {} : { canSignIn: false },
+);

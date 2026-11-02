@@ -409,6 +409,24 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
+`Section` styles only its own row kinds. A component that always renders exactly one of them, such
+as a wrapper choosing between a selectable and a read-only row, sets the static `sectionItem = true`
+(typed by `SectionItemComponent`) and passes `onPressedChange` through, so its separators follow
+press state like any row.
+
+Locked content belongs to someone else: it shows its value at full contrast, without the means to
+change it, and explains why when pressed. `LockedAppearanceProvider` supplies the owner's mark
+(`icon`, sized by `className`) and the `reason` shown in an `InfoPopover`; without a reason locks
+stay silent. `Switch`, `Tabs`, `Input`, `SelectionIndicator` and the `Section` rows take `locked`:
+they drop their edit affordances, and on their own carry the mark in its place. The switch draws a
+neutral track on both platforms, with the mark on its thumb when alone, because the iOS system
+switch cannot carry one. `LockedGroup` encloses a block in one outlined card headed by the mark and
+reason, locks the editable components inside and flattens the sections inside into
+its card, where their footers drop out. The header names the owner once, so nothing inside repeats
+the mark. A `Section.Item` locks only when it edits
+something; a row that only navigates or copies passes `locked={false}`. A virtualized list draws a
+group one item at a time with `LockedGroupSlice`; `LockedMark` and `LockedTrigger` serve custom
+controls.
 
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected

@@ -1,6 +1,12 @@
 import { useCallback, useMemo } from 'react';
 
 import { useModels, useProviders } from '@/frontend/hooks/chat';
+import { useCloud } from '@/frontend/hooks/useCloud';
+import {
+  CLOUD_PROVIDER_ID,
+  cloudModelUnavailable,
+  type CloudModelUse,
+} from '@/shared/contracts/cloud';
 
 import {
   buildModelPickerGroups,
@@ -13,13 +19,16 @@ type UseModelPickerDataOptions = {
   modelType: ModelTypeFilter;
   providerId?: string;
   searchText?: string;
+  cloudUse?: CloudModelUse;
 };
 
 export function useModelPickerData({
   modelType,
   providerId,
   searchText = '',
+  cloudUse = 'agent',
 }: UseModelPickerDataOptions) {
+  const { state: cloud } = useCloud();
   const { isLoading: isModelsLoading, models } = useModels({
     enabled: true,
     isSystemSupported: true,
@@ -36,8 +45,31 @@ export function useModelPickerData({
     [enabledProviders, providerId],
   );
   const groups = useMemo(
-    () => buildModelPickerGroups({ modelType, models, providers, searchText }),
-    [modelType, models, providers, searchText],
+    () =>
+      buildModelPickerGroups({ modelType, models, providers, searchText })
+        .map((group) => {
+          if (group.provider.id !== CLOUD_PROVIDER_ID) return group;
+          return {
+            ...group,
+            items: group.items
+              .filter((item) => cloud.models.some((model) => model.id === item.model.modelId))
+              .map((item) => {
+                const entitlements =
+                  cloud.account?.entitlements.filter(
+                    (entry) =>
+                      entry.status === 'active' && entry.model_ids.includes(item.model.modelId),
+                  ) ?? [];
+                return {
+                  ...item,
+                  cloudUnavailable: cloudModelUnavailable(cloud, item.model.modelId, cloudUse),
+                  isCloudFree:
+                    entitlements.length > 0 && entitlements.every((entry) => entry.is_free),
+                };
+              }),
+          };
+        })
+        .filter((group) => group.items.length > 0),
+    [modelType, models, providers, searchText, cloud, cloudUse],
   );
   const modelItems = useMemo<ModelPickerModelItem[]>(
     () => groups.flatMap((group) => group.items),

@@ -10,6 +10,11 @@ export type AiFailureFacts = {
 };
 
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
+  cloud_signed_out: 'auth',
+  cloud_unavailable: 'provider_unavailable',
+  cloud_not_entitled: 'permission',
+  cloud_quota_exhausted: 'quota',
+  quota_exhausted: 'quota',
   authentication_error: 'auth',
   content_filter: 'content_filter',
   context_length_exceeded: 'context_length',
@@ -73,6 +78,10 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     .filter((value): value is string => Boolean(value))
     .join('\n')
     .toLowerCase();
+  const cloudCode = /\bcloud_(?:signed_out|unavailable|not_entitled|quota_exhausted)\b/.exec(
+    text,
+  )?.[0];
+  if (cloudCode && CODE_REASONS[cloudCode]) return CODE_REASONS[cloudCode];
   const embeddedStatus = text.match(
     /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/u,
   )?.[1];

@@ -1,7 +1,9 @@
+import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
+import type { CloudModule } from './cloud';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
@@ -20,6 +22,8 @@ import type { TranslationModule } from './translation';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly account: AccountModule;
+  readonly cloud: CloudModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;

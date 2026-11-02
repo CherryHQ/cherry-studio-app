@@ -1,0 +1,3 @@
+# Enterprise implementation stays in this public repository; its owner reviews changes to it.
+/src/backend/services/enterprise/ @zhangjiadi225
+/src/bootstrap/profile/ @zhangjiadi225

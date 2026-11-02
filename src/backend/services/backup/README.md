@@ -17,7 +17,11 @@ prefix of bundled SQLite migrations; different migration lineage, future formats
 objects are rejected. Custom SQL triggers are excluded from the structure comparison because restore
 normalization and `DbService` recreate them from the running bundle.
 
-Archives are unencrypted and include database-held model keys and remote server headers. They exclude
+An enterprise profile's archive keeps conversations and Agents and leaves out the organization's
+keys, instructions and other delivered resources. Each archive restores only into the data it came
+from: local data into the local profile, an enterprise archive into the same identity; see
+[Enterprise Edition](../../../../docs/references/enterprise.md#backup). Archives are unencrypted and
+include the user's own database-held model keys and remote server headers. They exclude
 SecureStore values, desktop pairing tokens, device permissions, caches, logs and extracted documents.
 System sharing presents save destinations; opening or dismissing the share sheet is not proof of
 successful saving.

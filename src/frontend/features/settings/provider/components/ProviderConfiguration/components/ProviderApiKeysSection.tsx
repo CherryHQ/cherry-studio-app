@@ -11,6 +11,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { withPolicy } from '@/frontend/components/Policy';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
@@ -29,11 +30,17 @@ import { ProviderApiKeySheet } from './ProviderApiKeySheet';
  * API keys as rows. Without any key the first one is typed straight into the card; after
  * that each key toggles in place and opens a sheet for its label or removal.
  */
-export function ProviderApiKeysSection({
+function ApiKeysSection({
   apiKeys,
+  editable = true,
+  revealsKeys = true,
   value,
 }: {
   apiKeys: readonly ApiKeyEntry[];
+  /** Keys can be added and reordered; an organization supplies its own instead. */
+  editable?: boolean;
+  /** Shows each key's masked value; an organization's key stays withheld. */
+  revealsKeys?: boolean;
   value: ProviderConfigurationValue;
 }) {
   const { t } = useTranslation();
@@ -57,7 +64,7 @@ export function ProviderApiKeysSection({
         }
       >
         <Section.Header title={t('settings.provider.apiService.keys.title')}>
-          {apiKeys.length > 1 ? (
+          {editable && apiKeys.length > 1 ? (
             <Button
               disabled={value.isBusy}
               onPress={() => setIsReordering(true)}
@@ -69,7 +76,7 @@ export function ProviderApiKeysSection({
             </Button>
           ) : null}
         </Section.Header>
-        {apiKeys.length === 0 ? (
+        {editable && apiKeys.length === 0 ? (
           <Section.Item>
             <FirstApiKeyField disabled={value.isBusy} onAdd={value.actions.addApiKey} />
           </Section.Item>
@@ -81,15 +88,23 @@ export function ProviderApiKeysSection({
             <Section.Item
               accessibilityLabel={t('settings.provider.apiService.keys.accessibleLabel', {
                 name,
-                key: maskProviderApiKey(entry.key),
+                key: revealsKeys ? maskProviderApiKey(entry.key) : t('enterprise.managed.hidden'),
               })}
               description={
                 <Text
                   className={
-                    error ? 'text-destructive text-sm' : 'font-mono text-muted-foreground text-sm'
+                    error
+                      ? 'text-destructive text-sm'
+                      : revealsKeys
+                        ? 'font-mono text-muted-foreground text-sm'
+                        : 'text-muted-foreground text-sm'
                   }
                 >
-                  {error ? t(API_KEY_ERROR_LABELS[error]) : maskProviderApiKey(entry.key)}
+                  {error
+                    ? t(API_KEY_ERROR_LABELS[error])
+                    : revealsKeys
+                      ? maskProviderApiKey(entry.key)
+                      : t('enterprise.managed.hidden')}
                 </Text>
               }
               disabled={value.isBusy}
@@ -111,7 +126,7 @@ export function ProviderApiKeysSection({
             />
           );
         })}
-        {apiKeys.length > 0 ? (
+        {editable && apiKeys.length > 0 ? (
           <Section.Item
             accessibilityLabel={t('settings.provider.apiService.keys.add')}
             disabled={value.isBusy}
@@ -128,7 +143,7 @@ export function ProviderApiKeysSection({
             testID="provider-api-key-add"
           />
         ) : null}
-        {value.apiKeyUrl ? (
+        {editable && value.apiKeyUrl ? (
           <Section.Item
             accessibilityRole="link"
             label={t('onboarding.connection.getKey')}
@@ -263,3 +278,9 @@ function FirstApiKeyField({
     </View>
   );
 }
+
+/** An organization's keys stay listed but withheld, without ways to add or reorder them. */
+export const ProviderApiKeysSection = withPolicy(ApiKeysSection, (policy) => ({
+  editable: policy.canEdit('provider'),
+  revealsKeys: policy.revealsSecrets,
+}));

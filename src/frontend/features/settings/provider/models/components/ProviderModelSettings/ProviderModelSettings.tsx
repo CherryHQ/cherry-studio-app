@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
+import { PolicySelectItem } from '@/frontend/components/Policy';
+
 import { ProviderValueSheet } from '../../../components/ProviderValueSheet';
 import type { ProviderModelAddEndpoint } from '../../utils/providerModelAdd';
 import {
@@ -34,7 +36,8 @@ const LIMIT_FIELDS: readonly ProviderModelLimitField[] = [
 
 /**
  * A model's settings as rows, shared by model details and adding a model. Switches change in
- * place; names, limits, notes and pricing open a sheet that edits a copy until Save.
+ * place; names, limits, notes and pricing open a sheet that edits a copy until Save. Inside a
+ * locked group the same rows render locked; copying the model ID still works.
  */
 export function ProviderModelSettings({ value }: { value: ProviderModelSettingsValue }) {
   const { t } = useTranslation();
@@ -147,6 +150,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
           <Section.Item
             accessibilityHint={t('settings.provider.models.detail.copyId')}
             label={t('settings.provider.models.detail.modelId')}
+            locked={false}
             onPress={() => void copyModelId(value.modelId ?? '')}
             showChevron={false}
             testID="model-setting-modelId"
@@ -167,7 +171,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
           value={value.primaryType}
         />
         {!isVoiceModel ? (
-          <Section.SelectItem
+          <PolicySelectItem
             accessibilityLabel={`${t('settings.provider.models.addEndpointTypeLabel')}, ${value.endpoint.label}`}
             description={
               value.endpoint.error ? (
@@ -175,6 +179,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
               ) : undefined
             }
             disabled={disabled || value.endpoint.disabled}
+            field="model"
             label={t('settings.provider.models.addEndpointTypeLabel')}
             onPress={() => {
               Keyboard.dismiss();

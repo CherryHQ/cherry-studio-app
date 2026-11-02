@@ -1,3 +1,4 @@
+import { installDiagnosticContextReader } from '@/backend/utils/diagnosticContext';
 import {
   createLogRecord,
   flushLogWriter,
@@ -51,6 +52,7 @@ function persisted() {
 }
 
 beforeEach(() => {
+  installDiagnosticContextReader(() => ({}));
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-17T12:00:00Z'));
   mockFiles.clear();
@@ -58,6 +60,34 @@ beforeEach(() => {
   mockList.mockReset();
   mockList.mockReturnValue([]);
   mockAppend.mockClear();
+});
+
+test('captures context before buffering and keeps identity/version changes out of the same repeat group', () => {
+  let context = { accountSubjectId: 'user-a', appVersion: '0.5.0' };
+  installDiagnosticContextReader(() => context);
+  const writer = createDiagnosticLogWriter();
+  writer(startup(1));
+  context = { accountSubjectId: 'user-b', appVersion: '0.5.0' };
+  writer.flush?.();
+  expect(persisted()[0].environment.accountSubjectId).toBe('user-a');
+
+  const error = createLogRecord('error', 'HTTP request failed.', 'HttpTransport', {}, []);
+  writer(error);
+  writer(error);
+  context = { accountSubjectId: 'user-c', appVersion: '0.5.0' };
+  writer(error);
+  writer(error);
+  context = { accountSubjectId: 'user-c', appVersion: '0.5.1' };
+  writer(error);
+  writer(error);
+  writer.flush?.();
+  const summaries = persisted().filter((record) => record.repetition);
+  expect(summaries.map((record) => record.environment)).toEqual([
+    { accountSubjectId: 'user-b', appVersion: '0.5.0' },
+    { accountSubjectId: 'user-c', appVersion: '0.5.0' },
+    { accountSubjectId: 'user-c', appVersion: '0.5.1' },
+  ]);
+  expect(summaries.map((record) => record.repetition.count)).toEqual([1, 1, 1]);
 });
 
 afterEach(() => {

@@ -22,6 +22,12 @@ existing deep module over a new registry or pass-through wrapper. Read
 Frontend tests inject an `ApiClient` fake through `DataApiProvider`. Handler and persistence tests
 exercise observable endpoint and storage behavior independently.
 
+For resources an organization can own, enforce [Enterprise Edition](../references/enterprise.md)
+rules at the final persistence operation, including authorization, import, batch and tool-driven
+writes. Read ownership inside the write transaction; hiding a page action is not a write guard.
+Cover local data, user-created enterprise resources and organization-managed resources in the
+owning service's regressions.
+
 ## Add A Workflow Capability
 
 1. Define or extend a narrow `XxxModule` interface in `src/shared/contracts` only when the behavior
@@ -43,6 +49,10 @@ workflow interface and observable results.
 - Expose frontend access through a Data API endpoint, not a new `Backend` module.
 - Keep resource-specific composition in the owning frontend hook or page, not in shared or
   backend code.
+- Resolve profile-owned files through `storagePaths` and name profile-owned key-value stores and
+  credentials with `profileScopedName`. Installation-wide state needs an explicit owner and reason.
+  Backup restore must invalidate device authorization references so another profile cannot inherit
+  their credentials. See [Enterprise Edition](../references/enterprise.md#data-profiles).
 
 New Agent message-part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts` (the
 transitional home of types `packages/ai-runtime` imports); render

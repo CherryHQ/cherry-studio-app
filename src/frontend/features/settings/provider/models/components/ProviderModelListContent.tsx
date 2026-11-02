@@ -2,6 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import {
   Button,
   ContextMenu,
+  LockedGroupSlice,
   ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
@@ -41,7 +42,9 @@ export type ProviderModelListContentProps = {
   management?: ReturnType<typeof useProviderModelManagement>;
   ListEmptyComponent?: ReactElement;
   isEndpointSelectionDisabled?: boolean;
-  models: Model[];
+  /** Draws the list inside one locked group: an organization supplies these models. */
+  locked?: boolean;
+  models: readonly Model[];
   onEndpointPress?: (model: Model) => void;
   provider: Provider | undefined;
   updatingModelId?: string;
@@ -62,6 +65,7 @@ export function ProviderModelListContent({
   supportedModelIds,
   isEndpointSelectionDisabled = false,
   ListEmptyComponent,
+  locked = false,
   models,
   onEndpointPress,
   provider,
@@ -91,7 +95,7 @@ export function ProviderModelListContent({
       updatingModelId,
     ],
   );
-  const renderItem = useCallback(
+  const renderListItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
       if (item.type === 'section') {
         return (
@@ -151,12 +155,26 @@ export function ProviderModelListContent({
         );
       }
       return (
-        <ProviderModelRow model={item.model} provider={itemProvider} variant="management">
+        <DetailModelRow model={item.model} provider={itemProvider}>
           {endpointButton}
-        </ProviderModelRow>
+        </DetailModelRow>
       );
     },
     [t],
+  );
+  const lastIndex = listItems.length - 1;
+  const renderItem = useCallback(
+    (props: LegendListRenderItemProps<ProviderModelListItem>) =>
+      locked ? (
+        <View className="mx-4">
+          <LockedGroupSlice isFirst={props.index === 0} isLast={props.index === lastIndex}>
+            {renderListItem(props)}
+          </LockedGroupSlice>
+        </View>
+      ) : (
+        renderListItem(props)
+      ),
+    [lastIndex, locked, renderListItem],
   );
 
   return (
@@ -186,6 +204,36 @@ export function ProviderModelListContent({
   );
 }
 
+/** A row without management actions still opens the model's details. */
+function DetailModelRow({
+  children,
+  model,
+  provider,
+}: {
+  children: ReactElement | null;
+  model: Model;
+  provider: Provider | undefined;
+}) {
+  const router = useRouter();
+  return (
+    <ProviderModelRow
+      model={model}
+      provider={provider}
+      variant="management"
+      onPress={() => openModelDetails(router, model)}
+    >
+      {children}
+    </ProviderModelRow>
+  );
+}
+
+function openModelDetails(router: ReturnType<typeof useRouter>, model: Model) {
+  router.push({
+    pathname: '/settings/provider/[providerId]/model',
+    params: { providerId: model.providerId, modelId: model.id },
+  });
+}
+
 function ManagedModelRow({
   model,
   provider,
@@ -211,11 +259,7 @@ function ManagedModelRow({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const openModel = () =>
-    router.push({
-      pathname: '/settings/provider/[providerId]/model',
-      params: { providerId: model.providerId, modelId: model.id },
-    });
+  const openModel = () => openModelDetails(router, model);
   const items: readonly MenuItem[] = [
     {
       id: 'detail',

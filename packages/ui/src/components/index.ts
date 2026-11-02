@@ -14,6 +14,7 @@ export * from './image-preview-toolbar';
 export * from './info-popover';
 export * from './input';
 export * from './loading';
+export * from './locked';
 export * from './markdown-text';
 export * from './menu';
 export * from './message-part';

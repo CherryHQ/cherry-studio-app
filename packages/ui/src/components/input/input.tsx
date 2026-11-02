@@ -8,6 +8,7 @@ import {
   StyleSheet,
   type TextInputProps,
   useWindowDimensions,
+  Text,
   View,
   type TextInputInstance,
 } from 'react-native';
@@ -23,6 +24,9 @@ import { useCSSVariable } from 'uniwind';
 import { duration, easing } from '../../motion';
 import { cn } from '../../utils';
 import { Button } from '../button';
+import { useIsInLockedGroup, useLocked } from '../locked/locked-context';
+import { LockedMark } from '../locked/locked-mark';
+import { LockedTrigger } from '../locked/locked-trigger';
 import { useTextFieldState } from '../text-field/text-field-context';
 import type { InputPasswordProps, InputProps, InputTextProps } from './input.types';
 import { useFieldText } from './use-field-text';
@@ -60,6 +64,7 @@ function NativeInput({
   disabled,
   invalid,
   keyboardType,
+  locked: _locked,
   multiline = false,
   maxFontSizeMultiplier,
   onChangeText,
@@ -170,6 +175,7 @@ function PasswordInput({
   blurOnVisibilityToggle = false,
   disabled,
   invalid,
+  locked: _locked,
   ref,
   style,
   testID,
@@ -268,7 +274,39 @@ function PasswordInput({
 }
 
 export function Input(props: InputProps) {
+  if (useLocked(props.locked)) return <LockedInput {...props} />;
   return props.type === 'password' ? <PasswordInput {...props} /> : <NativeInput {...props} />;
+}
+
+/**
+ * A value someone else owns: a borderless filled field that cannot take focus, with the owner's
+ * mark at its end. A password never shows its characters; the placeholder names what is withheld.
+ */
+function LockedInput(props: InputProps) {
+  const { accessibilityLabel, placeholder, testID, value } = props;
+  const multiline = props.type === 'password' ? false : props.multiline;
+  const shown = props.type === 'password' ? '' : value;
+  // Inside a locked group the group's header already names the owner.
+  const inGroup = useIsInLockedGroup();
+  return (
+    <LockedTrigger accessibilityLabel={accessibilityLabel} testID={testID}>
+      <View
+        className="min-h-10 flex-row items-center gap-2 rounded-lg bg-secondary px-3 py-2"
+        style={styles.root}
+      >
+        <Text
+          className={cn(
+            'min-w-0 flex-1 text-base',
+            shown ? 'text-foreground' : 'text-muted-foreground',
+          )}
+          numberOfLines={multiline ? undefined : 1}
+        >
+          {shown || placeholder}
+        </Text>
+        {inGroup ? null : <LockedMark />}
+      </View>
+    </LockedTrigger>
+  );
 }
 
 const styles = StyleSheet.create({

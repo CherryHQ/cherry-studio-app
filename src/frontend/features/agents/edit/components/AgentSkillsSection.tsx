@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, Text, View } from 'react-native';
 
+import { withPolicy } from '@/frontend/components/Policy';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
@@ -16,16 +17,19 @@ type AgentSkillsSectionProps = {
   /** Draft binding state keyed by Skill id; absent means unbound. */
   bindings: ReadonlyMap<string, boolean>;
   onChange: (updates: AgentSkillUpdate[]) => void;
+  /** Lists only the bound Skills, without descriptions or the library link. */
+  readOnly?: boolean;
 };
 
 /**
  * Only enabled bindings appear in the editor. Adding an installed Skill is a
  * separate choice; installation and updates remain in the Skill library.
  */
-export function AgentSkillsSection({
+function SkillsSection({
   agentId,
   bindings,
   onChange,
+  readOnly = false,
   skills,
 }: AgentSkillsSectionProps) {
   const { t } = useTranslation();
@@ -36,6 +40,8 @@ export function AgentSkillsSection({
     (skill) => bindings.get(skill.id) !== true && skill.isEnabled && !skill.isPackageMissing,
   );
 
+  if (readOnly && enabledSkills.length === 0) return null;
+
   return (
     <>
       <Section
@@ -45,41 +51,48 @@ export function AgentSkillsSection({
         {enabledSkills.map((skill) => (
           <Section.Item
             description={
-              <View className="gap-0.5">
-                <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-                  {skill.description}
-                </Text>
-                {skill.isPackageMissing ? (
-                  <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
-                ) : null}
-              </View>
+              readOnly ? undefined : (
+                <View className="gap-0.5">
+                  <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+                    {skill.description}
+                  </Text>
+                  {skill.isPackageMissing ? (
+                    <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
+                  ) : null}
+                </View>
+              )
             }
             key={skill.id}
             label={skill.name}
+            locked={readOnly}
             trailing={
-              <Button
-                accessibilityLabel={t('agent.skills.removeAccessibilityLabel', {
-                  name: skill.name,
-                })}
-                icon={<TrashIcon />}
-                onPress={() => onChange([{ isEnabled: null, skillId: skill.id }])}
-                size="xs"
-                variant="ghost"
-              />
+              readOnly ? undefined : (
+                <Button
+                  accessibilityLabel={t('agent.skills.removeAccessibilityLabel', {
+                    name: skill.name,
+                  })}
+                  icon={<TrashIcon />}
+                  onPress={() => onChange([{ isEnabled: null, skillId: skill.id }])}
+                  size="xs"
+                  variant="ghost"
+                />
+              )
             }
           />
         ))}
-        <Section.Item
-          label={t('agent.skills.add')}
-          onPress={() => {
-            Keyboard.dismiss();
-            setIsAdding(true);
-          }}
-        />
+        {readOnly ? null : (
+          <Section.Item
+            label={t('agent.skills.add')}
+            onPress={() => {
+              Keyboard.dismiss();
+              setIsAdding(true);
+            }}
+          />
+        )}
       </Section>
       <BottomSheet
         onClose={() => setIsAdding(false)}
-        open={isAdding}
+        open={!readOnly && isAdding}
         size="medium"
         title={t('agent.skills.add')}
       >
@@ -111,3 +124,8 @@ export function AgentSkillsSection({
     </>
   );
 }
+
+/** Only the read-only listing appears once the organization owns the bindings. */
+export const AgentSkillsSection = withPolicy(SkillsSection, (policy, { readOnly }) =>
+  readOnly || policy.canBind ? {} : null,
+);

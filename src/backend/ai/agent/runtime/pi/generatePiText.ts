@@ -38,7 +38,14 @@ export async function generatePiText(
   try {
     signal.throwIfAborted();
     const resolved = await raceAbort(
-      dependencies.resolveModel(request.model, request.options, requestId, undefined, signal),
+      dependencies.resolveModel(
+        request.model,
+        request.options,
+        requestId,
+        undefined,
+        signal,
+        'general',
+      ),
       signal,
     );
     secrets = resolved.redactionValues;

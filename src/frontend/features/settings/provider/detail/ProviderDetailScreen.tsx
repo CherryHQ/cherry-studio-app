@@ -9,8 +9,10 @@ import { Text, View } from 'react-native';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { withCapability } from '@/frontend/components/Policy';
 import { SelectionToolbar } from '@/frontend/components/Selection';
 import { useBackendModule, useQuery } from '@/frontend/data';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -29,6 +31,7 @@ import {
   hasMultipleProviderModelPurposes,
   type ProviderModelPurpose,
 } from '../models/utils/providerModelPurpose';
+import { ManagedProviderDetail } from './components/ManagedProviderDetail';
 import { ProviderDetailTabs } from './components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './components/ProviderDetailTabs/types';
 import { ProviderModelList } from './components/ProviderModelList';
@@ -43,11 +46,17 @@ export default function ProviderDetailSettingsScreen() {
   if (!providerId) {
     return <Redirect href="/settings/provider" />;
   }
+  if (providerId === CLOUD_PROVIDER_ID) return <Redirect href="/settings/profile/subscription" />;
 
-  return (
-    <ProviderDetailSettings key={providerId} providerId={providerId} providerName={providerName} />
-  );
+  return <ProviderDetail key={providerId} providerId={providerId} providerName={providerName} />;
 }
+
+/** Organization providers open read-only. */
+const ProviderDetail = withCapability(
+  'providerSettings',
+  ProviderDetailSettings,
+  ManagedProviderDetail,
+);
 
 function ProviderDetailSettings({
   providerId,
