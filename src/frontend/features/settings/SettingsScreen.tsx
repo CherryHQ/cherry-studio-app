@@ -1,3 +1,4 @@
+import ActivityIcon from '@cherrystudio/app-icons/icons/activity';
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
@@ -54,6 +55,12 @@ export default function SettingsScreen() {
               label={t('settings.items.defaultModel')}
               leading={<PackageIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/model')}
+            />
+            <Section.Item
+              label={t('aiUsage.title')}
+              leading={<ActivityIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/home/ai-usage')}
+              testID="settings-ai-usage"
             />
           </Section>
           <Section>

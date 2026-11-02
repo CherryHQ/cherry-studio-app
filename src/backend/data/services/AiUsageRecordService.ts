@@ -28,6 +28,12 @@ import {
   type InsertAiUsageRecordRow,
 } from '@/backend/data/db/schemas/aiUsageRecord';
 import type {
+  AiUsageRecordAnalyticsQuery,
+  AiUsageRecordAnalyticsQueryParams,
+  AiUsageRecordAnalyticsResponse,
+  AiUsageRecordFilters,
+  AiUsageRecordGranularity,
+  AiUsageRecordPerformanceSummary,
   AiUsageRecordGroupBy,
   AiUsageRecordListQuery,
   AiUsageRecordListQueryParams,
@@ -45,6 +51,7 @@ import type {
   AiUsageRecordTimelineResponse,
 } from '@/shared/data/api/schemas/aiUsageRecords';
 import {
+  AiUsageRecordAnalyticsQuerySchema,
   AiUsageRecordListQuerySchema,
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
@@ -62,6 +69,7 @@ import type {
 import { getAiUsageRecordTotalTokens } from '@/shared/data/types/aiUsageRecord';
 import type { MessageStats } from '@/shared/data/types/messageStats';
 import type { Currency } from '@/shared/data/types/model';
+import { getAiUsageRecordTokensPerSecond } from '@/shared/utils/aiUsage';
 
 import { timestampToISO } from './utils/rowMappers';
 
@@ -347,22 +355,6 @@ function tokensPerSecondValue(): SQL<number | null> {
   END`;
 }
 
-function getTokensPerSecond(row: AiUsageRecordRow): number | null {
-  if (
-    row.outputTokens === null ||
-    row.outputTokens <= 0 ||
-    row.timeCompletionMs === null ||
-    row.timeCompletionMs <= 0
-  ) {
-    return null;
-  }
-  const generationMs =
-    row.timeFirstTokenMs !== null && row.timeFirstTokenMs < row.timeCompletionMs
-      ? row.timeCompletionMs - row.timeFirstTokenMs
-      : row.timeCompletionMs;
-  return row.outputTokens / (generationMs / 1000);
-}
-
 function getListSortValue(row: AiUsageRecordRow, sortBy: ListSortBy): number | null {
   switch (sortBy) {
     case 'createdAt':
@@ -374,7 +366,7 @@ function getListSortValue(row: AiUsageRecordRow, sortBy: ListSortBy): number | n
     case 'timeFirstTokenMs':
       return row.timeFirstTokenMs;
     case 'tokensPerSecond':
-      return getTokensPerSecond(row);
+      return getAiUsageRecordTokensPerSecond(row);
   }
 }
 
@@ -439,7 +431,7 @@ async function listAiUsageRecords(
   db: Database,
   query: AiUsageRecordListQuery,
 ): Promise<AiUsageRecordListResponse> {
-  const filterConditions: SQL[] = [];
+  const filterConditions = usageFilterConditions(query);
   if (query.from !== undefined)
     filterConditions.push(gte(aiUsageRecordTable.createdAt, query.from));
   if (query.to !== undefined) filterConditions.push(lte(aiUsageRecordTable.createdAt, query.to));
@@ -449,7 +441,7 @@ async function listAiUsageRecords(
       eq(aiUsageRecordTable.messageId, query.messageId),
     );
   }
-  if (query.sortBy === 'cost' && query.costCurrency) {
+  if (query.costCurrency) {
     filterConditions.push(eq(aiUsageRecordTable.costCurrency, query.costCurrency));
   }
   const filterWhere = filterConditions.length > 0 ? and(...filterConditions) : undefined;
@@ -626,8 +618,48 @@ function toStatsGroupIdentity(
   }
 }
 
-function rangeConditions(query: { from: number; to: number }): SQL[] {
+function usageFilterConditions(query: AiUsageRecordFilters): SQL[] {
+  const conditions: SQL[] = [];
+  const identities = [
+    'providerId',
+    'modelId',
+    'sourceType',
+    'sourceId',
+    'apiKeyId',
+    'apiKeyAttribution',
+    'authMethod',
+    'modality',
+  ] as const;
+  for (const key of identities) {
+    const value = query[key];
+    if (value !== undefined) conditions.push(nullableIdentity(aiUsageRecordTable[key], value));
+  }
+  if (query.search) {
+    // instr treats user '%' and '_' literally; search never exposes credentials.
+    const search = query.search;
+    conditions.push(
+      requiredCondition(
+        or(
+          ...[
+            aiUsageRecordTable.modelId,
+            aiUsageRecordTable.modelName,
+            aiUsageRecordTable.providerId,
+            aiUsageRecordTable.providerName,
+            aiUsageRecordTable.sourceId,
+            aiUsageRecordTable.sourceName,
+            aiUsageRecordTable.apiKeyLabel,
+            aiUsageRecordTable.apiKeyMasked,
+          ].map((column) => sql`instr(lower(coalesce(${column}, '')), lower(${search})) > 0`),
+        ),
+      ),
+    );
+  }
+  return conditions;
+}
+
+function rangeConditions(query: { from: number; to: number } & AiUsageRecordFilters): SQL[] {
   return [
+    ...usageFilterConditions(query),
     gte(aiUsageRecordTable.createdAt, query.from),
     lte(aiUsageRecordTable.createdAt, query.to),
   ];
@@ -643,6 +675,12 @@ function totalTokensSum(): SQL<number> {
   return sql<number>`coalesce(sum(${totalTokensValue()}), 0)`;
 }
 
+function currencyRecordCount(currency: Currency | undefined): SQL<number> {
+  return currency
+    ? sql<number>`coalesce(sum(case when ${aiUsageRecordTable.costCurrency} = ${currency} then 1 else 0 end), 0)`
+    : sql<number>`0`;
+}
+
 function metricsSelect(currency: Currency | undefined) {
   return {
     totalCost: scopedCostSum(currency),
@@ -653,6 +691,8 @@ function metricsSelect(currency: Currency | undefined) {
     totalCacheReadTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.cacheReadTokens}), 0)`,
     totalCacheWriteTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.cacheWriteTokens}), 0)`,
     recordCount: sql<number>`count(*)`,
+    tokenRecordCount: sql<number>`count(${totalTokensValue()})`,
+    costRecordCount: currencyRecordCount(currency),
     requestCount: sql<number>`coalesce(sum(${aiUsageRecordTable.requestCount}), 0)`,
     estimatedRequestCount: sql<number>`coalesce(sum(CASE WHEN ${aiUsageRecordTable.recordKind} = 'legacy-aggregate' THEN ${aiUsageRecordTable.requestCount} ELSE 0 END), 0)`,
     unpricedRequestCount: sql<number>`coalesce(sum(CASE WHEN ${aiUsageRecordTable.cost} IS NULL THEN ${aiUsageRecordTable.requestCount} ELSE 0 END), 0)`,
@@ -681,6 +721,8 @@ function subtractMetrics(
     totalCacheReadTokens: subtract((value) => value.totalCacheReadTokens),
     totalCacheWriteTokens: subtract((value) => value.totalCacheWriteTokens),
     recordCount: subtract((value) => value.recordCount),
+    tokenRecordCount: subtract((value) => value.tokenRecordCount),
+    costRecordCount: subtract((value) => value.costRecordCount),
     requestCount: subtract((value) => value.requestCount),
     estimatedRequestCount: subtract((value) => value.estimatedRequestCount),
     unpricedRequestCount: subtract((value) => value.unpricedRequestCount),
@@ -777,6 +819,8 @@ function toTimelineMetrics(
     totalCacheReadTokens: number;
     totalCacheWriteTokens: number;
     recordCount: number;
+    tokenRecordCount: number;
+    costRecordCount: number;
     requestCount: number;
     estimatedRequestCount: number;
     unpricedRequestCount: number;
@@ -789,10 +833,16 @@ function toTimelineMetrics(
 async function getAiUsageRecordTimeline(
   db: Database,
   query: AiUsageRecordTimelineQuery,
+  granularity: AiUsageRecordGranularity = 'day',
 ): Promise<AiUsageRecordTimelineResponse> {
   const baseConditions = rangeConditions(query);
   const where = and(...baseConditions);
-  const dayBucket = sql<string>`date(${aiUsageRecordTable.createdAt} / 1000, 'unixepoch', 'localtime')`;
+  const dayBucket =
+    granularity === 'year'
+      ? sql<string>`strftime('%Y-01-01', ${aiUsageRecordTable.createdAt} / 1000, 'unixepoch', 'localtime')`
+      : granularity === 'month'
+        ? sql<string>`date(${aiUsageRecordTable.createdAt} / 1000, 'unixepoch', 'localtime', 'start of month')`
+        : sql<string>`date(${aiUsageRecordTable.createdAt} / 1000, 'unixepoch', 'localtime')`;
   const timelineMetrics = {
     totalCost: scopedCostSum(query.currency),
     totalTokens: totalTokensSum(),
@@ -800,6 +850,8 @@ async function getAiUsageRecordTimeline(
     totalCacheReadTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.cacheReadTokens}), 0)`,
     totalCacheWriteTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.cacheWriteTokens}), 0)`,
     recordCount: sql<number>`count(*)`,
+    tokenRecordCount: sql<number>`count(${totalTokensValue()})`,
+    costRecordCount: currencyRecordCount(query.currency),
     requestCount: sql<number>`coalesce(sum(${aiUsageRecordTable.requestCount}), 0)`,
     estimatedRequestCount: sql<number>`coalesce(sum(CASE WHEN ${aiUsageRecordTable.recordKind} = 'legacy-aggregate' THEN ${aiUsageRecordTable.requestCount} ELSE 0 END), 0)`,
     unpricedRequestCount: sql<number>`coalesce(sum(CASE WHEN ${aiUsageRecordTable.cost} IS NULL THEN ${aiUsageRecordTable.requestCount} ELSE 0 END), 0)`,
@@ -841,12 +893,8 @@ async function getAiUsageRecordTimeline(
   }
 
   const top = await getAiUsageRecordStats(db, {
+    ...query,
     groupBy: query.groupBy,
-    metric: query.metric,
-    currency: query.currency,
-    limit: query.limit,
-    from: query.from,
-    to: query.to,
   });
   const identityWhere = topGroupCondition(query.groupBy, top.buckets);
   if (!identityWhere) return { buckets: [], costTotals, dailyCosts };
@@ -899,6 +947,14 @@ async function getAiUsageRecordTimeline(
           total.totalCacheWriteTokens - sum((bucket) => bucket.totalCacheWriteTokens),
         ),
         recordCount,
+        tokenRecordCount: Math.max(
+          0,
+          total.tokenRecordCount - sum((bucket) => bucket.tokenRecordCount),
+        ),
+        costRecordCount: Math.max(
+          0,
+          total.costRecordCount - sum((bucket) => bucket.costRecordCount),
+        ),
         requestCount: Math.max(0, total.requestCount - sum((bucket) => bucket.requestCount)),
         estimatedRequestCount: Math.max(
           0,
@@ -913,6 +969,105 @@ async function getAiUsageRecordTimeline(
     ];
   });
   return { buckets: [...selected, ...other], costTotals, dailyCosts };
+}
+
+async function getPerformanceSummary(
+  db: Database,
+  where: SQL | undefined,
+  value: SQLWrapper,
+): Promise<AiUsageRecordPerformanceSummary> {
+  // Rank inside SQLite: full history does not transfer every timing sample to JS.
+  const samples = db
+    .select({ value: sql<number>`${value}`.as('sample_value') })
+    .from(aiUsageRecordTable)
+    .where(and(where, eq(aiUsageRecordTable.recordKind, 'invocation'), isNotNull(value)))
+    .as('usage_samples');
+  const ranked = db
+    .select({
+      value: samples.value,
+      rank: sql<number>`row_number() over (order by ${samples.value})`.as('sample_rank'),
+      count: sql<number>`count(*) over ()`.as('sample_count'),
+    })
+    .from(samples)
+    .as('ranked_usage_samples');
+  const [result] = await db
+    .select({
+      sampleCount: sql<number>`count(*)`,
+      average: sql<number | null>`avg(${ranked.value})`,
+      median: sql<
+        number | null
+      >`avg(case when ${ranked.rank} in ((${ranked.count} + 1) / 2, (${ranked.count} + 2) / 2) then ${ranked.value} end)`,
+      p95: sql<
+        number | null
+      >`max(case when ${ranked.rank} = (${ranked.count} * 95 + 99) / 100 then ${ranked.value} end)`,
+    })
+    .from(ranked);
+  return result;
+}
+
+async function getAiUsageRecordAnalytics(
+  db: Database,
+  query: AiUsageRecordAnalyticsQuery,
+): Promise<AiUsageRecordAnalyticsResponse> {
+  const where = and(...rangeConditions(query));
+  const sum = (column: AnySQLiteColumn) => sql<number | null>`sum(${column})`;
+  const [summary] = await db
+    .select({
+      firstRecordAt: sql<number | null>`min(${aiUsageRecordTable.createdAt})`,
+      totalTokens: sql<number | null>`sum(${totalTokensValue()})`,
+      inputTokens: sum(aiUsageRecordTable.inputTokens),
+      outputTokens: sum(aiUsageRecordTable.outputTokens),
+      reasoningTokens: sum(aiUsageRecordTable.reasoningTokens),
+      noCacheTokens: sum(aiUsageRecordTable.noCacheTokens),
+      cacheReadTokens: sum(aiUsageRecordTable.cacheReadTokens),
+      cacheWriteTokens: sum(aiUsageRecordTable.cacheWriteTokens),
+      imageCount: sum(aiUsageRecordTable.imageCount),
+      providerReportedRequestCount: sql<number>`coalesce(sum(case when ${aiUsageRecordTable.costSource} = 'provider' then ${aiUsageRecordTable.requestCount} else 0 end), 0)`,
+      computedRequestCount: sql<number>`coalesce(sum(case when ${aiUsageRecordTable.costSource} = 'computed' then ${aiUsageRecordTable.requestCount} else 0 end), 0)`,
+    })
+    .from(aiUsageRecordTable)
+    .where(where);
+  const { firstRecordAt, providerReportedRequestCount, computedRequestCount, ...composition } =
+    summary;
+  const days =
+    (query.to - (query.from === 0 ? (firstRecordAt ?? query.to) : query.from)) / 86_400_000;
+  const granularity = days <= 62 ? 'day' : days <= 3650 ? 'month' : 'year';
+  const stats = await getAiUsageRecordStats(db, query);
+  const timeline = await getAiUsageRecordTimeline(
+    db,
+    { ...query, groupBy: undefined },
+    granularity,
+  );
+  const performance = query.includePerformance
+    ? {
+        timeFirstTokenMs: await getPerformanceSummary(
+          db,
+          where,
+          aiUsageRecordTable.timeFirstTokenMs,
+        ),
+        timeCompletionMs: await getPerformanceSummary(
+          db,
+          where,
+          aiUsageRecordTable.timeCompletionMs,
+        ),
+        timeThinkingMs: await getPerformanceSummary(db, where, aiUsageRecordTable.timeThinkingMs),
+        tokensPerSecond: await getPerformanceSummary(
+          db,
+          and(where, eq(aiUsageRecordTable.modality, 'language')),
+          tokensPerSecondValue(),
+        ),
+      }
+    : undefined;
+  return {
+    stats,
+    timeline,
+    granularity,
+    firstRecordAt,
+    composition,
+    performance,
+    providerReportedRequestCount,
+    computedRequestCount,
+  };
 }
 
 function sumOptional(
@@ -1101,6 +1256,7 @@ export type CommittedAiInvocationUsage = Readonly<
 
 /** Endpoint caches a newly committed usage record invalidates. */
 const USAGE_ANALYTICS_PATHS = [
+  '/ai-usage-records/analytics',
   '/ai-usage-records',
   '/ai-usage-records/stats',
   '/ai-usage-records/timeline',
@@ -1196,6 +1352,15 @@ export class AiUsageRecordService {
         requestIds: inputs.map(({ requestId }) => requestId),
       });
     }
+  }
+
+  async analytics(
+    query: AiUsageRecordAnalyticsQueryParams,
+  ): Promise<AiUsageRecordAnalyticsResponse> {
+    return getAiUsageRecordAnalytics(
+      this.dbService.getDb(),
+      AiUsageRecordAnalyticsQuerySchema.parse(query),
+    );
   }
 
   async list(query: AiUsageRecordListQueryParams = {}): Promise<AiUsageRecordListResponse> {

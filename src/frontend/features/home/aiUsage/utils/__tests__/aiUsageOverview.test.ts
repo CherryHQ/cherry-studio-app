@@ -131,6 +131,8 @@ function bucket(date: string, totalTokens: number): AiUsageRecordTimelineBucket 
     date,
     estimatedRequestCount: 0,
     recordCount: 1,
+    tokenRecordCount: 1,
+    costRecordCount: 0,
     requestCount: 1,
     totalCacheReadTokens: 0,
     totalCacheWriteTokens: 0,
