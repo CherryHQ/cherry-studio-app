@@ -56,11 +56,11 @@ test('deduplicates concurrent requests and publishes ready only after verificati
   await first;
   expect(FileSystem.createDownloadResumable).toHaveBeenCalledTimes(1);
   expect(hashLocalFile).toHaveBeenCalledWith(
-    'file:///cache/app-updates/pending.apk',
+    'file:///cache/app-updates/update.apk.part',
     expect.any(AbortSignal),
   );
   expect(FileSystem.moveAsync).toHaveBeenCalledWith({
-    from: 'file:///cache/app-updates/pending.apk',
+    from: 'file:///cache/app-updates/update.apk.part',
     to: 'file:///cache/app-updates/update.apk',
   });
   expect(states).toEqual(['downloading', 'verifying', 'ready']);
@@ -121,9 +121,8 @@ test('cancellation during metadata loading joins cleanup without claiming failur
   await pending;
   expect(updates.getDownload()).toEqual({ status: 'idle' });
   expect(FileSystem.createDownloadResumable).not.toHaveBeenCalled();
-  expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///cache/app-updates/pending.apk', {
-    idempotent: true,
-  });
+  // Cancellation before asset metadata resolves never starts or mutates the shared file transfer.
+  expect(FileSystem.moveAsync).not.toHaveBeenCalled();
 });
 
 test('disposal rejects new transfers', async () => {

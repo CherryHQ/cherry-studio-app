@@ -8,12 +8,7 @@ import { PolicyDeletable, PolicyGroup, withResourcePolicy } from '@/frontend/com
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import {
-  isImageGenerationModel,
-  isSpeechToTextModel,
-  isTextGenerationModel,
-  isTextToSpeechModel,
-} from '@/shared/utils/modelPurpose';
+import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { SettingsScrollPage } from '../../../components/SettingsScrollPage';
 import {
@@ -46,11 +41,7 @@ function ModelDetailsView({ model, provider }: { model: Model; provider: Provide
       ? 'settings.provider.models.section.chat'
       : isImageGenerationModel(model)
         ? 'settings.provider.models.section.painting'
-        : isTextToSpeechModel(model)
-          ? 'settings.provider.models.classification.speech'
-          : isSpeechToTextModel(model)
-            ? 'settings.provider.models.classification.transcription'
-            : 'settings.provider.models.detail.otherPurpose',
+        : 'settings.provider.models.detail.otherPurpose',
   );
   return (
     <SettingsScrollPage

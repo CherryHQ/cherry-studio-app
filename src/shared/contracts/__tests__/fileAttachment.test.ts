@@ -91,6 +91,21 @@ describe('persisted attachment feedback', () => {
     ).toBe(false);
   });
 
+  test('persists audio reference delivery without persisting audio or transcript bodies', () => {
+    const part = {
+      ...filePart,
+      mediaType: 'audio/mp4',
+      attachmentReport: { mode: 'audio', sourceTruncated: false, requestTruncated: false },
+    };
+    expect(AgentMessagePartSchema.parse(JSON.parse(JSON.stringify(part)))).toEqual(part);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...part,
+        attachmentReport: { ...part.attachmentReport, audio: 'base64-data' },
+      }).success,
+    ).toBe(false);
+  });
+
   test('roundtrips deferred document and image delivery facts without allowing persisted IR', () => {
     const report = {
       mode: 'document-ir',

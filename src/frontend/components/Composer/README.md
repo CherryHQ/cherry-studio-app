@@ -68,7 +68,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   `children` trail the label inside the pill.
 - `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
   draft, its managed attachments, and the presentation transition for its
-  input context.
+  input context. Field changes go through `editDraft`; `subscribeDraftEdits` announces user edits
+  and accepted sends synchronously so operations such as dictation release ownership before the
+  text changes. `setDraft` remains for owned updates such as live dictation and send recovery.
 - `useComposerPresentationState` — exposes `isEditing` independently of native field focus,
   alongside dock keyboard tracking. Screens derive their expanded state from editing and content.
   When a software keyboard is involved, `isEditing` commits only after that keyboard has started

@@ -36,7 +36,7 @@ jest.mock('@/frontend/hooks/plugin', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachments: () => null,
   useComposerActions: () => ({ setDraft: mockNoop }),
-  useComposerState: () => ({ draft: '' }),
+  useComposerState: () => ({ draft: '', attachments: [] }),
 }));
 jest.mock('@/frontend/components/McpApp', () => ({
   useMcpAppConversation: () => undefined,
@@ -63,6 +63,7 @@ jest.mock('../ChatInputSurface', () => ({
     jest.requireActual('react').createElement('TextComposer', props),
   ChatInputSurface: () => null,
 }));
+jest.mock('../components/AudioAttachmentNotice', () => ({ AudioAttachmentNotice: () => null }));
 jest.mock('../components/ChatInputEffortOverlay', () => ({
   ChatInputEffortOverlay: ({ children }: { children: (value?: undefined) => ReactNode }) =>
     children(),

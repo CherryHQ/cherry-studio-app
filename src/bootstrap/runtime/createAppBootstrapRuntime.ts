@@ -212,9 +212,11 @@ export function createAppBootstrapRuntime(
     disposeSystemEntry,
     disposeAppUpdate,
     disposeSkills,
+    disposeVoice,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
+    agentHostDependencies: host.container.get('AgentHostDependencies'),
     resourceScopes: host.container.get('ResourceScopeCoordinator'),
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
@@ -295,7 +297,7 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Drain system-entry consumers before the host's resources.
+      // Drain system-entry consumers, Skill writes, and voice activity before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
@@ -303,6 +305,7 @@ export function createAppBootstrapRuntime(
         await Promise.all([
           disposeSystemEntry(),
           disposeSkills(),
+          disposeVoice(),
           disposeAppUpdate(),
           enterpriseSync.stop(),
         ]);

@@ -274,6 +274,7 @@ export function RemoteComposer({
         </ChatInputAccessories>
         <ChatInputSurface
           attachmentMode={supportsAttachments ? 'images' : 'text-only'}
+          dictation
           streaming={canStop}
           leadingAction={supportsAttachments ? <ComposerMenu /> : undefined}
           secondaryAction={

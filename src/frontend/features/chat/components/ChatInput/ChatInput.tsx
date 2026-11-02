@@ -39,6 +39,7 @@ import { attachMessageQuote } from '../../quotes/messageQuoteInput';
 import { DraftMessageQuotePreview } from '../../quotes/MessageQuotePreview';
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
+import { AudioAttachmentNotice } from './components/AudioAttachmentNotice';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
@@ -397,6 +398,7 @@ function TextChatInput({
                 <View>
                   <DraftMessageQuotePreview />
                   <ComposerAttachments />
+                  <AudioAttachmentNotice />
                   {mode === 'standard' ? <McpAppContextNotice /> : null}
                 </View>
               </ChatInputAccessories>
@@ -429,6 +431,7 @@ function TextChatInput({
                   />
                 }
                 trailingAction={effortGauge}
+                dictation
               />
             </ChatInputComposer>
           )}

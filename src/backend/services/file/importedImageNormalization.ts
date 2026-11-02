@@ -32,7 +32,7 @@ export type NormalizedImportedImage = {
   uri: string;
 };
 
-// A full-resolution decode is tens of megabytes; a multi-photo pick must not hold several at once.
+// Even bounded images retain pixels during encoding; a multi-photo pick must not hold several at once.
 let queue: Promise<unknown> = Promise.resolve();
 
 /**
@@ -139,7 +139,10 @@ async function encodeWithinLimit(
   format: SaveFormat,
   maxBytes: number,
 ): Promise<string | undefined> {
-  const sourceContext = ImageManipulator.manipulate(uri);
+  const sourceContext = ImageManipulator.manipulate(uri, {
+    maxHeight: MAX_DIMENSION,
+    maxWidth: MAX_DIMENSION,
+  });
   let sourceImage: Awaited<ReturnType<typeof sourceContext.renderAsync>> | undefined;
   try {
     sourceImage = await sourceContext.renderAsync();
@@ -149,7 +152,7 @@ async function encodeWithinLimit(
     }
     let scale = Math.min(1, MAX_DIMENSION / Math.max(width, height));
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      // Every attempt re-renders the original pixels, never an already lossy derivative.
+      // Reuse the bounded source pixels, never an already lossy derivative.
       const context = ImageManipulator.manipulate(sourceImage);
       let rendered: Awaited<ReturnType<typeof context.renderAsync>> | undefined;
       let encoded: File | undefined;
