@@ -23,9 +23,7 @@ export function DeviceConnectionDetailScreen() {
   const { alert } = useAlert();
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
   const { isRemoving, remove } = useDesktopConnectionActions();
-  const remoteDesktop = useUuRemoteAction(
-    connection ? { page: 'device', connectionId: connection.id } : undefined,
-  );
+  const remoteDesktop = useUuRemoteAction();
 
   const requestRemove = useCallback(() => {
     if (!connectionId || !connection) {
@@ -125,7 +123,7 @@ export function DeviceConnectionDetailScreen() {
           label={t('uuRemote.bind.title')}
           description={t('uuRemote.rebind.description')}
           disabled={remoteDesktop.isOpening}
-          onPress={remoteDesktop.bind}
+          onPress={() => remoteDesktop.bind({ page: 'device', connectionId: connection.id })}
         />
       </Section>
 

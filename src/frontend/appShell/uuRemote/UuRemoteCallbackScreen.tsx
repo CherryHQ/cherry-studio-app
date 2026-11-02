@@ -8,7 +8,7 @@ import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
 import { useBackendModule } from '@/frontend/data';
 import { UuRemoteError } from '@/shared/contracts/uuRemote';
 
-import { useUuRemoteFeedback } from './useUuRemoteFeedback';
+import { useUuRemoteAction } from './useUuRemoteAction';
 
 /** UU owns the PiP window. This route only consumes its one-shot result and restores Cherry. */
 export function UuRemoteCallbackScreen() {
@@ -16,7 +16,7 @@ export function UuRemoteCallbackScreen() {
   const uuRemote = useBackendModule('uuRemote');
   const router = useRouter();
   const { t } = useTranslation();
-  const reportError = useUuRemoteFeedback();
+  const { open, reportError } = useUuRemoteAction();
   const handled = useRef<string | null>(null);
 
   useEffect(() => {
@@ -45,14 +45,13 @@ export function UuRemoteCallbackScreen() {
               }),
         );
         if (result.outcome === 'bound') {
-          if ((await uuRemote.open(target)) === 'binding-required')
-            throw new UuRemoteError('binding-invalid');
+          await open(target, result.mode);
         } else if (result.outcome === 'failed') {
-          reportError(new UuRemoteError(result.reason));
+          reportError(new UuRemoteError(result.reason), target);
         }
       })
       .catch(reportError);
-  }, [url, uuRemote, router, reportError]);
+  }, [url, uuRemote, router, open, reportError]);
 
   return <ContentState.Loading title={t('uuRemote.returning')} />;
 }

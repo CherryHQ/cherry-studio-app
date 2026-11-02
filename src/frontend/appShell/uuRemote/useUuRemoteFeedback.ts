@@ -24,9 +24,16 @@ export function useUuRemoteFeedback() {
   const { toast } = useToast();
   const { t } = useTranslation();
 
-  return (error: unknown) => {
+  return (error: unknown, openFullscreen?: () => Promise<void>) => {
     const reason = error instanceof UuRemoteError ? error.reason : 'failed';
-    if (reason === 'not-installed') {
+    if (reason === 'pip-unsupported' && openFullscreen) {
+      alert.confirm({
+        title: t('uuRemote.fullscreen.title'),
+        description: t('uuRemote.fullscreen.description'),
+        confirmLabel: t('uuRemote.fullscreen.action'),
+        onConfirm: openFullscreen,
+      });
+    } else if (reason === 'not-installed') {
       alert.confirm({
         title: t('uuRemote.install.title'),
         description: t('uuRemote.install.description'),

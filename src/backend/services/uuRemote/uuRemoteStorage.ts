@@ -19,6 +19,7 @@ const TargetSchema = z.discriminatedUnion('page', [
 ]);
 const PendingSchema = z.object({
   kind: z.enum(['bind', 'control']),
+  mode: z.enum(['pip', 'fullscreen']),
   nonce: IdentifierSchema,
   target: TargetSchema,
   createdAt: z.number().finite(),

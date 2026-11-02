@@ -9,6 +9,8 @@ export type UuRemoteTarget =
     }
   | { page: 'device'; connectionId: string };
 
+export type UuRemoteWindowMode = 'pip' | 'fullscreen';
+
 export type UuRemoteFailure =
   | 'not-installed'
   | 'pip-unsupported'
@@ -30,14 +32,15 @@ export class UuRemoteError extends Error {
 }
 
 export type UuRemoteResult = { target: UuRemoteTarget } & (
-  | { outcome: 'bound' | 'opened' | 'cancelled' }
+  | { outcome: 'bound'; mode: UuRemoteWindowMode }
+  | { outcome: 'opened' | 'cancelled' }
   | { outcome: 'failed'; reason: UuRemoteFailure }
 );
 
 export interface UuRemoteModule {
-  /** Launches PiP for this Cherry desktop, or asks the UI to explain device association first. */
-  open(target: UuRemoteTarget): Promise<'opened' | 'binding-required'>;
+  /** Defaults to PiP. Fullscreen launches UU without a result callback or automatic return. */
+  open(target: UuRemoteTarget, mode?: UuRemoteWindowMode): Promise<'opened' | 'binding-required'>;
   /** The user must select the corresponding computer in UU; the protocol cannot verify its name. */
-  bind(target: UuRemoteTarget): Promise<void>;
+  bind(target: UuRemoteTarget, mode?: UuRemoteWindowMode): Promise<void>;
   receiveCallback(url: string): Promise<UuRemoteResult | null>;
 }

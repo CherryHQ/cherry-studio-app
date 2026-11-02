@@ -85,6 +85,7 @@ test('binding survives process replacement, preserves the return target and enco
   await expect(second.module.receiveCallback(callback)).resolves.toEqual({
     target,
     outcome: 'bound',
+    mode: 'pip',
   });
   expect(first.bindings.get(target.connectionId)).toBe(encryptedId);
   await expect(second.module.open(target)).resolves.toBe('opened');
@@ -112,7 +113,11 @@ test.each(['scheme', 'path', 'request', 'nonce', 'duplicate'])(
     await expect(module.receiveCallback(forged.toString())).resolves.toBeNull();
     expect(bindings.size).toBe(0);
     expect(await storage.readPending()).not.toBeNull();
-    await expect(module.receiveCallback(valid)).resolves.toEqual({ target, outcome: 'bound' });
+    await expect(module.receiveCallback(valid)).resolves.toEqual({
+      target,
+      outcome: 'bound',
+      mode: 'pip',
+    });
   },
 );
 
@@ -127,20 +132,24 @@ test('a replaced request and a replay cannot overwrite another computer associat
   await expect(module.receiveCallback(current)).resolves.toEqual({
     target: next,
     outcome: 'bound',
+    mode: 'pip',
   });
   await expect(module.receiveCallback(current)).resolves.toBeNull();
   expect([...bindings]).toEqual([['desktop-b', 'new']]);
 });
 
-test('a cancelled reassociation preserves the previous computer', async () => {
-  const { module, bindings } = setup();
-  bindings.set(target.connectionId, encryptedId);
-  await module.bind(target);
-  await expect(
-    module.receiveCallback(reply(lastRequest(), { error: 'user_cancel' })),
-  ).resolves.toEqual({ target, outcome: 'cancelled' });
-  expect(bindings.get(target.connectionId)).toBe(encryptedId);
-});
+test.each(['pip', 'fullscreen'] as const)(
+  'a cancelled %s reassociation preserves the previous computer',
+  async (mode) => {
+    const { module, bindings } = setup();
+    bindings.set(target.connectionId, encryptedId);
+    await module.bind(target, mode);
+    await expect(
+      module.receiveCallback(reply(lastRequest(), { error: 'user_cancel' })),
+    ).resolves.toEqual({ target, outcome: 'cancelled' });
+    expect(bindings.get(target.connectionId)).toBe(encryptedId);
+  },
+);
 
 test('an expired or removed-device callback cannot create a binding', async () => {
   const { module, storage, bindings, connectionExists } = setup();
@@ -214,11 +223,55 @@ test('missing installation and unsupported iOS do not leave a pending handoff', 
   const { module, storage } = setup();
   jest.mocked(Linking.canOpenURL).mockResolvedValue(false);
   await expect(module.bind(target)).rejects.toEqual(new UuRemoteError('not-installed'));
+  await expect(module.open(target, 'fullscreen')).rejects.toEqual(
+    new UuRemoteError('not-installed'),
+  );
+  jest.mocked(Linking.canOpenURL).mockResolvedValue(true);
   Object.defineProperty(Platform, 'Version', { configurable: true, value: '17.6' });
   await expect(module.open(target)).rejects.toEqual(new UuRemoteError('pip-unsupported'));
   expect(await storage.readPending()).toBeNull();
   expect(Linking.openURL).not.toHaveBeenCalled();
 });
+
+test('iOS before 18 retains the chosen fullscreen mode across association and process replacement', async () => {
+  Object.defineProperty(Platform, 'Version', { configurable: true, value: '17.6' });
+  const first = setup();
+  await expect(first.module.open(target)).rejects.toEqual(new UuRemoteError('pip-unsupported'));
+  await expect(first.module.open(target, 'fullscreen')).resolves.toBe('binding-required');
+  await first.module.bind(target, 'fullscreen');
+  const callback = reply(lastRequest(), { anonymous_device_id: encryptedId });
+  await first.dispose();
+
+  const second = first.create();
+  const result = await second.module.receiveCallback(callback);
+  expect(result).toEqual({ target, outcome: 'bound', mode: 'fullscreen' });
+  if (result?.outcome !== 'bound') throw new Error('Expected a binding callback');
+  await expect(second.module.open(result.target, result.mode)).resolves.toBe('opened');
+  expect(lastRequest().searchParams.get('window_type')).toBe('0');
+  expect(lastRequest().searchParams.has('callback')).toBe(false);
+  expect(await first.storage.readPending()).toBeNull();
+});
+
+test.each(['ios', 'android'])(
+  '%s fullscreen retires an older PiP callback without waiting for a new one',
+  async (platform) => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    const { module, bindings, storage } = setup();
+    bindings.set(target.connectionId, encryptedId);
+    await module.open(target);
+    const oldCallback = reply(lastRequest(), { status: 'success' });
+
+    await expect(module.open(target, 'fullscreen')).resolves.toBe('opened');
+    const request = lastRequest();
+    expect(request.pathname).toBe('/device/control');
+    expect(request.searchParams.get('anonymous_device_id')).toBe(encryptedId);
+    expect(request.searchParams.get('window_type')).toBe('0');
+    expect(request.searchParams.has('callback')).toBe(false);
+    expect(request.searchParams.has('nonce')).toBe(false);
+    expect(await storage.readPending()).toBeNull();
+    await expect(module.receiveCallback(oldCallback)).resolves.toBeNull();
+  },
+);
 
 test('Android uses the same PiP protocol without applying the iOS version gate', async () => {
   const { module, bindings } = setup();
@@ -230,9 +283,12 @@ test('Android uses the same PiP protocol without applying the iOS version gate',
 });
 
 test('failed launches clear the request, and disposed owners cannot launch', async () => {
-  const { module, storage, dispose } = setup();
+  const { module, storage, bindings, dispose } = setup();
   jest.mocked(Linking.openURL).mockRejectedValue(new Error('native failure'));
   await expect(module.bind(target)).rejects.toEqual(new UuRemoteError('failed'));
+  expect(await storage.readPending()).toBeNull();
+  bindings.set(target.connectionId, encryptedId);
+  await expect(module.open(target, 'fullscreen')).rejects.toEqual(new UuRemoteError('failed'));
   expect(await storage.readPending()).toBeNull();
   await dispose();
   jest.mocked(Linking.openURL).mockClear();

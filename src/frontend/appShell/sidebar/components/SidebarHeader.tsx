@@ -94,9 +94,7 @@ function SidebarDeviceTitle() {
     source === 'remote'
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
       : undefined;
-  const remoteDesktop = useUuRemoteAction(
-    current ? { ...remoteTarget, page: 'chat', connectionId: current.id } : undefined,
-  );
+  const remoteDesktop = useUuRemoteAction();
   const name = current?.name ?? brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
@@ -135,7 +133,7 @@ function SidebarDeviceTitle() {
             disabled: remoteDesktop.isOpening,
             onPress: () => {
               closeDrawer();
-              remoteDesktop.open();
+              void remoteDesktop.open({ ...remoteTarget, page: 'chat', connectionId: current.id });
             },
           },
         ]

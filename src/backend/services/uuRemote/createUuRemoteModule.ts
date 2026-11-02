@@ -8,6 +8,7 @@ import {
   type UuRemoteModule,
   type UuRemoteResult,
   type UuRemoteTarget,
+  type UuRemoteWindowMode,
 } from '@/shared/contracts/uuRemote';
 
 import { uuRemoteStorage, type UuRemotePending, type UuRemoteStorage } from './uuRemoteStorage';
@@ -43,12 +44,7 @@ export function createUuRemoteModule({
   }
 
   async function assertAvailable(target: UuRemoteTarget) {
-    if (
-      (Platform.OS !== 'ios' && Platform.OS !== 'android') ||
-      (Platform.OS === 'ios' && Number.parseInt(String(Platform.Version), 10) < 18)
-    ) {
-      throw new UuRemoteError('pip-unsupported');
-    }
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') throw new UuRemoteError('failed');
     if (!(await connectionExists(target.connectionId))) throw new UuRemoteError('binding-invalid');
     let installed: boolean;
     try {
@@ -60,27 +56,32 @@ export function createUuRemoteModule({
     assertActive();
   }
 
-  async function launch(target: UuRemoteTarget, deviceId: string | null) {
-    const callbackBase = nativeCallbackUrl(CALLBACK_PATH);
-    if (!callbackBase) throw new UuRemoteError('failed');
-    const nonce = randomUUID();
-    const callback = new URL(callbackBase);
-    callback.searchParams.set('request_id', nonce);
+  async function launch(target: UuRemoteTarget, deviceId: string | null, mode: UuRemoteWindowMode) {
     const url = new URL(`uuremote://external/device/${deviceId ? 'control' : 'authorize'}`);
-    url.searchParams.set('callback', callback.toString());
     if (deviceId) {
       url.searchParams.set('anonymous_device_id', deviceId);
-      url.searchParams.set('window_type', '1');
-    } else {
-      url.searchParams.set('nonce', nonce);
+      url.searchParams.set('window_type', mode === 'pip' ? '1' : '0');
     }
+    let pending: UuRemotePending | null = null;
+    if (!deviceId || mode === 'pip') {
+      const callbackBase = nativeCallbackUrl(CALLBACK_PATH);
+      if (!callbackBase) throw new UuRemoteError('failed');
+      const nonce = randomUUID();
+      const callback = new URL(callbackBase);
+      callback.searchParams.set('request_id', nonce);
+      url.searchParams.set('callback', callback.toString());
+      if (!deviceId) url.searchParams.set('nonce', nonce);
+      pending = {
+        kind: deviceId ? 'control' : 'bind',
+        mode,
+        nonce,
+        target,
+        createdAt: Date.now(),
+      };
+    }
+    // Fullscreen never calls back. Retire any prior handoff before opening it.
     assertActive();
-    await storage.writePending({
-      kind: deviceId ? 'control' : 'bind',
-      nonce,
-      target,
-      createdAt: Date.now(),
-    });
+    await storage.writePending(pending);
     try {
       assertActive();
       await Linking.openURL(url.toString());
@@ -92,18 +93,25 @@ export function createUuRemoteModule({
 
   return {
     module: {
-      open: (target) =>
+      open: (target, mode = 'pip') =>
         serialize<'opened' | 'binding-required'>(async () => {
           await assertAvailable(target);
+          if (
+            mode === 'pip' &&
+            Platform.OS === 'ios' &&
+            Number.parseInt(String(Platform.Version), 10) < 18
+          ) {
+            throw new UuRemoteError('pip-unsupported');
+          }
           const deviceId = await storage.readBinding(target.connectionId);
           if (!deviceId) return 'binding-required';
-          await launch(target, deviceId);
+          await launch(target, deviceId, mode);
           return 'opened';
         }),
-      bind: (target) =>
+      bind: (target, mode = 'pip') =>
         serialize(async () => {
           await assertAvailable(target);
-          await launch(target, null);
+          await launch(target, null, mode);
         }),
       receiveCallback: (rawUrl) =>
         serialize(async () => {
@@ -171,7 +179,7 @@ function parseResult(url: URL, pending: UuRemotePending): UuRemoteResult {
     const deviceId = singleParam(url, 'anonymous_device_id');
     const error = singleParam(url, 'error');
     if (deviceId && deviceId.length <= 8192 && !url.searchParams.has('error')) {
-      return { target, outcome: 'bound' };
+      return { target, outcome: 'bound', mode: pending.mode };
     }
     if (error && !url.searchParams.has('anonymous_device_id')) return failureResult(target, error);
   } else {
