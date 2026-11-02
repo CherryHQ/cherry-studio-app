@@ -320,3 +320,26 @@ function fact(
 function utf8(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
+
+test('audio stays a managed reference without reading or exposing the recording bytes', async () => {
+  const file = fact(FIRST_ID, 'meeting.m4a', 'audio/mp4');
+  const readBytes = jest.fn();
+  const readImageText = jest.fn();
+  const result = await resolveManagedContentAttachments({
+    availableFiles: new Map([[FIRST_ID, file]]),
+    currentFileEntryIds: [FIRST_ID],
+    readBytes,
+    readImageText,
+    signal: new AbortController().signal,
+    target: { purpose: 'chat', acceptsImages: false },
+  });
+  expect(readBytes).not.toHaveBeenCalled();
+  expect(readImageText).not.toHaveBeenCalled();
+  expect(result.get(FIRST_ID)).toMatchObject({
+    type: 'text-attachment',
+    fileEntryId: FIRST_ID,
+    mediaType: 'audio/mp4',
+    text: expect.stringContaining('transcribe_audio'),
+    attachmentReport: { mode: 'audio' },
+  });
+});

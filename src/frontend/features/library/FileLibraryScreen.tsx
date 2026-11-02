@@ -21,7 +21,9 @@ import {
 } from '@/frontend/components/Selection';
 import { useQuery } from '@/frontend/data/hooks';
 
+import { AudioTranscriptionSheet } from './components/AudioTranscriptionSheet';
 import { FileLibraryList } from './components/FileLibraryList';
+import { useAudioTranscription } from './hooks/useAudioTranscription';
 import type { FileLibraryFilter } from './hooks/useFileEntries';
 import { useFileLibraryItemActions } from './hooks/useFileLibraryItemActions';
 import type { FileLibraryBrowseMode } from './utils/constants';
@@ -42,7 +44,8 @@ function FileLibraryScreenBody() {
   const [browseMode, setBrowseMode] = useState<FileLibraryBrowseMode>('recent');
   const isBrowsingFolders = browseMode === 'folders';
   const [folderId, setFolderId] = useState<string | null>(null);
-  const itemActions = useFileLibraryItemActions();
+  const transcription = useAudioTranscription();
+  const itemActions = useFileLibraryItemActions(transcription.start);
   const { moving } = itemActions;
   const folders = useQuery('/files/folders');
   const { requestCreate, isCreating } = useCreateFileFolder(isBrowsingFolders ? folderId : null);
@@ -203,6 +206,13 @@ function FileLibraryScreenBody() {
           filter={filter}
         />
       </View>
+      {transcription.state ? (
+        <AudioTranscriptionSheet
+          state={transcription.state}
+          onClose={transcription.close}
+          onRetry={() => transcription.state && transcription.start(transcription.state.file)}
+        />
+      ) : null}
       {moving ? (
         <FileFolderPicker
           excludedFolderId={moving.kind === 'folder' ? moving.folder.id : undefined}

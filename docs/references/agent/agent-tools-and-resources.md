@@ -257,6 +257,16 @@ name search, and subfolder creation use `list_workspace`, `find_workspace_files`
 `create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
 live destination ancestry. Without a workspace, new outputs use the library root.
 
+Audio attachments are managed references, with no audio bytes in model input. When the native
+file decoder and selected offline transcription engine are ready, `transcribe_audio` accepts a conversation
+file reference or workspace-relative path. It creates a plain-text artifact in the captured workspace
+(or library root) and the Host grants it before the next `read_file` call. Like `write_file`, it is
+auto-approved. It uses the shared voice runtime and never uploads audio. SenseVoice needs no
+recognition permission; the optional system engine uses platform speech permissions, including
+Android’s required `RECORD_AUDIO` permission for file input.
+Limits are 100 MiB and two hours; unsupported/corrupt audio, unavailable models and cancellation do
+not produce partial documents. See [Voice Input And Speech](../voice.md#audio-file-transcription).
+
 The `fileLibrary` capability adds library search/read and management tools, enabled by default
 through the Agent's deny-list model. They follow the shared approval rule: reads
 (`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are

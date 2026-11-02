@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { hashLocalFile } from '@/backend/services/file/fileHash';
+import { downloadFile, FileDownloadError } from '@/backend/services/download';
 import type { ApkUpdateRelease, AppUpdateDownload } from '@/shared/contracts/appUpdate';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -27,97 +27,35 @@ export function createApkDownload() {
     controller: AbortController,
   ): Promise<AppUpdateDownload> {
     const { signal } = controller;
-    let pending: string | undefined;
-    let task: FileSystem.DownloadResumable | undefined;
-    let verification = false;
-    let cancelTask: Promise<void> | undefined;
-    const cancel = () => {
-      cancelTask ??= task?.cancelAsync().catch((error: unknown) => {
-        logger.warn('APK transfer cancellation failed', { error });
-      });
-    };
-    const timeout = setTimeout(
-      () => controller.abort(new Error('APK download timed out')),
-      30 * 60_000,
-    );
-    signal.addEventListener('abort', cancel, { once: true });
     try {
       if (!FileSystem.cacheDirectory) throw new Error('Update storage unavailable');
       const directory = `${FileSystem.cacheDirectory}app-updates/`;
-      pending = `${directory}pending.apk`;
-      const complete = `${directory}update.apk`;
-      await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
-      signal.throwIfAborted();
       const expectedHash = await readApkChecksum(release, signal);
-      const previous = await FileSystem.getInfoAsync(complete);
-      // A completed file survives process exit; reuse it only after fresh checksum verification.
-      if (
-        reuseCached &&
-        previous.exists &&
-        !previous.isDirectory &&
-        (await hashLocalFile(complete, signal)) === expectedHash
-      ) {
-        return { status: 'ready', release };
-      }
-      await FileSystem.deleteAsync(complete, { idempotent: true });
-      await FileSystem.deleteAsync(pending, { idempotent: true });
-      signal.throwIfAborted();
-      let lastPercent = -1;
-      let lastPublish = 0;
-      task = FileSystem.createDownloadResumable(release.downloadUrl, pending, {}, (progress) => {
-        if (signal.aborted) return;
-        const receivedBytes = progress.totalBytesWritten;
-        const totalBytes =
-          progress.totalBytesExpectedToWrite > 0 ? progress.totalBytesExpectedToWrite : null;
-        if (receivedBytes > MAX_APK_BYTES || (totalBytes !== null && totalBytes > MAX_APK_BYTES)) {
-          controller.abort(new Error('APK exceeds download limit'));
-          return;
-        }
-        const percent = totalBytes === null ? -1 : Math.floor((receivedBytes / totalBytes) * 100);
-        if (percent !== lastPercent || Date.now() - lastPublish >= 500) {
-          lastPercent = percent;
-          lastPublish = Date.now();
-          publish({ status: 'downloading', release, receivedBytes, totalBytes });
-        }
+      await downloadFile({
+        url: release.downloadUrl,
+        destination: `${directory}update.apk`,
+        sha256: expectedHash,
+        maxBytes: MAX_APK_BYTES,
+        timeoutMs: 30 * 60_000,
+        signal,
+        reuseCached,
+        onProgress: (progress) => publish({ ...progress, release }),
       });
-      const response = await task.downloadAsync();
-      signal.throwIfAborted();
-      if (!response || response.status < 200 || response.status >= 300)
-        throw new Error('APK download failed');
-      const downloaded = await FileSystem.getInfoAsync(pending);
-      if (
-        !downloaded.exists ||
-        downloaded.isDirectory ||
-        downloaded.size <= 0 ||
-        downloaded.size > MAX_APK_BYTES
-      ) {
-        throw new Error('Invalid APK download size');
-      }
-      verification = true;
-      publish({ status: 'verifying', release });
-      if ((await hashLocalFile(pending, signal)) !== expectedHash)
-        throw new Error('APK checksum mismatch');
-      signal.throwIfAborted();
-      await FileSystem.moveAsync({ from: pending, to: complete });
-      signal.throwIfAborted();
       return { status: 'ready', release };
     } catch (error) {
       if (signal.aborted && signal.reason?.name === 'AbortError') {
         return { status: 'idle' };
       } else {
         logger.warn('APK update transfer failed', { error });
-        return { status: 'failed', release, reason: verification ? 'verification' : 'download' };
+        return {
+          status: 'failed',
+          release,
+          reason:
+            error instanceof FileDownloadError && error.code === 'verification'
+              ? 'verification'
+              : 'download',
+        };
       }
-    } finally {
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', cancel);
-      // Legacy FileSystem retains its progress listener after success; cancel releases it too.
-      cancel();
-      await cancelTask;
-      if (pending)
-        await FileSystem.deleteAsync(pending, { idempotent: true }).catch((error: unknown) => {
-          logger.warn('APK partial-file cleanup failed', { error });
-        });
     }
   }
 

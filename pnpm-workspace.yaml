@@ -24,6 +24,8 @@ trustPolicyExclude:
   - ua-parser-js@0.7.41||1.0.41
 
 overrides:
+  # Sherpa's packaging plugin uses the app's Expo SDK rather than installing SDK 56 tooling.
+  '@siteed/sherpa-onnx.rn>@expo/config-plugins': 58.0.10
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
   '@storybook/react-native-ui': 10.5.1
@@ -43,6 +45,8 @@ overrides:
   react-native-svg: 15.16.0
 
 allowBuilds:
+  # Downloads published Sherpa native libraries; does not compile unless explicitly requested.
+  '@siteed/sherpa-onnx.rn': true
   esbuild: true
   msgpackr-extract: true
   sharp: true
@@ -82,6 +86,7 @@ patchedDependencies:
   react-native-enriched-markdown@1.1.1: patches/react-native-enriched-markdown@1.1.1.patch
   react-native-drawer-layout@4.2.12: patches/react-native-drawer-layout@4.2.12.patch
   expo-calendar@58.0.6: patches/expo-calendar@58.0.6.patch
+  expo-modules-core@58.0.26: patches/expo-modules-core@58.0.26.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
   expo-app-metrics@58.0.14: patches/expo-app-metrics@58.0.14.patch
   react-native-screens@4.30.0: patches/react-native-screens@4.30.0.patch
@@ -99,4 +104,3 @@ patchedDependencies:
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
   nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
   react-native-gesture-handler@3.3.0: patches/react-native-gesture-handler@3.3.0.patch
-  expo-modules-core@58.0.26: patches/expo-modules-core@58.0.26.patch

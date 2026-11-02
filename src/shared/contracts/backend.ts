@@ -17,6 +17,7 @@ import type { RemoteAgentModule } from './remoteAgent';
 import type { SkillsModule } from './skills';
 import type { SystemEntryModule } from './systemEntry';
 import type { TranslationModule } from './translation';
+import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
@@ -40,6 +41,7 @@ export interface Backend {
   readonly skills: SkillsModule;
   readonly translation: TranslationModule;
   readonly webSearch: WebSearchModule;
+  readonly voice: VoiceModule;
 }
 
 export type BackendModuleKey = keyof Backend;

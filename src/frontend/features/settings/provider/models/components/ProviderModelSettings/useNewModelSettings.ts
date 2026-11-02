@@ -80,14 +80,13 @@ export function useNewModelSettings(
         baseline?.group ?? getDefaultProviderModelGroupName(formState.modelId, provider.id),
       value: formState.group,
     },
-    limits:
-      add.capabilities.drawing || add.capabilities.speech || add.capabilities.transcription
-        ? undefined
-        : {
-            contextWindow: limitSetting('contextWindow'),
-            maxInputTokens: limitSetting('maxInputTokens'),
-            maxOutputTokens: limitSetting('maxOutputTokens'),
-          },
+    limits: add.capabilities.drawing
+      ? undefined
+      : {
+          contextWindow: limitSetting('contextWindow'),
+          maxInputTokens: limitSetting('maxInputTokens'),
+          maxOutputTokens: limitSetting('maxOutputTokens'),
+        },
     name: {
       placeholder: add.defaultName || t('settings.provider.models.addModelNamePlaceholder'),
       required: false,

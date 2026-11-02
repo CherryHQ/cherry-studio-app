@@ -270,7 +270,6 @@ function ProviderDetailSettings({
             {management.isSelecting || managedModels.length === 0 ? null : showsModelPurposeTabs ? (
               <View className="px-4 pb-3">
                 <ProviderModelPurposeTabs
-                  counts={modelPurposeCounts}
                   onChange={setModelPurpose}
                   value={effectiveModelPurpose}
                 />

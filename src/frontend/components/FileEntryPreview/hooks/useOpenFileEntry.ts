@@ -71,7 +71,8 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
     file: ResolvedFile,
     replaceImage?: ReplacePreviewImage,
   ): FileEntryOpenTarget => {
-    if (fileEntryPreviewKind(file.entry) === 'document' && !canPreviewDocument(file.entry)) {
+    const kind = fileEntryPreviewKind(file.entry);
+    if (kind === 'audio' || (kind === 'document' && !canPreviewDocument(file.entry))) {
       void openFileEntryWithSystem(file);
       return 'system';
     }
