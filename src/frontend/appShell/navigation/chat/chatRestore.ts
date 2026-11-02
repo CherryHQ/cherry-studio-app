@@ -8,8 +8,10 @@ export type ChatRestoreState =
 
 export function resolveChatRestoreState({
   agents,
+  lastAgentId,
 }: {
   agents: { error?: Error; isLoading: boolean; items: readonly { id: string }[] };
+  lastAgentId: string | null;
 }): ChatRestoreState {
   if (agents.isLoading) {
     return { status: 'loading' };
@@ -18,7 +20,7 @@ export function resolveChatRestoreState({
     return { error: agents.error, status: 'error' };
   }
 
-  const agent = agents.items[0];
+  const agent = agents.items.find((item) => item.id === lastAgentId) ?? agents.items[0];
   return agent
     ? { status: 'ready', target: { agentId: agent.id, kind: 'draft' } }
     : { status: 'empty' };

@@ -6,6 +6,7 @@ import { View } from 'react-native';
 
 import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { resolveChatRestoreState } from '@/frontend/appShell/navigation/chat/chatRestore';
+import { usePersistCache } from '@/frontend/data';
 import { useAgentsApi } from '@/frontend/hooks/agent';
 
 import { ChatEmptyState } from '../ChatWorkspace';
@@ -14,8 +15,10 @@ export function ChatRouteResolver() {
   const { t } = useTranslation();
   const router = useRouter();
   const agents = useAgentsApi();
+  const [lastAgentId] = usePersistCache('chat.last_agent_id');
   const restoreState = resolveChatRestoreState({
     agents: { error: agents.error, isLoading: agents.isLoading, items: agents.agents },
+    lastAgentId,
   });
 
   useEffect(() => {
