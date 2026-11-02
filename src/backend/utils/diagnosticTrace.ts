@@ -2,6 +2,7 @@ import { AgentProtocolError } from '@/shared/contracts/agent';
 import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { TraceContext, TraceSpanStatus } from '@/shared/data/types/trace';
+import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 export type TraceAttributes = Record<string, string | number | boolean | undefined>;
@@ -109,6 +110,7 @@ export function traceErrorAttributes(error: unknown): TraceAttributes {
       'error.product_reason': productReason?.success ? productReason.data : undefined,
       'error.origin': typeof origin === 'string' ? origin : undefined,
       'error.retryable': typeof source.retryable === 'boolean' ? source.retryable : undefined,
+      'gen_ai.response.raw_finish_reason': readKnownAiFinishReason(context?.finishReason),
       'plugin.error.reason':
         error instanceof PluginError
           ? error.reason

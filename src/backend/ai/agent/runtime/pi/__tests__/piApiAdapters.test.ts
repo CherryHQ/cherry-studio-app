@@ -67,7 +67,7 @@ const CASES: {
     baseUrl: 'https://api.google.test',
     endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
     expectedBaseUrl: 'https://api.google.test/v1beta',
-    expectedFetch: undefined,
+    expectedFetch: mockFetch,
     streamSimple: mockGoogleStreamSimple,
   },
 ];

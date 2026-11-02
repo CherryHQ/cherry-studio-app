@@ -3,6 +3,7 @@ import { AgentProtocolError } from '@/shared/contracts/agent';
 import { PluginError } from '@/shared/contracts/plugins';
 import { createLogRecord } from '@/shared/core/logger/LoggerService';
 import type { TraceSpanRecord } from '@/shared/data/types/trace';
+import { createAiFailure } from '@/shared/utils/createAiFailure';
 
 import { projectDiagnosticLog, projectDiagnosticTrace } from '../diagnosticMetadata';
 import { projectDiagnosticLine } from '../sourceCollector';
@@ -23,6 +24,60 @@ const trace: TraceSpanRecord = {
   endedAt: 200,
   durationMs: 100,
 };
+
+test.each(['SAFETY', 'MALFORMED_FUNCTION_CALL', 'UNEXPECTED_TOOL_CALL', 'STOP'])(
+  'exports known raw finish reason %s alongside the normalized reason',
+  (reason) => {
+    expect(
+      projectDiagnosticTrace({
+        ...trace,
+        name: 'pi.generate_content',
+        attributes: {
+          'gen_ai.response.finish_reason': 'error',
+          'gen_ai.response.raw_finish_reason': reason,
+        },
+      })?.attributes,
+    ).toEqual({
+      'gen_ai.response.finish_reason': 'error',
+      'gen_ai.response.raw_finish_reason': reason,
+    });
+  },
+);
+
+test.each(['private_finish_reason', 'private provider response', 1, true])(
+  'rejects non-enum raw finish reasons at export: %s',
+  (reason) => {
+    expect(
+      projectDiagnosticTrace({
+        ...trace,
+        name: 'pi.generate_content',
+        attributes: { 'gen_ai.response.raw_finish_reason': reason },
+      })?.attributes,
+    ).toEqual({});
+  },
+);
+
+test('keeps the original finish reason through a product failure and log export', () => {
+  const error = new AgentProtocolError({
+    code: 'EXECUTION_FAILED',
+    ...createAiFailure({
+      code: 'provider_error',
+      message: 'private provider response',
+      retryable: true,
+      origin: 'provider',
+      context: { finishReason: 'MALFORMED_FUNCTION_CALL' },
+    }),
+  });
+  const projected = projectDiagnosticLog(
+    createLogRecord('error', 'Agent operation failed', 'DurableAgentHost', {}, [{ error }]),
+  );
+  expect(projected?.facts).toMatchObject({
+    'gen_ai.response.raw_finish_reason': 'MALFORMED_FUNCTION_CALL',
+    'error.product_reason': 'parse',
+  });
+  expect(projectDiagnosticLog(JSON.parse(JSON.stringify(projected)))).toEqual(projected);
+  expect(JSON.stringify(projected)).not.toContain('private');
+});
 
 test('retains admission rejection codes through log persistence and export without private text', () => {
   const error = new AgentProtocolError({

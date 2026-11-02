@@ -26,6 +26,8 @@ trustPolicyExclude:
 overrides:
   # Sherpa's packaging plugin uses the app's Expo SDK rather than installing SDK 56 tooling.
   '@siteed/sherpa-onnx.rn>@expo/config-plugins': 58.0.10
+  # Pi Google uses the SDK's instance-scoped httpOptions.fetch transport.
+  '@earendil-works/pi-ai>@google/genai': 2.23.0
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
   '@storybook/react-native-ui': 10.5.1
@@ -100,7 +102,7 @@ patchedDependencies:
   '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
-  '@google/genai@2.21.0': patches/@google__genai@2.21.0.patch
+  '@google/genai@2.23.0': patches/@google__genai@2.23.0.patch
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
   nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
   react-native-gesture-handler@3.3.0: patches/react-native-gesture-handler@3.3.0.patch

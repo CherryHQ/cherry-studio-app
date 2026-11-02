@@ -49,21 +49,29 @@ Current producers are:
 
 Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
 `error.category`, the product `AiFailureReason` that `classifyAiFailureReason` derives from the
-structured code and status alone. Messages are not used to guess a category. Provider codes the
-product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
+structured code, status and known provider finish reason alone. Messages are not used to guess a
+category. Provider codes the product table does not list (for example `usage_limit_reached` or
+`overloaded_error`) map in
 `piModelDiagnostics.ts`. A 4xx status without a product reason is `unknown`; `http.status_code`
 keeps the status. Final `ai.turn_state` failures also retain `error.product_reason` from the existing
 product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper,
 and available source name/origin/status. The product reason may have been inferred from the
 caller-visible message; it is distinct from the request's structured-only `error.category`.
 Only the closed reason is copied, never the message or response body.
+`gen_ai.response.finish_reason` retains Pi's normalized outcome;
+`gen_ai.response.raw_finish_reason` retains a known provider enum such as `SAFETY` or
+`MALFORMED_FUNCTION_CALL`. Producers and the archive exporter use the same closed allowlist.
+The product failure context reuses `finishReason` for that provider reason, falling back to Pi's
+normalized reason when it is absent or unknown. Product failure logs retain known raw reasons too.
+These facts improve classification without changing Pi's automatic retry decision.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
 `stream_disconnected`; both are network failures, and `no_response` also covers native timeouts
-and TLS errors because the rejection carries no cause. Adapters without a custom fetch (Google)
-do not receive these codes. Terminal model failures record Pi's retry classification of the
-error as `error.retryable`, qualified by `error.retry_scope: automatic`; whether a retry happened
+and TLS errors because the rejection carries no cause. Gemini and host-authenticated Vertex use
+the same injected transport as the other supported adapters. Terminal model failures record Pi's
+retry classification of the error as `error.retryable`, qualified by `error.retry_scope: automatic`;
+whether a retry happened
 also depends on the retry budget and context
 overflow handling. Cancellation remains a cancelled outcome. Correlate existing retry attempt logs
 with model requests and the final `ai.turn_state` to distinguish a failed attempt from a turn that

@@ -110,6 +110,61 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  test.each([
+    { raw: undefined, code: 'stream_disconnected', reason: 'stream_interrupted' },
+    { raw: undefined, code: 'no_response', reason: 'network' },
+    { raw: 'SAFETY', reason: 'content_filter' },
+    { raw: 'MALFORMED_FUNCTION_CALL', reason: 'parse' },
+    { raw: 'UNEXPECTED_TOOL_CALL', reason: 'tool_failed' },
+    { raw: 'TOO_MANY_TOOL_CALLS', reason: 'tool_limit' },
+    { raw: 'OTHER', reason: 'unknown' },
+    { raw: undefined, reason: 'unknown' },
+    { raw: 'private_finish_reason', reason: 'unknown' },
+  ])(
+    'preserves the known provider finish reason $raw in the displayed failure',
+    ({ raw, reason, code }) => {
+      const terminal: AssistantMessage = {
+        ...call('', 2000),
+        api: 'google-generative-ai',
+        content: [],
+        stopReason: 'error',
+        rawStopReason: raw,
+        errorMessage: 'Provider stopped.',
+        diagnostics: code
+          ? [
+              {
+                type: 'provider_response_failure',
+                timestamp: 1,
+                error: { code, message: 'Request failed.' },
+              },
+            ]
+          : undefined,
+      };
+      const turn = projectPiTurn({
+        lane: { sessionId: 'session', slot: 0 },
+        metadata,
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          reason: 'model_error',
+          entry: 1,
+        } as unknown as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+        ] as unknown as EntryRecord[],
+      });
+
+      expect(toAgentErrorView(turn.error!)).toMatchObject({
+        retryable: true,
+        failure: {
+          reasonCode: reason,
+          context: { finishReason: raw && raw !== 'private_finish_reason' ? raw : 'error' },
+        },
+      });
+    },
+  );
+
   test.each(['provider_response_failure', 'pi_messages_response_failure'])(
     'preserves the terminal %s facts in the displayed failure',
     (type) => {

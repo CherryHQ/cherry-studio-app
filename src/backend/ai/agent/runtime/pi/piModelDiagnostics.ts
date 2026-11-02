@@ -4,22 +4,20 @@ import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
-import { classifyAiFailureReason } from '@/shared/utils/aiFailure';
+import { classifyAiFailureReason, readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 
 import { traceErrorAttributes, type TraceAttributes } from '../../../observability';
 import type { PiModelResolution } from './piModelTypes';
 
 export type PiModelFailureStage = 'configuration' | 'model_resolution' | 'stream';
 
-// Provider codes outside the product table. Adding them to `CODE_REASONS` would override the
-// reason the UI currently derives from message text for the same failures.
+// Diagnostic-only classifications. Product failures may still use provider text, while a body
+// disconnect keeps the broader network category here and stream_interrupted in the UI.
 const DIAGNOSTIC_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   api_error: 'provider_unavailable',
   billing_not_active: 'quota',
   freeusagelimiterror: 'quota',
   gousagelimiterror: 'quota',
-  // No response covers every failure before headers, including native timeouts and TLS errors.
-  no_response: 'network',
   overloaded_error: 'provider_unavailable',
   permission_error: 'permission',
   server_error: 'provider_unavailable',
@@ -31,7 +29,7 @@ const DIAGNOSTIC_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>
 };
 
 /** Classify only structured facts. Unknown failures must not acquire a cause from their message. */
-function errorCategory(facts: TraceAttributes): AiFailureReason {
+function errorCategory(facts: TraceAttributes, finishReason?: string): AiFailureReason {
   const code = facts['error.code'] === undefined ? undefined : String(facts['error.code']);
   const status = facts['http.status_code'];
   return (
@@ -39,6 +37,7 @@ function errorCategory(facts: TraceAttributes): AiFailureReason {
     classifyAiFailureReason({
       code,
       message: '',
+      finishReason,
       statusCode: typeof status === 'number' ? status : undefined,
     })
   );
@@ -47,9 +46,10 @@ function errorCategory(facts: TraceAttributes): AiFailureReason {
 export function piModelErrorAttributes(
   error: unknown,
   stage: PiModelFailureStage,
+  finishReason?: string,
 ): TraceAttributes {
   const facts = traceErrorAttributes(error);
-  return { ...facts, 'error.stage': stage, 'error.category': errorCategory(facts) };
+  return { ...facts, 'error.stage': stage, 'error.category': errorCategory(facts, finishReason) };
 }
 
 export function piModelTerminalErrorAttributes(message: AssistantMessage): TraceAttributes {
@@ -69,6 +69,7 @@ export function piModelTerminalErrorAttributes(message: AssistantMessage): Trace
         origin: 'provider',
       },
       'stream',
+      readKnownAiFinishReason(message.rawStopReason),
     ),
     'error.retry_scope': 'automatic',
   };
