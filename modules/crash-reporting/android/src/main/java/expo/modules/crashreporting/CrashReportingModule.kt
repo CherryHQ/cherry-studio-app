@@ -18,7 +18,8 @@ class CrashReportingModule : Module() {
     // Consent lookup, cache cleanup, and SDK startup do disk work; keep them off the JS thread.
     AsyncFunction("configure") { dsn: String, isProduction: Boolean, version: String ->
       CrashReportingState.configure(
-        requireNotNull(appContext.reactContext).applicationContext, dsn, isProduction, version
+        requireNotNull(appContext.reactContext).applicationContext, dsn, isProduction, version,
+        isRuntimeConfiguration = true
       )
     }
     Function("getStatus") { CrashReportingState.status() }
@@ -48,9 +49,11 @@ internal object CrashReportingState {
   private val cacheDir get() = File(context.cacheDir, "cherry-crash-reporting")
 
   @Synchronized
-  fun configure(context: Context, dsn: String, isProduction: Boolean, version: String): Map<String, Any> {
+  fun configure(
+    context: Context, dsn: String, isProduction: Boolean, version: String, isRuntimeConfiguration: Boolean
+  ): Map<String, Any> {
     return try {
-      configureOwner(context, dsn, isProduction, version)
+      configureOwner(context, dsn, isProduction, version, isRuntimeConfiguration)
     } catch (error: Throwable) {
       recordStartupFailure()
       configured = false
@@ -65,7 +68,9 @@ internal object CrashReportingState {
     Sentry.close()
   }
 
-  private fun configureOwner(context: Context, dsn: String, isProduction: Boolean, version: String): Map<String, Any> {
+  private fun configureOwner(
+    context: Context, dsn: String, isProduction: Boolean, version: String, isRuntimeConfiguration: Boolean
+  ): Map<String, Any> {
     this.context = context
     val applicationInfo = context.packageManager.getApplicationInfo(
       context.packageName, PackageManager.GET_META_DATA
@@ -79,6 +84,10 @@ internal object CrashReportingState {
     canCapture = isProduction && dsn.isNotEmpty() &&
       applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
       metadata?.getBoolean("CherryCrashReportingEnabled") == true
+    // Embedded configuration cannot confirm that the JS configuration which paused capture recovered.
+    if (!isRuntimeConfiguration && (isCleanupPending || cleanupFile.exists())) {
+      canCapture = false
+    }
     if (configured) {
       if (version != consentVersion) {
         consentVersion = version

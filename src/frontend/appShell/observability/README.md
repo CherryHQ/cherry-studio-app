@@ -73,6 +73,9 @@ Native pause writes a separate cleanup marker before deleting reports. The marke
 and process restarts, and every resume must finish cleanup before reopening capture. Android also
 persists a new capture start time on resume, excluding previously discarded system ANR history and
 events from the paused interval without changing the user's enabled/disabled choice.
+On a cold start, embedded native configuration preserves an existing pause. Only the current JS
+configuration may restore eligibility, so missing or failed JS startup cannot reopen capture.
+Unpaused grants still allow native capture before JS starts.
 
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
 SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native

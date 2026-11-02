@@ -18,7 +18,7 @@ public class CrashReportingModule: Module {
     AsyncFunction("configure") {
       (dsn: String, isProduction: Bool, version: String) throws -> [String: Any] in
       try CrashReportingState.shared.configure(
-        dsn: dsn, isProduction: isProduction, version: version)
+        dsn: dsn, isProduction: isProduction, version: version, isRuntimeConfiguration: true)
     }
     Function("getStatus") { CrashReportingState.shared.status() }
     AsyncFunction("setConsent") { (enabled: Bool) throws -> [String: Any] in
@@ -38,7 +38,8 @@ public class CrashReportingAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     _ = try? CrashReportingState.shared.configure(
       dsn: config["CherryCrashReportingDsn"] as? String ?? "",
       isProduction: isCrashReportingAllowed,
-      version: config["CherryCrashReportingConsentVersion"] as? String ?? ""
+      version: config["CherryCrashReportingConsentVersion"] as? String ?? "",
+      isRuntimeConfiguration: false
     )
     return true
   }
@@ -59,7 +60,9 @@ private final class CrashReportingState {
   private var active = false
   private var initialization = "not_started"
 
-  func configure(dsn: String, isProduction: Bool, version: String) throws -> [String: Any] {
+  func configure(
+    dsn: String, isProduction: Bool, version: String, isRuntimeConfiguration: Bool
+  ) throws -> [String: Any] {
     controlLock.lock()
     var succeeded = false
     defer {
@@ -73,6 +76,13 @@ private final class CrashReportingState {
     }
     self.dsn = dsn
     canCapture = isCrashReportingAllowed && isProduction && !dsn.isEmpty
+    if !isRuntimeConfiguration {
+      let pendingFile = try cleanupFile()
+      // Embedded configuration cannot confirm that the JS configuration which paused capture recovered.
+      if isCleanupPending || FileManager.default.fileExists(atPath: pendingFile.path) {
+        canCapture = false
+      }
+    }
     if configured {
       if version != consentVersion {
         gateLock.withLock { consentVersion = version }

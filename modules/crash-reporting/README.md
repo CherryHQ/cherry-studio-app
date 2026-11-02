@@ -28,6 +28,9 @@ implement its own crash recorder or upload protocol.
   It is written before deletion and retained throughout the pause. Every SDK start checks it,
   retries cleanup, and removes it only after cleanup succeeds; failures keep capture closed,
   including after process restarts. A failed marker write also blocks retries in the current process.
+  Native lifecycle configuration retains a pending pause even when the installed binary has a valid
+  DSN. Only the JS bridge's current runtime configuration can permit resumption. Until that call
+  confirms eligibility, capture stays inactive and the marker remains, even if JS never starts.
   Every native `configure` call also checks the immutable binary flag and native debug status,
   so JS configuration cannot turn on reporting in a development or preview package.
 - `setConsent(true)` persists the disclosure version (Android also persists the capture start time) and, in
@@ -97,6 +100,11 @@ When authorized, cover both iOS and Android:
 8. Remove the JS DSN or production gate after a granted startup, then restore it: capture pauses
    and its cache is cleared, the saved choice survives, and capture resumes. Repeat with a saved
    opt-out and confirm it stays off. Changing the disclosure version still revokes the old grant.
+   Also restart the production binary while its embedded DSN remains valid and JS is still ineligible:
+   before JS configuration, native status is enabled but inactive and the cleanup marker remains.
+   Delay or fail JS startup and confirm no native capture resumes. A later valid JS configuration
+   must clean the cache, clear the marker, and resume; an invalid one must keep the pause. Repeat
+   a normal restart without a prior pause and confirm native capture still starts before JS.
 9. On Android 11+, report an ANR, pause with missing runtime configuration, then resume: the
    previously reported ANR is not uploaded again. Repeat with an ANR during the paused interval
    and a process restart before resuming: it is rejected too. A new ANR after resuming must still
