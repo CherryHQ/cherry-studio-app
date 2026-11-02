@@ -14,12 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AiUsageDetail, AiUsageDetailRow } from '@/frontend/components/AiUsageDetail';
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { useInfiniteQuery } from '@/frontend/data';
+import { useInfiniteQuery, useQuery } from '@/frontend/data';
 import { formatAiUsageCost } from '@/frontend/utils/aiUsage';
-import type {
-  AiUsageRecordFilters,
-  AiUsageRecordListSortBy,
-} from '@/shared/data/api/schemas/aiUsageRecords';
+import type { AiUsageRecordFilters } from '@/shared/data/api/schemas/aiUsageRecords';
 import {
   type AiUsageRecordEntry,
   getAiUsageRecordTotalTokens,
@@ -29,12 +26,12 @@ import { getAiUsageRecordTokensPerSecond } from '@/shared/utils/aiUsage';
 
 import { formatUsageDate, formatUsageNumber, type UsageRange } from '../utils/aiUsageAnalytics';
 
+type RecordSort = { field: 'createdAt' | 'totalTokens' } | { field: 'cost'; currency: Currency };
+
 const SORT_LABELS = {
-  createdAt: 'chat.messageUsage.createdAt',
-  totalTokens: 'chat.messageUsage.totalTokens',
-  cost: 'aiUsage.cost',
-  timeFirstTokenMs: 'chat.messageUsage.firstToken',
-  tokensPerSecond: 'chat.messageUsage.modelSpeed',
+  createdAt: 'aiUsage.sortRecent',
+  totalTokens: 'aiUsage.sortMostTokens',
+  cost: 'aiUsage.sortHighestCost',
 } as const;
 
 export const MODALITY_LABELS = {
@@ -47,7 +44,6 @@ export const MODALITY_LABELS = {
 export function AiUsageRecords({
   range,
   filters,
-  currencies,
   locale,
   scopeLabel,
   searchDraft,
@@ -56,7 +52,6 @@ export function AiUsageRecords({
 }: {
   range: UsageRange;
   filters: AiUsageRecordFilters;
-  currencies: Currency[];
   locale: string;
   scopeLabel?: string;
   searchDraft: string;
@@ -65,13 +60,25 @@ export function AiUsageRecords({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [sort, setSort] = useState<{ field: AiUsageRecordListSortBy; currency?: Currency }>({
-    field: 'createdAt',
+  const [sort, setSort] = useState<RecordSort>({ field: 'createdAt' });
+  const pricingQuery = useQuery('/ai-usage-records/analytics', {
+    query: {
+      ...filters,
+      from: range.from,
+      to: range.to,
+      groupBy: 'model',
+      metric: 'tokens',
+      limit: 1,
+      includePerformance: false,
+    },
   });
-  const sortBy = sort.field;
-  const currency = sort.currency;
-  const sortLabel = `${t(SORT_LABELS[sortBy])}${currency ? ` · ${currency}` : ''}`;
-  const [ascending, setAscending] = useState(false);
+  const currencies = pricingQuery.data?.timeline.costTotals.map((item) => item.currency) ?? [];
+  const sortBy =
+    sort.field === 'cost' && pricingQuery.data && !currencies.includes(sort.currency)
+      ? 'createdAt'
+      : sort.field;
+  const currency = sortBy === 'cost' && sort.field === 'cost' ? sort.currency : undefined;
+  const sortLabel = t(SORT_LABELS[sortBy], { currency });
   const [selected, setSelected] = useState<AiUsageRecordEntry>();
   const query = useInfiniteQuery('/ai-usage-records', {
     limit: 50,
@@ -80,7 +87,7 @@ export function AiUsageRecords({
       from: range.from,
       to: range.to,
       sortBy,
-      sortOrder: ascending ? 'asc' : 'desc',
+      sortOrder: 'desc',
       ...(sortBy === 'cost' ? { costCurrency: currency } : {}),
     },
   });
@@ -88,7 +95,7 @@ export function AiUsageRecords({
   return (
     <>
       <FlatList
-        key={JSON.stringify([range, filters, sortBy, ascending, currency])}
+        key={JSON.stringify([range, filters, sortBy, currency])}
         data={items}
         keyExtractor={(item) => item.id}
         ItemSeparatorComponent={RecordSeparator}
@@ -99,7 +106,7 @@ export function AiUsageRecords({
         }}
         keyboardShouldPersistTaps="handled"
         refreshing={query.isRefreshing && !query.isLoadingMore}
-        onRefresh={() => void query.refresh()}
+        onRefresh={() => void Promise.all([query.refresh(), pricingQuery.refetch()])}
         onEndReached={() => void query.loadNext()}
         onEndReachedThreshold={0.3}
         ListHeaderComponent={
@@ -126,30 +133,22 @@ export function AiUsageRecords({
             >
               <ActionMenu
                 items={[
-                  ...Object.entries(SORT_LABELS)
-                    .filter(([value]) => value !== 'cost')
-                    .map(([value, label]) => ({
-                      id: value,
-                      label: t(label),
-                      checked: value === sortBy,
-                      onPress: () => setSort({ field: value as AiUsageRecordListSortBy }),
-                    })),
+                  ...(['createdAt', 'totalTokens'] as const).map((field) => ({
+                    id: field,
+                    label: t(SORT_LABELS[field]),
+                    checked: field === sortBy,
+                    onPress: () => setSort({ field }),
+                  })),
                   ...currencies.map((value) => ({
                     id: `cost-${value}`,
-                    label: `${t('aiUsage.cost')} · ${value}`,
+                    label: t('aiUsage.sortHighestCost', { currency: value }),
                     checked: sortBy === 'cost' && currency === value,
                     onPress: () => setSort({ field: 'cost', currency: value }),
                   })),
-                  {
-                    id: 'direction',
-                    label: t(ascending ? 'aiUsage.descending' : 'aiUsage.ascending'),
-                    onPress: () => setAscending(!ascending),
-                    group: 'direction',
-                  },
                 ]}
               >
                 <Button size="sm" variant="ghost">
-                  {`${sortLabel} ${ascending ? '↑' : '↓'}`}
+                  {sortLabel}
                 </Button>
               </ActionMenu>
             </Section.Header>
@@ -191,24 +190,22 @@ export function AiUsageRecords({
           ) : null
         }
         renderItem={({ item }) => {
-          const metric =
-            sortBy === 'timeFirstTokenMs'
-              ? item.timeFirstTokenMs === null
-                ? null
-                : item.timeFirstTokenMs / 1000
-              : sortBy === 'tokensPerSecond'
-                ? getAiUsageRecordTokensPerSecond(item)
-                : getAiUsageRecordTotalTokens(item);
-          const unit =
-            sortBy === 'timeFirstTokenMs'
-              ? t('aiUsage.secondsUnit')
-              : sortBy === 'tokensPerSecond'
-                ? t('aiUsage.tokensPerSecondUnit')
-                : t('aiUsage.tokens');
+          const totalTokens = getAiUsageRecordTotalTokens(item);
+          const value =
+            sortBy === 'cost'
+              ? item.cost !== null && item.costCurrency
+                ? formatAiUsageCost(item.cost, item.costCurrency, locale)
+                : '—'
+              : formatUsageNumber(totalTokens, locale);
+          const unit = sortBy === 'cost' ? currency : t('aiUsage.tokens');
           const summary = [
-            item.cost !== null && item.costCurrency
-              ? formatAiUsageCost(item.cost, item.costCurrency, locale)
-              : undefined,
+            sortBy === 'cost'
+              ? totalTokens === null
+                ? undefined
+                : `${formatUsageNumber(totalTokens, locale)} ${t('aiUsage.tokens')}`
+              : item.cost !== null && item.costCurrency
+                ? formatAiUsageCost(item.cost, item.costCurrency, locale)
+                : undefined,
             item.timeCompletionMs !== null
               ? `${formatUsageNumber(item.timeCompletionMs / 1000, locale, 2)} ${t('aiUsage.secondsUnit')}`
               : undefined,
@@ -241,11 +238,7 @@ export function AiUsageRecords({
                       minimumFontScale={0.6}
                       numberOfLines={1}
                     >
-                      {formatUsageNumber(
-                        metric,
-                        locale,
-                        sortBy === 'timeFirstTokenMs' || sortBy === 'tokensPerSecond' ? 2 : 0,
-                      )}
+                      {value}
                     </Text>
                     <Text className="text-muted-foreground text-xs">{unit}</Text>
                   </View>

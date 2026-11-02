@@ -200,7 +200,6 @@ export function AiUsageScreen() {
             range={records.range}
             filters={{ ...records.filters, search: recordSearch || undefined }}
             scopeLabel={records.scopeLabel}
-            currencies={data?.timeline.costTotals.map((item) => item.currency) ?? []}
             locale={locale}
             searchDraft={recordSearchDraft}
             onSearchDraftChange={setRecordSearchDraft}
