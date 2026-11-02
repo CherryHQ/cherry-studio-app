@@ -95,23 +95,26 @@ hit reports nothing.
 
 ## Integration
 
-### Optional Xiaomi-OCR-0 model
+### Optional local OCR models
 
 General settings exposes one **Scanned document recognition** row beside the existing AnyDoc parser.
-Its compact sheet contains system/model choices and inline download, pause, resume and removal
+Its compact sheet contains system, Xiaomi-OCR-0 and OvisOCR3 choices and inline download, pause, resume and removal
 controls. Model size, progress and failures stay in that sheet rather than filling the settings page.
 The document parser still owns Office files; PDF/image recognition has its own `file.ocr.engine`
-preference. System recognition remains the default. Downloading both verified model files enables
-Xiaomi-OCR-0; deleting them cancels active local recognition and restores the system preference.
+preference. System recognition remains the default. Downloading both verified files enables the chosen model. Deleting that model cancels its active
+recognition and restores the system preference; deleting an inactive model preserves the selection.
 An app binary missing either native bridge keeps system recognition available and disables download.
 
 `createLocalOcrModule.ts` in the backend file owner is created by bootstrap and disposed with that
 generation. Its file-module surface owns download, pause and removal commands; route unmount only
-unsubscribes. `createOcrModelDownload.ts` streams into
-`Documents/LocalModels/xiaomi-ocr-0-q4km-0f0e77db-v1`, outside managed user files and the app's backup
-storage tree. It pins the [community conversion](https://huggingface.co/prithivMLmods/Xiaomi-OCR-0-GGUF/tree/0f0e77db7c97c409bb87347e6c2f151829651947)
+unsubscribes. `createOcrModelDownload.ts` gives each model its own versioned directory under
+`Documents/LocalModels`, outside managed user files and the app's backup storage tree. Xiaomi keeps
+`xiaomi-ocr-0-q4km-0f0e77db-v1` and pins the [community conversion](https://huggingface.co/prithivMLmods/Xiaomi-OCR-0-GGUF/tree/0f0e77db7c97c409bb87347e6c2f151829651947)
 and SHA-256 hashes for the 529,297,664-byte Q4_K_M language model and 207,346,624-byte BF16 vision
-projector. Downloads pause on backgrounding and persist Expo's resume token; verified files survive
+projector. Ovis uses `ovis-ocr3-q4km-c2955165-v1` and pins its
+[community conversion](https://huggingface.co/prithivMLmods/ATH-MaaS-OvisOCR3-GGUF/tree/c29551652e828085ca1e892092f1319dbee22d2f),
+including SHA-256 hashes for the 529,297,568-byte Q4_K_M model and 207,346,432-byte BF16 projector.
+The models have independent transfer states, files and cache identities. Downloads pause on backgrounding and persist Expo's resume token; verified files survive
 restarts. A failed/expired resume token restarts that file on retry. Startup verifies installed
 weights again; size alone never establishes readiness. No weights ship in the application package.
 
@@ -132,13 +135,17 @@ time and is removed after recognition, cancellation or failure. The model contex
 and released after each request; ordinary text-only PDF reads never load it. Cross-turn recurrent-state caching
 is disabled because document pages are independent.
 
-Recognition uses Xiaomi's whole-page document prompt with thinking disabled, at most 1024 image
+Recognition uses each model's whole-page document prompt with thinking disabled, at most 1024 image
 tokens, an 8192-token context and 4096 generated tokens per page. Output and page limits remain
 visible through `isTruncated`; failed pages do not return partial text. OTSL table grids are converted
 to escaped HTML with merged cells retained; malformed grids and LaTeX remain verbatim. This is the
-single-model whole-page path, without the official external layout detector. It does not establish
+whole-page path. Ovis HTML tables are parsed as bounded grids with merged cells and exact text,
+while malformed markup remains raw and is marked invalid. Ovis crop placeholders do not become
+files; repeated-tail cleanup is marked truncated. Neither external layout detection nor cross-page
+table reconstruction is included. It does not establish
 equivalence with official benchmark scores or guarantee phone memory, speed or accuracy. The
-[official model](https://huggingface.co/xiaomi-research/Xiaomi-OCR-0) is Apache-2.0; community
+[Xiaomi](https://huggingface.co/xiaomi-research/Xiaomi-OCR-0) and
+[Ovis](https://huggingface.co/ATH-MaaS/OvisOCR3) official models are Apache-2.0; community
 quantization and mobile behavior require their own acceptance.
 
 Source regressions cover checksum rejection, restart verification, persisted pause/resume, engine
@@ -153,7 +160,8 @@ The [file owner](../../src/backend/services/file/README.md) exposes `extractDocu
 `extract_document` Agent tool. Task requests select at most eight PDF pages within the first 100.
 `readPdfPages` accepts an optional one-based page list and returns only that selection. Table and
 formula tasks retain structured whole-page output; fields use a dedicated constrained-JSON prompt,
-and questions use a short document-image answer prompt. Question output is limited to 1024 tokens;
+and questions use model-specific document-image prompts. Ovis' final boxed answer is separated
+from its preserved raw reasoning. Question output is limited to 1024 tokens;
 other tasks retain the 4096-token ceiling. Results preserve raw output and actual engine/status.
 System OCR can supply document text but never substitutes for unavailable structural recognition.
 

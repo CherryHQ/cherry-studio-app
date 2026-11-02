@@ -21,7 +21,7 @@ import { extractAnydocContent } from './extractAnydocContent';
 import { hashLocalFile } from './fileHash';
 import { readFileUriBytes } from './fileStorage';
 import { readDocumentPages } from './fileTextExtraction';
-import { LOCAL_OCR_MODEL_VERSION } from './localOcrModel';
+import { LOCAL_OCR_MODELS } from './localOcrModel';
 
 /** This boundary accepts an already-resolved managed source, never a tool-supplied path or URL. */
 export async function extractDocument(
@@ -134,9 +134,11 @@ export async function extractDocument(
     result.units = extracted.pages.map((unit) =>
       options.assetRef ? { ...unit, location: { assetRef: options.assetRef } } : unit,
     );
-    result.modelVersion = result.units.some((unit) => unit.engine === 'xiaomi')
-      ? LOCAL_OCR_MODEL_VERSION
-      : undefined;
+    const model = result.units.find(
+      (unit) => unit.engine === 'xiaomi' || unit.engine === 'ovis',
+    )?.engine;
+    if (model === 'xiaomi' || model === 'ovis')
+      result.modelVersion = LOCAL_OCR_MODELS[model].version;
     if (type === 'pdf') {
       result.totalPages = extracted.totalPages;
       const last = Math.max(0, ...result.units.map((unit) => unit.location.page ?? 0));

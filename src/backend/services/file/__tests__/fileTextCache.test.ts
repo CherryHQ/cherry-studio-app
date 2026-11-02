@@ -89,10 +89,31 @@ test('keeps existing system cache keys and isolates local model revisions', asyn
   const local = fileTextCacheFile(file, 'en-US', 'pdf', 'xiaomi-v1');
   expect(local.uri).not.toBe(system.uri);
   expect(fileTextCacheFile(file, 'en-US', 'pdf', 'xiaomi-v2').uri).not.toBe(local.uri);
+  const ovis = fileTextCacheFile(file, 'en-US', 'pdf', 'ovis-v1');
+  expect(ovis.uri).not.toBe(local.uri);
   writeFileTextCache(system, result);
   writeFileTextCache(local, { ...result, text: 'Structured table' });
+  writeFileTextCache(ovis, {
+    ...result,
+    text: 'Ovis text',
+    pages: [
+      {
+        location: { page: 1 },
+        engine: 'ovis',
+        status: 'complete',
+        text: 'Ovis text',
+        raw: 'Ovis text',
+        tables: [],
+        formulas: [],
+      },
+    ],
+  });
   await expect(readFileTextCache(system)).resolves.toMatchObject({ text: result.text });
   await expect(readFileTextCache(local)).resolves.toMatchObject({ text: 'Structured table' });
+  await expect(readFileTextCache(ovis)).resolves.toMatchObject({
+    text: 'Ovis text',
+    pages: [{ engine: 'ovis', raw: 'Ovis text' }],
+  });
 });
 beforeEach(() => {
   mockFiles.clear();

@@ -1,4 +1,4 @@
-import { parseXiaomiFields, parseXiaomiOcrOutput } from '../xiaomiOcrOutput';
+import { parseXiaomiOcrOutput } from '../xiaomiOcrOutput';
 
 test('converts table cells without discarding surrounding document prose', () => {
   expect(parseXiaomiOcrOutput('Before\n<fcel>A & B<fcel>2<nl>\nAfter').text).toBe(
@@ -51,13 +51,4 @@ test('reports cut-off table markup without treating fenced examples as parse fai
     tables: [],
     invalidStructure: false,
   });
-});
-
-test('keeps exact field strings and rejects numeric coercion, missing keys and extra fields', () => {
-  expect(
-    parseXiaomiFields('{"id":"0012","amount":"12.00 USD","date":null}', ['id', 'amount', 'date']),
-  ).toEqual({ id: '0012', amount: '12.00 USD', date: null });
-  expect(parseXiaomiFields('{"id":""}', ['id'])).toEqual({ id: null });
-  for (const raw of ['{"id":12}', '{}', '{"id":"0012","extra":"x"}', '{"id":'])
-    expect(parseXiaomiFields(raw, ['id'])).toBeUndefined();
 });

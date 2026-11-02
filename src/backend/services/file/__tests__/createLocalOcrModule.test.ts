@@ -1,6 +1,7 @@
-import type { FileOcrEngine } from '@/shared/contracts/localOcr';
+import type { FileOcrEngine, LocalOcrModelId } from '@/shared/contracts/localOcr';
 
 import { createLocalOcrModule } from '../createLocalOcrModule';
+import { LOCAL_OCR_MODELS, type LocalOcrModel } from '../localOcrModel';
 
 const mockTemporaryFiles = new Set<string>();
 const mockCompletion = jest.fn(async (_params: unknown) => ({
@@ -42,10 +43,10 @@ const mockRender = jest.fn(async (_source: string, _index: number, output: strin
   mockTemporaryFiles.add(output);
   return true;
 });
-const mockDownload = jest.fn(async () => true);
-let mockReady = true;
-const mockRemove = jest.fn(async () => {
-  mockReady = false;
+const mockDownload = jest.fn(async (_model: LocalOcrModelId) => true);
+const mockReady = { xiaomi: true, ovis: true };
+const mockRemove = jest.fn(async (model: LocalOcrModelId) => {
+  mockReady[model] = false;
 });
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -53,16 +54,22 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('llama.rn', () => ({ initLlama: (params: unknown) => mockInit(params) }));
 jest.mock('../createOcrModelDownload', () => ({
-  createOcrModelDownload: () => ({
-    ensureReady: async () => mockReady,
-    isReady: () => mockReady,
-    paths: () => ({ model: 'file:///model.gguf', vision: 'file:///vision.gguf' }),
-    download: () => mockDownload(),
-    remove: () => mockRemove(),
-    observe: () => () => {},
-    pause: async () => {},
-    dispose: async () => {},
-  }),
+  createOcrModelDownload: (config: LocalOcrModel) => {
+    const model: LocalOcrModelId = config.version.startsWith('ovis-') ? 'ovis' : 'xiaomi';
+    return {
+      ensureReady: async () => mockReady[model],
+      isReady: () => mockReady[model],
+      paths: () => ({
+        model: `file:///${model}/model.gguf`,
+        vision: `file:///${model}/vision.gguf`,
+      }),
+      download: () => mockDownload(model),
+      remove: () => mockRemove(model),
+      observe: () => () => {},
+      pause: async () => {},
+      dispose: async () => {},
+    };
+  },
 }));
 jest.mock('../../../../../modules/pdf-text-extractor', () => ({
   supportsLocalOcrImages: () => true,
@@ -102,7 +109,8 @@ jest.mock('expo-file-system', () => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockTemporaryFiles.clear();
-  mockReady = true;
+  mockReady.xiaomi = true;
+  mockReady.ovis = true;
 });
 
 function runtime(initial: FileOcrEngine = 'xiaomi') {
@@ -215,10 +223,10 @@ test('model output limits remain visible as truncation metadata', async () => {
 test('download enables local recognition and deleting the model restores the system engine', async () => {
   const owner = runtime('system');
   expect(await owner.resolveEngine()).toBeUndefined();
-  await owner.module.download();
+  await owner.module.download('xiaomi');
   expect(owner.preferences.readEngine()).toBe('xiaomi');
   expect(await owner.resolveEngine()).toBeDefined();
-  await owner.module.remove();
+  await owner.module.remove('xiaomi');
   expect(owner.preferences.readEngine()).toBe('system');
   expect(await owner.resolveEngine()).toBeUndefined();
   await owner.dispose();
@@ -297,5 +305,218 @@ test('field extraction uses its own constrained prompt and preserves strings and
     fields: { invoice: '0012', amount: '12.00', tax: null },
     status: 'complete',
   });
+  await owner.dispose();
+});
+
+test('Ovis uses its own weights, prompt, structured HTML output and cache identity', async () => {
+  const owner = runtime('ovis');
+  const engine = (await owner.resolveEngine())!;
+  expect(engine.cacheKey).toBe(LOCAL_OCR_MODELS.ovis.version);
+  expect(engine.cacheKey).not.toBe(LOCAL_OCR_MODELS.xiaomi.version);
+  const raw = '<table><tr><td>001</td><td>12.00</td></tr></table>';
+  mockCompletion.mockResolvedValueOnce({
+    content: raw,
+    text: '',
+    interrupted: false,
+    truncated: false,
+    context_full: false,
+    stopped_limit: 0,
+  });
+  const result = await engine.extract(
+    'file:///table.png',
+    'image',
+    new AbortController().signal,
+    jest.fn(),
+    { task: 'tables' },
+  );
+  expect(mockInit).toHaveBeenCalledWith(
+    expect.objectContaining({ model: 'file:///ovis/model.gguf' }),
+  );
+  expect(mockVision).toHaveBeenCalledWith(
+    expect.objectContaining({ path: 'file:///ovis/vision.gguf' }),
+  );
+  const messages = JSON.stringify(mockFormat.mock.calls[0]![0]);
+  expect(messages).toContain('Format tables as HTML');
+  expect(messages).not.toContain('OTSL');
+  expect(result.pages?.[0]).toMatchObject({
+    engine: 'ovis',
+    raw,
+    status: 'complete',
+    tables: [{ cells: [{ text: '001' }, { text: '12.00' }] }],
+  });
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+  await owner.dispose();
+});
+
+test('Ovis fields use its schema prompt, retaining exact strings and normalizing missing values', async () => {
+  const owner = runtime('ovis');
+  const engine = (await owner.resolveEngine())!;
+  mockCompletion.mockResolvedValueOnce({
+    content: '{"id":"0001","missing":""}',
+    text: '',
+    interrupted: false,
+    truncated: false,
+    context_full: false,
+    stopped_limit: 0,
+  });
+  const result = await engine.extract(
+    'file:///receipt.png',
+    'image',
+    new AbortController().signal,
+    jest.fn(),
+    { task: 'fields', fields: ['id', 'missing'] },
+  );
+  expect(JSON.stringify(mockFormat.mock.calls[0]![0])).toContain('using exactly this JSON schema');
+  expect(result.pages?.[0]).toMatchObject({
+    engine: 'ovis',
+    fields: { id: '0001', missing: null },
+    status: 'complete',
+  });
+  await owner.dispose();
+});
+
+test('Ovis question answers preserve raw reasoning and project only the final answer', async () => {
+  const owner = runtime('ovis');
+  const engine = (await owner.resolveEngine())!;
+  const raw = 'The invoice shows 12.00. \\boxed{12.00}';
+  mockCompletion.mockResolvedValueOnce({
+    content: raw,
+    text: '',
+    interrupted: false,
+    truncated: false,
+    context_full: false,
+    stopped_limit: 0,
+  });
+  const result = await engine.extract(
+    'file:///receipt.png',
+    'image',
+    new AbortController().signal,
+    jest.fn(),
+    { task: 'question', question: 'Total?' },
+  );
+  expect(result.pages?.[0]).toMatchObject({
+    engine: 'ovis',
+    raw,
+    text: '12.00',
+    answer: '12.00',
+    status: 'complete',
+  });
+  await owner.dispose();
+});
+
+test('removing an inactive model preserves the selected engine; removing the selected one restores system', async () => {
+  const owner = runtime('system');
+  await owner.module.download('ovis');
+  expect(owner.preferences.readEngine()).toBe('ovis');
+  await owner.module.remove('xiaomi');
+  expect(owner.preferences.readEngine()).toBe('ovis');
+  expect((await owner.resolveEngine())?.cacheKey).toBe(LOCAL_OCR_MODELS.ovis.version);
+  await owner.module.remove('ovis');
+  expect(owner.preferences.readEngine()).toBe('system');
+  expect(await owner.resolveEngine()).toBeUndefined();
+  await owner.dispose();
+});
+
+test('a missing Ovis download falls back to system and cannot be supplied by Xiaomi files', async () => {
+  mockReady.ovis = false;
+  const owner = runtime('ovis');
+  expect(await owner.resolveEngine()).toBeUndefined();
+  expect(mockInit).not.toHaveBeenCalled();
+  await owner.dispose();
+});
+
+test('deleting Ovis while Xiaomi is reading never aborts or releases the active context', async () => {
+  const owner = runtime('xiaomi');
+  const engine = (await owner.resolveEngine())!;
+  let started!: () => void;
+  let finish!: (value: typeof mockFormatted) => void;
+  const starting = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  mockFormat.mockImplementationOnce(() => {
+    started();
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
+  const reading = engine.extract(
+    'file:///image.jpg',
+    'image',
+    new AbortController().signal,
+    jest.fn(),
+  );
+  await starting;
+  await owner.module.remove('ovis');
+  expect(mockStop).not.toHaveBeenCalled();
+  expect(mockRelease).not.toHaveBeenCalled();
+  expect(owner.preferences.readEngine()).toBe('xiaomi');
+  finish(mockFormatted);
+  await expect(reading).resolves.toMatchObject({ text: 'Recognized text' });
+  await owner.dispose();
+});
+
+test('deleting an active Ovis model waits for cancellation and release before removing weights', async () => {
+  const owner = runtime('ovis');
+  const engine = (await owner.resolveEngine())!;
+  let started!: () => void;
+  let finish!: (value: typeof mockFormatted) => void;
+  let cancelled!: () => void;
+  const starting = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const cancelling = new Promise<void>((resolve) => {
+    cancelled = resolve;
+  });
+  mockFormat.mockImplementationOnce(() => {
+    started();
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
+  mockStop.mockImplementationOnce(() => {
+    cancelled();
+    return undefined;
+  });
+  const reading = engine.extract(
+    'file:///image.jpg',
+    'image',
+    new AbortController().signal,
+    jest.fn(),
+  );
+  const rejected = expect(reading).rejects.toThrow();
+  await starting;
+  const removing = owner.module.remove('ovis');
+  await cancelling;
+  expect(mockRemove).not.toHaveBeenCalled();
+  finish(mockFormatted);
+  await rejected;
+  await removing;
+  expect(mockCompletion).not.toHaveBeenCalled();
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+  expect(mockRemove).toHaveBeenCalledWith('ovis');
+  expect(owner.preferences.readEngine()).toBe('system');
+  await owner.dispose();
+});
+
+test('an Ovis crop placeholder alone is not a complete text extraction', async () => {
+  const owner = runtime('ovis');
+  const engine = (await owner.resolveEngine())!;
+  const raw = '<img src="images/bbox_1_2_3_4.jpg" />';
+  mockCompletion.mockResolvedValueOnce({
+    content: raw,
+    text: '',
+    interrupted: false,
+    truncated: false,
+    context_full: false,
+    stopped_limit: 0,
+  });
+  const result = await engine.extract(
+    'file:///image.jpg',
+    'image',
+    new AbortController().signal,
+    jest.fn(),
+  );
+  expect(result.pages?.[0]).toMatchObject({ raw, text: '', status: 'unrecognized' });
+  expect(result.unrecognizedPages).toEqual([1]);
   await owner.dispose();
 });

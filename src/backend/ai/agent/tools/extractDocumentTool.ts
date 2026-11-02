@@ -43,7 +43,7 @@ const ERRORS: Record<DocumentExtractionError['code'], string> = {
   unsupported:
     'This task is unsupported for this source. For Office fields/question, select an embedded image asset_ref; read native text with read_file.',
   'model-unavailable':
-    'This image task requires the downloaded and enabled Xiaomi-OCR-0 model. Ordinary document text can still use system recognition. Do not retry unchanged.',
+    'This image task requires a downloaded and enabled local OCR model (Xiaomi-OCR-0 or OvisOCR3). Ordinary document text can still use system recognition. Do not retry unchanged.',
   failed: 'On-device document extraction failed. No complete result is available.',
   'size-limit': 'The document or embedded image exceeds the local extraction size limit.',
 };

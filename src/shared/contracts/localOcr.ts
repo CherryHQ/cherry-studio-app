@@ -1,4 +1,5 @@
-export type FileOcrEngine = 'system' | 'xiaomi';
+export type LocalOcrModelId = 'xiaomi' | 'ovis';
+export type FileOcrEngine = 'system' | LocalOcrModelId;
 
 export type LocalOcrModelState = {
   status: 'idle' | 'checking' | 'downloading' | 'paused' | 'verifying' | 'ready' | 'failed';
@@ -9,9 +10,9 @@ export type LocalOcrModelState = {
 
 export interface LocalOcrModule {
   /** Calls back immediately. Leaving settings only unsubscribes; it does not delete the model. */
-  observe(observer: (state: LocalOcrModelState) => void): () => void;
+  observe(model: LocalOcrModelId, observer: (state: LocalOcrModelState) => void): () => void;
   /** Downloads both model files and enables local recognition after successful verification. */
-  download(): Promise<void>;
-  pause(): Promise<void>;
-  remove(): Promise<void>;
+  download(model: LocalOcrModelId): Promise<void>;
+  pause(model: LocalOcrModelId): Promise<void>;
+  remove(model: LocalOcrModelId): Promise<void>;
 }

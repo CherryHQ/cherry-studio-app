@@ -8,7 +8,7 @@ import {
   type DocumentExtractionOptions,
   type DocumentExtractionUnit,
 } from '@/shared/contracts/documentExtraction';
-import type { FileOcrEngine, LocalOcrModule } from '@/shared/contracts/localOcr';
+import type { FileOcrEngine, LocalOcrModelId, LocalOcrModule } from '@/shared/contracts/localOcr';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -20,29 +20,31 @@ import {
 } from '../../../../modules/pdf-text-extractor';
 import { createOcrModelDownload } from './createOcrModelDownload';
 import type { FileTextEngine, FileTextResult } from './fileTextExtraction';
-import { LOCAL_OCR_MODEL_VERSION } from './localOcrModel';
-import { parseXiaomiFields, parseXiaomiOcrOutput } from './xiaomiOcrOutput';
+import { LOCAL_OCR_MODELS } from './localOcrModel';
+import { parseOcrFields } from './localOcrOutput';
+import { getLocalOcrPrompt } from './localOcrPrompt';
+import { parseOvisAnswer, parseOvisOcrOutput } from './ovisOcrOutput';
+import { parseXiaomiOcrOutput } from './xiaomiOcrOutput';
 
 const logger = loggerService.withContext('LocalOcr');
 const MAX_TEXT_CHARACTERS = 1_000_000;
-// Xiaomi's whole-page task prompt. The separate layout detector is intentionally not bundled.
-const DOCUMENT_PROMPT =
-  'Extract all information from the main body of the document image and represent it ' +
-  'in markdown format, ignoring headers and footers. Tables should be expressed in OTSL ' +
-  'format, formulas in the document should be represented using LATEX format, and the ' +
-  'parsing should be organized according to the reading order.';
 
 export function createLocalOcrModule(preferences: {
   readEngine(): FileOcrEngine;
   writeEngine(engine: FileOcrEngine): Promise<unknown>;
 }) {
-  const download = createOcrModelDownload(
-    supportsLocalOcrImages() && TurboModuleRegistry.get('RNLlama') !== null,
-  );
-  const running = new Map<AbortController, Promise<FileTextResult>>();
+  const isSupported = supportsLocalOcrImages() && TurboModuleRegistry.get('RNLlama') !== null;
+  const downloads = {
+    xiaomi: createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, isSupported),
+    ovis: createOcrModelDownload(LOCAL_OCR_MODELS.ovis, isSupported),
+  };
+  const running = new Map<
+    AbortController,
+    { model: LocalOcrModelId; result: Promise<FileTextResult> }
+  >();
   const commands = new Set<Promise<void>>();
   let stopped = false;
-  let removing = false;
+  const removing = new Set<LocalOcrModelId>();
 
   function command(work: () => Promise<void>): Promise<void> {
     if (stopped) return Promise.reject(new Error('Local OCR has stopped'));
@@ -51,24 +53,34 @@ export function createLocalOcrModule(preferences: {
     return result;
   }
 
-  const engine: FileTextEngine = {
-    cacheKey: LOCAL_OCR_MODEL_VERSION,
-    extract(source, kind, signal, onProgress, options) {
-      if (stopped || removing) return Promise.reject(new Error('Local OCR is unavailable'));
-      const controller = new AbortController();
-      const linked = linkAbortSignals([signal, controller.signal]);
-      const result = recognizeDocument(source, kind, linked.signal, onProgress, options).finally(
-        () => {
+  function createEngine(model: LocalOcrModelId): FileTextEngine {
+    return {
+      cacheKey: LOCAL_OCR_MODELS[model].version,
+      extract(source, kind, signal, onProgress, options) {
+        if (stopped || removing.has(model) || !downloads[model].isReady())
+          return Promise.reject(new Error('Local OCR is unavailable'));
+        const controller = new AbortController();
+        const linked = linkAbortSignals([signal, controller.signal]);
+        const result = recognizeDocument(
+          model,
+          source,
+          kind,
+          linked.signal,
+          onProgress,
+          options,
+        ).finally(() => {
           linked.dispose();
           running.delete(controller);
-        },
-      );
-      running.set(controller, result);
-      return result;
-    },
-  };
+        });
+        running.set(controller, { model, result });
+        return result;
+      },
+    };
+  }
+  const engines = { xiaomi: createEngine('xiaomi'), ovis: createEngine('ovis') };
 
   async function recognizeDocument(
+    model: LocalOcrModelId,
     uri: string,
     kind: 'pdf' | 'image',
     signal: AbortSignal,
@@ -95,25 +107,7 @@ export function createLocalOcrModule(preferences: {
     signal.throwIfAborted();
     const selected = inspection.pages.map((page) => page.page);
     const task = options?.task ?? 'document';
-    const prompt =
-      task === 'fields'
-        ? 'Extract key information in the image\n\nPlease output the key information in JSON format according to the following schema:\n' +
-          JSON.stringify(Object.fromEntries(options!.fields!.map((field) => [field, '']))) +
-          '\nPreserve exact visible text, including leading zeroes, dates, units and decimal places. Use null for missing values. Return JSON only.'
-        : task === 'question'
-          ? options!.question! + '\nAnswer the question using a single word or phrase.'
-          : DOCUMENT_PROMPT;
-    const fieldSchema =
-      task === 'fields'
-        ? {
-            type: 'object',
-            properties: Object.fromEntries(
-              options!.fields!.map((field) => [field, { type: ['string', 'null'] }]),
-            ),
-            required: options!.fields,
-            additionalProperties: false,
-          }
-        : undefined;
+    const { prompt, fieldSchema } = getLocalOcrPrompt(model, options);
     const folder = new Directory(Paths.cache, 'LocalOcr');
     folder.create({ idempotent: true, intermediates: true });
     // File extraction is serial; the directory contains at most one page, including after a crash.
@@ -159,7 +153,7 @@ export function createLocalOcrModule(preferences: {
           signal.throwIfAborted();
           if (hasContent) {
             if (!context) {
-              const paths = download.paths();
+              const paths = downloads[model].paths();
               // Deferred import keeps older development clients usable with system OCR.
               const { initLlama } = await import('llama.rn');
               signal.throwIfAborted();
@@ -226,25 +220,31 @@ export function createLocalOcrModule(preferences: {
               result.truncated || result.context_full || result.stopped_limit > 0,
             );
             const raw = (result.content || result.text).trim();
-            unit.engine = 'xiaomi';
+            unit.engine = model;
             unit.raw = raw;
             unit.status = truncated ? 'truncated' : raw ? 'complete' : 'unrecognized';
             if (task === 'fields') {
-              unit.fields = parseXiaomiFields(raw, options!.fields!);
+              unit.fields = parseOcrFields(raw, options!.fields!);
               if (!unit.fields && !truncated) unit.status = 'invalid-structure';
               text = raw;
             } else if (task === 'question') {
-              unit.answer = raw;
-              text = raw;
+              unit.answer = model === 'ovis' ? parseOvisAnswer(raw) : raw;
+              text = unit.answer ?? raw;
+              if (model === 'ovis' && !unit.answer && !truncated) unit.status = 'invalid-structure';
             } else {
-              const parsed = parseXiaomiOcrOutput(raw);
+              const parsed = model === 'ovis' ? parseOvisOcrOutput(raw) : parseXiaomiOcrOutput(raw);
               text = parsed.text;
               unit.tables = parsed.tables;
               unit.formulas = parsed.formulas;
-              if (parsed.invalidStructure && !truncated) unit.status = 'invalid-structure';
+              if ('truncated' in parsed && parsed.truncated) unit.status = 'truncated';
+              if (parsed.invalidStructure && unit.status !== 'truncated')
+                unit.status = 'invalid-structure';
             }
             isTruncated ||= truncated;
-            if (!text.trim()) unrecognizedPages.push(index + 1);
+            if (!text.trim()) {
+              unrecognizedPages.push(index + 1);
+              if (unit.status === 'complete') unit.status = 'unrecognized';
+            }
           }
           if (!hasContent && task !== 'document') unit.status = 'unrecognized';
           if (pageFile.exists) pageFile.delete();
@@ -300,46 +300,50 @@ export function createLocalOcrModule(preferences: {
     }
   }
 
-  async function stopRecognition() {
-    const pending = [...running.entries()];
+  async function stopRecognition(model?: LocalOcrModelId) {
+    const pending = [...running.entries()].filter(([, task]) => !model || task.model === model);
     for (const [controller] of pending) controller.abort();
-    await Promise.allSettled(pending.map(([, result]) => result));
+    await Promise.allSettled(pending.map(([, task]) => task.result));
   }
 
   const module: LocalOcrModule = {
-    observe: download.observe,
-    download: () =>
+    observe: (model, observer) => downloads[model].observe(observer),
+    download: (model) =>
       command(async () => {
-        if (stopped || removing) throw new Error('Local OCR is unavailable');
-        const ready = await download.download();
-        if (ready && download.isReady() && !stopped && !removing)
-          await preferences.writeEngine('xiaomi');
+        if (stopped || removing.has(model)) throw new Error('Local OCR is unavailable');
+        const ready = await downloads[model].download();
+        if (ready && downloads[model].isReady() && !stopped && !removing.has(model))
+          await preferences.writeEngine(model);
       }),
-    pause: download.pause,
-    remove: () =>
+    pause: (model) => downloads[model].pause(),
+    remove: (model) =>
       command(async () => {
-        if (stopped || removing) throw new Error('Local OCR is unavailable');
-        removing = true;
+        if (stopped || removing.has(model)) throw new Error('Local OCR is unavailable');
+        removing.add(model);
         try {
-          await preferences.writeEngine('system');
-          await stopRecognition();
-          await download.remove();
+          if (preferences.readEngine() === model) await preferences.writeEngine('system');
+          await stopRecognition(model);
+          await downloads[model].remove();
         } finally {
-          removing = false;
+          removing.delete(model);
         }
       }),
   };
   return {
     module,
     async resolveEngine(): Promise<FileTextEngine | undefined> {
-      if (stopped || removing || preferences.readEngine() !== 'xiaomi') return undefined;
+      const model = preferences.readEngine();
+      if (stopped || model === 'system' || removing.has(model)) return undefined;
       // Missing downloads (including a restored preference on a new phone) keep system OCR usable.
-      const ready = await download.ensureReady();
-      return ready && !stopped && !removing ? engine : undefined;
+      const ready = await downloads[model].ensureReady();
+      return ready && !stopped && !removing.has(model) ? engines[model] : undefined;
     },
     async dispose() {
       stopped = true;
-      await Promise.all([stopRecognition(), download.dispose()]);
+      await Promise.all([
+        stopRecognition(),
+        ...Object.values(downloads).map((download) => download.dispose()),
+      ]);
       await Promise.allSettled([...commands]);
     },
   };

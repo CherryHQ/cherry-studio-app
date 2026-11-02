@@ -18,21 +18,41 @@ assets by reference. Unsupported blocks retain their raw data with an incomplete
 
 Ordinary PDF document tasks use readable text layers. Explicit table/formula/field/question tasks
 render selected pages even when text exists. Images use the selected OCR engine; structural tasks
-require the downloaded and enabled Xiaomi model. Native Office tables and math runs use AnyDoc
-without loading that model. Office fields/questions require an exact embedded image `assetRef`.
+require a downloaded and enabled Xiaomi-OCR-0 or OvisOCR3 model. Native Office tables and math runs use AnyDoc
+without loading an OCR model. Office fields/questions require an exact embedded image `assetRef`.
 The asset is obtained from the authorized document, size checked and temporarily stored under a
 generated name. It cannot supply an arbitrary path or URL.
 
-Whole-page output retains validated OTSL cell origins and spans plus raw output and LaTeX.
+Whole-page output retains validated cell origins and spans plus raw output and LaTeX. Xiaomi uses
+OTSL; Ovis uses HTML tables, including row/column spans and decoded text entities.
 Independent tables, including cross-page tables, remain separate. Field tasks use a dedicated
 prompt and constrained JSON; values stay strings or null, preserving leading zeroes and units.
-Question tasks return a short answer about visible document content. Legal JSON and a complete
+Question tasks return an answer about visible document content. Ovis uses its trained VQA prompt;
+the final boxed answer is projected separately while reasoning remains in the raw output.
+Unfinished boxes or malformed tables are marked incomplete. Ovis image-crop placeholders are
+removed from the reading view (no crop files are created); repeated-tail cleanup retains the raw
+response and marks the unit truncated. Legal JSON and a complete
 status do not establish recognition accuracy.
 
 Each unit records its actual engine and completion, truncation, invalid-structure, unavailable or
 unrecognized status. Source metadata includes a SHA-256. Cache keys include task, page selection,
 field names, question, asset digest/parser version and task/model versions. Last-consumer cancellation
 stops inference; the inference slot and temporary asset remain owned until native cleanup settles.
+
+## Model selection
+
+General settings keeps one recognition row, with system, Xiaomi-OCR-0 and OvisOCR3 choices in its
+compact sheet. Each model owns independent verified downloads, resume state and deletion. A
+completed download enables that model; deleting the selected model restores system recognition.
+Deleting another model leaves the selection and active inference unchanged. Models use different
+versioned directories and cache identities, so existing Xiaomi downloads and cached results remain
+usable. One shared extraction queue and per-request context release prevent concurrent model loads.
+
+Ovis uses the pinned community Q4_K_M conversion plus its BF16 vision projector, totaling
+736,644,000 bytes. See `localOcrModel.ts` for immutable revisions and checksums. It reuses the installed
+`llama.rn` runtime and native image/PDF bridge without additional dependencies. This integration is
+single-page Markdown/HTML parsing, fields and VQA, not Ovis' optional layout, figure-captioning or
+cross-page reconstruction pipelines.
 
 ## Agent and Office composition
 
@@ -69,7 +89,8 @@ Regression sources cover source locations, grids, field strings, request validat
 cancellation/cleanup, authorization and bounded Unicode continuations. The Office owner separately
 covers merged-range validation and generation.
 They were added without running tests, type checks, builds or device/UI acceptance. Native page
-selection and Xiaomi tasks require a new development client and authorized real-sample acceptance
+selection and local model tasks require a development client containing the OCR bridges and
+`llama.rn`, followed by authorized real-sample acceptance
 on both platforms. Phone memory, speed and recognition quality remain unmeasured. See the
 [native module](../../../../modules/pdf-text-extractor/README.md) and
 [Office owner](../office/README.md).

@@ -77,7 +77,7 @@ export const documentExtractionUnitSchema = z.object({
     /** JSON pointer into the unchanged AnyDoc IR; never an invented Excel cell address. */
     pointer: z.string().optional(),
   }),
-  engine: z.enum(['pdf-text', 'system', 'xiaomi', 'anydoc', 'builtin']),
+  engine: z.enum(['pdf-text', 'system', 'xiaomi', 'ovis', 'anydoc', 'builtin']),
   status: z.enum(['complete', 'truncated', 'unrecognized', 'invalid-structure', 'unavailable']),
   text: z.string().max(1_000_000),
   raw: z.string().max(1_000_000).optional(),

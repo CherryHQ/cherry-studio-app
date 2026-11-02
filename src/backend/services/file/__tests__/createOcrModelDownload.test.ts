@@ -1,7 +1,7 @@
 import type { LocalOcrModelState } from '@/shared/contracts/localOcr';
 
 import { createOcrModelDownload } from '../createOcrModelDownload';
-import { LOCAL_OCR_MODEL_BYTES, LOCAL_OCR_MODEL_FILES } from '../localOcrModel';
+import { LOCAL_OCR_MODELS } from '../localOcrModel';
 
 jest.mock('react-native', () => ({
   AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
@@ -19,7 +19,9 @@ const mockCreateDownload = jest.fn(
     progress: (value: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void,
     resumeData?: string,
   ) => {
-    const model = LOCAL_OCR_MODEL_FILES.find((file) => file.url === url)!;
+    const model = Object.values(LOCAL_OCR_MODELS)
+      .flatMap((model) => model.files)
+      .find((file) => file.url === url)!;
     let finish: ((value: { status: number } | undefined) => void) | undefined;
     const transfer = async () => {
       if (mockHoldTransfer)
@@ -94,11 +96,14 @@ function observe(model: ReturnType<typeof createOcrModelDownload>) {
 }
 
 test('download during startup inspection installs both files before reporting ready', async () => {
-  const model = createOcrModelDownload(true);
+  const model = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   const { states, stop } = observe(model);
   await model.download();
   expect(mockCreateDownload).toHaveBeenCalledTimes(2);
-  expect(states.at(-1)).toMatchObject({ status: 'ready', receivedBytes: LOCAL_OCR_MODEL_BYTES });
+  expect(states.at(-1)).toMatchObject({
+    status: 'ready',
+    receivedBytes: LOCAL_OCR_MODELS.xiaomi.files.reduce((sum, file) => sum + file.bytes, 0),
+  });
   expect(await model.ensureReady()).toBe(true);
   expect([...mockFiles.keys()].filter((path) => path.endsWith('.gguf'))).toHaveLength(2);
   stop();
@@ -107,7 +112,7 @@ test('download during startup inspection installs both files before reporting re
 
 test('bad downloaded checksums never become a usable model', async () => {
   mockInvalidDigest = true;
-  const model = createOcrModelDownload(true);
+  const model = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   const { states } = observe(model);
   await model.download();
   expect(await model.ensureReady()).toBe(false);
@@ -118,18 +123,18 @@ test('bad downloaded checksums never become a usable model', async () => {
 });
 
 test('a new runtime verifies existing bytes rather than trusting file presence', async () => {
-  const first = createOcrModelDownload(true);
+  const first = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   await first.download();
   await first.dispose();
   mockInvalidDigest = true;
-  const second = createOcrModelDownload(true);
+  const second = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   expect(await second.ensureReady()).toBe(false);
   expect([...mockFiles.keys()].some((path) => path.endsWith('.gguf'))).toBe(false);
   await second.dispose();
 });
 
 test('pause persists the native resume token and a later runtime resumes that file', async () => {
-  const first = createOcrModelDownload(true);
+  const first = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   let started!: () => void;
   const starting = new Promise<void>((resolve) => {
     started = resolve;
@@ -146,7 +151,7 @@ test('pause persists the native resume token and a later runtime resumes that fi
   await first.dispose();
 
   mockHoldTransfer = false;
-  const second = createOcrModelDownload(true);
+  const second = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   const { states } = observe(second);
   await second.download();
   expect(mockResume).toHaveBeenCalledWith('native-resume-token');
@@ -158,7 +163,7 @@ test('pause persists the native resume token and a later runtime resumes that fi
 });
 
 test('an unavailable native runtime does not download model files', async () => {
-  const model = createOcrModelDownload(false);
+  const model = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, false);
   const { states } = observe(model);
   await model.download();
   expect(states.at(-1)).toMatchObject({ status: 'failed', reason: 'unavailable' });
@@ -167,7 +172,7 @@ test('an unavailable native runtime does not download model files', async () => 
 });
 
 test('pausing startup inspection does not prevent a subsequent download from pausing', async () => {
-  const model = createOcrModelDownload(true);
+  const model = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
   const checking = model.ensureReady();
   await model.pause();
   expect(await checking).toBe(false);
@@ -190,4 +195,25 @@ test('pausing startup inspection does not prevent a subsequent download from pau
   stopStarting();
   stop();
   await model.dispose();
+});
+
+test('models keep separate files, progress and deletion across restarts', async () => {
+  const xiaomi = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
+  const ovis = createOcrModelDownload(LOCAL_OCR_MODELS.ovis, true);
+  const xiaomiStates = observe(xiaomi).states;
+  const ovisStates = observe(ovis).states;
+  await xiaomi.download();
+  await ovis.download();
+  expect(xiaomi.paths().model).not.toBe(ovis.paths().model);
+  expect(ovisStates.at(-1)).toMatchObject({ status: 'ready', totalBytes: 736_644_000 });
+  expect([...mockFiles.keys()].filter((path) => path.endsWith('.gguf'))).toHaveLength(4);
+  await ovis.remove();
+  expect(ovisStates.at(-1)?.status).toBe('idle');
+  expect(xiaomiStates.at(-1)?.status).toBe('ready');
+  expect(mockFiles.has(xiaomi.paths().model)).toBe(true);
+  expect(mockFiles.has(xiaomi.paths().vision)).toBe(true);
+  await Promise.all([xiaomi.dispose(), ovis.dispose()]);
+  const restored = createOcrModelDownload(LOCAL_OCR_MODELS.xiaomi, true);
+  expect(await restored.ensureReady()).toBe(true);
+  await restored.dispose();
 });

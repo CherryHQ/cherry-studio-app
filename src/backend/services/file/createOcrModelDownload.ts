@@ -5,22 +5,20 @@ import type { LocalOcrModelState } from '@/shared/contracts/localOcr';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { hashLocalFile } from './fileHash';
-import {
-  LOCAL_OCR_MODEL_BYTES,
-  LOCAL_OCR_MODEL_FILES,
-  LOCAL_OCR_MODEL_VERSION,
-} from './localOcrModel';
+import type { LocalOcrModel } from './localOcrModel';
 
 const logger = loggerService.withContext('LocalOcrModel');
 
 /** Owns persistent verified weights and one resumable native transfer, never model inference. */
-export function createOcrModelDownload(isSupported: boolean) {
-  const directory = `${FileSystem.documentDirectory}LocalModels/${LOCAL_OCR_MODEL_VERSION}/`;
+export function createOcrModelDownload(model: LocalOcrModel, isSupported: boolean) {
+  const directory = `${FileSystem.documentDirectory}LocalModels/${model.version}/`;
+  const files = model.files;
+  const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0);
   const listeners = new Set<(state: LocalOcrModelState) => void>();
   let state: LocalOcrModelState = {
     status: isSupported ? 'idle' : 'failed',
     receivedBytes: 0,
-    totalBytes: LOCAL_OCR_MODEL_BYTES,
+    totalBytes,
     reason: isSupported ? undefined : 'unavailable',
   };
   let active:
@@ -37,7 +35,7 @@ export function createOcrModelDownload(isSupported: boolean) {
     receivedBytes = state.receivedBytes,
     reason?: LocalOcrModelState['reason'],
   ) {
-    state = { status, receivedBytes, totalBytes: LOCAL_OCR_MODEL_BYTES, reason };
+    state = { status, receivedBytes, totalBytes, reason };
     for (const listener of listeners) listener(state);
   }
 
@@ -60,7 +58,7 @@ export function createOcrModelDownload(isSupported: boolean) {
 
   async function verifiedBytes(signal: AbortSignal): Promise<number> {
     let bytes = 0;
-    for (const model of LOCAL_OCR_MODEL_FILES) {
+    for (const model of files) {
       const uri = directory + model.name;
       const info = await FileSystem.getInfoAsync(uri);
       signal.throwIfAborted();
@@ -88,14 +86,14 @@ export function createOcrModelDownload(isSupported: boolean) {
           if (!FileSystem.documentDirectory) throw new Error('Model storage unavailable');
           const bytes = await verifiedBytes(signal);
           const resumable = await Promise.all(
-            LOCAL_OCR_MODEL_FILES.flatMap((model) => [
+            files.flatMap((model) => [
               FileSystem.getInfoAsync(`${directory}${model.name}.part`),
               FileSystem.getInfoAsync(`${directory}${model.name}.part.resume`),
             ]),
           );
           signal.throwIfAborted();
           publish(
-            bytes === LOCAL_OCR_MODEL_BYTES
+            bytes === totalBytes
               ? 'ready'
               : bytes > 0 || resumable.some((info) => info.exists)
                 ? 'paused'
@@ -165,7 +163,7 @@ export function createOcrModelDownload(isSupported: boolean) {
         signal.throwIfAborted();
         completeBytes = await verifiedBytes(signal);
         const partials = await Promise.all(
-          LOCAL_OCR_MODEL_FILES.map(async (model) => {
+          files.map(async (model) => {
             const info = await FileSystem.getInfoAsync(`${directory}${model.name}.part`);
             return info.exists && !info.isDirectory ? Math.min(info.size, model.bytes) : 0;
           }),
@@ -173,10 +171,10 @@ export function createOcrModelDownload(isSupported: boolean) {
         const partialBytes = partials.reduce((sum, bytes) => sum + bytes, 0);
         if (
           (await FileSystem.getFreeDiskStorageAsync()) <
-          LOCAL_OCR_MODEL_BYTES - completeBytes - partialBytes + 100_000_000
+          totalBytes - completeBytes - partialBytes + 100_000_000
         )
           throw new Error('Insufficient model storage');
-        for (const model of LOCAL_OCR_MODEL_FILES) {
+        for (const model of files) {
           signal.throwIfAborted();
           const complete = directory + model.name;
           if ((await FileSystem.getInfoAsync(complete)).exists) continue;
@@ -254,7 +252,7 @@ export function createOcrModelDownload(isSupported: boolean) {
         }
         signal.throwIfAborted();
         initialized = true;
-        publish('ready', LOCAL_OCR_MODEL_BYTES);
+        publish('ready', totalBytes);
       } catch (error) {
         if (signal.aborted) {
           await pauseTask;
