@@ -45,6 +45,7 @@
   "agent.actions.create": "Νέος πράκτορας",
   "agent.actions.delete": "Διαγραφή πράκτορα",
   "agent.actions.retry": "Επανάληψη",
+  "agent.actions.switch": "Αλλαγή πράκτορα",
   "agent.create.title": "Νέος πράκτορας",
   "agent.default.name": "Πράκτορας Cherry",
   "agent.delete.message": "Μετά τη διαγραφή του \"{{name}}\", οι περίοδοι λειτουργίας του παραμένουν αναγνώσιμες, αλλά δεν μπορούν πλέον να εκτελεστούν.",

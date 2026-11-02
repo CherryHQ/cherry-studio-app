@@ -1,10 +1,13 @@
+import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, Text, View } from 'react-native';
 
 import {
   type ChatRouteParamsInput,
   chatRouteParams,
+  createChatComposerHandoff,
   parseChatRoute,
   useStartNewChat,
 } from '@/frontend/appShell/navigation/chat';
@@ -27,7 +30,13 @@ export function useMainHeaderAgent() {
   const openNewSession = useCallback(() => {
     Keyboard.dismiss();
     if (agent) {
-      router.setParams(chatRouteParams({ agentId: agent.id, kind: 'draft' }));
+      router.setParams(
+        chatRouteParams({
+          agentId: agent.id,
+          kind: 'draft',
+          composerHandoff: createChatComposerHandoff({ attachments: [], draft: '' }),
+        }),
+      );
       return;
     }
 
@@ -35,6 +44,22 @@ export function useMainHeaderAgent() {
   }, [agent, router, startNewChat]);
 
   return { agent, openNewSession };
+}
+
+export function MainHeaderAgentSwitch({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      accessibilityLabel={t('agent.actions.switch')}
+      accessibilityRole="button"
+      className="size-10 shrink-0 items-center justify-center rounded-full active:opacity-60"
+      hitSlop={2}
+      onPress={onPress}
+      testID="main-header-agent-switch"
+    >
+      <CircleUserRoundIcon className="size-4.5 text-foreground" strokeWidth={1.8} />
+    </Pressable>
+  );
 }
 
 export function MainHeaderAgentLabel({

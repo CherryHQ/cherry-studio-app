@@ -1,8 +1,8 @@
 import UploadIcon from '@cherrystudio/app-icons/icons/upload';
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, type ViewInstance } from 'react-native';
 
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
 import {
@@ -17,11 +17,22 @@ import { FilePickerList } from './FilePickerList';
 
 type FilePickerBottomSheetProps = {
   onClose: () => void;
+  onClosed?: () => void;
+  onSelect: () => void;
   onUpload: () => void;
+  open: boolean;
+  returnFocusRef?: RefObject<ViewInstance | null>;
 };
 
 /** Selection belongs to the sheet, so collapsing or recycling a folder never drops its files. */
-export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomSheetProps) {
+export function FilePickerBottomSheet({
+  onClose,
+  onClosed,
+  onSelect,
+  onUpload,
+  open,
+  returnFocusRef,
+}: FilePickerBottomSheetProps) {
   const { t } = useTranslation();
   const { attachments } = useComposerState();
   const { addAttachments } = useComposerActions();
@@ -52,11 +63,12 @@ export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomShe
   function addSelectedFiles() {
     if (selectedAttachments.length === 0) return;
     addAttachments(selectedAttachments);
-    onClose();
+    onSelect();
   }
 
   return (
     <BottomSheet
+      onClosed={onClosed}
       footer={
         selectedAttachments.length > 0 ? (
           <Button onPress={addSelectedFiles} testID="file-picker-add">
@@ -65,7 +77,9 @@ export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomShe
         ) : undefined
       }
       onClose={onClose}
-      open
+      open={open}
+      presentation="overlay"
+      returnFocusRef={returnFocusRef}
       size="full"
       testID="file-picker"
       title={t('chat.filePicker.title')}

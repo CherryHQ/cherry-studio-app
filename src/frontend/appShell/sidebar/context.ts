@@ -12,7 +12,6 @@ export type SidebarActions = {
   openPaintings: () => void;
   openSettings: () => void;
   openSearch?: () => void;
-  startNewChat: () => void;
 };
 
 export const SidebarActionsContext = createContext<SidebarActions | null>(null);

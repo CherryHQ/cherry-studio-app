@@ -70,15 +70,6 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
-jest.mock('../components/ChatInputPluginPopover', () => ({
-  ChatInputPluginPopover: ({ children }: { children: ReactNode }) => children,
-}));
-jest.mock('../components/ChatInputPromptPopover', () => ({
-  ChatInputPromptPopover: ({ children }: { children: ReactNode }) => children,
-}));
-jest.mock('../components/ChatInputSkillPopover', () => ({
-  ChatInputSkillPopover: ({ children }: { children: ReactNode }) => children,
-}));
 jest.mock('../hooks/useChatInputAgentModelSelection', () => ({
   useChatInputAgentModelSelection: () => ({ selectModel: mockNoop, selectedModelId: 'p::m' }),
 }));

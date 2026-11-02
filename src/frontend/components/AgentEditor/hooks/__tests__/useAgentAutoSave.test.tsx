@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { createAgentSkillBindingDraft } from '../agentSkillSettings';
+import { createAgentSkillBindingDraft } from '../../utils/agentSkillSettings';
 import { useAgentAutoSave } from '../useAgentAutoSave';
 
 const mockReplaceAgentSkills = jest.fn<Promise<void>, [string, readonly AgentSkillUpdate[]]>();

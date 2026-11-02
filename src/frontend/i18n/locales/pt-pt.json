@@ -45,6 +45,7 @@
   "agent.actions.create": "Novo agente",
   "agent.actions.delete": "Eliminar agente",
   "agent.actions.retry": "Tentar novamente",
+  "agent.actions.switch": "Mudar de agente",
   "agent.create.title": "Novo agente",
   "agent.default.name": "Cherry Agente",
   "agent.delete.message": "Após a eliminação de \"{{name}}\", as suas sessões permanecem legíveis, mas já não podem ser executadas.",

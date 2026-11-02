@@ -22,7 +22,7 @@ import {
   type McpToolCatalog,
   removeAgentToolBinding,
   setAgentMcpServerEnabled,
-} from '../agentToolSettings';
+} from '../utils/agentToolSettings';
 
 type AgentToolsSectionProps = {
   bindings: readonly WriteAgentToolBinding[];

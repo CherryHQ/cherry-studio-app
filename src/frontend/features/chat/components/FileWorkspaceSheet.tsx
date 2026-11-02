@@ -6,9 +6,9 @@ import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import { BottomSheet, Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useIsFocused } from 'expo-router';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, type RefObject, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import {
   FileEntrySkeleton,
@@ -34,7 +34,7 @@ type WorkspaceListExtraData = {
   isFocused: boolean;
   selectedId: string | null;
   isSaving: boolean;
-  onClose: () => void;
+  onOpenPreview: () => void;
   onSelect: (id: string | null) => Promise<void>;
   onToggle: (id: string) => void;
 };
@@ -47,9 +47,17 @@ const LEVEL_INDENT = 36;
 export function FileWorkspaceSheet({
   address,
   onClose,
+  onClosed,
+  onOpenPreview,
+  open,
+  returnFocusRef,
 }: {
   address: FileWorkspaceAddress;
   onClose: () => void;
+  onClosed?: () => void;
+  onOpenPreview: () => void;
+  open: boolean;
+  returnFocusRef?: RefObject<ViewInstance | null>;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -107,7 +115,7 @@ export function FileWorkspaceSheet({
       isFocused: focused,
       selectedId: workspace.folderId,
       isSaving: workspace.isSaving,
-      onClose,
+      onOpenPreview,
       onSelect: selectFolder,
       onToggle: toggleFolder,
     }),
@@ -116,7 +124,7 @@ export function FileWorkspaceSheet({
       focused,
       workspace.folderId,
       workspace.isSaving,
-      onClose,
+      onOpenPreview,
       selectFolder,
       toggleFolder,
     ],
@@ -127,11 +135,14 @@ export function FileWorkspaceSheet({
 
   return (
     <BottomSheet
+      onClosed={onClosed}
       onClose={onClose}
       // Keep the list mounted under the existing file viewer. Controlled hiding
       // on route blur preserves expansion, loaded pages and the scroll position.
-      open={focused}
-      size="large"
+      open={open && focused}
+      presentation="overlay"
+      returnFocusRef={returnFocusRef}
+      size="full"
       testID="file-workspace-sheet"
       title={t('workspace.title')}
     >
@@ -177,7 +188,7 @@ function renderWorkspaceRow({ item, extraData }: LegendListRenderItemProps<Works
         enabled={data.isFocused}
         folderId={item.folderId}
         hasChildFolders={item.hasChildFolders}
-        onClose={data.onClose}
+        onOpenPreview={data.onOpenPreview}
       />
     );
   }
@@ -292,13 +303,13 @@ function WorkspaceFolderFiles({
   enabled,
   folderId,
   hasChildFolders,
-  onClose,
+  onOpenPreview,
 }: {
   depth: number;
   enabled: boolean;
   folderId: string;
   hasChildFolders: boolean;
-  onClose: () => void;
+  onOpenPreview: () => void;
 }) {
   const { t } = useTranslation();
   const { openFileEntry } = useOpenFileEntry();
@@ -326,7 +337,7 @@ function WorkspaceFolderFiles({
             onPress={() => {
               // A file beside chat would sit under this sheet, so the sheet gives way to it.
               if (item.uri && openFileEntry({ entry: item.entry, uri: item.uri }) === 'pane') {
-                onClose();
+                onOpenPreview();
               }
             }}
             testID={`file-workspace-preview-${item.entry.id}`}

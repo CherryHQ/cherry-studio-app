@@ -45,6 +45,7 @@
   "agent.actions.create": "Новый агент",
   "agent.actions.delete": "Удалить агента",
   "agent.actions.retry": "Повторить",
+  "agent.actions.switch": "Переключить агента",
   "agent.create.title": "Новый агент",
   "agent.default.name": "Агент Cherry",
   "agent.delete.message": "После удаления «{{name}}» его сеансы остаются доступными для чтения, но больше не могут запускаться.",

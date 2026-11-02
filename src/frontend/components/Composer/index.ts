@@ -16,6 +16,7 @@ export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
 export { ComposerSessionProvider } from './components/ComposerSessionProvider';
 export { ComposerSurface, type ComposerSendPayload } from './components/ComposerSurface';
+export { useComposerMediaActions } from './hooks/useComposerMediaActions';
 export { useComposerDocumentPicker } from './hooks/useComposerDocumentPicker';
 export {
   type ComposerAttachmentStore,

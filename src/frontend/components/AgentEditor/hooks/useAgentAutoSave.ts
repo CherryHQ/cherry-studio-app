@@ -10,7 +10,7 @@ import { useSkillMutations } from '@/frontend/hooks/skill';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 
-import type { AgentFormState } from './agentForm';
+import type { AgentFormState } from '../utils/agentForm';
 
 const TEXT_SAVE_DELAY_MS = 600;
 const logger = loggerService.withContext('useAgentAutoSave');

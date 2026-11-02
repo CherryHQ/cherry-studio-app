@@ -175,6 +175,20 @@ const frontendPublicSurfaceZones = [
     message:
       'Import ModelPicker UI from @/frontend/components/ModelPicker or capability badges from its /badges entry.',
   },
+  {
+    target: [
+      'src/app',
+      'src/frontend/!(components)/**/*',
+      'src/frontend/components/!(AgentEditor)/**/*',
+    ],
+    from: [
+      'src/frontend/components/AgentEditor/AgentEditor.tsx',
+      'src/frontend/components/AgentEditor/components',
+      'src/frontend/components/AgentEditor/hooks',
+      'src/frontend/components/AgentEditor/utils',
+    ],
+    message: 'Import the shared Agent form from @/frontend/components/AgentEditor.',
+  },
 ];
 
 // Reuse the same layer declarations for resolved paths, so relative imports,

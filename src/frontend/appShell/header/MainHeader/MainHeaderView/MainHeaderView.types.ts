@@ -11,5 +11,6 @@ export type MainHeaderViewProps = {
   hidden?: boolean;
   onNewChat: () => void;
   onAgentPress?: () => void;
+  onAgentSwitch?: () => void;
   actions?: readonly HeaderToolbarAction[];
 };

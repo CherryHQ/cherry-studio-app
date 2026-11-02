@@ -89,3 +89,19 @@ The closed detent then becomes programmatic-only: drag, scrim, Android back, and
 escape cannot reach it, while changing `open` to `false` still performs the controlled close. Such a
 sheet hides its drag handle unless `sizes` still lets the user drag between heights; the handle's
 space stays so the header does not move.
+
+## Covering overlays
+
+Use `presentation="overlay"` for a handle-only surface. `title` remains its accessible name; the
+visible heading and header actions are omitted. Nested sheets inherit this presentation and a
+minimum height equal to their parent, keeping the lower card covered. The parent stays mounted and
+becomes inactive while a nested sheet is presented. Sibling sheets coordinate the same behavior
+with `active={false}` on the covered sheet and `size="full"` on the child.
+
+`size="content"` wraps short content in a scroll view and measures the body, handle/header, footer
+and safe-area space, capped at the available height. Fixed and semantic sizes remain available.
+`initialFocusRef` selects the first focus target; `returnFocusRef` restores focus after dismissal.
+`onClose` reports an interactive dismissal once it settles. `onClosed` also runs for controlled
+closures, after focus restoration, so a caller can wait before opening a native picker or focusing
+its input. An overlay allocates its native portal on first opening and then keeps its content
+mounted during controlled hiding, preserving scroll state across file previews.

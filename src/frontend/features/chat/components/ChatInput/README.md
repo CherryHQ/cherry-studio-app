@@ -20,7 +20,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   incoming system share opens a fresh Draft composer seeded with its text and library attachments,
   replacing whatever draft was there; nothing is sent until the user sends it.
 - Sending a message blurs the input, ends editing, and dismisses the keyboard immediately on
-  submission. The empty composer returns to one row; local-send scrolling does not dismiss again.
+  submission. Local-send scrolling does not dismiss again.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a submission or the selected branch's answer is active, the send control becomes stop.
@@ -28,12 +28,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer; afterwards it stops the selected answer by its message and turn IDs. Switching to
   a completed answer restores the send control; it stays disabled until the other answers finish.
   A queued follow-up keeps its running ancestor as the stop target.
-- When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
-  action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
-  full width, the action row moves below it, and
-  the model pill and reasoning-effort gauge slide and scale in without animating their glass
-  opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
-  it down.
+- Local chat always shows the field above its action row, including the model and reasoning
+  controls when the draft is empty. Remote chat retains the adaptive one-row resting layout.
+  The field grows with its content up to the shared composer cap.
 - Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
   surface below the top safe area, with a collapse action and no heading. Its background fills
   both screen edges and extends through the footer and bottom safe area. Local and
@@ -61,12 +58,11 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   press outside the composer calls `dismiss`, blurring the field and ending editing. List scrolling
   and handled child actions do not count as background presses. Draft text and attachments still keep
   the surface expanded. Closing an overlay by its backdrop only closes that overlay. The original
-  layout and motion remain in place; the [interaction contract](../../../../../../docs/references/chat/input-interaction.md)
-  limits this change to keyboard and selection side effects.
+  editing state remains in place; see the [interaction contract](../../../../../../docs/references/chat/input-interaction.md).
 - Native media pickers and model/settings Sheets replace the live input context: the shared
   composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
-  It reconnects keyboard tracking only when the field receives focus again. Menu and effort
-  overlays preserve the existing keyboard context instead.
+  It reconnects keyboard tracking only when the field receives focus again. The local chat tools
+  sheet uses this replacement path; the effort overlay retains the existing keyboard context.
 - Picking a model updates the current Agent's `model`. Submission also snapshots the visible
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.
@@ -79,13 +75,19 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Models without selectable reasoning, including image models, reset it to `default`; loading model
   metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
   fallback ordering.
+- The plus action opens a content-height tools sheet with camera, photos, files, workspace,
+  Plugins, Skills and available MCP prompts. Child sheets cover the menu, keeping its content
+  mounted and inactive. Drag, scrim, Back and Escape dismiss only the top layer; the handle retains
+  an accessible name without a visible title or header buttons. Completing a content selection
+  closes both layers before focusing the input. Workspace selection returns to the tools sheet;
+  file previews preserve its expansion state unless a reference is handed back to the composer.
 - The composer menu offers media, Plugins, and a separate Skills row. The Plugins row remains visible
   when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
 - A short MCP row appears only when the current Agent enables a custom MCP server that has
   cached prompt templates. Per-tool overrides do not enable that server's prompts. The same
-  keyboard-preserving compact menu used by Plugins lists the cached templates and their sources;
+  covering sheet presentation used by Plugins lists the cached templates and their sources;
   opening it performs no remote discovery. Selecting a template resolves its messages and adds
   them to the draft without preview or sending; a template without parameters shows progress in
   its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
@@ -103,9 +105,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   action shares the discovery handoff, send, retry and history contract. The Host owns full-content
   review and explicit save/binding choices. Trial opens a fresh unsent installed-Skill draft.
 - The plus menu does not add or discover Skills; it only selects installed Skills for use.
-- The menu's Skills row opens the same anchored small-menu presentation as Plugins, listing eligible
-  installed bindings for the current Agent. A row inserts an inline Skill reference and closes the
-  menu without dismissing the composer keyboard. Selected rows show a checkmark and do not insert
+- The menu's Skills row opens a covering sheet like Plugins, listing eligible installed bindings
+  for the current Agent. A row inserts an inline Skill reference and returns to the composer. Selected rows show a checkmark and do not insert
   duplicates; deleting a reference in the editor removes its selection.
   Skill references use desktop's ToolCase icon beside their name at the editor's font size. The plus
   menu, picker rows and sidebar use the same Lucide vector. Native inline icons are tagged separately
@@ -116,7 +117,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   them and records name/revision receipts on the user message. Rejected sends retain selections,
   successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
   remain selectable when user invocation is allowed. Selection never creates an Agent binding.
-- The menu's File row opens the full-height library picker with only a centered title in its header.
+- The menu's File tile opens the full-height library picker with only a drag handle at the top.
   Like the library, each level lists its folders first, then its files newest first. A folder's
   own timestamp does not change when files are added inside it, so folders are not ordered among
   files. Folder rows only expand/collapse; their children remain under the folder and reuse the

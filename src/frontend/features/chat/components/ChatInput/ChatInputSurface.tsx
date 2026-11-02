@@ -37,6 +37,7 @@ export function ChatInputSurface({
   fieldStyle,
   placeholder,
   attachmentMode = 'images',
+  layout = 'adaptive',
 }: {
   leadingAction?: ReactNode;
   secondaryAction?: ReactNode;
@@ -46,6 +47,7 @@ export function ChatInputSurface({
   fieldStyle?: StyleProp<TextStyle>;
   placeholder?: string;
   attachmentMode?: 'images' | 'text-only';
+  layout?: 'adaptive' | 'expanded';
 }) {
   const { t } = useTranslation();
   const { isEditing } = useComposerPresentationState();
@@ -53,7 +55,7 @@ export function ChatInputSurface({
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
   return (
     <ComposerEditor
-      active={isEditing || draft.length > 0 || attachments.length > 0}
+      active={layout === 'expanded' || isEditing || draft.length > 0 || attachments.length > 0}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
       placeholder={placeholder}

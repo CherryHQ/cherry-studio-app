@@ -45,6 +45,7 @@
   "agent.actions.create": "新建智能體",
   "agent.actions.delete": "刪除智能體",
   "agent.actions.retry": "重試",
+  "agent.actions.switch": "切換智能體",
   "agent.create.title": "新建智能體",
   "agent.default.name": "Cherry 小助手",
   "agent.delete.message": "刪除“{{name}}”後，它的會話仍可查看，但無法繼續運行。",

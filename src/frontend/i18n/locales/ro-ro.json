@@ -45,6 +45,7 @@
   "agent.actions.create": "Agent nou",
   "agent.actions.delete": "Ștergeți agentul",
   "agent.actions.retry": "Reîncercați",
+  "agent.actions.switch": "Schimbă agentul",
   "agent.create.title": "Agent nou",
   "agent.default.name": "Cherry Agent",
   "agent.delete.message": "După ștergerea „{{name}}”, sesiunile sale rămân lizibile, dar nu mai pot rula.",

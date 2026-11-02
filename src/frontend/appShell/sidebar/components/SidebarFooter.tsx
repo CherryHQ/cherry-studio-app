@@ -1,16 +1,17 @@
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import { Spinner, Surface } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
+import { useAccount } from '@/frontend/appShell/account';
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { useCloud } from '@/frontend/hooks/useCloud';
 import { appSidebar } from '@/frontend/utils/constants';
 
-import NewConversationIcon from '../../icons/NewConversationIcon';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
@@ -22,12 +23,10 @@ import { SidebarFade } from './SidebarFade/SidebarFade';
 export function SidebarFooter() {
   const { t } = useTranslation();
   const [userName] = usePreference('app.user.name');
-  const primaryForegroundColor = useThemeColor('sidebar-primary-foreground');
   const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
-  const { openSettings, startNewChat } = useSidebarActions('SidebarFooter');
+  const { openSettings } = useSidebarActions('SidebarFooter');
   const displayName = userName.trim();
   const isSettingsOpen = useSidebarDestination() === 'settings';
-  const selectedColor = useThemeColor('secondary');
   const selection = useSidebarSelection();
   const { progress } = selection;
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
@@ -64,64 +63,37 @@ export function SidebarFooter() {
           pointerEvents={isSelecting ? 'none' : 'auto'}
           style={normalStyle}
         >
-          <Surface interactive shape="pill" tone="sidebar-primary">
-            <Pressable
-              accessibilityLabel={t('navigation.newChat')}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isSelecting || isDeleting }}
-              disabled={isSelecting || isDeleting}
-              onPress={startNewChat}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                flexDirection: 'row',
-                gap: 8,
-                height: appSidebar.dockHeight,
-                opacity: isDeleting ? 0.4 : pressed ? 0.6 : 1,
-                paddingHorizontal: 16,
-              })}
-              testID="sidebar-new-chat"
-            >
-              <NewConversationIcon color={primaryForegroundColor} size={18} />
-              <Text className="font-medium text-[15px] text-sidebar-primary-foreground">
-                {t('navigation.newChat')}
-              </Text>
-            </Pressable>
-          </Surface>
-
-          <Surface interactive shape="pill">
-            <Pressable
-              accessibilityLabel={t('navigation.settings')}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isSelecting || isDeleting, selected: isSettingsOpen }}
-              disabled={isSelecting || isDeleting}
-              onPress={openSettings}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                // Settings filling the content region marks the avatar like a selected row.
-                backgroundColor: isSettingsOpen ? selectedColor : undefined,
-                borderRadius: appSidebar.dockHeight / 2,
-                flexDirection: 'row',
-                gap: 8,
-                height: appSidebar.dockHeight,
-                opacity: isDeleting ? 0.4 : pressed ? 0.6 : 1,
-                paddingHorizontal: 10,
-              })}
-              testID="sidebar-settings"
-            >
-              <ProfileAvatarImage
-                accessibilityLabel={displayName || t('settings.profile.avatar')}
-                size={28}
-              />
-              {displayName ? (
+          <Pressable
+            accessibilityLabel={t('navigation.settings')}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isSelecting || isDeleting, selected: isSettingsOpen }}
+            disabled={isSelecting || isDeleting}
+            onPress={openSettings}
+            style={{ flex: 1 }}
+            testID="sidebar-settings"
+          >
+            {({ pressed }) => (
+              <View
+                className={cn(
+                  'min-h-11 flex-row items-center gap-3 rounded-xl px-1',
+                  isSettingsOpen && 'bg-secondary',
+                  pressed && 'opacity-60',
+                )}
+              >
+                <ProfileAvatarImage
+                  accessibilityLabel={displayName || t('settings.profile.avatar')}
+                  size={36}
+                />
                 <Text
-                  className="min-w-0 max-w-20 shrink font-medium text-[15px] text-sidebar-foreground"
+                  className="min-w-0 flex-1 font-medium text-base text-sidebar-foreground"
                   numberOfLines={1}
                 >
-                  {displayName}
+                  {displayName || t('settings.profile.title')}
                 </Text>
-              ) : null}
-            </Pressable>
-          </Surface>
+                <SidebarPlanBadge />
+              </View>
+            )}
+          </Pressable>
         </Animated.View>
         <Animated.View
           accessibilityElementsHidden={!isSelecting}
@@ -182,6 +154,27 @@ export function SidebarFooter() {
           </Surface>
         </Animated.View>
       </View>
+    </View>
+  );
+}
+
+/** Subscription updates stay local to the small account badge. */
+function SidebarPlanBadge() {
+  const { t } = useTranslation();
+  const { state: account } = useAccount();
+  const { state } = useCloud();
+  if (account.isEnterprise) return null;
+  const activePlan =
+    state.plans?.entitlements.find((entry) => entry.state === 'active' && !entry.plan.is_free) ??
+    state.plans?.entitlements.find((entry) => entry.state === 'active');
+  const label =
+    activePlan?.plan.display_name ??
+    (state.phase === 'loading' || state.phase === 'error' ? '—' : t('cloud.free'));
+  return (
+    <View className="max-w-28 shrink rounded-lg border border-dashed border-border-strong px-3 py-0.5">
+      <Text className="text-sm text-sidebar-foreground" numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }

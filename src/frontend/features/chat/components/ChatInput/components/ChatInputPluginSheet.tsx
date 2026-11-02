@@ -1,7 +1,7 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { Button, Composer } from '@cherrystudio/ui/components';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { useFocusEffect } from 'expo-router';
+import { type RefObject, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
@@ -12,29 +12,31 @@ import type { ChatInputPlugin } from '../utils/chatInputPlugins';
 import { createMentionLabel } from '../utils/mentionLabels';
 import { createPluginMentionUrl, readPluginMentions } from '../utils/pluginMentions';
 
-type ChatInputPluginPopoverProps = {
-  children: ReactNode;
+type ChatInputPluginSheetProps = {
+  onConnect: () => void;
   onClose: () => void;
+  onClosed?: () => void;
+  onSelect: () => void;
   open: boolean;
   plugins: readonly ChatInputPlugin[];
   returnFocusRef?: RefObject<ViewInstance | null>;
 };
 
 /** Reads composer context here; the portal receives presentation and callbacks only. */
-export function ChatInputPluginPopover({
-  children,
+export function ChatInputPluginSheet({
   onClose,
+  onClosed,
+  onConnect,
+  onSelect,
   open,
   plugins,
   returnFocusRef,
-}: ChatInputPluginPopoverProps) {
+}: ChatInputPluginSheetProps) {
   const { t } = useTranslation();
-  const router = useRouter();
   const { inputRef } = useComposerMeta();
   const { draft } = useComposerState();
   const initialFocusRef = useRef<ViewInstance>(null);
   const selectionAccepted = useRef(false);
-  const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);
   useEffect(() => {
     if (!open) return;
     selectionAccepted.current = false;
@@ -42,7 +44,6 @@ export function ChatInputPluginPopover({
   useFocusEffect(
     useCallback(
       () => () => {
-        setShouldRestoreFocus(false);
         onClose();
       },
       [onClose],
@@ -50,16 +51,9 @@ export function ChatInputPluginPopover({
   );
   const selectedIds = new Set(readPluginMentions(draft).pluginServerIds);
 
-  function close(reason: 'outside' | 'anchor' | 'back' = 'outside') {
-    // A touch on the composer owns its next focus/action, including during exit.
-    setShouldRestoreFocus(reason !== 'anchor');
-    onClose();
-  }
-
   function select(plugin: ChatInputPlugin) {
     if (!open || selectionAccepted.current) return;
     selectionAccepted.current = true;
-    setShouldRestoreFocus(true);
     if (!selectedIds.has(plugin.serverId)) {
       inputRef.current?.insertLink(
         createMentionLabel(t(`plugins.catalog.${plugin.id}.name`)),
@@ -67,30 +61,22 @@ export function ChatInputPluginPopover({
       );
       inputRef.current?.insertText(' ');
     }
-    onClose();
+    onSelect();
   }
 
   // Keyboard taps stay with the list. A vertical drag cancels its candidate row
   // press; rows only select on release and have no competing long-press action.
   const content = (
     <ScrollView
-      className="grow-0 shrink"
-      contentContainerClassName="gap-0.5 p-2"
+      className="min-h-0 flex-1"
+      contentContainerClassName="gap-1 px-5 py-2"
       keyboardDismissMode="none"
       keyboardShouldPersistTaps="always"
     >
       {plugins.length === 0 ? (
         <View className="gap-2 px-3 py-2">
           <Text className="text-sm text-muted-foreground">{t('plugins.composer.empty')}</Text>
-          <Button
-            onPress={() => {
-              setShouldRestoreFocus(false);
-              onClose();
-              router.push('/plugins');
-            }}
-            size="sm"
-            variant="ghost"
-          >
+          <Button onPress={onConnect} size="sm" variant="ghost">
             {t('plugins.connect')}
           </Button>
         </View>
@@ -103,7 +89,7 @@ export function ChatInputPluginPopover({
             accessibilityLabel={name}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
-            className="min-h-12 flex-row items-center gap-3 rounded-xl px-3 py-2 active:bg-secondary-active"
+            className="min-h-14 flex-row items-center gap-3 rounded-xl px-3 py-2 active:bg-secondary-active"
             key={plugin.id}
             onPress={() => select(plugin)}
             ref={index === 0 ? initialFocusRef : undefined}
@@ -119,18 +105,18 @@ export function ChatInputPluginPopover({
   );
 
   return (
-    <Composer.Popover
-      accessibilityLabel={t('plugins.title')}
-      content={content}
+    <BottomSheet
+      onClosed={onClosed}
       initialFocusRef={initialFocusRef}
-      maxHeight={320}
-      maxWidth={280}
-      onClose={close}
+      onClose={onClose}
       open={open}
-      returnFocusRef={shouldRestoreFocus ? returnFocusRef : undefined}
-      testID="chat-plugin-popover"
+      presentation="overlay"
+      returnFocusRef={returnFocusRef}
+      size="full"
+      testID="chat-plugin-sheet"
+      title={t('plugins.title')}
     >
-      {children}
-    </Composer.Popover>
+      {content}
+    </BottomSheet>
   );
 }

@@ -45,6 +45,7 @@
   "agent.actions.create": "Nouvel agent",
   "agent.actions.delete": "Supprimer l'agent",
   "agent.actions.retry": "Réessayer",
+  "agent.actions.switch": "Changer d’agent",
   "agent.create.title": "Nouvel agent",
   "agent.default.name": "Agent Cherry",
   "agent.delete.message": "Après avoir supprimé « {{name}} », ses sessions restent lisibles mais ne peuvent plus s'exécuter.",

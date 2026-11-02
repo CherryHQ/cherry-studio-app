@@ -45,6 +45,7 @@
   "agent.actions.create": "Yeni ajan",
   "agent.actions.delete": "Ajanı sil",
   "agent.actions.retry": "Yeniden dene",
+  "agent.actions.switch": "Ajan değiştir",
   "agent.create.title": "Yeni ajan",
   "agent.default.name": "Cherry Ajanı",
   "agent.delete.message": "\"{{name}}\" silindikten sonra oturumları okunabilir durumda kalır ancak artık çalıştırılamaz.",

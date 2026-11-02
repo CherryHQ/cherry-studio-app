@@ -45,6 +45,7 @@
   "agent.actions.create": "Tác nhân mới",
   "agent.actions.delete": "Xóa tác nhân",
   "agent.actions.retry": "Thử lại",
+  "agent.actions.switch": "Chuyển tác nhân",
   "agent.create.title": "Tác nhân mới",
   "agent.default.name": "Tác nhân Cherry",
   "agent.delete.message": "Sau khi xóa \"{{name}}\", các phiên của nó vẫn có thể đọc được nhưng không thể chạy được nữa.",
