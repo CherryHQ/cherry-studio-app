@@ -11,6 +11,7 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { AppUpdateDownload, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { appUpdateReleaseNotesQueryOptions, useAppUpdateDownload } from './appUpdateQueries';
+import { DOMESTIC_STORE_KEYS } from './domesticStoreKeys';
 
 export type AppUpdateDialogActions = {
   cancel(): Promise<void>;
@@ -124,7 +125,7 @@ function ReleaseNotes({
     );
   }
   if (!notes) {
-    return channel === 'google-play' ? (
+    return channel === 'google-play' || channel === 'domestic-stores' ? (
       <Text className="text-base text-foreground">{t('appUpdate.storeAvailable')}</Text>
     ) : null;
   }
@@ -237,7 +238,13 @@ function AppUpdateDialogActionsView({
       return (
         <View className="gap-3">
           <Button onPress={() => actions.start(release)} testID="app-update-start">
-            {t(release.channel === 'apk' ? 'appUpdate.download' : STORE_KEYS[release.channel])}
+            {t(
+              release.channel === 'apk'
+                ? 'appUpdate.download'
+                : release.channel === 'domestic-stores'
+                  ? DOMESTIC_STORE_KEYS[release.store]
+                  : STORE_KEYS[release.channel],
+            )}
           </Button>
           {later}
         </View>

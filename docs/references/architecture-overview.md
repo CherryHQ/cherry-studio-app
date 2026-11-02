@@ -92,6 +92,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [UI Components](./ui-components.md): shared controls and feature-local UI.
 - [System Integration Design](./system-integration-design.md): system sharing, composer handoff,
   and native-extension boundaries.
+- [Application Update Design](./app-update-design.md): proposed shared update workflow, native
+  store adapters, and cold-start reminder behavior; implementation status is recorded in the design.
 - [Extending Cherry Mobile](../guides/extending.md): how to extend data, workflows, backend behavior, and UI.
 
 ## Current Baseline

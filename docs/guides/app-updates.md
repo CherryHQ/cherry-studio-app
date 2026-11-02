@@ -1,8 +1,8 @@
 # Application Updates
 
 Cherry Mobile uses `expo-updates` and EAS Update for compatible JavaScript and ordinary asset
-changes on iOS, Google Play, and the public APK distributed through GitHub/GitCode. Existing
-installations must first install a new native package containing this client. Development and
+changes on iOS, Google Play, domestic Android stores, and the public APK distributed through
+GitHub/GitCode. Existing installations must first install a new native package containing this client. Development and
 Storybook disable automatic OTA updates and continue using Metro.
 
 ## Startup And Compatibility
@@ -46,6 +46,7 @@ OTA publication must comply with store review rules and cannot bypass review req
 | `preview`, Android/iOS | `preview` | `preview` | Disabled |
 | `production`, Android | `production-apk` | `production` | Enabled |
 | `production-google-play`, Android | `production-google-play` | `production` | Disabled |
+| `production-domestic-stores`, Android | `production-domestic-stores` | `production` | Disabled |
 | `production`, iOS | `production-ios` | `production` | Disabled |
 | `development` / `development-simulator` | None | `development` | Opt-in flag |
 
@@ -72,6 +73,7 @@ Run `eas channel:list`, then create any missing channels and their same-named br
 eas channel:create preview
 eas channel:create production-apk
 eas channel:create production-google-play
+eas channel:create production-domestic-stores
 eas channel:create production-ios
 ```
 
@@ -79,8 +81,8 @@ Keep `PROFILE`, `APK_UPDATES_ENABLED`, `ANDROID_COMPRESS_NATIVE_LIBS`, and
 `EXPO_PUBLIC_STORYBOOK_ENABLED` out of shared EAS environments; remote variables can otherwise
 override publication configuration. Build profiles in `eas.json` own `PROFILE` and
 `ANDROID_COMPRESS_NATIVE_LIBS`. `APK_UPDATES_ENABLED` additionally controls native APK installation permission: the APK build
-profile enables it and Play disables it. It remains an opt-in development switch at build and Metro
-time. `EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
+profile enables it and Play/domestic store profiles disable it. It remains an opt-in development
+switch at build and Metro time. `EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
 actions using the embedded native channel.
 Other service settings and credentials still come from the selected environment. Client/config
 values must be readable during both builds and updates; Secret-only values cannot be read by
@@ -171,6 +173,11 @@ public APK:
 Source regressions cover installed-version comparisons and distribution gates. Native activation,
 fingerprint parity, and measured savings require authorized builds and device/server
 checks; source changes and lint do not establish these outcomes.
+
+Domestic store updates additionally use the public metadata contract in
+[Domestic Android Store Updates](./domestic-store-updates.md). The `domestic-stores` OTA target
+and the `all` choice include the new channel. Until its first compatible EAS build is recorded,
+select an existing target explicitly; `all` will correctly fail the receiving-build check.
 
 ## References
 

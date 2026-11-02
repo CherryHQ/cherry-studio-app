@@ -1,13 +1,14 @@
 # Application Updates
 
 This app-shell module owns update presentation across the application. `AppUpdateProvider` exposes
-shared actions and renders the one `AppUpdateDialog`; `AppUpdateObserver` runs the startup check and
+shared actions and renders `AppUpdateDialog` or the manual `AppUpdateStoreDialog`; `AppUpdateObserver` runs the startup check and
 the cold-start offer; `useAppUpdateEntry` gives a page the state for an ordinary "check for updates"
 row. Pages render that row with their own settings components and do not own channel decisions,
 transfers or update UI.
 
 The observer checks after bootstrap without blocking startup. Each cold launch checks again;
-returning to the foreground refreshes results older than six hours. Query keys include the channel.
+returning to the foreground refreshes stale results (six hours, or 15 minutes for domestic stores).
+Query keys include the channel and the selected domestic store.
 
 ## Cold-Start Offer
 
@@ -24,7 +25,7 @@ There are no passive update toasts.
 ## Dialog
 
 The centered dialog shows the version, the installed version, the release notes for the channel in a
-bounded scrolling region, and one next step: download (APK), open App Store or open Google Play;
+bounded scrolling region, and one next step: download (APK) or open the selected app store;
 then progress with cancel or continue in background, installation, or retry. Closing it never stops
 a transfer, and reopening it from About shows the transfer's current state. A retry fetches the
 latest release, so a replaced or withdrawn package is not downloaded again. Installation explains
@@ -42,6 +43,10 @@ update. A missing note never blocks the update.
 About keeps its single row with an optional `NEW` badge. A tap opens the dialog for a recorded
 release or an active transfer without a request; otherwise it checks once, sharing one request and
 outcome across repeated taps, and reports up-to-date, unavailable or failed checks with a toast.
+Expired domestic metadata is fetched again before reopening a cached offer. A domestic `storeOnly`
+result opens a manual store-choice dialog, including a translated explanation when no supported
+store is available. It is not an update offer, does not record a reminder, and never opens on its
+own at startup. Store-open failures use the existing translated failure toast.
 
 Backend failures map to translated copy; raw diagnostic errors stay out of UI. All supported locales
 own the `appUpdate.*` catalog entries.

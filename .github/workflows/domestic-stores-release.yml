@@ -1,0 +1,113 @@
+name: Domestic Stores APK
+
+on:
+  workflow_call:
+    secrets:
+      EXPO_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  EAS_CLI_VERSION: 24.4.2
+
+jobs:
+  build-android:
+    name: Build Domestic Stores APK on EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Configure EAS CLI install scripts
+        # Match expo-github-action's temporary CLI directory; allowBuilds is project-only.
+        run: |
+          eas_cli_dir="$RUNNER_TEMP/eas-cli/$EAS_CLI_VERSION/$(node -p 'require("node:os").arch()')"
+          mkdir -p "$eas_cli_dir"
+          pnpm --dir "$eas_cli_dir" config set --location=project --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: ${{ env.EAS_CLI_VERSION }}
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Android on EAS and wait for completion
+        run: |
+          eas build --platform android --profile production-domestic-stores --non-interactive --wait --json > "$RUNNER_TEMP/domestic-stores-build.json"
+          jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "ANDROID"' "$RUNNER_TEMP/domestic-stores-build.json"
+          build_id="$(jq -er '.[0].id' "$RUNNER_TEMP/domestic-stores-build.json")"
+          echo "domestic stores EAS build: $build_id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download APK for manual domestic stores upload
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          apk_url="$(jq -er '.[0].artifacts.applicationArchiveUrl' "$RUNNER_TEMP/domestic-stores-build.json")"
+          artifact_dir="$RUNNER_TEMP/domestic-stores-release"
+          mkdir -p "$artifact_dir"
+          apk_name="cherry-studio-${RELEASE_TAG#v}-android.apk"
+          curl --fail --location --retry 3 --connect-timeout 30 --max-time 900 \
+            "$apk_url" --output "$artifact_dir/$apk_name"
+          unzip -tq "$artifact_dir/$apk_name"
+          unzip -Z1 "$artifact_dir/$apk_name" | grep -x 'AndroidManifest.xml'
+          (cd "$artifact_dir" && sha256sum "$apk_name" > SHA256SUMS)
+
+      - name: Record build and signing identity
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          artifact_dir="$RUNNER_TEMP/domestic-stores-release"
+          apk="$artifact_dir/cherry-studio-${RELEASE_TAG#v}-android.apk"
+          build_tools="$(printf '%s\n' "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+          "$build_tools/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/domestic-stores-signing.txt"
+          certificate="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/domestic-stores-signing.txt")"
+          test -n "$certificate"
+          "$build_tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/domestic-stores-package.txt"
+          package_name="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" "$RUNNER_TEMP/domestic-stores-package.txt")"
+          version_code="$(sed -n "s/^package:.* versionCode='\([^']*\)'.*/\1/p" "$RUNNER_TEMP/domestic-stores-package.txt")"
+          test "$package_name" = "$(jq -r '.expo.android.package' app.json)"
+          test "$version_code" = "$(jq -r '.[0].appBuildVersion' "$RUNNER_TEMP/domestic-stores-build.json")"
+          jq --arg commit "$GITHUB_SHA" --arg certificate "$certificate" --arg package "$package_name" \
+            '.[0] | {buildId: .id, commit: $commit, packageName: $package, appVersion, versionCode: .appBuildVersion, channel: "production-domestic-stores", signingCertificateSha256: $certificate}' \
+            "$RUNNER_TEMP/domestic-stores-build.json" > "$artifact_dir/release-manifest.json"
+
+      - name: Save domestic stores package
+        uses: actions/upload-artifact@v4
+        with:
+          name: domestic-stores-release
+          path: ${{ runner.temp }}/domestic-stores-release/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+          overwrite: true
+
+      - name: Explain separate store submissions
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Download `domestic-stores-release` and extract the ZIP. It contains one signed APK,
+          `SHA256SUMS`, and `release-manifest.json`, retained for 30 days.
+          Upload this same APK separately to HONOR, Xiaomi, OPPO, and vivo; finish each store's
+          materials and review in its console. Never substitute the public GitHub APK.
+          Building or uploading does not establish store availability. Record each store's live
+          version independently before announcing updates. This workflow does not submit for review.
+          EOF

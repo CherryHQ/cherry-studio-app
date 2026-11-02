@@ -9,10 +9,10 @@ import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUp
  */
 export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
   return queryOptions({
-    queryKey: queryKeys.appUpdate.latest(appUpdate.channel),
+    queryKey: queryKeys.appUpdate.latest(appUpdate.channel, appUpdate.store),
     queryFn: ({ signal }) => appUpdate.check(signal),
     enabled: appUpdate.isEnabled,
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: appUpdate.channel === 'domestic-stores' ? 15 * 60_000 : 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
     retry: 1,
   });

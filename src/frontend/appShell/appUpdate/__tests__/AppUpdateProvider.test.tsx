@@ -13,6 +13,7 @@ import type {
 import type { AppUpdateDialog } from '../AppUpdateDialog';
 import { AppUpdateProvider, useAppUpdateActions } from '../AppUpdateProvider';
 import { appUpdateQueryOptions } from '../appUpdateQueries';
+import type { AppUpdateStoreDialog } from '../AppUpdateStoreDialog';
 
 type AppUpdateDialogProps = Parameters<typeof AppUpdateDialog>[0];
 
@@ -45,6 +46,13 @@ let mockDialog: AppUpdateDialogProps;
 jest.mock('../AppUpdateDialog', () => ({
   AppUpdateDialog: (props: AppUpdateDialogProps) => {
     mockDialog = props;
+    return null;
+  },
+}));
+let mockStoreDialog: Parameters<typeof AppUpdateStoreDialog>[0];
+jest.mock('../AppUpdateStoreDialog', () => ({
+  AppUpdateStoreDialog: (props: Parameters<typeof AppUpdateStoreDialog>[0]) => {
+    mockStoreDialog = props;
     return null;
   },
 }));
@@ -131,6 +139,20 @@ test('an unknown result is checked, and an up-to-date result is reported without
 
   expect(mockDialog.release).toBeNull();
   expect(mockToast.show).toHaveBeenLastCalledWith({ label: 'appUpdate.upToDate' });
+});
+
+test('an unconfirmed store version offers a manual visit without an update reminder', async () => {
+  mockUpdate.check.mockResolvedValue({ status: 'storeOnly', stores: ['oppo', 'xiaomi'] });
+  await act(async () => actions.check());
+  expect(mockDialog.release).toBeNull();
+  expect(mockStoreDialog.stores).toEqual(['oppo', 'xiaomi']);
+  expect(mockSetPersist).not.toHaveBeenCalled();
+  await act(async () => mockStoreDialog.onOpenStore('xiaomi'));
+  expect(mockUpdate.openStore).toHaveBeenCalledWith({
+    channel: 'domestic-stores',
+    store: 'xiaomi',
+  });
+  expect(mockStoreDialog.stores).toBeNull();
 });
 
 test('an active or finished transfer reopens its own release', async () => {

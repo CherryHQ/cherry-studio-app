@@ -9,6 +9,7 @@ import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
+import { checkDomesticStoreRelease } from './domesticStoreRelease';
 import { assertApkRelease, checkGitcodeRelease } from './gitcodeRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
@@ -23,6 +24,9 @@ export function createAppUpdateModule(dependencies: {
     __DEV__ && Constants.expoConfig?.extra?.isApkUpdatesEnabled === true,
   );
   const download = createApkDownload();
+  const stores =
+    channel === 'domestic-stores' ? getNativeAppUpdate()?.getDomesticStoreInfo?.() : null;
+  const store = stores?.preferred ?? (stores?.available.length === 1 ? stores.available[0]! : null);
   let stopped = false;
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
 
@@ -37,6 +41,7 @@ export function createAppUpdateModule(dependencies: {
 
   return {
     channel,
+    store,
     isEnabled: channel !== null,
     async check(signal): Promise<AppUpdateResult> {
       signal?.throwIfAborted();
@@ -54,6 +59,26 @@ export function createAppUpdateModule(dependencies: {
         return result;
       }
       if (!Application.applicationId) return { status: 'unavailable', reason: 'unknownVersion' };
+      if (channel === 'domestic-stores') {
+        if (!stores) return { status: 'unavailable', reason: 'nativeUnavailable' };
+        const fallback: AppUpdateResult = { status: 'storeOnly', stores: stores.available };
+        if (!store || !stores.available.includes(store)) return fallback;
+        const currentBuild = Number(Application.nativeBuildVersion);
+        if (!Number.isSafeInteger(currentBuild) || currentBuild <= 0) return fallback;
+        try {
+          return await checkDomesticStoreRelease(
+            store,
+            Application.applicationId,
+            currentVersion,
+            currentBuild,
+            signal,
+          );
+        } catch {
+          signal?.throwIfAborted();
+          // Unknown availability offers a manual visit, never an "up to date" assertion.
+          return fallback;
+        }
+      }
       if (channel === 'google-play') {
         const native = getNativeAppUpdate();
         if (!native) return { status: 'unavailable', reason: 'nativeUnavailable' };
@@ -84,6 +109,14 @@ export function createAppUpdateModule(dependencies: {
     async openStore(release) {
       if (stopped || release.channel === 'apk' || release.channel !== channel) {
         throw new Error('Invalid store update action');
+      }
+      if (release.channel === 'domestic-stores') {
+        const native = getNativeAppUpdate();
+        if (!native?.getDomesticStoreInfo?.().available.includes(release.store)) {
+          throw new Error('The requested domestic store is unavailable');
+        }
+        await native.openDomesticStore(release.store);
+        return;
       }
       if (channel === 'google-play') {
         if (

@@ -65,7 +65,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           apkUpdatesEnabled:
             profile !== 'preview' &&
             apkUpdatesSetting === 'true' &&
-            process.env.EAS_BUILD_PROFILE !== 'production-google-play',
+            !['production-google-play', 'production-domestic-stores'].includes(
+              process.env.EAS_BUILD_PROFILE ?? '',
+            ),
         },
       ] as [string, { apkUpdatesEnabled: boolean }],
       ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),

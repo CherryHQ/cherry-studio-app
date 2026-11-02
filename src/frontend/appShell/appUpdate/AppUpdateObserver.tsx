@@ -60,6 +60,7 @@ export function AppUpdateObserver() {
     if (status !== 'success') return;
     settled.current = true;
     if (data.status !== 'available' || appUpdate.getDownload().status !== 'idle') return;
+    if (data.channel === 'domestic-stores' && data.expiresAt <= Date.now()) return;
     const previous = cacheService.getPersist('app_update.last_reminder');
     const now = Date.now();
     if (

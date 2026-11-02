@@ -64,6 +64,13 @@
         "channel": "production-ios"
       }
     },
+    "production-domestic-stores": {
+      "extends": "production",
+      "android": {
+        "channel": "production-domestic-stores",
+        "env": { "APK_UPDATES_ENABLED": "false" }
+      }
+    },
     "production-google-play": {
       "extends": "production",
       "env": {

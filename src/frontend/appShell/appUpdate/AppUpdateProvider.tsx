@@ -5,10 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { cacheService } from '@/frontend/data/CacheService';
-import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
+import type { AppUpdateRelease, DomesticAppStore } from '@/shared/contracts/appUpdate';
 
 import { AppUpdateDialog } from './AppUpdateDialog';
 import { appUpdateQueryOptions } from './appUpdateQueries';
+import { AppUpdateStoreDialog } from './AppUpdateStoreDialog';
 
 const UNAVAILABLE_KEYS = {
   unsupported: 'appUpdate.unsupported',
@@ -26,8 +27,8 @@ type AppUpdateActions = {
 const AppUpdateActionsContext = createContext<AppUpdateActions | null>(null);
 
 /**
- * Shared decisions and the one update dialog. The dialog's open release is the only state here;
- * availability and transfer subscriptions remain in leaf consumers.
+ * Shared decisions and update presentation: either a known release or a manual store choice.
+ * Availability and transfer subscriptions remain in leaf consumers.
  */
 export function AppUpdateProvider({ children }: PropsWithChildren) {
   const appUpdate = useBackendModule('appUpdate');
@@ -36,6 +37,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   const { toast } = useToast();
   const { t } = useTranslation();
   const [release, setRelease] = useState<AppUpdateRelease | null>(null);
+  const [stores, setStores] = useState<DomesticAppStore[] | null>(null);
   const pendingCheck = useRef<Promise<void> | null>(null);
 
   const dialog = useMemo(() => {
@@ -97,6 +99,10 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
           return;
         }
         close();
+        if (result.status === 'storeOnly') {
+          setStores(result.stores);
+          return;
+        }
         toast.show({
           label:
             result.status === 'upToDate'
@@ -118,6 +124,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
         releaseId: next.id,
         remindedAt: Date.now(),
       });
+      setStores(null);
       setRelease(next);
     };
 
@@ -129,7 +136,10 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       }
       const options = appUpdateQueryOptions(appUpdate);
       const recorded = queryClient.getQueryData(options.queryKey);
-      if (recorded?.status === 'available') {
+      if (
+        recorded?.status === 'available' &&
+        (recorded.channel !== 'domestic-stores' || recorded.expiresAt > Date.now())
+      ) {
         open(recorded);
         return;
       }
@@ -137,6 +147,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       try {
         const result = await queryClient.fetchQuery({ ...options, staleTime: 0 });
         if (result.status === 'available') open(result);
+        else if (result.status === 'storeOnly') setStores(result.stores);
         else if (result.status === 'upToDate') {
           toast.show({ label: t('appUpdate.upToDate', { version: result.currentVersion }) });
         } else toast.show({ label: t(UNAVAILABLE_KEYS[result.reason]) });
@@ -161,6 +172,16 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
     <AppUpdateActionsContext value={actions}>
       {children}
       <AppUpdateDialog actions={dialog} release={release} />
+      <AppUpdateStoreDialog
+        stores={stores}
+        onClose={() => setStores(null)}
+        onOpenStore={(store) => {
+          setStores(null);
+          void appUpdate.openStore({ channel: 'domestic-stores', store }).catch(() => {
+            toast.show({ label: t('appUpdate.openFailed'), variant: 'danger' });
+          });
+        }}
+      />
     </AppUpdateActionsContext>
   );
 }

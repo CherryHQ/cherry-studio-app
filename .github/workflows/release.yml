@@ -52,3 +52,10 @@ jobs:
     uses: ./.github/workflows/google-play-release.yml
     secrets:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  domestic-stores:
+    needs: ci
+    if: ${{ !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/domestic-stores-release.yml
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

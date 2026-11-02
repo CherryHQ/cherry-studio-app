@@ -14,7 +14,9 @@ export function useAppUpdateEntry() {
   return {
     checkForUpdates: actions.check,
     // A known newer version stays visible when a later background refresh fails.
-    hasAvailableUpdate: data?.status === 'available',
+    hasAvailableUpdate:
+      data?.status === 'available' &&
+      (data.channel !== 'domestic-stores' || data.expiresAt > Date.now()),
     isEnabled: appUpdate.isEnabled,
     isFetching,
   };
