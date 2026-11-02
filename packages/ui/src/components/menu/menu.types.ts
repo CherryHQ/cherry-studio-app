@@ -1,4 +1,5 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, Ref } from 'react';
+import type { PressableProps, ViewInstance, ViewProps } from 'react-native';
 
 /** Private window-space geometry. Zero width and height represent a pointer anchor. */
 export type MenuAnchor = { height: number; pageX: number; pageY: number; width: number };
@@ -27,3 +28,10 @@ export type ContextMenuProps = {
   children: ReactElement;
   items: readonly MenuItem[];
 };
+
+/** A tap target whose enclosing context menu owns long-press recognition. */
+export type ContextMenuTriggerProps = Omit<ViewProps, 'children' | 'style'> &
+  Pick<PressableProps, 'children' | 'disabled' | 'style'> & {
+    onPress?: () => void;
+    ref?: Ref<ViewInstance>;
+  };

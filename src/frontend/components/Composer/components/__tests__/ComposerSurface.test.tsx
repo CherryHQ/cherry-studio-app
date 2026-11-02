@@ -17,6 +17,7 @@ type MockComposerProps = {
   canSend?: boolean;
   children?: ReactNode;
   labels?: { send: string; stop: string };
+  onChangeText: (text: string) => void;
   onSend: () => Promise<void> | void;
   onStop: () => void;
   value: string;
@@ -90,6 +91,54 @@ describe('ComposerSurface', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  it('hands the draft back before field edits, including clearing or unchanged text', () => {
+    render(
+      <ComposerSurface onSend={jest.fn()} onStop={jest.fn()} streaming={false}>
+        <StateProbe />
+      </ComposerSurface>,
+    );
+    const edits = jest.fn(() => mockComposerState?.draft);
+    const unsubscribe = mockComposerActions!.subscribeDraftEdits(edits);
+
+    act(() => mockComposerActions!.setDraft('recognized words'));
+    expect(edits).not.toHaveBeenCalled();
+    act(() => mockComposerProps!.onChangeText(''));
+    expect(edits.mock.results[0]?.value).toBe('recognized words');
+    expect(mockComposerState?.draft).toBe('');
+    act(() => mockComposerProps!.onChangeText(''));
+    expect(edits).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    act(() => mockComposerProps!.onChangeText('typed words'));
+    expect(edits).toHaveBeenCalledTimes(2);
+    expect(mockComposerState?.draft).toBe('typed words');
+  });
+
+  it('hands off dictation before an accepted send clears the draft, once per send attempt', async () => {
+    const pending = deferred<void>();
+    render(
+      <ComposerSurface onSend={() => pending.promise} onStop={jest.fn()} streaming={false}>
+        <StateProbe />
+      </ComposerSurface>,
+      'recognized words',
+    );
+    const edits = jest.fn(() => mockComposerState?.draft);
+    mockComposerActions!.subscribeDraftEdits(edits);
+    let firstSend!: Promise<void>;
+    let secondSend!: Promise<void>;
+    act(() => {
+      firstSend = Promise.resolve(mockComposerProps!.onSend());
+      secondSend = Promise.resolve(mockComposerProps!.onSend());
+    });
+    expect(edits).toHaveBeenCalledTimes(1);
+    expect(edits.mock.results[0]?.value).toBe('recognized words');
+    expect(mockComposerState?.draft).toBe('');
+    await act(async () => {
+      pending.resolve();
+      await Promise.all([firstSend, secondSend]);
+    });
   });
 
   it('accepts only one send while the current send promise is unsettled', async () => {

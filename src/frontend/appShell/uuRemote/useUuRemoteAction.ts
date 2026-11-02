@@ -49,7 +49,7 @@ export function useUuRemoteAction(target: UuRemoteTarget | undefined) {
         key: 'uu-remote-desktop',
         type: 'icon',
         icon: MonitorIcon,
-        nativeIcon: 'desktopcomputer',
+        nativeIcon: require('@/assets/header-toolbar/monitor.png'),
         accessibilityLabel: t('uuRemote.open'),
         disabled: isOpening,
         testID: 'remote-desktop-button',

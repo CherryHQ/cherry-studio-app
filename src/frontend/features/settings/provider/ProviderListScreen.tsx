@@ -247,7 +247,7 @@ export default function ProviderListScreen() {
         icon: EllipsisIcon,
         items: menuItems,
         key: 'provider-actions',
-        nativeIcon: 'ellipsis',
+        nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
         testID: 'provider-actions',
         type: 'menu',
       },

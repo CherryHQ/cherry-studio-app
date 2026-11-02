@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useMessageListDisclosureToggle } from '../../list/MessageListDisclosureContext';
 import { deriveToolGroupSummary, getToolDisplayState, type ToolMessagePart } from './toolPartState';
 import { useToolTitle } from './ToolRendererContext';
+import { useAudioTranscriptionStatus } from './useAudioTranscriptionStatus';
 import { useReadFileOcrStatus } from './useReadFileOcrStatus';
 import { useToolGroupActivity } from './useToolGroupActivity';
 
@@ -34,6 +35,7 @@ export function ToolGroupPart({
   const activeTool = tools.findLast((part) => getToolDisplayState(part) === 'running');
   const awaitingTool = tools.findLast((part) => part.state === 'approval-requested');
   const ocrStatus = useReadFileOcrStatus(isStreaming ? activeTool : undefined);
+  const transcriptionStatus = useAudioTranscriptionStatus(isStreaming ? activeTool : undefined);
   const titles = [...new Set(tools.map(getTitle))];
   const completedActivity =
     titles.length === 1
@@ -65,7 +67,7 @@ export function ToolGroupPart({
       statusText={
         summary.approvalCount
           ? t('chat.toolGroup.approvalCount', { count: summary.approvalCount })
-          : ocrStatus
+          : (ocrStatus ?? transcriptionStatus)
       }
       statusTone={summary.approvalCount ? 'warning' : 'default'}
       title={title}

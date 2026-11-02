@@ -171,6 +171,11 @@ describe('filePreviewStorage', () => {
     const first = await resolveFilePreviewUris(entry);
     const second = await resolveFilePreviewUris(entry);
 
+    // Bound the decode itself; resizing a full-resolution bitmap is too late.
+    expect(ImageManipulator.manipulate).toHaveBeenNthCalledWith(1, sourceUri, {
+      maxHeight: 512,
+      maxWidth: 512,
+    });
     expect(outputContext.resize).toHaveBeenCalledWith({ height: 384, width: 512 });
     expect(outputImage.saveAsync).toHaveBeenCalledWith({ compress: 0.78, format: 'webp' });
     expect(first).toEqual({

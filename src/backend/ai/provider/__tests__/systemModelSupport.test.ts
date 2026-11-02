@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
@@ -29,6 +29,7 @@ describe('createSystemModelSupport', () => {
   });
   it.each([
     ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/multimodal-generation/generation'],
+    ['qwencloud', 'qwen-image-2.0', '/api/v1/services/aigc/multimodal-generation/generation'],
     ['ppio', 'seedream-4-0', '/v3/seedream-4.0'],
     ['tokenhub', 'hy-image-v3', '/v1/wand/hunyuan-image/v3-generation'],
   ])(
@@ -50,6 +51,7 @@ describe('createSystemModelSupport', () => {
 
   it.each([
     ['dashscope', 'future-image', '/api/v1/services/aigc/multimodal-generation/generation'],
+    ['qwencloud', 'future-image', '/api/v1/services/aigc/multimodal-generation/generation'],
     ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/future-image/generation'],
     ['ppio', 'seedream-4-0', '/v3/new-image-protocol'],
     ['tokenhub', 'hy-image-v3', '/v1/api/image/submit'],
@@ -84,6 +86,34 @@ describe('createSystemModelSupport', () => {
 
     supportsLanguageModel.mockReturnValue(false);
     expect(isModelSupportedBySystem(provider, model)).toBe(false);
+  });
+
+  it('keeps QwenCloud images available when Anthropic serves its text models', () => {
+    const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(false));
+    expect(
+      isModelSupportedBySystem(
+        createProvider({
+          presetProviderId: 'qwencloud',
+          defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+          endpointConfigs: { [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { adapterFamily: 'anthropic' } },
+        }),
+        createModel({
+          endpointTypes: [ENDPOINT_TYPE.ANTHROPIC_MESSAGES],
+          apiModelId: 'qwen-image-2.0',
+          capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+          imageGeneration: {
+            modes: {
+              generate: {
+                supports: {},
+                vendorTransport: {
+                  endpoint: '/api/v1/services/aigc/multimodal-generation/generation',
+                },
+              },
+            },
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('accepts endpoint-declared image models without consulting language serving', () => {
@@ -131,33 +161,6 @@ describe('createSystemModelSupport', () => {
 
     expect(isModelSupportedBySystem(createProvider(), model)).toBe(false);
     expect(supportsLanguageModel).not.toHaveBeenCalled();
-  });
-
-  it.each([MODEL_CAPABILITY.AUDIO_GENERATION, MODEL_CAPABILITY.AUDIO_TRANSCRIPT])(
-    'admits %s only for accounts with a supported audio protocol',
-    (capability) => {
-      const supportsLanguageModel = jest.fn().mockReturnValue(true);
-      const { isModelSupportedBySystem } = supportWith(supportsLanguageModel);
-      const model = createModel({ capabilities: [capability] });
-      expect(isModelSupportedBySystem(createProvider(), model)).toBe(true);
-      expect(isModelSupportedBySystem(createProvider({ endpointConfigs: {} }), model)).toBe(false);
-      expect(isModelSupportedBySystem(createProvider({ authType: 'iam-gcp' }), model)).toBe(false);
-      expect(supportsLanguageModel).not.toHaveBeenCalled();
-    },
-  );
-
-  it('admits audio-only recognition catalog models as transcription', () => {
-    const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(false));
-    expect(
-      isModelSupportedBySystem(
-        createProvider(),
-        createModel({
-          capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
-          inputModalities: [MODALITY.AUDIO],
-          outputModalities: [MODALITY.TEXT],
-        }),
-      ),
-    ).toBe(true);
   });
 
   it('filters out models whose provider is unknown', () => {

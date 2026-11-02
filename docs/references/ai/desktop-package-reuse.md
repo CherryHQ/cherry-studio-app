@@ -1,9 +1,9 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.2` and
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.3` and
 `@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.2.8` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.3.1` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -68,7 +68,7 @@ dependency review before the pinned version changes.
 
 ### Dependency resolution
 
-The published `ai-core@2.4.2` and `ai-sdk-provider@0.1.9` require OpenAI SDK `3.0.109`; `ai-core`
+The published `ai-core@2.4.3` and `ai-sdk-provider@0.1.9` require OpenAI SDK `3.0.109`; `ai-core`
 also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
 Both Cherry packages now require Google SDK `3.0.132`. Mobile pins it with its required
 `@ai-sdk/provider@3.0.18` and `@ai-sdk/provider-utils@4.0.58`, retaining the Google model-path and
@@ -78,7 +78,7 @@ by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.2.8` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.3.1` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -95,7 +95,21 @@ the bundled declarations and eligibility as described in [Web Search](../web-sea
 excludes `ultra` from selectable reasoning efforts and rejects
 `adaptive-between-tools` entries until the native runtime supports them.
 
-The `0.2.8` update is consumed through existing owners:
+The `0.3.1` update adds these Mobile adaptations:
+
+- Native-tool eligibility receives the actual endpoint, keeping QwenCloud's Chat, Responses and
+  Anthropic model declarations separate. Pi owns the Qwen-specific system identifier, paired
+  search/fetch selection, exact hosted-model restrictions and replay of multi-URL fetch inputs.
+- QwenCloud image generation reuses the existing DashScope adapter and parameter namespace,
+  independently of its text endpoint. The image origin follows the configured Chat host, including
+  proxy prefixes; credentials, headers and injected fetch stay with that provider. The native
+  transport also admits Qwen Image 2.0 and its Pro variant.
+- Grok Imagine aspect-ratio controls and the xAI image adapter come from the published declarations.
+  Manually added Step-5 Preview models receive the shared effort inference.
+- Qwen AI Platform's new defaults apply through the bundled provider catalog. Saved endpoint
+  overrides remain authoritative; the upgrade does not rewrite stored provider settings.
+
+The earlier registry behavior remains in place:
 
 - DeepSeek's bundled Responses reasoning mappings and downloaded V4 Flash endpoint contracts flow
   through `ProviderRegistryService` into the shared reasoning interpreter and Pi request adapter.
@@ -110,8 +124,8 @@ The `0.2.8` update is consumed through existing owners:
   support and the narrowed DashScope GLM/Kimi search list. Mobile's DeepSeek and Poe endpoint
   corrections remain in `mobileProviderCatalog.ts`.
 
-These paths have passing regression coverage in the repository; device acceptance of the upgrade
-is still pending.
+Regression cases cover these Mobile adapters. Execution, type checking, Metro and device acceptance
+of this upgrade remain pending; dependency installation skipped lifecycle build scripts.
 
 ### Current migration ledger
 

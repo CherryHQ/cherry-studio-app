@@ -41,5 +41,5 @@ export function createLocationTools(deps: DeviceToolDependencies) {
         }
       },
     }),
-  ];
+  ].map((tool) => ({ ...tool, deferred: true }));
 }

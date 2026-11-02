@@ -24,6 +24,8 @@ const DASHSCOPE_RERANK_BASE_PATH = '/compatible-api/v1';
 // Only admitted models whose native request supports `parameters.n` may batch.
 const DASHSCOPE_IMAGE_BATCH_LIMITS: Readonly<Record<string, number>> = {
   'qwen-image': 4,
+  'qwen-image-2.0': 6,
+  'qwen-image-2.0-pro': 6,
   'qwen-image-3.0': 6,
   'qwen-image-3.0-pro': 6,
   'wan2.5-i2i-preview': 4,
@@ -80,6 +82,8 @@ export function buildDashScopeTransport(
   return createDashScopeTransport({
     apiKey: settings.apiKey ?? '',
     imageBaseURL: settings.imageBaseURL || DEFAULT_DASHSCOPE_IMAGE_BASE_URL,
+    fetch: settings.fetch,
+    headers: settings.headers,
   });
 }
 

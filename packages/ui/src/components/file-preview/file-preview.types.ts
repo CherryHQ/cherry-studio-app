@@ -5,7 +5,7 @@ import type { ComponentType, ReactNode } from 'react';
  * `image` has a built-in renderer; the rest exist so a caller can name a file
  * precisely today and register a renderer for it later.
  */
-export type BuiltInFilePreviewKind = 'document' | 'image' | 'pdf' | 'text';
+export type BuiltInFilePreviewKind = 'audio' | 'document' | 'image' | 'pdf' | 'text';
 
 /**
  * An open set: product code registers renderers for kinds CherryUI has never

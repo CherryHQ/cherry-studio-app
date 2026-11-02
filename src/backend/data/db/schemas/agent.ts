@@ -48,9 +48,8 @@ export const agentTable = sqliteTable(
       .$type<AgentToolApprovalMode>()
       .notNull()
       .default(DEFAULT_AGENT_TOOL_APPROVAL_MODE),
-    // Capability-group deny-list (aligned with desktop's disabled_tools JSON
-    // pattern): a group id absent from the list is enabled. Stores group ids,
-    // never tool names; reads sanitize unknown ids instead of failing.
+    // Retired capability switches. Keep stored values for schema compatibility;
+    // current readers ignore them and tool discovery uses per-turn system gates.
     disabledCapabilities: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
     ...orderKeyColumns,
     ...createUpdateDeleteTimestamps,

@@ -79,10 +79,14 @@ to the same view. The source adapters do not duplicate platform chrome.
 On iOS 26 and later, every native header renders icon and menu actions that carry a `nativeIcon`
 as standard `Stack.Toolbar.Button` and `Stack.Toolbar.Menu` items rather than custom views, through
 `renderHeaderToolbarItem`, so the system can place them where the window keeps its controls: on an
-iPhone Duo, the vertical rail under the status bar. `nativeIcon` is an SF Symbol name, typed by Expo
-Router, so the app ships no toolbar artwork of its own. A native menu keeps the custom menu's
+iPhone Duo, the vertical rail under the status bar. `nativeIcon` is a template image of the same
+glyph as the action's React icon, never a substitute SF Symbol. The native adapter uses template
+rendering so toolbar tint follows the theme. Header-only images in `assets/header-toolbar` retain
+the existing 18pt glyphs at 1x, 2x and 3x; regenerate them with
+`pnpm exec tsx scripts/generateHeaderToolbarIcons.ts` when their source geometry changes.
+A native menu keeps the custom menu's
 sections, checked items and destructive items. The Agent capsule, labels, custom elements and
-actions without an SF Symbol (such as the GitHub mark, or a translation still in progress) stay
+actions without a native image (such as the GitHub mark, or a translation still in progress) stay
 custom views and remain at the top, as Apple's guidance keeps labeled controls in the horizontal
 bar. Toolbar items are written as direct children of `Stack.Toolbar`, because Expo reads them
 before rendering. Older systems keep the custom views with their fallback surfaces, and Android

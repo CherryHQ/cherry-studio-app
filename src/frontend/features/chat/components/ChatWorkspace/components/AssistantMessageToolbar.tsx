@@ -4,14 +4,23 @@ import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
-import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
-import { memo, useMemo } from 'react';
+import SquareIcon from '@cherrystudio/app-icons/icons/square';
+import Volume2Icon from '@cherrystudio/app-icons/icons/volume-2';
+import {
+  ActionMenu,
+  Button,
+  OptionPickerBottomSheet,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
-import { resolveAppLanguage } from '@/shared/utils/languages';
+import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
 
+import { useMessageSpeech } from '../../../voice/useMessageSpeech';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -30,7 +39,8 @@ type AssistantMessageToolbarProps = {
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
+  const [isTranslationLanguagePickerOpen, setIsTranslationLanguagePickerOpen] = useState(false);
   const {
     copiedMessageId,
     isAssistantToolbarEnabled,
@@ -55,6 +65,11 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
     [isSettled, message],
   );
+  const speechText = useMemo(
+    () => (isSettled ? messageTranslationText(message.data.parts ?? []) : undefined),
+    [isSettled, message],
+  );
+  const speech = useMessageSpeech(message.id, speechText);
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
@@ -89,14 +104,14 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
                   : 'chat.translation.show'
                 : 'chat.translation.translate',
             ),
-            // The translation panel offers other target languages once it is open.
-            onPress: () =>
-              hasTranslation
-                ? translation.store.toggle(translation.source)
-                : void translation.store.start(
-                    translation.source,
-                    resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language),
-                  ),
+            onPress: () => {
+              if (hasTranslation) {
+                translation.store.toggle(translation.source);
+              } else {
+                Keyboard.dismiss();
+                setIsTranslationLanguagePickerOpen(true);
+              }
+            },
           },
         ]
       : []),
@@ -133,6 +148,22 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
           size="xs"
           testID="assistant-message-copy"
+          variant="ghost"
+        />
+      ) : null}
+      {speechText ? (
+        <Button
+          accessibilityLabel={t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start')}
+          icon={
+            speech.isSpeaking ? (
+              <SquareIcon className="text-foreground" size={15} />
+            ) : (
+              <Volume2Icon className="text-muted-foreground" size={15} />
+            )
+          }
+          onPress={speech.toggle}
+          size="xs"
+          testID="assistant-message-read-aloud"
           variant="ghost"
         />
       ) : null}
@@ -179,6 +210,20 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       </ActionMenu>
+      {translation && isTranslationLanguagePickerOpen ? (
+        <OptionPickerBottomSheet<AppLanguage | ''>
+          onClose={() => setIsTranslationLanguagePickerOpen(false)}
+          onValueChange={(language) => {
+            if (language) void translation.store.start(translation.source, language);
+          }}
+          open
+          options={APP_LANGUAGES}
+          selectedValue=""
+          size="large"
+          testID="message-translation-language-picker"
+          title={t('chat.translation.translate')}
+        />
+      ) : null}
     </View>
   );
 });

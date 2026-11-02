@@ -1,3 +1,5 @@
+import type { FetchFunction } from '@ai-sdk/provider-utils';
+
 import { DEFAULT_TIMEOUT } from '../../../constants';
 import type {
   ImageGenerationSubmitInput,
@@ -120,6 +122,8 @@ export interface DashScopeProviderParams {
 export interface DashScopeTransportSettings {
   apiKey: string;
   imageBaseURL?: string;
+  fetch?: FetchFunction;
+  headers?: Record<string, string>;
 }
 
 type ResponseFamily = 'choices' | 'results' | 'image_url';
@@ -365,12 +369,21 @@ function resolveBodyBuilder(modelId: string) {
   switch (modelId) {
     case 'z-image-turbo':
     case 'qwen-image-3.0':
+    case 'qwen-image-3-0':
     case 'qwen-image-3.0-pro':
+    case 'qwen-image-3-0-pro':
+    case 'qwen-image-2.0':
+    case 'qwen-image-2-0':
+    case 'qwen-image-2.0-pro':
+    case 'qwen-image-2-0-pro':
     case 'qwen-image-edit':
     case 'qwen-image-edit-plus':
     case 'wan2.6-image':
+    case 'wan2-6-image':
     case 'wan2.7-image':
+    case 'wan2-7-image':
     case 'wan2.7-image-pro':
+    case 'wan2-7-image-pro':
       return buildChatLikeBody;
     case 'qwen-image':
     case 'qwen-image-plus':
@@ -381,6 +394,7 @@ function resolveBodyBuilder(modelId: string) {
     case 'wanx-v1':
       return buildWanxV1Body;
     case 'wan2.5-i2i-preview':
+    case 'wan2-5-i2i-preview':
       return buildWan25I2IBody;
     case 'qwen-mt-image':
       return buildQwenMtImageBody;
@@ -418,11 +432,15 @@ function buildRequestBody(
 class DashScopeTransport implements ImageGenerationTransport {
   private apiKey: string;
   private baseURL: string;
+  private fetch: FetchFunction | undefined;
+  private headers: Record<string, string> | undefined;
   private pendingDescriptors = new Map<string, DashScopeModelDescriptor>();
 
   constructor(settings: DashScopeTransportSettings) {
     this.apiKey = settings.apiKey;
     this.baseURL = settings.imageBaseURL || DEFAULT_DASHSCOPE_IMAGE_BASE_URL;
+    this.fetch = settings.fetch;
+    this.headers = settings.headers;
   }
 
   async submit(
@@ -579,6 +597,7 @@ class DashScopeTransport implements ImageGenerationTransport {
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         ...(method === 'POST' && { 'Content-Type': 'application/json' }),
+        ...this.headers,
         ...options.extraHeaders,
       },
       signal: controller.signal,
@@ -588,7 +607,10 @@ class DashScopeTransport implements ImageGenerationTransport {
     }
 
     try {
-      const response = await fetch(`${this.baseURL}${path}`, fetchOptions);
+      const response = await (this.fetch ?? globalThis.fetch)(
+        `${this.baseURL}${path}`,
+        fetchOptions,
+      );
       if (!response.ok) {
         const errorText = (await response.text().catch(() => '')).slice(0, 500);
         throw new DashScopeApiError(

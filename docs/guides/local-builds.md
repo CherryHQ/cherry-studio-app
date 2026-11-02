@@ -385,6 +385,18 @@ instead of using Expo's precompiled binaries. Observe's source build requires Ap
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
 
+### Expo Modules Core Swift Compiler Compatibility Patch
+
+`expo-modules-core@58.0.26` casts a failure value to `any Error` while consuming a result whose
+success value is noncopyable. Xcode 27.2 / Swift 6.4.2 crashes during SIL generation for that
+pattern in `AsyncFunctionDefinition.swift`. The patch backports
+[Expo #52631](https://github.com/expo/expo/pull/52631), removing the redundant cast while preserving
+Promise resolution and rejection. Remove it when the installed Expo Modules Core includes that fix.
+
+`scripts/__tests__/expoModulesCoreSwiftCompatibility.test.ts` guards patch registration, the hash,
+and Expo's installed native source in PR CI. A new iOS build with the affected toolchain is required
+to verify compilation; source guards alone do not establish compiler or runtime compatibility.
+
 ### iOS 17 Nitro Exception Compatibility Patch
 
 Build 46 (`0.4.0`) terminates at launch on iOS 17 with `DYLD 4 Symbol missing` for

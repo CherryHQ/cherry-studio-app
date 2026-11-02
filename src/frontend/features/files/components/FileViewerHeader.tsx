@@ -50,7 +50,7 @@ export function FileViewerHeader({
           icon: EllipsisIcon,
           items: menuItems,
           key: 'more',
-          nativeIcon: 'ellipsis',
+          nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
           type: 'menu',
         },
       ]}

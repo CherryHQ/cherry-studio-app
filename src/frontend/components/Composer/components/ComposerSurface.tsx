@@ -69,8 +69,14 @@ export function ComposerSurface({
     sendFailedLabel: labels?.sendFailed,
   });
   const { attachments, draft, isSubmitting } = useComposerState();
-  const { addAttachments, beginSendAttempt, clearAttachments, endSendAttempt, setDraft } =
-    useComposerActions();
+  const {
+    addAttachments,
+    beginSendAttempt,
+    clearAttachments,
+    editDraft,
+    endSendAttempt,
+    setDraft,
+  } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
   // The composer's actions must not change with what was typed (see CherryUI's `Composer`), and
   // callers rebuild their handlers on every update, so the handlers read these when invoked.
@@ -145,7 +151,7 @@ export function ComposerSurface({
         (canSend ?? hasComposerSendableContent(draft, attachments))
       }
       labels={composerLabels}
-      onChangeText={setDraft}
+      onChangeText={editDraft}
       onSend={handleSend}
       onStop={handleStop}
       streaming={streaming}

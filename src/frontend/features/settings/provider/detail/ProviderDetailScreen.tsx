@@ -160,7 +160,7 @@ function ProviderDetailSettings({
         disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
         icon: RefreshCwIcon,
         key: 'sync-provider-models',
-        nativeIcon: 'arrow.clockwise',
+        nativeIcon: require('@/assets/header-toolbar/refresh-cw.png'),
         onPress: startModelSync,
         type: 'icon',
       },
@@ -169,7 +169,7 @@ function ProviderDetailSettings({
         disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
         icon: PlusIcon,
         key: 'add-provider-model',
-        nativeIcon: 'plus',
+        nativeIcon: require('@/assets/header-toolbar/plus.png'),
         onPress: openModelAddSettings,
         type: 'icon',
       },
@@ -270,7 +270,6 @@ function ProviderDetailSettings({
             {management.isSelecting || managedModels.length === 0 ? null : showsModelPurposeTabs ? (
               <View className="px-4 pb-3">
                 <ProviderModelPurposeTabs
-                  counts={modelPurposeCounts}
                   onChange={setModelPurpose}
                   value={effectiveModelPurpose}
                 />

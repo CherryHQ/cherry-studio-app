@@ -19,7 +19,7 @@ const icon: HeaderToolbarAction = {
   accessibilityLabel: 'New chat',
   icon: Icon,
   key: 'new-chat',
-  nativeIcon: 'square.and.pencil',
+  nativeIcon: { height: 18, uri: 'new-chat.png', width: 18 },
   onPress: jest.fn(),
   type: 'icon',
 };
@@ -32,7 +32,7 @@ const menu: Extract<HeaderToolbarAction, { type: 'menu' }> = {
     { destructive: true, group: 'danger', id: 'delete', label: 'Delete', onPress: jest.fn() },
   ],
   key: 'more',
-  nativeIcon: 'ellipsis',
+  nativeIcon: { height: 18, uri: 'ellipsis.png', width: 18 },
   type: 'menu',
 };
 
@@ -44,15 +44,20 @@ function children(element: ReactElement) {
   return Children.toArray((element.props as { children?: ReactNode }).children) as ReactElement[];
 }
 
-it('renders an icon action with an SF Symbol as a native toolbar button', () => {
+it('keeps the original glyph in a tinted native toolbar button', () => {
   const item = renderHeaderToolbarItem(icon);
   expect(item.type).toBe(Stack.Toolbar.Button);
-  expect(item.props).toMatchObject({ accessibilityLabel: 'New chat', icon: 'square.and.pencil' });
+  expect(item.props).toMatchObject({
+    accessibilityLabel: 'New chat',
+    icon: icon.nativeIcon,
+    iconRenderingMode: 'template',
+  });
 });
 
 it('maps menu groups to inline sections and keeps item states', () => {
   const item = renderHeaderToolbarItem(menu);
   expect(item.type).toBe(Stack.Toolbar.Menu);
+  expect(item.props).toMatchObject({ icon: menu.nativeIcon, iconRenderingMode: 'template' });
   const sections = children(item);
   expect(sections.map((section) => section.type)).toEqual([Stack.Toolbar.Menu, Stack.Toolbar.Menu]);
   expect(sections.every((section) => (section.props as { inline?: boolean }).inline)).toBe(true);
@@ -74,7 +79,7 @@ it('lists a single group directly in the menu', () => {
   ]);
 });
 
-it('keeps the custom view without an SF Symbol or before the shared glass surface', () => {
+it('keeps the custom view without a native image or before the shared glass surface', () => {
   expect(renderHeaderToolbarItem({ ...icon, nativeIcon: undefined }).type).toBe(Stack.Toolbar.View);
   mockIsLiquidGlassAvailable = false;
   expect(renderHeaderToolbarItem(icon).type).toBe(Stack.Toolbar.View);
