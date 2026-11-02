@@ -1,17 +1,20 @@
 # UU Remote Desktop
 
-The remote chat and device detail headers expose a computer action through `useUuRemoteAction`.
-First use explains association, lets the user choose the corresponding Windows/macOS computer in
-UU Remote, then opens its desktop in picture in picture. Subsequent presses open PiP directly.
-Device details also expose reassociation when the user chose the wrong computer or changed UU accounts.
+The sidebar's device menu exposes Remote desktop immediately above Manage devices when a remote
+computer is selected. It uses the existing plain menu rows without group separators or a header
+icon. `useUuRemoteAction` reuses the installation guidance and association flow: first use lets the
+user choose the corresponding Windows/macOS computer in UU Remote, then opens its desktop in
+picture in picture. Subsequent presses open PiP directly. Device details retain reassociation when
+the user chose the wrong computer or changed UU accounts.
 
 `Backend.uuRemote` owns the external protocol, installation and iOS version checks, device-local SecureStore
 bindings and a single pending request. It uses this build's native callback scheme, preserves the
 originating chat/device target across process restarts, and validates and consumes correlated
 callbacks once. Persistent bindings stay in SecureStore and never enter the Cherry desktop protocol.
 Observe filters the UU device ID and request correlation parameters before exporting navigation
-metrics; removing the callback route after mount is not a telemetry boundary. Remote chat supplies
-its effective draft ID so a callback can restore unsent input even after a process restart.
+metrics; removing the callback route after mount is not a telemetry boundary. Remote chat publishes
+its effective draft ID into the focused route so the sidebar can preserve unsent input across a
+callback and process restart.
 Replacing a request makes older callbacks inert; callbacks expire after 30 minutes without imposing
 a short UI timeout while UU is waiting for a user decision. Bootstrap drains operations on disposal.
 

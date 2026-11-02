@@ -16,7 +16,6 @@ const folder =
 // Native-only derivatives of the existing header glyphs. Keep geometry in sync with
 // `SidebarExpandIcon`, `NewConversationIcon` and the matching `@cherrystudio/app-icons` adapters.
 const GLYPHS: Record<string, string> = {
-  monitor: `<rect width="20" height="14" x="2" y="3" rx="2" ${stroke} stroke-width="2"/><line x1="8" x2="16" y1="21" y2="21" ${stroke} stroke-width="2"/><line x1="12" x2="12" y1="17" y2="21" ${stroke} stroke-width="2"/>`,
   sidebar: `<rect x="3.5" y="4" width="17" height="16" rx="4" ${stroke} stroke-width="1.7"/><path d="M9.5 5v14" ${stroke} stroke-width="1.7"/>`,
   folder: `<path d="${folder}" ${stroke} stroke-width="2"/>`,
   'folder-check': `<path d="${folder}" ${stroke} stroke-width="2"/><path d="m9 13 2 2 4-4" ${stroke} stroke-width="2"/>`,

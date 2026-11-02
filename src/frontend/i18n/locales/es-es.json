@@ -2465,7 +2465,7 @@
   "uuRemote.install.action": "Descargar UU Remote",
   "uuRemote.install.description": "Instala UU Remote 4.42.0 o posterior en el móvil y configura UU Remote en el ordenador que quieras ver.",
   "uuRemote.install.title": "Instalar UU Remote",
-  "uuRemote.open": "Ver el escritorio del ordenador",
+  "uuRemote.open": "Escritorio remoto",
   "uuRemote.rebind.description": "Vuelve a vincularlo aquí si elegiste otro ordenador por error o cambiaste de cuenta de UU.",
   "uuRemote.returning": "Volviendo a tu dispositivo…",
   "voice.dictation.cancel": "Cancelar entrada de voz",

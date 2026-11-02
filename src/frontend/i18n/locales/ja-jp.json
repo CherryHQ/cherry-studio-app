@@ -2427,7 +2427,7 @@
   "uuRemote.install.action": "UU Remote をダウンロード",
   "uuRemote.install.description": "スマートフォンに UU Remote 4.42.0 以降をインストールし、表示したいパソコンで UU Remote を設定してください。",
   "uuRemote.install.title": "UU Remote をインストール",
-  "uuRemote.open": "パソコンのデスクトップを表示",
+  "uuRemote.open": "リモートデスクトップ",
   "uuRemote.rebind.description": "別のパソコンを選んだ場合や UU アカウントを変更した場合は、ここで再度関連付けてください。",
   "uuRemote.returning": "デバイスに戻っています…",
   "voice.dictation.cancel": "音声入力をキャンセル",

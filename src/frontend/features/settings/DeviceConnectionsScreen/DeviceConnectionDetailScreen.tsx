@@ -71,13 +71,7 @@ export function DeviceConnectionDetailScreen() {
   }
 
   return (
-    <SettingsScrollPage
-      contentClassName="gap-6"
-      headerProps={{
-        title: connection.name,
-        rightActions: remoteDesktop.action ? [remoteDesktop.action] : [],
-      }}
-    >
+    <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
         <Section.Item
           label={t('settings.deviceConnections.capabilities.label')}

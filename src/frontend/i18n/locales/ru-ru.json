@@ -2484,7 +2484,7 @@
   "uuRemote.install.action": "Скачать UU Remote",
   "uuRemote.install.description": "Установите UU Remote версии 4.42.0 или новее на телефон и настройте UU Remote на нужном компьютере.",
   "uuRemote.install.title": "Установить UU Remote",
-  "uuRemote.open": "Показать рабочий стол компьютера",
+  "uuRemote.open": "Удалённый рабочий стол",
   "uuRemote.rebind.description": "Повторите привязку здесь, если выбрали не тот компьютер или сменили аккаунт UU.",
   "uuRemote.returning": "Возвращаемся к устройству…",
   "voice.dictation.cancel": "Отменить голосовой ввод",

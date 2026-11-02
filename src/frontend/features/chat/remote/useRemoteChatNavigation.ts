@@ -31,12 +31,16 @@ export function useRemoteChatNavigation(
     };
   }, [identity, isFocused]);
 
+  // The sidebar reads the shared route target. Publish the actual composer identity so an
+  // external-app callback can restore unsent input even after this process is reclaimed.
+  useLayoutEffect(() => {
+    const routeDraftId = target.sessionId ? undefined : draftId;
+    if (isFocused && target.draftId !== routeDraftId) router.setParams({ draftId: routeDraftId });
+  }, [draftId, isFocused, router, target.draftId, target.sessionId]);
+
   return {
     draftId,
     identity,
-    // A newly selected desktop has no route draftId yet. Persist the composer's actual identity
-    // when another app may return after this process has been reclaimed.
-    returnTarget: { ...target, draftId: target.sessionId ? undefined : draftId },
     selectAgent: (agentId: string) => {
       // Read at click time: admission may have happened since the header last rendered. A submitted
       // start keeps its route; an undelivered one stays on the draft and still resends to its Agent.

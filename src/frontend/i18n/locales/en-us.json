@@ -2446,7 +2446,7 @@
   "uuRemote.install.action": "Download UU Remote",
   "uuRemote.install.description": "Install UU Remote 4.42.0 or later on your phone, and set up UU Remote on the computer you want to view.",
   "uuRemote.install.title": "Install UU Remote",
-  "uuRemote.open": "View computer desktop",
+  "uuRemote.open": "Remote desktop",
   "uuRemote.rebind.description": "Link again here if you selected the wrong computer or changed your UU account.",
   "uuRemote.returning": "Returning to your device…",
   "voice.dictation.cancel": "Cancel voice input",

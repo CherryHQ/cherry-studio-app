@@ -1,10 +1,8 @@
-import MonitorIcon from '@cherrystudio/app-icons/icons/monitor';
 import { useAlert } from '@cherrystudio/ui/components';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
-import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import type { UuRemoteTarget } from '@/shared/contracts/uuRemote';
 
@@ -44,21 +42,13 @@ export function useUuRemoteAction(target: UuRemoteTarget | undefined) {
     });
   }
 
-  const action: HeaderToolbarAction | undefined = target
-    ? {
-        key: 'uu-remote-desktop',
-        type: 'icon',
-        icon: MonitorIcon,
-        nativeIcon: require('@/assets/header-toolbar/monitor.png'),
-        accessibilityLabel: t('uuRemote.open'),
-        disabled: isOpening,
-        testID: 'remote-desktop-button',
-        onPress: () =>
-          void run(async () => {
-            if ((await uuRemote.open(target)) === 'binding-required') bind();
-          }),
-      }
-    : undefined;
+  function open() {
+    if (!target) return;
+    const destination = target;
+    void run(async () => {
+      if ((await uuRemote.open(destination)) === 'binding-required') bind();
+    });
+  }
 
-  return { action, bind, isOpening };
+  return { open, bind, isOpening };
 }

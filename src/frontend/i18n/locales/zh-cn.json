@@ -2427,7 +2427,7 @@
   "uuRemote.install.action": "下载 UU 远程",
   "uuRemote.install.description": "请在手机安装 UU 远程 4.42.0 或更新版本，并在要查看的电脑上配置 UU 远程。",
   "uuRemote.install.title": "安装 UU 远程",
-  "uuRemote.open": "查看电脑桌面",
+  "uuRemote.open": "远程桌面",
   "uuRemote.rebind.description": "选错电脑或切换 UU 账号后，可在这里重新关联。",
   "uuRemote.returning": "正在返回设备…",
   "voice.dictation.cancel": "取消语音输入",

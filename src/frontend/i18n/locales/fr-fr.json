@@ -2465,7 +2465,7 @@
   "uuRemote.install.action": "Télécharger UU Remote",
   "uuRemote.install.description": "Installez UU Remote 4.42.0 ou une version ultérieure sur votre téléphone et configurez UU Remote sur l’ordinateur à afficher.",
   "uuRemote.install.title": "Installer UU Remote",
-  "uuRemote.open": "Afficher le bureau de l’ordinateur",
+  "uuRemote.open": "Bureau à distance",
   "uuRemote.rebind.description": "Refaites l’association ici si vous avez choisi le mauvais ordinateur ou changé de compte UU.",
   "uuRemote.returning": "Retour à votre appareil…",
   "voice.dictation.cancel": "Annuler la saisie vocale",

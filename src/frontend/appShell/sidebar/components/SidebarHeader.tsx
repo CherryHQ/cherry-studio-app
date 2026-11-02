@@ -9,6 +9,7 @@ import { Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
+import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -93,6 +94,9 @@ function SidebarDeviceTitle() {
     source === 'remote'
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
       : undefined;
+  const remoteDesktop = useUuRemoteAction(
+    current ? { ...remoteTarget, page: 'chat', connectionId: current.id } : undefined,
+  );
   const name = current?.name ?? brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
@@ -106,7 +110,6 @@ function SidebarDeviceTitle() {
   if (!connections.length) return frame(<SidebarTitle name={name} width={width} />);
   const items: MenuItem[] = [
     {
-      group: 'devices',
       id: 'device-local',
       checked: source === 'local',
       label: brand,
@@ -116,7 +119,6 @@ function SidebarDeviceTitle() {
       },
     },
     ...connections.map((connection) => ({
-      group: 'devices',
       id: `device-${connection.id}`,
       checked: source === 'remote' && connection.id === remoteTarget.connectionId,
       label: connection.name,
@@ -125,8 +127,20 @@ function SidebarDeviceTitle() {
         selectDevice(connection.id);
       },
     })),
+    ...(current
+      ? [
+          {
+            id: 'remote-desktop',
+            label: t('uuRemote.open'),
+            disabled: remoteDesktop.isOpening,
+            onPress: () => {
+              closeDrawer();
+              remoteDesktop.open();
+            },
+          },
+        ]
+      : []),
     {
-      group: 'manage',
       id: 'manage-devices',
       label: t('navigation.manageDevices'),
       onPress: () => {
