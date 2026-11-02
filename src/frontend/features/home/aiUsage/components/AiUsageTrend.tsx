@@ -28,7 +28,7 @@ import {
   type UsageRange,
 } from '../utils/aiUsageAnalytics';
 import { parseLocalDateKey } from '../utils/aiUsageCalendar';
-import { AiUsageMetricTabs } from './AiUsageBreakdown';
+import { AiUsageMetricSelect } from './AiUsageBreakdown';
 
 type UsageChartPoint = UsagePoint & { parts: ReturnType<typeof usageTokenParts> };
 
@@ -117,13 +117,6 @@ export function AiUsageTrend({
       t('aiUsage.tokens'),
       totalTokens === null ? '—' : formatCompactNumber(totalTokens),
     ]);
-  if (metric !== 'cost') {
-    for (const cost of costs)
-      metrics.push([
-        cost.currency,
-        formatUsageCost(cost.total, cost.currency, locale, 'narrowSymbol'),
-      ]);
-  }
   if (metric === 'cost' && data.composition.imageCount !== null)
     metrics.push([t('aiUsage.images'), formatUsageNumber(data.composition.imageCount, locale)]);
   const hasUnclassified = points.some((point) => point.parts.unclassified > 0);
@@ -162,7 +155,7 @@ export function AiUsageTrend({
                   : formatCompactNumber(totalTokens)
                 : formatUsageNumber(requestCount, locale)}
           </Text>
-          <AiUsageMetricTabs metric={metric} onChange={onMetricChange} />
+          <AiUsageMetricSelect metric={metric} onChange={onMetricChange} />
         </View>
         <View className="min-h-8 flex-row flex-wrap items-center justify-between gap-2">
           {selected ? (
@@ -233,41 +226,58 @@ export function AiUsageTrend({
           </View>
         ))}
       </View>
-      <View className="flex-row flex-wrap gap-x-4 gap-y-5 px-1">
+      <View className="gap-1 px-1">
         {metrics.map(([label, amount]) => (
-          <View className="min-w-0 flex-1 basis-[27%] gap-1.5" key={label}>
-            <Text className="text-muted-foreground text-xs">{label}</Text>
+          <View className="min-h-9 flex-row items-center justify-between gap-4" key={label}>
+            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{label}</Text>
             <Text
-              className="font-semibold text-2xl text-foreground"
+              className="max-w-[60%] shrink text-right font-medium text-base text-foreground"
               style={{ fontVariant: ['tabular-nums'] }}
             >
               {amount}
             </Text>
           </View>
         ))}
-      </View>
-      <InfoPopover
-        accessibilityLabel={t('aiUsage.costInfo')}
-        text={[
-          t('aiUsage.costCoverageDetails', {
-            reported: formatUsageNumber(data.providerReportedRequestCount, locale),
-            computed: formatUsageNumber(data.computedRequestCount, locale),
-            unpriced: formatUsageNumber(unpricedCount, locale),
-          }),
-          data.stats.totals.estimatedRequestCount > 0 ? t('aiUsage.legacyHint') : '',
-        ]
-          .filter(Boolean)
-          .join('\n')}
-      >
-        <View className="min-h-8 flex-row items-center gap-1.5 px-1">
-          <InfoIcon className="size-3.5 text-muted-foreground" />
-          <Text className="text-muted-foreground text-xs">
-            {unpricedCount > 0
-              ? t('aiUsage.unpricedCalls', { value: formatUsageNumber(unpricedCount, locale) })
-              : t('aiUsage.costInfo')}
-          </Text>
+        <View className="flex-row items-center justify-between gap-4">
+          <InfoPopover
+            accessibilityLabel={
+              unpricedCount > 0
+                ? `${t('aiUsage.costInfo')}, ${t('aiUsage.unpricedCalls', { value: formatUsageNumber(unpricedCount, locale) })}`
+                : t('aiUsage.costInfo')
+            }
+            text={[
+              t('aiUsage.costCoverageDetails', {
+                reported: formatUsageNumber(data.providerReportedRequestCount, locale),
+                computed: formatUsageNumber(data.computedRequestCount, locale),
+                unpriced: formatUsageNumber(unpricedCount, locale),
+              }),
+              data.stats.totals.estimatedRequestCount > 0 ? t('aiUsage.legacyHint') : '',
+            ]
+              .filter(Boolean)
+              .join('\n')}
+          >
+            <View className="min-h-9 flex-row items-center gap-1.5">
+              <Text className="text-muted-foreground text-sm">
+                {t(metric !== 'cost' && costs.length > 0 ? 'aiUsage.cost' : 'aiUsage.costInfo')}
+              </Text>
+              <InfoIcon className="size-3.5 text-muted-foreground" />
+            </View>
+          </InfoPopover>
+          {metric !== 'cost' && costs.length > 0 ? (
+            <View className="min-w-0 max-w-[60%] shrink items-end gap-1">
+              {costs.map((cost) => (
+                <Text
+                  className="text-right font-medium text-base text-foreground"
+                  key={cost.currency}
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  {formatUsageCost(cost.total, cost.currency, locale)}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
-      </InfoPopover>
+      </View>
       <Pressable
         accessibilityRole="button"
         onPress={() => onOpenRecords(selected)}

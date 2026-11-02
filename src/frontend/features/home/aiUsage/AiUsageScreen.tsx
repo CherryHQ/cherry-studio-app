@@ -3,13 +3,14 @@ import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import SlidersHorizontalIcon from '@cherrystudio/app-icons/icons/sliders-horizontal';
 import {
+  ActionMenu,
   BottomSheet,
   Button,
   Chip,
   ContentState,
-  Input,
+  DateRangePicker,
+  type DateRangeValue,
   Tabs,
-  TextField,
 } from '@cherrystudio/ui/components';
 import { usePreventRemove } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -166,11 +167,11 @@ export function AiUsageScreen() {
                 },
               ]}
             />
-            <View className="min-h-16 flex-row items-center justify-between gap-2">
+            <View className="min-h-14 flex-row items-center justify-between gap-2">
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${t('aiUsage.timeRange')}, ${t(PERIOD_LABELS[range.period])}, ${dateFormatter.format(rangeStart)} – ${dateFormatter.format(range.to)}`}
-                className="min-h-11 min-w-0 flex-1 flex-row flex-wrap items-center gap-2"
+                className="min-h-11 min-w-0 flex-1 flex-row items-center gap-2"
                 onPress={() => setDateOpen(true)}
                 testID="ai-usage-periods"
               >
@@ -183,7 +184,7 @@ export function AiUsageScreen() {
                 <ChevronDownIcon className="size-3.5 text-muted-foreground" />
               </Pressable>
               {span > 0 ? (
-                <View className="flex-row">
+                <View className="min-h-11 flex-row items-center gap-1">
                   <Button
                     size="xs"
                     variant="ghost"
@@ -416,84 +417,65 @@ function AiUsageDateRange({
   onApply: (range: UsageRange) => void;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
-  const [from, setFrom] = useState(() =>
-    toLocalDateKey(new Date(range.from === 0 ? range.to : range.from)),
-  );
-  const [to, setTo] = useState(() => toLocalDateKey(new Date(range.to)));
-  const [submitted, setSubmitted] = useState(false);
-  const nextRange = customUsageRange(from, to);
+  const { i18n, t } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const [draft, setDraft] = useState<DateRangeValue>(() => ({
+    startDate: new Date(range.from === 0 ? range.to : range.from),
+    endDate: new Date(range.to),
+  }));
+  const nextRange =
+    draft.startDate && draft.endDate
+      ? customUsageRange(toLocalDateKey(draft.startDate), toLocalDateKey(draft.endDate))
+      : null;
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
   return (
     <BottomSheet
       open
       onClose={onClose}
-      size="medium"
-      avoidKeyboard
+      size="large"
       title={t('aiUsage.timeRange')}
-      closeAction={{ accessibilityLabel: t('common.close') }}
+      headerAction={
+        <ActionMenu
+          items={(['today', '7d', '30d', 'all'] as const).map((period) => ({
+            id: period,
+            label: t(PERIOD_LABELS[period]),
+            onPress: () => onApply(usageRange(period)),
+          }))}
+        >
+          <Button size="sm" variant="ghost">
+            <Button.Label>{t('aiUsage.quickRanges')}</Button.Label>
+            <ChevronDownIcon className="size-3.5 text-muted-foreground" />
+          </Button>
+        </ActionMenu>
+      }
       footer={
         <Button
+          disabled={!nextRange}
           onPress={() => {
-            setSubmitted(true);
             if (nextRange) onApply(nextRange);
           }}
         >
-          {t('aiUsage.applyCustomRange')}
+          {t('common.done')}
         </Button>
       }
     >
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, gap: 20 }}
-      >
-        <View className="flex-row flex-wrap gap-3">
-          {(['today', '7d', '30d', 'all'] as const).map((period) => (
-            <View className="min-w-0 flex-1 basis-[45%]" key={period}>
-              <Chip.Selectable
-                accessibilityRole="radio"
-                className="min-h-11 w-full justify-center rounded-lg"
-                selected={range.period === period}
-                onSelectedChange={() => onApply(usageRange(period))}
-                testID={`ai-usage-period-${period}`}
-              >
-                {t(PERIOD_LABELS[period])}
-              </Chip.Selectable>
-            </View>
-          ))}
-        </View>
-        <View className="flex-row flex-wrap gap-3">
-          <View className="min-w-36 flex-1">
-            <TextField invalid={submitted && !nextRange}>
-              <TextField.Label>{t('aiUsage.fromDate')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('aiUsage.fromDate')}
-                value={from}
-                onChangeText={setFrom}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={10}
-              />
-            </TextField>
-          </View>
-          <View className="min-w-36 flex-1">
-            <TextField invalid={submitted && !nextRange}>
-              <TextField.Label>{t('aiUsage.toDate')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('aiUsage.toDate')}
-                value={to}
-                onChangeText={setTo}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={10}
-              />
-              {submitted && !nextRange ? (
-                <TextField.Error>{t('aiUsage.invalidDates')}</TextField.Error>
-              ) : null}
-            </TextField>
-          </View>
-        </View>
+      <ScrollView contentContainerClassName="gap-4 px-4 pb-4">
+        <Text accessibilityLiveRegion="polite" className="font-medium text-base text-foreground">
+          {draft.startDate ? dateFormatter.format(draft.startDate) : t('aiUsage.fromDate')}
+          {' – '}
+          {draft.endDate ? dateFormatter.format(draft.endDate) : t('aiUsage.toDate')}
+        </Text>
+        <DateRangePicker
+          locale={locale}
+          minimumDate={new Date(0)}
+          value={draft}
+          onValueChange={setDraft}
+          testID="ai-usage-date-range"
+        />
       </ScrollView>
     </BottomSheet>
   );

@@ -2,12 +2,11 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import {
-  BottomSheet,
+  ActionMenu,
   Button,
   ContentState,
   InfoPopover,
-  Section,
-  Tabs,
+  OptionPickerBottomSheet,
 } from '@cherrystudio/ui/components';
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
@@ -99,7 +98,7 @@ export function AiUsageBreakdown({
         </Button>
       </View>
       <View className="items-end">
-        <AiUsageMetricTabs metric={metric} onChange={onMetricChange} />
+        <AiUsageMetricSelect metric={metric} onChange={onMetricChange} />
       </View>
       {metric === 'cost' && data.timeline.costTotals.length > 0 ? (
         data.timeline.costTotals.map(({ currency }) => (
@@ -117,29 +116,18 @@ export function AiUsageBreakdown({
         <AiUsageRanking data={data} metric={metric} locale={locale} onSelect={onSelect} />
       )}
       {groupOpen ? (
-        <BottomSheet
+        <OptionPickerBottomSheet
           open
-          size="medium"
+          size="compact"
           title={t('aiUsage.distribution')}
           onClose={() => setGroupOpen(false)}
-          closeAction={{ accessibilityLabel: t('common.close') }}
-        >
-          <View className="px-5 pb-6">
-            <Section variant="plain">
-              {(Object.keys(GROUP_LABELS) as AiUsageRecordGroupBy[]).map((value) => (
-                <Section.RadioItem
-                  key={value}
-                  label={t(GROUP_LABELS[value])}
-                  selected={value === groupBy}
-                  onPress={() => {
-                    onGroupChange(value);
-                    setGroupOpen(false);
-                  }}
-                />
-              ))}
-            </Section>
-          </View>
-        </BottomSheet>
+          selectedValue={groupBy}
+          onValueChange={onGroupChange}
+          options={(Object.keys(GROUP_LABELS) as AiUsageRecordGroupBy[]).map((value) => ({
+            value,
+            label: t(GROUP_LABELS[value]),
+          }))}
+        />
       ) : null}
     </View>
   );
@@ -320,7 +308,7 @@ function AiUsageRanking({
   );
 }
 
-export function AiUsageMetricTabs({
+export function AiUsageMetricSelect({
   metric,
   onChange,
 }: {
@@ -328,19 +316,29 @@ export function AiUsageMetricTabs({
   onChange: (metric: AiUsageRecordMetric) => void;
 }) {
   const { t } = useTranslation();
+  const labels = {
+    tokens: t('aiUsage.tokens'),
+    cost: t('aiUsage.cost'),
+    requests: t('aiUsage.calls'),
+  };
   return (
-    <Tabs
-      variant="segmented"
-      layout="hug"
-      accessibilityLabel={t('aiUsage.metric')}
-      value={metric}
-      onValueChange={onChange}
-      items={[
-        { value: 'tokens', label: t('aiUsage.tokens') },
-        { value: 'cost', label: t('aiUsage.cost') },
-        { value: 'requests', label: t('aiUsage.calls') },
-      ]}
-    />
+    <ActionMenu
+      items={(['tokens', 'cost', 'requests'] as const).map((value) => ({
+        id: value,
+        label: labels[value],
+        checked: value === metric,
+        onPress: () => onChange(value),
+      }))}
+    >
+      <Button
+        accessibilityLabel={`${t('aiUsage.metric')}: ${labels[metric]}`}
+        size="sm"
+        variant="ghost"
+      >
+        <Button.Label>{labels[metric]}</Button.Label>
+        <ChevronDownIcon className="size-3.5 text-muted-foreground" />
+      </Button>
+    </ActionMenu>
   );
 }
 

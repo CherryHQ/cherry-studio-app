@@ -1,5 +1,6 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
-import { InfoPopover, Tabs } from '@cherrystudio/ui/components';
+import { ActionMenu, Button, InfoPopover } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -32,6 +33,11 @@ export function AiUsagePerformance({
 }) {
   const { t } = useTranslation();
   const [statistic, setStatistic] = useState<'average' | 'median' | 'p95'>('median');
+  const statisticLabels = {
+    median: t('aiUsage.median'),
+    p95: 'P95',
+    average: t('aiUsage.average'),
+  };
   const maximum = Math.max(0, ...models.map((model) => model[statistic] ?? 0));
   return (
     <View className="gap-6">
@@ -40,18 +46,23 @@ export function AiUsagePerformance({
           <Text className="font-semibold text-base text-foreground">
             {t('aiUsage.responsePerformance')}
           </Text>
-          <Tabs
-            variant="segmented"
-            layout="hug"
-            accessibilityLabel={t('aiUsage.performance')}
-            value={statistic}
-            onValueChange={setStatistic}
-            items={[
-              { value: 'median', label: t('aiUsage.median') },
-              { value: 'p95', label: 'P95' },
-              { value: 'average', label: t('aiUsage.average') },
-            ]}
-          />
+          <ActionMenu
+            items={(['median', 'p95', 'average'] as const).map((value) => ({
+              id: value,
+              label: statisticLabels[value],
+              checked: value === statistic,
+              onPress: () => setStatistic(value),
+            }))}
+          >
+            <Button
+              accessibilityLabel={`${t('aiUsage.performance')}: ${statisticLabels[statistic]}`}
+              size="sm"
+              variant="ghost"
+            >
+              <Button.Label>{statisticLabels[statistic]}</Button.Label>
+              <ChevronDownIcon className="size-3.5 text-muted-foreground" />
+            </Button>
+          </ActionMenu>
         </View>
         <View className="flex-row flex-wrap gap-6">
           {Object.entries(PERFORMANCE_LABELS).map(([metric, label]) => {
@@ -60,7 +71,7 @@ export function AiUsagePerformance({
             return (
               <View className="min-w-0 flex-1 basis-[40%] gap-2" key={metric}>
                 <Text className="text-muted-foreground text-xs">{t(label)}</Text>
-                <View className="flex-row flex-wrap items-baseline gap-1">
+                <View className="gap-1">
                   <Text
                     className="font-semibold text-3xl text-foreground"
                     style={{ fontVariant: ['tabular-nums'] }}
