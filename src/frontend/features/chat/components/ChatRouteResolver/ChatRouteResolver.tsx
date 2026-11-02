@@ -6,16 +6,38 @@ import { View } from 'react-native';
 
 import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { resolveChatRestoreState } from '@/frontend/appShell/navigation/chat/chatRestore';
-import { useAgentsApi } from '@/frontend/hooks/agent';
+import { usePersistCache, useQuery } from '@/frontend/data';
 
 import { ChatEmptyState } from '../ChatWorkspace';
 
 export function ChatRouteResolver() {
   const { t } = useTranslation();
   const router = useRouter();
-  const agents = useAgentsApi();
+  const [lastAgentId] = usePersistCache('chat.last_agent_id');
+  const lastAgent = useQuery('/agents', {
+    enabled: Boolean(lastAgentId),
+    query: { id: lastAgentId ?? undefined, limit: 1 },
+  });
+  const needsFallback =
+    !lastAgentId ||
+    (!lastAgent.isPending && !lastAgent.error && lastAgent.data?.items.length === 0);
+  const agents = useQuery('/agents', {
+    enabled: needsFallback,
+    query: { limit: 1 },
+  });
   const restoreState = resolveChatRestoreState({
-    agents: { error: agents.error, isLoading: agents.isLoading, items: agents.agents },
+    agents: {
+      error: agents.error,
+      isLoading: agents.isPending,
+      items: agents.data?.items ?? [],
+    },
+    lastAgent: lastAgentId
+      ? {
+          error: lastAgent.error,
+          isLoading: lastAgent.isPending,
+          items: lastAgent.data?.items ?? [],
+        }
+      : undefined,
   });
 
   useEffect(() => {
@@ -41,7 +63,7 @@ export function ChatRouteResolver() {
           <ContentState.Error
             primaryAction={{
               children: t('agent.actions.retry'),
-              onPress: () => void agents.refetch(),
+              onPress: () => void (needsFallback ? agents : lastAgent).refetch(),
             }}
             title={t('navigation.chatsLoadFailed')}
           />
