@@ -410,6 +410,10 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
 
+`Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
+and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all
+platforms. They support the existing `fill`/`hug` layouts; labels grow with system text size.
+
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
 value and persistence. The default grouped `Section` supplies its surface and separators. Use

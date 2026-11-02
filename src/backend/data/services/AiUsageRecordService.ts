@@ -39,6 +39,7 @@ import type {
   AiUsageRecordListQueryParams,
   AiUsageRecordListResponse,
   AiUsageRecordMetric,
+  AiUsageRecordModelPerformance,
   AiUsageRecordStatsBucket,
   AiUsageRecordStatsGroupIdentity,
   AiUsageRecordStatsMetrics,
@@ -815,6 +816,8 @@ function toTimelineMetrics(
   row: {
     totalCost: number;
     totalTokens: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
     totalNoCacheTokens: number;
     totalCacheReadTokens: number;
     totalCacheWriteTokens: number;
@@ -834,6 +837,7 @@ async function getAiUsageRecordTimeline(
   db: Database,
   query: AiUsageRecordTimelineQuery,
   granularity: AiUsageRecordGranularity = 'day',
+  rankedGroups?: AiUsageRecordStatsResponse,
 ): Promise<AiUsageRecordTimelineResponse> {
   const baseConditions = rangeConditions(query);
   const where = and(...baseConditions);
@@ -846,6 +850,8 @@ async function getAiUsageRecordTimeline(
   const timelineMetrics = {
     totalCost: scopedCostSum(query.currency),
     totalTokens: totalTokensSum(),
+    totalInputTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.inputTokens}), 0)`,
+    totalOutputTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.outputTokens}), 0)`,
     totalNoCacheTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.noCacheTokens}), 0)`,
     totalCacheReadTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.cacheReadTokens}), 0)`,
     totalCacheWriteTokens: sql<number>`coalesce(sum(${aiUsageRecordTable.cacheWriteTokens}), 0)`,
@@ -892,10 +898,8 @@ async function getAiUsageRecordTimeline(
     return { buckets: ungrouped, costTotals, dailyCosts };
   }
 
-  const top = await getAiUsageRecordStats(db, {
-    ...query,
-    groupBy: query.groupBy,
-  });
+  const top =
+    rankedGroups ?? (await getAiUsageRecordStats(db, { ...query, groupBy: query.groupBy }));
   const identityWhere = topGroupCondition(query.groupBy, top.buckets);
   if (!identityWhere) return { buckets: [], costTotals, dailyCosts };
 
@@ -934,6 +938,14 @@ async function getAiUsageRecordTimeline(
         costCurrency: total.costCurrency,
         totalCost: Math.max(0, total.totalCost - sum((bucket) => bucket.totalCost)),
         totalTokens: Math.max(0, total.totalTokens - sum((bucket) => bucket.totalTokens)),
+        totalInputTokens: Math.max(
+          0,
+          total.totalInputTokens - sum((bucket) => bucket.totalInputTokens),
+        ),
+        totalOutputTokens: Math.max(
+          0,
+          total.totalOutputTokens - sum((bucket) => bucket.totalOutputTokens),
+        ),
         totalNoCacheTokens: Math.max(
           0,
           total.totalNoCacheTokens - sum((bucket) => bucket.totalNoCacheTokens),
@@ -971,6 +983,23 @@ async function getAiUsageRecordTimeline(
   return { buckets: [...selected, ...other], costTotals, dailyCosts };
 }
 
+function performanceSummarySelect(ranked: {
+  value: SQLWrapper;
+  rank: SQLWrapper;
+  count: SQLWrapper;
+}) {
+  return {
+    sampleCount: sql<number>`count(*)`,
+    average: sql<number | null>`avg(${ranked.value})`,
+    median: sql<
+      number | null
+    >`avg(case when ${ranked.rank} in ((${ranked.count} + 1) / 2, (${ranked.count} + 2) / 2) then ${ranked.value} end)`,
+    p95: sql<
+      number | null
+    >`max(case when ${ranked.rank} = (${ranked.count} * 95 + 99) / 100 then ${ranked.value} end)`,
+  };
+}
+
 async function getPerformanceSummary(
   db: Database,
   where: SQL | undefined,
@@ -990,19 +1019,49 @@ async function getPerformanceSummary(
     })
     .from(samples)
     .as('ranked_usage_samples');
-  const [result] = await db
-    .select({
-      sampleCount: sql<number>`count(*)`,
-      average: sql<number | null>`avg(${ranked.value})`,
-      median: sql<
-        number | null
-      >`avg(case when ${ranked.rank} in ((${ranked.count} + 1) / 2, (${ranked.count} + 2) / 2) then ${ranked.value} end)`,
-      p95: sql<
-        number | null
-      >`max(case when ${ranked.rank} = (${ranked.count} * 95 + 99) / 100 then ${ranked.value} end)`,
-    })
-    .from(ranked);
+  const [result] = await db.select(performanceSummarySelect(ranked)).from(ranked);
   return result;
+}
+
+async function getModelPerformance(
+  db: Database,
+  where: SQL | undefined,
+  limit: number,
+): Promise<AiUsageRecordModelPerformance[]> {
+  const partition = sql`${aiUsageRecordTable.providerId}, ${aiUsageRecordTable.modelId}`;
+  const ranked = db
+    .select({
+      providerId: aiUsageRecordTable.providerId,
+      providerName: aiUsageRecordTable.providerName,
+      modelId: aiUsageRecordTable.modelId,
+      value: aiUsageRecordTable.timeFirstTokenMs,
+      rank: sql<number>`row_number() over (partition by ${partition} order by ${aiUsageRecordTable.timeFirstTokenMs})`.as(
+        'sample_rank',
+      ),
+      count: sql<number>`count(*) over (partition by ${partition})`.as('sample_count'),
+    })
+    .from(aiUsageRecordTable)
+    .where(
+      and(
+        where,
+        eq(aiUsageRecordTable.recordKind, 'invocation'),
+        isNotNull(aiUsageRecordTable.timeFirstTokenMs),
+      ),
+    )
+    .as('ranked_model_samples');
+  // One bounded result for all model comparisons, without fetching every sample
+  // or issuing a separate percentile query for each model.
+  return db
+    .select({
+      providerId: ranked.providerId,
+      providerName: sql<string | null>`max(${ranked.providerName})`,
+      modelId: ranked.modelId,
+      ...performanceSummarySelect(ranked),
+    })
+    .from(ranked)
+    .groupBy(ranked.providerId, ranked.modelId)
+    .orderBy(desc(sql`count(*)`), asc(ranked.providerId), asc(ranked.modelId))
+    .limit(limit);
 }
 
 async function getAiUsageRecordAnalytics(
@@ -1033,11 +1092,7 @@ async function getAiUsageRecordAnalytics(
     (query.to - (query.from === 0 ? (firstRecordAt ?? query.to) : query.from)) / 86_400_000;
   const granularity = days <= 62 ? 'day' : days <= 3650 ? 'month' : 'year';
   const stats = await getAiUsageRecordStats(db, query);
-  const timeline = await getAiUsageRecordTimeline(
-    db,
-    { ...query, groupBy: undefined },
-    granularity,
-  );
+  const timeline = await getAiUsageRecordTimeline(db, query, granularity, stats);
   const performance = query.includePerformance
     ? {
         timeFirstTokenMs: await getPerformanceSummary(
@@ -1065,6 +1120,9 @@ async function getAiUsageRecordAnalytics(
     firstRecordAt,
     composition,
     performance,
+    performanceByModel: query.includePerformance
+      ? await getModelPerformance(db, where, query.limit)
+      : undefined,
     providerReportedRequestCount,
     computedRequestCount,
   };

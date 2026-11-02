@@ -220,6 +220,8 @@ export interface AiUsageRecordTimelineBucket extends AiUsageRecordGroupIdentity 
   date: string;
   costCurrency: Currency | null;
   totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalNoCacheTokens: number;
   totalCacheReadTokens: number;
   totalCacheWriteTokens: number;
@@ -279,6 +281,11 @@ export interface AiUsageRecordPerformanceSummary {
   median: number | null;
   p95: number | null;
 }
+export interface AiUsageRecordModelPerformance extends AiUsageRecordPerformanceSummary {
+  providerId: string | null;
+  providerName: string | null;
+  modelId: string | null;
+}
 export interface AiUsageRecordAnalyticsResponse {
   stats: AiUsageRecordStatsResponse;
   timeline: AiUsageRecordTimelineResponse;
@@ -295,6 +302,7 @@ export interface AiUsageRecordAnalyticsResponse {
     imageCount: number | null;
   };
   performance?: Record<AiUsageRecordPerformanceMetric, AiUsageRecordPerformanceSummary>;
+  performanceByModel?: AiUsageRecordModelPerformance[];
   providerReportedRequestCount: number;
   computedRequestCount: number;
 }

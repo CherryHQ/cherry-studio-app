@@ -1,5 +1,7 @@
 import type {
   AiUsageRecordFilters,
+  AiUsageRecordGroupBy,
+  AiUsageRecordGroupIdentity,
   AiUsageRecordGranularity,
   AiUsageRecordMetric,
   AiUsageRecordStatsBucket,
@@ -85,11 +87,76 @@ export function usageGroupFilters(bucket: AiUsageRecordStatsBucket): AiUsageReco
 }
 
 export function usageGroupKey(bucket: AiUsageRecordStatsBucket): string {
-  return JSON.stringify(usageGroupFilters(bucket));
+  return usageIdentityKey(bucket.groupBy, bucket);
+}
+
+export function usageIdentityKey(
+  groupBy: AiUsageRecordGroupBy,
+  identity: AiUsageRecordGroupIdentity,
+): string {
+  switch (groupBy) {
+    case 'provider':
+      return JSON.stringify([identity.providerId]);
+    case 'model':
+      return JSON.stringify([identity.providerId, identity.modelId]);
+    case 'source':
+      return JSON.stringify([identity.sourceType, identity.sourceId]);
+    case 'apiKey':
+      return JSON.stringify([
+        identity.providerId,
+        identity.apiKeyId,
+        identity.apiKeyAttribution,
+        identity.authMethod,
+      ]);
+  }
+}
+
+const TIMELINE_SUM_FIELDS = [
+  'totalTokens',
+  'totalInputTokens',
+  'totalOutputTokens',
+  'totalNoCacheTokens',
+  'totalCacheReadTokens',
+  'totalCacheWriteTokens',
+  'totalCost',
+  'recordCount',
+  'tokenRecordCount',
+  'costRecordCount',
+  'requestCount',
+  'estimatedRequestCount',
+  'unpricedRequestCount',
+] as const;
+type UsageTimelineTotal = Pick<
+  AiUsageRecordTimelineBucket,
+  'date' | 'costCurrency' | (typeof TIMELINE_SUM_FIELDS)[number]
+>;
+
+/** Grouped series still represent one total per calendar bucket, including Other. */
+export function usageTimelineTotals(
+  buckets: readonly AiUsageRecordTimelineBucket[],
+): UsageTimelineTotal[] {
+  const totals = new Map<string, UsageTimelineTotal>();
+  for (const bucket of buckets) {
+    const total = totals.get(bucket.date);
+    if (total) {
+      for (const field of TIMELINE_SUM_FIELDS) total[field] += bucket[field];
+    } else {
+      totals.set(bucket.date, { ...bucket });
+    }
+  }
+  return [...totals.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Only show a split supported by the recorded parent total; never normalize inconsistent parts. */
+export function usageTokenParts(total: number | null, input: number, output: number) {
+  if (total === null || input + output > total) {
+    return { input: 0, output: 0, unclassified: total ?? 0 };
+  }
+  return { input, output, unclassified: total - input - output };
 }
 
 export function usagePoints(
-  buckets: AiUsageRecordTimelineBucket[],
+  buckets: readonly UsageTimelineTotal[],
   range: UsageRange,
   firstRecordAt: number | null,
   granularity: AiUsageRecordGranularity,
@@ -130,13 +197,18 @@ export function formatUsageNumber(
     : new Intl.NumberFormat(locale, { maximumFractionDigits: fractionDigits }).format(value);
 }
 
-export function formatUsageCost(value: number | null, currency: Currency, locale: string): string {
+export function formatUsageCost(
+  value: number | null,
+  currency: Currency,
+  locale: string,
+  currencyDisplay: 'code' | 'narrowSymbol' = 'code',
+): string {
   return value === null
     ? '—'
     : new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
-        currencyDisplay: 'code',
+        currencyDisplay,
         maximumFractionDigits: 4,
       }).format(value);
 }

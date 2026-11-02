@@ -150,6 +150,115 @@ describe('AI usage analytics', () => {
     });
   });
 
+  test('keeps ranked model stacks and the remaining usage in the same calendar bucket', async () => {
+    const createdAt = new Date(2026, 9, 29, 12).getTime();
+    await service.recordInvocations([
+      invocation(
+        'top',
+        createdAt,
+        { totalTokens: 100, inputTokens: 80, outputTokens: 20 },
+        context('a', { modelId: 'top' }),
+      ),
+      invocation(
+        'other-a',
+        createdAt,
+        { totalTokens: 50, inputTokens: 30, outputTokens: 10 },
+        context('a', { modelId: 'second' }),
+      ),
+      invocation(
+        'other-b',
+        createdAt,
+        { totalTokens: 30, inputTokens: 20, outputTokens: 5 },
+        context('a', { modelId: 'third' }),
+      ),
+    ]);
+    const result = await service.analytics({
+      from: 0,
+      to: createdAt,
+      groupBy: 'model',
+      metric: 'tokens',
+      limit: 1,
+    });
+    expect(result.timeline.buckets).toEqual([
+      expect.objectContaining({
+        date: '2026-10-29',
+        modelId: 'top',
+        totalTokens: 100,
+        totalInputTokens: 80,
+        totalOutputTokens: 20,
+        requestCount: 1,
+      }),
+      expect.objectContaining({
+        date: '2026-10-29',
+        isOther: true,
+        totalTokens: 80,
+        totalInputTokens: 50,
+        totalOutputTokens: 15,
+        requestCount: 2,
+      }),
+    ]);
+    expect(result.timeline.buckets.reduce((sum, bucket) => sum + bucket.totalTokens, 0)).toBe(
+      result.stats.totals.totalTokens,
+    );
+    expect(result.performance).toBeUndefined();
+    expect(result.performanceByModel).toBeUndefined();
+  });
+
+  test('compares model response percentiles within provider identities and the selected scope', async () => {
+    await service.recordInvocations([
+      ...[100, 200, 300, 400].map((timeFirstTokenMs, index) => ({
+        ...invocation(`a-${index}`, 1000, undefined, context('a', { modelId: 'shared' })),
+        metrics: { timeFirstTokenMs },
+      })),
+      ...[0, 600].map((timeFirstTokenMs, index) => ({
+        ...invocation(`b-${index}`, 1000, undefined, context('b', { modelId: 'shared' })),
+        metrics: { timeFirstTokenMs },
+      })),
+      {
+        ...invocation('other-model', 1000, undefined, context('a', { modelId: 'other' })),
+        metrics: { timeFirstTokenMs: 2000 },
+      },
+      {
+        ...invocation('no-timing', 1000, undefined, context('a', { modelId: 'shared' })),
+        metrics: undefined,
+      },
+      {
+        ...invocation('outside-range', 3000, undefined, context('a', { modelId: 'shared' })),
+        metrics: { timeFirstTokenMs: 9000 },
+      },
+    ]);
+    const query = { from: 0, to: 2000, groupBy: 'model' as const, includePerformance: true };
+    const result = await service.analytics({ ...query, limit: 2 });
+    expect(result.performanceByModel).toEqual([
+      {
+        providerId: 'a',
+        providerName: 'Provider A',
+        modelId: 'shared',
+        sampleCount: 4,
+        average: 250,
+        median: 250,
+        p95: 400,
+      },
+      {
+        providerId: 'b',
+        providerName: 'Provider B',
+        modelId: 'shared',
+        sampleCount: 2,
+        average: 300,
+        median: 300,
+        p95: 600,
+      },
+    ]);
+    const filtered = await service.analytics({
+      ...query,
+      sourceId: 'assistant-a',
+      search: 'shared',
+    });
+    expect(filtered.performanceByModel).toEqual([result.performanceByModel![0]]);
+    const missing = await service.analytics({ ...query, modelId: 'missing' });
+    expect(missing.performanceByModel).toEqual([]);
+  });
+
   test('shares exact identities and literal search between analytics and paginated records', async () => {
     const capture = context('a', {
       modelId: 'model%_one',
@@ -219,6 +328,9 @@ describe('AI usage analytics', () => {
     expect(result.stats.totals).toMatchObject({ requestCount: 9, estimatedRequestCount: 8 });
     expect(result.performance!.timeFirstTokenMs.sampleCount).toBe(1);
     expect(result.performance!.tokensPerSecond.sampleCount).toBe(0);
+    expect(result.performanceByModel).toEqual([
+      expect.objectContaining({ providerId: 'a', modelId: 'model-1', sampleCount: 1 }),
+    ]);
     expect(result.composition.imageCount).toBe(1);
   });
 

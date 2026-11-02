@@ -5,6 +5,7 @@ import {
   Button,
   ContentState,
   Section,
+  SearchField,
 } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,12 @@ import {
 import type { Currency } from '@/shared/data/types/model';
 import { getAiUsageRecordTokensPerSecond } from '@/shared/utils/aiUsage';
 
-import { formatUsageCost, formatUsageNumber, type UsageRange } from '../utils/aiUsageAnalytics';
+import {
+  formatUsageCost,
+  formatUsageDate,
+  formatUsageNumber,
+  type UsageRange,
+} from '../utils/aiUsageAnalytics';
 import { AiUsageValueRow } from './AiUsageBreakdown';
 import { PERFORMANCE_LABELS } from './AiUsagePerformance';
 
@@ -45,17 +51,30 @@ export const MODALITY_LABELS = {
 export function AiUsageRecords({
   range,
   filters,
-  currency,
+  currencies,
   locale,
+  scopeLabel,
+  searchDraft,
+  onSearchDraftChange,
+  onSearch,
 }: {
   range: UsageRange;
   filters: AiUsageRecordFilters;
-  currency: Currency;
+  currencies: Currency[];
   locale: string;
+  scopeLabel?: string;
+  searchDraft: string;
+  onSearchDraftChange: (value: string) => void;
+  onSearch: (value: string) => void;
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [sortBy, setSortBy] = useState<AiUsageRecordListSortBy>('createdAt');
+  const [sort, setSort] = useState<{ field: AiUsageRecordListSortBy; currency?: Currency }>({
+    field: 'createdAt',
+  });
+  const sortBy = sort.field;
+  const currency = sort.currency;
+  const sortLabel = `${t(SORT_LABELS[sortBy])}${currency ? ` · ${currency}` : ''}`;
   const [ascending, setAscending] = useState(false);
   const [selected, setSelected] = useState<AiUsageRecordEntry>();
   const query = useInfiniteQuery('/ai-usage-records', {
@@ -76,6 +95,7 @@ export function AiUsageRecords({
         key={JSON.stringify([range, filters, sortBy, ascending, currency])}
         data={items}
         keyExtractor={(item) => item.id}
+        ItemSeparatorComponent={RecordSeparator}
         contentContainerStyle={{
           paddingHorizontal: 20,
           paddingBottom: insets.bottom + 24,
@@ -87,7 +107,22 @@ export function AiUsageRecords({
         onEndReached={() => void query.loadNext()}
         onEndReachedThreshold={0.3}
         ListHeaderComponent={
-          <View className="gap-2 pb-3">
+          <View className="gap-3 pb-3">
+            <Text className="text-muted-foreground text-xs">
+              {range.period === 'all'
+                ? t('aiUsage.periodAll')
+                : `${formatUsageDate(range.from, locale)} – ${formatUsageDate(range.to, locale)}`}
+              {scopeLabel ? ` · ${scopeLabel}` : null}
+            </Text>
+            <SearchField
+              accessibilityLabel={t('aiUsage.search')}
+              placeholder={t('aiUsage.search')}
+              clearAccessibilityLabel={t('common.clear')}
+              value={searchDraft}
+              onChangeText={(value) => onSearchDraftChange(value.slice(0, 200))}
+              onSubmitEditing={() => onSearch(searchDraft)}
+              onClear={() => onSearch('')}
+            />
             <Section.Header
               title={t('aiUsage.recordCount', {
                 value: formatUsageNumber(query.pages[0]?.total ?? 0, locale),
@@ -95,11 +130,19 @@ export function AiUsageRecords({
             >
               <ActionMenu
                 items={[
-                  ...Object.entries(SORT_LABELS).map(([value, label]) => ({
-                    id: value,
-                    label: t(label),
-                    checked: value === sortBy,
-                    onPress: () => setSortBy(value as AiUsageRecordListSortBy),
+                  ...Object.entries(SORT_LABELS)
+                    .filter(([value]) => value !== 'cost')
+                    .map(([value, label]) => ({
+                      id: value,
+                      label: t(label),
+                      checked: value === sortBy,
+                      onPress: () => setSort({ field: value as AiUsageRecordListSortBy }),
+                    })),
+                  ...currencies.map((value) => ({
+                    id: `cost-${value}`,
+                    label: `${t('aiUsage.cost')} · ${value}`,
+                    checked: sortBy === 'cost' && currency === value,
+                    onPress: () => setSort({ field: 'cost', currency: value }),
                   })),
                   {
                     id: 'direction',
@@ -110,15 +153,10 @@ export function AiUsageRecords({
                 ]}
               >
                 <Button size="sm" variant="ghost">
-                  {t(SORT_LABELS[sortBy])} {ascending ? '↑' : '↓'}
+                  {`${sortLabel} ${ascending ? '↑' : '↓'}`}
                 </Button>
               </ActionMenu>
             </Section.Header>
-            {sortBy === 'cost' ? (
-              <Text className="text-muted-foreground text-xs">
-                {t('aiUsage.currencyRecords', { currency })}
-              </Text>
-            ) : null}
           </View>
         }
         ListEmptyComponent={
@@ -162,7 +200,7 @@ export function AiUsageRecords({
             accessibilityLabel={`${item.modelName || item.modelId || t('aiUsage.unknownModel')}, ${t('aiUsage.viewDetails')}`}
             onPress={() => setSelected(item)}
           >
-            <View className="flex-row items-center gap-3 border-b border-border-subtle py-4">
+            <View className="flex-row items-center gap-3 rounded-2xl bg-card p-4">
               <View className="min-w-0 flex-1 gap-1">
                 <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
                   {item.modelName || item.modelId || t('aiUsage.unknownModel')}
@@ -170,6 +208,14 @@ export function AiUsageRecords({
                 <Text className="text-muted-foreground text-xs" numberOfLines={1}>
                   {item.providerName || t('aiUsage.unknownProvider')}
                 </Text>
+                <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                  {item.sourceName || item.sourceId || t('aiUsage.unknownSource')}
+                </Text>
+                {!item.messageId ? (
+                  <Text className="text-muted-foreground text-xs">
+                    {t('aiUsage.noConversation')}
+                  </Text>
+                ) : null}
                 <Text className="text-muted-foreground text-xs">
                   {new Intl.DateTimeFormat(locale, {
                     month: 'short',
@@ -337,4 +383,8 @@ function AiUsageRecordDetail({
       </ScrollView>
     </BottomSheet>
   );
+}
+
+function RecordSeparator() {
+  return <View className="h-2" />;
 }

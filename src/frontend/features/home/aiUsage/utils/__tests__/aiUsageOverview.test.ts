@@ -137,7 +137,9 @@ function bucket(date: string, totalTokens: number): AiUsageRecordTimelineBucket 
     totalCacheReadTokens: 0,
     totalCacheWriteTokens: 0,
     totalCost: 0,
+    totalInputTokens: totalTokens,
     totalNoCacheTokens: totalTokens,
+    totalOutputTokens: 0,
     totalTokens,
     unpricedRequestCount: 0,
   };
