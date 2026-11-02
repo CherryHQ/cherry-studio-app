@@ -68,6 +68,7 @@ test.each([
   ['apk', ['--channel', 'preview']],
   ['apk', ['--environment=preview']],
   ['apk', ['--json']],
+  ['apk', ['--skip-bundler']],
   ['ios', ['--platform', 'android']],
   ['google-play', ['-p', 'all']],
 ])('%s rejects overriding fixed publication settings: %j', (name, args) => {

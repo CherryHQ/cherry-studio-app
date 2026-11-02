@@ -6,6 +6,7 @@ type NativeConfig = {
   extra: { reporting?: { environment: string; services: Record<string, boolean> } };
   info: Record<string, unknown>;
   application: { 'meta-data': MetadataEntry[] };
+  mods?: { ios?: () => unknown; android?: () => unknown };
 };
 
 // Exercise the config mods without generating native projects or touching the filesystem.
@@ -14,14 +15,14 @@ jest.mock('expo/config-plugins', () => ({
     config: NativeConfig,
     action: (mod: { modResults: NativeConfig['info'] }) => unknown,
   ) => {
-    action({ modResults: config.info });
+    config.mods = { ...config.mods, ios: () => action({ modResults: config.info }) };
     return config;
   },
   withAndroidManifest: (
     config: NativeConfig,
     action: (mod: { modResults: NativeConfig['application'] }) => unknown,
   ) => {
-    action({ modResults: config.application });
+    config.mods = { ...config.mods, android: () => action({ modResults: config.application }) };
     return config;
   },
   AndroidConfig: {
@@ -41,6 +42,13 @@ jest.mock('expo/config-plugins', () => ({
 // Expo loads local config plugins as CommonJS.
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- match Expo's plugin loader
 const plugin = require('../app.plugin') as (config: NativeConfig) => NativeConfig;
+
+function generateNativeConfig(input: NativeConfig): NativeConfig {
+  const config = plugin(input);
+  config.mods?.ios?.();
+  config.mods?.android?.();
+  return config;
+}
 
 describe('native startup reporting configuration', () => {
   const oldDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -66,7 +74,7 @@ describe('native startup reporting configuration', () => {
   test.each(['development', 'preview', 'production'])(
     'embeds the same consent policy with a production-only DSN for %s',
     (profile) => {
-      const config = plugin({
+      const config = generateNativeConfig({
         extra: {
           reporting: {
             environment: profile,
@@ -96,7 +104,7 @@ describe('native startup reporting configuration', () => {
 
   test('disables native startup reporting in Storybook even with production config', () => {
     process.env.EXPO_PUBLIC_STORYBOOK_ENABLED = 'true';
-    const config = plugin({
+    const config = generateNativeConfig({
       extra: {
         reporting: {
           environment: 'production',
@@ -113,7 +121,7 @@ describe('native startup reporting configuration', () => {
   test.each(Object.keys(services) as (keyof typeof services)[])(
     'the Sentry native flag follows its own service setting: %s',
     (disabled) => {
-      const config = plugin({
+      const config = generateNativeConfig({
         extra: {
           reporting: {
             environment: 'production',
@@ -128,8 +136,64 @@ describe('native startup reporting configuration', () => {
   );
 
   test('missing configuration never enables any native sender', () => {
-    const config = plugin({ extra: {}, info: {}, application: { 'meta-data': [] } });
+    const config = generateNativeConfig({ extra: {}, info: {}, application: { 'meta-data': [] } });
     expect(config.info[services.sentry.nativeFlag]).toBe(false);
     expect(config.info.CherryCrashReportingDsn).toBe('');
   });
+
+  test.each([undefined, '', ' \t '])(
+    'rejects a missing or blank production DSN during native generation: %j',
+    (dsn) => {
+      if (dsn === undefined) delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+      else process.env.EXPO_PUBLIC_SENTRY_DSN = dsn;
+      // EAS must still be able to discover the project before loading its remote environment.
+      const config = plugin({
+        extra: { reporting: { environment: 'production', services: { sentry: true } } },
+        info: {},
+        application: { 'meta-data': [] },
+      });
+      expect(config.info).toEqual({});
+      expect(() => config.mods!.ios!()).toThrow('EXPO_PUBLIC_SENTRY_DSN is required');
+      expect(() => config.mods!.android!()).toThrow('EXPO_PUBLIC_SENTRY_DSN is required');
+    },
+  );
+
+  test('reads the DSN after the build environment is loaded', () => {
+    delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+    const config = plugin({
+      extra: { reporting: { environment: 'production', services: { sentry: true } } },
+      info: {},
+      application: { 'meta-data': [] },
+    });
+    process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.com/1';
+    config.mods!.ios!();
+    config.mods!.android!();
+    expect(config.info.CherryCrashReportingDsn).toBe('https://public@example.com/1');
+    expect(config.application['meta-data']).toContainEqual({
+      $: {
+        'android:name': 'CherryCrashReportingDsn',
+        'android:value': 'https://public@example.com/1',
+      },
+    });
+  });
+
+  test.each(['development', 'preview', 'storybook', 'disabled'])(
+    '%s does not require a DSN',
+    (variant) => {
+      delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+      process.env.EXPO_PUBLIC_STORYBOOK_ENABLED = String(variant === 'storybook');
+      const config = generateNativeConfig({
+        extra: {
+          reporting: {
+            environment: ['development', 'preview'].includes(variant) ? variant : 'production',
+            services: { sentry: variant !== 'disabled' },
+          },
+        },
+        info: {},
+        application: { 'meta-data': [] },
+      });
+      expect(config.info[services.sentry.nativeFlag]).toBe(false);
+      expect(config.info.CherryCrashReportingDsn).toBe('');
+    },
+  );
 });

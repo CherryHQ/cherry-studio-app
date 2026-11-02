@@ -192,7 +192,7 @@ describe('Sentry consent lifecycle', () => {
     expect(JSON.stringify(mockWarn.mock.calls)).not.toContain('storage unavailable');
   });
 
-  test('keeps the saved choice while missing runtime configuration closes capture', async () => {
+  test('does not turn invalid runtime configuration into a saved opt-out', async () => {
     delete process.env.EXPO_PUBLIC_SENTRY_DSN;
     mockStatus.enabled = true;
     mockNative.configure.mockResolvedValueOnce({ enabled: true, active: false });

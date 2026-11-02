@@ -22,8 +22,7 @@ class CrashReportingPackage : Package {
             metadata?.getString("CherryCrashReportingDsn") ?: "",
             !isDebug && metadata?.getBoolean("CherryCrashReportingEnabled") == true,
             // Android may parse the existing numeric policy version as an integer.
-            metadata?.get("CherryCrashReportingConsentVersion")?.toString() ?: "",
-            isRuntimeConfiguration = false
+            metadata?.get("CherryCrashReportingConsentVersion")?.toString() ?: ""
           )
         }.onFailure { CrashReportingState.recordStartupFailure() }
       }

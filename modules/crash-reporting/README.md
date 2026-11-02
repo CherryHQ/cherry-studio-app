@@ -8,7 +8,11 @@ implement its own crash recorder or upload protocol.
 ## Native ownership
 
 - `app.plugin.js` embeds public production/DSN configuration and the shared startup policy. The
-  iOS app-delegate subscriber and Android application lifecycle listener configure Sentry before
+  native generation mods and Metro both use `buildConfig.js` to reject a missing or blank DSN
+  when production Sentry reporting is enabled. Validation runs after the build/update environment
+  is loaded; EAS project discovery can read app config before fetching that environment.
+  Development, preview, Storybook, and explicitly disabled Sentry builds do not require a DSN.
+  The iOS app-delegate subscriber and Android application lifecycle listener configure Sentry before
   React starts, including the settings lookup and cache cleanup. This adds synchronous native
   startup work; assess its cost during authorized device acceptance. Debug, preview and Storybook
   builds cannot start reporting through these hooks.
@@ -21,19 +25,14 @@ implement its own crash recorder or upload protocol.
   transport on both platforms; the native `beforeSend` filters below only see native events. The
   Android transport gate still applies to them; on iOS, stopping the SDK on revocation drops them.
 - A process-wide owner survives Expo module recreation during JS reloads. A running grant is
-  revoked if a reload changes the disclosure version. Losing the production/DSN gate stops the
-  SDK and clears pending reports without replacing the saved choice; a later valid configuration
-  can resume an existing grant. Explicit opt-outs remain disabled.
-  A separate pending-cleanup file lives beside the consent record, outside the report caches.
-  It is written before deletion and retained throughout the pause. Every SDK start checks it,
-  retries cleanup, and removes it only after cleanup succeeds; failures keep capture closed,
-  including after process restarts. A failed marker write also blocks retries in the current process.
-  Native lifecycle configuration retains a pending pause even when the installed binary has a valid
-  DSN. Only the JS bridge's current runtime configuration can permit resumption. Until that call
-  confirms eligibility, capture stays inactive and the marker remains, even if JS never starts.
+  revoked if a reload changes the disclosure version. An invalid runtime production/DSN gate
+  stops the SDK in the current process without replacing the saved choice or deleting reports
+  captured under that grant. This is a defensive fallback for configuration errors, not a normal
+  runtime configuration lifecycle. A later valid configuration or native startup can use the saved
+  grant; explicit opt-outs remain disabled. There is no persisted configuration-error pause.
   Every native `configure` call also checks the immutable binary flag and native debug status,
   so JS configuration cannot turn on reporting in a development or preview package.
-- `setConsent(true)` persists the disclosure version (Android also persists the capture start time) and, in
+- `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
   production builds, starts the SDK at once. `setConsent(false)` closes the capture and transport
   gates, stops the SDK, persists a `disabled` marker, and removes the report cache. Both may repeat
   within one process; the gates are plain flags read by every SDK callback.
@@ -42,11 +41,9 @@ implement its own crash recorder or upload protocol.
   exported app data.
 - The SDK cache lives in one app-owned directory. Startup without a current grant deletes it along
   with pre-consent legacy Sentry caches, so nothing written while revoked can be replayed later.
-- Android persists the capture start time and rejects older events. After a runtime pause, it
-  advances that time to the resume time before removing the cleanup marker or starting Sentry.
-  This prevents Android's system ANR history from replaying reports whose deduplication markers
-  were deleted, or backfilling the paused interval. Ordinary eligible restarts keep the boundary
-  unchanged so a crash from the previous active process can still be reported.
+- Android persists when the grant began and rejects older events. This prevents Android's system
+  ANR history from backfilling an interval when the user had disabled reporting. A configuration
+  error does not revoke consent, reset that time, or delete Sentry's ANR deduplication state.
 - Android combines consent with Sentry's connection-status provider at the transport gate. Requests
   already handed to the network can finish; already transmitted data cannot be withdrawn.
 
@@ -86,8 +83,7 @@ Run builds and device checks only with explicit task authorization.
 When authorized, cover both iOS and Android:
 
 1. Fresh install: the switch defaults to on. Existing `20260915` grants and saved opt-outs survive
-   upgrades and relaunches. Stale grants,
-   absent DSN, and non-production profiles send no Sentry requests.
+   upgrades and relaunches. Stale grants and non-production profiles send no Sentry requests.
 2. Grant, then relaunch: a JS error and a real native crash retain usable source/symbol information.
 3. Offline crash, revoke before delivery, re-grant and relaunch: revoked reports are never sent.
 4. Revoke while a send is queued, including a subsequent JS reload: no new sends; document requests
@@ -97,24 +93,13 @@ When authorized, cover both iOS and Android:
    URLs, paths, and attachments. Inspect NDK dumps separately; do not infer their contents from JS
    or Java event filtering.
 7. Consent write failure: show an error and keep the current process paused.
-8. Remove the JS DSN or production gate after a granted startup, then restore it: capture pauses
-   and its cache is cleared, the saved choice survives, and capture resumes. Repeat with a saved
-   opt-out and confirm it stays off. Changing the disclosure version still revokes the old grant.
-   Also restart the production binary while its embedded DSN remains valid and JS is still ineligible:
-   before JS configuration, native status is enabled but inactive and the cleanup marker remains.
-   Delay or fail JS startup and confirm no native capture resumes. A later valid JS configuration
-   must clean the cache, clear the marker, and resume; an invalid one must keep the pause. Repeat
-   a normal restart without a prior pause and confirm native capture still starts before JS.
-9. On Android 11+, report an ANR, pause with missing runtime configuration, then resume: the
-   previously reported ANR is not uploaded again. Repeat with an ANR during the paused interval
-   and a process restart before resuming: it is rejected too. A new ANR after resuming must still
-   be delivered on the next eligible launch.
-10. On both platforms, make deletion of a populated report cache fail during pause. Restore valid
-    configuration in the same process and after a restart while deletion still fails: capture stays
-    closed and the pending-cleanup marker remains. Restore deletion access and retry: residual
-    reports are removed before capture resumes; the saved consent choice is unchanged. Also fail
-    marker removal (and Android's capture-time write): neither failure may reopen capture. Repeat
-    with an explicit opt-out while cleanup is pending and confirm recovery never re-enables it.
+8. Supply invalid runtime configuration through an isolated native fixture: capture stops but the
+   saved choice and previously consented reports remain. Valid configuration can resume the grant;
+   a cold start uses the embedded configuration and consent before JS. A saved opt-out must stay
+   off, and changing the disclosure version must still revoke the old grant.
+9. Production native generation and JS export must fail with an absent, empty, or whitespace-only
+   DSN when Sentry is enabled. EAS project discovery must still work before environment loading.
+   Development, preview, Storybook, and explicitly disabled Sentry builds must not require a DSN.
 
 Official references: [native initialization](https://docs.sentry.io/platforms/react-native/manual-setup/native-init/),
 [native filtering limitation](https://sentry.zendesk.com/hc/en-us/articles/26323481356443-How-to-filter-native-events-in-React-Native-SDK),

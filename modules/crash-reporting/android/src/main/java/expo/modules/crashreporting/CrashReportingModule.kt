@@ -18,8 +18,7 @@ class CrashReportingModule : Module() {
     // Consent lookup, cache cleanup, and SDK startup do disk work; keep them off the JS thread.
     AsyncFunction("configure") { dsn: String, isProduction: Boolean, version: String ->
       CrashReportingState.configure(
-        requireNotNull(appContext.reactContext).applicationContext, dsn, isProduction, version,
-        isRuntimeConfiguration = true
+        requireNotNull(appContext.reactContext).applicationContext, dsn, isProduction, version
       )
     }
     Function("getStatus") { CrashReportingState.status() }
@@ -33,8 +32,6 @@ internal object CrashReportingState {
   private var dsn = ""
   private var canCapture = false
   private var captureStartedAt = 0L
-  // Also retain a failed marker write for retries in this process.
-  private var isCleanupPending = false
   @Volatile private var granted = false
   @Volatile private var active = false
   @Volatile private var initialization = "not_started"
@@ -45,15 +42,12 @@ internal object CrashReportingState {
 
   private lateinit var context: Context
   private val consentFile get() = File(context.noBackupFilesDir, "cherry-crash-reporting-consent")
-  private val cleanupFile get() = File(context.noBackupFilesDir, "cherry-crash-reporting-pending-cleanup")
   private val cacheDir get() = File(context.cacheDir, "cherry-crash-reporting")
 
   @Synchronized
-  fun configure(
-    context: Context, dsn: String, isProduction: Boolean, version: String, isRuntimeConfiguration: Boolean
-  ): Map<String, Any> {
+  fun configure(context: Context, dsn: String, isProduction: Boolean, version: String): Map<String, Any> {
     return try {
-      configureOwner(context, dsn, isProduction, version, isRuntimeConfiguration)
+      configureOwner(context, dsn, isProduction, version)
     } catch (error: Throwable) {
       recordStartupFailure()
       configured = false
@@ -68,9 +62,7 @@ internal object CrashReportingState {
     Sentry.close()
   }
 
-  private fun configureOwner(
-    context: Context, dsn: String, isProduction: Boolean, version: String, isRuntimeConfiguration: Boolean
-  ): Map<String, Any> {
+  private fun configureOwner(context: Context, dsn: String, isProduction: Boolean, version: String): Map<String, Any> {
     this.context = context
     val applicationInfo = context.packageManager.getApplicationInfo(
       context.packageName, PackageManager.GET_META_DATA
@@ -84,16 +76,15 @@ internal object CrashReportingState {
     canCapture = isProduction && dsn.isNotEmpty() &&
       applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
       metadata?.getBoolean("CherryCrashReportingEnabled") == true
-    // Embedded configuration cannot confirm that the JS configuration which paused capture recovered.
-    if (!isRuntimeConfiguration && (isCleanupPending || cleanupFile.exists())) {
-      canCapture = false
-    }
     if (configured) {
       if (version != consentVersion) {
         consentVersion = version
         revoke()
-      } else if (!canCapture && granted) {
-        pause()
+      } else if (!canCapture && active) {
+        // A configuration error is not a user opt-out; retain consent and previously captured reports.
+        active = false
+        initialization = "inactive"
+        Sentry.close()
       } else if (canCapture && granted && !active) {
         start()
       }
@@ -119,9 +110,7 @@ internal object CrashReportingState {
       // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
       cleanCaches()
     }
-    if (granted) {
-      if (canCapture) start() else pause()
-    }
+    if (granted && canCapture) start()
     initialization = if (active) "ready" else if (granted && canCapture) "failed" else "inactive"
     return status()
   }
@@ -138,11 +127,7 @@ internal object CrashReportingState {
       persistConsent()
       granted = true
     }
-    if (!canCapture) {
-      pause()
-    } else if (!active) {
-      start()
-    }
+    if (canCapture && !active) start()
     return status()
   }
 
@@ -169,21 +154,6 @@ internal object CrashReportingState {
     cleanCaches()
   }
 
-  private fun markCleanupPending() {
-    isCleanupPending = true
-    // An empty file is sufficient; its atomic creation must precede cache deletion.
-    check(cleanupFile.exists() || cleanupFile.createNewFile()) { "Could not record pending crash cleanup" }
-  }
-
-  private fun pause() {
-    active = false
-    initialization = "inactive"
-    Sentry.close()
-    markCleanupPending()
-    cleanCaches()
-    // Keep the marker throughout the pause, including after a successful cleanup or a restart.
-  }
-
   fun status(): Map<String, Any> = mapOf(
     "enabled" to granted, "active" to (active && granted),
     "consentVersion" to consentVersion, "initialization" to initialization
@@ -205,16 +175,6 @@ internal object CrashReportingState {
   }
 
   private fun start() {
-    if (isCleanupPending || cleanupFile.exists()) {
-      markCleanupPending()
-      cleanCaches()
-      // Cache cleanup also removes Sentry's ANR deduplication markers. A new durable boundary
-      // excludes both previously discarded reports and system exits from the paused interval.
-      captureStartedAt = System.currentTimeMillis()
-      persistConsent()
-      check(cleanupFile.delete()) { "Could not finish pending crash cleanup" }
-      isCleanupPending = false
-    }
     active = true
     initialization = "starting"
     SentryAndroid.init(context) { options ->

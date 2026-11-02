@@ -18,7 +18,7 @@ public class CrashReportingModule: Module {
     AsyncFunction("configure") {
       (dsn: String, isProduction: Bool, version: String) throws -> [String: Any] in
       try CrashReportingState.shared.configure(
-        dsn: dsn, isProduction: isProduction, version: version, isRuntimeConfiguration: true)
+        dsn: dsn, isProduction: isProduction, version: version)
     }
     Function("getStatus") { CrashReportingState.shared.status() }
     AsyncFunction("setConsent") { (enabled: Bool) throws -> [String: Any] in
@@ -38,8 +38,7 @@ public class CrashReportingAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     _ = try? CrashReportingState.shared.configure(
       dsn: config["CherryCrashReportingDsn"] as? String ?? "",
       isProduction: isCrashReportingAllowed,
-      version: config["CherryCrashReportingConsentVersion"] as? String ?? "",
-      isRuntimeConfiguration: false
+      version: config["CherryCrashReportingConsentVersion"] as? String ?? ""
     )
     return true
   }
@@ -53,16 +52,12 @@ private final class CrashReportingState {
   private var consentVersion = ""
   private var dsn = ""
   private var canCapture = false
-  // Also retain a failed marker write for retries in this process.
-  private var isCleanupPending = false
   // Read by SDK callbacks under gateLock; written only while holding controlLock.
   private var granted = false
   private var active = false
   private var initialization = "not_started"
 
-  func configure(
-    dsn: String, isProduction: Bool, version: String, isRuntimeConfiguration: Bool
-  ) throws -> [String: Any] {
+  func configure(dsn: String, isProduction: Bool, version: String) throws -> [String: Any] {
     controlLock.lock()
     var succeeded = false
     defer {
@@ -76,21 +71,16 @@ private final class CrashReportingState {
     }
     self.dsn = dsn
     canCapture = isCrashReportingAllowed && isProduction && !dsn.isEmpty
-    if !isRuntimeConfiguration {
-      let pendingFile = try cleanupFile()
-      // Embedded configuration cannot confirm that the JS configuration which paused capture recovered.
-      if isCleanupPending || FileManager.default.fileExists(atPath: pendingFile.path) {
-        canCapture = false
-      }
-    }
     if configured {
       if version != consentVersion {
         gateLock.withLock { consentVersion = version }
         try revoke()
-      } else if !canCapture && isGranted {
-        try pause()
+      } else if !canCapture && isActive {
+        // A configuration error is not a user opt-out; retain consent and previously captured reports.
+        setGate(granted: isGranted, active: false)
+        SentrySDK.close()
       } else if canCapture && isGranted && !isActive {
-        try start()
+        start()
       }
       succeeded = true
       return status()
@@ -109,12 +99,8 @@ private final class CrashReportingState {
       // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
       try cleanCaches()
     }
-    if isGranted {
-      if canCapture {
-        try start()
-      } else {
-        try pause()
-      }
+    if isGranted && canCapture {
+      start()
     }
     gateLock.withLock {
       initialization = active ? "ready" : (granted && canCapture ? "failed" : "inactive")
@@ -134,10 +120,8 @@ private final class CrashReportingState {
       try consentVersion.write(to: consentFile(), atomically: true, encoding: .utf8)
       setGate(granted: true, active: isActive)
     }
-    if !canCapture {
-      try pause()
-    } else if !isActive {
-      try start()
+    if canCapture && !isActive {
+      start()
     }
     return status()
   }
@@ -148,24 +132,6 @@ private final class CrashReportingState {
     SentrySDK.close()
     try "disabled".write(to: consentFile(), atomically: true, encoding: .utf8)
     try cleanCaches()
-  }
-
-  private func cleanupFile() throws -> URL {
-    try consentFile().deletingLastPathComponent().appendingPathComponent("pending-cleanup")
-  }
-
-  private func markCleanupPending() throws {
-    isCleanupPending = true
-    // Store outside the caches being removed; a failed cleanup must survive process restarts.
-    try "".write(to: cleanupFile(), atomically: true, encoding: .utf8)
-  }
-
-  private func pause() throws {
-    setGate(granted: isGranted, active: false)
-    SentrySDK.close()
-    try markCleanupPending()
-    try cleanCaches()
-    // Keep the marker until a later eligible start has completed cleanup again.
   }
 
   func status() -> [String: Any] {
@@ -223,14 +189,7 @@ private final class CrashReportingState {
     }
   }
 
-  private func start() throws {
-    let pendingFile = try cleanupFile()
-    if isCleanupPending || FileManager.default.fileExists(atPath: pendingFile.path) {
-      try markCleanupPending()
-      try cleanCaches()
-      try FileManager.default.removeItem(at: pendingFile)
-      isCleanupPending = false
-    }
+  private func start() {
     setGate(granted: true, active: true)
     SentrySDK.start { options in
       options.dsn = self.dsn

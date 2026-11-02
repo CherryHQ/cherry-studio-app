@@ -2,6 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+const mockGetConfig = jest.fn(() => ({
+  exp: { extra: { reporting: { environment: 'development', services: { sentry: true } } } },
+}));
+jest.mock('expo/config', () => ({ getConfig: () => mockGetConfig() }));
 jest.mock('@sentry/react-native/metro', () => ({
   getSentryExpoConfig: () => ({ resolver: { sourceExts: [], assetExts: [] }, watchFolders: [] }),
 }));
@@ -28,6 +32,46 @@ const config = jest.requireActual<{
   resolver: { resolveRequest: Context['resolveRequest'] };
 }>('../../metro.config.js');
 const projectOrigin = join(process.cwd(), 'package.json');
+
+describe('reporting configuration before bundling', () => {
+  const oldDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  const oldStorybook = process.env.EXPO_PUBLIC_STORYBOOK_ENABLED;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_STORYBOOK_ENABLED = 'false';
+    mockGetConfig.mockReturnValue({
+      exp: { extra: { reporting: { environment: 'production', services: { sentry: true } } } },
+    });
+  });
+  afterEach(() => {
+    for (const [key, value] of Object.entries({
+      EXPO_PUBLIC_SENTRY_DSN: oldDsn,
+      EXPO_PUBLIC_STORYBOOK_ENABLED: oldStorybook,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    mockGetConfig.mockReturnValue({
+      exp: { extra: { reporting: { environment: 'development', services: { sentry: true } } } },
+    });
+  });
+
+  test.each([undefined, '', ' \t '])('rejects missing or blank DSNs: %j', (dsn) => {
+    if (dsn === undefined) delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+    else process.env.EXPO_PUBLIC_SENTRY_DSN = dsn;
+    expect(() => {
+      jest.isolateModules(() => jest.requireActual('../../metro.config.js'));
+    }).toThrow('EXPO_PUBLIC_SENTRY_DSN is required');
+  });
+
+  test('allows a production bundle with its public reporting address', () => {
+    process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.com/1';
+    expect(() => {
+      jest.isolateModules(() => jest.requireActual('../../metro.config.js'));
+    }).not.toThrow();
+  });
+});
+
 // Jest maps every Expo import to the root copy. Use Node's physical resolution
 // in a subprocess so this regression does not pass because of that test-only map.
 function resolveFrom(origin: string, moduleName: string) {

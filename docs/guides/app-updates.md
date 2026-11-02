@@ -85,6 +85,10 @@ actions using the embedded native channel.
 Other service settings and credentials still come from the selected environment. Client/config
 values must be readable during both builds and updates; Secret-only values cannot be read by
 EAS Update.
+When production Sentry reporting is enabled, `EXPO_PUBLIC_SENTRY_DSN` must be nonblank in that
+environment. Metro rejects an export without it before an update can be published. This uses the
+same validation as native generation; a missing address is a release configuration error.
+The publication wrapper rejects `--skip-bundler` so an old export cannot bypass this check.
 
 Release channels receive updates only on packages from the tag
 [release workflow](./cloud-releases.md): EAS records their runtime versions, and the publication

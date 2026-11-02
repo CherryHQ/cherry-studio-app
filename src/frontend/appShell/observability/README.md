@@ -50,7 +50,7 @@ Privacy settings retains the existing Send anonymous error reports switch. First
 on; a saved `disabled` marker keeps manual opt-outs off across relaunches. The policy
 version remains `20260915`, preserving existing settings through this update. Stale grants stay off.
 A grant is the stored `SENTRY_CONSENT_VERSION`;
-Android also stores when the current capture interval began so older system ANR history is rejected. The native module
+Android also stores when the grant began so older system ANR history is rejected. The native module
 stores this outside SQLite and excludes it from backups, so database startup failures do not
 prevent reading an existing grant. This is consent to diagnostic reporting, not acceptance of a
 complete legal privacy policy. The shared `modules/crash-reporting/reportingPolicy.json` owns the
@@ -66,16 +66,12 @@ behind, so a report
 written after revocation is never replayed under a later grant. Persistence/cleanup failures are
 shown in settings. Native revocation closes its gate before disk operations; if the
 bridge call rejects, JS stays paused and the switch restores the last saved choice for retrying.
-Missing runtime configuration pauses capture and clears native pending reports while preserving
-the saved choice. Restoring valid configuration can resume an existing grant; it cannot override
-an opt-out or an obsolete disclosure version.
-Native pause writes a separate cleanup marker before deleting reports. The marker survives failures
-and process restarts, and every resume must finish cleanup before reopening capture. Android also
-persists a new capture start time on resume, excluding previously discarded system ANR history and
-events from the paused interval without changing the user's enabled/disabled choice.
-On a cold start, embedded native configuration preserves an existing pause. Only the current JS
-configuration may restore eligibility, so missing or failed JS startup cannot reopen capture.
-Unpaused grants still allow native capture before JS starts.
+Missing production reporting configuration is a build/export error. As a runtime fallback, invalid
+configuration stops capture in the current process without changing consent or deleting reports
+captured under that consent. A later valid configuration or native startup can resume an existing
+grant; it cannot override an opt-out or an obsolete disclosure version. Configuration errors do not
+create a persisted pause or reset Android's grant time. Native capture still starts before JS when
+the embedded configuration and saved grant permit it.
 
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
 SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native
@@ -138,6 +134,9 @@ native dependencies during CocoaPods installation.
 
 Sentry reporting and native initialization require a current grant, the shared production reporting
 policy, a configured `EXPO_PUBLIC_SENTRY_DSN`, and a bundle running outside development mode.
+The native config plugin and Metro validate the DSN after the build/update environment is loaded.
+Missing or blank values fail production native generation or JS export when Sentry is enabled,
+including EAS Update exports. Early EAS project discovery does not require those variables yet.
 Native `configure` rechecks the installed binary's gate even when called from JS. `app.config.ts`
 supplies the build's `PROFILE` through `extra.reporting.environment`; `extra.sentryEnvironment`
 remains for existing build-display consumers. Development and preview packages never enable
