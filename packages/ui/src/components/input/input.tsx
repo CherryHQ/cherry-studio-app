@@ -74,8 +74,10 @@ function NativeInput({
   ...inputProps
 }: NativeInputProps) {
   const [text, changeText] = useFieldText(value, onChangeText);
+  const textField = useTextFieldState();
+  const isInvalid = invalid ?? textField?.invalid ?? false;
   const [selectionTint, selectionBackground] = useCSSVariable([
-    '--color-muted-foreground',
+    '--color-primary',
     '--color-secondary',
   ]);
   const selectionColor = Platform.OS === 'ios' ? selectionTint : selectionBackground;
@@ -94,10 +96,10 @@ function NativeInput({
   );
   const inputClassName = cn(
     multiline
-      ? 'min-h-10 rounded-lg border border-border py-2 text-base shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-border'
-      : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-border',
-    invalid &&
-      'border-error ios:outline-error ios:focus:outline-error android:border-error android:focus:border-error',
+      ? 'min-h-10 rounded-lg border border-border py-2 text-base shadow-none focus:border-primary ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-primary'
+      : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none focus:border-primary ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-primary',
+    isInvalid &&
+      'border-error focus:border-error ios:outline-error ios:focus:outline-error android:border-error android:focus:border-error',
     className,
   );
 
@@ -228,6 +230,7 @@ function PasswordInput({
         'min-h-10 flex-row items-stretch overflow-hidden rounded-lg border border-border shadow-none',
         isOnSurface ? 'bg-default' : 'bg-field',
         isDisabled && 'opacity-disabled',
+        isFocused && !isDisabled && 'border-primary',
         isInvalid && 'border-error',
       )}
       style={[styles.root, style]}

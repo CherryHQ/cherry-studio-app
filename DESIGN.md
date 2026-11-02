@@ -109,6 +109,12 @@ Use `control-active` for switch fills, `primary` for emphasized actions and adju
 and neutral `secondary` / `border-selected` for ordinary selection. Default buttons remain neutral.
 HeroUI's `accent` adapter follows `primary`; the underlying Shadcn `accent` remains a neutral overlay.
 
+The enabled composer send arrow, slider progress, shared input focus borders and carets, and model
+picker selection marks use `primary`. Model selection is an explicit exception to ordinary neutral
+selection: single checks use `primary`, while multiple-selection fills pair it with
+`primary-foreground`. Pausing and disabled send states stay neutral; input errors retain their error
+color. Usage heatmaps and categorical chart colors keep their existing data roles.
+
 General settings exposes one row of six palette swatches under Theme. Palette names are
 accessibility labels, not visible captions. `packages/design-tokens/src/palettes.ts` owns their
 light/dark emphasis colors, paired foregrounds, and control fills. The default green preserves the

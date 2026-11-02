@@ -433,7 +433,7 @@ controls with circular switch thumbs, thin slider tracks, and mobile touch targe
 follows the desktop visual direction while colors use Mobile theme tokens. Switches use
 `control-active`, supplied by the selected palette and defaulting to desktop's `brand-600` green.
 The white thumb has a one-point darkened outline on Android and Web; iOS applies the same palette
-fill to its native toggle.
+fill to its native toggle. Slider progress uses `primary`, including the iOS native slider tint.
 iOS retains its private SwiftUI adapters. Feature code never imports a platform UI SDK or branches
 on the operating system.
 
@@ -488,6 +488,8 @@ row. The parent owns the accessible role, state, and press handling. Use its `ov
 the unselected ring sits on imagery and needs a dark contrast fill. A form that mixes single and
 multiple choice passes `control="radio"` (dot) or `control="checkbox"` (square check) so the shape,
 not a caption, tells them apart.
+The default remains neutral. `variant="primary"` pairs the theme's primary fill with
+`primary-foreground` for explicitly emphasized selections such as the model picker.
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest
@@ -611,6 +613,11 @@ control to the native input, including `selectTextOnFocus`. The password variant
 compatible `Input` props. Its `style` prop targets the composed field container. Disabling the field
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
+
+Plain and password fields use `primary` for focus borders, carets, and selection handles. Error
+borders take precedence, including validation inherited from `TextField`. Android keeps its neutral
+text-selection background for readability; iOS derives that highlight from the native tint. This
+contract belongs to `Input`; native search and the composer's rich text field retain their own styling.
 
 `InfoPopover` presents caller-owned text next to a tap trigger, with bounded scrolling. Its
 `children` are presentation-only; the component owns the tap and exposes the caller's
@@ -867,6 +874,7 @@ do — so a tool that merely acts keeps its identity while the user types. Senda
 "there is text"; pass `canSend` when it depends on something the composer cannot see, such as an
 attachment the caller holds, an image model that has to be picked first, or a mode that needs no
 prompt at all.
+An enabled send arrow uses `primary`; the pause action and disabled arrow keep their neutral roles.
 
 Only platform-divergent material and text metrics use `.ios` / `.android` files. Layout, state, and
 collapse behavior stay shared. `Composer.Input` forwards every paste to `onPaste`; the caller decides

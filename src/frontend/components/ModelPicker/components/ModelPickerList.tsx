@@ -305,9 +305,9 @@ const ModelPickerRow = memo(function ModelPickerRow({
         </View>
       ) : null}
       {multiple ? (
-        <SelectionIndicator selected={isSelected} />
+        <SelectionIndicator selected={isSelected} variant="primary" />
       ) : isSelected ? (
-        <CheckIcon className="size-5 shrink-0 text-foreground" />
+        <CheckIcon className="size-5 shrink-0 text-primary" />
       ) : null}
     </Pressable>
   );
