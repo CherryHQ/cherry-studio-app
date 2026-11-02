@@ -68,14 +68,12 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   missing_terminal_event: 'internal',
   model_not_found: 'model_not_found',
   model_not_supported: 'model_not_found',
-  no_response: 'network',
   permission_denied: 'permission',
   payload_too_large: 'payload_too_large',
   provider_unavailable: 'provider_unavailable',
   rate_limit_error: 'rate_limit',
   rate_limit_exceeded: 'rate_limit',
   request_too_large: 'payload_too_large',
-  stream_disconnected: 'stream_interrupted',
   tool_call_limit_exceeded: 'tool_limit',
   tool_execution_error: 'tool_failed',
   tool_step_limit_exceeded: 'tool_limit',
@@ -104,25 +102,10 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   const finishReason = facts.finishReason?.trim().toLowerCase();
   if (
     finishReason &&
-    [
-      'content-filter',
-      'content_filter',
-      'safety',
-      'recitation',
-      'blocklist',
-      'prohibited_content',
-      'spii',
-      'image_safety',
-      'image_prohibited_content',
-      'image_recitation',
-      'refusal',
-    ].includes(finishReason)
+    ['content-filter', 'content_filter', 'safety', 'recitation'].includes(finishReason)
   ) {
     return 'content_filter';
   }
-  if (finishReason === 'malformed_function_call') return 'parse';
-  if (finishReason === 'unexpected_tool_call') return 'tool_failed';
-  if (finishReason === 'too_many_tool_calls') return 'tool_limit';
 
   const text = [facts.name, facts.message, facts.responseBody]
     .filter((value): value is string => Boolean(value))

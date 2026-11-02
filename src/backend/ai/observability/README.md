@@ -49,9 +49,8 @@ Current producers are:
 
 Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
 `error.category`, the product `AiFailureReason` that `classifyAiFailureReason` derives from the
-structured code, status and known provider finish reason alone. Messages are not used to guess a
-category. Provider codes the product table does not list (for example `usage_limit_reached` or
-`overloaded_error`) map in
+structured code and status alone. Messages are not used to guess a category. Provider codes the
+product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
 `piModelDiagnostics.ts`. A 4xx status without a product reason is `unknown`; `http.status_code`
 keeps the status. Final `ai.turn_state` failures also retain `error.product_reason` from the existing
 product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper,
@@ -59,11 +58,10 @@ and available source name/origin/status. The product reason may have been inferr
 caller-visible message; it is distinct from the request's structured-only `error.category`.
 Only the closed reason is copied, never the message or response body.
 `gen_ai.response.finish_reason` retains Pi's normalized outcome;
-`gen_ai.response.raw_finish_reason` retains a known provider enum such as `SAFETY` or
-`MALFORMED_FUNCTION_CALL`. Producers and the archive exporter use the same closed allowlist.
-The product failure context reuses `finishReason` for that provider reason, falling back to Pi's
-normalized reason when it is absent or unknown. Product failure logs retain known raw reasons too.
-These facts improve classification without changing Pi's automatic retry decision.
+`gen_ai.response.raw_finish_reason` on `pi.generate_content` retains a known provider enum such as
+`SAFETY` or `MALFORMED_FUNCTION_CALL`. The producer and archive exporter use the same closed
+allowlist. These facts support diagnostic analysis without changing error classification or Pi's
+automatic retry decision. Product failure context continues to use Pi's normalized `finishReason`.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is

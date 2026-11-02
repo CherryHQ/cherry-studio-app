@@ -111,18 +111,18 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 
 describe('Pi turn projection', () => {
   test.each([
-    { raw: undefined, code: 'stream_disconnected', reason: 'stream_interrupted' },
-    { raw: undefined, code: 'no_response', reason: 'network' },
-    { raw: 'SAFETY', reason: 'content_filter' },
-    { raw: 'MALFORMED_FUNCTION_CALL', reason: 'parse' },
-    { raw: 'UNEXPECTED_TOOL_CALL', reason: 'tool_failed' },
-    { raw: 'TOO_MANY_TOOL_CALLS', reason: 'tool_limit' },
-    { raw: 'OTHER', reason: 'unknown' },
-    { raw: undefined, reason: 'unknown' },
-    { raw: 'private_finish_reason', reason: 'unknown' },
+    { raw: undefined, code: 'stream_disconnected' },
+    { raw: undefined, code: 'no_response' },
+    { raw: 'SAFETY' },
+    { raw: 'MALFORMED_FUNCTION_CALL' },
+    { raw: 'UNEXPECTED_TOOL_CALL' },
+    { raw: 'TOO_MANY_TOOL_CALLS' },
+    { raw: 'OTHER' },
+    { raw: undefined },
+    { raw: 'private_finish_reason' },
   ])(
-    'preserves the known provider finish reason $raw in the displayed failure',
-    ({ raw, reason, code }) => {
+    'keeps diagnostic reason $raw and code $code out of product classification',
+    ({ raw, code }) => {
       const terminal: AssistantMessage = {
         ...call('', 2000),
         api: 'google-generative-ai',
@@ -158,8 +158,8 @@ describe('Pi turn projection', () => {
       expect(toAgentErrorView(turn.error!)).toMatchObject({
         retryable: true,
         failure: {
-          reasonCode: reason,
-          context: { finishReason: raw && raw !== 'private_finish_reason' ? raw : 'error' },
+          reasonCode: 'unknown',
+          context: { finishReason: 'error' },
         },
       });
     },

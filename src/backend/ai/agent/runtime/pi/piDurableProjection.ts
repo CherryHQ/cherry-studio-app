@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
-import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
 import {
@@ -352,7 +351,7 @@ export function projectPiTurn(options: {
             // This flag permits a user retry after correcting configuration or account limits.
             // Automatic retry is decided separately by Pi from the terminal diagnostic.
             retryable: message.api !== 'cherry-image',
-            finishReason: readKnownAiFinishReason(message.rawStopReason) ?? message.stopReason,
+            finishReason: message.stopReason,
           },
           [],
           { providerId: message.provider, modelId: message.model },

@@ -548,27 +548,26 @@ describe('Gemini injected transport', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  test.each([
-    { finishReason: 'SAFETY', category: 'content_filter' },
-    { finishReason: 'MALFORMED_FUNCTION_CALL', category: 'parse' },
-    { finishReason: 'UNEXPECTED_TOOL_CALL', category: 'tool_failed' },
-  ])('retains the provider terminal reason $finishReason', async ({ finishReason, category }) => {
-    const stream = await bind(
-      async () =>
-        new Response(
-          sse(undefined, {
-            candidates: [{ finishReason }],
-          }),
-          { headers: { 'Content-Type': 'text/event-stream' } },
-        ),
-    );
-    const result = await (await stream(googleModel, context, {})).result();
-    expect(result).toMatchObject({ stopReason: 'error', rawStopReason: finishReason });
-    expect(piModelTerminalErrorAttributes(result)).toMatchObject({
-      'error.category': category,
-      'error.retryable': false,
-    });
-  });
+  test.each(['SAFETY', 'MALFORMED_FUNCTION_CALL', 'UNEXPECTED_TOOL_CALL'])(
+    'retains the provider terminal reason %s',
+    async (finishReason) => {
+      const stream = await bind(
+        async () =>
+          new Response(
+            sse(undefined, {
+              candidates: [{ finishReason }],
+            }),
+            { headers: { 'Content-Type': 'text/event-stream' } },
+          ),
+      );
+      const result = await (await stream(googleModel, context, {})).result();
+      expect(result).toMatchObject({ stopReason: 'error', rawStopReason: finishReason });
+      expect(piModelTerminalErrorAttributes(result)).toMatchObject({
+        'error.category': 'unknown',
+        'error.retryable': false,
+      });
+    },
+  );
 
   test('keeps an early end without a finish reason distinct from a provider rejection', async () => {
     const stream = await bind(
