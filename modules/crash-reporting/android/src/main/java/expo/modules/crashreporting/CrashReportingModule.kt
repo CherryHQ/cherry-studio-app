@@ -32,6 +32,8 @@ internal object CrashReportingState {
   private var dsn = ""
   private var canCapture = false
   private var captureStartedAt = 0L
+  // Also retain a failed marker write for retries in this process.
+  private var isCleanupPending = false
   @Volatile private var granted = false
   @Volatile private var active = false
   @Volatile private var initialization = "not_started"
@@ -42,6 +44,7 @@ internal object CrashReportingState {
 
   private lateinit var context: Context
   private val consentFile get() = File(context.noBackupFilesDir, "cherry-crash-reporting-consent")
+  private val cleanupFile get() = File(context.noBackupFilesDir, "cherry-crash-reporting-pending-cleanup")
   private val cacheDir get() = File(context.cacheDir, "cherry-crash-reporting")
 
   @Synchronized
@@ -80,12 +83,8 @@ internal object CrashReportingState {
       if (version != consentVersion) {
         consentVersion = version
         revoke()
-      } else if (!canCapture && active) {
-        // Runtime eligibility may disappear during a JS reload. Preserve the saved choice.
-        active = false
-        initialization = "inactive"
-        Sentry.close()
-        cleanCaches()
+      } else if (!canCapture && granted) {
+        pause()
       } else if (canCapture && granted && !active) {
         start()
       }
@@ -111,7 +110,9 @@ internal object CrashReportingState {
       // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
       cleanCaches()
     }
-    if (granted && canCapture) start()
+    if (granted) {
+      if (canCapture) start() else pause()
+    }
     initialization = if (active) "ready" else if (granted && canCapture) "failed" else "inactive"
     return status()
   }
@@ -128,7 +129,11 @@ internal object CrashReportingState {
       persistConsent()
       granted = true
     }
-    if (canCapture && !active) start()
+    if (!canCapture) {
+      pause()
+    } else if (!active) {
+      start()
+    }
     return status()
   }
 
@@ -155,6 +160,21 @@ internal object CrashReportingState {
     cleanCaches()
   }
 
+  private fun markCleanupPending() {
+    isCleanupPending = true
+    // An empty file is sufficient; its atomic creation must precede cache deletion.
+    check(cleanupFile.exists() || cleanupFile.createNewFile()) { "Could not record pending crash cleanup" }
+  }
+
+  private fun pause() {
+    active = false
+    initialization = "inactive"
+    Sentry.close()
+    markCleanupPending()
+    cleanCaches()
+    // Keep the marker throughout the pause, including after a successful cleanup or a restart.
+  }
+
   fun status(): Map<String, Any> = mapOf(
     "enabled" to granted, "active" to (active && granted),
     "consentVersion" to consentVersion, "initialization" to initialization
@@ -176,6 +196,16 @@ internal object CrashReportingState {
   }
 
   private fun start() {
+    if (isCleanupPending || cleanupFile.exists()) {
+      markCleanupPending()
+      cleanCaches()
+      // Cache cleanup also removes Sentry's ANR deduplication markers. A new durable boundary
+      // excludes both previously discarded reports and system exits from the paused interval.
+      captureStartedAt = System.currentTimeMillis()
+      persistConsent()
+      check(cleanupFile.delete()) { "Could not finish pending crash cleanup" }
+      isCleanupPending = false
+    }
     active = true
     initialization = "starting"
     SentryAndroid.init(context) { options ->

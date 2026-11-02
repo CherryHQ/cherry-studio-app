@@ -24,9 +24,13 @@ implement its own crash recorder or upload protocol.
   revoked if a reload changes the disclosure version. Losing the production/DSN gate stops the
   SDK and clears pending reports without replacing the saved choice; a later valid configuration
   can resume an existing grant. Explicit opt-outs remain disabled.
+  A separate pending-cleanup file lives beside the consent record, outside the report caches.
+  It is written before deletion and retained throughout the pause. Every SDK start checks it,
+  retries cleanup, and removes it only after cleanup succeeds; failures keep capture closed,
+  including after process restarts. A failed marker write also blocks retries in the current process.
   Every native `configure` call also checks the immutable binary flag and native debug status,
   so JS configuration cannot turn on reporting in a development or preview package.
-- `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
+- `setConsent(true)` persists the disclosure version (Android also persists the capture start time) and, in
   production builds, starts the SDK at once. `setConsent(false)` closes the capture and transport
   gates, stops the SDK, persists a `disabled` marker, and removes the report cache. Both may repeat
   within one process; the gates are plain flags read by every SDK callback.
@@ -35,8 +39,11 @@ implement its own crash recorder or upload protocol.
   exported app data.
 - The SDK cache lives in one app-owned directory. Startup without a current grant deletes it along
   with pre-consent legacy Sentry caches, so nothing written while revoked can be replayed later.
-- Android persists when the grant began and rejects older events. This prevents Android's system
-  ANR history from backfilling an interval when reporting was disabled.
+- Android persists the capture start time and rejects older events. After a runtime pause, it
+  advances that time to the resume time before removing the cleanup marker or starting Sentry.
+  This prevents Android's system ANR history from replaying reports whose deduplication markers
+  were deleted, or backfilling the paused interval. Ordinary eligible restarts keep the boundary
+  unchanged so a crash from the previous active process can still be reported.
 - Android combines consent with Sentry's connection-status provider at the transport gate. Requests
   already handed to the network can finish; already transmitted data cannot be withdrawn.
 
@@ -90,6 +97,16 @@ When authorized, cover both iOS and Android:
 8. Remove the JS DSN or production gate after a granted startup, then restore it: capture pauses
    and its cache is cleared, the saved choice survives, and capture resumes. Repeat with a saved
    opt-out and confirm it stays off. Changing the disclosure version still revokes the old grant.
+9. On Android 11+, report an ANR, pause with missing runtime configuration, then resume: the
+   previously reported ANR is not uploaded again. Repeat with an ANR during the paused interval
+   and a process restart before resuming: it is rejected too. A new ANR after resuming must still
+   be delivered on the next eligible launch.
+10. On both platforms, make deletion of a populated report cache fail during pause. Restore valid
+    configuration in the same process and after a restart while deletion still fails: capture stays
+    closed and the pending-cleanup marker remains. Restore deletion access and retry: residual
+    reports are removed before capture resumes; the saved consent choice is unchanged. Also fail
+    marker removal (and Android's capture-time write): neither failure may reopen capture. Repeat
+    with an explicit opt-out while cleanup is pending and confirm recovery never re-enables it.
 
 Official references: [native initialization](https://docs.sentry.io/platforms/react-native/manual-setup/native-init/),
 [native filtering limitation](https://sentry.zendesk.com/hc/en-us/articles/26323481356443-How-to-filter-native-events-in-React-Native-SDK),

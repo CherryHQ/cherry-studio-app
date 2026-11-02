@@ -50,7 +50,7 @@ Privacy settings retains the existing Send anonymous error reports switch. First
 on; a saved `disabled` marker keeps manual opt-outs off across relaunches. The policy
 version remains `20260915`, preserving existing settings through this update. Stale grants stay off.
 A grant is the stored `SENTRY_CONSENT_VERSION`;
-Android also stores when the grant began so older system ANR history is rejected. The native module
+Android also stores when the current capture interval began so older system ANR history is rejected. The native module
 stores this outside SQLite and excludes it from backups, so database startup failures do not
 prevent reading an existing grant. This is consent to diagnostic reporting, not acceptance of a
 complete legal privacy policy. The shared `modules/crash-reporting/reportingPolicy.json` owns the
@@ -69,6 +69,10 @@ bridge call rejects, JS stays paused and the switch restores the last saved choi
 Missing runtime configuration pauses capture and clears native pending reports while preserving
 the saved choice. Restoring valid configuration can resume an existing grant; it cannot override
 an opt-out or an obsolete disclosure version.
+Native pause writes a separate cleanup marker before deleting reports. The marker survives failures
+and process restarts, and every resume must finish cleanup before reopening capture. Android also
+persists a new capture start time on resume, excluding previously discarded system ANR history and
+events from the paused interval without changing the user's enabled/disabled choice.
 
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
 SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native
