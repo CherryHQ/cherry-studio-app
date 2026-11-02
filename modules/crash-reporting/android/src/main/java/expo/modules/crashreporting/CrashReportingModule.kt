@@ -77,9 +77,15 @@ internal object CrashReportingState {
       applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
       metadata?.getBoolean("CherryCrashReportingEnabled") == true
     if (configured) {
-      if (version != consentVersion || (!canCapture && active)) {
+      if (version != consentVersion) {
         consentVersion = version
         revoke()
+      } else if (!canCapture && active) {
+        // Runtime eligibility may disappear during a JS reload. Preserve the saved choice.
+        active = false
+        initialization = "inactive"
+        Sentry.close()
+        cleanCaches()
       } else if (canCapture && granted && !active) {
         start()
       }

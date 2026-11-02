@@ -66,6 +66,9 @@ behind, so a report
 written after revocation is never replayed under a later grant. Persistence/cleanup failures are
 shown in settings. Native revocation closes its gate before disk operations; if the
 bridge call rejects, JS stays paused and the switch restores the last saved choice for retrying.
+Missing runtime configuration pauses capture and clears native pending reports while preserving
+the saved choice. Restoring valid configuration can resume an existing grant; it cannot override
+an opt-out or an obsolete disclosure version.
 
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
 SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native
@@ -75,6 +78,10 @@ embedded production/DSN configuration and saved setting. At the JS entry, `confi
 native status synchronously and installs capture immediately when ready. Async configuration still
 reconciles JS reloads and supports older native clients. Missing native code or unreadable settings
 fail closed. Errors before the native hook/SDK starts remain outside the capture window.
+Configuration and initialization failures write fixed `sentry.*` codes to local diagnostic warnings,
+without DSNs or arbitrary exception text. A failed JS initializer leaves JS status inactive even
+if native capture is running; its warning records that distinction in `reasonCode`. Diagnostic
+exports retain these codes through the existing metadata allowlist.
 
 Native fatal exceptions from React Native remain as a fallback, even when a JS handler exists:
 handler installation does not prove delivery. Duplicate JS/native reports are possible. iOS exception

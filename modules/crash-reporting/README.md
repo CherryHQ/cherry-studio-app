@@ -21,7 +21,9 @@ implement its own crash recorder or upload protocol.
   transport on both platforms; the native `beforeSend` filters below only see native events. The
   Android transport gate still applies to them; on iOS, stopping the SDK on revocation drops them.
 - A process-wide owner survives Expo module recreation during JS reloads. A running grant is
-  revoked if a reload changes the disclosure version or removes the production/DSN gate.
+  revoked if a reload changes the disclosure version. Losing the production/DSN gate stops the
+  SDK and clears pending reports without replacing the saved choice; a later valid configuration
+  can resume an existing grant. Explicit opt-outs remain disabled.
   Every native `configure` call also checks the immutable binary flag and native debug status,
   so JS configuration cannot turn on reporting in a development or preview package.
 - `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
@@ -85,6 +87,9 @@ When authorized, cover both iOS and Android:
    URLs, paths, and attachments. Inspect NDK dumps separately; do not infer their contents from JS
    or Java event filtering.
 7. Consent write failure: show an error and keep the current process paused.
+8. Remove the JS DSN or production gate after a granted startup, then restore it: capture pauses
+   and its cache is cleared, the saved choice survives, and capture resumes. Repeat with a saved
+   opt-out and confirm it stays off. Changing the disclosure version still revokes the old grant.
 
 Official references: [native initialization](https://docs.sentry.io/platforms/react-native/manual-setup/native-init/),
 [native filtering limitation](https://sentry.zendesk.com/hc/en-us/articles/26323481356443-How-to-filter-native-events-in-React-Native-SDK),

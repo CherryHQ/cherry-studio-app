@@ -72,9 +72,14 @@ private final class CrashReportingState {
     self.dsn = dsn
     canCapture = isCrashReportingAllowed && isProduction && !dsn.isEmpty
     if configured {
-      if version != consentVersion || (!canCapture && isActive) {
+      if version != consentVersion {
         gateLock.withLock { consentVersion = version }
         try revoke()
+      } else if !canCapture && isActive {
+        // Runtime eligibility may disappear during a JS reload. Preserve the saved choice.
+        setGate(granted: isGranted, active: false)
+        SentrySDK.close()
+        try cleanCaches()
       } else if canCapture && isGranted && !isActive {
         start()
       }

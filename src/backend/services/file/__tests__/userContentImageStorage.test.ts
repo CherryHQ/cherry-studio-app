@@ -120,6 +120,10 @@ describe('userContentImageStorage', () => {
     const storedName = await storage.create(sourceUri);
 
     expect(storedName).toMatch(STORED_NAME_PATTERN);
+    expect(ImageManipulator.manipulate).toHaveBeenNthCalledWith(1, sourceUri, {
+      maxHeight: 4096,
+      maxWidth: 4096,
+    });
     expect(outputContext.crop).toHaveBeenCalledWith({
       height: 1200,
       originX: 200,
