@@ -25,6 +25,7 @@ import {
   type ToolMessagePart,
 } from './toolPartState';
 import { useToolRenderer } from './ToolRendererContext';
+import { TranscribeAudioToolPart } from './TranscribeAudioToolPart';
 import { UserQuestionPart } from './UserQuestionPart';
 import { WebSearchToolPart } from './WebSearchToolPart';
 import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
@@ -79,6 +80,10 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
 
   if (isReadFileToolPart(part)) {
     return <ReadFileToolPart part={part} />;
+  }
+
+  if (getToolName(part) === 'transcribe_audio') {
+    return <TranscribeAudioToolPart part={part} />;
   }
 
   if (isRunJsToolPart(part)) {

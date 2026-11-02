@@ -1,3 +1,4 @@
+import AudioLinesIcon from '@cherrystudio/app-icons/icons/audio-lines';
 import FileIcon from '@cherrystudio/app-icons/icons/file';
 import FileCode2Icon from '@cherrystudio/app-icons/icons/file-code-2';
 import FileJsonIcon from '@cherrystudio/app-icons/icons/file-json';
@@ -11,6 +12,24 @@ import type { FilePreviewFile } from '../file-preview.types';
 // Icon choices and extension groups follow desktop's composer/tokenView/
 // fileTokenPresentation.tsx. Category colors use Mobile's theme-aware tokens.
 const fileVisualPresets = {
+  audio: {
+    icon: AudioLinesIcon,
+    iconClassName: 'text-muted-foreground',
+    extensions: [
+      'aac',
+      'aif',
+      'aiff',
+      'amr',
+      'caf',
+      'flac',
+      'm4a',
+      'mp3',
+      'oga',
+      'ogg',
+      'opus',
+      'wav',
+    ],
+  },
   word: {
     icon: FileType2Icon,
     iconClassName: 'text-tag-blue-foreground',
@@ -94,6 +113,7 @@ export function fileVisualPreset(
 
   const preset = fileVisualPresetByExtension.get(extension.toLowerCase());
   if (preset) return preset;
+  if (file.kind === 'audio') return fileVisualPresets.audio;
   if (file.kind === 'pdf') return fileVisualPresets.pdf;
   if (file.kind === 'markdown') return fileVisualPresets.markdown;
   if (file.kind === 'html') return fileVisualPresets.code;

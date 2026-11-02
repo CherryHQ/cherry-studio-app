@@ -68,6 +68,7 @@ export const BUILT_IN_TOOL_TITLE_KEYS = {
   edit_file: 'chat.builtinTool.file.edit',
   read_file: 'chat.builtinTool.file.read',
   write_file: 'chat.builtinTool.file.write',
+  transcribe_audio: 'chat.builtinTool.media.transcribeAudio',
   generate_image: 'chat.builtinTool.media.generateImage',
   web_search: 'chat.builtinTool.web.search',
   web_fetch: 'chat.builtinTool.web.fetch',

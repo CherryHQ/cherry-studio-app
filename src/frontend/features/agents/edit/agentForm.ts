@@ -6,10 +6,6 @@ import {
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   type AgentToolApprovalMode,
 } from '@/shared/data/types/agent';
-import {
-  type AgentCapability,
-  DEFAULT_DISABLED_AGENT_CAPABILITIES,
-} from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {
@@ -19,8 +15,6 @@ export type AgentFormState = {
    * Never part of the DTO: the avatar has its own endpoint.
    */
   avatarUri: string | null;
-  /** Capability-group deny-list; a group absent from the list is enabled. */
-  disabledCapabilities: AgentCapability[];
   instructions: string;
   mode: AgentMode;
   model: UniqueModelId | null;
@@ -36,27 +30,12 @@ type BuildAgentDtoOptions = {
 export function createAgentFormState(agent?: Agent): AgentFormState {
   return {
     avatarUri: agent?.avatarUri ?? null,
-    // A new Agent starts with the sensitive device groups and Agent management
-    // off; an existing record keeps exactly what was saved.
-    disabledCapabilities: agent
-      ? [...agent.disabledCapabilities]
-      : [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
     instructions: agent?.instructions ?? '',
     mode: agent?.mode ?? DEFAULT_AGENT_MODE,
     model: agent?.model ?? null,
     name: agent?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
-}
-
-export function setAgentCapabilityEnabled(
-  disabledCapabilities: readonly AgentCapability[],
-  capability: AgentCapability,
-  enabled: boolean,
-): AgentCapability[] {
-  return enabled
-    ? disabledCapabilities.filter((entry) => entry !== capability)
-    : [...new Set([...disabledCapabilities, capability])];
 }
 
 export function buildAgentDto(
@@ -72,7 +51,6 @@ export function buildAgentDto(
   return {
     ok: true,
     value: {
-      disabledCapabilities: form.disabledCapabilities,
       instructions: form.instructions,
       mode: form.mode,
       ...(options.inheritDefaultModel ? {} : { model: form.model }),

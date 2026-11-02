@@ -5,6 +5,7 @@ import type { BackgroundActivityEnvironmentConfig } from '@/backend/services/bac
 import { createAppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
+const mockAgentHostDependencies = { configureVoice: jest.fn() };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
@@ -73,6 +74,7 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockDisposeSkills = jest.fn(async () => {});
+const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
@@ -82,6 +84,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
   disposeSkills: mockDisposeSkills,
+  disposeVoice: mockDisposeVoice,
   disposeAppUpdate: mockDisposeAppUpdate,
 }));
 
@@ -153,6 +156,7 @@ jest.mock('@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActiv
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
+    AgentHostDependencies: mockAgentHostDependencies,
     AgentRuntime: mockAgentRuntime,
     AiService: mockAi,
     TraceStorageService: mockTraces,
@@ -264,6 +268,28 @@ describe('createAppBootstrapRuntime', () => {
       uninstall.mockRestore();
     }
   });
+  test('drains voice activity before uninstalling its host', async () => {
+    let finish!: () => void;
+    mockDisposeVoice.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      uninstall.mockRestore();
+    }
+  });
   test('commits a restore only after candidate validation and required initialization finish', async () => {
     mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
     let initialized!: () => void;
@@ -349,6 +375,7 @@ describe('createAppBootstrapRuntime', () => {
       translate: expect.any(Function),
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
+      agentHostDependencies: mockAgentHostDependencies,
       resourceScopes: mockResourceScopes,
       backgroundExecution: mockKeepAlive,
       remoteBackground: {

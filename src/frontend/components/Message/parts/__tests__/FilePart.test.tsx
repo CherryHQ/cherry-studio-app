@@ -11,7 +11,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
     jest.requireActual('react').createElement('View', props),
 }));
 
-jest.mock('@/frontend/hooks/file', () => ({ useFileOcrState: jest.fn() }));
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileOcrState: jest.fn(),
+  useAudioTranscriptionActivity: jest.fn(),
+}));
 
 jest.mock('@/frontend/components/FileEntryPreview', () => {
   const { createElement } = jest.requireActual('react');
