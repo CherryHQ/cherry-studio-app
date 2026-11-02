@@ -161,10 +161,6 @@ SENTRY_AUTH_TOKEN=
   development mode (`__DEV__`). Users enable reports in Settings → Privacy settings → Send anonymous
   error reports. Native consent/filtering changes require a new installation package; an OTA update
   cannot add `modules/crash-reporting` to an existing client.
-- When the production Sentry service is enabled, a missing, empty, or whitespace-only DSN fails
-  native generation and JavaScript bundling. Development, preview, Storybook, and explicitly
-  disabled Sentry builds remain exempt. Validation runs after EAS loads the selected environment,
-  so its initial project/config discovery does not require a local copy of the cloud variables.
 - `SENTRY_AUTH_TOKEN` is a build-only credential used to upload source maps and debug symbols.
   Use a token with the source-map upload permissions for the configured Sentry project. Do not
   prefix it with `EXPO_PUBLIC_` or add it to app config.

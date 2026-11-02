@@ -8,11 +8,7 @@ implement its own crash recorder or upload protocol.
 ## Native ownership
 
 - `app.plugin.js` embeds public production/DSN configuration and the shared startup policy. The
-  native generation mods and Metro both use `buildConfig.js` to reject a missing or blank DSN
-  when production Sentry reporting is enabled. Validation runs after the build/update environment
-  is loaded; EAS project discovery can read app config before fetching that environment.
-  Development, preview, Storybook, and explicitly disabled Sentry builds do not require a DSN.
-  The iOS app-delegate subscriber and Android application lifecycle listener configure Sentry before
+  iOS app-delegate subscriber and Android application lifecycle listener configure Sentry before
   React starts, including the settings lookup and cache cleanup. This adds synchronous native
   startup work; assess its cost during authorized device acceptance. Debug, preview and Storybook
   builds cannot start reporting through these hooks.
@@ -97,9 +93,6 @@ When authorized, cover both iOS and Android:
    saved choice and previously consented reports remain. Valid configuration can resume the grant;
    a cold start uses the embedded configuration and consent before JS. A saved opt-out must stay
    off, and changing the disclosure version must still revoke the old grant.
-9. Production native generation and JS export must fail with an absent, empty, or whitespace-only
-   DSN when Sentry is enabled. EAS project discovery must still work before environment loading.
-   Development, preview, Storybook, and explicitly disabled Sentry builds must not require a DSN.
 
 Official references: [native initialization](https://docs.sentry.io/platforms/react-native/manual-setup/native-init/),
 [native filtering limitation](https://sentry.zendesk.com/hc/en-us/articles/26323481356443-How-to-filter-native-events-in-React-Native-SDK),

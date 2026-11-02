@@ -26,14 +26,7 @@ const TARGETS: Record<string, { profile: string; platform?: 'android' | 'ios'; r
   'google-play': { profile: 'production-google-play', platform: 'android', release: true },
   ios: { profile: 'production', platform: 'ios', release: true },
 };
-const FIXED_OPTIONS = new Set([
-  '--channel',
-  '--branch',
-  '--environment',
-  '--input-dir',
-  '--json',
-  '--skip-bundler',
-]);
+const FIXED_OPTIONS = new Set(['--channel', '--branch', '--environment', '--input-dir', '--json']);
 const SOURCE_MAP_ATTEMPTS = 3;
 
 function resolveProfile(build: EasConfig['build'], name: string): BuildProfile {

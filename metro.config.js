@@ -1,13 +1,9 @@
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
-const { getConfig } = require('expo/config');
 const path = require('path');
 const { getBundleModeMetroConfig } = require('react-native-worklets/bundleMode');
 const { withStorybook } = require('@storybook/react-native/withStorybook');
 const { withUniwindConfig } = require('uniwind/metro');
-const getCrashReportingBuildConfig = require('./modules/crash-reporting/buildConfig');
 
-// Native builds and OTA exports must reject missing reporting config before producing a bundle.
-getCrashReportingBuildConfig(getConfig(__dirname).exp);
 let config = getSentryExpoConfig(__dirname);
 
 config.resolver.sourceExts.push('sql');

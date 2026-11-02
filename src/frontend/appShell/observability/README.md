@@ -66,12 +66,11 @@ behind, so a report
 written after revocation is never replayed under a later grant. Persistence/cleanup failures are
 shown in settings. Native revocation closes its gate before disk operations; if the
 bridge call rejects, JS stays paused and the switch restores the last saved choice for retrying.
-Missing production reporting configuration is a build/export error. As a runtime fallback, invalid
-configuration stops capture in the current process without changing consent or deleting reports
-captured under that consent. A later valid configuration or native startup can resume an existing
-grant; it cannot override an opt-out or an obsolete disclosure version. Configuration errors do not
-create a persisted pause or reset Android's grant time. Native capture still starts before JS when
-the embedded configuration and saved grant permit it.
+As a runtime fallback, invalid configuration stops capture in the current process without changing
+consent or deleting reports captured under that consent. A later valid configuration or native startup
+can resume an existing grant; it cannot override an opt-out or an obsolete disclosure version.
+Configuration errors do not create a persisted pause or reset Android's grant time. Native capture
+still starts before JS when the embedded configuration and saved grant permit it.
 
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
 SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native
@@ -134,9 +133,6 @@ native dependencies during CocoaPods installation.
 
 Sentry reporting and native initialization require a current grant, the shared production reporting
 policy, a configured `EXPO_PUBLIC_SENTRY_DSN`, and a bundle running outside development mode.
-The native config plugin and Metro validate the DSN after the build/update environment is loaded.
-Missing or blank values fail production native generation or JS export when Sentry is enabled,
-including EAS Update exports. Early EAS project discovery does not require those variables yet.
 Native `configure` rechecks the installed binary's gate even when called from JS. `app.config.ts`
 supplies the build's `PROFILE` through `extra.reporting.environment`; `extra.sentryEnvironment`
 remains for existing build-display consumers. Development and preview packages never enable
