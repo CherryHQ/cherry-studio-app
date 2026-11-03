@@ -1,4 +1,5 @@
 import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +7,8 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
+import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,
@@ -124,6 +127,10 @@ export function DeviceConnectionDetailScreen() {
       ) : null}
 
       <Section>
+        <UuRemoteBindingItem connectionId={connection.id} />
+      </Section>
+
+      <Section>
         <Section.Item
           label={t('settings.deviceConnections.location.scan')}
           onPress={() =>
@@ -145,6 +152,38 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
     </SettingsScrollPage>
+  );
+}
+
+function UuRemoteBindingItem({ connectionId }: { connectionId: string }) {
+  const { t } = useTranslation();
+  const uuRemote = useBackendModule('uuRemote');
+  const remoteDesktop = useUuRemoteAction();
+  const binding = useQuery({
+    queryKey: queryKeys.uuRemote.binding(connectionId),
+    queryFn: () => uuRemote.getBinding(connectionId),
+  });
+  const status = binding.isPending
+    ? t('uuRemote.binding.loading')
+    : binding.isError
+      ? t('uuRemote.binding.loadFailed')
+      : binding.data
+        ? t('uuRemote.binding.linked', { id: binding.data.displayId })
+        : t('uuRemote.binding.notLinked');
+
+  return (
+    <Section.Item
+      label={t('uuRemote.bind.title')}
+      accessibilityValue={{ text: status }}
+      disabled={remoteDesktop.isOpening}
+      onPress={() => remoteDesktop.bind({ page: 'device', connectionId })}
+      showChevron
+      trailing={
+        <Text className="text-muted-foreground" numberOfLines={1}>
+          {status}
+        </Text>
+      }
+    />
   );
 }
 

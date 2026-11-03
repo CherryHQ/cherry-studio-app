@@ -92,6 +92,8 @@ export type PersistCacheSchema = {
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
+  // Last local chat Agent; cold starts open its greeting rather than a Session.
+  'chat.last_agent_id': string | null;
   // Last composer effort per Agent; clearing the cache restores model defaults.
   'chat.reasoning_efforts': Record<string, ReasoningEffortOption>;
   // Persist-layer self-test key: exercises the typed persist API and round-trip
@@ -104,6 +106,7 @@ export const DefaultPersistCache: PersistCacheSchema = {
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
+  'chat.last_agent_id': null,
   'chat.reasoning_efforts': {},
   'internal.persist_probe': 0,
 };

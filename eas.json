@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 16.3.2",
+    "version": "24.4.2",
     "appVersionSource": "remote"
   },
   "build": {
@@ -50,7 +50,8 @@
       "node": "24.19.0",
       "pnpm": "12.2.1",
       "env": {
-        "PROFILE": "production"
+        "PROFILE": "production",
+        "SENTRY_URL": "https://sentry.io/"
       },
       "android": {
         "channel": "production-apk",

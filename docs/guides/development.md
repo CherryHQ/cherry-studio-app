@@ -56,6 +56,7 @@ block leaves when upstream ships an equivalent.
 | Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |
 | iOS input measurement without main-thread waits | Bug fix | Duo startup and display-transition deadlock | [#582](https://github.com/software-mansion/enriched-markdown/pull/582) leaves input measurement unresolved | Upstream input layout consumes immutable text without waiting for the main thread |
 | Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
+| Signed YAML scanner failure status after grammar restoration | Bug fix | #1586 | Tree-sitter YAML 0.7.1 returns `-1` through plain `char` | Upstream preserves signed failure statuses on unsigned-char targets |
 | Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
 | iOS nested display math fitted to the column | Bug fix | #1484 | Not fixed in 1.1.1 | Upstream fits nested display math |
 | Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
@@ -118,7 +119,7 @@ acceptance still owns native arbitration. `gestureHandlerPressablePatch.test.ts`
 
 ### Android Offline Model Storage Patch
 
-`patches/expo-modules-core@58.0.26.patch` includes `noBackupFilesDir` in Expo's canonical internal
+`patches/expo-modules-core@58.0.29.patch` includes `noBackupFilesDir` in Expo's canonical internal
 storage roots. The offline voice model lives there to survive cache eviction without entering OS
 backups. Upstream only recognizes `filesDir` and `cacheDir`; other paths fall back to `canRead()` /
 `canWrite()` on the target itself. A new model directory or file therefore fails permission checks

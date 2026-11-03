@@ -78,26 +78,25 @@ type ModelProviderConfig = {
   presetProviderId?: string | null;
 };
 
-export const UPDATE_MODEL_FIELD_MAP: Array<UpdateField | [UpdateField, keyof InsertUserModelRow]> =
-  [
-    'name',
-    'description',
-    'group',
-    'capabilities',
-    'inputModalities',
-    'outputModalities',
-    'endpointTypes',
-    ['parameterSupport', 'parameters'],
-    'supportsStreaming',
-    'contextWindow',
-    'maxInputTokens',
-    'maxOutputTokens',
-    'pricing',
-    'isEnabled',
-    'isHidden',
-    'isDeprecated',
-    'notes',
-  ];
+export const UPDATE_MODEL_FIELD_MAP: (UpdateField | [UpdateField, keyof InsertUserModelRow])[] = [
+  'name',
+  'description',
+  'group',
+  'capabilities',
+  'inputModalities',
+  'outputModalities',
+  'endpointTypes',
+  ['parameterSupport', 'parameters'],
+  'supportsStreaming',
+  'contextWindow',
+  'maxInputTokens',
+  'maxOutputTokens',
+  'pricing',
+  'isEnabled',
+  'isHidden',
+  'isDeprecated',
+  'notes',
+];
 
 const presetDeltaFields = new Set<keyof InsertUserModelRow>([
   'name',
@@ -544,7 +543,7 @@ export class ModelService {
   }
 
   async bulkUpdate(
-    items: Array<{ modelId: string; patch: UpdateModelDto; providerId: string }>,
+    items: { modelId: string; patch: UpdateModelDto; providerId: string }[],
   ): Promise<Model[]> {
     if (items.length === 0) {
       return [];
@@ -628,7 +627,7 @@ export class ModelService {
     });
   }
 
-  async bulkDelete(items: Array<{ modelId: string; providerId: string }>): Promise<void> {
+  async bulkDelete(items: { modelId: string; providerId: string }[]): Promise<void> {
     const uniqueItems = new Map<string, { modelId: string; providerId: string }>();
     for (const item of items) {
       uniqueItems.set(createUniqueModelId(item.providerId, item.modelId), item);

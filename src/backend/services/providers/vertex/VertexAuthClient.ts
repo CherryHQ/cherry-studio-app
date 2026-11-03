@@ -194,8 +194,8 @@ async function createServiceAccountAssertion(
   now: number,
 ): Promise<string> {
   // Lazy: the native module must not load with the service registry.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
   const { subtle } =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
     require('react-native-quick-crypto') as typeof import('react-native-quick-crypto');
   const issuedAt = Math.floor(now / 1000);
   const encodedHeader = encodeBase64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
