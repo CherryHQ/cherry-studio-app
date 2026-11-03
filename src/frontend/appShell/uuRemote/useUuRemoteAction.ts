@@ -1,20 +1,22 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { useBackendModule } from '@/frontend/data';
 import type { UuRemoteTarget, UuRemoteWindowMode } from '@/shared/contracts/uuRemote';
 
 import { useUuRemoteFeedback } from './useUuRemoteFeedback';
 
-export function useUuRemoteAction() {
+export function useUuRemoteAction(prepare?: (signal: AbortSignal) => Promise<boolean>) {
   const uuRemote = useBackendModule('uuRemote');
   const { alert } = useAlert();
   const { t } = useTranslation();
   const showError = useUuRemoteFeedback();
-  const opening = useRef(false);
+  const opening = useRef<AbortController | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+
+  useEffect(() => () => opening.current?.abort(), []);
 
   function reportError(error: unknown, target?: UuRemoteTarget) {
     showError(error, target ? () => open(target, 'fullscreen') : undefined);
@@ -22,16 +24,20 @@ export function useUuRemoteAction() {
 
   async function run(target: UuRemoteTarget, operation: () => Promise<unknown>) {
     if (opening.current) return;
-    opening.current = true;
+    const controller = new AbortController();
+    opening.current = controller;
     setIsOpening(true);
-    Keyboard.dismiss();
     try {
+      if (prepare && !(await prepare(controller.signal))) return;
+      if (controller.signal.aborted) return;
+      await KeyboardController.dismiss();
+      if (controller.signal.aborted) return;
       await operation();
     } catch (error) {
-      reportError(error, target);
+      if (!controller.signal.aborted) reportError(error, target);
     } finally {
-      opening.current = false;
-      setIsOpening(false);
+      opening.current = null;
+      if (!controller.signal.aborted) setIsOpening(false);
     }
   }
 

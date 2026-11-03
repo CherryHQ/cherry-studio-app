@@ -86,7 +86,8 @@ const chevronWidth = 20;
 function SidebarDeviceTitle() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { closeDrawer, returnToChat } = useSidebarActions('SidebarDeviceTitle');
+  const { closeDrawer, prepareExternalNavigation, returnToChat } =
+    useSidebarActions('SidebarDeviceTitle');
   const { source, remoteTarget, selectDevice } = useChatSource();
   const { connections } = useDesktopConnections();
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
@@ -94,7 +95,7 @@ function SidebarDeviceTitle() {
     source === 'remote'
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
       : undefined;
-  const remoteDesktop = useUuRemoteAction();
+  const remoteDesktop = useUuRemoteAction(prepareExternalNavigation);
   const name = current?.name ?? brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
@@ -132,7 +133,6 @@ function SidebarDeviceTitle() {
             label: t('uuRemote.open'),
             disabled: remoteDesktop.isOpening,
             onPress: () => {
-              closeDrawer();
               void remoteDesktop.open({ ...remoteTarget, page: 'chat', connectionId: current.id });
             },
           },

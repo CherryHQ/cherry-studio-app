@@ -17,6 +17,7 @@ import type { AppSearchPanelProps } from '@/frontend/appShell/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
+import { closeDrawerForExternalNavigation } from '../hooks/closeDrawerForExternalNavigation';
 import type { SessionSearchResult } from '../hooks/sessionSearch';
 import {
   sessionSearchResultHref,
@@ -97,6 +98,8 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         navigation.closeDrawer();
         returnToChat();
       },
+      prepareExternalNavigation: (signal) =>
+        closeDrawerForExternalNavigation(navigation, column.kind === 'permanent', signal),
       returnToChat,
       openSearch:
         source === 'local'
@@ -134,6 +137,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       sourceChat,
       navigation,
       canDock,
+      column.kind,
       openDestination,
       openSessionSearch,
       pane,

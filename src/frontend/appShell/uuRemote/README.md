@@ -19,15 +19,28 @@ bindings and a single pending request. It uses this build's native callback sche
 originating chat/device target across process restarts, and validates and consumes correlated
 callbacks once. Persistent bindings stay in SecureStore and never enter the Cherry desktop protocol.
 Observe filters the UU device ID and request correlation parameters before exporting navigation
-metrics; removing the callback route after mount is not a telemetry boundary. Remote chat publishes
+metrics; callback routing is not a telemetry boundary. Remote chat publishes
 its effective draft ID into the focused route so the sidebar can preserve unsent input across a
 callback and process restart.
 Replacing a request makes older callbacks inert; callbacks expire after 30 minutes without imposing
 a short UI timeout while UU is waiting for a user decision. Bootstrap drains operations on disposal.
 
-`UuRemoteCallbackScreen` removes callback parameters from navigation and restores the originating
-surface. It follows an accepted binding using the saved window mode and translates failures. It does not own
-or render a video stream. UU owns the actual PiP window. A full-screen control request has no callback,
+The route adapter `+native-intent.ts` uses the UI-free public sub-entry `uuRemote/nativeIntent` to
+stage callbacks before bootstrap and keep raw callback parameters out of navigation. Warm callbacks
+return no route: `UuRemoteCallbackBridge` consumes them without changing the mounted page, scroll
+position, or draft. Cold callbacks use the empty `UuRemoteCallbackScreen` beneath the existing startup
+cover, then replace it once with the validated saved target (or home for an invalid callback).
+Binding continuations wait for the startup cover to finish. Callback consumption retains the same
+validation promise across effect resubscriptions; it refreshes binding queries and reports failures.
+
+Android menu actions already run after the menu has closed. The sidebar's remote-desktop action then
+waits for the drawer's closing transition without navigating away from the current page; permanent
+sidebars require no transition. Keyboard dismissal is awaited before launching UU. Reopening the
+drawer cancels the handoff, and unmounting the action owner aborts pending preparation. No fixed delay
+or short callback timeout is used. Repeated presses during preparation share the existing opening guard.
+
+Cherry does not own or render a video stream. UU owns the actual PiP window and the cross-app switch
+still occurs. A full-screen control request has no callback,
 retires any older pending request, and leaves navigation with UU; the user switches back to Cherry
 manually. Launching UU is not evidence that full-screen remote control connected successfully.
 The protocol cannot verify that the user selected the same physical computer as the Cherry device.

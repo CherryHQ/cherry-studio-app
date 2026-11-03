@@ -1,5 +1,6 @@
 import type { AlertConfirmOptions } from '@cherrystudio/ui/components';
 import { useLayoutEffect } from 'react';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
@@ -12,6 +13,7 @@ import { useUuRemoteAction } from '../useUuRemoteAction';
 
 const mockConfirm: jest.MockedFunction<(options: AlertConfirmOptions) => void> = jest.fn();
 const mockToast = jest.fn();
+const mockPrepare = jest.fn(async (_signal: AbortSignal) => true);
 const mockUuRemote: jest.Mocked<Pick<UuRemoteModule, 'open' | 'bind'>> = {
   open: jest.fn(),
   bind: jest.fn(),
@@ -34,7 +36,7 @@ const target: UuRemoteTarget = {
 let actions: ReturnType<typeof useUuRemoteAction>;
 let renderer: ReactTestRenderer;
 function Probe() {
-  const value = useUuRemoteAction();
+  const value = useUuRemoteAction(mockPrepare);
   useLayoutEffect(() => {
     actions = value;
   }, [value]);
@@ -43,6 +45,8 @@ function Probe() {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockPrepare.mockReset().mockResolvedValue(true);
+  jest.mocked(KeyboardController.dismiss).mockReset().mockResolvedValue(undefined);
   mockUuRemote.open.mockReset().mockResolvedValue('opened');
   mockUuRemote.bind.mockReset().mockResolvedValue(undefined);
   await act(async () => {
@@ -98,4 +102,70 @@ test('keeps unrelated failures as errors without offering a fullscreen retry', a
   expect(mockConfirm).not.toHaveBeenCalled();
   expect(mockToast).toHaveBeenCalledWith({ label: 'uuRemote.error.offline', variant: 'danger' });
   expect(mockUuRemote.open.mock.calls).toEqual([[target, 'pip']]);
+});
+
+test('waits for drawer and keyboard dismissal and ignores repeated presses during preparation', async () => {
+  let closeDrawer!: (ready: boolean) => void;
+  let hideKeyboard!: () => void;
+  mockPrepare.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        closeDrawer = resolve;
+      }),
+  );
+  jest.mocked(KeyboardController.dismiss).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        hideKeyboard = resolve;
+      }),
+  );
+  let opening!: Promise<void>;
+  act(() => {
+    opening = actions.open(target);
+  });
+  await act(async () => actions.open(target));
+  expect(mockPrepare).toHaveBeenCalledTimes(1);
+  expect(mockUuRemote.open).not.toHaveBeenCalled();
+  expect(actions.isOpening).toBe(true);
+
+  await act(async () => closeDrawer(true));
+  expect(KeyboardController.dismiss).toHaveBeenCalledTimes(1);
+  expect(mockUuRemote.open).not.toHaveBeenCalled();
+  await act(async () => {
+    hideKeyboard();
+    await opening;
+  });
+  expect(mockUuRemote.open).toHaveBeenCalledTimes(1);
+  expect(actions.isOpening).toBe(false);
+});
+
+test('cancelled preparation leaves UU unopened and permits retry', async () => {
+  mockPrepare.mockResolvedValueOnce(false);
+  await act(async () => actions.open(target));
+  expect(mockUuRemote.open).not.toHaveBeenCalled();
+  expect(actions.isOpening).toBe(false);
+  await act(async () => actions.open(target));
+  expect(mockUuRemote.open).toHaveBeenCalledTimes(1);
+});
+
+test('unmount aborts preparation and prevents a delayed external launch', async () => {
+  let finish!: (ready: boolean) => void;
+  mockPrepare.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  let opening!: Promise<void>;
+  act(() => {
+    opening = actions.open(target);
+  });
+  const signal = mockPrepare.mock.lastCall![0];
+  await act(async () => renderer.unmount());
+  expect(signal.aborted).toBe(true);
+  await act(async () => {
+    finish(true);
+    await opening;
+  });
+  expect(mockUuRemote.open).not.toHaveBeenCalled();
 });
