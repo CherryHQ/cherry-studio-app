@@ -173,7 +173,7 @@ SENTRY_AUTH_TOKEN=
   Use a token with the source-map upload permissions for the configured Sentry project. Do not
   prefix it with `EXPO_PUBLIC_` or add it to app config.
 - The production profile supplies `SENTRY_URL=https://sentry.io/` through `eas.json`, alongside
-  the environment-sourced token. Sentry CLI 3.8.0 deliberately discards a file-sourced URL when
+  the environment-sourced token. Sentry CLI 3.8.x deliberately discards a file-sourced URL when
   the selected token comes from a different source. Direct upload commands outside EAS must export
   `SENTRY_URL` with `SENTRY_AUTH_TOKEN` too. Keep the URL consistent with the Sentry plugin in
   `app.json`; the token stays outside source control.

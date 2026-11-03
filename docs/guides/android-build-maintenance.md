@@ -15,7 +15,8 @@ did not establish a runtime crash or an installation failure.
 - `eas.json` requires CLI 24.4.2, matching the release workflows, and supplies `SENTRY_URL` in
   production alongside the environment-sourced token. Tokens remain outside Git. Sentry CLI
   [3.8.0 reconciles URL and token sources together](https://github.com/getsentry/sentry-cli/blob/3.8.0/src/config.rs).
-  The direct CLI dependency now matches the React Native SDK's 3.8.0 upload CLI.
+  The direct CLI dependency matches the React Native SDK's upload CLI (3.8.2 after the warning
+  follow-up below).
 - `withAndroidReleaseOptimization.js` places the Sentry plugin after the Android application
   plugin in the generated app module. It preserves R8 optimization and local Expo module source
   directories. Production uploads remain enabled; development and preview reporting remain off.
@@ -83,7 +84,7 @@ malformed YAML fences in chat/device acceptance before claiming those paths are 
 
 ## Diagnostic Coverage And Lint Decisions
 
-Keep Sentry CLI 3.8.0's default 1 MiB source-file limit. Build 193 skipped 11 generated
+Keep Sentry CLI's default 1 MiB source-file limit. Build 193 skipped 11 generated
 Tree-sitter parsers, QuickJS's amalgamation, and simdutf. These generated/third-party sources add
 little routine application-debugging value. Application-owned source context, native symbols,
 R8 mappings, and JavaScript source maps stay enabled. This is a source-context coverage decision,
@@ -113,13 +114,65 @@ API-specific exceptions stay narrow:
 | EAS CLI installed locally | Expo Doctor 1.21.5 rejects any `eas-cli` in the dependency tree. Keep this development dependency deliberately: the lockfile pins the CLI/plugin pair and the launcher resolves both before a build starts. This avoids the failed nested-download launch and does not rely on a global CLI. The Doctor check remains enabled and reported as a tooling-policy exception. |
 | React Native Directory metadata | `package.json` excludes only enumerated local modules/workspace packages. Third-party unknown-package and `react-native-background-actions` architecture warnings remain visible; metadata absence is not compatibility evidence. The background-execution owner must verify the retained native patch on a device. |
 | Storybook script/bin collision | The app scripts are `dev:storybook` and `dev:storybook:clear`; the `storybook` package binary keeps its name. |
-| Metro export fallback | The recorded Expo Router/internal exports and `@noble/hashes` / `multiformats` warnings belong to package exports and their importers. App hash imports use exported `.js` subpaths. Reassess remaining logs after the dependency update; do not disable package exports or add a generic resolver fallback. |
+| Metro export fallback | Build 195 still recorded these warnings. The follow-up below adopts Sentry's Expo Router 58 fix and exports the two existing hash browser targets. Keep package exports enabled; no generic resolver fallback is added. A new bundle is needed to confirm the warnings are gone. |
 | Android/OpenSSL deprecated APIs, Kotlin casts, hidden C++ overloads | Upstream native dependencies own these diagnostics. Retain behavior pending a concrete defect or compatible upstream migration; warnings alone do not justify editing generated or vendored native output. |
 | CMake, manifest-merger, legacy Gradle APIs/options | Native dependency/configuration owners must reassess with the next authorized build. AGP 10 migration is separate from this Expo 58 patch alignment. Keep Play-specific findings in #1192 and cloud-worker failures in #1499. |
 | Terminal color variables | CLI environment only; no demonstrated app impact. |
 
 This is not a claim that a new build is warning-free. Record the remaining exact messages,
 dependency versions, and native build IDs with the acceptance results.
+
+### Build 195 Warning Follow-up
+
+Sentry React Native 8.28.0 imports the removed
+`expo-router/build/global-state/router-store` module inside an optional `try` block. Metro's warning
+does not mean it eventually finds that module: Expo permits the unresolved optional dependency,
+and Sentry returns `null`. This app disables default integrations and does not enable
+`expoRouterIntegration` or `wrapExpoRouterErrorBoundary`, so no active route-tracing regression was
+established here. The SDK entry still pulls the optional import into Metro's dependency graph.
+
+Sentry 8.33.0 includes [the upstream Expo Router 58 fix](https://github.com/getsentry/sentry-react-native/pull/6923).
+The SDK now uses the public navigation-ref export and existing route-info/event modules. Its CLI
+is aligned to 3.8.2 and the local crash-reporting module's Android dependency to 8.62.0; the existing
+podspec follows Cocoa 9.32.0 automatically. Consent, reporting gates, and enabled integrations stay
+unchanged. This upgrade requires new native clients; build 195's successful uploads do not validate
+the upgraded SDK.
+
+Metro 0.87.1 applies legacy `browser` redirects before checking `exports`:
+
+- `@noble/hashes@1.8.0` redirects `./crypto` to `./crypto.js`, which its exports omit. The patch
+  exports exactly `./crypto.js` as that same CommonJS browser file.
+- `multiformats@14.0.5` redirects `./hashes/sha2` to `./dist/src/hashes/sha2-browser.js`, which its
+  exports omit. The patch exports exactly that existing file. The importing dependencies are
+  `@libp2p/peer-id` and `@libp2p/crypto`'s browser secp256k1 implementation.
+
+Both patches change package metadata only. They preserve the browser files previously selected by
+fallback, canonical Node entries, and hash implementations. Remove them when compatible upstream
+metadata or Metro's export/browser ordering handles these imports without warnings while preserving
+the selected platform files. Do not replace the browser targets with `node:crypto` implementations.
+`scripts/__tests__/metroPackageExports.test.ts` guards the actual resolver targets and absence of
+fallback warnings; `patchReapplication.test.ts` covers the new patches automatically.
+
+The native source review did not establish a behavior defect in the remaining cast/overload warnings:
+
+| Diagnostic | Source evidence and disposition |
+| --- | --- |
+| Keyboard Controller `ArrayList<TextWatcher>` cast | The old ReactEditText field path checks every element with `is TextWatcher` before casting. RN 0.88 uses the renamed field and the existing `NoSuchFieldException` path adds the listener through the public method. Retain upstream code. |
+| WebView header/menu casts | The JS adapter produces `{name, value}` headers, and the native component contract declares string header fields and `{label, key}` menu items. These are bridge-contract casts; no invalid producer was established. Retain upstream code. |
+| Screens `BottomSheetBehavior<Screen>` cast | `ScreenStackFragment` creates `BottomSheetBehavior<Screen>` for this screen; the reader uses a safe cast for other behavior types. Retain upstream code. |
+| Quick Crypto `OCBCipher::init` hides the base overload | The factory explicitly casts to `OCBCipher` and calls the three-argument initializer, including tag length. That initializer explicitly calls the base initializer. No incorrect virtual dispatch was found on this path. Retain upstream code. |
+
+Android/OpenSSL deprecations remain upstream migration work. The AGP legacy switches and variant
+APIs must migrate before AGP 10; changing the compatibility switches alone is not a migration.
+The CMake warnings concern missing `project()` declarations in dependency builds. The manifest
+warnings are unmatched removal/replacement directives for `READ_MEDIA_IMAGES`, the file provider's
+authority, and the image crop activity's exported flag; they do not establish an incorrect merged
+manifest. Worklets Bundle Mode remains required by Streamdown, and conflicting terminal color
+variables affect log rendering. These diagnostics remain visible.
+
+This follow-up installs dependencies with scripts disabled and adds regression coverage without
+running tests, type checks, bundling, native builds, or device acceptance. The checks below are
+historical results from before these dependency changes.
 
 ## Validation Results
 
