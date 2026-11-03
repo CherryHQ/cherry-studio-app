@@ -1,4 +1,3 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 /**
  * The Host's built-in tool catalog, resolved once per turn.
  *
@@ -15,6 +14,8 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
  * change outside Cherry, so a catalog cached across turns would offer tools the
  * user just revoked.
  */
+
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
@@ -69,9 +70,9 @@ import {
 } from './painting';
 import { createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
-import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createSshFileTools } from './sshFileTools';
 import { createSshTool, type SshToolAccess } from './sshTool';
+import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
 import { createWriteFileTool } from './writeFileTool';

@@ -14,10 +14,12 @@ import { Text, View } from 'react-native';
 import { useBackendModule } from '@/frontend/data';
 import { SettingsScrollPage } from '@/frontend/features/settings/components/SettingsScrollPage';
 import { sshErrorLabel, useSshAction, useSshProfiles } from '@/frontend/hooks/ssh';
+import type { SshHostProbe } from '@/shared/contracts/ssh';
 import { SshError, type SshCommandResult, type SshProfile } from '@/shared/data/types/ssh';
 
 import { SshAgentPicker } from './SshAgentPicker';
 import { SshDiagnosticsButton } from './SshDiagnosticsButton';
+import { SshHostTrustDialog } from './SshHostTrustDialog';
 
 export function SshProfileScreen() {
   const { profileId } = useLocalSearchParams<{ profileId: string }>();
@@ -47,25 +49,13 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
   const ssh = useBackendModule('ssh');
   const action = useSshAction();
   const [pickAgent, setPickAgent] = useState(false);
+  const [hostProbe, setHostProbe] = useState<SshHostProbe | null>(null);
   async function probe() {
     const result = await action.run((signal) => ssh.probe(profile, signal));
     if (!result) return;
-    alert.confirm({
-      title: t(
-        profile.fingerprint && profile.fingerprint !== result.fingerprint
-          ? 'ssh.hostKeyChanged'
-          : 'ssh.trustTitle',
-      ),
-      description: t('ssh.trustDescription', {
-        target: `${profile.host}:${profile.port}`,
-        fingerprint: result.fingerprint,
-      }),
-      confirmLabel: t('ssh.trust'),
-      onConfirm: () => {
-        void action.run(() => ssh.trust(result.token));
-      },
-    });
+    setHostProbe(result);
   }
+
   function remove() {
     alert.confirm({
       title: t('ssh.removeTitle'),
@@ -140,6 +130,14 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
           onPress={remove}
         />
       </Section>
+      {hostProbe ? (
+        <SshHostTrustDialog
+          key={hostProbe.token}
+          profile={profile}
+          probe={hostProbe}
+          onClose={() => setHostProbe(null)}
+        />
+      ) : null}
       {pickAgent ? <SshAgentPicker profile={profile} onClose={() => setPickAgent(false)} /> : null}
     </SettingsScrollPage>
   );

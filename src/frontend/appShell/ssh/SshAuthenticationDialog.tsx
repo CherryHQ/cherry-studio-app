@@ -53,7 +53,6 @@ function AuthenticationForm({ request }: { request: SshAuthenticationRequest }) 
         ) : null}
         {request.prompts.map((prompt, index) => (
           // A challenge has immutable protocol slots; repeated prompt text is valid.
-          // eslint-disable-next-line react/no-array-index-key
           <TextField key={index} invalid={invalid}>
             <TextField.Label>{prompt.text || t('ssh.auth.response')}</TextField.Label>
             <Input

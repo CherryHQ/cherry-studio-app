@@ -119,6 +119,8 @@ export type ConversationInteraction = {
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
+  /** Identified from the local tool reference, never from model-authored arguments. */
+  sshCommand?: boolean;
   input: ResourceRead;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };

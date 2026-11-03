@@ -3,7 +3,7 @@ import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { MessageDetailValue } from '@/frontend/components/MessageDetail';
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 
 const ignoreClose = () => undefined;
 
@@ -11,6 +11,7 @@ export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
   displayName: string;
+  sshCommand?: boolean;
 };
 
 export type ToolApprovalRespondInput = {
@@ -105,7 +106,11 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
+        {approval.sshCommand ? (
+          <SshCommandApproval input={approval.input} />
+        ) : (
+          <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
+        )}
         {children}
       </ScrollView>
     </BottomSheet>
@@ -142,6 +147,38 @@ function ToolApprovalSheetActions({
           <Button.Label>{t('chat.tool.approval.continue')}</Button.Label>
         </Button>
       </View>
+    </View>
+  );
+}
+
+/** Full literal command data; scripts and paths must never be reduced to a preview. */
+function SshCommandApproval({ input }: { input: unknown }) {
+  const { t } = useTranslation();
+  if (!input || typeof input !== 'object' || Array.isArray(input))
+    return <MessageDetailValue title={t('chat.tool.arguments')} value={input} />;
+  const fields = input as Record<string, unknown>;
+  return (
+    <View className="gap-4">
+      <Text className="text-sm text-warning">{t('ssh.approval.notice')}</Text>
+      {[
+        ['target', t('ssh.selectTarget')],
+        ['cwd', t('ssh.command.cwd')],
+        ['command', t('ssh.command.label')],
+        ['stdin', t('ssh.command.stdin')],
+      ].map(([key, title]) => (
+        <MessageDetailText
+          key={key}
+          title={title}
+          value={
+            typeof fields[key] === 'string' && fields[key] ? fields[key] : t('ssh.approval.empty')
+          }
+          variant="code"
+        />
+      ))}
+      <MessageDetailValue
+        title={t('chat.tool.arguments')}
+        value={{ timeout_seconds: fields.timeout_seconds }}
+      />
     </View>
   );
 }

@@ -448,8 +448,16 @@ void fileOperation(Connection &connection, const Options &options, const std::st
       if (entries++) entriesJson += ',';
       retained += filename.size();
       const auto mode = attributes.permissions;
-      const auto type = !(attributes.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ? "other" :
+      auto type = !(attributes.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ? "other" :
         LIBSSH2_SFTP_S_ISDIR(mode) ? "directory" : LIBSSH2_SFTP_S_ISREG(mode) ? "file" : LIBSSH2_SFTP_S_ISLNK(mode) ? "symlink" : "other";
+      if (LIBSSH2_SFTP_S_ISLNK(mode)) {
+        LIBSSH2_SFTP_ATTRIBUTES target{};
+        const auto child = result.path + (result.path == "/" ? "" : "/") + filename;
+        if (retry(connection, run, deadline, [&] { return libssh2_sftp_stat(connection.sftp, child.c_str(), &target); }) == 0 &&
+            (target.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(target.permissions))
+          type = "directory";
+        // Navigation still canonicalizes the target and rejects paths outside root.
+      }
       entriesJson += "{\"name\":" + encoded(filename) + ",\"type\":\"" + type + "\",\"size\":" +
         ((attributes.flags & LIBSSH2_SFTP_ATTR_SIZE) ? std::to_string(attributes.filesize) : "null") +
         ",\"modifiedAt\":" + ((attributes.flags & LIBSSH2_SFTP_ATTR_ACMODTIME) ? std::to_string(static_cast<unsigned long long>(attributes.mtime) * 1000) : "null") + "}";
@@ -656,7 +664,7 @@ std::string run(const std::string &id, Options options, const Output &output) {
       throw Failure("invalid-input");
     std::call_once(initialization, [] { initResult = libssh2_init(0); });
     if (initResult != 0) throw Failure("unavailable");
-    auto deadline = Clock::now() + std::chrono::milliseconds(std::clamp(options.timeoutMs, 1000, 120000));
+    auto deadline = Clock::now() + std::chrono::milliseconds(std::clamp(options.timeoutMs, 1000, 600000));
     auto connectionDeadline = std::min(deadline, Clock::now() + std::chrono::seconds(20));
     check(state, deadline);
     if (options.probe) {
@@ -787,10 +795,15 @@ std::string run(const std::string &id, Options options, const Output &output) {
             const auto count = libssh2_channel_read_ex(conn.channel, stream, buffer, sizeof(buffer));
             if (count > 0) {
               progressed = true;
-              const size_t available = maxOutput - out.size() - err.size();
-              const size_t kept = std::min(available, static_cast<size_t>(count));
-              if (kept) { (stream ? err : out).append(buffer, kept); pendingOutput[stream].append(buffer, kept); }
-              if (kept < static_cast<size_t>(count)) truncated = true;
+              auto &retained = stream ? err : out;
+              // Keep a bounded head and tail per stream, including failures printed last.
+              const size_t kept = std::min(maxOutput / 2 - retained.size(), static_cast<size_t>(count));
+              if (kept) pendingOutput[stream].append(buffer, kept);
+              retained.append(buffer, static_cast<size_t>(count));
+              if (retained.size() > maxOutput / 2) {
+                retained.erase(maxOutput / 4, retained.size() - maxOutput / 2);
+                truncated = true;
+              }
             } else if (count < 0 && count != LIBSSH2_ERROR_EAGAIN) throw Failure("connection");
             if (count == LIBSSH2_ERROR_EAGAIN) blockedDirections |= libssh2_session_block_directions(conn.session);
           }

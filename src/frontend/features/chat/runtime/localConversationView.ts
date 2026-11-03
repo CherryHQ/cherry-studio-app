@@ -197,6 +197,9 @@ export function createLocalConversationProjector(input: {
           kind: 'decision',
           title: approval.displayName,
           state: 'pending',
+          sshCommand:
+            approval.toolRef.source === 'builtin' &&
+            approval.toolRef.capabilityId === 'ssh_execute',
           ...(isHealth
             ? {
                 healthDataSharing: {

@@ -705,9 +705,10 @@ export class SshRuntime extends BaseService implements SshModule {
   ): Promise<SshCommandResult> {
     const parsed = SshCommandInputSchema.safeParse(input);
     if (!parsed.success) throw new SshError('invalid-input');
+    const { timeout_seconds: timeoutSeconds, ...command } = parsed.data;
     const result = await this.runOperation(
       reference,
-      { ...parsed.data, operation: 'exec' },
+      { ...command, operation: 'exec', timeoutMs: (timeoutSeconds ?? 60) * 1000 },
       signal,
       onOutput,
       agent,
@@ -733,14 +734,27 @@ export class SshRuntime extends BaseService implements SshModule {
     operation: Partial<
       Pick<
         SshNativeOptions,
-        'operation' | 'command' | 'cwd' | 'stdin' | 'path' | 'localPath' | 'content' | 'overwrite'
+        | 'operation'
+        | 'command'
+        | 'cwd'
+        | 'stdin'
+        | 'path'
+        | 'localPath'
+        | 'content'
+        | 'overwrite'
+        | 'timeoutMs'
       >
     >,
     signal: AbortSignal,
     onOutput?: (output: SshOutput) => void,
     agent?: AgentAccess,
     onProgress?: (progress: SshTransferProgress) => void,
+    canReconnect = true,
   ): Promise<NativeResult> {
+    const startedAt = Date.now();
+    const timeoutMs =
+      operation.timeoutMs ??
+      (operation.operation === 'upload' || operation.operation === 'download' ? 300000 : 60000);
     const { pending } = await this.serialize(async () => {
       signal.throwIfAborted();
       const row = await this.profiles.getRow(SshReferenceSchema.parse(reference));
@@ -776,7 +790,7 @@ export class SshRuntime extends BaseService implements SshModule {
             ...operation,
             directory: row.remoteDirectory,
             poolKey: poolKey(reference),
-            timeoutMs: 60000,
+            timeoutMs,
             probe: false,
           },
           signal,
@@ -786,7 +800,33 @@ export class SshRuntime extends BaseService implements SshModule {
         ),
       };
     });
-    return pending;
+    const result = await pending;
+    const remaining = timeoutMs - (Date.now() - startedAt);
+    // Only a native, pre-operation failure on a reused transport proves replay is safe.
+    // Bridge failures and every unknown/completed result must remain untouched.
+    if (
+      canReconnect &&
+      operation.operation === 'exec' &&
+      result.state === 'not-started' &&
+      result.diagnostics?.reused &&
+      result.diagnostics.phase === 'command' &&
+      (result.error === 'connection' || result.error === 'channel' || result.error === 'timeout') &&
+      remaining >= 1000 &&
+      !signal.aborted &&
+      !this.lifetime.signal.aborted
+    ) {
+      getSshNative()?.closePool(poolKey(reference));
+      return this.runOperation(
+        reference,
+        { ...operation, timeoutMs: remaining },
+        signal,
+        onOutput,
+        agent,
+        onProgress,
+        false,
+      );
+    }
+    return result;
   }
 
   private start(

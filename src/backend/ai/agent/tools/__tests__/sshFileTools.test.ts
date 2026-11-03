@@ -31,8 +31,6 @@ const ssh: jest.Mocked<SshToolAccess> = {
   downloadForAgent: jest.fn(),
 };
 const input = {
-  connection_id: profile.id,
-  connection_revision: profile.revision,
   target: 'user@server.example:22',
   path: 'notes.txt',
 };
@@ -61,9 +59,9 @@ beforeEach(() => {
 test('keeps file approval independent from the shell grant and binds every request to its target', async () => {
   for (const item of createSshFileTools(ssh, 'conversation', target, access()))
     expect(item).toMatchObject({ approval: 'ask', autoApprovalEligible: false });
-  await expect(
-    tool('ssh_read_file').execute(call({ ...input, connection_revision: 'changed' })),
-  ).rejects.toThrow();
+  expect(
+    (await tool('ssh_read_file').execute(call({ ...input, connection_revision: 'changed' }))).value,
+  ).toMatchObject({ error: 'invalid-input' });
   expect(ssh.filesForAgent).not.toHaveBeenCalled();
 });
 

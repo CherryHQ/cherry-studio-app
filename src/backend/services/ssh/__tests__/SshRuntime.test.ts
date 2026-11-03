@@ -451,3 +451,58 @@ test('does not publish a late download after its conversation target is cleared'
   expect(dispose).toHaveBeenCalledTimes(1);
   expect(runtime.hasPendingStorageWork()).toBe(false);
 });
+
+const reusedFailure = (state = 'not-started') =>
+  JSON.stringify({
+    state,
+    error: 'channel',
+    fingerprint,
+    stdout: '',
+    stderr: '',
+    exitCode: null,
+    truncated: false,
+    diagnostics: {
+      phase: 'command',
+      code: -43,
+      hostKeyType: 1,
+      keyExchange: '',
+      cipher: '',
+      authenticationMethods: '',
+      reused: true,
+    },
+  });
+
+test('reconnects once only when a reused connection failed before command execution', async () => {
+  const profile = await trusted();
+  native.run.mockClear();
+  native.run.mockResolvedValueOnce(reusedFailure()).mockResolvedValueOnce(outcome('exited'));
+  const result = await runtime.execute(
+    profile,
+    { command: 'uname -a', timeout_seconds: 300 },
+    new AbortController().signal,
+  );
+  expect(result.state).toBe('exited');
+  expect(native.run).toHaveBeenCalledTimes(2);
+  expect(native.closePool).toHaveBeenCalledWith(`${profile.id}:${profile.revision}`);
+  expect(native.run.mock.calls[0][1].timeoutMs).toBe(300000);
+  expect(native.run.mock.calls[1][1].timeoutMs).toBeLessThanOrEqual(300000);
+});
+
+test.each(['unknown', 'exited'])(
+  'does not replay a reused command with state %s',
+  async (state) => {
+    const profile = await trusted();
+    native.run.mockClear();
+    native.run.mockResolvedValueOnce(reusedFailure(state));
+    await runtime.execute(profile, { command: 'uname -a' }, new AbortController().signal);
+    expect(native.run).toHaveBeenCalledTimes(1);
+  },
+);
+
+test('does not reconnect repeatedly after a second pre-command failure', async () => {
+  const profile = await trusted();
+  native.run.mockClear();
+  native.run.mockResolvedValue(reusedFailure());
+  await runtime.execute(profile, { command: 'uname -a' }, new AbortController().signal);
+  expect(native.run).toHaveBeenCalledTimes(2);
+});

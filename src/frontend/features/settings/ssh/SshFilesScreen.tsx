@@ -56,8 +56,8 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
   const { toast } = useToast();
   const ssh = useBackendModule('ssh');
   const action = useSshAction();
-  const [path, setPath] = useState('.');
-  const [refresh, setRefresh] = useState(0);
+  const [location, setLocation] = useState({ path: '.' });
+  const { path } = location;
   const [directory, setDirectory] = useState<SshFileResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>();
@@ -73,7 +73,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
       setError(undefined);
       setDirectory(null);
       void ssh
-        .files(profile, { operation: 'list', path }, controller.signal)
+        .files(profile, { operation: 'list', path: location.path }, controller.signal)
         .then((result) => {
           if (controller.signal.aborted) return;
           setDirectory(result);
@@ -87,7 +87,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
           if (!controller.signal.aborted) setLoading(false);
         });
       return () => controller.abort();
-    }, [ssh, profile, path, refresh]),
+    }, [ssh, profile, location]),
   );
 
   const busy = loading || action.busy;
@@ -95,7 +95,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
   async function read(entry: SshFileEntry) {
     const sourcePath = childPath(entry.name);
     if (entry.type === 'directory') {
-      setPath(sourcePath);
+      setLocation({ path: sourcePath });
       return;
     }
     const result = await action.run((signal) =>
@@ -151,7 +151,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
       });
     } else {
       toast.show({ label: t('ssh.files.uploaded'), variant: 'success' });
-      setRefresh((value) => value + 1);
+      setLocation((current) => ({ ...current }));
     }
   }
   return (
@@ -167,14 +167,16 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
         <Button
           variant="secondary"
           disabled={busy || path === '.'}
-          onPress={() => setPath(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.')}
+          onPress={() =>
+            setLocation({ path: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.' })
+          }
         >
           {t('ssh.files.parent')}
         </Button>
         <Button
           variant="secondary"
           disabled={busy}
-          onPress={() => setRefresh((value) => value + 1)}
+          onPress={() => setLocation((current) => ({ ...current }))}
         >
           {t('ssh.files.refresh')}
         </Button>
@@ -206,7 +208,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
           title={sshErrorLabel(error, t)}
           primaryAction={{
             children: t('common.retry'),
-            onPress: () => setRefresh((value) => value + 1),
+            onPress: () => setLocation((current) => ({ ...current })),
           }}
         />
       ) : directory?.entries.length ? (
@@ -256,7 +258,6 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
             ) : null}
             {splitTextBlocks(preview.result.content.slice(0, 16000)).map((block, index) => (
               // Preview blocks are immutable and may contain identical text.
-              // eslint-disable-next-line react/no-array-index-key
               <Text key={index} selectable className="font-mono text-sm text-foreground">
                 {block}
               </Text>

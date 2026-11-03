@@ -28,9 +28,10 @@ a command.
   runtime; neither prompts nor answers become model inputs or transcript parts.
 - `ssh_execute` and the five SSH file tools are the AI consumers. Each turn captures the selection identity, connection revision
   and grant. Reselecting the same connection cannot revive an old pending approval.
-  Its input schema fixes the connection ID, revision and displayed destination. Execution checks the
-  live binding again after loading credentials. Model output previews are capped at 16,000 characters
-  per stream or file content. Remote output is untrusted data, never a source of permissions.
+  Connection identity and revision are backend-bound, not model-supplied. Invalid parameters return
+  structured `invalid-input` results. Execution checks the live binding again after loading credentials.
+  Model output previews retain the head and tail within 16,000 characters per stream or file content;
+  native diagnostics remain available to users but are excluded from model results. Remote output is untrusted data, never a source of permissions.
 
 ## Commands and remote files
 
@@ -40,7 +41,9 @@ Every command receives an explicit directory context; optional `cwd` applies to 
 Optional `stdin` supplies up to 256 KiB of UTF-8 input, followed by EOF. A fresh non-interactive
 shell runs each command even when the SSH connection is reused. The remote directory does not
 restrict shell permissions. There is no human terminal, PTY, interactive process session or
-automatic handling of command-time password prompts.
+automatic handling of command-time password prompts. `timeout_seconds` defaults to 60 and accepts
+1–600 seconds. Uploads/downloads have a separate five-minute deadline; connecting still has a
+20-second limit. Native command output keeps bounded head and tail buffers.
 
 The file interface provides directory listing, UTF-8 reading/writing, downloading and uploading.
 Paths are relative to the profile directory. Listings are bounded to 500 entries, text to 256 KiB,
@@ -66,11 +69,15 @@ five-minute confirmation token for the observed fingerprint and exact profile re
 changes the revision. Every new connection checks the actual peer key, including after an earlier
 successful probe. Reuse is limited to the same profile revision, endpoint, username and trusted
 fingerprint; edits and trust changes retire that pooled connection. Passwords/private keys are never
-sent to an unverified host.
+sent to an unverified host. A changed host key uses destructive styling, shows the saved and new
+fingerprints side by side, and requires a second confirmation after independent verification.
 
 By default, every AI command requires approval. Global auto approval cannot promote SSH. Users can
-explicitly grant arbitrary-command access for one hour to the current conversation and connection;
-this is not a read-only promise. Revocation, expiry, target changes, profile changes and deletion
+grant one-hour access to a fixed set of read-only diagnostics: `pwd`, `whoami`, `id`, `uptime`,
+`uname`, `df`, and `free`, with limited diagnostic flags. Any other command, shell composition,
+nonempty stdin, or custom working directory still requires approval. The SSH approval sheet shows
+the complete command, resolved cwd, stdin, target and timeout. Background actions must open the app
+for SSH approvals. Revocation, expiry, target changes, profile changes and deletion
 cancel affected AI operations. SSH file tools always require their own approval; the command grant
 does not promote them. Manual and AI operations share a connection only through exclusive leases.
 All conversation
@@ -82,8 +89,9 @@ target reports busy instead of silently queueing commands. Transfers retain a se
 bound through local file publication. Profiles are limited to 100, remembered
 conversation/draft bindings to 64, pending admission/storage work to 16, and pending trust probes
 to 16. Up to four connections can be retained for five idle minutes, with 15-second keepalive
-maintenance while the app is scheduled. There are no startup probes, automatic reconnects or
-background retries. Pooling does not preserve shell state or recover an interrupted task.
+maintenance while the app is scheduled. There are no startup probes or background retries. An explicit command may reconnect once if
+a reused connection fails before execution, using only its remaining deadline and rechecking the
+profile, target, grant and cancellation state. Unknown outcomes are never replayed. Pooling does not preserve shell state or recover an interrupted task.
 The Agent runtime already marks tool side effects unsafe to replay after uncertain recovery.
 
 The manual panel's lifetime owns its command; leaving it cancels that operation. Cancellation may

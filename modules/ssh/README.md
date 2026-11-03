@@ -57,8 +57,8 @@ The core resolves at most 16 addresses, limits concurrent DNS workers to four, a
 cancellation/deadlines while awaiting DNS. POSIX DNS resolution itself is not cancellable: abandoned
 resolver workers retain only host/port and finish independently. TCP attempts give alternate
 addresses a chance after three seconds. Connect/handshake/authentication have a shared 20-second
-budget; operations have a 60-second total budget selected by the backend (native hard cap:
-120 seconds). Human authentication waiting extends these deadlines by at most 120 seconds total.
+budget; commands default to 60 seconds and accept a per-call 1–600 second budget. Uploads and
+downloads have a separate five-minute budget (native hard cap: 600 seconds). Human authentication waiting extends these deadlines by at most 120 seconds total.
 Poll waits are at most 100 ms.
 
 A probe performs a handshake without authenticating. Execution compares the peer's SHA-256 host
@@ -77,8 +77,9 @@ override it with an absolute path or a path relative to that directory. Paths ar
 the command is a separate subshell after a successful directory change. UTF-8 `stdin` is bounded
 to 256 KiB and interleaved with output reads before EOF, avoiding a full-duplex pipe deadlock.
 This is finite input supplied with the request, not an interactive terminal. Connection reuse does
-not preserve shell state or the working directory between calls. Combined stdout/stderr retention is limited
-to 256 KiB before crossing the bridge; excess output is drained and marked truncated. Output events
+not preserve shell state or the working directory between calls. Each output stream retains at most
+128 KiB split between its head and tail; excess output is drained and marked truncated. Initial
+output events are bounded separately; the final result contains the retained tail. Output events
 are batched and base64 encoded to preserve UTF-8 boundaries and arbitrary bytes across both bridges.
 The backend decodes command output with replacement for invalid UTF-8. `onEvent` also carries
 authentication challenges and transfer progress; routing always includes the native run ID.
@@ -86,7 +87,8 @@ authentication challenges and transfer progress; routing always includes the nat
 SFTP supports `list`, `read`, `write`, `download` and `upload`. Paths are relative to the configured
 remote directory; canonical paths must remain inside its resolved root. This bounds the file
 interface, not the account's command permissions, and is not a filesystem sandbox against concurrent
-remote changes. Directory results stop at 500 entries or the result byte budget. Text reads/writes
+remote changes. Directory results stop at 500 entries or the result byte budget. Directory symlinks are navigable;
+each navigation resolves the destination and checks the configured root again. Text reads/writes
 are limited to 256 KiB; transfers to 20 MiB. Non-UTF-8 or NUL-containing files are rejected as text
 by the backend and remain downloadable. Transfer events are throttled to 100 ms plus completion.
 

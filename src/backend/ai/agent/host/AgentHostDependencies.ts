@@ -1,4 +1,3 @@
-import { fromByteArray } from 'base64-js';
 /**
  * Assembles the Mobile Agent Host's ports from application services.
  *
@@ -9,6 +8,8 @@ import { fromByteArray } from 'base64-js';
  * service as a dependency, so every owner listed below still stops after the
  * Host has drained its turns.
  */
+
+import { fromByteArray } from 'base64-js';
 import { getLocales } from 'expo-localization';
 import { Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';

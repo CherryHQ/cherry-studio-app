@@ -47,6 +47,7 @@ export const SshCommandInputSchema = z.strictObject({
   command: SshCommandSchema,
   cwd: text(4096).optional(),
   stdin: text(262144).optional(),
+  timeout_seconds: z.number().int().min(1).max(600).optional(),
 });
 export type SshCommandInput = z.infer<typeof SshCommandInputSchema>;
 export const SshFilePathSchema = text(4096).min(1);
