@@ -12,7 +12,7 @@ import {
   type AccountEnvironment,
   AccountError,
   type AccountModule,
-  AccountSessionContextSchema,
+  type AccountSessionContext,
   type AccountState,
   normalizeEnterpriseAddress,
   type PrivateSignIn,
@@ -51,6 +51,8 @@ type Portal = Pick<
 export interface AccountRuntimeOptions {
   /** Null when the build carries no Accounts Portal configuration. */
   portal: Portal | null;
+  /** The SDK integration supplies app-owned context for this exact current or candidate session. */
+  resolveSessionContext(session: AuthState): AccountSessionContext | null;
   /** Enterprise API addresses selected by the SDK's signed-in environment. */
   enterpriseAddresses?: Partial<Record<AccountEnvironment, string>>;
   /** The profile this runtime serves. */
@@ -200,15 +202,15 @@ export class AccountRuntime implements AccountModule {
         validate: async (candidate) => {
           proposed = candidate.state;
           if (!proposed.subject || !proposed.profile?.profileId) throw new AccountError('rejected');
-          const context = AccountSessionContextSchema.safeParse(proposed);
-          if (!context.success) throw new AccountError('unavailable', { cause: context.error });
+          const context = this.options.resolveSessionContext(proposed);
+          if (!context) throw new AccountError('unavailable');
           await candidate.getAccount();
           if (proposed.profile.product === 'cloud') {
             target = LOCAL_PROFILE;
             return;
           }
           if (proposed.profile.product !== 'enterprise') throw new AccountError('rejected');
-          const address = this.enterpriseAddress(context.data.environment);
+          const address = this.enterpriseAddress(context.environment);
           const api = this.options.createApi(address, {
             getProductToken: () => candidate.getProductToken(address),
           });
@@ -218,7 +220,7 @@ export class AccountRuntime implements AccountModule {
           target = this.options.profiles.resolve(
             {
               deployment: configuration.data.serverUniqueId,
-              issuer: context.data.issuer,
+              issuer: context.issuer,
               subject: proposed.subject,
               productProfileId: proposed.profile.profileId,
             },
@@ -303,25 +305,25 @@ export class AccountRuntime implements AccountModule {
   /** Backend-only identity boundary for the device-bound community product session. */
   readonly getCommunityIdentity = () => {
     const session = this.options.portal?.getState();
-    const context = AccountSessionContextSchema.safeParse(session);
+    const context = session ? this.options.resolveSessionContext(session) : null;
     if (
       this.options.active.identity ||
       !this.state.isSignedIn ||
       this.state.needsSignIn ||
       session?._tag !== 'signedIn' ||
       session.profile?.product !== 'cloud' ||
-      !context.success
+      !context
     )
       return null;
     return {
       key: JSON.stringify([
-        context.data.environment,
-        context.data.issuer,
+        context.environment,
+        context.issuer,
         session.subject,
         session.profile.profileId,
         this.communityRevision,
       ]),
-      environment: context.data.environment,
+      environment: context.environment,
       profileId: session.profile.profileId,
     };
   };
@@ -478,12 +480,12 @@ export class AccountRuntime implements AccountModule {
 
   private matchesCloudProfile(session: AuthState): boolean {
     const { identity, address } = this.options.active;
-    const context = AccountSessionContextSchema.safeParse(session);
+    const context = this.options.resolveSessionContext(session);
     if (
       !identity ||
       'authentication' in identity ||
-      !context.success ||
-      identity.issuer !== context.data.issuer ||
+      !context ||
+      identity.issuer !== context.issuer ||
       session._tag !== 'signedIn' ||
       session.subject !== identity.subject ||
       session.profile?.product !== 'enterprise' ||
@@ -491,7 +493,7 @@ export class AccountRuntime implements AccountModule {
     )
       return false;
     try {
-      return address === this.enterpriseAddress(context.data.environment);
+      return address === this.enterpriseAddress(context.environment);
     } catch {
       return false;
     }
@@ -511,7 +513,7 @@ export class AccountRuntime implements AccountModule {
       ? this.matchesCloudProfile(session)
       : session._tag === 'signedIn' &&
         session.profile?.product === 'cloud' &&
-        AccountSessionContextSchema.safeParse(session).success;
+        this.options.resolveSessionContext(session) !== null;
     const isSignedIn =
       session._tag === 'signedIn' &&
       matchesProfile &&

@@ -35,11 +35,11 @@ access/ID pair after refresh and checks the SDK's session, profile and sign-in g
 regressions for matched token refresh and sign-out isolation remain in
 `scripts/__tests__/accountsPortalIdentityTokens.test.ts`.
 
-The account layer additionally requires the SDK's session environment and actual issuer, as described
-in [Enterprise Edition](../../../../docs/references/enterprise.md#account). Accounts Portal 0.2.1
-does not yet provide that metadata; cloud sign-in remains unavailable until the SDK meets the required
-contract. The subscription layer consumes the account layer's environment rather than adapting SDK
-internals or inventing a region.
+The account layer supplies the app's normalized session environment and actual issuer, as described
+in [Enterprise Edition](../../../../docs/references/enterprise.md#account). SDK fields and values
+are translated at the installation's account integration point; they do not define the subscription
+contract. Accounts Portal 0.2.1 has no environment result yet, so that mapping cannot currently
+produce usable context. Completing it later does not change subscription APIs or environment selection.
 
 ## Session and transport
 

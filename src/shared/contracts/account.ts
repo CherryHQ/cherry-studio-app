@@ -1,14 +1,15 @@
 import * as z from 'zod';
 
-/** The SDK selects the environment; the app only selects that environment's configured services. */
+/** App-owned service environments; the SDK integration maps its decision to one of these values. */
 export const AccountEnvironmentSchema = z.enum(['cn', 'global']);
 export type AccountEnvironment = z.infer<typeof AccountEnvironmentSchema>;
 
-/** Required SDK session metadata, including during candidate admission and restoration. */
+/** Normalized app input, independent of the SDK's field names and response structure. */
 export const AccountSessionContextSchema = z.object({
   environment: AccountEnvironmentSchema,
   issuer: z.url({ protocol: /^https$/ }),
 });
+export type AccountSessionContext = z.infer<typeof AccountSessionContextSchema>;
 
 export type AccountErrorCode =
   /** The build carries no Accounts Portal configuration. */

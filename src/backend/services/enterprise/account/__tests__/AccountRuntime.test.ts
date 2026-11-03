@@ -2,6 +2,7 @@ import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-
 
 import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
+import { AccountSessionContextSchema } from '@/shared/contracts/account';
 import {
   type ActiveProfile,
   type EnterpriseIdentity,
@@ -84,6 +85,10 @@ function setup(
   };
   const options = {
     portal,
+    resolveSessionContext: jest.fn((state: AuthState) => {
+      const context = AccountSessionContextSchema.safeParse(state);
+      return context.success ? context.data : null;
+    }),
     enterpriseAddresses: {
       cn: 'https://cse.example.com',
       global: 'https://enterprise.global.example.com',
@@ -951,7 +956,30 @@ describe('community Cloud identity admission', () => {
   });
 });
 
-describe('SDK environment admission', () => {
+describe('normalized account environment admission', () => {
+  it('uses normalized context without requiring environment fields on the SDK state', async () => {
+    const session = signedIn('enterprise');
+    delete session.environment;
+    delete session.issuer;
+    const { options } = setup(session);
+    options.resolveSessionContext.mockReturnValue({
+      environment: 'global',
+      issuer: 'https://global.identity.example.com',
+    });
+    const runtime = new AccountRuntime(options);
+
+    await runtime.signIn();
+
+    expect(options.createApi).toHaveBeenCalledWith(
+      options.enterpriseAddresses.global,
+      expect.anything(),
+    );
+    expect(options.profiles.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ issuer: 'https://global.identity.example.com' }),
+      options.enterpriseAddresses.global,
+    );
+  });
+
   it.each(['cn', 'global'] as const)(
     'enters the %s enterprise API selected by the candidate session',
     async (environment) => {
@@ -980,7 +1008,7 @@ describe('SDK environment admission', () => {
   );
 
   it.each([{ environment: undefined }, { environment: 'unknown' }, { issuer: undefined }])(
-    'rejects missing or unknown SDK context without choosing an environment (%j)',
+    'rejects context that cannot be normalized without choosing an environment (%j)',
     async (context) => {
       const { runtime, options, select } = setup({ _tag: 'signedOut' });
       select({ ...signedIn('enterprise'), ...context });
@@ -1011,7 +1039,7 @@ describe('SDK environment admission', () => {
     expect(options.portal.getProductToken).not.toHaveBeenCalled();
   });
 
-  it('never exposes an old SDK session without environment metadata as a community identity', async () => {
+  it('never exposes a community identity without normalized environment context', async () => {
     const { runtime, options } = setup({ ...signedIn('cloud'), environment: undefined });
     await options.portal.ready;
     expect(runtime.getState().isSignedIn).toBe(false);
