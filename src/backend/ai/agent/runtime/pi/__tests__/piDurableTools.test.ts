@@ -1,6 +1,8 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createModels } from '@earendil-works/pi-ai/models';
+import { parseToolCallArguments } from '@earendil-works/pi-ai/utils/json-parse';
+import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
 import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
 import {
@@ -21,9 +23,15 @@ import {
   type SubmissionRecord,
   type ToolTaskCheckpoint,
 } from '@earendil-works/pi-durable';
+import { CodemodeStoreDoc } from '@earendil-works/pi-durable/codemode';
 
+import { officeInputSchemas } from '@/backend/services/office';
+import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+
+import { toRuntimeInputSchema } from '../../../tools/runtimeToolSchema';
 import type { RuntimeArtifact, RuntimeTool, RuntimeToolResult } from '../../types';
 import { PiCodemodeArtifactsEntry, PiCodemodeFiles } from '../piCodemodeFiles';
+import { retainPiCodemodeOutput } from '../piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
 import { projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
@@ -105,6 +113,7 @@ async function toolTask(
   callId = 'call',
   legacyCheckpoint?: ToolTaskCheckpoint,
   unoffered = false,
+  argumentsError?: string,
 ): Promise<TaskId> {
   return conversation.commit(async (tx) => {
     const message = emptyAssistantMessage({
@@ -124,7 +133,15 @@ async function toolTask(
         {
           ...message,
           stopReason: 'toolUse',
-          content: [{ type: 'toolCall', id: callId, name, arguments: args }],
+          content: [
+            {
+              type: 'toolCall',
+              id: callId,
+              name,
+              arguments: args,
+              ...(argumentsError ? { argumentsError } : {}),
+            },
+          ],
         },
       ],
     });
@@ -207,6 +224,87 @@ describe('durable capability boundary', () => {
       await harness.close(BACKGROUND_CONTEXT);
     }
   });
+
+  test.each(['direct', 'nested', 'malformed'] as const)(
+    'bounds %s validation feedback through native hooks while preserving the original input',
+    async (mode) => {
+      const execute = jest.fn(async () => ({ value: 'must not run', artifacts: [] }));
+      const args = Object.fromEntries(
+        Array.from({ length: 20 }, (_, index) => [`field${index}`, 'PRIVATE'.repeat(2_000)]),
+      );
+      const malformed = parseToolCallArguments('{"field0":"' + 'PRIVATE'.repeat(2_000));
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [
+          scriptCapability(),
+          capability({
+            approval: 'auto',
+            execute,
+            inputSchema: {
+              type: 'object',
+              properties: Object.fromEntries(
+                Object.keys(args).map((key) => [key, { type: 'number' }]),
+              ),
+            },
+          }),
+        ],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              description: 'Validate a nested call.',
+              parameters: { type: 'object' },
+              async execute(_raw, api, context) {
+                const result = await api.executeTool('create_file', args, context, {
+                  key: 'invalid',
+                });
+                expect(result.diagnostics[0]?.message).not.toContain('PRIVATE');
+                return result;
+              },
+            }),
+          ],
+        }),
+      });
+      const harness = await open(new MemoryStorage(), extension);
+      try {
+        const conversation = await harness.createConversation(
+          { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+          BACKGROUND_CONTEXT,
+        );
+        await harness.waitForTask(
+          await toolTask(
+            conversation,
+            mode === 'nested' ? 'codemode' : 'create_file',
+            mode === 'malformed' ? {} : args,
+            'call',
+            undefined,
+            false,
+            mode === 'malformed' ? malformed.argumentsError : undefined,
+          ),
+          BACKGROUND_CONTEXT,
+        );
+        const entries = (
+          await conversation.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        const result = entries.findLast(ToolResultEntry.is)!;
+        const message = result.data.diagnostics?.[0]?.message ?? '';
+        expect(result.model?.[0]).toMatchObject({ isError: true });
+        expect(message).not.toContain('Received arguments:');
+        expect(message).not.toContain('PRIVATE'.repeat(10));
+        expect(message.length).toBeLessThanOrEqual(2000);
+        expect(message.match(/  - /g)?.length ?? 0).toBeLessThanOrEqual(5);
+        if (mode !== 'malformed') expect(message).toContain('field0');
+        expect(execute).not.toHaveBeenCalled();
+        expect(entries.find(AssistantEntry.is)?.model?.[0]).toMatchObject({
+          content: [{ arguments: mode === 'malformed' ? {} : args }],
+        });
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
 
   test.each(['invalid_arguments', 'blocked', 'tool_unavailable'] as const)(
     'keeps %s Code Mode failures intact when afterTool runs without executing the script',
@@ -1473,4 +1571,103 @@ describe('durable capability boundary', () => {
       await reopened.close(BACKGROUND_CONTEXT);
     }
   });
+});
+
+test('retains console overflow in the native store across parent failure and reopen, without library artifacts', async () => {
+  const storage = new ReopenableMemoryStorage();
+  const code = '/* input stays in the transcript */'.repeat(500);
+  const log = 'console output'.repeat(500);
+  let outputKey = '';
+  const extension = capabilityExtension({
+    name: 'cherry',
+    tools: [scriptCapability()],
+    approve: async () => true,
+    codemode: defineExtension({
+      name: 'test-codemode',
+      tools: [
+        defineTool({
+          name: 'codemode',
+          description: 'Fail after producing console output.',
+          parameters: { type: 'object' },
+          replay: 'safe',
+          callers: ['model'],
+          async execute(_raw, api, context) {
+            expect(
+              await retainPiCodemodeOutput(
+                'too-large.txt',
+                'x'.repeat(MAX_TEXT_ATTACHMENT_BYTES + 1),
+                api,
+                context,
+              ),
+            ).toMatchObject({ error: expect.stringContaining('working cache limit') });
+            const saved = await retainPiCodemodeOutput('output.txt', log, api, context);
+            if (!('path' in saved)) throw new Error(saved.error);
+            expect(saved.path).toMatch(/^store:/);
+            outputKey = saved.path.slice('store:'.length);
+            expect(await retainPiCodemodeOutput('output.txt', log, api, context)).toEqual(saved);
+            throw new Error('Execution failed');
+          },
+        }),
+      ],
+    }),
+  });
+  const harness = await open(storage, extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    const taskId = await toolTask(conversation, 'codemode', { code });
+    await harness.waitForTask(taskId, BACKGROUND_CONTEXT);
+    expect(
+      (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values,
+    ).toEqual({ [outputKey]: log });
+    const messages = (await conversation.context(BACKGROUND_CONTEXT)).messages;
+    expect(messages.find((item) => item.role === 'assistant')).toMatchObject({
+      content: [{ type: 'toolCall', arguments: { code } }],
+    });
+    expect(messages.at(-1)).toMatchObject({ isError: true });
+    expect(await harness.snapshot(PiCodemodeFiles, taskId, BACKGROUND_CONTEXT)).toBeUndefined();
+    await harness.close(BACKGROUND_CONTEXT);
+    const reopened = await open(storage, extension);
+    try {
+      expect(
+        (await reopened.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values,
+      ).toEqual({ [outputKey]: log });
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('accepts finite workbook width adjustments at the provider boundary without changing cells', () => {
+  const args = {
+    filename: 'report.xlsx',
+    spec: {
+      version: 1,
+      sheets: [{ name: 'Data', rows: [['Original', '=A1', 100]], column_widths: [110, -4, 15] }],
+    },
+  };
+  const input = validateToolArguments(
+    {
+      name: 'create_workbook',
+      description: '',
+      parameters: toRuntimeInputSchema(officeInputSchemas.xlsx, 'input') as Record<string, unknown>,
+    },
+    { type: 'toolCall', id: 'call', name: 'create_workbook', arguments: args },
+  );
+  const result = officeInputSchemas.xlsx.parse(input);
+  expect(result.spec.sheets[0].column_widths).toEqual([80, 4, 15]);
+  expect(result.spec.sheets[0].rows).toEqual(args.spec.sheets[0].rows);
+  expect(args.spec.sheets[0].column_widths).toEqual([110, -4, 15]);
+  for (const width of ['110', NaN, Infinity]) {
+    expect(
+      officeInputSchemas.xlsx.safeParse({
+        ...args,
+        spec: { ...args.spec, sheets: [{ ...args.spec.sheets[0], column_widths: [width] }] },
+      }).success,
+    ).toBe(false);
+  }
 });

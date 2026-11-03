@@ -46,6 +46,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
@@ -1342,7 +1343,7 @@ export class DurableAgentHost implements AgentProtocol {
       streamingMessage: view?.assistant ?? null,
       additionalMessages: running
         .slice(1)
-        .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? []),
+        .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? []),
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
@@ -2105,6 +2106,9 @@ export class DurableAgentHost implements AgentProtocol {
           (part.type === 'text' || part.type === 'reasoning') &&
           old.type === part.type &&
           part.state === old.state &&
+          (part.type !== 'reasoning' ||
+            old.type !== 'reasoning' ||
+            part.truncated === old.truncated) &&
           part.text.startsWith(old.text)
         ) {
           const text = part.text.slice(old.text.length);
@@ -2338,6 +2342,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   private projectTurn(turn: RuntimeDurableTurn) {
     const view = projectDurableHostTurn(turn);
+    if (view.assistant) view.assistant = projectAgentMessageDisplay(view.assistant);
     const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
     let parentId = view.user.parentId;
     while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);

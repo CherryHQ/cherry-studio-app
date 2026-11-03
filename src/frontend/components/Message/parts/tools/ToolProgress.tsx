@@ -1,12 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { AgentToolProgress } from '@/shared/contracts/agent';
 
 import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
 
-/** The tool calls a script made, in call order; arguments arrive as compact JSON cut for display. */
+/** Nested activity is status-only; raw arguments belong to execution, not the message list. */
 export function ToolProgress({ progress }: { progress: AgentToolProgress }) {
   const { t } = useTranslation();
   const labels = {
@@ -34,12 +33,6 @@ export function ToolProgress({ progress }: { progress: AgentToolProgress }) {
                 {labels[call.status]}
               </Text>
             </View>
-            <MessageDetailText
-              language="json"
-              title={t('chat.tool.arguments')}
-              value={call.args}
-              variant="code"
-            />
           </View>
         );
       })}

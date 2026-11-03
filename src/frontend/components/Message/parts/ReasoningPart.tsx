@@ -1,7 +1,9 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
+import { Text } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { reasoningPreview } from '@/shared/utils/agentMessageDisplay';
 
 import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
 import { PartMarkdown } from './PartMarkdown';
@@ -15,6 +17,14 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
   const handleDisclosureToggle = useMessageListDisclosureToggle();
   const isThinking = isStreaming && part.state === 'streaming';
+  const preview = reasoningPreview(part.text);
+  const metadata = part.providerMetadata?.cherry;
+  const truncated =
+    preview.truncated ||
+    (metadata !== null &&
+      typeof metadata === 'object' &&
+      !Array.isArray(metadata) &&
+      metadata.reasoningPreview === true);
   const statusText = t(
     isThinking ? 'chat.reasoningStatus.thinking' : 'chat.reasoningStatus.thought',
   );
@@ -32,7 +42,18 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
       state={isThinking ? 'running' : 'complete'}
       statusText={statusText}
     >
-      <PartMarkdown isStreaming={isStreaming} markdown={part.text} />
+      {truncated ? (
+        <Text
+          className="text-muted-foreground text-sm"
+          numberOfLines={3}
+          ellipsizeMode="head"
+          selectable
+        >
+          {preview.text}
+        </Text>
+      ) : (
+        <PartMarkdown isStreaming={isStreaming} markdown={preview.text} />
+      )}
     </MessagePart.Reasoning>
   );
 }

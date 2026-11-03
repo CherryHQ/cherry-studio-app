@@ -88,6 +88,7 @@ export function ProcessGroupPart({
         expanded={expandedGroups[key] ?? false}
         isStreaming={isStreaming}
         isThinking={isThinking}
+        startedAt={message.stats?.runtimeTiming?.startedAt ?? Date.parse(message.createdAt)}
         onExpandedChange={(expanded) =>
           setExpandedGroups((current) => ({ ...current, [key]: expanded }))
         }

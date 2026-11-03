@@ -246,7 +246,7 @@ test('projects nested tool progress and drops it when the parent result commits'
     parentTaskId: taskId,
     taskId: 43 as TaskId,
     status: 'running' as const,
-    arguments: { query: 'calendar' },
+    arguments: { query: 'calendar', code: 'hidden'.repeat(20_000) },
   };
   const fixture = attach(view({ run, tools: [tool], nestedTools: [child] }, [call]), [input()]);
   try {
@@ -255,6 +255,7 @@ test('projects nested tool progress and drops it when the parent result commits'
       state: 'running',
       progress: { calls: [{ id: 'call/child', status: 'running' }] },
     });
+    expect(initial.parts[0]).not.toHaveProperty('progress.calls.0.args');
     await fixture.advance(
       view(
         {

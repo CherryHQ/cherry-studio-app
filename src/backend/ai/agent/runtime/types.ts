@@ -347,7 +347,7 @@ export type RuntimeToolProgress = {
     id: string;
     name: string;
     title?: string;
-    args: string;
+    args?: string;
     status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted';
   }[];
 };
@@ -366,6 +366,7 @@ export type RuntimeOutputPart =
       id: string;
       type: 'text' | 'reasoning';
       text: string;
+      truncated?: boolean;
       state: 'streaming' | 'done';
     }
   | {

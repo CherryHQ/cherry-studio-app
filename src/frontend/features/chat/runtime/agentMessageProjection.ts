@@ -16,6 +16,7 @@ import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
 import { classifyAgentFailureReason } from '@/shared/utils/agentFailure';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 
 type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
 
@@ -97,6 +98,11 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): 
     input: part.input,
     ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
     ...(part.progress ? { progress: part.progress } : {}),
+    ...(part.state === 'running'
+      ? { executionState: 'running' as const }
+      : part.state === 'input-available'
+        ? { executionState: 'pending' as const }
+        : {}),
     title: part.title,
     toolCallId: part.toolCallId,
     toolName: part.toolName,
@@ -192,7 +198,12 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
           )
         : { type: 'text', text: part.text, state: part.state };
     case 'reasoning':
-      return { type: part.type, text: part.text, state: part.state } as CherryMessagePart;
+      return {
+        type: part.type,
+        text: part.text,
+        state: part.state,
+        ...(part.truncated ? { providerMetadata: { cherry: { reasoningPreview: true } } } : {}),
+      } as CherryMessagePart;
     case 'file':
       return withCherryMeta(
         {
@@ -283,22 +294,6 @@ function toDisplayParts(
   const sourcePartKeys: string[] = [];
 
   for (const sourcePart of parts) {
-    // Restored history can still contain separate provider summaries and opaque empty items.
-    if (sourcePart.type === 'reasoning') {
-      const previous = displayParts.at(-1);
-      if (previous?.type === 'reasoning') {
-        // The previous display part may be cached; keep source and cached objects unchanged.
-        displayParts[displayParts.length - 1] = {
-          ...previous,
-          text: sourcePart.text.trim() ? `${previous.text}\n\n${sourcePart.text}` : previous.text,
-          state: sourcePart.state,
-        };
-      } else if (sourcePart.text.trim() || sourcePart.state === 'streaming') {
-        displayParts.push(projectAgentPart(sourcePart, cache).part);
-        partKeys.push(sourcePart.id);
-      }
-      continue;
-    }
     if (sourcePart.type === 'file' && sourcePart.attachmentReport) {
       attachmentReports[sourcePart.id] = sourcePart.attachmentReport;
     }
@@ -360,12 +355,12 @@ export function toAgentMessageListItem(
     data: {
       ...toDisplayParts(
         message.status === 'cancelled'
-          ? message.parts.filter(
+          ? projectAgentMessageDisplay(message).parts.filter(
               (part) =>
                 part.type !== 'data-error' ||
                 (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
             )
-          : message.parts,
+          : projectAgentMessageDisplay(message).parts,
         cache,
       ),
       ...(message.translations ? { translations: message.translations } : {}),

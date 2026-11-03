@@ -304,7 +304,7 @@ export const AgentToolProgressSchema = z.strictObject({
       name: z.string(),
       /** Display name of a tool the app has no translated title for, such as an MCP tool. */
       title: z.string().optional(),
-      args: z.string().max(1000),
+      args: z.string().max(1000).optional(),
       status: z.enum(['pending', 'running', 'ok', 'error', 'interrupted']),
     }),
   ),
@@ -393,6 +393,8 @@ export const AgentMessagePartSchema = z.union([
     id: z.string().min(1),
     type: z.literal('reasoning'),
     text: z.string(),
+    /** This is a bounded display excerpt; the execution record retains the full reasoning. */
+    truncated: z.boolean().optional(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
     selectionReferences: z.array(SelectionTextReferenceSchema).optional(),

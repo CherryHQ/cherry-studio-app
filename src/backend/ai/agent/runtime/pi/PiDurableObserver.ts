@@ -221,11 +221,10 @@ export class PiDurableObserver {
         else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
       }
       this.nestedTools.clear();
-      for (const tool of live.nestedTools ?? [])
+      for (const tool of live.nestedTools ?? []) {
         this.nestedTools.set(tool.callId, {
           parentCallId: tool.parentCallId,
           name: tool.name,
-          args: JSON.stringify(tool.arguments).slice(0, 1000),
           status: tool.summary
             ? tool.summary.isError
               ? 'error'
@@ -234,6 +233,7 @@ export class PiDurableObserver {
               ? 'interrupted'
               : tool.status,
         });
+      }
       if (initial) return;
 
       if (this.contextStatus() !== previousContext)

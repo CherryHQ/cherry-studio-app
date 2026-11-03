@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
+import { isCompactTool, reasoningPreview } from '@/shared/utils/agentMessageDisplay';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
 import {
@@ -380,15 +381,32 @@ export function projectPiTurn(options: {
       }
       answer = undefined;
       if (block.type === 'thinking') {
+        const preview = options.active
+          ? reasoningPreview(block.thinking)
+          : { text: block.thinking, truncated: false };
         const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
         const previous = parts.at(-1);
         // Adjacent summaries remain one phase, including across provider retries.
         // Keep a growing phase visible even before its first readable summary arrives.
         if (previous?.type === 'reasoning') {
-          if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
+          const combined = preview.text.trim()
+            ? `${previous.text}\n\n${preview.text}`
+            : previous.text;
+          const bounded = options.active
+            ? reasoningPreview(combined)
+            : { text: combined, truncated: false };
+          previous.text = bounded.text;
+          if (options.active)
+            previous.truncated = previous.truncated || preview.truncated || bounded.truncated;
           previous.state = state;
-        } else if (block.thinking.trim() || state === 'streaming') {
-          parts.push({ id, type: 'reasoning', text: block.thinking, state });
+        } else if (preview.text.trim() || state === 'streaming') {
+          parts.push({
+            id,
+            type: 'reasoning',
+            text: preview.text,
+            ...(preview.truncated ? { truncated: true } : {}),
+            state,
+          });
         }
         return;
       }
@@ -420,7 +438,11 @@ export function projectPiTurn(options: {
         state: streaming
           ? 'input-streaming'
           : (options.toolStates?.get(block.id) ?? 'input-available'),
-        ...(inputPreview ? { inputPreview } : { input: RuntimeJsonValueSchema.parse(args) }),
+        ...(options.active && target?.ref.source !== 'mcp' && isCompactTool(block.name)
+          ? {}
+          : inputPreview
+            ? { inputPreview }
+            : { input: RuntimeJsonValueSchema.parse(args) }),
       };
       parts.push(part);
       toolsByCall.set(block.id, part);
@@ -435,7 +457,7 @@ export function projectPiTurn(options: {
                 name: call.name,
                 // The client translates built-in names; an MCP alias needs its display name.
                 ...(tool?.ref.source === 'mcp' ? { title: tool.displayName } : {}),
-                args: call.args,
+                ...(call.args !== undefined ? { args: call.args } : {}),
                 status: call.status,
               },
             ];

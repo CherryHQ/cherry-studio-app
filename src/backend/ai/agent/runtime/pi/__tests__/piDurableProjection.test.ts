@@ -837,3 +837,32 @@ describe('Pi turn projection', () => {
     });
   });
 });
+
+test('live script/reasoning projection is bounded while settled replay retains exact input', () => {
+  const text = '思考'.repeat(20_000);
+  const code = 'const data = [];'.repeat(10_000);
+  const message: AssistantMessage = {
+    ...call('', 2_000),
+    content: [
+      { type: 'thinking', thinking: text },
+      { type: 'toolCall', id: 'script', name: 'codemode', arguments: { code } },
+    ],
+  };
+  const options = {
+    lane: { sessionId: 'session', slot: 0 },
+    metadata,
+    record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+    entries: [
+      { id: 2, conversationId: 1, kind: 'pi.assistant', model: [message] },
+    ] as unknown as EntryRecord[],
+  };
+  const live = projectPiTurn({ ...options, active: true });
+  expect(live.parts[0]).toMatchObject({ type: 'reasoning', truncated: true });
+  expect(live.parts[0].type === 'reasoning' && live.parts[0].text.length).toBeLessThanOrEqual(2000);
+  expect(live.parts[1]).not.toHaveProperty('input');
+  const settled = projectPiTurn({ ...options, active: false });
+  expect(settled.parts[0]).toMatchObject({ text });
+  expect(settled.parts[1]).toHaveProperty('input.code', code);
+  expect(message.content[0]).toHaveProperty('thinking', text);
+  expect(message.content[1]).toHaveProperty('arguments.code', code);
+});

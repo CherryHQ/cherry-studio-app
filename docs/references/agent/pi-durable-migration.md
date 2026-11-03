@@ -447,19 +447,55 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 | `harness.js`: `openTasks` orphaned-inbox scan and ownership guards | No upstream replacement. The explicitly chosen clear/rebuild scope does not preserve old orphaned queues; the idle-inbox repair fixture is replaced by normal admitted-run recovery | Same runtime suite retains existing-run and task-owned conversation exclusions. This is a scope retirement, not a claim of backward-compatible orphan repair |
 
 The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.5.0.patch) contains
-Segmenter fallback and Han search terms, exact-name tool search, and managed Code Mode output.
+Segmenter fallback and Han search terms, exact-name tool search, and the host Code Mode output hook.
 The `declarations` import is upstream in 1.5.0. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing
 ([#1219](https://github.com/CherryHQ/cherry-studio-app/issues/1219)) remains described in
 [Clearing The Working File](#clearing-the-working-file).
 
+### Private Working Materials
+
+Intermediate scripts, research data and confirmed file receipts use upstream Code Mode `store/load`
+(`CodemodeStoreDoc`), with its existing conversation history and fork semantics. They stay in the
+disposable runtime cache, never the file library or backups. A requested deliverable continues to
+use managed artifacts; original conversation records retain their normal history policy.
+
+Store writes commit only when the entire script succeeds. Preparation therefore uses separate,
+short successful calls: save the first source/data chunk, append or locally replace the next chunk,
+then execute using `load(key)` without printing or re-emitting the source. After creation, store its
+returned `value.fileEntryId` and finish that call successfully before inspecting or editing the
+existing file in a separate call. A later inspection failure cannot roll back an earlier successful
+call's cache writes. Interrupted model text and failed preparation calls are not checkpoints.
+Missing cache values after rebuild/clearing must be recreated; missing receipts do not establish an
+uncertain side effect's outcome. This is an instructed workflow using existing tools, not a new
+cache-file API or automatic scheduler.
+
+Text console overflow also goes into `CodemodeStoreDoc` through the existing host output callback,
+under a task-specific key. The returned `store:<key>` is read with `load(key)`; output exceeding the
+existing text byte limit returns a size error. Saving overflow commits independently of the parent
+script's outcome. Explicit image outputs keep the existing managed-artifact path. Execution inputs
+are not automatically duplicated and historical tool arguments are not rewritten for model requests.
+New calls reuse short references; historical context compaction remains upstream-owned.
+
+The supported `afterTool` hook bounds invalid-argument diagnostics before settlement: at most five
+issues / 2,000 characters, without the full `Received arguments` echo. Application status projection
+omits nested arguments. Upstream validation and Code Mode may still serialize arguments internally;
+this change does not patch those paths or claim to eliminate their allocation cost.
+
+[piCodemodeSandbox.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeSandbox.test.ts)
+covers staged source reuse and the separate creation/checking bridge contract;
+[piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts)
+covers native-store overflow persistence, unchanged inputs and bounded direct/nested validation.
+These regressions and device performance checks have not been run. The earlier 46-second inspection
+delay remains unattributed.
+
 ### Other Behavioral And Platform Adaptations
 
 | Package/hunk group | Classification and invariant | Existing regression source / retirement evidence |
 | --- | --- | --- |
 | Pi Durable Unicode search and exact names | Product behavior: Chinese names and adjacent Han pairs remain discoverable without exposing deferred tools prematurely; exact deferred names in a `tool_search` query load before ranked matches, even when their count exceeds `limit` | [piToolSearch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piToolSearch.test.ts); upstream must satisfy Chinese and Latin cases and select exact names regardless of BM25 rank |
-| Pi Durable `writeOutput` hook | Host boundary: Code Mode output becomes a managed artifact rather than an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts), [piCodemodeOutput.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeOutput.test.ts); require an upstream host-output API with cancellation/artifact ownership preserved |
+| Pi Durable `writeOutput` hook | Host boundary: textual console overflow stays in the private working cache; explicit image outputs use managed artifacts. Neither path exposes an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts); require an upstream host-output API with cancellation/artifact ownership preserved |
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
 | Pi AI legacy JSON preview fast path (retired) | No production caller found in Mobile or the six published 1.5.0 Pi packages; providers use upstream `ToolCallArgumentsStream`. Final arguments still use unchanged `parseToolCallArguments` | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts) now covers the consumed incremental path, string repair and final validation. Behavior and performance checks remain unrun |
 | Pi AI native OAuth; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |

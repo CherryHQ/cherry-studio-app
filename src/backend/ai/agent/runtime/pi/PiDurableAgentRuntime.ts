@@ -44,7 +44,7 @@ import {
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
-import { fitPiCodemodeOutput } from './piCodemodeOutput';
+import { retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -747,16 +747,18 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
               ],
               writeOutput: async (name, data, api, context) => {
-                const writer = this.requirePorts().writeToolOutput;
-                if (!writer) return { error: 'Managed output storage is unavailable.' };
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(lane, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
+                // Text overflow is an intermediate, not a generated user document. Images remain deliverables.
+                if (typeof data === 'string')
+                  return retainPiCodemodeOutput(name, data, api, context);
+                const writer = this.requirePorts().writeToolOutput;
+                if (!writer) return { error: 'Managed output storage is unavailable.' };
                 try {
                   const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
                   const artifact =
-                    previous?.outputs[name] ??
-                    (await writer(identity, { name, data: fitPiCodemodeOutput(data) }, signal));
+                    previous?.outputs[name] ?? (await writer(identity, { name, data }, signal));
                   await api.commit(async (tx) => {
                     (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = artifact;
                   }, context);

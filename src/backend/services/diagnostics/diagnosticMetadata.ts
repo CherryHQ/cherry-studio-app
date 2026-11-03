@@ -5,6 +5,7 @@ import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 const LOG_MESSAGES = new Set([
   'Startup stage',
+  'Office stage',
   'Service promoted to startup gate',
   'Initial content did not report readiness before the startup timeout',
   'Skill storage reconciliation failed',
