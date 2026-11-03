@@ -13,6 +13,13 @@ minimumReleaseAge: 1440
 # First-party Cherry packages ship in lockstep with Desktop and are adopted on release.
 minimumReleaseAgeExclude:
   - '@cherrystudio/*'
+  # Explicit Pi upgrade: keep the release-age exception limited to this version.
+  - '@earendil-works/chord@1.5.0'
+  - '@earendil-works/pi-ai@1.5.0'
+  - '@earendil-works/pi-codemode@1.5.0'
+  - '@earendil-works/pi-durable@1.5.0'
+  - '@earendil-works/pi-schema@1.5.0'
+  - '@earendil-works/pi-telemetry@1.5.0'
 trustPolicy: no-downgrade
 
 # 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
@@ -68,9 +75,9 @@ allowBuilds:
 
 patchedDependencies:
   '@anthropic-ai/vertex-sdk@0.22.0': patches/@anthropic-ai__vertex-sdk@0.22.0.patch
-  '@earendil-works/pi-durable@1.4.0': patches/@earendil-works__pi-durable@1.4.0.patch
-  '@earendil-works/pi-codemode@1.4.0': patches/@earendil-works__pi-codemode@1.4.0.patch
-  '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
+  '@earendil-works/pi-durable@1.5.0': patches/@earendil-works__pi-durable@1.5.0.patch
+  '@earendil-works/pi-codemode@1.5.0': patches/@earendil-works__pi-codemode@1.5.0.patch
+  '@earendil-works/pi-ai@1.5.0': patches/@earendil-works__pi-ai@1.5.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.87.1: patches/metro@0.87.1.patch
   metro-runtime@0.87.1: patches/metro-runtime@0.87.1.patch
@@ -97,7 +104,7 @@ patchedDependencies:
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
-  '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
+  '@earendil-works/chord@1.5.0': patches/@earendil-works__chord@1.5.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
   '@google/genai@2.21.0': patches/@google__genai@2.21.0.patch
