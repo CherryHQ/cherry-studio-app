@@ -86,6 +86,17 @@ test('binding continues once with the saved mode after the cold startup cover cl
   expect(mockOpen).toHaveBeenCalledTimes(1);
 });
 
+test('a warm binding continues immediately and is not repeated when the cover changes', async () => {
+  await act(async () => mockCallbacks.onResult({ target, outcome: 'bound', mode: 'pip' }, false));
+  expect(mockOpen.mock.calls).toEqual([[target, 'pip']]);
+  mockCoverVisible = true;
+  await act(async () => renderer.update(<UuRemoteCallbackBridge />));
+  mockCoverVisible = false;
+  await act(async () => renderer.update(<UuRemoteCallbackBridge />));
+  expect(mockOpen).toHaveBeenCalledTimes(1);
+  expect(mockReplace).not.toHaveBeenCalled();
+});
+
 test('an invalid binding refreshes its display and reports failure without leaving the current page', async () => {
   const failure: UuRemoteResult = { target, outcome: 'failed', reason: 'binding-invalid' };
   await act(async () => mockCallbacks.onResult(failure, false));

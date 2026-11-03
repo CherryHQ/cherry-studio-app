@@ -54,12 +54,13 @@ function reply(request: URL, fields: Record<string, string>) {
 
 beforeEach(() => {
   jest.restoreAllMocks();
+  jest.clearAllMocks();
   let sequence = 0;
   jest.mocked(randomUUID).mockImplementation(() => `request-${++sequence}`);
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
   Object.defineProperty(Platform, 'Version', { configurable: true, value: '18.0' });
   jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
-  jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
 });
 
 test('first use asks for association before opening UU', async () => {

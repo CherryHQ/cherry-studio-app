@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRootNavigationState, useRouter } from 'expo-router';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
 import { useStartupCoverVisible } from '@/frontend/appShell/startup';
@@ -18,9 +18,14 @@ export function UuRemoteCallbackBridge() {
   const navigation = useRootNavigationState();
   const coverVisible = useStartupCoverVisible();
   const { open, reportError } = useUuRemoteAction();
-  const [binding, setBinding] = useState<Extract<UuRemoteResult, { outcome: 'bound' }> | null>(
-    null,
-  );
+  const binding = useRef<Extract<UuRemoteResult, { outcome: 'bound' }> | null>(null);
+
+  function continueBinding() {
+    const result = binding.current;
+    if (!result || coverVisible) return;
+    binding.current = null;
+    void open(result.target, result.mode);
+  }
 
   useUuRemoteCallbacks({
     module,
@@ -52,8 +57,10 @@ export function UuRemoteCallbackBridge() {
           queryKey: queryKeys.uuRemote.binding(result.target.connectionId),
         });
       }
-      if (result?.outcome === 'bound') setBinding(result);
-      else if (result?.outcome === 'failed')
+      if (result?.outcome === 'bound') {
+        binding.current = result;
+        continueBinding();
+      } else if (result?.outcome === 'failed')
         reportError(new UuRemoteError(result.reason), result.target);
     },
     onError(error, initial) {
@@ -62,12 +69,10 @@ export function UuRemoteCallbackBridge() {
     },
   });
 
-  const openBinding = useEffectEvent(open);
+  const openBinding = useEffectEvent(continueBinding);
   useEffect(() => {
-    if (!binding || coverVisible) return;
-    setBinding(null);
-    void openBinding(binding.target, binding.mode);
-  }, [binding, coverVisible]);
+    openBinding();
+  }, [coverVisible]);
 
   return null;
 }

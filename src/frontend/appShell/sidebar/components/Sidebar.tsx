@@ -141,7 +141,6 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       navigation,
       prepareExternalNavigation,
       canDock,
-      column.kind,
       openDestination,
       openSessionSearch,
       pane,

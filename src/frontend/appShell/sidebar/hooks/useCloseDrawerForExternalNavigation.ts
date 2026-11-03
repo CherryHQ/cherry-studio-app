@@ -23,7 +23,10 @@ export function useCloseDrawerForExternalNavigation(
       if (
         pending.current?.id === id &&
         progress.get() === 0 &&
-        getDrawerStatusFromState(navigation.getState(), 'closed') === 'closed'
+        getDrawerStatusFromState(
+          navigation.getState() as DrawerContentComponentProps['state'],
+          'closed',
+        ) === 'closed'
       ) {
         pending.current.finish(true);
       }
@@ -54,7 +57,10 @@ export function useCloseDrawerForExternalNavigation(
     if (signal.aborted) return Promise.resolve(false);
     if (
       isPermanent ||
-      (getDrawerStatusFromState(navigation.getState(), 'closed') === 'closed' &&
+      (getDrawerStatusFromState(
+        navigation.getState() as DrawerContentComponentProps['state'],
+        'closed',
+      ) === 'closed' &&
         progress.get() === 0)
     ) {
       return Promise.resolve(true);

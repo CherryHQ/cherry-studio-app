@@ -1,4 +1,5 @@
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
+import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useCloseDrawerForExternalNavigation } from '../useCloseDrawerForExternalNavigation';
@@ -51,7 +52,10 @@ const navigation = {
 let prepare: ReturnType<typeof useCloseDrawerForExternalNavigation>;
 let renderer: ReactTestRenderer;
 function Probe({ permanent = false }) {
-  prepare = useCloseDrawerForExternalNavigation(navigation, permanent);
+  const closeDrawer = useCloseDrawerForExternalNavigation(navigation, permanent);
+  useEffect(() => {
+    prepare = closeDrawer;
+  }, [closeDrawer]);
   return null;
 }
 function render(permanent = false) {
