@@ -1,3 +1,4 @@
+import { connectRelayStream } from '@cherrystudio/relay-client';
 import { directEndpointUrl, type RemoteAuthorization } from '@cherrystudio/remote-protocol';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -12,6 +13,8 @@ import { openWebSocketStream } from '../remoteSocket';
 
 let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
 
+jest.mock('@cherrystudio/relay-client', () => ({ connectRelayStream: jest.fn() }));
+jest.mock('../relaySocket', () => ({ createRelaySocket: jest.fn() }));
 jest.mock('@cherrystudio/remote-transport', () => ({}));
 jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
 jest.mock('../DesktopDiscovery', () => ({
@@ -40,6 +43,7 @@ const grants: RemoteAuthorization['grants'] = [
 const original: DesktopConnectionRow = {
   id: 'desktop-1',
   name: 'Desktop',
+  relay: null,
   deviceId: 'device-1',
   desktopIdentity: 'peer1',
   learnedEndpoints: [],
@@ -126,6 +130,80 @@ describe('DesktopConnectionManager ownership', () => {
     await manager._doStop();
     await manager._doDestroy();
     jest.useRealTimers();
+  });
+
+  it('falls back to Relay after a failed direct route and keeps the pinned identity and authorization', async () => {
+    row.relay = { origin: 'https://relay.example.com', targetId: 'a'.repeat(64) };
+    jest.mocked(openWebSocketStream).mockRejectedValue(new Error('offline'));
+    const stream = { abort: jest.fn() };
+    jest.mocked(connectRelayStream).mockResolvedValue(stream as never);
+    const connected = session();
+    connect.mockResolvedValue(connected as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).resolves.toBe(connected);
+    expect(connectRelayStream).toHaveBeenCalledWith(
+      row.relay.targetId,
+      expect.objectContaining({ origin: row.relay.origin }),
+    );
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ stream, desktopIdentity: row.desktopIdentity }),
+    );
+    expect(connected.authenticate).toHaveBeenCalledWith(row.deviceId, expect.any(AbortSignal));
+    lease.release();
+  });
+
+  it('reserves Relay time when a direct socket never opens', async () => {
+    row.relay = { origin: 'https://relay.example.com', targetId: 'a'.repeat(64) };
+    let directSignal!: AbortSignal;
+    jest.mocked(openWebSocketStream).mockImplementation((_url, signal) => {
+      directSignal = signal;
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason)),
+      );
+    });
+    jest.mocked(connectRelayStream).mockResolvedValue({ abort: jest.fn() } as never);
+    const connected = session();
+    connect.mockResolvedValue(connected as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(directSignal.aborted).toBe(true);
+    await expect(lease.ready(signal())).resolves.toBe(connected);
+    expect(connectRelayStream).toHaveBeenCalledTimes(1);
+    lease.release();
+  });
+
+  it('does not wait for discovery before a Relay-only dial and aborts it on background suspension', async () => {
+    row.configuredEndpoints = [];
+    row.relay = { origin: 'https://relay.example.com', targetId: 'a'.repeat(64) };
+    let relaySignal!: AbortSignal;
+    jest.mocked(connectRelayStream).mockImplementation((_target, options) => {
+      relaySignal = options.signal;
+      return new Promise((_resolve, reject) =>
+        options.signal.addEventListener('abort', () => reject(options.signal.reason)),
+      );
+    });
+    const lease = await manager.retain(row.id, 'configuration', signal());
+    await jest.advanceTimersByTimeAsync(0);
+    expect(connectRelayStream).toHaveBeenCalledTimes(1);
+    expect(openWebSocketStream).not.toHaveBeenCalled();
+    appState('background');
+    expect(relaySignal.aborted).toBe(true);
+    expect(lease.getSnapshot().status).toBe('suspended');
+    lease.release();
+  });
+
+  it('treats revoked authorization as terminal without falling back to Relay', async () => {
+    row.relay = { origin: 'https://relay.example.com', targetId: 'a'.repeat(64) };
+    const connected = session();
+    connected.authenticate.mockRejectedValue(
+      new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Revoked' }),
+    );
+    connect.mockResolvedValue(connected as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).rejects.toMatchObject({ reason: 'UNAUTHENTICATED' });
+    expect(connectRelayStream).not.toHaveBeenCalled();
+    expect(row.status).toBe('needs-repair');
+    lease.release();
   });
 
   it('reconnects over a synced VPN address after network changes clear QR hints', async () => {

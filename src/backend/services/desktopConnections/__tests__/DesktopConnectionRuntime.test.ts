@@ -1,3 +1,4 @@
+import { connectRelayStream } from '@cherrystudio/relay-client';
 import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
 import { loggerService } from '@logger';
 import { AppState } from 'react-native';
@@ -20,6 +21,8 @@ import { openWebSocketStream } from '../remoteSocket';
 
 let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
 
+jest.mock('@cherrystudio/relay-client', () => ({ connectRelayStream: jest.fn() }));
+jest.mock('../relaySocket', () => ({ createRelaySocket: jest.fn() }));
 jest.mock('@cherrystudio/remote-transport', () => ({}));
 jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
 jest.mock('../DesktopDiscovery', () => ({
@@ -46,6 +49,7 @@ const grants: RemoteAuthorization['grants'] = [{ domain: 'configuration', grantI
 const row = {
   id,
   name: 'Desktop',
+  relay: null,
   deviceId: 'device-1',
   desktopIdentity: '12D3KooWDesktop',
   learnedEndpoints: [] as { host: string; port: number; security: 'ws' | 'wss' }[],
@@ -263,6 +267,32 @@ describe('DesktopConnectionRuntime', () => {
     store.getRow.mockRejectedValueOnce(failure);
     await expect(runtime.pair(pairing, signal())).rejects.toBe(failure);
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('saves a Relay-only v4 target only after approval, without requiring address sync', async () => {
+    const relay = { origin: 'https://relay.example.com', targetId: 'a'.repeat(64) };
+    jest.mocked(connectRelayStream).mockResolvedValue({ abort: jest.fn() } as never);
+    const approved = deferred<unknown>();
+    const session = createSession({
+      'pairing.claim': () => ({ claimId: 'claim', verificationCode: '123456', expiresAt: 'later' }),
+      'pairing.get': () => approved.promise,
+    });
+    connect.mockResolvedValue(session as never);
+    const pairingResult = runtime.pair(
+      { ...pairing, connectionId: undefined, v: 4, endpoints: [], relay },
+      signal(),
+    );
+    await jest.advanceTimersByTimeAsync(0);
+    expect(store.savePair).not.toHaveBeenCalled();
+    approved.resolve({ status: 'approved', deviceId: row.deviceId, authorization: { grants } });
+    await expect(pairingResult).resolves.toMatchObject({ status: 'paired' });
+    expect(store.savePair).toHaveBeenCalledWith(
+      expect.objectContaining({ relay, desktopIdentity: row.desktopIdentity }),
+      false,
+      expect.any(AbortSignal),
+    );
+    expect(openWebSocketStream).not.toHaveBeenCalled();
+    expect(session.isOpen).toBe(false);
   });
 
   it.each([undefined, id])(

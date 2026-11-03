@@ -31,6 +31,12 @@ it('replaces legacy HTTP connections with the final pairing schema and preserves
       configured_endpoints: '[]',
       status: 'paired',
     });
+    const before = db.prepare('SELECT * FROM desktop_connection').get();
+    db.exec(readFileSync(`${migrationRoot}/0013_watery_rogue.sql`, 'utf8'));
+    expect(db.prepare('SELECT * FROM desktop_connection').get()).toEqual({
+      ...before,
+      relay: null,
+    });
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
   } finally {

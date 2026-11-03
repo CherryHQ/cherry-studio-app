@@ -16,7 +16,7 @@ participate in the binding fingerprint or Agent scope. The location implementati
   revalidated after sixty seconds at most. Network changes discard automatic hints and successful
   route preferences, without deleting configuration or authorization.
 - The phone skips scoped/link-local IPv6 discoveries because RN WebSocket cannot portably use the
-  interface scope. Configured WSS uses normal system certificate validation. All routes use the
+  interface scope. Configured WSS uses normal system certificate validation. Direct routes use the
   fixed `/v1/remote/connect` path; credentials, arbitrary paths, queries and fragments are rejected.
 
 QR v2 IP lists become WS endpoints using their shared port. QR v3 endpoints preserve each
@@ -24,6 +24,29 @@ hostname, port, and WS/WSS scheme through initial pairing, re-pairing, and tempo
 hints. Multiple endpoints are tried in order; a failed WSS route is not rewritten to WS.
 The QR parser and workflow validation consume the published protocol schema. QR endpoint
 hints stay in memory until an authenticated desktop supplies a durable address snapshot.
+
+## Relay routes
+
+QR v4 accepts direct endpoints and/or `{ origin, targetId }` for a self-hosted Relay.
+The origin must be HTTPS without credentials, path, query or fragment. The manager opens
+`wss://<origin>/v1/relay`, then passes the admitted stream to the same `DesktopSession`.
+Noise identity pinning, desktop approval and grants remain unchanged; Relay availability is
+never authorization. Desktop host keys and one-time attach tickets are not stored on the phone.
+
+A nullable `relay` column is added by migration `0013_watery_rogue`, preserving existing
+pairings and addresses. Initial approval atomically saves the QR target with the pairing.
+Authenticated endpoint synchronization can refresh it under the existing binding/grant guard:
+an absent field from an older desktop preserves it, while explicit null removes it.
+
+With a saved Relay route, the first five seconds of the existing fifteen-second round are
+available to direct candidates. No direct candidate, or exhausting that phase, attempts Relay
+immediately instead of waiting for mDNS. Relay admission gets at most eight seconds and shares
+the remaining round deadline with Noise/authentication. Only the existing manager owns retries,
+foreground/background cancellation and leases. An authenticated revocation is terminal.
+
+`modules/relay-socket` and `relaySocket.ts` provide bounded native send and bridge delivery.
+A new native client is required; direct-only connections load neither the Relay package nor its
+native adapter. See the [native transport contract](../../../modules/relay-socket/README.md).
 
 ## Connection lifetime
 

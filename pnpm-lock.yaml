@@ -106,6 +106,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@cherrystudio/relay-protocol': file:.context/relay-packages/relay-protocol.tgz
+  '@cherrystudio/remote-protocol': file:.context/relay-packages/remote-protocol.tgz
   '@siteed/sherpa-onnx.rn>@expo/config-plugins': 58.0.11
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
@@ -255,9 +257,12 @@ importers:
       '@cherrystudio/provider-registry':
         specifier: 0.3.1
         version: 0.3.1(zod@4.4.3)
+      '@cherrystudio/relay-client':
+        specifier: file:.context/relay-packages/relay-client.tgz
+        version: file:.context/relay-packages/relay-client.tgz
       '@cherrystudio/remote-protocol':
-        specifier: 0.7.0
-        version: 0.7.0(zod@4.4.3)
+        specifier: file:.context/relay-packages/remote-protocol.tgz
+        version: file:.context/relay-packages/remote-protocol.tgz(zod@4.4.3)
       '@cherrystudio/remote-transport':
         specifier: 0.2.5
         version: 0.2.5(zod@4.4.3)
@@ -1861,8 +1866,17 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@cherrystudio/remote-protocol@0.7.0':
-    resolution: {integrity: sha512-N/ELVCuwLaSAt+FOfrnkDbRoRdzcQtCfk9x//BlnmbWG7O7FeoQfTY4rHIOcOZzA4FL8qq2JzwKyu5+xrVnC4Q==}
+  '@cherrystudio/relay-client@file:.context/relay-packages/relay-client.tgz':
+    resolution: {integrity: sha512-ZF0V3ITdgvkZuWc5ZnUzoPjMOLhGWQqksggicG4VuOdBED9mCLygFH88vGVbu8VOIYJerxQq50iYpYitldp5QQ==, tarball: file:.context/relay-packages/relay-client.tgz}
+    version: 0.0.0
+
+  '@cherrystudio/relay-protocol@file:.context/relay-packages/relay-protocol.tgz':
+    resolution: {integrity: sha512-3dsaOZl+fDVm2CRbtGIPn7A+uXfhE8jl/s5APdmIYc0xVI3QSjdZ9WJUQsh0Lk/MeUe3eZZjWQ/VgCV3EMzruQ==, tarball: file:.context/relay-packages/relay-protocol.tgz}
+    version: 0.0.0
+
+  '@cherrystudio/remote-protocol@file:.context/relay-packages/remote-protocol.tgz':
+    resolution: {integrity: sha512-2S5Xo6HDeLTTeKoqV7ctfDhn+bivinoeoYlNczd9oyfLUy7YvdCx944alt8JARHl8bNT+wDHafS+oOAdTntHDQ==, tarball: file:.context/relay-packages/remote-protocol.tgz}
+    version: 0.7.0
     peerDependencies:
       zod: ^4.3.4
 
@@ -13039,14 +13053,22 @@ snapshots:
       semver: 7.8.5
       zod: 4.4.3
 
-  '@cherrystudio/remote-protocol@0.7.0(zod@4.4.3)':
+  '@cherrystudio/relay-client@file:.context/relay-packages/relay-client.tgz':
+    dependencies:
+      '@cherrystudio/relay-protocol': file:.context/relay-packages/relay-protocol.tgz
+      '@libp2p/interface': 3.3.0
+      '@libp2p/utils': 7.4.1
+
+  '@cherrystudio/relay-protocol@file:.context/relay-packages/relay-protocol.tgz': {}
+
+  '@cherrystudio/remote-protocol@file:.context/relay-packages/remote-protocol.tgz(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
   '@cherrystudio/remote-transport@0.2.5(zod@4.4.3)':
     dependencies:
-      '@cherrystudio/remote-protocol': 0.7.0(zod@4.4.3)
+      '@cherrystudio/remote-protocol': file:.context/relay-packages/remote-protocol.tgz(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2

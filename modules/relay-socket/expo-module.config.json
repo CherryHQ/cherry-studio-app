@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "podspecPath": "ios/RelaySocket.podspec", "modules": ["RelaySocketModule"] },
+  "android": { "modules": ["expo.modules.relaysocket.RelaySocketModule"] }
+}

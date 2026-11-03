@@ -1,4 +1,8 @@
-import type { DirectEndpoint, RemoteAuthorization } from '@cherrystudio/remote-protocol';
+import type {
+  DirectEndpoint,
+  RelayEndpoint,
+  RemoteAuthorization,
+} from '@cherrystudio/remote-protocol';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { createUpdateTimestamps } from './_columnHelpers';
@@ -17,6 +21,7 @@ export const desktopConnectionTable = sqliteTable('desktop_connection', {
     .$type<DirectEndpoint[]>()
     .notNull()
     .default([]),
+  relay: text('relay', { mode: 'json' }).$type<RelayEndpoint>(),
   grants: text({ mode: 'json' }).$type<RemoteAuthorization['grants']>().notNull(),
   status: text().$type<'needs-repair' | 'paired'>().notNull().default('paired'),
   lastFetchedAt: integer('last_fetched_at'),

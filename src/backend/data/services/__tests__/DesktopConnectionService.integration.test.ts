@@ -77,6 +77,30 @@ describe('DesktopConnectionService provider synchronization', () => {
     testDb.sqlite.close();
   });
 
+  it('persists Relay metadata with pairing, preserves it for old snapshots and clears it only explicitly', async () => {
+    const relay = { origin: 'https://RELAY.example.com:443/', targetId: 'a'.repeat(64) };
+    const current = await service.getRow(connectionId);
+    await service.savePair({ ...current, relay }, true, signal());
+    const paired = await service.getRow(connectionId);
+    expect(paired.relay).toEqual({ ...relay, origin: 'https://relay.example.com' });
+    await service.updateLearnedEndpoints(connectionId, [], paired, signal());
+    expect((await service.getRow(connectionId)).relay).toEqual(paired.relay);
+    await expect(
+      service.updateLearnedEndpoints(
+        connectionId,
+        [],
+        { ...paired, deviceId: 'replaced' },
+        signal(),
+        null,
+      ),
+    ).rejects.toThrow('Pairing changed');
+    expect((await service.getRow(connectionId)).relay).toEqual(paired.relay);
+    await service.updateLearnedEndpoints(connectionId, [], paired, signal(), null);
+    expect((await service.getRow(connectionId)).relay).toBeNull();
+    expect((await service.getRow(connectionId)).deviceId).toBe(current.deviceId);
+    expect((await service.getRow(connectionId)).grants).toEqual(current.grants);
+  });
+
   it('notifies connection observers after each committed write', async () => {
     const changed = jest.fn((_paths: readonly string[]) => testDb.sqlite.isTransaction);
     const unsubscribe = subscribeDataApiChanges(changed);

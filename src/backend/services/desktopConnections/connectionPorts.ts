@@ -1,4 +1,4 @@
-import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
+import type { DirectEndpoint, RelayEndpoint } from '@cherrystudio/remote-protocol';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 
@@ -50,6 +50,7 @@ export type PersistentDesktopConnection = {
 export type DesktopConnectionTarget = {
   desktopIdentity: string;
   endpoints: DirectEndpoint[];
+  relay?: RelayEndpoint | null;
 };
 export type DesktopBindingInvalidation = {
   connectionId: string;
