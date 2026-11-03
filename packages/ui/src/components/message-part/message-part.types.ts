@@ -18,6 +18,7 @@ export type MessagePartStatusProps = {
 };
 
 export type MessagePartReasoningProps = {
+  autoCollapseOnComplete?: boolean;
   children: ReactNode;
   /** Runs before a reader-initiated inline disclosure toggle. */
   onDisclosureToggle?: () => void;

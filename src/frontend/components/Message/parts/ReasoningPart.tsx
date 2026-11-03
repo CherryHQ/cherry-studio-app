@@ -1,6 +1,7 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { usePreference } from '@/frontend/data/hooks';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
@@ -13,6 +14,7 @@ type ReasoningPartProps = {
 
 export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
+  const [autoCollapseOnComplete] = usePreference('chat.reasoning.auto_collapse');
   const handleDisclosureToggle = useMessageListDisclosureToggle();
   const isThinking = isStreaming && part.state === 'streaming';
   const statusText = t(
@@ -28,6 +30,7 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
 
   return (
     <MessagePart.Reasoning
+      autoCollapseOnComplete={autoCollapseOnComplete}
       onDisclosureToggle={handleDisclosureToggle}
       state={isThinking ? 'running' : 'complete'}
       statusText={statusText}

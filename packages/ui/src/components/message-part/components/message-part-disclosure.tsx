@@ -1,5 +1,5 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import Animated, {
   ReduceMotion,
@@ -92,6 +92,7 @@ export function MessagePartProcess({
 }
 
 export function MessagePartReasoning({
+  autoCollapseOnComplete = false,
   children,
   onDisclosureToggle,
   state,
@@ -99,6 +100,16 @@ export function MessagePartReasoning({
   testID = 'reasoning',
 }: MessagePartReasoningProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const previousState = useRef(state);
+
+  useEffect(() => {
+    const didComplete = previousState.current === 'running' && state === 'complete';
+    previousState.current = state;
+    if (didComplete && autoCollapseOnComplete && isOpen) {
+      setIsOpen(false);
+    }
+  }, [autoCollapseOnComplete, isOpen, state]);
+
   const isRunning = state === 'running';
   const toggle = () => {
     onDisclosureToggle?.();
