@@ -804,6 +804,13 @@ callers never need grouping views. `Composer.Action` is the button shell every t
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
 
+`Composer.Input` accepts `submitOnReturn` and `onReturnSubmit`. When both are set, a single
+appended newline on a nonempty draft restores the previous value and calls the callback. Other
+edits remain text changes, including multiline pastes and list continuation. The caller connects
+the callback to its normal guarded submission path. An explicit newline action calls
+`inputRef.current.insertText('\n')`; it inserts at the native selection and bypasses Return
+submission, including at the end of the draft.
+
 `Composer.Dock` applies horizontal and safe-area insets and follows the keyboard. It floats above
 screen content by default. Use `layoutMode="flow"` when the parent should reserve its space through
 normal flex layout; this avoids measuring the dock back into React state. Pair the floating mode

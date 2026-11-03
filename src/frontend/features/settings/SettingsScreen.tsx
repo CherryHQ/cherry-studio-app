@@ -88,6 +88,13 @@ export default function SettingsScreen() {
               onPress={() => router.push('/settings/device-connections')}
             />
           </Section>
+          <Section title={t('settings.chatInput.title')}>
+            <Section.Item
+              label={t('settings.chatInput.title')}
+              onPress={() => router.push('/settings/chat-input')}
+              testID="settings-chat-input"
+            />
+          </Section>
           <Section>
             <Section.Item
               label={t('settings.data.title')}

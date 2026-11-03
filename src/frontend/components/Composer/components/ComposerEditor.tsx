@@ -13,14 +13,18 @@ export function ComposerEditor({
   children,
   compactAccessory,
   fieldStyle,
+  onReturnSubmit,
   placeholder,
+  submitOnReturn,
   testID,
 }: PropsWithChildren<{
   active: boolean;
   attachmentMode?: 'images' | 'text-only';
   compactAccessory?: ReactNode;
   fieldStyle?: StyleProp<TextStyle>;
+  onReturnSubmit?: () => void;
   placeholder?: string;
+  submitOnReturn?: boolean;
   testID: string;
 }>) {
   const { t } = useTranslation();
@@ -35,8 +39,10 @@ export function ComposerEditor({
       field={
         <ComposerField
           attachmentMode={attachmentMode}
+          onReturnSubmit={onReturnSubmit}
           placeholder={placeholder}
           style={fieldStyle}
+          submitOnReturn={submitOnReturn}
           testID={`${testID}-input`}
         />
       }

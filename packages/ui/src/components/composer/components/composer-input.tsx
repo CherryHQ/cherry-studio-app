@@ -1,5 +1,5 @@
 import { TextInputWrapper } from 'expo-paste-input';
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { useCSSVariable, useResolveClassNames } from 'uniwind';
@@ -8,6 +8,7 @@ import type { ComposerInputHandle, ComposerInputProps } from '../composer.types'
 import { useComposerActions, useComposerState } from '../hooks/use-composer-context';
 import { pasteWrapperStyle, textInputBoxStyle } from '../utils/composer-layout';
 import { composerTextStyle } from '../utils/composer-text-style/composer-text-style';
+import { isReturnSubmission } from '../utils/is-return-submission';
 import { useComposerEditorInput } from './composer-editor';
 
 const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
@@ -34,9 +35,11 @@ export function ComposerInput({
   onFocus,
   onLayout,
   onPaste,
+  onReturnSubmit,
   placeholder,
   ref,
   style,
+  submitOnReturn = false,
   testID,
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
@@ -57,8 +60,47 @@ export function ComposerInput({
     '--color-secondary',
   ]);
   const selectionColor = Platform.OS === 'ios' ? selectionTint : selectionBackground;
-  const fallbackRef = useRef<ComposerInputHandle | null>(null);
-  const inputRef = ref ?? fallbackRef;
+  const inputRef = useRef<ComposerInputHandle | null>(null);
+  const pendingNewlines = useRef(0);
+  useImperativeHandle(ref, (): ComposerInputHandle => {
+    // The child ref is attached before this imperative handle is created.
+    if (!submitOnReturn) return inputRef.current!;
+
+    return {
+      focus: () => inputRef.current?.focus(),
+      blur: () => inputRef.current?.blur(),
+      measure: (...args) => inputRef.current?.measure(...args),
+      measureInWindow: (...args) => inputRef.current?.measureInWindow(...args),
+      measureLayout: (...args) => inputRef.current?.measureLayout(...args),
+      setValue: (markdown) => inputRef.current?.setValue(markdown),
+      setSelection: (start, end) => inputRef.current?.setSelection(start, end),
+      toggleBold: () => inputRef.current?.toggleBold(),
+      toggleItalic: () => inputRef.current?.toggleItalic(),
+      toggleUnderline: () => inputRef.current?.toggleUnderline(),
+      toggleStrikethrough: () => inputRef.current?.toggleStrikethrough(),
+      toggleSpoiler: () => inputRef.current?.toggleSpoiler(),
+      toggleHeading: (level) => inputRef.current?.toggleHeading(level),
+      toggleUnorderedList: () => inputRef.current?.toggleUnorderedList(),
+      toggleOrderedList: () => inputRef.current?.toggleOrderedList(),
+      indentList: () => inputRef.current?.indentList(),
+      outdentList: () => inputRef.current?.outdentList(),
+      setLink: (url) => inputRef.current?.setLink(url),
+      insertLink: (text, url) => inputRef.current?.insertLink(text, url),
+      insertText(text) {
+        // An explicit newline action uses the native cursor insertion path too,
+        // but its change event must remain an edit even at the end of the draft.
+        if (text === '\n') pendingNewlines.current += 1;
+        inputRef.current?.insertText(text);
+      },
+      insertMention: (displayText, url) => inputRef.current?.insertMention(displayText, url),
+      startMention: (indicator) => inputRef.current?.startMention(indicator),
+      removeLink: () => inputRef.current?.removeLink(),
+      copyToClipboard: () => inputRef.current?.copyToClipboard(),
+      getMarkdown: () => inputRef.current?.getMarkdown() ?? Promise.resolve(''),
+      getCaretRect: () =>
+        inputRef.current?.getCaretRect() ?? Promise.resolve({ x: 0, y: 0, width: 0, height: 0 }),
+    };
+  }, [submitOnReturn]);
   // The field is uncontrolled — it owns its own text and we mirror it out. This
   // records what it last told us so the sync below can tell a value that came
   // back from the field from one the caller pushed in.
@@ -79,10 +121,21 @@ export function ComposerInput({
 
   const handleChangeMarkdown = useCallback(
     (markdown: string) => {
+      const isInsertedNewline = pendingNewlines.current > 0;
+      if (isInsertedNewline) pendingNewlines.current -= 1;
+      if (
+        !isInsertedNewline &&
+        onReturnSubmit &&
+        isReturnSubmission(emitted.current, markdown, submitOnReturn)
+      ) {
+        inputRef.current?.setValue(emitted.current);
+        onReturnSubmit();
+        return;
+      }
       emitted.current = markdown;
       changeText(markdown);
     },
-    [changeText],
+    [changeText, onReturnSubmit, submitOnReturn],
   );
 
   // Pushes a caller-side change — send clearing the draft, a failed send
@@ -96,6 +149,7 @@ export function ComposerInput({
     }
 
     emitted.current = value;
+    pendingNewlines.current = 0;
     inputRef.current?.setValue(value);
   }, [inputRef, value]);
 

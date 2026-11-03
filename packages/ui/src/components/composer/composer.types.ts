@@ -113,6 +113,9 @@ export type ComposerInputProps = {
    * too, already handled by the field. Callers filter for what they want.
    */
   onPaste?: (payload: PasteEventPayload) => void;
+  /** Submit only for a single appended newline; imperative insertText remains an edit. */
+  submitOnReturn?: boolean;
+  onReturnSubmit?: () => void;
   placeholder?: string;
   /**
    * A ref object, not a callback ref — the underlying input only accepts the

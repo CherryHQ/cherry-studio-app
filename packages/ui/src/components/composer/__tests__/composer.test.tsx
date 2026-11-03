@@ -1,9 +1,10 @@
-import { createRef, useLayoutEffect } from 'react';
+import { createRef, useLayoutEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
+import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Composer } from '../components/composer';
-import type { ComposerInputHandle, ComposerProps } from '../composer.types';
+import type { ComposerInputHandle, ComposerInputProps, ComposerProps } from '../composer.types';
 
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
 
@@ -259,6 +260,95 @@ describe('Composer', () => {
 
     expect(input.props.style).toEqual(expect.objectContaining({ color: '#111827', fontSize: 16 }));
   });
+
+  function renderReturnInput(submitOnReturn: boolean) {
+    const inputRef = createRef<ComposerInputHandle>();
+    const onReturnSubmit = jest.fn();
+    const onChangeText = jest.fn();
+    function Harness() {
+      const [value, setValue] = useState('');
+      return (
+        <Composer
+          onChangeText={(next) => {
+            onChangeText(next);
+            setValue(next);
+          }}
+          onSend={jest.fn()}
+          value={value}
+        >
+          <Composer.Input
+            onReturnSubmit={onReturnSubmit}
+            ref={inputRef}
+            submitOnReturn={submitOnReturn}
+          />
+        </Composer>
+      );
+    }
+    act(() => {
+      renderer = create(<Harness />);
+    });
+    const edit = (next: string) =>
+      act(() => renderer!.root.findByType(TextInput).props.onChangeText(next));
+    return { edit, inputRef, onChangeText, onReturnSubmit };
+  }
+
+  it('submits Return after typing and restores the native draft before the callback', async () => {
+    const { edit, inputRef, onChangeText, onReturnSubmit } = renderReturnInput(true);
+    let nativeDraft: Promise<string> | undefined;
+    onReturnSubmit.mockImplementation(() => {
+      nativeDraft = inputRef.current!.getMarkdown();
+    });
+    edit('abc');
+    edit('abc\n');
+
+    expect(onReturnSubmit).toHaveBeenCalledTimes(1);
+    expect(onChangeText.mock.calls).toEqual([['abc']]);
+    expect(await nativeDraft).toBe('abc');
+    expect(renderer!.root.findByType(TextInput).props.value).toBe('abc');
+    // The rejected newline did not advance the previous emitted value.
+    edit('abc\n');
+    expect(onReturnSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the newline as text when Return submission is disabled', async () => {
+    const { edit, inputRef, onChangeText, onReturnSubmit } = renderReturnInput(false);
+    edit('abc');
+    edit('abc\n');
+
+    expect(onReturnSubmit).not.toHaveBeenCalled();
+    expect(onChangeText).toHaveBeenLastCalledWith('abc\n');
+    expect(await inputRef.current!.getMarkdown()).toBe('abc\n');
+  });
+
+  it('keeps a multiline paste without submitting', async () => {
+    const { edit, inputRef, onReturnSubmit } = renderReturnInput(true);
+    edit('abc');
+    edit('abc\npasted\ntext');
+
+    expect(onReturnSubmit).not.toHaveBeenCalled();
+    expect(await inputRef.current!.getMarkdown()).toBe('abc\npasted\ntext');
+  });
+
+  it.each(['abc\n', 'ab\nc'])(
+    'keeps an explicit newline insertion (%j), then submits the next keyboard Return',
+    async (inserted) => {
+      const { edit, inputRef, onReturnSubmit } = renderReturnInput(true);
+      edit('abc');
+      // The native mock exposes insertText as a spy but leaves cursor editing to
+      // its caller. Deliver the resulting native change through the normal field.
+      const nativeRef = renderer!.root.findByType(EnrichedMarkdownTextInput).props
+        .ref as ComposerInputProps['ref'];
+      act(() => inputRef.current!.insertText('\n'));
+      expect(nativeRef!.current!.insertText).toHaveBeenCalledWith('\n');
+      edit(inserted);
+
+      expect(onReturnSubmit).not.toHaveBeenCalled();
+      expect(await inputRef.current!.getMarkdown()).toBe(inserted);
+      edit(`${inserted}\n`);
+      expect(onReturnSubmit).toHaveBeenCalledTimes(1);
+      expect(await inputRef.current!.getMarkdown()).toBe(inserted);
+    },
+  );
 
   // The field owns its own buffer, so a caller-side value has to be pushed into
   // it. Send clearing the draft is the case this exists for.

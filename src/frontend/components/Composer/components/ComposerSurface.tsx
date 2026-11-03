@@ -1,5 +1,13 @@
 import { Composer, useComposerExpansion, useToast } from '@cherrystudio/ui/components';
-import { type PropsWithChildren, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import {
+  createContext,
+  type PropsWithChildren,
+  use,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -18,6 +26,14 @@ import {
 } from '../utils/composerAttachments';
 
 const logger = loggerService.withContext('ComposerSurface');
+const ComposerSubmitContext = createContext<(() => Promise<void>) | null>(null);
+
+/** The same guarded submission used by the surface's send button. */
+export function useComposerSubmit() {
+  const submit = use(ComposerSubmitContext);
+  if (!submit) throw new Error('useComposerSubmit must be rendered inside a ComposerSurface');
+  return submit;
+}
 
 export type ComposerSendPayload = {
   attachments: readonly ComposerAttachmentReady[];
@@ -78,11 +94,16 @@ export function ComposerSurface({
     setDraft,
   } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
+  const isSendable =
+    !isSubmitting &&
+    !hasImportingComposerAttachments(attachments) &&
+    (canSend ?? hasComposerSendableContent(draft, attachments));
+  const canReturnSubmit = isSendable && !streaming;
   // The composer's actions must not change with what was typed (see CherryUI's `Composer`), and
   // callers rebuild their handlers on every update, so the handlers read these when invoked.
-  const latest = useRef({ attachments, draft, onSend, onStop });
+  const latest = useRef({ attachments, canReturnSubmit, draft, onSend, onStop });
   useLayoutEffect(() => {
-    latest.current = { attachments, draft, onSend, onStop };
+    latest.current = { attachments, canReturnSubmit, draft, onSend, onStop };
   });
 
   const handleSend = useCallback(async () => {
@@ -135,6 +156,9 @@ export function ComposerSurface({
     t,
     toast,
   ]);
+  const handleReturnSubmit = useCallback(async () => {
+    if (latest.current.canReturnSubmit) await handleSend();
+  }, [handleSend]);
   const handleStop = useCallback(() => latest.current.onStop(), []);
   const sendLabel = labels?.send ?? t('chat.input.action.sendMessage');
   const stopLabel = labels?.stop ?? t('chat.input.action.stopGenerating');
@@ -144,21 +168,19 @@ export function ComposerSurface({
   );
 
   return (
-    <Composer
-      canSend={
-        !isSubmitting &&
-        !hasImportingComposerAttachments(attachments) &&
-        (canSend ?? hasComposerSendableContent(draft, attachments))
-      }
-      labels={composerLabels}
-      onChangeText={editDraft}
-      onSend={handleSend}
-      onStop={handleStop}
-      streaming={streaming}
-      testID={testID}
-      value={draft}
-    >
-      {children}
-    </Composer>
+    <ComposerSubmitContext value={handleReturnSubmit}>
+      <Composer
+        canSend={isSendable}
+        labels={composerLabels}
+        onChangeText={editDraft}
+        onSend={handleSend}
+        onStop={handleStop}
+        streaming={streaming}
+        testID={testID}
+        value={draft}
+      >
+        {children}
+      </Composer>
+    </ComposerSubmitContext>
   );
 }

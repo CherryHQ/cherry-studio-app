@@ -45,9 +45,13 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
     as it follows keyboard opening, then detaches when closing finishes. If the keyboard is
     already hidden, it detaches immediately. Only a new field focus reconnects it. Chat enables
     this behavior; its list does not dismiss the keyboard again.
+- `useComposerSubmit` — returns a guarded entry to that same send protocol for field Return
+  submission. It respects sendability and pending submissions, and never invokes Stop. Chat admits
+  drafted follow-ups through the ordinary queue path while the current answer streams.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
   shared editing state. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
+  It also forwards `submitOnReturn` and `onReturnSubmit`; `ComposerEditor` exposes the same props.
   Plugin and Skill references use the link color and stay inline at the field's font size. The
   native formatter marks their text range with the `com.cherryai.composer-mention-icon` attribute;
   the paste wrapper excludes marked ranges from media extraction while continuing to import real
