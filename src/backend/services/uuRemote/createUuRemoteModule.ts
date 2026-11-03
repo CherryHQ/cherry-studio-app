@@ -10,6 +10,7 @@ import {
   type UuRemoteTarget,
   type UuRemoteWindowMode,
 } from '@/shared/contracts/uuRemote';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { uuRemoteStorage, type UuRemotePending, type UuRemoteStorage } from './uuRemoteStorage';
 
@@ -93,6 +94,11 @@ export function createUuRemoteModule({
 
   return {
     module: {
+      getBinding: (connectionId) =>
+        serialize(async () => {
+          const deviceId = await storage.readBinding(connectionId);
+          return deviceId ? { displayId: sha256HexOfText(deviceId).slice(0, 8) } : null;
+        }),
       open: (target, mode = 'pip') =>
         serialize<'opened' | 'binding-required'>(async () => {
           await assertAvailable(target);

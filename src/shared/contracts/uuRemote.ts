@@ -38,6 +38,8 @@ export type UuRemoteResult = { target: UuRemoteTarget } & (
 );
 
 export interface UuRemoteModule {
+  /** A short fingerprint for display; the encrypted UU identifier stays in secure storage. */
+  getBinding(connectionId: string): Promise<{ displayId: string } | null>;
   /** Defaults to PiP. Fullscreen launches UU without a result callback or automatic return. */
   open(target: UuRemoteTarget, mode?: UuRemoteWindowMode): Promise<'opened' | 'binding-required'>;
   /** The user must select the corresponding computer in UU; the protocol cannot verify its name. */

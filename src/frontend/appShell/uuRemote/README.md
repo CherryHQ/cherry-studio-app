@@ -5,7 +5,10 @@ computer is selected. It uses the existing plain menu rows without group separat
 icon. `useUuRemoteAction` reuses the installation guidance and association flow: first use lets the
 user choose the corresponding Windows/macOS computer in UU Remote, then opens its desktop in
 picture in picture. Subsequent presses open PiP directly. Device details retain reassociation when
-the user chose the wrong computer or changed UU accounts.
+the user chose the wrong computer or changed UU accounts. The association row shows the saved
+binding's short fingerprint, or an unlinked state. UU does not return a device name; the fingerprint
+only distinguishes saved binding identifiers and does not verify the physical computer. Binding
+and invalid-binding callbacks refresh this display through the shared query cache.
 
 When PiP is unavailable, the existing alert offers an explicit full-screen launch in UU Remote.
 The user can cancel and stay in Cherry. If association is still needed, the pending binding retains

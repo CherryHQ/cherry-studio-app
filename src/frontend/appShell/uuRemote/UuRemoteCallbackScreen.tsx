@@ -1,11 +1,12 @@
 import { ContentState } from '@cherrystudio/ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { clearInitialURL, useLinkingURL } from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
-import { useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { UuRemoteError } from '@/shared/contracts/uuRemote';
 
 import { useUuRemoteAction } from './useUuRemoteAction';
@@ -14,6 +15,7 @@ import { useUuRemoteAction } from './useUuRemoteAction';
 export function UuRemoteCallbackScreen() {
   const url = useLinkingURL();
   const uuRemote = useBackendModule('uuRemote');
+  const queryClient = useQueryClient();
   const router = useRouter();
   const { t } = useTranslation();
   const { open, reportError } = useUuRemoteAction();
@@ -31,6 +33,14 @@ export function UuRemoteCallbackScreen() {
       .then(async (result) => {
         if (!result) return;
         const { target } = result;
+        if (
+          result.outcome === 'bound' ||
+          (result.outcome === 'failed' && result.reason === 'binding-invalid')
+        ) {
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.uuRemote.binding(target.connectionId),
+          });
+        }
         router.dismissTo(
           target.page === 'device'
             ? {
@@ -51,7 +61,7 @@ export function UuRemoteCallbackScreen() {
         }
       })
       .catch(reportError);
-  }, [url, uuRemote, router, open, reportError]);
+  }, [url, uuRemote, queryClient, router, open, reportError]);
 
   return <ContentState.Loading title={t('uuRemote.returning')} />;
 }
