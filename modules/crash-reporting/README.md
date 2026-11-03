@@ -43,7 +43,7 @@ implement its own crash recorder or upload protocol.
 - Android combines consent with Sentry's connection-status provider at the transport gate. Requests
   already handed to the network can finish; already transmitted data cannot be withdrawn.
 
-Sentry React Native 8.28.0 uses Cocoa 9.29.0 and Android 8.57.0. Cocoa ships only as a prebuilt
+Sentry React Native 8.33.0 uses Cocoa 9.32.0 and Android 8.62.0. Cocoa ships only as a prebuilt
 xcframework that RNSentry downloads; the podspec reads RNSentry's Cocoa version and reuses that
 xcframework's search paths, so iOS follows Sentry upgrades automatically. The Gradle dependency pins
 the Android version. Recheck the native APIs and update the Android pin when upgrading Sentry.

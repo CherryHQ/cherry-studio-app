@@ -202,6 +202,7 @@ function RemoteChatSession() {
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
   return (
+    // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider

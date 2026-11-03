@@ -11,12 +11,12 @@ const packageDirectory = dirname(
 // Guards delivery of the native fix; real download/cancel/delete acceptance needs a new APK.
 describe('Android offline model storage permissions', () => {
   test('registers the installed Expo Modules Core patch and its lockfile hash', () => {
-    const dependency = 'expo-modules-core@58.0.26';
+    const dependency = 'expo-modules-core@58.0.29';
     const patchPath = `patches/${dependency}.patch`;
     const hash = createHash('sha256').update(readFileSync(patchPath)).digest('hex');
 
     expect(JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8')).version).toBe(
-      '58.0.26',
+      '58.0.29',
     );
     expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(`${dependency}: ${patchPath}`);
     expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(`  ${dependency}: ${hash}\n`);
