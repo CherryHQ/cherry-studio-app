@@ -158,6 +158,8 @@ export function AgentEditor({
         key={agentId ?? 'new'}
         agent={agent}
         agentId={agentId}
+        hasServersError={Boolean(serversError)}
+        isServersLoading={areServersLoading}
         originalToolBindings={bindings}
         servers={servers}
         shouldStartChat={shouldStartChat}
@@ -201,6 +203,8 @@ function AgentEditorFrame({
 function AgentEditForm({
   agent,
   agentId,
+  hasServersError,
+  isServersLoading,
   originalToolBindings,
   servers,
   shouldStartChat,
@@ -210,6 +214,8 @@ function AgentEditForm({
   presentation: AgentEditorPresentation;
   agent: Agent | undefined;
   agentId?: string;
+  hasServersError: boolean;
+  isServersLoading: boolean;
   originalToolBindings: readonly AgentToolBinding[];
   servers: readonly McpServer[];
   shouldStartChat: boolean;
@@ -592,6 +598,8 @@ function AgentEditForm({
             {form.mode === 'standard' ? (
               <AgentToolsSection
                 bindings={toolBindings}
+                hasServersError={hasServersError}
+                isServersLoading={isServersLoading}
                 onChange={handleToolBindingsChange}
                 originalBindings={originalToolBindings}
                 readOnly
@@ -662,6 +670,8 @@ function AgentEditForm({
         {form.mode === 'standard' ? (
           <AgentToolsSection
             bindings={toolBindings}
+            hasServersError={hasServersError}
+            isServersLoading={isServersLoading}
             onChange={handleToolBindingsChange}
             originalBindings={originalToolBindings}
             servers={servers}

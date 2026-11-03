@@ -6,6 +6,7 @@ const SENSITIVE_ROUTE_PREFIXES = [
   '/settings/device-connections',
   '/plugins',
   '/oauth',
+  '/uu-remote',
 ];
 
 export function canCaptureFeedbackRoute(pathname: string): boolean {

@@ -38,6 +38,7 @@ import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
+import { UuRemoteCallbackBridge } from '@/frontend/appShell/uuRemote';
 import { MermaidRendererHost } from '@/frontend/components/MermaidDiagram';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -81,6 +82,7 @@ function RootLayout() {
                                         <BackgroundActivityBridge />
                                         <LanguagePreferenceObserver />
                                         <SystemEntryBridge />
+                                        <UuRemoteCallbackBridge />
                                         {/* Before the navigator, so opaque screens cover the renderer page. */}
                                         <MermaidRendererHost />
                                         <FeedbackCaptureProvider>
@@ -183,6 +185,7 @@ function RootStack() {
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
       <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
+      <Stack.Screen name="uu-remote/callback" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen
         name="document-export"
         options={{

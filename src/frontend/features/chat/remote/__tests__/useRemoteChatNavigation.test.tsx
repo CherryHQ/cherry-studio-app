@@ -48,6 +48,57 @@ afterEach(async () => {
   renderer = undefined!;
 });
 
+it.each([{ connectionId: 'desktop' }, draft])(
+  'restores the same composer from the shared sidebar route after a fresh mount: %j',
+  async (target) => {
+    await render(target);
+    const identity = navigation.identity;
+    const draftId = navigation.draftId;
+    const returnTarget: RemoteChatTarget = JSON.parse(
+      JSON.stringify({ ...target, ...mockSetParams.mock.lastCall?.[0] }),
+    );
+    expect(returnTarget.draftId).toBe(draftId);
+    await render(returnTarget);
+    expect(navigation.identity).toBe(identity);
+    mockSetParams.mockClear();
+
+    await act(async () => renderer.unmount());
+    renderer = undefined!;
+    await render(returnTarget);
+
+    expect(navigation.identity).toBe(identity);
+    expect(navigation.draftId).toBe(draftId);
+    expect(returnTarget.connectionId).toBe(target.connectionId);
+    expect(mockOpen).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
+  },
+);
+
+it('returns to an existing session without carrying an obsolete draft identity', async () => {
+  const target = { ...draft, sessionId: 'existing' };
+  await render(target);
+  const returnTarget: RemoteChatTarget = JSON.parse(
+    JSON.stringify({ ...target, ...mockSetParams.mock.lastCall?.[0] }),
+  );
+  expect(returnTarget).toEqual({ connectionId: 'desktop', agentId: 'a', sessionId: 'existing' });
+
+  await act(async () => renderer.unmount());
+  renderer = undefined!;
+  await render(returnTarget);
+  expect(navigation.identity).toBe('session:existing');
+});
+
+it('publishes an implicit draft only while its chat route is focused', async () => {
+  mockFocused = false;
+  await render({ connectionId: 'desktop' });
+  const draftId = navigation.draftId;
+  expect(mockSetParams).not.toHaveBeenCalled();
+
+  mockFocused = true;
+  await render({ connectionId: 'desktop' });
+  expect(mockSetParams).toHaveBeenLastCalledWith({ draftId });
+});
+
 it('retargets an unsent draft without changing its composer or desktop identity', async () => {
   await render(draft);
   const identity = navigation.identity;

@@ -3,9 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-type TextMessagePart = Extract<CherryMessagePart, { type: 'text' }>;
-
 import { TextPart } from '../TextPart';
+
+type TextMessagePart = Extract<CherryMessagePart, { type: 'text' }>;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   ContextMenuExclusion: (props: object) =>

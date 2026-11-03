@@ -180,19 +180,20 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         settings: () => ({
           followUpMode: 'one-at-a-time',
           afterFailedRun: 'continue',
+          progress: { persistWithinMs: 0 },
           compaction: { modelOverrides: this.models.compactionOverrides },
         }),
         identity: cherryClientIdentity(),
-        onReport: (error, info) => {
+        onReport: (report) => {
           logger.warn('Pi durable runtime reported a failure', {
-            error,
-            operation: `pi.${info.type}`,
-            ...('task' in info && info.task
-              ? { taskId: Number(info.task.id), taskKind: info.task.kind }
+            error: report.error,
+            operation: `pi.${report.kind}`,
+            ...('task' in report && report.task
+              ? { taskId: Number(report.task.id), taskKind: report.task.kind }
               : {}),
-            ...('reason' in info ? { reasonCode: info.reason } : {}),
-            ...('extension' in info ? { extension: info.extension } : {}),
-            ...('callback' in info ? { callback: info.callback } : {}),
+            ...('reason' in report ? { reasonCode: report.reason } : {}),
+            ...('extension' in report ? { extension: report.extension } : {}),
+            ...('callback' in report ? { callback: report.callback } : {}),
           });
         },
       });
@@ -200,7 +201,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       const opened = this.runtime;
       void opened.closed
         .then((end) => {
-          if (end.reason !== 'failed' || this.runtime !== opened) return;
+          if (end.kind !== 'failed' || this.runtime !== opened) return;
           logger.error('Pi storage session closed after a failure', { error: end.error });
           ports.onFailure?.({
             code: 'runtime_storage_failed',
@@ -265,7 +266,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async watchWork(listener: (active: boolean) => void) {
     const watch = await this.requireRuntime().watchWork();
     const active = hasRunnablePiTasks(watch.value);
-    watch.start(async (value) => listener(hasRunnablePiTasks(value)));
+    watch.start(async (call) => {
+      if (call.kind === 'value') listener(hasRunnablePiTasks(call.value));
+    });
     let observing = true;
     void watch.closed.then(() => {
       if (observing) listener(false);
@@ -927,7 +930,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   private async taskIdentity(
     lane: RuntimeLane,
-    api: HookApi,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
     context: Context,
   ): Promise<RuntimeExecutionIdentity> {
     const inputs = await this.requireRuntime().inputsForTask(api, context);

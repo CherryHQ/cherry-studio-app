@@ -118,13 +118,7 @@ describe('Pi React Native patches', () => {
         .filter((file) => file.startsWith(`${aiDist}/auth/`))
         .map((file) => file.slice(aiDist.length + 1))
         .sort(),
-    ).toEqual([
-      'auth/context.native.js',
-      'auth/credential-store.js',
-      'auth/helpers.js',
-      'auth/resolve.js',
-      'auth/types.js',
-    ]);
+    ).toEqual(['auth/context.native.js', 'auth/credential-store.js', 'auth/resolve.js']);
     for (const [file, source] of graph) {
       expect({ file, wasmImport: /(?:from|import)\s*["']quickjs-wasi/.test(source) }).toEqual({
         file,

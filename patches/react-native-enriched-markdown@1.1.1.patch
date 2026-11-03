@@ -2637,3 +2637,27 @@ index b6d98e88b5d2c1ea76d622326e01bfb3118f96a6..671abdbeec78838bbf2ce3cff092dda8
    backgroundColor: string;
    borderColor: string;
    borderRadius: number;
+diff --git a/vendor-grammars.mjs b/vendor-grammars.mjs
+--- a/vendor-grammars.mjs
++++ b/vendor-grammars.mjs
+@@ -505,5 +505,20 @@
+     }
+   }
+ 
++  // Android ARM targets use unsigned plain char. Preserve the -1 failure status,
++  // including when an earlier install left an otherwise up-to-date grammar cache.
++  if (requested.includes('yaml')) {
++    const scannerFile = path.join(vendorOut, 'grammars/yaml/scanner.c');
++    const original = fs.readFileSync(scannerFile, 'utf8');
++    let scanner = original;
++    for (const name of ['scn_uri_esc', 'scn_ns_uri_char', 'scn_ns_tag_char']) {
++      scanner = scanner.replace(`static char ${name}(`, `static int ${name}(`);
++      if (!scanner.includes(`static int ${name}(`)) {
++        fail(`yaml: unexpected status signature for ${name}; review the signed-status patch`);
++      }
++    }
++    if (scanner !== original) fs.writeFileSync(scannerFile, scanner);
++  }
++
+   log('done.');
+ }
