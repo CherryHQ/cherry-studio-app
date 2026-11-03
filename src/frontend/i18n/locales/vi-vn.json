@@ -1843,6 +1843,8 @@
   "settings.provider.account.authorizationCode": "Mã cấp quyền hoặc URL chuyển hướng",
   "settings.provider.account.authorizationCodeHint": "Sau khi cấp quyền, dán URL chuyển hướng cuối cùng hoặc mã vào đây.",
   "settings.provider.account.deviceCode": "Mã xác minh",
+  "settings.provider.account.deviceCodeCopied": "Đã sao chép mã xác minh",
+  "settings.provider.account.deviceCodeCopyFailed": "Không thể sao chép mã xác minh. Vui lòng thử lại.",
   "settings.provider.account.deviceCodeHint": "Sao chép mã này, mở trình duyệt và quay lại đây sau khi cấp quyền.",
   "settings.provider.account.enterpriseDomain": "Tên miền GitHub Enterprise",
   "settings.provider.account.enterpriseDomainHint": "Ví dụ: company.ghe.com",

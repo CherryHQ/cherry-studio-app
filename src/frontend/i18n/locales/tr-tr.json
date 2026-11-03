@@ -1860,6 +1860,8 @@
   "settings.provider.account.authorizationCode": "Yetkilendirme kodu veya yönlendirme URL’si",
   "settings.provider.account.authorizationCodeHint": "Yetkilendirmeden sonra son yönlendirme URL’sini veya kodu buraya yapıştırın.",
   "settings.provider.account.deviceCode": "Doğrulama kodu",
+  "settings.provider.account.deviceCodeCopied": "Doğrulama kodu kopyalandı",
+  "settings.provider.account.deviceCodeCopyFailed": "Doğrulama kodu kopyalanamadı. Lütfen tekrar deneyin.",
   "settings.provider.account.deviceCodeHint": "Bu kodu kopyalayın, tarayıcıyı açın ve yetkilendirmeden sonra buraya dönün.",
   "settings.provider.account.enterpriseDomain": "GitHub Enterprise alan adı",
   "settings.provider.account.enterpriseDomainHint": "ör. company.ghe.com",

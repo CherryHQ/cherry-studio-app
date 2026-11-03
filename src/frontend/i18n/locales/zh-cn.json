@@ -1843,6 +1843,8 @@
   "settings.provider.account.authorizationCode": "授权码或跳转地址",
   "settings.provider.account.authorizationCodeHint": "在浏览器完成授权后，粘贴最终跳转地址或授权码。",
   "settings.provider.account.deviceCode": "验证码",
+  "settings.provider.account.deviceCodeCopied": "验证码已复制",
+  "settings.provider.account.deviceCodeCopyFailed": "无法复制验证码，请重试。",
   "settings.provider.account.deviceCodeHint": "复制此验证码，在浏览器中完成授权后返回此处。",
   "settings.provider.account.enterpriseDomain": "GitHub Enterprise 域名",
   "settings.provider.account.enterpriseDomainHint": "例如 company.ghe.com",

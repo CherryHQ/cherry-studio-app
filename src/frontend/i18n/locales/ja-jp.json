@@ -1843,6 +1843,8 @@
   "settings.provider.account.authorizationCode": "認証コードまたはリダイレクト URL",
   "settings.provider.account.authorizationCodeHint": "認証後、最後のリダイレクト URL またはコードをここに貼り付けてください。",
   "settings.provider.account.deviceCode": "確認コード",
+  "settings.provider.account.deviceCodeCopied": "確認コードをコピーしました",
+  "settings.provider.account.deviceCodeCopyFailed": "確認コードをコピーできませんでした。もう一度お試しください。",
   "settings.provider.account.deviceCodeHint": "このコードをコピーし、ブラウザーで認証を完了してからここに戻ってください。",
   "settings.provider.account.enterpriseDomain": "GitHub Enterprise のドメイン",
   "settings.provider.account.enterpriseDomainHint": "例: company.ghe.com",
