@@ -55,3 +55,47 @@ describe('classifyAgentFailureReason', () => {
     ).toBe('region');
   });
 });
+
+describe('structured safety evidence', () => {
+  test.each(
+    [
+      'content_filter_results',
+      'content_policy_metadata',
+      'prohibited_content_info',
+      'responsible_ai_metadata',
+      'output_blocked_metadata',
+      'blocked by safety',
+      'recitation_metadata',
+    ].flatMap((text) =>
+      (['name', 'message', 'responseBody'] as const).map((field) => ({ text, field })),
+    ),
+  )('does not infer safety from $field: $text', ({ text, field }) => {
+    expect(classifyAgentFailureReason({ message: 'Request failed', [field]: text })).not.toBe(
+      'content_filter',
+    );
+  });
+
+  test.each(['content-filter', 'content_filter', 'safety', 'recitation'])(
+    'recognizes the exact structured finish %s',
+    (finishReason) => {
+      expect(classifyAgentFailureReason({ message: 'Request failed', finishReason })).toBe(
+        'content_filter',
+      );
+    },
+  );
+
+  test('recognizes an explicit safety code', () => {
+    expect(classifyAgentFailureReason({ code: 'content_filter', message: 'Request failed' })).toBe(
+      'content_filter',
+    );
+  });
+
+  test.each(['content_filter_results', 'OTHER', 'private safety description'])(
+    'rejects near-match code and finish %s',
+    (value) => {
+      expect(classifyAgentFailureReason({ code: value, finishReason: value, message: '' })).toBe(
+        'unknown',
+      );
+    },
+  );
+});

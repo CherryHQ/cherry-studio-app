@@ -49,13 +49,15 @@ Current producers are:
 
 Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
 `error.category`, the product `AiFailureReason` that `classifyAiFailureReason` derives from the
-structured code and status alone. Messages are not used to guess a category. Provider codes the
-product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
+structured code, status, and exact safety finish reason. Messages are not used to guess a category.
+Provider codes the product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
 `piModelDiagnostics.ts`. A 4xx status without a product reason is `unknown`; `http.status_code`
 keeps the status. Final `ai.turn_state` failures also retain `error.product_reason` from the existing
 product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper,
-and available source name/origin/status. The product reason may have been inferred from the
-caller-visible message; it is distinct from the request's structured-only `error.category`.
+and available source name/origin/status. Normal-chat terminal provider failures consume one
+structured decision in `piModelDiagnostics.ts` for both the product reason and generation category.
+Other consumers keep their own policy: the product reason may have been inferred from the
+caller-visible message and can differ from the request's structured-only `error.category`.
 Only the closed reason is copied, never the message or response body.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.

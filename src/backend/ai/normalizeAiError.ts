@@ -36,7 +36,7 @@ function sanitizeErrorText(value: string, secrets: readonly string[], maxChars: 
   return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
 }
 
-function readErrorStatus(record: Record<string, unknown> | undefined): number | undefined {
+export function readAiErrorStatus(record: Record<string, unknown> | undefined): number | undefined {
   const value = record?.statusCode ?? record?.status;
   const status =
     typeof value === 'number'
@@ -99,7 +99,7 @@ export function normalizeAiError(
         ? record.name
         : undefined;
   const name = nameValue ? sanitizeErrorText(nameValue, secrets, 256) : undefined;
-  const statusCode = readErrorStatus(record);
+  const statusCode = readAiErrorStatus(record);
   const finishReason =
     typeof record?.finishReason === 'string'
       ? sanitizeErrorText(record.finishReason, secrets, 256)

@@ -1,4 +1,4 @@
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import { AgentMessageViewSchema, type AgentMessageView } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
@@ -973,3 +973,39 @@ test('settled and pending quote-only metadata survives the conditional display p
   const part = toAgentMessageListItem(source)?.data.parts?.[0];
   expect(part?.type === 'text' && readCherryMeta(part)).toMatchObject(fields);
 });
+
+test.each(['content_filter', 'unknown', undefined] as const)(
+  'restores stored reason %s and classifies historical metadata without a snapshot',
+  (reasonCode) => {
+    const row = message('stored-failure', {
+      status: 'error',
+      parts: [
+        {
+          id: 'failure',
+          type: 'data-error',
+          data: {
+            code: 'EXECUTION_FAILED',
+            message: 'content_filter_results: filtered false',
+            retryable: true,
+            ...(reasonCode
+              ? {
+                  failure: {
+                    version: 1,
+                    reasonCode,
+                    source: { layer: 'provider', code: 'provider_error' },
+                  },
+                }
+              : {}),
+          },
+        },
+      ],
+    });
+    const restored = AgentMessageViewSchema.parse(JSON.parse(JSON.stringify(row)));
+    expect(toAgentMessageListItem(restored)?.data.parts).toEqual([
+      expect.objectContaining({
+        type: 'data-error',
+        data: expect.objectContaining({ reasonCode: reasonCode ?? 'unknown', retryable: true }),
+      }),
+    ]);
+  },
+);

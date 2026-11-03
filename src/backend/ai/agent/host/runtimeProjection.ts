@@ -16,7 +16,7 @@ import { createAiFailure } from '@/shared/utils/createAiFailure';
 import type { RuntimeApproval, RuntimeError, RuntimeOutputPart } from '../runtime';
 
 export function toAgentErrorView(error: RuntimeError): AgentErrorView {
-  return { code: 'EXECUTION_FAILED', ...createAiFailure(error) };
+  return { code: 'EXECUTION_FAILED', ...createAiFailure(error, error.reasonCode) };
 }
 
 export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {

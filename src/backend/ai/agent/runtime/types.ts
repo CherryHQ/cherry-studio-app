@@ -1,3 +1,4 @@
+import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 import type {
   FileAttachmentContent,
   FileAttachmentReport,
@@ -464,6 +465,8 @@ export type RuntimeError = {
   origin?: 'provider' | 'runtime' | 'host' | 'tool';
   name?: string;
   context?: RuntimeErrorContext;
+  /** Computed by the application after normalization, never copied from an upstream error. */
+  reasonCode?: AiFailureReason;
 };
 
 export type RuntimeEvent =

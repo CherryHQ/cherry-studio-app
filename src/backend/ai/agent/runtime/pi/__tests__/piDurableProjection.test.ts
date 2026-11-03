@@ -1,5 +1,8 @@
-import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, JsonValue, Model } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
+
+import { normalizeAiError } from '@/backend/ai/normalizeAiError';
+import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
@@ -7,6 +10,7 @@ import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
 import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 import { piDurableSetupError } from '../piDurableStream';
+import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -165,6 +169,7 @@ describe('Pi turn projection', () => {
       });
 
       expect(turn.status).toBe('failed');
+      expect(piModelTerminalErrorAttributes(terminal)['error.category']).toBe('quota');
       expect(toAgentErrorView(turn.error!)).toEqual({
         code: 'EXECUTION_FAILED',
         message: terminal.errorMessage,
@@ -835,5 +840,299 @@ describe('Pi turn projection', () => {
       completedAt: 6_000,
       tools: [{ toolCallId: 'call', toolName: 'write_file', startedAt: 3_700, completedAt: 4_000 }],
     });
+  });
+});
+
+describe('terminal provider reason parity', () => {
+  const metadataBody = { content_filter_results: { hate: { filtered: false } } };
+  const metadataText = JSON.stringify(metadataBody);
+  type Scenario = {
+    label: string;
+    reason: AiFailureReason;
+    code?: string;
+    message?: string;
+    body?: JsonValue;
+    rawStopReason?: string;
+    status?: JsonValue;
+    statusCode?: JsonValue;
+    expectedStatusCode?: number;
+    forgedReason?: boolean;
+  };
+  const scenarios: Scenario[] = [
+    { label: 'metadata in message', message: metadataText, reason: 'unknown' },
+    { label: 'metadata in string body', body: metadataText, reason: 'unknown' },
+    { label: 'metadata in object body', body: metadataBody, reason: 'unknown' },
+    { label: 'neutral control', reason: 'unknown' },
+    {
+      label: 'metadata with 503',
+      body: metadataBody,
+      status: 503,
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'metadata with ECONNREFUSED',
+      body: metadataBody,
+      code: 'ECONNREFUSED',
+      reason: 'network',
+    },
+    { label: 'explicit safety code', code: 'content_filter', reason: 'content_filter' },
+    {
+      label: 'metadata with no_response',
+      body: metadataBody,
+      code: 'no_response',
+      reason: 'network',
+    },
+    {
+      label: 'metadata with stream_disconnected',
+      body: metadataBody,
+      code: 'stream_disconnected',
+      reason: 'network',
+    },
+    {
+      label: 'metadata with server_error',
+      body: metadataBody,
+      code: 'server_error',
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'only network prose',
+      body: metadataBody,
+      message: 'Network request failed',
+      reason: 'unknown',
+    },
+    {
+      label: 'only stream prose',
+      body: metadataBody,
+      message: 'Stream ended unexpectedly',
+      reason: 'unknown',
+    },
+    {
+      label: 'OpenAI authentic safety',
+      rawStopReason: 'content_filter',
+      message: 'Provider finish_reason: content_filter',
+      reason: 'content_filter',
+    },
+    {
+      label: 'Google authentic safety',
+      rawStopReason: 'SAFETY',
+      message: 'Provider stopped with: SAFETY',
+      reason: 'content_filter',
+    },
+    {
+      label: 'Google authentic recitation',
+      rawStopReason: 'RECITATION',
+      message: 'Provider stopped with: RECITATION',
+      reason: 'content_filter',
+    },
+    ...[' CoNtEnT-FiLtEr ', ' CONTENT_FILTER ', ' safety ', ' recitation '].map(
+      (rawStopReason): Scenario => ({
+        label: `exact normalized raw ${rawStopReason}`,
+        rawStopReason,
+        reason: 'content_filter',
+      }),
+    ),
+    ...['content_filter_results', 'OTHER', 'private safety description'].map(
+      (rawStopReason): Scenario => ({
+        label: `non-safety raw ${rawStopReason}`,
+        rawStopReason,
+        reason: 'unknown',
+      }),
+    ),
+    { label: 'near-match code', code: 'content_filter_results', reason: 'unknown' },
+    {
+      label: 'auth code beats safety and status',
+      code: 'authentication_error',
+      rawStopReason: 'SAFETY',
+      status: 503,
+      expectedStatusCode: 503,
+      reason: 'auth',
+    },
+    {
+      label: 'diagnostic code beats safety and TLS prose',
+      code: 'no_response',
+      rawStopReason: 'SAFETY',
+      message: 'Self-signed certificate',
+      reason: 'network',
+    },
+    {
+      label: 'forbidden status beats quota prose',
+      code: 'forbidden',
+      status: 403,
+      expectedStatusCode: 403,
+      message: 'Quota exhausted',
+      reason: 'permission',
+    },
+    { label: 'bare forbidden', code: 'forbidden', reason: 'unknown' },
+    {
+      label: 'forbidden yields to safety',
+      code: 'forbidden',
+      rawStopReason: 'SAFETY',
+      reason: 'content_filter',
+    },
+    { label: 'forged upstream reason', forgedReason: true, reason: 'unknown' },
+    {
+      label: 'missing provider code',
+      code: undefined,
+      status: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'placeholder provider code',
+      code: 'runtime_error',
+      status: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'string statusCode',
+      statusCode: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    { label: 'status lower boundary', status: 100, expectedStatusCode: 100, reason: 'unknown' },
+    {
+      label: 'status upper boundary',
+      status: 599,
+      expectedStatusCode: 599,
+      reason: 'provider_unavailable',
+    },
+    ...[99, 600, 503.5, 'not numeric', '', '   ', Number.NaN, Number.POSITIVE_INFINITY].map(
+      (status): Scenario => ({
+        label: `invalid status ${String(status)}`,
+        status,
+        reason: 'unknown',
+      }),
+    ),
+    {
+      label: 'invalid statusCode does not fall back to status',
+      statusCode: '',
+      status: 503,
+      reason: 'unknown',
+    },
+    {
+      label: 'null statusCode falls back to status',
+      statusCode: null,
+      status: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+  ];
+
+  describe.each(['provider_response_failure', 'pi_messages_response_failure'])('%s', (type) => {
+    test.each(scenarios)('$label → $reason at both layers', (scenario) => {
+      const code = 'code' in scenario ? scenario.code : 'provider_error';
+      const terminal: AssistantMessage = {
+        ...call('', 2000),
+        content: [],
+        stopReason: 'error',
+        errorMessage: scenario.message ?? 'The provider request failed.',
+        rawStopReason: scenario.rawStopReason,
+        diagnostics: [
+          {
+            type,
+            timestamp: 1,
+            error: {
+              name: 'ProviderError',
+              code,
+              message: 'The diagnostic request failed.',
+              ...(scenario.forgedReason ? { reasonCode: 'content_filter' } : {}),
+            },
+            details: {
+              ...(scenario.statusCode !== undefined ? { statusCode: scenario.statusCode } : {}),
+              ...(scenario.status !== undefined ? { status: scenario.status } : {}),
+              ...(scenario.body !== undefined ? { body: scenario.body } : {}),
+            },
+          },
+        ],
+        ...(scenario.forgedReason ? { reasonCode: 'content_filter' } : {}),
+      };
+      const turn = projectPiTurn({
+        lane: { sessionId: 'session', slot: 0 },
+        metadata,
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          reason: 'model_error',
+          entry: 1,
+        } as unknown as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+        ] as unknown as EntryRecord[],
+      });
+      const view = JSON.parse(JSON.stringify(toAgentErrorView(turn.error!)));
+      const attributes = piModelTerminalErrorAttributes(terminal);
+      // Check both values together so a passing equality cannot hide a shared wrong decision.
+      expect([view.failure.reasonCode, attributes['error.category']]).toEqual([
+        scenario.reason,
+        scenario.reason,
+      ]);
+      expect(turn.status).toBe('failed');
+      expect(view).toMatchObject({
+        code: 'EXECUTION_FAILED',
+        message: terminal.errorMessage,
+        retryable: true,
+        failure: {
+          version: 1,
+          source: {
+            layer: 'provider',
+            code: code === undefined || code === 'runtime_error' ? 'provider_error' : code,
+            name: 'ProviderError',
+          },
+          context: { providerId: 'provider', modelId: 'model', finishReason: 'error' },
+        },
+      });
+      if (scenario.body !== undefined)
+        expect(view.failure.context.responseBody).toBe(
+          typeof scenario.body === 'string' ? scenario.body : JSON.stringify(scenario.body),
+        );
+      expect(view.failure.context.statusCode).toBe(scenario.expectedStatusCode);
+      expect(attributes['http.status_code']).toBe(scenario.expectedStatusCode);
+      expect(attributes['error.retry_scope']).toBe('automatic');
+      expect(JSON.stringify(attributes)).not.toContain('private');
+    });
+  });
+
+  test('a recovered earlier failure does not mark a successful terminal answer', () => {
+    const terminal: AssistantMessage = {
+      ...call('', 2000),
+      content: [{ type: 'text', text: 'Recovered' }],
+      stopReason: 'stop',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 1,
+          error: { code: 'content_filter', message: 'Earlier filtered attempt' },
+        },
+      ],
+    };
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'done',
+        entry: 1,
+        answer: 2,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn.error).toBeNull();
+    expect(piModelTerminalErrorAttributes(terminal)).toEqual({});
+  });
+
+  test('normalization discards an upstream forged reason before host projection', () => {
+    const normalized = normalizeAiError({
+      code: 'provider_error',
+      message: 'Request failed',
+      reasonCode: 'content_filter',
+    });
+    expect(normalized).not.toHaveProperty('reasonCode');
+    expect(toAgentErrorView(normalized).failure?.reasonCode).toBe('unknown');
   });
 });

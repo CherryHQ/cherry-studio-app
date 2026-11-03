@@ -36,6 +36,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
+import { readPiTerminalFailure } from './piModelDiagnostics';
 import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
@@ -317,18 +318,9 @@ export function projectPiTurn(options: {
       for (const key of Object.keys(billed) as (keyof RuntimeUsage)[])
         usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
-    if (message.stopReason === 'error') {
-      const diagnostic = message.diagnostics?.findLast(
-        (entry) =>
-          entry.type === 'provider_response_failure' ||
-          entry.type === 'pi_messages_response_failure',
-      );
-      // Stored diagnostics are normalized before commit, which fills a missing code with
-      // `runtime_error`; that placeholder does not describe a provider failure.
-      const code =
-        diagnostic?.error?.code === undefined || diagnostic.error.code === 'runtime_error'
-          ? 'provider_error'
-          : String(diagnostic.error.code);
+    const terminalFailure = readPiTerminalFailure(message);
+    if (terminalFailure) {
+      const { diagnostic, code, statusCode, reasonCode } = terminalFailure;
       const body = diagnostic?.details?.body;
       const imageTool =
         message.api === 'cherry-image'
@@ -338,15 +330,14 @@ export function projectPiTurn(options: {
           : undefined;
       // The image scheduling message carries no new provider response. Its tool receipt owns
       // the failure shown by the Host, including explicit-user-retry eligibility.
-      error =
-        (imageTool?.type === 'tool' ? imageTool.error : undefined) ??
-        normalizeAiError(
+      error = (imageTool?.type === 'tool' ? imageTool.error : undefined) ?? {
+        ...normalizeAiError(
           {
             code,
             name: diagnostic?.error?.name,
             message:
               message.errorMessage ?? diagnostic?.error?.message ?? 'The provider request failed.',
-            statusCode: diagnostic?.details?.statusCode ?? diagnostic?.details?.status,
+            statusCode,
             responseBody: typeof body === 'string' ? body : JSON.stringify(body),
             // This flag permits a user retry after correcting configuration or account limits.
             // Automatic retry is decided separately by Pi from the terminal diagnostic.
@@ -355,7 +346,9 @@ export function projectPiTurn(options: {
           },
           [],
           { providerId: message.provider, modelId: message.model },
-        );
+        ),
+        ...(message.api !== 'cherry-image' ? { reasonCode } : {}),
+      };
     }
     const web = readPiWebResult(message);
     // Anthropic splits one answer at every citation; the fragments are a single paragraph flow.

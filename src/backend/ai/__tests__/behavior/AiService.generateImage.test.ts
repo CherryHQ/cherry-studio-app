@@ -321,6 +321,65 @@ describe('AiService.generateImage AI SDK contract', () => {
     expect(JSON.stringify(error)).not.toContain('contract-key');
   });
 
+  test.each([
+    {
+      label: 'incidental metadata',
+      facts: { responseBody: '{"content_filter_results":{"filtered":false}}' },
+      reason: 'unknown',
+    },
+    { label: 'explicit filter code', facts: { code: 'content_filter' }, reason: 'content_filter' },
+    {
+      label: 'structured filter finish',
+      facts: { finishReason: 'safety' },
+      reason: 'content_filter',
+    },
+    { label: 'forged reason', facts: { reasonCode: 'content_filter' }, reason: 'unknown' },
+    {
+      label: 'prose request classification',
+      facts: { message: 'Quota exhausted' },
+      reason: 'quota',
+    },
+  ])('classifies $label at the image request boundary', async ({ facts, reason }) => {
+    const fixture = imageFixture();
+    const modelError = Object.assign(new Error('Request failed'), facts);
+    restoreProvider = installMockProvider({
+      image: new MockImageModelV3({
+        modelId: fixture.model.modelId,
+        provider: 'contract-provider',
+        doGenerate: async () => {
+          throw modelError;
+        },
+      }),
+    });
+    const error = await captureRejection(
+      new AiService(fixture.services).generateImage({
+        mode: 'generate',
+        paramValues: {},
+        prompt: 'Fail.',
+        requestOptions: { maxRetries: 0 },
+        uniqueModelId: fixture.model.id,
+      }),
+    );
+    expect(error).toBeInstanceOf(AiRequestError);
+    expect(error).toMatchObject({
+      message: modelError.message,
+      detail: {
+        retryable: false,
+        failure: {
+          version: 1,
+          reasonCode: reason,
+          source: { layer: 'provider' },
+          context: { providerId: fixture.provider.id, modelId: fixture.model.modelId },
+        },
+      },
+    });
+    if ('responseBody' in facts)
+      expect((error as AiRequestError).detail.failure.context?.responseBody).toBe(
+        facts.responseBody,
+      );
+    expect((error as AiRequestError).detail).not.toHaveProperty('reasonCode');
+  });
+
   test('forwards aborts to the image model and preserves the abort reason', async () => {
     const fixture = imageFixture();
     let notifyStarted!: (options: ImageModelV3CallOptions) => void;

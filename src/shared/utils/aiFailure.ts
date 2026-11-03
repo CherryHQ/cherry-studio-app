@@ -189,19 +189,6 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   if (
     includesAny(text, [
-      'content_filter',
-      'content_policy',
-      'prohibited_content',
-      'responsible_ai',
-      'output_blocked',
-      'blocked by safety',
-      'recitation',
-    ])
-  ) {
-    return 'content_filter';
-  }
-  if (
-    includesAny(text, [
       'mcp server',
       'mcp connection',
       'mcp error',

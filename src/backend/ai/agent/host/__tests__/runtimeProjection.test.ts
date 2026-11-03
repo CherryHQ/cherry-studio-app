@@ -241,3 +241,31 @@ describe('Runtime output projection', () => {
     });
   });
 });
+
+test.each([
+  { reasonCode: 'unknown' as const, expected: 'unknown' },
+  { reasonCode: undefined, expected: 'quota' },
+])(
+  'honors the internal reason $reasonCode without adding a wire field',
+  ({ reasonCode, expected }) => {
+    const error = {
+      code: 'provider_error',
+      message: 'Quota exhausted; content_filter_results: filtered false',
+      retryable: true,
+      origin: 'provider' as const,
+      reasonCode,
+    };
+    const view = JSON.parse(JSON.stringify(toAgentErrorView(error)));
+    expect(view).toEqual({
+      code: 'EXECUTION_FAILED',
+      message: error.message,
+      retryable: true,
+      failure: {
+        version: 1,
+        reasonCode: expected,
+        source: { layer: 'provider', code: 'provider_error' },
+      },
+    });
+    expect(view).not.toHaveProperty('reasonCode');
+  },
+);
