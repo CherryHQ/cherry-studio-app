@@ -218,48 +218,58 @@ export function AiUsageRecords({
               accessibilityLabel={`${item.modelName || item.modelId || t('aiUsage.unknownModel')}, ${t('aiUsage.viewDetails')}`}
               onPress={() => setSelected(item)}
             >
-              <View className="gap-3 py-4">
-                <View className="flex-row items-center gap-3">
-                  <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
-                    <ModelAvatar model={recordModel(item, t('aiUsage.unknownModel'))} size={28} />
-                    <View className="min-w-0 flex-1 gap-0.5">
-                      <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
+              <View className="flex-row items-start gap-3 py-4">
+                <ModelAvatar model={recordModel(item, t('aiUsage.unknownModel'))} size={28} />
+                <View className="min-w-0 flex-1 gap-3">
+                  <View className="gap-0.5">
+                    <View className="flex-row items-baseline gap-3">
+                      <Text
+                        className="min-w-0 flex-1 font-medium text-foreground text-sm"
+                        numberOfLines={2}
+                      >
                         {item.modelName || item.modelId || t('aiUsage.unknownModel')}
                       </Text>
-                      <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                      <Text
+                        adjustsFontSizeToFit
+                        className="max-w-[45%] font-medium text-foreground text-xl tabular-nums"
+                        minimumFontScale={0.6}
+                        numberOfLines={1}
+                      >
+                        {value}
+                      </Text>
+                    </View>
+                    <View className="flex-row items-baseline gap-3">
+                      <Text
+                        className="min-w-0 flex-1 text-muted-foreground text-xs"
+                        numberOfLines={1}
+                      >
                         {item.providerName || item.providerId || t('aiUsage.unknownProvider')}
+                      </Text>
+                      <Text className="max-w-[45%] text-right text-muted-foreground text-xs">
+                        {unit}
                       </Text>
                     </View>
                   </View>
-                  <View className="max-w-[45%] items-end gap-0.5">
-                    <Text
-                      adjustsFontSizeToFit
-                      className="font-medium text-foreground text-xl tabular-nums"
-                      minimumFontScale={0.6}
-                      numberOfLines={1}
-                    >
-                      {value}
+                  <View className="flex-row items-baseline gap-3">
+                    <Text className="min-w-0 flex-1 font-mono text-muted-foreground text-xs">
+                      {new Intl.DateTimeFormat(locale, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(new Date(item.createdAt))}
                     </Text>
-                    <Text className="text-muted-foreground text-xs">{unit}</Text>
+                    <Text className="max-w-[60%] shrink text-right text-muted-foreground text-xs tabular-nums">
+                      {summary}
+                    </Text>
                   </View>
+                  {item.recordKind === 'legacy-aggregate' ? (
+                    <Text className="text-muted-foreground text-xs">{t('aiUsage.legacy')}</Text>
+                  ) : null}
                 </View>
-                <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
-                  <Text className="font-mono text-muted-foreground text-xs">
-                    {new Intl.DateTimeFormat(locale, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    }).format(new Date(item.createdAt))}
-                  </Text>
-                  <Text className="min-w-0 flex-1 text-right text-muted-foreground text-xs tabular-nums">
-                    {summary}
-                  </Text>
+                <View className="self-center">
                   <ChevronRightIcon className="size-3.5 text-muted-foreground" />
                 </View>
-                {item.recordKind === 'legacy-aggregate' ? (
-                  <Text className="text-muted-foreground text-xs">{t('aiUsage.legacy')}</Text>
-                ) : null}
               </View>
             </Pressable>
           );
