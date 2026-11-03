@@ -86,6 +86,18 @@ Missing Portal configuration does not change the sign-in method page. Requesting
 reports the configuration error, whose invalid field names are recorded in diagnostics. Community
 sign-in does not require an enterprise service address; only enterprise admission validates it.
 
+Signed-in SDK states, including admission candidates and restored states, must provide
+`environment: 'cn' | 'global'` and the actual `issuer`. The app accepts this SDK decision and never
+derives an environment from IP, locale, a hostname or a build profile. These fields are the Mobile
+integration requirement; the pinned Accounts Portal 0.2.1 does not provide them yet, so its cloud
+sessions cannot be admitted until the SDK implements that contract. There is no legacy-session
+or default-environment path. Private deployment sign-in remains independent.
+
+`AccountRuntime` exposes backend-only community identity and matched identity-token reads. The
+identity key includes environment, issuer, subject, product profile and sign-in generation. Reads
+check the key before and after awaiting the SDK, and sign-out withdraws the identity before waiting
+for the server. Subscription consumers use this account boundary without owning SDK storage or login.
+
 The account UI offers sign-in, organization switching, account switching and sign-out. The
 portal lists the community account and organizations to switch between; the app selects a local data profile only after admission succeeds. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
 community account, the organization name or the private server host, and opens the profile page,
@@ -115,7 +127,8 @@ profile, only a community session counts as signed in.
   user and server ids; an offline start with matching local credentials keeps its data available.
 - **Cloud identity changes:** the account gate waits for stored cloud credentials to finish
   restoring before showing enterprise data. Session notifications and product-token reads compare
-  issuer, subject, product and organization against the active profile; token reads check again
+  the SDK's actual issuer, subject, product, organization and selected enterprise address against
+  the active profile; token reads check again
   after awaiting the SDK. The SDK validates a candidate session before replacing credentials:
   the runtime obtains its product token, reads `/configurations` and resolves its data profile.
   Until admission succeeds, the old session stays usable. Candidate failure never signs out the
@@ -182,6 +195,15 @@ values in the Git-ignored repository-root `.env.local`, using the keys in `.env.
 cloud builds in their selected EAS environment. The local build wrapper loads `.env.local` before
 starting EAS. Register the installed app's native callback scheme with the corresponding Accounts
 Portal client, as described above.
+
+Configure `ACCOUNTS_PORTAL_ENTERPRISE_API_CN` and `ACCOUNTS_PORTAL_ENTERPRISE_API_GLOBAL` in each
+EAS deployment environment (`development`, `preview`, `production`). `app.config.ts` embeds both
+under `extra.accountsPortal.enterpriseAddresses`. SDK login configuration remains under its own
+`origin`, `issuer`, `clientId` and `scopes` inputs; it is not a source of a default account environment.
+After the SDK selects a session, its environment selects the enterprise API used for admission,
+product entry and the active profile's synchronization. Missing configuration rejects that entry;
+it never tries the other environment. A changed service address is admitted before reloading the
+profile, and the existing server identity continues to own its local data.
 
 ## Synchronization
 
