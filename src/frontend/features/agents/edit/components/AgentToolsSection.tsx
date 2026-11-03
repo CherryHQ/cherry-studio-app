@@ -1,6 +1,5 @@
-import FolderOpenIcon from '@cherrystudio/app-icons/icons/folder-open';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
-import { BottomSheet, Button, ContentState, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, ContentState, Image, Section } from '@cherrystudio/ui/components';
 import { useQueries } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -8,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, Text, View } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -43,6 +43,7 @@ export function AgentToolsSection({
 }: AgentToolsSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const mcpIcon = useMcpIcon();
   const [isAdding, setIsAdding] = useState(false);
   const mcp = useBackendModule('mcp');
   const serverOptions = useMemo(
@@ -219,7 +220,7 @@ export function AgentToolsSection({
             </Section>
           ) : (
             <ContentState.Empty
-              icon={<FolderOpenIcon className="size-12 text-muted-foreground" />}
+              icon={<Image className="size-12" contentFit="contain" source={mcpIcon} />}
               title={t('agent.tools.empty')}
             />
           )}

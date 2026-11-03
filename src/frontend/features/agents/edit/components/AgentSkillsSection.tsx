@@ -1,5 +1,6 @@
+import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
-import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +35,7 @@ export function AgentSkillsSection({
   const availableSkills = skills.filter(
     (skill) => bindings.get(skill.id) !== true && skill.isEnabled && !skill.isPackageMissing,
   );
+  const hasSkillOptions = availableSkills.length > 0;
 
   return (
     <>
@@ -84,7 +86,7 @@ export function AgentSkillsSection({
               router.push({ pathname: '/skills', params: { agentId } });
             }}
           >
-            {skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
+            {t('agent.skills.manage')}
           </Button>
         }
         onClose={() => setIsAdding(false)}
@@ -92,29 +94,39 @@ export function AgentSkillsSection({
         size="medium"
         title={t('agent.skills.add')}
       >
-        <ScrollView contentContainerClassName="pt-2" showsVerticalScrollIndicator={false}>
-          <Section variant="plain">
-            {availableSkills.map((skill) => (
-              <Section.Item
-                description={
-                  <Text
-                    className="text-sm text-muted-foreground"
-                    ellipsizeMode="tail"
-                    numberOfLines={2}
-                  >
-                    {skill.description}
-                  </Text>
-                }
-                key={skill.id}
-                label={skill.name}
-                onPress={() => {
-                  onChange([{ isEnabled: true, skillId: skill.id }]);
-                  setIsAdding(false);
-                }}
-                showChevron={false}
-              />
-            ))}
-          </Section>
+        <ScrollView
+          contentContainerClassName={hasSkillOptions ? 'pt-2' : 'grow justify-center px-6 py-8'}
+          showsVerticalScrollIndicator={false}
+        >
+          {hasSkillOptions ? (
+            <Section variant="plain">
+              {availableSkills.map((skill) => (
+                <Section.Item
+                  description={
+                    <Text
+                      className="text-sm text-muted-foreground"
+                      ellipsizeMode="tail"
+                      numberOfLines={2}
+                    >
+                      {skill.description}
+                    </Text>
+                  }
+                  key={skill.id}
+                  label={skill.name}
+                  onPress={() => {
+                    onChange([{ isEnabled: true, skillId: skill.id }]);
+                    setIsAdding(false);
+                  }}
+                  showChevron={false}
+                />
+              ))}
+            </Section>
+          ) : (
+            <ContentState.Empty
+              icon={<ToolCaseIcon className="size-12 text-muted-foreground" />}
+              title={t('agent.skills.empty')}
+            />
+          )}
         </ScrollView>
       </BottomSheet>
     </>
