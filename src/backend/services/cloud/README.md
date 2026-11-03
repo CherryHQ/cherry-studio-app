@@ -8,17 +8,38 @@ methods. Tokens and device secrets never reach the frontend or database.
 
 ## Configuration
 
-Set `ACCOUNTS_PORTAL_CLOUD_API` to the HTTPS **origin** of the Cloud API linked to the configured
-Accounts Portal deployment. Supply that product's audience in `ACCOUNTS_PORTAL_SCOPES`, alongside
-any enterprise audience. No geographic region, price, SKU or model name is hardcoded. Missing or
-invalid Cloud configuration leaves ordinary local/provider use available and reports subscription
-information as unavailable. This feature has no purchase or renewal entry point.
+Configure both environments through EAS, separately for each `development`, `preview` and
+`production` deployment:
+
+| Environment | HTTPS Cloud API origin | Full subscription-management page URL |
+| --- | --- | --- |
+| `cn` | `ACCOUNTS_PORTAL_CLOUD_API_CN` | `ACCOUNTS_PORTAL_CLOUD_WEB_CN` |
+| `global` | `ACCOUNTS_PORTAL_CLOUD_API_GLOBAL` | `ACCOUNTS_PORTAL_CLOUD_WEB_GLOBAL` |
+
+`app.config.ts` embeds these values under `extra.cloud`. After sign-in, the SDK's environment selects
+one configured pair for account reads, models, inference and the webpage. There is no single-origin
+compatibility setting, geographic inference or fallback to the other environment. Missing or
+invalid configuration makes that environment unavailable without changing ordinary provider use.
+API origins cannot contain a path, query, fragment or credentials; webpage URLs must be HTTPS and
+contain no credentials. The app does not retrieve variables from EAS at runtime.
+
+Supply the Cloud product audience in `ACCOUNTS_PORTAL_SCOPES`, alongside any enterprise audience.
+Prices, SKUs and models come from the service. The subscription page opens the selected environment's
+configured webpage, and refreshes the current account when the browser returns or the app enters
+the foreground. Payment, purchase and renewal management stay on the webpage; closing it is never
+treated as proof of payment. No app credentials are added to its URL.
 
 Accounts Portal 0.2.1 provides `getIdentityTokens()` without a local patch. It returns a matched
 access/ID pair after refresh and checks the SDK's session, profile and sign-in generations.
 `AccountRuntime` also checks its community identity before and after the read. Its installed-SDK
 regressions for matched token refresh and sign-out isolation remain in
 `scripts/__tests__/accountsPortalIdentityTokens.test.ts`.
+
+The account layer supplies the app's normalized session environment and actual issuer, as described
+in [Enterprise Edition](../../../../docs/references/enterprise.md#account). SDK fields and values
+are translated at the installation's account integration point; they do not define the subscription
+contract. Accounts Portal 0.2.1 has no environment result yet, so that mapping cannot currently
+produce usable context. Completing it later does not change subscription APIs or environment selection.
 
 ## Session and transport
 
@@ -62,8 +83,10 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 - State refreshes after sign-in/account replacement, foreground entry, subscription-page opening,
   inference completion/cancellation, and periodically. Admission refreshes a stale snapshot.
   Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
-- Account replacement clears the public snapshot synchronously, cancels old requests and discards
-  late results. Catalog projection is serialized and generation-checked in its write transaction.
+- Account or SDK-environment replacement clears the public snapshot synchronously, cancels old
+  requests and discards late results. Revocation uses the old session's service; the replacement's
+  queries, inference and webpage use the new one. Catalog withdrawal disables old rows without
+  writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.
   Unchanged catalogs are not rewritten. Cloud writes participate in backup storage admission.
 
 The source protocol reviewed for this implementation is Cloud API

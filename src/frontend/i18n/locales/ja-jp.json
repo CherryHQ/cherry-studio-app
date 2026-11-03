@@ -698,6 +698,7 @@
   "cloud.free": "無料",
   "cloud.includedModels": "プランに含まれるモデル",
   "cloud.loading": "読み込み中…",
+  "cloud.manageOnWeb": "Webでサブスクリプションを管理",
   "cloud.measuredAt": "更新日時：{{time}}",
   "cloud.modelCount_other": "{{count}} モデル",
   "cloud.noPlans": "サブスクリプションはありません",

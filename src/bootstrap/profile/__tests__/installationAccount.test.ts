@@ -40,7 +40,10 @@ const configuration = {
   origin: 'https://accounts.example.com',
   clientId: 'mobile',
   scopes: ['openid'],
-  enterpriseAddress: 'https://enterprise.example.com',
+  enterpriseAddresses: {
+    cn: 'https://enterprise.example.com',
+    global: 'https://enterprise.global.example.com',
+  },
 };
 
 function compose(scheme?: string, values: Record<string, unknown> = configuration) {
@@ -75,7 +78,7 @@ test.each([undefined, 'exp'])(
 );
 
 test('does not require enterprise configuration to compose ordinary account sign-in', () => {
-  const { enterpriseAddress: _enterpriseAddress, ...cloudConfiguration } = configuration;
+  const { enterpriseAddresses: _enterpriseAddresses, ...cloudConfiguration } = configuration;
   compose('cherrystudio', cloudConfiguration);
   expect(mockCreatePortal).toHaveBeenCalled();
   expect(mockConfigurationError).not.toHaveBeenCalled();

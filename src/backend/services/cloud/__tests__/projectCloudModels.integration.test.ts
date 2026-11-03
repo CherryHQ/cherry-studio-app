@@ -28,9 +28,7 @@ test('sign-out withdraws the managed catalog while retaining historical model id
     .select()
     .from(userModelTable)
     .where(eq(userModelTable.providerId, CLOUD_PROVIDER_ID));
-  await db.dbService.withWriteTx((tx) =>
-    projectCloudModels(tx, 'https://cloud.example', [], () => {}),
-  );
+  await db.dbService.withWriteTx((tx) => projectCloudModels(tx, null, [], () => {}));
   const [after] = await db.database
     .select()
     .from(userModelTable)
@@ -51,7 +49,13 @@ test('sign-out withdraws the managed catalog while retaining historical model id
     .select()
     .from(userProviderTable)
     .where(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID));
-  expect(provider).toMatchObject({ isEnabled: false, apiKeys: [] });
+  expect(provider).toMatchObject({
+    isEnabled: false,
+    apiKeys: [],
+    endpointConfigs: {
+      'openai-chat-completions': { baseUrl: 'https://cloud.example' },
+    },
+  });
 });
 
 test('a revoked generation rolls back its catalog writes', async () => {

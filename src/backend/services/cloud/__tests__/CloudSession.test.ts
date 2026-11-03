@@ -1,4 +1,4 @@
-import { CloudSession } from '../CloudSession';
+import { CloudSession, type CloudIdentity } from '../CloudSession';
 import { cloudSnapshot } from './cloudFixtures';
 
 const mockRequest = jest.fn();
@@ -19,7 +19,13 @@ jest.mock('../cloudDevice', () => ({
 
 function setup() {
   const source = {
-    getIdentity: jest.fn(() => ({ key: 'a', profileId: 'account-a' })),
+    getIdentity: jest.fn(
+      (): CloudIdentity => ({
+        key: 'a',
+        environment: 'cn',
+        profileId: 'account-a',
+      }),
+    ),
     getTokens: jest.fn(async () => ({ accessToken: 'idp-access', idToken: 'idp-id' })),
     subscribe: () => () => {},
   };
@@ -115,7 +121,14 @@ test('a late product-entry response cannot reopen an account after replacement',
   );
   const pending = session.headers('GET', '/v1/models');
   await Promise.resolve();
-  source.getIdentity.mockReturnValue({ key: 'b', profileId: 'account-b' });
+  source.getIdentity.mockReturnValue({ key: 'b', environment: 'cn', profileId: 'account-b' });
   resolve(entry());
   await expect(pending).rejects.toMatchObject({ code: 'cloud_signed_out' });
+});
+
+test('an environment change invalidates a session even when the source identity key is unchanged', async () => {
+  const { session, source } = setup();
+  source.getIdentity.mockReturnValue({ ...source.getIdentity(), environment: 'global' });
+  await expect(session.get('/v1/models')).rejects.toMatchObject({ code: 'cloud_signed_out' });
+  expect(mockRequest).not.toHaveBeenCalled();
 });

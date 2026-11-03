@@ -9,8 +9,10 @@ import * as z from 'zod';
 import { Emitter } from '@/backend/core/lifecycle/event';
 import { isHttpError } from '@/backend/services/http';
 import {
+  type AccountEnvironment,
   AccountError,
   type AccountModule,
+  type AccountSessionContext,
   type AccountState,
   normalizeEnterpriseAddress,
   type PrivateSignIn,
@@ -49,9 +51,10 @@ type Portal = Pick<
 export interface AccountRuntimeOptions {
   /** Null when the build carries no Accounts Portal configuration. */
   portal: Portal | null;
-  issuer: string;
-  /** The enterprise cloud address used by Accounts Portal sign-in. */
-  defaultAddress: string;
+  /** The SDK integration supplies app-owned context for this exact current or candidate session. */
+  resolveSessionContext(session: AuthState): AccountSessionContext | null;
+  /** Enterprise API addresses selected by the SDK's signed-in environment. */
+  enterpriseAddresses?: Partial<Record<AccountEnvironment, string>>;
   /** The profile this runtime serves. */
   active: ActiveProfile;
   profiles: {
@@ -199,13 +202,15 @@ export class AccountRuntime implements AccountModule {
         validate: async (candidate) => {
           proposed = candidate.state;
           if (!proposed.subject || !proposed.profile?.profileId) throw new AccountError('rejected');
+          const context = this.options.resolveSessionContext(proposed);
+          if (!context) throw new AccountError('unavailable');
           await candidate.getAccount();
           if (proposed.profile.product === 'cloud') {
             target = LOCAL_PROFILE;
             return;
           }
           if (proposed.profile.product !== 'enterprise') throw new AccountError('rejected');
-          const address = normalizeEnterpriseAddress(this.options.defaultAddress);
+          const address = this.enterpriseAddress(context.environment);
           const api = this.options.createApi(address, {
             getProductToken: () => candidate.getProductToken(address),
           });
@@ -215,7 +220,7 @@ export class AccountRuntime implements AccountModule {
           target = this.options.profiles.resolve(
             {
               deployment: configuration.data.serverUniqueId,
-              issuer: this.options.issuer,
+              issuer: context.issuer,
               subject: proposed.subject,
               productProfileId: proposed.profile.profileId,
             },
@@ -239,7 +244,7 @@ export class AccountRuntime implements AccountModule {
         if (organization)
           target = this.options.profiles.resolve(target.identity, target.address, organization);
       }
-      if (target.id === this.options.active.id) {
+      if (target.id === this.options.active.id && target.address === this.options.active.address) {
         this.communityRevision++;
         this.update({ needsSignIn: false });
         this.updateCloudSession(session);
@@ -300,21 +305,25 @@ export class AccountRuntime implements AccountModule {
   /** Backend-only identity boundary for the device-bound community product session. */
   readonly getCommunityIdentity = () => {
     const session = this.options.portal?.getState();
+    const context = session ? this.options.resolveSessionContext(session) : null;
     if (
       this.options.active.identity ||
       !this.state.isSignedIn ||
       this.state.needsSignIn ||
       session?._tag !== 'signedIn' ||
-      session.profile?.product !== 'cloud'
+      session.profile?.product !== 'cloud' ||
+      !context
     )
       return null;
     return {
       key: JSON.stringify([
-        this.options.issuer,
+        context.environment,
+        context.issuer,
         session.subject,
         session.profile.profileId,
         this.communityRevision,
       ]),
+      environment: context.environment,
       profileId: session.profile.profileId,
     };
   };
@@ -470,16 +479,30 @@ export class AccountRuntime implements AccountModule {
   };
 
   private matchesCloudProfile(session: AuthState): boolean {
-    const { identity } = this.options.active;
-    return Boolean(
-      identity &&
-      !('authentication' in identity) &&
-      identity.issuer === this.options.issuer &&
-      session._tag === 'signedIn' &&
-      session.subject === identity.subject &&
-      session.profile?.product === 'enterprise' &&
-      session.profile.profileId === identity.productProfileId,
-    );
+    const { identity, address } = this.options.active;
+    const context = this.options.resolveSessionContext(session);
+    if (
+      !identity ||
+      'authentication' in identity ||
+      !context ||
+      identity.issuer !== context.issuer ||
+      session._tag !== 'signedIn' ||
+      session.subject !== identity.subject ||
+      session.profile?.product !== 'enterprise' ||
+      session.profile.profileId !== identity.productProfileId
+    )
+      return false;
+    try {
+      return address === this.enterpriseAddress(context.environment);
+    } catch {
+      return false;
+    }
+  }
+
+  private enterpriseAddress(environment: AccountEnvironment): string {
+    const address = this.options.enterpriseAddresses?.[environment];
+    if (!address) throw new AccountError('unavailable');
+    return normalizeEnterpriseAddress(address);
   }
 
   private updateCloudSession(session: AuthState): void {
@@ -488,7 +511,9 @@ export class AccountRuntime implements AccountModule {
     // failed enterprise sign-in does not count.
     const matchesProfile = this.state.isEnterprise
       ? this.matchesCloudProfile(session)
-      : session._tag === 'signedIn' && session.profile?.product === 'cloud';
+      : session._tag === 'signedIn' &&
+        session.profile?.product === 'cloud' &&
+        this.options.resolveSessionContext(session) !== null;
     const isSignedIn =
       session._tag === 'signedIn' &&
       matchesProfile &&

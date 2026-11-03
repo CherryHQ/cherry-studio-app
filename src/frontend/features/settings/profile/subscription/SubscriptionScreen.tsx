@@ -1,11 +1,12 @@
 import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { ContentState } from '@cherrystudio/ui/components';
+import { ContentState, Section } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useCloud } from '@/frontend/hooks/useCloud';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { formatSubscriptionDate } from './subscriptionFormatters';
@@ -18,6 +19,12 @@ export default function SubscriptionScreen() {
     void cloud.refresh().catch(() => {});
   }, [cloud]);
   const refresh = () => void cloud.refresh().catch(() => {});
+  const openSubscriptionWeb = async () => {
+    const url = cloud.getState().webUrl;
+    if (!url) return;
+    await openExternalUrl(url);
+    await cloud.refresh().catch(() => {});
+  };
 
   return (
     <SettingsScrollPage
@@ -81,6 +88,15 @@ export default function SubscriptionScreen() {
           </View>
         </>
       )}
+      {state.webUrl ? (
+        <Section>
+          <Section.Item
+            accessibilityRole="link"
+            label={t('cloud.manageOnWeb')}
+            onPress={() => void openSubscriptionWeb()}
+          />
+        </Section>
+      ) : null}
     </SettingsScrollPage>
   );
 }

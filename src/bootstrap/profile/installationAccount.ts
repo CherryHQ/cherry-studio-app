@@ -1,4 +1,4 @@
-import { createAccountsPortal } from '@cherryinternal/accounts-portal/client';
+import { createAccountsPortal, type AuthState } from '@cherryinternal/accounts-portal/client';
 import { loggerService } from '@logger';
 import { reloadAppAsync } from 'expo';
 import Constants from 'expo-constants';
@@ -15,7 +15,11 @@ import {
 } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
 import { nativeCallbackUrl } from '@/backend/utils/oauth';
-import { AccountError } from '@/shared/contracts/account';
+import {
+  AccountError,
+  type AccountSessionContext,
+  AccountSessionContextSchema,
+} from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -27,7 +31,9 @@ const ConfigSchema = z.object({
   origin: z.string().min(1),
   clientId: z.string().min(1),
   scopes: z.array(z.string()).min(1),
-  enterpriseAddress: z.string().optional(),
+  enterpriseAddresses: z
+    .object({ cn: z.string().optional(), global: z.string().optional() })
+    .optional(),
 });
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
@@ -106,8 +112,8 @@ function createAccount(): AccountRuntime {
   const active = getActiveProfile();
   const runtime = new AccountRuntime({
     portal,
-    issuer: config?.issuer ?? '',
-    defaultAddress: config?.enterpriseAddress ?? '',
+    resolveSessionContext: resolvePortalSessionContext,
+    enterpriseAddresses: config?.enterpriseAddresses,
     active,
     profiles: installationProfiles(),
     prompt: {
@@ -132,7 +138,6 @@ function createAccount(): AccountRuntime {
     },
     reload: () => reloadAppAsync('Switch data profile'),
   });
-  const issuerHash = config ? sha256HexOfText(config.issuer) : undefined;
   setDiagnosticAccountReader(() => {
     const state = runtime.getState();
     const accountStatus = state.isRestoringSession
@@ -146,12 +151,26 @@ function createAccount(): AccountRuntime {
     if (active.identity && 'authentication' in active.identity)
       return { accountStatus, accountSubjectId: active.identity.subject };
     const session = portal?.getState();
+    const context = session ? resolvePortalSessionContext(session) : null;
     return {
       accountStatus,
-      ...(session?._tag === 'signedIn'
-        ? { accountSubjectId: session.subject, accountIssuerHash: issuerHash }
+      ...(session?._tag === 'signedIn' && context
+        ? {
+            accountSubjectId: session.subject,
+            accountIssuerHash: sha256HexOfText(context.issuer),
+          }
         : {}),
     };
   });
   return runtime;
+}
+
+/**
+ * Sole mapping point from SDK session metadata to the app's environment and issuer.
+ * Field names and values here belong to the app contract, not a requirement on the SDK.
+ * The pinned SDK has no environment result yet; its eventual mapping belongs here.
+ */
+function resolvePortalSessionContext(session: AuthState): AccountSessionContext | null {
+  const context = AccountSessionContextSchema.safeParse(session);
+  return context.success ? context.data : null;
 }

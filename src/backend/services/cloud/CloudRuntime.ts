@@ -16,6 +16,7 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
+import { AccountEnvironmentSchema, type AccountEnvironment } from '@/shared/contracts/account';
 import {
   CLOUD_PROVIDER_ID,
   CloudAccessError,
@@ -39,7 +40,24 @@ const EMPTY: CloudState = {
   account: null,
   plans: null,
   models: [],
+  webUrl: null,
 };
+
+const EnvironmentConfigSchema = z.object({
+  apiOrigin: z.url({ protocol: /^https$/ }).transform((value, context) => {
+    const url = new URL(value);
+    if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+      context.addIssue({ code: 'custom', message: 'Expected an HTTPS API origin' });
+      return z.NEVER;
+    }
+    return url.origin;
+  }),
+  webUrl: z.url({ protocol: /^https$/ }).refine((value) => {
+    const url = new URL(value);
+    return !url.username && !url.password;
+  }, 'Subscription pages cannot contain credentials'),
+});
+type EnvironmentConfig = z.infer<typeof EnvironmentConfigSchema>;
 
 @Injectable('CloudRuntime')
 @ServicePhase(Phase.PostReady)
@@ -49,7 +67,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private snapshot = EMPTY;
   private readonly changes = new Emitter<void>();
   private source: CloudIdentitySource | undefined;
-  private origin = '';
+  private readonly environments: Partial<Record<AccountEnvironment, EnvironmentConfig>> = {};
+  private configuration: EnvironmentConfig | undefined;
   private version = '';
   private identityKey: string | null = null;
   private lifetime = new AbortController();
@@ -67,26 +86,21 @@ export class CloudRuntime extends BaseService implements CloudModule {
     super();
   }
 
-  configure(source: CloudIdentitySource, origin: string, version: string): void {
+  configure(
+    source: CloudIdentitySource,
+    environments: Partial<Record<AccountEnvironment, unknown>> | undefined,
+    version: string,
+  ): void {
     this.source = source;
-    // Cloud credentials only leave the installation for the explicitly configured HTTPS origin.
-    if (origin) {
-      try {
-        const url = new URL(origin);
-        if (
-          url.protocol !== 'https:' ||
-          url.username ||
-          url.password ||
-          url.pathname !== '/' ||
-          url.search ||
-          url.hash
-        )
-          throw new Error('Invalid Cloud API origin');
-        this.origin = url.origin;
-      } catch {
+    // Only explicitly configured HTTPS services may receive the selected account's credentials.
+    for (const environment of AccountEnvironmentSchema.options) {
+      const parsed = EnvironmentConfigSchema.safeParse(environments?.[environment]);
+      if (parsed.success) this.environments[environment] = parsed.data;
+      else {
+        delete this.environments[environment];
         loggerService
           .withContext('CloudRuntime')
-          .error('Cloud API origin is not configured correctly');
+          .error('Cloud environment is not configured correctly', { environment });
       }
     }
     this.version = version;
@@ -113,17 +127,21 @@ export class CloudRuntime extends BaseService implements CloudModule {
 
   private changeIdentity(): void {
     if (this.stopped) return;
-    const key = this.source?.getIdentity()?.key ?? null;
+    const identity = this.source?.getIdentity();
+    const key = identity ? JSON.stringify([identity.key, identity.environment]) : null;
     if (key === this.identityKey) return;
     this.lifetime.abort();
     void this.session?.revoke().catch(() => {});
     this.lifetime = new AbortController();
     this.session = undefined;
+    this.configuration = identity ? this.environments[identity.environment] : undefined;
     this.identityKey = key;
     this.refreshing = undefined;
     this.refreshedAt = 0;
     this.projectedCatalog = undefined;
-    this.publish(key ? { ...EMPTY, phase: 'loading' } : EMPTY);
+    this.publish(
+      key ? { ...EMPTY, phase: 'loading', webUrl: this.configuration?.webUrl ?? null } : EMPTY,
+    );
     this.project([], this.lifetime.signal);
     if (key) this.refreshInBackground();
   }
@@ -150,7 +168,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
     this.publish({ ...this.snapshot, isRefreshing: true });
     try {
       const identity = this.source?.getIdentity();
-      if (!this.source || !identity || !this.origin) throw new CloudAccessError('unavailable');
+      const configuration = this.configuration;
+      if (!this.source || !identity || !configuration) throw new CloudAccessError('unavailable');
       this.device ??= loadCloudDevice().catch((error: unknown) => {
         this.device = undefined;
         throw error;
@@ -158,7 +177,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const device = await this.device;
       signal.throwIfAborted();
       this.session ??= new CloudSession(
-        this.origin,
+        configuration.apiOrigin,
         identity,
         this.source,
         device,
@@ -176,7 +195,14 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const plans = CloudPlansSchema.parse(planData);
       const { data: models } = z.object({ data: z.array(CloudModelSchema) }).parse(modelData);
       if (account.account.id !== identity.profileId) throw new CloudAccessError('unavailable');
-      const next: CloudState = { phase: 'ready', isRefreshing: false, account, plans, models };
+      const next: CloudState = {
+        phase: 'ready',
+        isRefreshing: false,
+        account,
+        plans,
+        models,
+        webUrl: configuration.webUrl,
+      };
       const entitledModels = models.filter((model) =>
         ['agent', 'general'].some((use) => {
           const reason = cloudModelUnavailable(next, model.id, use as CloudModelUse);
@@ -220,7 +246,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const path =
         model.endpoint_type === 'anthropic-messages' ? '/v1/messages' : '/v1/chat/completions';
       if (
-        url.origin !== this.origin ||
+        url.origin !== session.origin ||
         url.pathname !== path ||
         url.search ||
         url.hash ||
@@ -306,7 +332,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
   }
 
   private project(models: CloudState['models'], signal: AbortSignal): Promise<void> {
-    const catalog = JSON.stringify([this.origin, models]);
+    const origin = this.configuration?.apiOrigin ?? null;
+    const catalog = JSON.stringify([origin, models]);
     this.pendingProjections++;
     const assertWritable = () => {
       signal.throwIfAborted();
@@ -318,7 +345,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         assertWritable();
         if (this.projectedCatalog === catalog) return;
         const ids = await this.db.withWriteTx((tx) =>
-          projectCloudModels(tx, this.origin, models, assertWritable),
+          projectCloudModels(tx, origin, models, assertWritable),
         );
         signal.throwIfAborted();
         this.projectedCatalog = catalog;

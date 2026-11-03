@@ -129,8 +129,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         issuer: process.env.ACCOUNTS_PORTAL_ISSUER ?? '',
         clientId: process.env.ACCOUNTS_PORTAL_CLIENT_ID ?? '',
         scopes: (process.env.ACCOUNTS_PORTAL_SCOPES ?? '').split(/\s+/).filter(Boolean),
-        enterpriseAddress: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API ?? '',
-        cloudAddress: process.env.ACCOUNTS_PORTAL_CLOUD_API ?? '',
+        enterpriseAddresses: {
+          cn: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API_CN,
+          global: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API_GLOBAL,
+        },
+      },
+      cloud: {
+        cn: {
+          apiOrigin: process.env.ACCOUNTS_PORTAL_CLOUD_API_CN,
+          webUrl: process.env.ACCOUNTS_PORTAL_CLOUD_WEB_CN,
+        },
+        global: {
+          apiOrigin: process.env.ACCOUNTS_PORTAL_CLOUD_API_GLOBAL,
+          webUrl: process.env.ACCOUNTS_PORTAL_CLOUD_WEB_GLOBAL,
+        },
       },
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
       // Native APK installation capability is separately embedded by withAppUpdates.

@@ -4,6 +4,7 @@ export function cloudSnapshot(accountId = 'account-a'): CloudState {
   return {
     phase: 'ready',
     isRefreshing: false,
+    webUrl: 'https://cloud.example/account/plans',
     account: {
       measured_at: '2026-10-31T00:00:00Z',
       account: { id: accountId, status: 'active' },

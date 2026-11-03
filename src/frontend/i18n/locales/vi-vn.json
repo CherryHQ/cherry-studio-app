@@ -698,6 +698,7 @@
   "cloud.free": "Miễn phí",
   "cloud.includedModels": "Mô hình trong gói",
   "cloud.loading": "Đang tải…",
+  "cloud.manageOnWeb": "Quản lý gói đăng ký trên web",
   "cloud.measuredAt": "Cập nhật lúc {{time}}",
   "cloud.modelCount_other": "{{count}} mô hình",
   "cloud.noPlans": "Chưa có gói đăng ký",
