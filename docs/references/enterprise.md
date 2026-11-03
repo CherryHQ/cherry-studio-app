@@ -86,12 +86,17 @@ Missing Portal configuration does not change the sign-in method page. Requesting
 reports the configuration error, whose invalid field names are recorded in diagnostics. Community
 sign-in does not require an enterprise service address; only enterprise admission validates it.
 
-Signed-in SDK states, including admission candidates and restored states, must provide
-`environment: 'cn' | 'global'` and the actual `issuer`. The app accepts this SDK decision and never
-derives an environment from IP, locale, a hostname or a build profile. These fields are the Mobile
-integration requirement; the pinned Accounts Portal 0.2.1 does not provide them yet, so its cloud
-sessions cannot be admitted until the SDK implements that contract. There is no legacy-session
-or default-environment path. Private deployment sign-in remains independent.
+`AccountSessionContext` is the app-owned input: `environment: 'cn' | 'global'` and the actual
+`issuer`. These names and values do not prescribe the SDK's response format. The installation's
+`resolvePortalSessionContext` is the single SDK integration point that supplies this input for
+current, candidate and restored sessions; `AccountRuntime` consumes its typed result. Any future
+SDK field, value or structure changes are translated at that integration point, without changing
+enterprise or subscription environment selection.
+
+The app accepts the SDK's environment decision and never derives it from IP, locale, a hostname
+or a build profile. Accounts Portal 0.2.1 cannot supply that decision yet, so the integration has
+no usable context and cloud sessions remain unavailable. There is no legacy-session or
+default-environment path. Private deployment sign-in remains independent.
 
 `AccountRuntime` exposes backend-only community identity and matched identity-token reads. The
 identity key includes environment, issuer, subject, product profile and sign-in generation. Reads
