@@ -1,6 +1,5 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { TSchema } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
@@ -14,6 +13,7 @@ import {
   Harness,
   MemoryStorage,
   ToolTask,
+  ToolResultEntry,
   type Conversation,
   type EntryId,
   type Extension,
@@ -104,6 +104,7 @@ async function toolTask(
   args: Record<string, JsonValue> = { name: 'note.txt' },
   callId = 'call',
   legacyCheckpoint?: ToolTaskCheckpoint,
+  unoffered = false,
 ): Promise<TaskId> {
   return conversation.commit(async (tx) => {
     const message = emptyAssistantMessage({
@@ -128,7 +129,7 @@ async function toolTask(
       ],
     });
     if (legacyCheckpoint) {
-      // Seed the 1.1 persisted shape; only the installed 1.2 ToolTask may execute it after reopen.
+      // Seed the 1.1 persisted shape; only the installed 1.5 ToolTask may execute it after reopen.
       const unexpectedExecution = async () => {
         throw new Error('The legacy fixture must never execute.');
       };
@@ -147,13 +148,128 @@ async function toolTask(
     }
     return tx.createTask(
       ToolTask,
-      { kind: 'model', assistant: assistant.id, callId },
+      {
+        kind: 'model',
+        assistant: assistant.id,
+        callId,
+        ...(unoffered ? { unoffered: true as const } : {}),
+      },
       { ownership: { kind: 'conversation' } },
     );
   }, BACKGROUND_CONTEXT);
 }
 
 describe('durable capability boundary', () => {
+  test('approval and execution receive the same coerced JSON Schema input, including extra properties', async () => {
+    const execute = jest.fn<ReturnType<RuntimeTool['execute']>, Parameters<RuntimeTool['execute']>>(
+      async () => ({ value: 'ok', artifacts: [] }),
+    );
+    const approve = jest.fn<
+      Promise<boolean>,
+      Parameters<Parameters<typeof createPiDurableToolExtension>[0]['approve']>
+    >(async () => true);
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: [
+        capability({
+          inputSchema: {
+            type: 'object',
+            properties: {
+              count: { type: 'integer' },
+              names: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['count', 'names'],
+            additionalProperties: true,
+          },
+          execute,
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', {
+          count: '2',
+          names: 'one',
+          extra: { kept: true },
+        }),
+        BACKGROUND_CONTEXT,
+      );
+      const expected = { count: 2, names: ['one'], extra: { kept: true } };
+      expect(approve.mock.calls[0]?.[1]).toEqual(expected);
+      expect(execute.mock.calls[0]?.[0].input).toEqual(expected);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  test.each(['invalid_arguments', 'blocked', 'tool_unavailable'] as const)(
+    'keeps %s Code Mode failures intact when afterTool runs without executing the script',
+    async (code) => {
+      const execute = jest.fn(async () => ({
+        output: [{ type: 'text' as const, text: 'must not run' }],
+      }));
+      const approve = jest.fn(async () => code !== 'blocked');
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [scriptCapability('ask')],
+        approve,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              description: 'Run a script.',
+              parameters: {
+                type: 'object',
+                properties: { code: { type: 'string' } },
+                required: ['code'],
+              },
+              replay: 'unsafe',
+              execute,
+            }),
+          ],
+        }),
+      });
+      const harness = await open(new MemoryStorage(), extension);
+      try {
+        const conversation = await harness.createConversation(
+          { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+          BACKGROUND_CONTEXT,
+        );
+        await harness.waitForTask(
+          await toolTask(
+            conversation,
+            'codemode',
+            code === 'invalid_arguments' ? {} : { code: 'return 1' },
+            'call',
+            undefined,
+            code === 'tool_unavailable',
+          ),
+          BACKGROUND_CONTEXT,
+        );
+        const entries = (
+          await conversation.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        const result = entries.find(ToolResultEntry.is)!;
+        expect(result.data.diagnostics).toEqual([
+          expect.objectContaining({ code, severity: 'error' }),
+        ]);
+        expect(result.model?.[0]).toMatchObject({ role: 'toolResult', isError: true });
+        expect(result.model?.[0]).not.toHaveProperty('details');
+        expect(execute).not.toHaveBeenCalled();
+        if (code === 'tool_unavailable') expect(approve).not.toHaveBeenCalled();
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
   test('defers Skill installation and adaptation without MCP while retaining all readers and call permissions', async () => {
     const names = [
       'load_skill',
@@ -289,7 +405,7 @@ describe('durable capability boundary', () => {
         tools: [
           defineTool({
             name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
+            parameters: { type: 'object' },
             description: 'Save a batch of files.',
             replay: 'safe',
             async execute(_args, api, context) {
@@ -350,7 +466,7 @@ describe('durable capability boundary', () => {
         tools: [
           defineTool({
             name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
+            parameters: { type: 'object' },
             description: 'Save one file.',
             replay: 'safe',
             async execute(_args, api, context) {
@@ -398,7 +514,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Run a script.',
               replay: 'safe',
               execute: async () => ({ output: [] }),
@@ -445,7 +561,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Create a file then wait.',
               replay: 'safe',
               async execute(_args, api, context) {
@@ -543,7 +659,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Run a script.',
               replay: 'safe',
               execute: async () => ({
@@ -615,7 +731,7 @@ describe('durable capability boundary', () => {
       tools: [
         defineTool({
           name: 'codemode',
-          parameters: { type: 'object' } as TSchema,
+          parameters: { type: 'object' },
           description: 'Exercise native child calls.',
           replay: 'safe',
           callers: ['model'],
@@ -705,7 +821,7 @@ describe('durable capability boundary', () => {
         tools: [
           defineTool({
             name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
+            parameters: { type: 'object' },
             description: 'Exercise the declared child result.',
             replay: 'safe',
             async execute(_args, api, context) {
@@ -796,7 +912,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Show a widget.',
               replay: 'safe',
               async execute(_args, api, context) {

@@ -23,7 +23,6 @@ import {
   ProviderDoc,
   type Storage,
   type TaskGraph,
-  watchEvents,
 } from '@earendil-works/pi-durable';
 
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
@@ -157,14 +156,18 @@ export class PiDurableRuntime {
     private readonly harness: Harness,
     private readonly storage: Storage,
   ) {
-    this.unsubscribeCommits = harness.subscribeCommits((publication) => {
-      for (const change of publication.changes) {
-        if (change.type !== 'submission') continue;
-        const record = change.value;
-        const index = this.submissionIndexes.get(record.conversationId);
-        if (index) indexSubmission(index, record);
-      }
+    const observation = harness.observeCommits({
+      advance: (publication) => {
+        for (const change of publication.changes) {
+          if (change.type !== 'submission') continue;
+          const record = change.value;
+          const index = this.submissionIndexes.get(record.conversationId);
+          if (index) indexSubmission(index, record);
+        }
+      },
+      end: () => {},
     });
+    this.unsubscribeCommits = () => observation.detach();
   }
 
   static async open(
@@ -592,7 +595,10 @@ export class PiDurableRuntime {
   }
 
   /** Resolve capabilities by the durable run that owns the task, rather than a stale closure. */
-  async inputsForTask(api: HookApi, context: Context = BACKGROUND_CONTEXT) {
+  async inputsForTask(
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
+    context: Context = BACKGROUND_CONTEXT,
+  ) {
     const live = await api.snapshot(LiveDoc, api.conversationId, context);
     return Promise.all(
       (live?.run?.inputs ?? []).map(async (id) => {
@@ -684,7 +690,28 @@ export class PiDurableRuntime {
 
   async watch(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
-    return watchEvents(this.harness, conversation.id, context);
+    return conversation.watch(context);
+  }
+
+  /** Register before attaching the view: a coalesced watch can miss a whole short run. */
+  async observeSubmissions(
+    sessionId: string,
+    listener: (records: readonly SubmissionRecord[]) => void,
+    context: Context = BACKGROUND_CONTEXT,
+  ) {
+    const conversation = await this.requireSession(sessionId, context);
+    const observation = this.harness.observeCommits({
+      advance: (publication) => {
+        const records = publication.changes.flatMap((change) =>
+          change.type === 'submission' && change.value.conversationId === conversation.id
+            ? [change.value]
+            : [],
+        );
+        if (records.length) listener(records);
+      },
+      end: () => {},
+    });
+    return () => observation.detach();
   }
 
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
