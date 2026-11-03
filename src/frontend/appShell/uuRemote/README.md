@@ -35,7 +35,9 @@ validation promise across effect resubscriptions; it refreshes binding queries a
 
 Android menu actions already run after the menu has closed. The sidebar's remote-desktop action then
 waits for the drawer's closing transition without navigating away from the current page; permanent
-sidebars require no transition. Keyboard dismissal is awaited before launching UU. Reopening the
+sidebars require no transition. Completion follows the drawer's actual animated progress rather
+than the parent route's navigation events. Queued completions only resolve their own request.
+Keyboard dismissal is awaited before launching UU. Reopening the
 drawer cancels the handoff, and unmounting the action owner aborts pending preparation. No fixed delay
 or short callback timeout is used. Repeated presses during preparation share the existing opening guard.
 
