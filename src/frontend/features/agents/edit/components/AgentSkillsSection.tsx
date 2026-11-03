@@ -1,4 +1,3 @@
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
@@ -78,6 +77,16 @@ export function AgentSkillsSection({
         />
       </Section>
       <BottomSheet
+        footer={
+          <Button
+            onPress={() => {
+              setIsAdding(false);
+              router.push({ pathname: '/skills', params: { agentId } });
+            }}
+          >
+            {skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
+          </Button>
+        }
         onClose={() => setIsAdding(false)}
         open={isAdding}
         size="medium"
@@ -87,7 +96,15 @@ export function AgentSkillsSection({
           <Section variant="plain">
             {availableSkills.map((skill) => (
               <Section.Item
-                description={skill.description}
+                description={
+                  <Text
+                    className="text-sm text-muted-foreground"
+                    ellipsizeMode="tail"
+                    numberOfLines={2}
+                  >
+                    {skill.description}
+                  </Text>
+                }
                 key={skill.id}
                 label={skill.name}
                 onPress={() => {
@@ -97,14 +114,6 @@ export function AgentSkillsSection({
                 showChevron={false}
               />
             ))}
-            <Section.Item
-              label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
-              onPress={() => {
-                setIsAdding(false);
-                router.push({ pathname: '/skills', params: { agentId } });
-              }}
-              trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
-            />
           </Section>
         </ScrollView>
       </BottomSheet>
