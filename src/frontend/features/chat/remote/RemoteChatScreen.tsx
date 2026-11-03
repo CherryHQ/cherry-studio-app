@@ -99,6 +99,7 @@ function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInst
   const { startRemoteChat } = useChatSource();
   return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
 }
+
 const HeaderContext = createContext<{
   agent?: AgentSummary;
   selectAgent(agentId: string): void;

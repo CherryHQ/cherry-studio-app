@@ -13,6 +13,7 @@ test.each([
   '/plugins/feishu/connect',
   '/plugins/feishu/callback',
   '/oauth/callback',
+  '/uu-remote/callback',
 ])('does not capture credential and pairing routes: %s', (route) => {
   expect(canCaptureFeedbackRoute(route)).toBe(false);
 });
