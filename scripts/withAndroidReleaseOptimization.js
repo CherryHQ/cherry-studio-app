@@ -13,6 +13,20 @@ module.exports = (config) =>
     );
 
     if (config.extra?.reporting?.services?.sentry) {
+      const applicationPlugin = /^[\t ]*apply plugin: (["'])com\.android\.application\1[\t ]*$/m;
+      const sentryPlugin = /^[\t ]*apply plugin: (["'])io\.sentry\.android\.gradle\1[\t ]*\r?\n?/m;
+      if (
+        !applicationPlugin.test(mod.modResults.contents) ||
+        !sentryPlugin.test(mod.modResults.contents)
+      ) {
+        throw new Error(
+          'Android release optimization requires the application and Sentry plugins.',
+        );
+      }
+      // Sentry's Expo plugin prepends its declaration, before Android creates the app extension.
+      mod.modResults.contents = mod.modResults.contents
+        .replace(sentryPlugin, '')
+        .replace(applicationPlugin, '$&\napply plugin: "io.sentry.android.gradle"');
       const sentryBlock = /^[\t ]*sentry \{[\t ]*$/m;
       if (!sentryBlock.test(mod.modResults.contents)) {
         throw new Error('Android release optimization requires the Sentry Android Gradle plugin.');

@@ -234,6 +234,7 @@ function replayGoogleParts(
     const content = record(contents[target])!;
     const parts = [...array(content.parts)];
     // Later parts first, so earlier insertion points stay valid.
+    // oxlint-disable-next-line unicorn/no-array-reverse -- Reverse a copy without requiring another Hermes Array intrinsic.
     for (const { before, part, offsetBefore, signatureBefore } of [...web.googleParts].reverse()) {
       if (offsetBefore === undefined || partIndex[before - 1] === partIndex[before]) {
         parts.splice(partIndex[before] ?? parts.length, 0, part);
