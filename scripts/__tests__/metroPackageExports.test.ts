@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 // Use Expo's installed resolver without loading its Metro config or starting a bundler.
 const expoRequire = createRequire(require.resolve('expo/package.json'));
@@ -13,14 +13,16 @@ const { resolve } = jest.requireActual<{
     platform: string,
   ) => { type: string; filePath?: string };
 }>(metroRequire.resolve('metro-resolver'));
-const libp2pRequire = createRequire(realpathSync('node_modules/@libp2p/interface/package.json'));
-const multiformatsRoot = join(dirname(libp2pRequire.resolve('multiformats')), '../..');
+// Jest cannot select multiformats' import/module-sync exports. Follow its installed pnpm link.
+const multiformatsRoot = realpathSync(
+  join(realpathSync('node_modules/@libp2p/interface'), '../../multiformats'),
+);
 
 const packages = [
   {
     name: '@noble/hashes',
     version: '1.8.0',
-    root: dirname(require.resolve('@noble/hashes/package.json')),
+    root: realpathSync('node_modules/@noble/hashes'),
     request: '@noble/hashes/crypto',
     target: 'crypto.js',
     patch: 'patches/@noble__hashes@1.8.0.patch',
