@@ -239,8 +239,9 @@ export class PiDurableObserver {
       if (this.contextStatus() !== previousContext)
         this.listener({ type: 'context.updated', status: this.contextStatus() });
       for (const input of this.inputs.values()) {
-        // A frame can precede its submission notification. Do not invent an interruption.
-        if (input.record.status === 'placed' && !visibleIds.has(input.record.id)) continue;
+        // A placed record can outpace its run frame while the old inbox still names it.
+        if (input.record.status === 'placed' && !live.run?.inputs.includes(input.record.id))
+          continue;
         if (input.record.status === 'unanswered') {
           const stored = readPiSubmission(input.metadata);
           const taskId = live.runFailure?.inputs.includes(input.record.id)

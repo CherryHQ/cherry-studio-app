@@ -3,7 +3,6 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import {
   createRegistry,
-  defineDoc,
   defineDocFamily,
   defineTask,
   Harness,
@@ -14,7 +13,6 @@ import {
   ProviderDoc,
   UserEntry,
   type ConversationId,
-  type SubmissionId,
   type TaskGraphNode,
   type TaskId,
 } from '@earendil-works/pi-durable';
@@ -113,17 +111,6 @@ describe('PiDurableRuntime identity and handoff', () => {
       class ReopenableStorage extends MemoryStorage {
         override async close() {}
       }
-      // Persist the shapes published in v1.4.0, then let the installed Harness migrate on reopen.
-      // https://github.com/earendil-works/pi/blob/v1.4.0/packages/durable/src/harness/live.ts
-      const legacyLive = defineDoc<{ run?: { taskId: TaskId; inputs: SubmissionId[] } }>({
-        kind: 'pi.live',
-        version: 1,
-        scope: 'conversation',
-        history: 'latest',
-        fork: 'initial',
-        initial: () => ({}),
-        checkpointWhen: () => true,
-      });
       const legacyGeneration = defineTask({ ...GenerationTask.definition, version: 1 });
       const storage = new ReopenableStorage();
       const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
@@ -131,12 +118,9 @@ describe('PiDurableRuntime identity and handoff', () => {
         { ownership: { kind: 'ownerless' } },
         BACKGROUND_CONTEXT,
       );
-      await conversation.commit(async (tx) => {
+      const savedRun = await conversation.commit(async (tx) => {
         const inbox = await tx.doc(InboxDoc, conversation.id);
-        const live =
-          version === '1.4.0'
-            ? await tx.doc(legacyLive, conversation.id)
-            : await tx.doc(LiveDoc, conversation.id);
+        const live = await tx.doc(LiveDoc, conversation.id);
         const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
         const active = await tx.createSubmission({
           conversationId: conversation.id,
@@ -153,7 +137,8 @@ describe('PiDurableRuntime identity and handoff', () => {
             conversationId: conversation.id,
           },
         );
-        live.run = { taskId, inputs: [active.id], ...(version === '1.4.0' ? {} : { turns: 0 }) };
+        const run = { taskId, inputs: [active.id] };
+        live.run = { ...run, turns: 0 };
         const queued = await tx.createSubmission({
           conversationId: conversation.id,
           type: 'input',
@@ -161,8 +146,34 @@ describe('PiDurableRuntime identity and handoff', () => {
           requestId: 'waiting',
         });
         inbox.items.push({ id: queued.id, mode: 'followUp', content: 'Waiting' });
+        return run;
       }, BACKGROUND_CONTEXT);
       await first.close(BACKGROUND_CONTEXT);
+      if (version === '1.4.0') {
+        // The current Harness initializes pi.live at v3. Replace its checkpoint only after close
+        // with the published v1.4.0 shape, so no current reader migrates it before reopen.
+        // https://github.com/earendil-works/pi/blob/v1.4.0/packages/durable/src/harness/live.ts
+        const live = await storage.findDocument(
+          { kind: 'pi.live', scope: { kind: 'conversation', conversationId: conversation.id } },
+          'current',
+          BACKGROUND_CONTEXT,
+        );
+        await storage.commit(
+          [
+            [
+              {
+                type: 'document.change',
+                id: live!.id,
+                content: { kind: 'base', version: 1, value: { run: savedRun } },
+              },
+            ],
+          ],
+          () => {},
+          BACKGROUND_CONTEXT,
+        );
+        expect((await storage.document(live!.id, 'current', BACKGROUND_CONTEXT))?.version).toBe(1);
+        expect((await storage.task(savedRun.taskId, BACKGROUND_CONTEXT))?.version).toBe(1);
+      }
       const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
       try {
         const inspected = await reopened.inspect(BACKGROUND_CONTEXT);

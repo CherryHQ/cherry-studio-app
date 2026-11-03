@@ -25,7 +25,7 @@ const taskId = 42 as TaskId;
 const conversationId = 1 as ConversationId;
 const run = { inputs: [inputId], taskId, turns: 0 };
 
-function response(text: string): AssistantMessage {
+function response(text: string) {
   return {
     role: 'assistant',
     api: 'openai-completions',
@@ -42,7 +42,7 @@ function response(text: string): AssistantMessage {
       totalTokens: 0,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-  };
+  } satisfies AssistantMessage;
 }
 
 function entry(id: number, text: string): EntryRecord {
@@ -150,14 +150,14 @@ test('projects immutable streamed values without changing earlier snapshots', as
   const fixture = attach(view({ run, generation: { attempt: 0, message: original } }), [input()]);
   try {
     const initial = (await fixture.observer.start()).activeTurn!;
-    const next: AssistantMessage = {
+    const next = {
       ...original,
       content: [
         { type: 'text', text: 'Answer one' },
         { type: 'thinking', thinking: 'Reason' },
         { type: 'toolCall', id: 'call', name: 'custom_tool', arguments: { rows: [{ text: 'A' }] } },
       ],
-    };
+    } satisfies AssistantMessage;
     await fixture.advance(view({ run, generation: { attempt: 0, message: next } }));
     const first = fixture.latest();
     await fixture.advance(
@@ -391,6 +391,35 @@ test.each(['interrupted', 'restart_limit'])(
     }
   },
 );
+
+test('waits for the run frame when a placed input still appears in the old inbox', async () => {
+  const queued: SubmissionRecord = {
+    id: inputId,
+    conversationId,
+    requestId: 'request-1',
+    type: 'input',
+    status: 'queued',
+  };
+  const oldInbox: ConversationView = {
+    ...view(),
+    docs: { 'pi.inbox': { items: [{ id: inputId, mode: 'followUp', content: 'Question' }] } },
+  };
+  const fixture = attach(oldInbox, [queued]);
+  try {
+    expect((await fixture.observer.start()).queue).toHaveLength(1);
+    fixture.notify(input());
+    await fixture.advance(oldInbox);
+    expect(fixture.events.filter((event) => event.type === 'turn.updated')).toEqual([]);
+    await fixture.advance(view({ run }));
+    expect(fixture.latest().status).toBe('running');
+    const terminal = fixture.terminal();
+    fixture.history.set(inputId, [entry(2, 'Complete answer')]);
+    fixture.notify({ ...input(), status: 'done', answer: 2 as EntryId });
+    expect((await terminal).status).toBe('completed');
+  } finally {
+    await fixture.observer.stop();
+  }
+});
 
 test('settles a whole short run from persisted submissions without a view update', async () => {
   const fixture = attach();

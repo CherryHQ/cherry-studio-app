@@ -595,7 +595,10 @@ export class PiDurableRuntime {
   }
 
   /** Resolve capabilities by the durable run that owns the task, rather than a stale closure. */
-  async inputsForTask(api: HookApi, context: Context = BACKGROUND_CONTEXT) {
+  async inputsForTask(
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
+    context: Context = BACKGROUND_CONTEXT,
+  ) {
     const live = await api.snapshot(LiveDoc, api.conversationId, context);
     return Promise.all(
       (live?.run?.inputs ?? []).map(async (id) => {

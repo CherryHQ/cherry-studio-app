@@ -37,11 +37,16 @@ describe('upstream tool discovery', () => {
       if (descriptor) Object.defineProperty(Intl, 'Segmenter', descriptor);
       else Reflect.deleteProperty(Intl, 'Segmenter');
     }
-    const api = { agent: async () => ({ deferred: catalog }) } as unknown as ToolExecutionApi;
+    const api = {
+      agent: async () => ({ deferred: catalog.toReversed() }),
+    } as unknown as ToolExecutionApi;
     for (const query of ['飞书日历', '日历', '书日'])
-      expect((await search.execute({ query }, api, BACKGROUND_CONTEXT)).control?.addTools).toEqual([
-        'mcp_calendar',
-      ]);
+      expect(
+        (await search.execute({ query, limit: 1 }, api, BACKGROUND_CONTEXT)).control?.addTools,
+      ).toEqual(['mcp_calendar']);
+    expect(
+      (await search.execute({ query: '日历' }, api, BACKGROUND_CONTEXT)).control?.addTools,
+    ).toEqual(['mcp_calendar']);
   });
 
   test('loads exact deferred names before ranked matches, so a small limit cannot load another tool', async () => {

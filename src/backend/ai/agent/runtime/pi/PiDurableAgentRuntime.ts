@@ -930,7 +930,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   private async taskIdentity(
     lane: RuntimeLane,
-    api: HookApi,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
     context: Context,
   ): Promise<RuntimeExecutionIdentity> {
     const inputs = await this.requireRuntime().inputsForTask(api, context);

@@ -37,12 +37,15 @@ type PiDurableToolOptions = {
   tools: readonly RuntimeTool[];
   acceptsImages?: boolean;
   codemode?: Extension;
-  previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
+  previousFailures?(
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
+    context: Context,
+  ): Promise<readonly string[]>;
   beforeCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<string | undefined>;
   /** Resolve the current Pi run, including queued input and a reconstructed process generation. */
   resolve(
     tool: RuntimeTool,
-    api: HookApi,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
     context: Context,
   ): Promise<{ tool: RuntimeTool; turnId: string }>;
   /** The Host admits verified artifacts to its resource ledger before the next tool round. */
@@ -92,7 +95,11 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
   let failedTurnId: string | undefined;
   let restoringFailures: Promise<void> = Promise.resolve();
 
-  async function resolve(template: RuntimeTool, api: HookApi, context: Context) {
+  async function resolve(
+    template: RuntimeTool,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
+    context: Context,
+  ) {
     const binding = await options.resolve(template, api, context);
     if (
       !binding.turnId ||
