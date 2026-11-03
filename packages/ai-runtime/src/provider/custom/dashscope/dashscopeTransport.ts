@@ -64,8 +64,8 @@ interface DashScopeTaskOutput {
   task_status: DashScopeTaskStatus;
   message?: string;
   code?: string;
-  results?: Array<{ url?: string; image_url?: string }>;
-  choices?: Array<{ message?: { content?: Array<{ image?: string; text?: string }> } }>;
+  results?: { url?: string; image_url?: string }[];
+  choices?: { message?: { content?: { image?: string; text?: string }[] } }[];
   image_url?: string;
 }
 
@@ -228,7 +228,7 @@ function buildChatLikeBody(
   input: ImageGenerationSubmitInput,
   bag: DashScopeProviderParams,
 ): Record<string, unknown> {
-  const content: Array<{ text?: string; image?: string }> = [];
+  const content: { text?: string; image?: string }[] = [];
   if (input.prompt) content.push({ text: input.prompt });
   for (const file of input.files ?? []) content.push({ image: fileToDataUrl(file) });
 
@@ -622,7 +622,7 @@ class DashScopeTransport implements ImageGenerationTransport {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         if (externallyAborted) throw createAbortError('DashScope API request aborted');
-        throw new Error(`DashScope API request timeout after ${timeout / 1000}s`);
+        throw new Error(`DashScope API request timeout after ${timeout / 1000}s`, { cause: error });
       }
       throw error;
     } finally {

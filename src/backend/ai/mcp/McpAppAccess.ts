@@ -1,5 +1,4 @@
-import type { ListToolsResult } from '@modelcontextprotocol/client';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
+import type { CallToolResult, ListToolsResult, Tool } from '@modelcontextprotocol/client';
 import { CallToolResultSchema } from '@modelcontextprotocol/core';
 import * as z from 'zod';
 

@@ -47,5 +47,5 @@ Use kebab-case filenames and import components through the public
 `@cherrystudio/ui/components` entry point. Run Storybook from the workspace root:
 
 ```sh
-pnpm storybook
+pnpm dev:storybook
 ```

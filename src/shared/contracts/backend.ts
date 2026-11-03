@@ -19,6 +19,7 @@ import type { RemoteAgentModule } from './remoteAgent';
 import type { SkillsModule } from './skills';
 import type { SystemEntryModule } from './systemEntry';
 import type { TranslationModule } from './translation';
+import type { UuRemoteModule } from './uuRemote';
 import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
@@ -32,6 +33,7 @@ export interface Backend {
   readonly agent: AgentProtocol;
   readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
+  readonly uuRemote: UuRemoteModule;
   readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;

@@ -211,6 +211,7 @@ export function createAppBootstrapRuntime(
     dataApiDependencies,
     disposeSystemEntry,
     disposeAppUpdate,
+    disposeUuRemote,
     disposeSkills,
     disposeVoice,
     initializeSkills,
@@ -308,6 +309,7 @@ export function createAppBootstrapRuntime(
           disposeVoice(),
           disposeAppUpdate(),
           enterpriseSync.stop(),
+          disposeUuRemote(),
         ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host

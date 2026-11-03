@@ -5,7 +5,7 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useIsPreview, useLocalSearchParams } from 'expo-router';
 import { type ComponentProps, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -32,6 +32,7 @@ import {
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { PolicyScope } from '@/frontend/components/Policy';
+import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
@@ -202,6 +203,13 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
+  const activeAgentId = hasComposer && !agent.error ? agent.agent?.id : undefined;
+  // Both drafts and existing chats select the next launch's Agent; previews never do.
+  useFocusEffect(
+    useCallback(() => {
+      if (activeAgentId) cacheService.setPersist('chat.last_agent_id', activeAgentId);
+    }, [activeAgentId]),
+  );
   // Entry actions seed the rich draft; only the user's send creates a message.
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
   const initialDraft = composerHandoff?.skillAction

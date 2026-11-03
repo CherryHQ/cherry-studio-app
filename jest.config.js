@@ -68,6 +68,8 @@ module.exports = {
     '^@earendil-works/pi-codemode/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-codemode/dist/$1.js',
     '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
+    '^@earendil-works/pi-schema$': piDependencyFile('pi-schema', 'index.js'),
+    '^@earendil-works/pi-schema/formats$': piDependencyFile('pi-schema', 'formats/index.js'),
     '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
     '^@earendil-works/pi-ai/models$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/models.js',
     '^@earendil-works/pi-ai/native-oauth$':

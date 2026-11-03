@@ -54,6 +54,9 @@ jest.mock('../../hooks/useSessionSearch', () => ({
   useSessionSearch: () => jest.fn(),
   useSessionSearchRequest: () => ({}),
 }));
+jest.mock('../../hooks/useCloseDrawerForExternalNavigation', () => ({
+  useCloseDrawerForExternalNavigation: () => jest.fn(),
+}));
 jest.mock('../../SidebarSelectionProvider', () => ({
   SidebarSelectionProvider: ({ children }: { children: ReactNode }) => children,
 }));

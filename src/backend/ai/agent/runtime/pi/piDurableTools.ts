@@ -1,5 +1,4 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
-import type { TSchema } from '@earendil-works/pi-ai';
 import {
   defineExtension,
   defineTool,
@@ -38,12 +37,15 @@ type PiDurableToolOptions = {
   tools: readonly RuntimeTool[];
   acceptsImages?: boolean;
   codemode?: Extension;
-  previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
+  previousFailures?(
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
+    context: Context,
+  ): Promise<readonly string[]>;
   beforeCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<string | undefined>;
   /** Resolve the current Pi run, including queued input and a reconstructed process generation. */
   resolve(
     tool: RuntimeTool,
-    api: HookApi,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
     context: Context,
   ): Promise<{ tool: RuntimeTool; turnId: string }>;
   /** The Host admits verified artifacts to its resource ledger before the next tool round. */
@@ -93,7 +95,11 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
   let failedTurnId: string | undefined;
   let restoringFailures: Promise<void> = Promise.resolve();
 
-  async function resolve(template: RuntimeTool, api: HookApi, context: Context) {
+  async function resolve(
+    template: RuntimeTool,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
+    context: Context,
+  ) {
     const binding = await options.resolve(template, api, context);
     if (
       !binding.turnId ||
@@ -209,7 +215,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       defineTool({
         name: tool.providerName,
         description: tool.description,
-        parameters: tool.inputSchema as TSchema,
+        parameters: z.record(z.string(), RuntimeJsonValueSchema).parse(tool.inputSchema),
         structuredOutputSchema: {
           type: 'object',
           properties: {
@@ -236,7 +242,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             },
           },
           required: ['value', 'artifacts'],
-        } as TSchema,
+        },
         ...(tool.ref.source === 'mcp' || tool.deferred ? { deferred: true as const } : {}),
         replay: 'unsafe',
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
@@ -310,6 +316,9 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         },
         async afterTool(call, result, api, context) {
           if (call.name !== CODEMODE_TOOL_NAME || !codemode) return;
+          // Harness failures may never have executed the script. Confirmed artifacts have their
+          // own transcript receipts, so preserve the original diagnostics and failure details.
+          if (result.diagnostics?.some((diagnostic) => diagnostic.severity === 'error')) return;
           const files = await api.snapshot(PiCodemodeFiles, api.taskId, context);
           const text = (result.output ?? [])
             .flatMap((block) => (block.type === 'text' ? [block.text] : []))
