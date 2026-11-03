@@ -114,9 +114,10 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
       const endpoints =
-        qr.v === 3
+        qr.v !== 2
           ? qr.endpoints
           : qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' as const }));
+      const relay = qr.v === 4 ? qr.relay : undefined;
       const id = qr.connectionId ?? Crypto.randomUUID();
       const existing = qr.connectionId
         ? await store.getRow(id).catch((error: unknown) => {
@@ -127,7 +128,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
       onProgress?.({ stage: 'connecting' });
       const session = await this.connections!.connectTemporary(
-        { desktopIdentity: qr.desktopIdentity, endpoints },
+        { desktopIdentity: qr.desktopIdentity, endpoints, relay },
         signal,
       ).catch((error: unknown) => {
         throw translate(error);
@@ -146,7 +147,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
             onProgress?.({ stage: 'saving' });
             await store.updateStatus(
               id,
-              { grants: authorization.grants, status: 'paired' },
+              { grants: authorization.grants, status: 'paired', ...(relay ? { relay } : {}) },
               signal,
               existing,
             );
@@ -188,6 +189,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
                 grants: decision.authorization.grants,
                 id,
                 name: qr.name,
+                relay,
               },
               Boolean(qr.connectionId),
               signal,

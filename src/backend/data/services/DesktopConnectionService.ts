@@ -3,6 +3,8 @@ import {
   configuredEndpointsSchema,
   directEndpointSchema,
   directEndpointUrl,
+  relayEndpointSchema,
+  type RelayEndpoint,
   type DirectEndpoint,
 } from '@cherrystudio/remote-protocol';
 import { loggerService } from '@logger';
@@ -361,13 +363,20 @@ export class DesktopConnectionService {
   }
 
   async savePair(
-    input: Pick<DesktopConnectionRow, 'id' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name'>,
+    input: Pick<DesktopConnectionRow, 'id' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name'> & {
+      relay?: RelayEndpoint | null;
+    },
     replace: boolean,
     signal: AbortSignal,
   ): Promise<DesktopConnection> {
     const connection = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
-      const values = { ...input, learnedEndpoints: [], status: 'paired' as const };
+      const values = {
+        ...input,
+        relay: input.relay == null ? null : relayEndpointSchema.parse(input.relay),
+        learnedEndpoints: [],
+        status: 'paired' as const,
+      };
       const [row] = await (replace
         ? tx
             .update(desktopConnectionTable)
@@ -403,7 +412,9 @@ export class DesktopConnectionService {
     input: DirectEndpoint[],
     expected: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
     signal: AbortSignal,
+    relay?: RelayEndpoint | null,
   ): Promise<DirectEndpoint[]> {
+    const parsedRelay = relay == null ? relay : relayEndpointSchema.parse(relay);
     const learnedEndpoints = [
       ...new Map(
         input.slice(0, 32).map((value) => {
@@ -429,11 +440,13 @@ export class DesktopConnectionService {
         JSON.stringify(row.grants) !== JSON.stringify(expected.grants)
       )
         throw desktopError('auth-revoked', 'Pairing changed while syncing addresses');
-      const changed = JSON.stringify(row.learnedEndpoints) !== JSON.stringify(learnedEndpoints);
+      const changed =
+        JSON.stringify(row.learnedEndpoints) !== JSON.stringify(learnedEndpoints) ||
+        (parsedRelay !== undefined && JSON.stringify(row.relay) !== JSON.stringify(parsedRelay));
       if (changed)
         await tx
           .update(desktopConnectionTable)
-          .set({ learnedEndpoints })
+          .set({ learnedEndpoints, ...(parsedRelay !== undefined ? { relay: parsedRelay } : {}) })
           .where(eq(desktopConnectionTable.id, id));
       signal.throwIfAborted();
       return changed;
@@ -498,10 +511,12 @@ export class DesktopConnectionService {
 
   async updateStatus(
     id: string,
-    values: Partial<Pick<DesktopConnectionRow, 'status' | 'grants' | 'lastFetchedAt'>>,
+    values: Partial<Pick<DesktopConnectionRow, 'status' | 'grants' | 'lastFetchedAt' | 'relay'>>,
     signal: AbortSignal,
     expected?: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
   ): Promise<void> {
+    if (values.relay != null)
+      values = { ...values, relay: relayEndpointSchema.parse(values.relay) };
     await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const [row] = await tx

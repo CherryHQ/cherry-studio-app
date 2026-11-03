@@ -1,6 +1,7 @@
 import {
   directEndpointUrl,
   type DirectEndpoint,
+  type RelayEndpoint,
   type RemoteAuthorization,
 } from '@cherrystudio/remote-protocol';
 import { loggerService } from '@logger';
@@ -36,6 +37,7 @@ import { DesktopSession } from './DesktopSession';
 import { loadDeviceIdentity } from './deviceIdentity';
 import { DesktopUnreachableError, RemoteFailureError, WebSocketOpeningError } from './remoteErrors';
 import { openWebSocketStream } from './remoteSocket';
+import { transportLogger } from './transportLogger';
 
 type LeaseEntry = {
   backgroundRequired: boolean;
@@ -383,7 +385,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   /** Pairing channels are also registered with app lifetime, including a dial still in flight. */
   connectTemporary(target: DesktopConnectionTarget, signal: AbortSignal): Promise<DesktopSession> {
-    return this.openTemporary(target.endpoints, target.desktopIdentity, signal);
+    return this.openTemporary(
+      target.endpoints,
+      target.desktopIdentity,
+      signal,
+      undefined,
+      target.relay,
+    );
   }
 
   /** Checks only the requested route, without reusing or replacing a retained channel. */
@@ -429,10 +437,15 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
         snapshot.endpoints,
         row,
         syncSignal,
+        snapshot.relay,
       );
       const entry = this.entries.get(row.id);
       if (entry && fingerprint(entry.row) === fingerprint(row))
-        entry.row = { ...entry.row, learnedEndpoints };
+        entry.row = {
+          ...entry.row,
+          learnedEndpoints,
+          ...(snapshot.relay !== undefined ? { relay: snapshot.relay } : {}),
+        };
     } catch (error) {
       if (!signal.aborted) logger.warn('Could not sync desktop addresses', { error });
     }
@@ -471,6 +484,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     desktopIdentity: string,
     signal: AbortSignal,
     deviceId?: string,
+    relay?: RelayEndpoint | null,
   ): Promise<DesktopSession> {
     this.assertAvailable();
     if (!this.foreground) throw new DesktopUnreachableError(['suspended']);
@@ -483,7 +497,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     try {
       this.refreshDiscoveryActivity();
       session = await this.track(
-        this.connectCandidates(() => endpoints, desktopIdentity, controller.signal, deviceId),
+        this.connectCandidates(
+          () => endpoints,
+          desktopIdentity,
+          controller.signal,
+          deviceId,
+          undefined,
+          relay,
+        ),
       );
       controller.signal.throwIfAborted();
       const connected = session;
@@ -650,6 +671,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             ...entry.row,
             configuredEndpoints: latest.configuredEndpoints,
             learnedEndpoints: latest.learnedEndpoints,
+            relay: latest.relay,
           };
           this.refreshDiscoveryActivity();
           const stopBrowsing = this.discovery.browse();
@@ -664,6 +686,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
               controller.signal,
               entry.row.deviceId,
               id,
+              entry.row.relay,
             );
           } finally {
             stopBrowsing();
@@ -778,6 +801,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       return;
     clearTimeout(entry.retryTimer);
     if (
+      !entry.row.relay &&
       !this.resolver.discoveryAvailable &&
       !this.resolver.candidates(id, entry.row.desktopIdentity, [
         ...entry.row.configuredEndpoints,
@@ -852,6 +876,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     signal: AbortSignal,
     deviceId?: string,
     id?: string,
+    relay?: RelayEndpoint | null,
   ): Promise<DesktopSession> {
     const identity = await loadDeviceIdentity();
     signal.throwIfAborted();
@@ -860,6 +885,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     signal.addEventListener('abort', cancel, { once: true });
     if (signal.aborted) cancel();
     const deadline = setTimeout(() => round.abort(new Error('Connection round timed out')), 15_000);
+    const directDeadline = Date.now() + 5000;
+    let relayAttempted = false;
     const attempted = new Set<string>();
     const failures: string[] = [];
     const connectionFailures: DesktopConnectionFailure[] = [];
@@ -867,12 +894,15 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     try {
       for (;;) {
         round.signal.throwIfAborted();
-        if (attempted.size >= 32) throw new DesktopUnreachableError(failures);
-        const endpoint = candidates().find(
-          (endpoint) => !attempted.has(directEndpointUrl(endpoint)),
-        );
-        if (!endpoint) {
-          if (!id || !this.resolver.discoveryAvailable) throw new DesktopUnreachableError(failures);
+        const endpoint =
+          attempted.size < 32 && (!relay || Date.now() < directDeadline)
+            ? candidates().find((endpoint) => !attempted.has(directEndpointUrl(endpoint)))
+            : undefined;
+        const useRelay = !endpoint && relay && !relayAttempted ? relay : undefined;
+        if (useRelay) relayAttempted = true;
+        if (!endpoint && !useRelay) {
+          if (relayAttempted || attempted.size >= 32 || !id || !this.resolver.discoveryAvailable)
+            throw new DesktopUnreachableError(failures);
           await new Promise<void>((resolve, reject) => {
             const cleanup = () => {
               unsubscribe();
@@ -891,8 +921,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           });
           continue;
         }
-        const url = directEndpointUrl(endpoint);
-        attempted.add(url);
+        const url = endpoint ? directEndpointUrl(endpoint) : useRelay!.origin;
+        if (endpoint) attempted.add(url);
         const attempt = new AbortController();
         const abort = () => attempt.abort(round.signal.reason);
         round.signal.addEventListener('abort', abort, { once: true });
@@ -906,12 +936,36 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
         };
         attempt.signal.addEventListener('abort', dispose, { once: true });
         try {
-          stream = await openWebSocketStream(url, attempt.signal);
+          if (relay && endpoint)
+            timer = setTimeout(
+              () => attempt.abort(new Error('Direct connection phase timed out')),
+              Math.max(1, directDeadline - Date.now()),
+            );
+          if (useRelay) {
+            const { connectRelayStream } =
+              // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads Relay only when this route is selected.
+              require('@cherrystudio/relay-client') as typeof import('@cherrystudio/relay-client');
+            const { createRelaySocket } =
+              // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native bridge out of direct-only startup.
+              require('./relaySocket') as typeof import('./relaySocket');
+            attempt.signal.throwIfAborted();
+            stream = await connectRelayStream(useRelay.targetId, {
+              origin: useRelay.origin,
+              createSocket: createRelaySocket,
+              signal: attempt.signal,
+              timeoutMs: 8000,
+              log: transportLogger.forComponent('relay'),
+            });
+          } else stream = await openWebSocketStream(url, attempt.signal);
           attempt.signal.throwIfAborted();
-          timer = setTimeout(() => attempt.abort(new Error('Desktop handshake timed out')), 6000);
+          clearTimeout(timer);
+          timer = setTimeout(
+            () => attempt.abort(new Error('Desktop handshake timed out')),
+            relay && endpoint ? Math.max(1, Math.min(6000, directDeadline - Date.now())) : 6000,
+          );
           session = await DesktopSession.connect({
             stream,
-            address: endpoint.host,
+            address: endpoint?.host ?? useRelay!.origin,
             desktopIdentity,
             identity,
             signal: attempt.signal,
@@ -927,17 +981,18 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             }
           }
           attempt.signal.throwIfAborted();
-          if (id) this.resolver.succeeded(id, endpoint);
+          if (id && endpoint) this.resolver.succeeded(id, endpoint);
           success = true;
           return session;
         } catch (error) {
           if (error instanceof DesktopAuthorizationError) throw error;
           if (!round.signal.aborted) {
-            if (id) this.resolver.failed(id, endpoint);
+            if (id && endpoint) this.resolver.failed(id, endpoint);
             logger.debug('Desktop endpoint failed', {
-              host: endpoint.host,
-              port: endpoint.port,
-              security: endpoint.security,
+              transport: endpoint ? 'direct' : 'relay',
+              host: endpoint?.host,
+              port: endpoint?.port,
+              security: endpoint?.security,
               reason:
                 error instanceof RemoteFailureError
                   ? error.reason
