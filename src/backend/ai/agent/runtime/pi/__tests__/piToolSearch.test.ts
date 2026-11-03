@@ -22,6 +22,28 @@ describe('upstream tool discovery', () => {
     expect(result.control?.addTools).toEqual(expected);
   });
 
+  test('keeps Chinese whole names and adjacent pairs when Intl.Segmenter is unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Intl, 'Segmenter');
+    let search!: ReturnType<typeof createToolSearchTool>;
+    try {
+      Object.defineProperty(Intl, 'Segmenter', { configurable: true, value: undefined });
+      jest.isolateModules(() => {
+        const isolated = jest.requireActual<
+          typeof import('@earendil-works/pi-durable/tool-search')
+        >('@earendil-works/pi-durable/tool-search');
+        search = isolated.createToolSearchTool();
+      });
+    } finally {
+      if (descriptor) Object.defineProperty(Intl, 'Segmenter', descriptor);
+      else Reflect.deleteProperty(Intl, 'Segmenter');
+    }
+    const api = { agent: async () => ({ deferred: catalog }) } as unknown as ToolExecutionApi;
+    for (const query of ['飞书日历', '日历', '书日'])
+      expect((await search.execute({ query }, api, BACKGROUND_CONTEXT)).control?.addTools).toEqual([
+        'mcp_calendar',
+      ]);
+  });
+
   test('loads exact deferred names before ranked matches, so a small limit cannot load another tool', async () => {
     // BM25 ranks the shorter agent_get first for "agent_list": it mentions the name and is shorter.
     const agents = [
@@ -48,13 +70,13 @@ describe('upstream tool discovery', () => {
   test.each(['pi-durable', 'pi-codemode'])(
     'pins the %s patch to the installed dependency',
     (name) => {
-      const path = `patches/@earendil-works__${name}@1.4.0.patch`;
+      const path = `patches/@earendil-works__${name}@1.5.0.patch`;
       const hash = createHash('sha256').update(readFileSync(path)).digest('hex');
       expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(
-        `'@earendil-works/${name}@1.4.0': ${path}`,
+        `'@earendil-works/${name}@1.5.0': ${path}`,
       );
       expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(
-        `  '@earendil-works/${name}@1.4.0': ${hash}\n`,
+        `  '@earendil-works/${name}@1.5.0': ${hash}\n`,
       );
     },
   );

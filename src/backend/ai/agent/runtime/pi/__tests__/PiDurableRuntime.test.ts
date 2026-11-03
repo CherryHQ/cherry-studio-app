@@ -3,7 +3,9 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import {
   createRegistry,
+  defineDoc,
   defineDocFamily,
+  defineTask,
   Harness,
   InboxDoc,
   LiveDoc,
@@ -12,6 +14,7 @@ import {
   ProviderDoc,
   UserEntry,
   type ConversationId,
+  type SubmissionId,
   type TaskGraphNode,
   type TaskId,
 } from '@earendil-works/pi-durable';
@@ -58,7 +61,7 @@ test('execution protection follows runnable work, including due sleeps and cance
     true,
   );
   const pending: TaskGraphNode = { ...task, state: { status: 'pending', phase: 'generate' } };
-  expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'restart_limit' } } })).toBe(
+  expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'migration_failed' } } })).toBe(
     false,
   );
   expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'missing_task' } } })).toBe(
@@ -104,67 +107,88 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test('reopens an existing run and advances waiting input after a missing-model failure', async () => {
-    class ReopenableStorage extends MemoryStorage {
-      override async close() {}
-    }
-    const storage = new ReopenableStorage();
-    const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
-    const conversation = await first.createConversation(
-      { ownership: { kind: 'ownerless' } },
-      BACKGROUND_CONTEXT,
-    );
-    await conversation.commit(async (tx) => {
-      const inbox = await tx.doc(InboxDoc, conversation.id);
-      const live = await tx.doc(LiveDoc, conversation.id);
-      const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
-      const active = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        status: 'placed',
-        requestId: 'active',
-        entry: entry.id,
+  test.each(['1.4.0', '1.5.0'])(
+    'reopens a %s run and advances waiting input after a missing-model failure',
+    async (version) => {
+      class ReopenableStorage extends MemoryStorage {
+        override async close() {}
+      }
+      // Persist the shapes published in v1.4.0, then let the installed Harness migrate on reopen.
+      // https://github.com/earendil-works/pi/blob/v1.4.0/packages/durable/src/harness/live.ts
+      const legacyLive = defineDoc<{ run?: { taskId: TaskId; inputs: SubmissionId[] } }>({
+        kind: 'pi.live',
+        version: 1,
+        scope: 'conversation',
+        history: 'latest',
+        fork: 'initial',
+        initial: () => ({}),
+        checkpointWhen: () => true,
       });
-      const taskId = await tx.createTask(
-        GenerationTask,
-        {},
-        {
-          ownership: { kind: 'conversation' },
+      const legacyGeneration = defineTask({ ...GenerationTask.definition, version: 1 });
+      const storage = new ReopenableStorage();
+      const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+      const conversation = await first.createConversation(
+        { ownership: { kind: 'ownerless' } },
+        BACKGROUND_CONTEXT,
+      );
+      await conversation.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        const live =
+          version === '1.4.0'
+            ? await tx.doc(legacyLive, conversation.id)
+            : await tx.doc(LiveDoc, conversation.id);
+        const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
+        const active = await tx.createSubmission({
           conversationId: conversation.id,
-        },
-      );
-      live.run = { taskId, inputs: [active.id] };
-      const queued = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        status: 'queued',
-        requestId: 'waiting',
-      });
-      inbox.items.push({ id: queued.id, mode: 'followUp', content: 'Waiting' });
-    }, BACKGROUND_CONTEXT);
-    await first.close(BACKGROUND_CONTEXT);
-    const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
-    try {
-      const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
-      expect(inspected.submissions.map((record) => [record.requestId, record.status])).toEqual([
-        ['active', 'placed'],
-        ['waiting', 'queued'],
-      ]);
-      expect(inspected.tasks).toHaveLength(1);
-      reopened.resume();
-      await reopened.waitForIdle(BACKGROUND_CONTEXT);
-      const records = await Promise.all(
-        inspected.submissions.map(async ({ id }) =>
-          (await reopened.submission(id, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
-        ),
-      );
-      expect(records.map((record) => record.status)).toEqual(['unanswered', 'unanswered']);
-      expect(records.every((record) => record.entry !== undefined)).toBe(true);
-      expect((await reopened.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
-    } finally {
-      await reopened.close(BACKGROUND_CONTEXT);
-    }
-  });
+          type: 'input',
+          status: 'placed',
+          requestId: 'active',
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          version === '1.4.0' ? legacyGeneration : GenerationTask,
+          {},
+          {
+            ownership: { kind: 'conversation' },
+            conversationId: conversation.id,
+          },
+        );
+        live.run = { taskId, inputs: [active.id], ...(version === '1.4.0' ? {} : { turns: 0 }) };
+        const queued = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'queued',
+          requestId: 'waiting',
+        });
+        inbox.items.push({ id: queued.id, mode: 'followUp', content: 'Waiting' });
+      }, BACKGROUND_CONTEXT);
+      await first.close(BACKGROUND_CONTEXT);
+      const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+      try {
+        const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
+        expect(inspected.submissions.map((record) => [record.requestId, record.status])).toEqual([
+          ['active', 'placed'],
+          ['waiting', 'queued'],
+        ]);
+        expect(inspected.tasks).toHaveLength(1);
+        expect(
+          (await reopened.snapshot(LiveDoc, conversation.id, BACKGROUND_CONTEXT))?.run?.turns,
+        ).toBe(0);
+        reopened.resume();
+        await reopened.waitForIdle(BACKGROUND_CONTEXT);
+        const records = await Promise.all(
+          inspected.submissions.map(async ({ id }) =>
+            (await reopened.submission(id, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
+          ),
+        );
+        expect(records.map((record) => record.status)).toEqual(['unanswered', 'unanswered']);
+        expect(records.every((record) => record.entry !== undefined)).toBe(true);
+        expect((await reopened.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
+      } finally {
+        await reopened.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
 
   test('a failed blocking compaction settles its input and advances queued input', async () => {
     const configuration = options();
