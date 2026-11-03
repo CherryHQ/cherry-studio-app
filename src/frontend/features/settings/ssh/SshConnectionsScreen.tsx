@@ -30,7 +30,7 @@ export function SshConnectionsScreen() {
             <Section.Item
               key={profile.id}
               label={profile.name}
-              description={`${profile.username}@${profile.host}:${profile.port}`}
+              description={`${profile.username}@${profile.host}:${profile.port}${profile.isEnabled ? '' : ` · ${t('ssh.disabled')}`}`}
               onPress={() =>
                 router.push({
                   pathname: '/settings/ssh/[profileId]',

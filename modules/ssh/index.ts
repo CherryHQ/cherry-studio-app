@@ -23,6 +23,7 @@ export type SshNativeOptions = {
 };
 
 export type SshNative = {
+  readonly resultVersion: number;
   prepare(id: string): boolean;
   cancel(id: string): void;
   respond(id: string, challenge: string, responses: readonly string[]): void;
@@ -42,7 +43,10 @@ export type SshNative = {
 
 export function getSshNative(): SshNative | null {
   const native = requireOptionalNativeModule<SshNative>('Ssh');
-  return native && typeof native.respond === 'function' && typeof native.maintain === 'function'
+  return native &&
+    native.resultVersion === 2 &&
+    typeof native.respond === 'function' &&
+    typeof native.maintain === 'function'
     ? native
     : null;
 }

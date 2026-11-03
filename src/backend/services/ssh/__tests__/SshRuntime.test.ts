@@ -43,6 +43,8 @@ const outcome = (state: string, error = '') =>
     fingerprint,
     stdout: '',
     stderr: '',
+    stdoutBytes: 0,
+    stderrBytes: 0,
     exitCode: null,
     truncated: false,
   });
@@ -52,6 +54,7 @@ let profileStorage: { getString(key: string): string | undefined; set: jest.Mock
 let runtime: SshRuntime;
 let secrets: Map<string, string>;
 const native: jest.Mocked<SshNative> = {
+  resultVersion: 2,
   prepare: jest.fn(),
   cancel: jest.fn(),
   run: jest.fn(),
@@ -243,6 +246,74 @@ test('reselecting the same host does not revive an old command or grant confirma
     code: 'changed',
   });
   expect(runtime.getTarget('conversation')?.grant).toBeNull();
+  expect(native.run).not.toHaveBeenCalled();
+});
+
+test('enabling diagnostics preserves the pending explicit approval, while revoking retires it', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const pendingTarget = runtime.getTarget('conversation')!;
+  await runtime.setCommandGrant('conversation', pendingTarget, true);
+  const granted = runtime.getTarget('conversation')!;
+  expect(granted.selectionId).toBe(pendingTarget.selectionId);
+  expect(pendingTarget.grant).toBeNull();
+  native.run.mockClear();
+  await runtime.executeForAgent(
+    'conversation',
+    pendingTarget,
+    { command: 'pwd' },
+    new AbortController().signal,
+  );
+  expect(native.run).toHaveBeenCalledTimes(1);
+  await runtime.setCommandGrant('conversation', granted, false);
+  expect(runtime.getTarget('conversation')!.selectionId).not.toBe(pendingTarget.selectionId);
+  await expect(
+    runtime.executeForAgent(
+      'conversation',
+      pendingTarget,
+      { command: 'pwd' },
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'changed' });
+  expect(native.run).toHaveBeenCalledTimes(1);
+});
+
+test('disabling a connection invalidates its bindings and rejects command admission', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const disabled = await runtime.save({
+    previous: profile,
+    profile: { ...profile, isEnabled: false },
+  });
+  expect(runtime.getTarget('conversation')).toBeNull();
+  expect((await profiles.list()).find((item) => item.id === profile.id)?.isEnabled).toBe(false);
+  native.run.mockClear();
+  await expect(runtime.selectTarget('conversation', disabled)).rejects.toMatchObject({
+    code: 'disabled',
+  });
+  await expect(
+    runtime.execute(disabled, { command: 'pwd' }, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'disabled' });
+  expect(native.run).not.toHaveBeenCalled();
+});
+
+test('grant expiry also retires a command captured before diagnostics were enabled', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const pendingTarget = runtime.getTarget('conversation')!;
+  await runtime.setCommandGrant('conversation', pendingTarget, true);
+  const granted = runtime.getTarget('conversation')!;
+  jest.spyOn(Date, 'now').mockReturnValue(granted.grant!.expiresAt + 1);
+  expect((await runtime.resolveAgentTarget('conversation'))?.grant).toBeNull();
+  native.run.mockClear();
+  await expect(
+    runtime.executeForAgent(
+      'conversation',
+      pendingTarget,
+      { command: 'pwd' },
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'changed' });
   expect(native.run).not.toHaveBeenCalled();
 });
 
@@ -459,6 +530,8 @@ const reusedFailure = (state = 'not-started') =>
     fingerprint,
     stdout: '',
     stderr: '',
+    stdoutBytes: 0,
+    stderrBytes: 0,
     exitCode: null,
     truncated: false,
     diagnostics: {

@@ -8,6 +8,7 @@ import { useBackendModule, useQuery } from '@/frontend/data';
 import { SshError, type SshErrorCode } from '@/shared/data/types/ssh';
 
 const errorKeys = {
+  disabled: 'ssh.error.disabled',
   unavailable: 'ssh.error.unavailable',
   'invalid-input': 'ssh.error.invalidInput',
   busy: 'ssh.error.busy',

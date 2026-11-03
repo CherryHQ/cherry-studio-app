@@ -8,6 +8,12 @@ const profile = {
   authMethod: 'password',
 };
 
+test('new profiles default to enabled and explicit disabled state survives validation', () => {
+  expect(SshProfileFieldsSchema.parse(profile).isEnabled).toBe(true);
+  expect(SshProfileFieldsSchema.parse({ ...profile, isEnabled: false }).isEnabled).toBe(false);
+  expect(SshProfileFieldsSchema.safeParse({ ...profile, isEnabled: 'false' }).success).toBe(false);
+});
+
 test('preserves the account directory by default and accepts only an explicit absolute workspace root', () => {
   expect(SshProfileFieldsSchema.parse(profile).remoteDirectory).toBe('.');
   expect(

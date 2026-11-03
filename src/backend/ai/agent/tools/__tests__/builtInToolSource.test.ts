@@ -98,6 +98,7 @@ describe('createSystemCapabilitySource', () => {
         username: 'admin',
         authMethod: 'password',
         fingerprint: 'SHA256:key',
+        isEnabled: true,
         remoteDirectory: '/srv/project',
       },
       grant: null,

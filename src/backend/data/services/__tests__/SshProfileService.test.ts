@@ -46,6 +46,7 @@ const input = () => ({
   port: 22,
   username: 'user',
   authMethod: 'password' as const,
+  isEnabled: true,
   remoteDirectory: '/projects',
   fingerprint: 'SHA256:trusted',
   credentialReference: mockRandomUUID(),
@@ -97,6 +98,12 @@ test('exports configuration without device credential references and rejects sec
       }),
     ),
   ).toThrow();
+});
+
+test('keeps disabled connections disabled in persistent reads and portable backups', async () => {
+  const profile = await service.save({ ...input(), isEnabled: false });
+  expect(await new SshProfileService(storage).list()).toEqual([profile]);
+  expect(parseSshProfileBackup(service.exportSnapshot()).profiles[0]?.isEnabled).toBe(false);
 });
 
 test('rejects corrupt or duplicate persisted records without replacing the saved data', async () => {

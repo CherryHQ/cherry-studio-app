@@ -2,8 +2,9 @@
 
 An Expo local module exposing bounded SSH command and SFTP operations. iOS and Android
 share `cpp/Ssh.cpp` and the same pinned libssh2 source. Existing development clients need a new
-native build for the command-input, authentication-event and file-operation interfaces; a JavaScript
-update alone cannot add them. The JavaScript adapter treats an older native interface as unavailable.
+native build for the result-version 2 interface, including original output byte counts; a JavaScript
+update alone cannot add them. The JavaScript adapter checks the result version and treats an older
+native interface as unavailable before executing any operation.
 
 The native SSH runtime is bundled with the app. The source download described below happens only
 on the build host; users do not download or install SSH components separately.
@@ -12,31 +13,38 @@ on the build host; users do not download or install SSH components separately.
 
 `upstream.json` pins libssh2 commit
 `94629f16bb313e522276b53a50f8d89c6eee81b0` (upstream `1.11.2_DEV`), its archive URL and SHA-256.
-`prepareLibssh2.cjs` downloads that archive during CocoaPods installation or Android CMake
-configuration, checks its digest before extraction, and caches the complete source tree under
-`.cache/libssh2-<archive-sha256>`. Both platforms use this one preparation script; no third-party
-source is checked in. Node.js, curl and tar are required on the build host. A cold cache needs
-network access; a complete cache is reused without a download. Failed downloads or hash mismatches
-stop preparation, and incomplete temporary trees are never published to the shared cache.
+`prepareLibssh2.cjs` downloads that exact archive during CocoaPods installation or Android CMake
+configuration, verifies its digest before extraction, and caches the complete source tree under
+`.cache/libssh2-<archive-sha256>`. Both platforms use this one preparation script; third-party
+source and downloaded archives are not checked into Git. Node.js, curl and tar are required on
+the build host. A cold cache needs network access; a complete cache is reused without a download.
+Failed downloads or hash mismatches stop preparation; incomplete temporary trees are never
+published to the shared cache.
 
 The cache is excluded from Git, EAS source archives and Expo compatibility fingerprints. The
-committed pin, preparation script and native wrappers remain fingerprint inputs. Delete the module's
-`.cache` directory to fetch a clean copy. `licenses/libssh2.txt` retains the upstream copyright
-notice and is included in both native packages. There are no local source patches.
-This pin includes fixes after the 1.11.1 release and the exit-status-presence API. Do not replace it
-with an unpatched 1.11.1 package. Track [upstream security advisories](https://libssh2.org/security.html)
-when updating the pin, and review source/API changes before changing the commit and archive digest.
+committed pin, preparation script and wrappers remain fingerprint inputs. Delete the module's
+`.cache` directory to fetch a clean copy. `licenses/libssh2.txt` retains upstream notices and is
+included in both native packages. There are no local libssh2 source patches.
 
-The build compiles the upstream C sources except `blowfish.c`, which `bcrypt_pbkdf.c` includes.
+Keep this fixed commit until a formal release includes the required security fixes and
+`libssh2_channel_has_exit_status()`. Do not downgrade to unpatched 1.11.1 or follow a moving branch.
+When a suitable release is available, review its changes and replace the commit pin with the
+release archive URL and SHA-256 for both platforms together. Track
+[upstream security advisories](https://github.com/libssh2/libssh2/security/advisories).
+Native compilation and device/server acceptance remain separate, explicitly authorized checks.
+
+The build compiles upstream C sources except `blowfish.c`, which `bcrypt_pbkdf.c` includes.
 `cpp/libssh2_config.h` is the iOS/Android POSIX configuration. Compression is not compiled in;
 legacy algorithms disabled by upstream stay disabled, and AES-CBC is explicitly disabled.
 
-- iOS depends on QuickCrypto 1.1.8 and uses its OpenSSL 3.6.2 headers, static framework, and forced
-  `rnqc_*` symbol prefix. Updating QuickCrypto's packaging requires reviewing this podspec too.
-- Android consumes the same OpenSSL prefab version as QuickCrypto,
-  `io.github.ronickg:openssl-static:3.6.2-3`. Each shared library localizes its static crypto symbols
-  with `--exclude-libs,ALL`; no competing `libcrypto.so` is introduced. This shares the build input,
-  not the linked machine code: both shared libraries contain their required crypto symbols.
+- iOS directly depends on the published `OpenSSL-Universal` **3.6.2000** pod (OpenSSL 3.6.2).
+  CocoaPods selects the public XCFramework slice. A before-compile phase maps its public headers
+  to the lowercase `openssl/` include layout in the derived directory. SSH no longer imports
+  QuickCrypto private headers or its prefix file; QuickCrypto retains its own `rnqc_*` symbols.
+- Android directly consumes `io.github.ronickg:openssl-static:3.6.2-3`, also used by QuickCrypto.
+  Each shared library localizes its static crypto symbols with `--exclude-libs,ALL`; no competing
+  `libcrypto.so` is introduced. This shares the build input, not linked machine code: both shared
+  libraries contain their required crypto symbols.
 
 ## Native contract
 
@@ -77,8 +85,11 @@ override it with an absolute path or a path relative to that directory. Paths ar
 the command is a separate subshell after a successful directory change. UTF-8 `stdin` is bounded
 to 256 KiB and interleaved with output reads before EOF, avoiding a full-duplex pipe deadlock.
 This is finite input supplied with the request, not an interactive terminal. Connection reuse does
-not preserve shell state or the working directory between calls. Each output stream retains at most
-128 KiB split between its head and tail; excess output is drained and marked truncated. Initial
+not preserve shell state or the working directory between calls. Calls on one connection run
+sequentially; overlapping operations return `busy`. Each output stream retains at most
+128 KiB split between its head and tail; excess output is drained and marked truncated.
+`stdoutBytes` and `stderrBytes` count all bytes received before truncation (including invalid UTF-8);
+a lost native final result yields unknown counts (`null`) in the JavaScript adapter. Initial
 output events are bounded separately; the final result contains the retained tail. Output events
 are batched and base64 encoded to preserve UTF-8 boundaries and arbitrary bytes across both bridges.
 The backend decodes command output with replacement for invalid UTF-8. `onEvent` also carries

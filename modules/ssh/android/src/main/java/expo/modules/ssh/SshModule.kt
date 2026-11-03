@@ -9,6 +9,7 @@ import expo.modules.kotlin.records.Record
 class SshModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Ssh")
+    Constants("resultVersion" to 2)
     Events("onEvent")
     Function("prepare") { id: String -> SshNative.prepare(id.toByteArray(Charsets.UTF_8)) }
     Function("cancel") { id: String -> SshNative.cancel(id.toByteArray(Charsets.UTF_8)) }

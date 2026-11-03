@@ -1,3 +1,4 @@
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import {
   Button,
   ContentState,
@@ -53,7 +54,21 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
   async function probe() {
     const result = await action.run((signal) => ssh.probe(profile, signal));
     if (!result) return;
-    setHostProbe(result);
+    if (profile.fingerprint && profile.fingerprint !== result.fingerprint) {
+      setHostProbe(result);
+    } else {
+      alert.confirm({
+        title: t('ssh.trustTitle'),
+        description: t('ssh.trustDescription', {
+          target: `${profile.host}:${profile.port}`,
+          fingerprint: result.fingerprint,
+        }),
+        confirmLabel: t('ssh.trust'),
+        onConfirm: () => {
+          void action.run(() => ssh.trust(result.token));
+        },
+      });
+    }
   }
 
   function remove() {
@@ -69,7 +84,7 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
             return true;
           })
           .then((removed) => {
-            if (removed) router.dismissTo('/settings/ssh');
+            if (removed) router.back();
           });
       },
     });
@@ -78,7 +93,34 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
     <SettingsScrollPage
       contentClassName="gap-5"
       keyboardShouldPersistTaps="handled"
-      headerProps={{ title: profile.name }}
+      headerProps={{
+        title: profile.name,
+        rightActions: [
+          {
+            key: 'ssh-actions',
+            type: 'menu',
+            icon: EllipsisIcon,
+            nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
+            accessibilityLabel: t('common.more'),
+            disabled: action.busy,
+            items: [
+              {
+                id: 'enabled',
+                label: t(profile.isEnabled ? 'ssh.disable' : 'ssh.enable'),
+                onPress: () => {
+                  void action.run(() =>
+                    ssh.save({
+                      previous: profile,
+                      profile: { ...profile, isEnabled: !profile.isEnabled },
+                    }),
+                  );
+                },
+              },
+              { id: 'remove', label: t('common.remove'), destructive: true, onPress: remove },
+            ],
+          },
+        ],
+      }}
     >
       <Section footer={t('ssh.localNetworkNotice')}>
         <Section.Item
@@ -101,7 +143,7 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
         <Section.Item
           label={t('ssh.files.title')}
           description={profile.remoteDirectory}
-          disabled={action.busy || !profile.fingerprint || !ssh.isAvailable()}
+          disabled={action.busy || !profile.isEnabled || !profile.fingerprint || !ssh.isAvailable()}
           onPress={() =>
             router.push({ pathname: '/settings/ssh/files', params: { profileId: profile.id } })
           }
@@ -115,21 +157,13 @@ function SshProfileDetail({ profile }: { profile: SshProfile }) {
         />
       </Section>
       <Button
-        disabled={!profile.fingerprint || action.busy || !ssh.isAvailable()}
+        disabled={!profile.isEnabled || !profile.fingerprint || action.busy || !ssh.isAvailable()}
         variant="secondary"
         onPress={() => setPickAgent(true)}
       >
         {t('ssh.useWithAi')}
       </Button>
       <SshCommandPanel key={profile.revision} profile={profile} />
-      <Section>
-        <Section.Item
-          label={t('common.remove')}
-          disabled={action.busy}
-          destructive
-          onPress={remove}
-        />
-      </Section>
       {hostProbe ? (
         <SshHostTrustDialog
           key={hostProbe.token}
@@ -217,7 +251,9 @@ function SshCommandPanel({ profile }: { profile: SshProfile }) {
         </Button>
       ) : (
         <Button
-          disabled={!command.trim() || !profile.fingerprint || !ssh.isAvailable()}
+          disabled={
+            !command.trim() || !profile.isEnabled || !profile.fingerprint || !ssh.isAvailable()
+          }
           onPress={() => void execute()}
         >
           {t('ssh.command.run')}

@@ -56,9 +56,30 @@ export function parseSshProfileBackup(raw: string) {
 }
 
 export function toSshProfile(row: SshProfileRecord): SshProfile {
-  const { id, revision, name, host, port, username, authMethod, fingerprint, remoteDirectory } =
-    row;
-  return { id, revision, name, host, port, username, authMethod, fingerprint, remoteDirectory };
+  const {
+    id,
+    revision,
+    name,
+    host,
+    port,
+    username,
+    authMethod,
+    fingerprint,
+    remoteDirectory,
+    isEnabled,
+  } = row;
+  return {
+    id,
+    revision,
+    name,
+    host,
+    port,
+    username,
+    authMethod,
+    fingerprint,
+    remoteDirectory,
+    isEnabled,
+  };
 }
 
 /** Durable configuration, isolated from the disposable frontend/backend MMKV caches. */

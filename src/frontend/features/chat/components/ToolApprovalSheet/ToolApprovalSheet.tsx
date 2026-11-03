@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -12,11 +12,13 @@ export type PendingToolApproval = {
   input: unknown;
   displayName: string;
   sshCommand?: boolean;
+  canGrantSshDiagnostics?: boolean;
 };
 
 export type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
+  sshDiagnosticsGrant?: true;
 };
 
 type ToolApprovalSheetProps = {
@@ -43,13 +45,18 @@ export function ToolApprovalSheet({
   const [response, setResponse] = useState({
     approvalId: approvals[0]?.approvalId,
     isSubmitting: false,
+    allowSshDiagnostics: false,
   });
   const submitting = useRef(new Set<string>());
   if (approvals[0] && approvals[0] !== lastApproval) {
     setLastApproval(approvals[0]);
   }
   if (approvals[0] && approvals[0].approvalId !== response.approvalId) {
-    setResponse({ approvalId: approvals[0].approvalId, isSubmitting: false });
+    setResponse({
+      approvalId: approvals[0].approvalId,
+      isSubmitting: false,
+      allowSshDiagnostics: false,
+    });
   }
   const approval = approvals[0] ?? lastApproval;
 
@@ -67,7 +74,13 @@ export function ToolApprovalSheet({
     submitting.current.add(approvalId);
     setResponse((current) => ({ ...current, isSubmitting: true }));
     try {
-      await onRespond({ approvalId, approved });
+      await onRespond({
+        approvalId,
+        approved,
+        ...(approved && approval.canGrantSshDiagnostics && response.allowSshDiagnostics
+          ? { sshDiagnosticsGrant: true as const }
+          : {}),
+      });
     } finally {
       submitting.current.delete(approvalId);
       setResponse((current) =>
@@ -111,6 +124,18 @@ export function ToolApprovalSheet({
         ) : (
           <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         )}
+        {approval.canGrantSshDiagnostics ? (
+          <Section footer={t('ssh.grant.ask')}>
+            <Section.SwitchItem
+              label={t('ssh.grant.title')}
+              disabled={!canDecide}
+              value={response.allowSshDiagnostics}
+              onValueChange={(allowSshDiagnostics) =>
+                setResponse((current) => ({ ...current, allowSshDiagnostics }))
+              }
+            />
+          </Section>
+        ) : null}
         {children}
       </ScrollView>
     </BottomSheet>

@@ -636,11 +636,12 @@ std::string run(const std::string &id, Options options, const Output &output) {
     std::lock_guard<std::mutex> guard(runsLock);
     auto found = runs.find(id);
     if (found == runs.end() || found->second->started)
-      return R"({"state":"not-started","error":"cancelled","stdout":"","stderr":"","fingerprint":"","exitCode":null,"truncated":false})";
+      return R"({"state":"not-started","error":"cancelled","stdout":"","stderr":"","stdoutBytes":0,"stderrBytes":0,"fingerprint":"","exitCode":null,"truncated":false})";
     state = found->second;
     state->started = true;
   }
   std::string remoteState = "not-started", error, fingerprint, out, err, temporaryPath;
+  uint64_t stdoutBytes = 0, stderrBytes = 0;
   std::string phase = "connect", kex, cipher, authMethods;
   bool truncated = false, hasExit = false, reused = false;
   int exitCode = 0, nativeCode = 0, hostKeyType = 0;
@@ -796,6 +797,7 @@ std::string run(const std::string &id, Options options, const Output &output) {
             if (count > 0) {
               progressed = true;
               auto &retained = stream ? err : out;
+              (stream ? stderrBytes : stdoutBytes) += static_cast<uint64_t>(count);
               // Keep a bounded head and tail per stream, including failures printed last.
               const size_t kept = std::min(maxOutput / 2 - retained.size(), static_cast<size_t>(count));
               if (kept) pendingOutput[stream].append(buffer, kept);
@@ -848,7 +850,8 @@ std::string run(const std::string &id, Options options, const Output &output) {
   // The last confirmed outcome survives a cleanup failure; no operation is replayed.
   return "{\"state\":\"" + remoteState + "\",\"error\":\"" + error +
     "\",\"fingerprint\":\"" + fingerprint + "\",\"stdout\":" + encoded(out) +
-    ",\"stderr\":" + encoded(err) + ",\"exitCode\":" + (hasExit ? std::to_string(exitCode) : "null") +
+    ",\"stderr\":" + encoded(err) + ",\"stdoutBytes\":" + std::to_string(stdoutBytes) +
+    ",\"stderrBytes\":" + std::to_string(stderrBytes) + ",\"exitCode\":" + (hasExit ? std::to_string(exitCode) : "null") +
     ",\"truncated\":" + (truncated || file.truncated ? "true" : "false") +
     ",\"path\":" + encoded(file.path) + ",\"entries\":" + file.entries +
     ",\"content\":" + encoded(file.content) + ",\"bytes\":" + std::to_string(file.bytes) +

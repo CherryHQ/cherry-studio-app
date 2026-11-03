@@ -24,7 +24,7 @@ jest.mock('../../../quotes/MessageQuotePreview', () => ({ DraftMessageQuotePrevi
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
 jest.mock('@/frontend/data', () => ({
   useApiClient: () => ({}),
-  useBackendModule: () => ({ isAvailable: () => false }),
+  useBackendModule: () => ({ isAvailable: () => false, getTarget: () => null }),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockNoop }) }));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => mockNoop }));
@@ -77,7 +77,7 @@ jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
 jest.mock('../components/ChatInputSsh', () => ({
-  ChatInputSshSheet: () => null,
+  ChatInputSshPopover: ({ children }: { children: ReactNode }) => children,
   ChatInputSshTarget: () => null,
 }));
 jest.mock('../components/ChatInputPluginPopover', () => ({

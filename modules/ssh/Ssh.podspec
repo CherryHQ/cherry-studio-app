@@ -15,23 +15,32 @@ Pod::Spec.new do |s|
   s.source = { git: '' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
-  s.dependency 'QuickCrypto', '1.1.8'
+  s.dependency 'OpenSSL-Universal', '3.6.2000'
   s.source_files = 'ios/**/*.{h,mm,swift}', 'cpp/**/*.{h,cpp}', "#{ssh2_source}/src/*.{h,c}"
   # blowfish.c is included by bcrypt_pbkdf.c, not a separate translation unit.
   s.exclude_files = "#{ssh2_source}/src/blowfish.c"
   s.preserve_paths = '.cache/**/*'
   s.resource_bundles = { 'SshLicenses' => ['licenses/*'] }
   s.public_header_files = 'ios/SshRunner.h'
-  crypto = File.realpath(File.join(__dir__, '../../node_modules/react-native-quick-crypto'))
-  prefix = File.join(crypto, 'ios/openssl/quickcrypto_openssl_prefix.h')
+  # OpenSSL-Universal exposes a public framework. Map its public headers to the
+  # lowercase include layout expected by libssh2, including case-sensitive hosts.
+  # CocoaPods selects the device/simulator slice; do not reach into another pod's source tree.
+  s.script_phase = {
+    :name => 'Prepare SSH OpenSSL headers',
+    :execution_position => :before_compile,
+    :script => <<~SH,
+      set -eu
+      mkdir -p "${DERIVED_FILE_DIR}/ssh-crypto"
+      ln -sfn "${PODS_XCFRAMEWORKS_BUILD_DIR}/OpenSSL-Universal/OpenSSL.framework/Headers" "${DERIVED_FILE_DIR}/ssh-crypto/openssl"
+    SH
+    :input_files => ['$(PODS_XCFRAMEWORKS_BUILD_DIR)/OpenSSL-Universal/OpenSSL.framework/Headers/opensslv.h'],
+    :output_files => ['$(DERIVED_FILE_DIR)/ssh-crypto/openssl'],
+  }
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
     'GCC_C_LANGUAGE_STANDARD' => 'gnu11',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) HAVE_CONFIG_H LIBSSH2_OPENSSL LIBSSH2_NO_AES_CBC',
-    'HEADER_SEARCH_PATHS' => "\"$(PODS_TARGET_SRCROOT)/cpp\" \"$(PODS_TARGET_SRCROOT)/#{ssh2_source}/include\" \"$(PODS_TARGET_SRCROOT)/#{ssh2_source}/src\" \"#{crypto}/ios/openssl/include\"",
-    # Resolve to QuickCrypto's namespaced static OpenSSL, never another pod's symbols.
-    'OTHER_CFLAGS' => "$(inherited) -include \"#{prefix}\"",
-    'OTHER_CPLUSPLUSFLAGS' => "$(inherited) -include \"#{prefix}\"",
+    'HEADER_SEARCH_PATHS' => "$(inherited) \"$(PODS_TARGET_SRCROOT)/cpp\" \"$(PODS_TARGET_SRCROOT)/#{ssh2_source}/include\" \"$(PODS_TARGET_SRCROOT)/#{ssh2_source}/src\" \"$(DERIVED_FILE_DIR)/ssh-crypto\"",
   }
 end

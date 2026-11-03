@@ -57,9 +57,18 @@ function SshProfileForm({ profile }: { profile?: SshProfile }) {
   const [passphrase, setPassphrase] = useState('');
   const [replaceCredential, setReplaceCredential] = useState(!profile);
   const needsCredential = replaceCredential || profile?.authMethod !== authMethod;
+  const hasChanges =
+    !profile ||
+    needsCredential ||
+    (name.trim() || `${username.trim()}@${host.trim()}`) !== profile.name ||
+    host !== profile.host ||
+    Number(port) !== profile.port ||
+    username !== profile.username ||
+    (remoteDirectory.trim() || '.') !== profile.remoteDirectory;
   async function save() {
     const input: SaveSshProfile = {
       profile: {
+        isEnabled: profile?.isEnabled ?? true,
         name: name.trim() || `${username.trim()}@${host.trim()}`,
         host,
         port: Number(port),
@@ -230,7 +239,11 @@ function SshProfileForm({ profile }: { profile?: SshProfile }) {
           ) : null}
         </View>
       ) : null}
-      <Button loading={action.busy} onPress={() => void save()}>
+      <Button
+        disabled={action.busy || !hasChanges}
+        loading={action.busy}
+        onPress={() => void save()}
+      >
         {t('common.save')}
       </Button>
     </SettingsScrollPage>

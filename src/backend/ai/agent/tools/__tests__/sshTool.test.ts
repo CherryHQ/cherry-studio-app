@@ -13,6 +13,7 @@ const target: SshTarget = {
     username: 'admin',
     authMethod: 'password',
     fingerprint: 'SHA256:key',
+    isEnabled: true,
     remoteDirectory: '/srv/project',
   },
   grant: null,
@@ -29,6 +30,8 @@ const ssh: SshToolAccess = {
         state: 'unknown',
         stdout: 'x'.repeat(20000),
         stderr: '',
+        stdoutBytes: 20000,
+        stderrBytes: 0,
         exitCode: null,
         truncated: false,
       }) as const,
@@ -126,6 +129,9 @@ test('limits the grant to fixed diagnostics without stdin or a different directo
   expect(tool.requiresApproval!({ command: 'uname -a', cwd: '/tmp' })).toBe(true);
   expect(tool.approvalInput!({ command: 'bash -s', stdin: 'echo first\necho last' })).toEqual({
     target: 'admin@router.local:22',
+    connection_id: target.profile.id,
+    connection_revision: target.profile.revision,
+    selection_id: target.selectionId,
     command: 'bash -s',
     stdin: 'echo first\necho last',
     cwd: '/srv/project',
@@ -139,6 +145,8 @@ test('preserves the output tail and excludes diagnostics from model results', as
     state: 'exited',
     stdout: value,
     stderr: '',
+    stdoutBytes: 90000,
+    stderrBytes: 0,
     exitCode: 1,
     truncated: false,
     diagnostics: {
@@ -156,6 +164,8 @@ test('preserves the output tail and excludes diagnostics from model results', as
   );
   expect(result.value).toMatchObject({
     stdout: expect.stringMatching(/^start[\s\S]*last error$/),
+    stdoutBytes: 90000,
+    stderrBytes: 0,
     truncated: true,
   });
   expect(JSON.stringify(result.value)).not.toContain('diagnostic');

@@ -6,6 +6,7 @@ const text = (max: number) =>
     .max(max)
     .refine((value) => !value.includes('\0'));
 export const SshProfileFieldsSchema = z.object({
+  isEnabled: z.boolean().default(true),
   name: text(100).trim().min(1),
   host: text(253)
     .trim()
@@ -98,6 +99,7 @@ export type SshDiagnostics = {
 };
 
 export const SshErrorCodeSchema = z.enum([
+  'disabled',
   'unavailable',
   'invalid-input',
   'busy',
@@ -135,6 +137,9 @@ export type SshCommandResult = {
   state: 'not-started' | 'exited' | 'unknown';
   stdout: string;
   stderr: string;
+  /** Bytes received before truncation; null when the native bridge lost the final result. */
+  stdoutBytes: number | null;
+  stderrBytes: number | null;
   exitCode: number | null;
   truncated: boolean;
   error?: SshErrorCode;
@@ -144,7 +149,7 @@ export type SshOutput = { stream: 'stdout' | 'stderr'; text: string };
 
 /** Local, ephemeral conversation binding. It does not survive process restarts. */
 export type SshTarget = {
-  /** A fresh identity for each selection or authorization change. */
+  /** A fresh identity for each selection or authorization revocation. */
   selectionId: string;
   profile: SshProfile;
   /** null means every command requires approval. */

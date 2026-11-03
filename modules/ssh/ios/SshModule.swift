@@ -3,6 +3,7 @@ import ExpoModulesCore
 public class SshModule: Module {
   public func definition() -> ModuleDefinition {
     Name("Ssh")
+    Constants(["resultVersion": 2])
     Events("onEvent")
     Function("prepare") { (id: String) in SshRunner.prepare(id) }
     Function("cancel") { (id: String) in SshRunner.cancel(id) }

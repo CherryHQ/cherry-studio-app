@@ -15,6 +15,7 @@ const profile = {
   username: 'user',
   authMethod: 'password' as const,
   fingerprint: 'SHA256:key',
+  isEnabled: true,
   remoteDirectory: '/srv/project',
 };
 const target: SshTarget = {

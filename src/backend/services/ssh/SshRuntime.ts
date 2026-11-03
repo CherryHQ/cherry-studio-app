@@ -58,6 +58,8 @@ const NativeResultSchema = z.object({
   state: z.enum(['not-started', 'exited', 'unknown', 'probed', 'completed']),
   stdout: z.string().max(350000),
   stderr: z.string().max(350000),
+  stdoutBytes: z.number().int().nonnegative().nullable(),
+  stderrBytes: z.number().int().nonnegative().nullable(),
   exitCode: z.number().int().nullable(),
   truncated: z.boolean(),
   fingerprint: z.string().max(100),
@@ -236,7 +238,7 @@ export class SshRuntime extends BaseService implements SshModule {
           if (current?.grant?.id !== grant.id) return;
           for (const run of [...this.active, ...this.transfers])
             if (run.sessionId === contextId) run.cancel();
-          this.targets.set(contextId, { ...current, grant: null });
+          this.targets.set(contextId, { ...current, selectionId: randomUUID(), grant: null });
           this.notifyTargets();
         },
         Math.max(0, grant.expiresAt - Date.now()),
@@ -399,6 +401,7 @@ export class SshRuntime extends BaseService implements SshModule {
         ? await this.profiles.getRow(SshReferenceSchema.parse(reference))
         : null;
       if (row && !row.fingerprint) throw new SshError('host-key');
+      if (row && !row.isEnabled) throw new SshError('disabled');
       for (const run of [...this.active, ...this.transfers])
         if (run.sessionId === sessionId) run.cancel();
       this.targets.delete(sessionId);
@@ -422,11 +425,14 @@ export class SshRuntime extends BaseService implements SshModule {
       await this.profiles.getRow(expected.profile);
       this.assertActive();
       this.assertAgentTarget(sessionId, expected);
-      for (const run of [...this.active, ...this.transfers])
-        if (run.sessionId === sessionId) run.cancel();
+      if (!allowCommands)
+        for (const run of [...this.active, ...this.transfers])
+          if (run.sessionId === sessionId) run.cancel();
       const target: SshTarget = {
         ...expected,
-        selectionId: randomUUID(),
+        // Enabling future diagnostics must not invalidate the command being approved.
+        // Revocation still retires every captured authorization, including in-flight work.
+        selectionId: allowCommands ? expected.selectionId : randomUUID(),
         grant: allowCommands ? { id: randomUUID(), expiresAt: Date.now() + 3600000 } : null,
       };
       this.targets.set(sessionId, target);
@@ -463,7 +469,7 @@ export class SshRuntime extends BaseService implements SshModule {
         return null;
       }
       if (target.grant && target.grant.expiresAt <= Date.now()) {
-        target = { ...target, grant: null };
+        target = { ...target, selectionId: randomUUID(), grant: null };
         this.targets.set(sessionId, target);
         this.clearGrantTimer(sessionId);
         this.notifyTargets();
@@ -690,7 +696,7 @@ export class SshRuntime extends BaseService implements SshModule {
       !current ||
       current.selectionId !== target.selectionId ||
       !sameReference(current.profile, target.profile) ||
-      current.grant?.id !== target.grant?.id ||
+      (target.grant && current.grant?.id !== target.grant.id) ||
       (current.grant && current.grant.expiresAt <= Date.now())
     )
       throw new SshError('changed');
@@ -722,6 +728,8 @@ export class SshRuntime extends BaseService implements SshModule {
             : 'not-started',
       stdout: result.stdout,
       stderr: result.stderr,
+      stdoutBytes: result.stdoutBytes,
+      stderrBytes: result.stderrBytes,
       exitCode: result.exitCode,
       truncated: result.truncated,
       ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
@@ -758,6 +766,7 @@ export class SshRuntime extends BaseService implements SshModule {
     const { pending } = await this.serialize(async () => {
       signal.throwIfAborted();
       const row = await this.profiles.getRow(SshReferenceSchema.parse(reference));
+      if (!row.isEnabled) throw new SshError('disabled');
       if (!row.fingerprint) throw new SshError('host-key');
       if (agent) this.assertAgentTarget(agent.sessionId, agent.target);
       // Same-target serialization prevents concurrent AI/manual changes interleaving.
@@ -979,6 +988,8 @@ export class SshRuntime extends BaseService implements SshModule {
           error: 'connection',
           stdout: partial.stdout,
           stderr: partial.stderr,
+          stdoutBytes: null,
+          stderrBytes: null,
           exitCode: null,
           truncated: false,
           fingerprint: '',

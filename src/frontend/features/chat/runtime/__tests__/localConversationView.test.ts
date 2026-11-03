@@ -1,5 +1,7 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { SshModule } from '@/shared/contracts/ssh';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import { SshError, type SshTarget } from '@/shared/data/types/ssh';
 
 import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import { createLocalConversationProjector } from '../localConversationView';
@@ -44,7 +46,10 @@ const question = {
     ],
   },
 };
-function fixture(initial: Partial<AgentSessionChatState> = {}) {
+function fixture(
+  initial: Partial<AgentSessionChatState> = {},
+  ssh?: Pick<SshModule, 'getTarget' | 'setCommandGrant'>,
+) {
   let state: AgentSessionChatState = {
     sessionId: 'session',
     status: 'ready',
@@ -71,6 +76,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     client,
     sessionId: 'session',
     onSessionChanged: sessionChanged,
+    ssh,
   });
   return {
     client,
@@ -133,6 +139,91 @@ test('a changed approval payload under the same id rejects the earlier decision'
     value: undefined,
   });
   expect(f.client.respondApproval).toHaveBeenCalledWith('session', 'approval', 'deny');
+});
+
+const sshTarget: SshTarget = {
+  selectionId: 'selection',
+  grant: null,
+  profile: {
+    id: 'connection',
+    revision: 'revision',
+    name: 'Host',
+    host: 'host.local',
+    port: 22,
+    username: 'user',
+    authMethod: 'password',
+    fingerprint: 'SHA256:key',
+    remoteDirectory: '.',
+    isEnabled: true,
+  },
+};
+const sshApproval = {
+  ...approval,
+  toolRef: { source: 'builtin' as const, capabilityId: 'ssh_execute' },
+  input: {
+    connection_id: 'connection',
+    connection_revision: 'revision',
+    selection_id: 'selection',
+    command: 'pwd',
+  },
+};
+
+test('only a matching local SSH approval can grant diagnostics, before approving the command', async () => {
+  const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => undefined) };
+  const f = fixture({ pendingApprovals: [sshApproval] }, ssh);
+  const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
+  expect(interaction.canGrantSshDiagnostics).toBe(true);
+  expect(
+    await interaction.respond!.execute({ kind: 'approve', sshDiagnosticsGrant: true }),
+  ).toMatchObject({ state: 'applied' });
+  expect(ssh.setCommandGrant).toHaveBeenCalledWith('session', sshTarget, true);
+  expect(ssh.setCommandGrant.mock.invocationCallOrder[0]).toBeLessThan(
+    f.client.respondApproval.mock.invocationCallOrder[0]!,
+  );
+});
+
+test.each(['mcp', 'stale', 'denied', 'plain'] as const)(
+  'does not create a diagnostics grant for %s approval',
+  async (mode) => {
+    const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => undefined) };
+    const pending =
+      mode === 'mcp'
+        ? {
+            ...sshApproval,
+            toolRef: { source: 'mcp' as const, serverId: 'server', rawToolName: 'ssh_execute' },
+          }
+        : mode === 'stale'
+          ? { ...sshApproval, input: { ...sshApproval.input, selection_id: 'old' } }
+          : sshApproval;
+    const f = fixture({ pendingApprovals: [pending] }, ssh);
+    const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
+    await interaction.respond!.execute(
+      mode === 'denied'
+        ? { kind: 'deny' }
+        : mode === 'plain'
+          ? { kind: 'approve' }
+          : { kind: 'approve', sshDiagnosticsGrant: true },
+    );
+    expect(ssh.setCommandGrant).not.toHaveBeenCalled();
+    expect(f.client.respondApproval).toHaveBeenCalledTimes(
+      mode === 'mcp' || mode === 'stale' ? 0 : 1,
+    );
+  },
+);
+
+test('a target invalidated during grant admission leaves the command pending', async () => {
+  const ssh = {
+    getTarget: () => sshTarget,
+    setCommandGrant: jest.fn(async () => {
+      throw new SshError('changed');
+    }),
+  };
+  const f = fixture({ pendingApprovals: [sshApproval] }, ssh);
+  const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
+  expect(
+    await interaction.respond!.execute({ kind: 'approve', sshDiagnosticsGrant: true }),
+  ).toMatchObject({ state: 'rejected' });
+  expect(f.client.respondApproval).not.toHaveBeenCalled();
 });
 
 test('health sharing identifies the executing turn model and never matches an MCP name collision', () => {
