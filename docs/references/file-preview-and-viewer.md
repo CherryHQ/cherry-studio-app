@@ -75,9 +75,10 @@ under system bars. Images and text use theme surfaces. iOS's pop
 gesture is disabled while an image is zoomed, matching the existing painting viewer. Android
 system back remains native navigation.
 
-Every resolved file has an Open with action in the overflow menu. Images put Share and Save to
-Photos in a bottom toolbar; other files retain Share in the overflow menu. Saving to Photos uses
-the add-only permission flow shared with the painting viewer.
+Every resolved file has Share and Open with actions in the header's overflow menu. Images also
+offer Save to Photos and, when available, Edit in that menu. The footer is reserved for Add to
+current chat or document-selection handoff, using the same text-only action across file kinds.
+Saving to Photos uses the add-only permission flow shared with the painting viewer.
 
 ### Image
 
