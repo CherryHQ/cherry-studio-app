@@ -706,6 +706,7 @@
   "cloud.free": "Kostenlos",
   "cloud.includedModels": "Enthaltene Modelle",
   "cloud.loading": "Wird geladen…",
+  "cloud.manageOnWeb": "Abonnement im Web verwalten",
   "cloud.measuredAt": "Aktualisiert: {{time}}",
   "cloud.modelCount_one": "{{count}} Modell",
   "cloud.modelCount_other": "{{count}} Modelle",

@@ -172,7 +172,7 @@ export function createAppBootstrapRuntime(
       getTokens: account.getCommunityTokens,
       subscribe: account.subscribe,
     },
-    Constants.expoConfig?.extra?.accountsPortal?.cloudAddress ?? '',
+    Constants.expoConfig?.extra?.cloud,
     Constants.expoConfig?.version ?? '0.0.0',
   );
   const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');

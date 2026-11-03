@@ -2,13 +2,20 @@ import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-
 
 import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
-import { type ActiveProfile, LOCAL_PROFILE } from '@/shared/data/activeProfile';
+import {
+  type ActiveProfile,
+  type EnterpriseIdentity,
+  LOCAL_PROFILE,
+} from '@/shared/data/activeProfile';
 
+import type { EnterpriseSession } from '../../enterpriseApi';
 import { AccountRuntime } from '../AccountRuntime';
 
 jest.mock('@logger', () => ({
   loggerService: { withContext: () => ({ warn: jest.fn(), error: jest.fn() }) },
 }));
+
+type PortalState = AuthState & { environment?: string; issuer?: string };
 
 const enterpriseProfile: ActiveProfile = {
   id: '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
@@ -34,7 +41,7 @@ const privateCredentials = {
 };
 
 function setup(
-  session: AuthState,
+  session: PortalState,
   active: ActiveProfile = LOCAL_PROFILE,
   ready = Promise.resolve(),
 ) {
@@ -43,7 +50,7 @@ function setup(
   const portal = {
     ready,
     getState: jest.fn(() => session),
-    subscribe: jest.fn((_listener: (state: AuthState) => void) => () => {}),
+    subscribe: jest.fn((_listener: (state: PortalState) => void) => () => {}),
     beginSignIn: jest.fn(async () => ({ url: 'https://portal/sign-in', redirectUri: 'cb://' })),
     completeSignIn: jest.fn(async (_url: string, options?: CompleteSignInOptions) => {
       if (candidateSession._tag !== 'signedIn') throw new Error('Missing callback session');
@@ -77,10 +84,15 @@ function setup(
   };
   const options = {
     portal,
-    issuer: 'https://auth',
-    defaultAddress: 'https://cse.example.com',
+    enterpriseAddresses: {
+      cn: 'https://cse.example.com',
+      global: 'https://enterprise.global.example.com',
+    },
     active,
-    profiles: { resolve: jest.fn(() => enterpriseProfile), setActive: jest.fn() },
+    profiles: {
+      resolve: jest.fn((_identity: EnterpriseIdentity, _address: string) => enterpriseProfile),
+      setActive: jest.fn(),
+    },
     prompt: { read: () => false, write: jest.fn() },
     browserSession: (() => {
       let stale = false;
@@ -89,7 +101,7 @@ function setup(
         setStale: jest.fn((value: boolean) => (stale = value)),
       };
     })(),
-    createApi: jest.fn(() => ({
+    createApi: jest.fn((_address: string, _session: EnterpriseSession) => ({
       getUser: jest.fn(async () => privateCredentials.user),
       getConfiguration: jest.fn(async () => ({ serverUniqueId: 'server-1' })),
       setupAgent: jest.fn(),
@@ -114,18 +126,20 @@ function setup(
   return {
     runtime: new AccountRuntime(options),
     options,
-    select(next: AuthState) {
+    select(next: PortalState) {
       candidateSession = next;
     },
-    publish(next: AuthState) {
+    publish(next: PortalState) {
       session = next;
       portal.subscribe.mock.calls.at(-1)![0](next);
     },
   };
 }
 
-const signedIn = (product: 'cloud' | 'enterprise'): Extract<AuthState, { _tag: 'signedIn' }> => ({
+const signedIn = (product: 'cloud' | 'enterprise'): Extract<PortalState, { _tag: 'signedIn' }> => ({
   _tag: 'signedIn',
+  environment: 'cn',
+  issuer: 'https://auth',
   subject: 'user-1',
   name: 'Ada',
   profile: { product, profileId: product === 'enterprise' ? 'org-1' : 'me' },
@@ -141,9 +155,9 @@ describe('AccountRuntime', () => {
 
   it.each(['', '://invalid'])(
     'signs into a community account without an enterprise address (%s)',
-    async (defaultAddress) => {
+    async (address) => {
       const { options } = setup(signedIn('cloud'));
-      const runtime = new AccountRuntime({ ...options, defaultAddress });
+      const runtime = new AccountRuntime({ ...options, enterpriseAddresses: { cn: address } });
       await expect(runtime.signIn()).resolves.toBe(true);
       expect(runtime.getState().isSignedIn).toBe(true);
       expect(options.createApi).not.toHaveBeenCalled();
@@ -485,8 +499,10 @@ describe('AccountRuntime', () => {
   );
 
   it('does not admit a cloud identity restored from another issuer', async () => {
-    const { options } = setup(signedIn('enterprise'), enterpriseProfile);
-    const runtime = new AccountRuntime({ ...options, issuer: 'https://another-auth' });
+    const { runtime, options } = setup(
+      { ...signedIn('enterprise'), issuer: 'https://another-auth' },
+      enterpriseProfile,
+    );
     await runtime.verify();
     expect(runtime.getState().needsSignIn).toBe(true);
     await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
@@ -875,6 +891,26 @@ describe('AccountRuntime', () => {
 });
 
 describe('community Cloud identity admission', () => {
+  it('exposes the SDK environment and discards credentials when that environment changes', async () => {
+    const { runtime, options, publish } = setup(signedIn('cloud'));
+    await options.portal.ready;
+    const identity = runtime.getCommunityIdentity()!;
+    expect(identity.environment).toBe('cn');
+    let finish!: (value: { accessToken: string; idToken: string }) => void;
+    options.portal.getIdentityTokens.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = runtime.getCommunityTokens(identity.key);
+    publish({ ...signedIn('cloud'), environment: 'global' });
+    finish({ accessToken: 'cn-access', idToken: 'cn-id' });
+    await expect(pending).rejects.toMatchObject({ code: 'rejected' });
+    expect(runtime.getCommunityIdentity()).toMatchObject({ environment: 'global' });
+    expect(runtime.getCommunityIdentity()?.key).not.toBe(identity.key);
+  });
+
   it('discards a token pair returned after the community account changed', async () => {
     const { runtime, options, publish } = setup(signedIn('cloud'));
     await options.portal.ready;
@@ -912,5 +948,74 @@ describe('community Cloud identity admission', () => {
     finish({ revoked: true, loggedOut: true });
     await signingOut;
     expect(runtime.getCommunityIdentity()).toBeNull();
+  });
+});
+
+describe('SDK environment admission', () => {
+  it.each(['cn', 'global'] as const)(
+    'enters the %s enterprise API selected by the candidate session',
+    async (environment) => {
+      const { runtime, options, select } = setup({ _tag: 'signedOut' });
+      const issuer = `https://${environment}.identity.example.com`;
+      select({ ...signedIn('enterprise'), environment, issuer });
+      options.profiles.resolve.mockImplementation((identity, address) => ({
+        ...enterpriseProfile,
+        identity,
+        address,
+      }));
+      await runtime.signIn();
+      const address = options.enterpriseAddresses[environment];
+      expect(options.portal.getProductToken).not.toHaveBeenCalled();
+      expect(options.createApi).toHaveBeenCalledWith(address, expect.any(Object));
+      expect(options.profiles.setActive).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identity: expect.objectContaining({ issuer }),
+          address,
+        }),
+      );
+      const session = options.createApi.mock.calls[0]![1];
+      await session.getProductToken();
+      expect(options.portal.getProductToken).toHaveBeenCalledWith(address);
+    },
+  );
+
+  it.each([{ environment: undefined }, { environment: 'unknown' }, { issuer: undefined }])(
+    'rejects missing or unknown SDK context without choosing an environment (%j)',
+    async (context) => {
+      const { runtime, options, select } = setup({ _tag: 'signedOut' });
+      select({ ...signedIn('enterprise'), ...context });
+      await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+      expect(options.createApi).not.toHaveBeenCalled();
+      expect(options.profiles.setActive).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not use the other enterprise API when the selected environment is unconfigured', async () => {
+    const { options } = setup({ ...signedIn('enterprise'), environment: 'global' });
+    const runtime = new AccountRuntime({
+      ...options,
+      enterpriseAddresses: { cn: options.enterpriseAddresses.cn },
+    });
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+    expect(options.createApi).not.toHaveBeenCalled();
+  });
+
+  it('refuses a restored environment that does not own the open enterprise address', async () => {
+    const { runtime, options } = setup(
+      { ...signedIn('enterprise'), environment: 'global' },
+      enterpriseProfile,
+    );
+    await runtime.verify();
+    expect(runtime.getState().needsSignIn).toBe(true);
+    await expect(runtime.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
+    expect(options.portal.getProductToken).not.toHaveBeenCalled();
+  });
+
+  it('never exposes an old SDK session without environment metadata as a community identity', async () => {
+    const { runtime, options } = setup({ ...signedIn('cloud'), environment: undefined });
+    await options.portal.ready;
+    expect(runtime.getState().isSignedIn).toBe(false);
+    expect(runtime.getCommunityIdentity()).toBeNull();
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
   });
 });

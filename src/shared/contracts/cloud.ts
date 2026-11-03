@@ -95,6 +95,8 @@ export type CloudState = Readonly<{
   account: CloudAccount | null;
   plans: CloudPlans | null;
   models: readonly CloudModel[];
+  /** Current SDK environment's configured subscription-management page. */
+  webUrl: string | null;
 }>;
 export interface CloudModule {
   getState(): CloudState;

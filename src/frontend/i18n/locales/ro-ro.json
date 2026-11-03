@@ -715,6 +715,7 @@
   "cloud.free": "Gratuit",
   "cloud.includedModels": "Modele incluse",
   "cloud.loading": "Se încarcă…",
+  "cloud.manageOnWeb": "Gestionează abonamentul pe web",
   "cloud.measuredAt": "Actualizat: {{time}}",
   "cloud.modelCount_few": "{{count}} modele",
   "cloud.modelCount_one": "{{count}} model",

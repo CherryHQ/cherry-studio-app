@@ -14,7 +14,7 @@ import {
 /** Retain rows referenced by history, but revoke all model availability before applying a snapshot. */
 export async function projectCloudModels(
   tx: Database,
-  origin: string,
+  origin: string | null,
   models: readonly CloudModel[],
   assertCurrent: () => void,
 ): Promise<string[]> {
@@ -26,7 +26,10 @@ export async function projectCloudModels(
     .from(userModelTable)
     .where(eq(userModelTable.providerId, CLOUD_PROVIDER_ID));
   const modelIds = new Set(previous.map((model) => model.id));
-  if (existing || models.length) {
+  if (origin === null) {
+    if (models.length) throw new Error('Cloud models require a configured API origin');
+    if (existing) await tx.update(userProviderTable).set({ isEnabled: false }).where(where);
+  } else if (existing || models.length) {
     const provider = {
       providerId: CLOUD_PROVIDER_ID,
       name: 'Cherry Cloud',

@@ -724,6 +724,7 @@
   "cloud.free": "Бесплатный",
   "cloud.includedModels": "Модели в подписке",
   "cloud.loading": "Загрузка…",
+  "cloud.manageOnWeb": "Управление подпиской на сайте",
   "cloud.measuredAt": "Обновлено: {{time}}",
   "cloud.modelCount_few": "{{count}} модели",
   "cloud.modelCount_many": "{{count}} моделей",
