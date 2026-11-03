@@ -25,6 +25,7 @@ import type {
   AiUsageRecordGroupBy,
   AiUsageRecordMetric,
 } from '@/shared/data/api/schemas/aiUsageRecords';
+import type { Currency } from '@/shared/data/types/model';
 
 import {
   AiUsageBreakdown,
@@ -63,6 +64,7 @@ export function AiUsageScreen() {
   const [records, setRecords] = useState<{
     range: UsageRange;
     filters: AiUsageRecordFilters;
+    costCurrency?: Currency;
     scopeLabel?: string;
   }>();
   const [metric, setMetric] = useState<AiUsageRecordMetric>('tokens');
@@ -199,6 +201,7 @@ export function AiUsageScreen() {
           <AiUsageRecords
             range={records.range}
             filters={{ ...records.filters, search: recordSearch || undefined }}
+            costCurrency={records.costCurrency}
             scopeLabel={records.scopeLabel}
             locale={locale}
             searchDraft={recordSearchDraft}
@@ -281,6 +284,10 @@ export function AiUsageScreen() {
                             openRecords({
                               range,
                               filters: { ...filters, ...usageGroupFilters(bucket) },
+                              costCurrency:
+                                rankingMetric === 'cost'
+                                  ? (bucket.costCurrency ?? undefined)
+                                  : undefined,
                               scopeLabel: usageGroupLabel(bucket, t),
                             })
                           }

@@ -5,6 +5,7 @@ import type {
 
 import {
   customUsageRange,
+  formatUsageCost,
   usageGroupFilters,
   usageKnownMetricValue,
   usagePoints,
@@ -31,6 +32,15 @@ const metrics = {
 } as const;
 
 describe('usage analytics presentation', () => {
+  test('keeps small positive costs distinct from zero and missing costs', () => {
+    expect(formatUsageCost(0.000001, 'USD', 'en-US', 'narrowSymbol')).toBe('<$0.0001');
+    expect(formatUsageCost(0.000001, 'CNY', 'en-US', 'narrowSymbol')).toBe('<¥0.0001');
+    expect(formatUsageCost(0.000001, 'USD', 'en-US')).toBe('<USD\u00a00.0001');
+    expect(formatUsageCost(0.0001, 'USD', 'en-US', 'narrowSymbol')).toBe('$0.0001');
+    expect(formatUsageCost(0, 'USD', 'en-US', 'narrowSymbol')).toBe('$0.00');
+    expect(formatUsageCost(null, 'USD', 'en-US')).toBe('—');
+  });
+
   test('keeps custom dates inclusive and rejects invalid calendar dates', () => {
     expect(customUsageRange('2026-02-30', '2026-03-01')).toBeNull();
     expect(customUsageRange('2026-03-02', '2026-03-01')).toBeNull();

@@ -1,3 +1,4 @@
+import { formatAiUsageCost } from '@/frontend/utils/aiUsage';
 import type {
   AiUsageRecordFilters,
   AiUsageRecordGroupBy,
@@ -203,14 +204,7 @@ export function formatUsageCost(
   locale: string,
   currencyDisplay: 'code' | 'narrowSymbol' = 'code',
 ): string {
-  return value === null
-    ? '—'
-    : new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency,
-        currencyDisplay,
-        maximumFractionDigits: 4,
-      }).format(value);
+  return value === null ? '—' : formatAiUsageCost(value, currency, locale, currencyDisplay);
 }
 
 export function formatUsageDate(timestamp: number, locale: string): string {

@@ -44,6 +44,7 @@ export const MODALITY_LABELS = {
 export function AiUsageRecords({
   range,
   filters,
+  costCurrency,
   locale,
   scopeLabel,
   searchDraft,
@@ -52,6 +53,7 @@ export function AiUsageRecords({
 }: {
   range: UsageRange;
   filters: AiUsageRecordFilters;
+  costCurrency?: Currency;
   locale: string;
   scopeLabel?: string;
   searchDraft: string;
@@ -72,7 +74,9 @@ export function AiUsageRecords({
       includePerformance: false,
     },
   });
-  const currencies = pricingQuery.data?.timeline.costTotals.map((item) => item.currency) ?? [];
+  const currencies = costCurrency
+    ? [costCurrency]
+    : (pricingQuery.data?.timeline.costTotals.map((item) => item.currency) ?? []);
   const sortBy =
     sort.field === 'cost' && pricingQuery.data && !currencies.includes(sort.currency)
       ? 'createdAt'
@@ -88,14 +92,14 @@ export function AiUsageRecords({
       to: range.to,
       sortBy,
       sortOrder: 'desc',
-      ...(sortBy === 'cost' ? { costCurrency: currency } : {}),
+      costCurrency: costCurrency ?? currency,
     },
   });
   const items = query.pages.flatMap((page) => page.items);
   return (
     <>
       <FlatList
-        key={JSON.stringify([range, filters, sortBy, currency])}
+        key={JSON.stringify([range, filters, costCurrency, sortBy, currency])}
         data={items}
         keyExtractor={(item) => item.id}
         ItemSeparatorComponent={RecordSeparator}
@@ -116,6 +120,7 @@ export function AiUsageRecords({
                 ? t('aiUsage.periodAll')
                 : `${formatUsageDate(range.from, locale)} – ${formatUsageDate(range.to, locale)}`}
               {scopeLabel ? ` · ${scopeLabel}` : null}
+              {costCurrency ? ` · ${costCurrency}` : null}
             </Text>
             <SearchField
               accessibilityLabel={t('aiUsage.search')}

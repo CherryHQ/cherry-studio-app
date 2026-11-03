@@ -311,6 +311,36 @@ describe('AI usage analytics', () => {
     expect(unknown.stats.totals.recordCount).toBe(2);
   });
 
+  test.each(['createdAt', 'totalTokens', 'cost'] as const)(
+    'retains the currency scope when sorting records by %s and searching across pages',
+    async (sortBy) => {
+      const capture = context('a', { pricingSnapshot: null });
+      await service.recordInvocations([
+        invocation('usd-1', 1000, { totalTokens: 1 }, capture, { amount: 1, currency: 'USD' }),
+        invocation('usd-2', 2000, { totalTokens: 2 }, capture, { amount: 2, currency: 'USD' }),
+        invocation('cny', 3000, { totalTokens: 3 }, capture, { amount: 3, currency: 'CNY' }),
+        invocation('unpriced', 4000, { totalTokens: 4 }, capture),
+      ]);
+      const query = {
+        from: 0,
+        to: 5000,
+        providerId: 'a',
+        modelId: 'model-1',
+        search: 'model-1',
+        costCurrency: 'USD' as const,
+        sortBy,
+        sortOrder: 'desc' as const,
+        limit: 1,
+      };
+      const first = await service.list(query);
+      const next = await service.list({ ...query, cursor: first.nextCursor });
+      expect(first.total).toBe(2);
+      expect(first.items.map((record) => record.requestId)).toEqual(['usd-2']);
+      expect(next.items.map((record) => record.requestId)).toEqual(['usd-1']);
+      expect(next.nextCursor).toBeUndefined();
+    },
+  );
+
   test('excludes legacy aggregates and non-language speed samples from performance', async () => {
     await service.recordInvocations([
       invocation('legacy', 1000, { outputTokens: 10 }),
