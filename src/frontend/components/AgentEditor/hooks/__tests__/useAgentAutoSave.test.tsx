@@ -15,7 +15,6 @@ const mockSetAgentAvatar = jest.fn();
 const mockReplaceAgentToolBindings = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({ useToast: () => ({ toast: mockToast }) }));
-jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentMutations: () => ({ updateAgent: mockUpdateAgent, setAgentAvatar: mockSetAgentAvatar }),
@@ -30,7 +29,7 @@ let snapshot: Snapshot;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe({ skills }: { skills: readonly SkillListItem[] }) {
-  const autoSave = useAgentAutoSave('agent-1');
+  const autoSave = useAgentAutoSave('agent-1', true);
   const bindings = createAgentSkillBindingDraft(skills, autoSave.skillBindingUpdates);
   useEffect(() => {
     snapshot = { ...autoSave, bindings };

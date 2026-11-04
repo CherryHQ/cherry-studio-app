@@ -59,6 +59,7 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
+import { AgentInstructionsSection } from './components/AgentInstructionsSection';
 import { AgentSkillsSection } from './components/AgentSkillsSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
 import { useAgentAutoSave } from './hooks/useAgentAutoSave';
@@ -123,18 +124,17 @@ export function AgentEditor({
   // The form seeds its fields from the record when it mounts, so it must not mount
   // before the record is there — an empty form that reseeds a commit later would throw
   // away whatever the user had already typed into it.
+  let content: ReactNode;
   if (isLoadingEditData) {
-    return (
+    content = (
       <AgentEditorFrame presentation={presentation} title={t('agent.edit.title')}>
         <View className="p-4">
           <ContentState.Loading title={t('agent.form.loading')} />
         </View>
       </AgentEditorFrame>
     );
-  }
-
-  if (agentId && (!agent || hasEditDataError)) {
-    return (
+  } else if (agentId && (!agent || hasEditDataError)) {
+    content = (
       <AgentEditorFrame presentation={presentation} title={t('agent.edit.title')}>
         <View className="p-4">
           <ContentState.Error
@@ -149,24 +149,41 @@ export function AgentEditor({
         </View>
       </AgentEditorFrame>
     );
+  } else {
+    content = (
+      // An organization Agent's fields, bindings and model pool follow its policy.
+      <PolicyScope policy={agentPolicy(agent)}>
+        <AgentEditForm
+          key={agentId ?? 'new'}
+          agent={agent}
+          agentId={agentId}
+          hasServersError={Boolean(serversError)}
+          isFocused={focused}
+          isServersLoading={areServersLoading}
+          originalToolBindings={bindings}
+          servers={servers}
+          shouldStartChat={shouldStartChat}
+          presentation={presentation}
+          skills={skills}
+        />
+      </PolicyScope>
+    );
   }
 
-  return (
-    // An organization Agent's fields, bindings and model pool follow its policy.
-    <PolicyScope policy={agentPolicy(agent)}>
-      <AgentEditForm
-        key={agentId ?? 'new'}
-        agent={agent}
-        agentId={agentId}
-        hasServersError={Boolean(serversError)}
-        isServersLoading={areServersLoading}
-        originalToolBindings={bindings}
-        servers={servers}
-        shouldStartChat={shouldStartChat}
-        presentation={presentation}
-        skills={skills}
-      />
-    </PolicyScope>
+  // Keep the native sheet mounted while its loading, error and form content changes.
+  return presentation.presentation === 'sheet' ? (
+    <BottomSheet
+      avoidKeyboard
+      onClose={presentation.onClose}
+      open
+      presentation="overlay"
+      size="large"
+      title={agentId ? t('agent.edit.title') : t('agent.create.title')}
+    >
+      {content}
+    </BottomSheet>
+  ) : (
+    content
   );
 }
 
@@ -182,16 +199,7 @@ function AgentEditorFrame({
   title: string;
 }) {
   return presentation.presentation === 'sheet' ? (
-    <BottomSheet
-      avoidKeyboard
-      onClose={presentation.onClose}
-      open
-      presentation="overlay"
-      size="large"
-      title={title}
-    >
-      {children}
-    </BottomSheet>
+    children
   ) : (
     <>
       <RouteHeader rightActions={rightActions} title={title} />
@@ -204,6 +212,7 @@ function AgentEditForm({
   agent,
   agentId,
   hasServersError,
+  isFocused,
   isServersLoading,
   originalToolBindings,
   servers,
@@ -215,6 +224,7 @@ function AgentEditForm({
   agent: Agent | undefined;
   agentId?: string;
   hasServersError: boolean;
+  isFocused: boolean;
   isServersLoading: boolean;
   originalToolBindings: readonly AgentToolBinding[];
   servers: readonly McpServer[];
@@ -237,7 +247,7 @@ function AgentEditForm({
     saveSkillBindings,
     saveToolBindings,
     skillBindingUpdates,
-  } = useAgentAutoSave(agentId);
+  } = useAgentAutoSave(agentId, isFocused);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
@@ -618,23 +628,11 @@ function AgentEditForm({
           </PolicyGroup>
         </PolicyManaged>
         <PolicySecret>
-          <Section title={t('agent.form.instructions')}>
-            <TextInput
-              accessibilityLabel={t('agent.form.instructions')}
-              autoCorrect
-              className="min-h-28 max-h-120 px-4 py-3 text-base text-foreground"
-              cursorColor={mutedForegroundColor}
-              multiline
-              onBlur={flush}
-              onChangeText={(value) => updateForm('instructions', value)}
-              placeholder={t('agent.form.instructionsPlaceholder')}
-              placeholderTextColor={mutedForegroundColor}
-              scrollEnabled
-              selectionColor={mutedForegroundColor}
-              textAlignVertical="top"
-              value={form.instructions}
-            />
-          </Section>
+          <AgentInstructionsSection
+            onBlur={flush}
+            onChangeText={(value) => updateForm('instructions', value)}
+            value={form.instructions}
+          />
         </PolicySecret>
         <View className="gap-3">
           <Section
@@ -765,7 +763,7 @@ function AgentEditForm({
       rightActions={isEditing ? undefined : saveActions}
       title={title}
     >
-      <PolicyScope policy={agentPolicy(agent)}>{content}</PolicyScope>
+      {content}
     </AgentEditorFrame>
   );
 }
