@@ -13,8 +13,8 @@ Configure both environments through EAS, separately for each `development`, `pre
 
 | Environment | HTTPS Cloud API origin | Full subscription-management page URL |
 | --- | --- | --- |
-| `cn` | `ACCOUNTS_PORTAL_CLOUD_API_CN` | `ACCOUNTS_PORTAL_CLOUD_WEB_CN` |
-| `global` | `ACCOUNTS_PORTAL_CLOUD_API_GLOBAL` | `ACCOUNTS_PORTAL_CLOUD_WEB_GLOBAL` |
+| `cn` | `CHERRY_CLOUD_API_ORIGIN_CN` | `CHERRY_CLOUD_WEB_URL_CN` |
+| `global` | `CHERRY_CLOUD_API_ORIGIN_GLOBAL` | `CHERRY_CLOUD_WEB_URL_GLOBAL` |
 
 `app.config.ts` embeds these values under `extra.cloud`. After sign-in, the SDK's environment selects
 one configured pair for account reads, models, inference and the webpage. There is no single-origin
