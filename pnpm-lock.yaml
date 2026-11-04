@@ -141,6 +141,7 @@ patchedDependencies:
   '@openrouter/ai-sdk-provider@2.10.0': 2c35b3db284d8b886568aa45c9c46d1a47397087392670bdac93f88a9e1aebf8
   '@preeternal/react-native-file-hash@3.0.1': 29ab042ea2fc7bb298669d0b73aafbff73ec8d0cc72794594046958bcd2e214e
   '@react-native-masked-view/masked-view@0.3.2': 8f00ff3502ec74198553d8c39e326a1a6db9d8fa74d2bad0203e51ec9f6f6b8e
+  '@shopify/react-native-skia@2.14.0': 6e7d419a1080c09acae48ca93d1cdf9468cb7a81debaaee33e3fe04a5defe890
   ai@6.0.185: c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8
   drizzle-orm@0.45.2: f0752da0b8bbfb3f31057a6735061860ec0a2facb1c608a25795bb5a9ad845d6
   expo-app-metrics@58.0.14: c819a776859da9e7a5a4281aa366db1ec0ecd066de90a798cacf66f76fae8eb1
@@ -229,14 +230,14 @@ importers:
         specifier: 0.2.1
         version: 0.2.1
       '@cherrystudio/ai-core':
-        specifier: 2.4.3
-        version: 2.4.3(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
+        specifier: 2.4.4
+        version: 2.4.4(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
       '@cherrystudio/ai-runtime':
         specifier: workspace:*
         version: link:packages/ai-runtime
       '@cherrystudio/ai-sdk-provider':
-        specifier: 0.1.9
-        version: 0.1.9(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
+        specifier: 0.1.10
+        version: 0.1.10(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/analytics-client':
         specifier: ^1.4.0
         version: 1.4.0(typescript@6.0.3)
@@ -256,8 +257,8 @@ importers:
         specifier: workspace:*
         version: link:packages/mermaid-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.3.1
-        version: 0.3.1(zod@4.4.3)
+        specifier: 0.3.3
+        version: 0.3.3(zod@4.4.3)
       '@cherrystudio/remote-protocol':
         specifier: 0.7.0
         version: 0.7.0(zod@4.4.3)
@@ -338,7 +339,7 @@ importers:
         version: 2.3.2(@babel/runtime@7.29.7)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       '@shopify/react-native-skia':
         specifier: 2.14.0
-        version: 2.14.0(f5200ab0c5920739d9e7cf359f991c7b)
+        version: 2.14.0(patch_hash=6e7d419a1080c09acae48ca93d1cdf9468cb7a81debaaee33e3fe04a5defe890)(f5200ab0c5920739d9e7cf359f991c7b)
       '@siteed/sherpa-onnx.rn':
         specifier: 1.3.1
         version: 1.3.1(encoding@0.1.13)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1)(typescript@6.0.3)
@@ -797,14 +798,14 @@ importers:
         specifier: ^2.0.53
         version: 2.0.53(zod@4.4.3)
       '@cherrystudio/ai-core':
-        specifier: 2.4.3
-        version: 2.4.3(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
+        specifier: 2.4.4
+        version: 2.4.4(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
       '@cherrystudio/ai-sdk-provider':
-        specifier: 0.1.9
-        version: 0.1.9(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
+        specifier: 0.1.10
+        version: 0.1.10(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.3.1
-        version: 0.3.1(zod@4.4.3)
+        specifier: 0.3.3
+        version: 0.3.3(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -930,7 +931,7 @@ importers:
         version: 0.3.2(patch_hash=8f00ff3502ec74198553d8c39e326a1a6db9d8fa74d2bad0203e51ec9f6f6b8e)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       '@shopify/react-native-skia':
         specifier: '*'
-        version: 2.14.0(f5200ab0c5920739d9e7cf359f991c7b)
+        version: 2.14.0(patch_hash=6e7d419a1080c09acae48ca93d1cdf9468cb7a81debaaee33e3fe04a5defe890)(f5200ab0c5920739d9e7cf359f991c7b)
       '@swmansion/react-native-bottom-sheet':
         specifier: '*'
         version: 0.15.3(react-native-safe-area-context@5.10.1(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -1008,8 +1009,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.3.1
-        version: 0.3.1(zod@4.4.3)
+        specifier: 0.3.3
+        version: 0.3.3(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3)
@@ -1830,16 +1831,16 @@ packages:
   '@cherryinternal/accounts-portal@0.2.1':
     resolution: {integrity: sha512-9OWqVKtmFXbW8pXxAlHRrIA5NGL7C3er+EhXWZNkXpkg4yPCrA8d+wzCfKCqr/9+BwuvW0TAmh7MqwMv4PwnFA==}
 
-  '@cherrystudio/ai-core@2.4.3':
-    resolution: {integrity: sha512-28pZ+gTmWByvdiu9dXOeh0lG7ZW7yW5e99OIMLJpZI2FsAIF0INMi3uw2rE5dBgnB0n4rD8Jb7gFNHRb12IqtQ==}
+  '@cherrystudio/ai-core@2.4.4':
+    resolution: {integrity: sha512-1RETvhorUe5xu9nDMWBKSJXAD/zRz+hf12IrfcWM2Yulyk7gaGLu7qS9D00E/Krh/wAouapUVu6s6fmGdA9ckQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@ai-sdk/google': 3.0.132
       '@ai-sdk/openai': 3.0.109
       ai: 6.0.185
 
-  '@cherrystudio/ai-sdk-provider@0.1.9':
-    resolution: {integrity: sha512-RwF+EXo41xeJRuEcLpqCk4zqJ5heEKWEbjQLZrg9Ge1+xlcHAgygDmBlKPCOFNeUfqzyKJP1lTOUNYDcPih/Fw==}
+  '@cherrystudio/ai-sdk-provider@0.1.10':
+    resolution: {integrity: sha512-zhpZK3xQJLTUHU+0D2Dp54lp3MX1bxLv0QirSBCbH3GhvXM4XbG0Kpak4vcCBBsBF07Ek9G4j4dSOjDVga9tWw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@ai-sdk/anthropic': 3.0.103
@@ -1862,8 +1863,8 @@ packages:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.3.1':
-    resolution: {integrity: sha512-gh6hVaJ6uqEdi+MALfwS3qSc2SzyDMloFYKYGbRoyfvnWL07/ph0foalkKVc9+DpS+P8JmhPdVCdWL6zO/z+HA==}
+  '@cherrystudio/provider-registry@0.3.3':
+    resolution: {integrity: sha512-vXtD2u0iQPO2In2sjMWE4+UBIRSrwUCbehA8SHD8b+CTQACGJyjLv2e5by69C0Hq5zJKRJ+ruYeN79eppVq4aw==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -13004,7 +13005,7 @@ snapshots:
 
   '@cherryinternal/accounts-portal@0.2.1': {}
 
-  '@cherrystudio/ai-core@2.4.3(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
+  '@cherrystudio/ai-core@2.4.4(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(zod@4.4.3)
       '@ai-sdk/azure': 3.0.116(zod@4.4.3)
@@ -13015,13 +13016,13 @@ snapshots:
       '@ai-sdk/provider': 3.0.18
       '@ai-sdk/provider-utils': 4.0.58(zod@4.4.3)
       '@ai-sdk/xai': 3.0.126(zod@4.4.3)
-      '@cherrystudio/ai-sdk-provider': 0.1.9(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
+      '@cherrystudio/ai-sdk-provider': 0.1.10(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
       '@openrouter/ai-sdk-provider': 2.10.0(patch_hash=2c35b3db284d8b886568aa45c9c46d1a47397087392670bdac93f88a9e1aebf8)(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))(zod@4.4.3)
       ai: 6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3)
       quick-lru: 5.1.1
       zod: 4.4.3
 
-  '@cherrystudio/ai-sdk-provider@0.1.9(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)':
+  '@cherrystudio/ai-sdk-provider@0.1.10(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(zod@4.4.3)
       '@ai-sdk/google': 3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3)
@@ -13042,7 +13043,7 @@ snapshots:
       react-dom: 19.3.0(react@19.3.0)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.3.1(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.3.3(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
@@ -16205,7 +16206,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
 
-  '@shopify/react-native-skia@2.14.0(f5200ab0c5920739d9e7cf359f991c7b)':
+  '@shopify/react-native-skia@2.14.0(patch_hash=6e7d419a1080c09acae48ca93d1cdf9468cb7a81debaaee33e3fe04a5defe890)(f5200ab0c5920739d9e7cf359f991c7b)':
     dependencies:
       canvaskit-wasm: 0.41.0
       react: 19.3.0

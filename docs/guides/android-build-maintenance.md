@@ -52,6 +52,28 @@ The exact-version trust exception follows a comparison of all 41 published sourc
 the official [v4.5.7 tag](https://github.com/NaturalIntelligence/fast-xml-parser/tree/v4.5.7)
 (`49a12f10e9a44da765f045ca0c60e8d9e5be5aa0`). Do not broaden that exception to other versions.
 
+## Skia Compiler Memory
+
+The pinned `@shopify/react-native-skia@2.14.0` backports
+[Skia #4284](https://github.com/wcandillon/react-native-skia/pull/4284)
+(`21d93539689811ac45e9af22f905f608d026f3db`). Three C++ translation units included the
+entire JSI API and could compile concurrently inside one Ninja invocation. Upstream reproduced
+the resulting memory exhaustion on an EAS medium worker with Expo 58, matching the native-build
+stage of [#1499](https://github.com/CherryHQ/cherry-studio-app/issues/1499).
+
+The patch makes recorder headers self-contained and moves the PictureView and ViewProperty
+definitions into `RNSkManager.cpp`, leaving one heavy compilation unit. It removes the original
+two source files as well as their Android CMake entries; CocoaPods also compiles the shared C++
+source glob. Package identity, JavaScript interfaces, and the Skia 154 native engine stay unchanged.
+Retain this patch until the project adopts a compatible upstream release containing the fix.
+
+`scripts/__tests__/skiaCompilerMemory.test.ts` guards patch delivery, the installed Android
+compilation graph, and removal of the old shared definitions in PR CI. These source checks do
+not measure memory or establish native compatibility. Confirmation still requires a separately
+authorized Google Play AAB build on the same EAS worker class, recording resource usage and
+successful artifact/Sentry uploads, plus iOS native integration and the existing Canvas/image
+export flows. No cloud or native acceptance result is claimed for this backport yet.
+
 ## YAML Failure Status
 
 Tree-sitter YAML 0.7.1's `scn_uri_esc`, `scn_ns_uri_char`, and `scn_ns_tag_char` return `SCN_FAIL`

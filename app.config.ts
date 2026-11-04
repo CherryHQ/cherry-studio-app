@@ -136,12 +136,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
       cloud: {
         cn: {
-          apiOrigin: process.env.ACCOUNTS_PORTAL_CLOUD_API_CN,
-          webUrl: process.env.ACCOUNTS_PORTAL_CLOUD_WEB_CN,
+          apiOrigin: process.env.CHERRY_CLOUD_API_ORIGIN_CN,
+          webUrl: process.env.CHERRY_CLOUD_WEB_URL_CN,
         },
         global: {
-          apiOrigin: process.env.ACCOUNTS_PORTAL_CLOUD_API_GLOBAL,
-          webUrl: process.env.ACCOUNTS_PORTAL_CLOUD_WEB_GLOBAL,
+          apiOrigin: process.env.CHERRY_CLOUD_API_ORIGIN_GLOBAL,
+          webUrl: process.env.CHERRY_CLOUD_WEB_URL_GLOBAL,
         },
       },
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.

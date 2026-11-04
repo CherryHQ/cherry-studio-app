@@ -13,10 +13,10 @@ Configure both environments through EAS, separately for each `development`, `pre
 
 | Environment | HTTPS Cloud API origin | Full subscription-management page URL |
 | --- | --- | --- |
-| `cn` | `ACCOUNTS_PORTAL_CLOUD_API_CN` | `ACCOUNTS_PORTAL_CLOUD_WEB_CN` |
-| `global` | `ACCOUNTS_PORTAL_CLOUD_API_GLOBAL` | `ACCOUNTS_PORTAL_CLOUD_WEB_GLOBAL` |
+| `cn` | `CHERRY_CLOUD_API_ORIGIN_CN` | `CHERRY_CLOUD_WEB_URL_CN` |
+| `global` | `CHERRY_CLOUD_API_ORIGIN_GLOBAL` | `CHERRY_CLOUD_WEB_URL_GLOBAL` |
 
-`app.config.ts` embeds these values under `extra.cloud`. After sign-in, the SDK's environment selects
+`app.config.ts` embeds these values under `extra.cloud`. After sign-in, the account environment selects
 one configured pair for account reads, models, inference and the webpage. There is no single-origin
 compatibility setting, geographic inference or fallback to the other environment. Missing or
 invalid configuration makes that environment unavailable without changing ordinary provider use.
@@ -38,8 +38,9 @@ regressions for matched token refresh and sign-out isolation remain in
 The account layer supplies the app's normalized session environment and actual issuer, as described
 in [Enterprise Edition](../../../../docs/references/enterprise.md#account). SDK fields and values
 are translated at the installation's account integration point; they do not define the subscription
-contract. Accounts Portal 0.2.1 has no environment result yet, so that mapping cannot currently
-produce usable context. Completing it later does not change subscription APIs or environment selection.
+contract. The current China-only Accounts Portal 0.2.1 integration supplies `cn` and its configured
+issuer. When multi-region login ships, only that integration mapping needs to consume the SDK's
+environment result; subscription APIs and environment selection remain unchanged.
 
 ## Session and transport
 
