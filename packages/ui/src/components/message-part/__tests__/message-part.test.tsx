@@ -191,6 +191,29 @@ describe('MessagePart', () => {
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
   });
 
+  it('keeps manually expanded inner reasoning open when thinking completes', () => {
+    const onDisclosureToggle = jest.fn();
+    const content = (state: 'running' | 'complete') => (
+      <MessagePart.Reasoning
+        onDisclosureToggle={onDisclosureToggle}
+        state={state}
+        statusText="Thinking"
+      >
+        <Text>Reasoning details</Text>
+      </MessagePart.Reasoning>
+    );
+    act(() => {
+      renderer = create(content('running'));
+    });
+    act(() => renderer!.root.findByProps({ testID: 'reasoning-trigger' }).props.onPress());
+
+    act(() => renderer!.update(content('complete')));
+
+    expect(findRenderedByTestId(renderer!, 'reasoning-detail')).toHaveLength(1);
+    expect(renderer!.root.findByProps({ children: 'Reasoning details' })).toBeDefined();
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
+  });
+
   it('reopens streaming reasoning before Markdown has reported any layout', () => {
     const content = (text: string) => (
       <MessagePart.Reasoning state="running" statusText="Thinking" testID="thinking">
@@ -236,6 +259,31 @@ describe('MessagePart', () => {
     expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
     expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: 'Reasoning and tools' })).toBeDefined();
+  });
+
+  it('keeps a manually reopened completed process open through later renders', () => {
+    const onDisclosureToggle = jest.fn();
+    const content = (defaultExpanded: boolean, title: string) => (
+      <MessagePart.Process
+        defaultExpanded={defaultExpanded}
+        onDisclosureToggle={onDisclosureToggle}
+        state="complete"
+        title={title}
+      >
+        <Text>Process details</Text>
+      </MessagePart.Process>
+    );
+    act(() => {
+      renderer = create(content(false, 'Took 16s'));
+    });
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'process-trigger' }).props.onPress());
+
+    act(() => renderer!.update(content(false, 'Took 17s')));
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
+    act(() => renderer!.update(content(true, 'Took 17s')));
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
   });
 
   it('uses compact status rows only inside an expanded process', () => {

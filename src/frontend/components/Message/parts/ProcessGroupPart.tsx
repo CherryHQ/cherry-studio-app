@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { usePreference } from '@/frontend/data/hooks';
 import type { ResolvedCitationText } from '@/frontend/utils/messageCitations';
 import { getMessageProcessDurationMs } from '@/frontend/utils/messageProcessDuration';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -53,6 +54,7 @@ export function ProcessGroupPart({
   messageParts,
   renderMode,
 }: ProcessGroupPartProps) {
+  const [isAutoCollapseEnabled] = usePreference('chat.process.auto_collapse');
   const handleDisclosureToggle = useMessageListDisclosureToggle();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const isStreaming = message.status === 'pending';
@@ -102,7 +104,11 @@ export function ProcessGroupPart({
 
   return (
     <MessagePart.Process
-      defaultExpanded={Object.values(expandedGroups).some(Boolean)}
+      defaultExpanded={
+        message.status === 'success'
+          ? !isAutoCollapseEnabled
+          : Object.values(expandedGroups).some(Boolean)
+      }
       onDisclosureToggle={handleDisclosureToggle}
       state="complete"
       title={title}
