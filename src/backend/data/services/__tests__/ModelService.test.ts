@@ -36,6 +36,26 @@ describe('ModelService', () => {
     jest.clearAllMocks();
   });
 
+  test('prevents deleting the configured session naming model', async () => {
+    const writes = jest.fn();
+    const service = await createService(
+      { withWriteTx: writes } as unknown as DbService,
+      {
+        get: jest.fn(async (key: string) =>
+          key === 'agent.session_naming.model_id' ? 'openai::naming' : null,
+        ),
+      } as unknown as PreferenceService,
+    );
+
+    await expect(service.deleteByKey('openai', 'naming')).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+    await expect(
+      service.bulkDelete([{ providerId: 'openai', modelId: 'naming' }]),
+    ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    expect(writes).not.toHaveBeenCalled();
+  });
+
   test('rejects model writes before download instead of committing rows and then failing to read them', async () => {
     const writes = jest.fn();
     const service = await createService({ withWriteTx: writes } as unknown as DbService);

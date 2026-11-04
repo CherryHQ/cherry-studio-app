@@ -1,9 +1,9 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.3` and
-`@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.4` and
+`@cherrystudio/ai-sdk-provider@0.1.10` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.3.1` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.3.3` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -66,9 +66,12 @@ Mobile uses the published package for CherryIN and OpenAI-compatible provider be
 reranking, reasoning-model token conversion, and embedding. New versions require consumer and
 dependency review before the pinned version changes.
 
+Version `0.1.10` disables strict-tool declarations on CherryIN's Anthropic endpoint because its
+upstream rejects that field. Mobile's conversation tools remain on the Pi path.
+
 ### Dependency resolution
 
-The published `ai-core@2.4.3` and `ai-sdk-provider@0.1.9` require OpenAI SDK `3.0.109`; `ai-core`
+The published `ai-core@2.4.4` and `ai-sdk-provider@0.1.10` require OpenAI SDK `3.0.109`; `ai-core`
 also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
 Both Cherry packages now require Google SDK `3.0.132`. Mobile pins it with its required
 `@ai-sdk/provider@3.0.18` and `@ai-sdk/provider-utils@4.0.58`, retaining the Google model-path and
@@ -78,7 +81,7 @@ by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.3.1` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.3.3` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -94,6 +97,14 @@ readable. The published package models native search through `serverTools`; the 
 the bundled declarations and eligibility as described in [Web Search](../web-search.md). Mobile
 excludes `ultra` from selectable reasoning efforts and rejects
 `adaptive-between-tools` entries until the native runtime supports them.
+
+The `0.3.3` update includes LongCat-2.5 endpoint and reasoning declarations, Qwen 3.8 Flash Next
+effort inference, and corrected MiMo API model IDs. Model data still arrives through remote catalog
+updates; upgrading the package does not replace the saved snapshot. Mobile resolves the six legacy
+MiMo preset IDs to their API names on read, including copied presets and older cached catalogs,
+while preserving stored model identities, Agent references, and user overrides. Other custom
+provider aliases remain authoritative. Model-list reconciliation recognizes both stored identities
+and resolved API names, so corrected catalog entries do not duplicate or retire saved MiMo models.
 
 The `0.3.1` update adds these Mobile adaptations:
 

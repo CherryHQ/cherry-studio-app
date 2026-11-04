@@ -8,9 +8,9 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import {
   bundledBackupVersion,
   captureDatabase,
+  normalizeBackupDatabase,
   prepareRestoredDatabase,
   readDevicePreferences,
-  validateBackupDatabase,
 } from '@/backend/data/db/backupDatabase';
 import type { DbService } from '@/backend/data/db/DbService';
 import {
@@ -101,11 +101,12 @@ export class BackupRuntime extends BaseService implements BackupModule {
           await this.quiesceAgent();
           const database = archiveFile(work, 'database/cherry.db');
           await captureDatabase(this.dbService.getSqlite(), database);
+          requireDiskSpace(database.size);
+          await normalizeBackupDatabase(database, version);
           resources = await captureResources(storageDirectory(), work, signal);
         } finally {
           release();
         }
-        await validateBackupDatabase(archiveFile(work, 'database/cherry.db'), version);
         const entries: BackupManifest['entries'] = [];
         for (const [index, path] of resources.paths.entries()) {
           signal.throwIfAborted();
@@ -185,7 +186,9 @@ export class BackupRuntime extends BaseService implements BackupModule {
           this.publish({ phase: 'validating', completed: done, total }),
         );
         signal.throwIfAborted();
-        await validateBackupDatabase(archiveFile(extracted, 'database/cherry.db'), manifest);
+        const database = archiveFile(extracted, 'database/cherry.db');
+        requireDiskSpace(database.size);
+        await normalizeBackupDatabase(database, manifest);
         await validateResourceReferences(extracted, manifest);
         signal.throwIfAborted();
         this.candidate = { directory: work, manifest };
