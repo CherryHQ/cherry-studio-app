@@ -330,7 +330,9 @@ async function resolveRuntimeImages(
       signal.throwIfAborted();
       if (!uri || !uri.startsWith(`data:${fact.mediaType};base64,`)) {
         if (resources.inputFiles.has(fact.fileEntryId)) {
-          throw new Error('A current managed image became unavailable.');
+          fail('ATTACHMENT_UNAVAILABLE', 'A current managed image became unavailable.', {
+            code: 'unavailable',
+          });
         }
         continue;
       }
@@ -346,7 +348,9 @@ async function resolveRuntimeImages(
         throw signal.reason ?? new Error('Managed image resolution was aborted.');
       }
       if (resources.inputFiles.has(fact.fileEntryId)) {
-        throw new Error('A current managed image could not be read.');
+        fail('ATTACHMENT_UNAVAILABLE', 'A current managed image could not be read.', {
+          code: 'unavailable',
+        });
       }
     }
   }
