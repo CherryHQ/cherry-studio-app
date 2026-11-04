@@ -100,7 +100,11 @@ excludes `ultra` from selectable reasoning efforts and rejects
 
 The `0.3.3` update includes LongCat-2.5 endpoint and reasoning declarations, Qwen 3.8 Flash Next
 effort inference, and corrected MiMo API model IDs. Model data still arrives through remote catalog
-updates; upgrading the package does not replace the saved snapshot or rewrite saved MiMo model IDs.
+updates; upgrading the package does not replace the saved snapshot. Mobile resolves the six legacy
+MiMo preset IDs to their API names on read, including copied presets and older cached catalogs,
+while preserving stored model identities, Agent references, and user overrides. Other custom
+provider aliases remain authoritative. Model-list reconciliation recognizes both stored identities
+and resolved API names, so corrected catalog entries do not duplicate or retire saved MiMo models.
 
 The `0.3.1` update adds these Mobile adaptations:
 
