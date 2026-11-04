@@ -33,6 +33,8 @@ test.each([
   'avatars/user/',
   'files/x\u0000y',
   'preferences.json',
+  'ssh/credentials.json',
+  'ssh/other.json',
   `skills/brief/${sha256}/../SKILL.md`,
   `skills/brief/${sha256}/./SKILL.md`,
   `skills/brief/${sha256}/references//format.md`,
@@ -44,6 +46,14 @@ test.each([
 test('accepts nested files in pinned Skill revisions', () => {
   const base = manifest();
   const entry = { path: `skills/brief/${sha256}/references/format.md`, size: 40, sha256 };
+  expect(validateManifest({ ...base, entries: [...base.entries, entry] }).entries).toContainEqual(
+    entry,
+  );
+});
+
+test('accepts the optional portable SSH profile snapshot', () => {
+  const base = manifest();
+  const entry = { path: 'ssh/profiles.json', size: 80, sha256 };
   expect(validateManifest({ ...base, entries: [...base.entries, entry] }).entries).toContainEqual(
     entry,
   );

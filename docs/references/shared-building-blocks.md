@@ -51,6 +51,8 @@ it already exists.
 | Safe Markdown code fences | `createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` |
 | Markdown prose to plain text, code kept literal | `stripMarkdownFormatting` in `src/shared/utils/markdownFormatting.ts`, shared by search indexing and quote excerpts |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
+| SSH commands, remote files, authentication and pooled native connections | `SshRuntime` in `src/backend/services/ssh` and `modules/ssh`; `sshFileStorage` owns bounded transfer staging and exact-byte library imports |
+| Durable SSH connection configuration | `SshProfileService` in `src/backend/data/services`, with a dedicated MMKV store and a validated portable backup snapshot; credentials remain in SecureStore |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
@@ -79,6 +81,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
+| SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Feedback entry and context handoff | `useFeedbackActions`, `useFeedbackSource` and safe failure projection in `src/frontend/appShell/feedback`; settings owns the form |

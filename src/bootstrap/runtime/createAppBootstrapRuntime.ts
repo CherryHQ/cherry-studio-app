@@ -43,6 +43,7 @@ import type { ProviderAccountRuntime } from '@/backend/services/providers/accoun
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { SshRuntime } from '@/backend/services/ssh';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
@@ -145,6 +146,7 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionManager',
   );
   const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
+  const ssh = host.container.get<SshRuntime>('SshRuntime');
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
@@ -190,6 +192,7 @@ export function createAppBootstrapRuntime(
     providerAccounts,
     documentExport,
     desktopConnections,
+    ssh,
     desktopConnectionManager,
     remoteAgent,
     diagnostics,
@@ -202,6 +205,7 @@ export function createAppBootstrapRuntime(
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      ssh.hasPendingStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
     () => {
@@ -224,6 +228,7 @@ export function createAppBootstrapRuntime(
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
+      sshProfiles: services.sshProfile,
       desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
@@ -298,6 +303,7 @@ export function createAppBootstrapRuntime(
           resetFileTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
+        services.sshProfile.initialize();
         await initializeAppRuntime(services);
         await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();

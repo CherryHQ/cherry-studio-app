@@ -1569,7 +1569,10 @@ export class DurableAgentHost implements AgentProtocol {
         kind: 'approval',
         id: approval.id,
         title: approval.displayName,
-        requiresApp: isHealthToolRef(approval.toolRef),
+        requiresApp:
+          isHealthToolRef(approval.toolRef) ||
+          (approval.toolRef.source === 'builtin' &&
+            approval.toolRef.capabilityId.startsWith('ssh_')),
         respond: (decision) =>
           this.respondApproval({
             sessionId,

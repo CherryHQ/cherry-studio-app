@@ -22,7 +22,11 @@ jest.mock('../../../quotes/ChatQuoteContext', () => ({
 }));
 jest.mock('../../../quotes/MessageQuotePreview', () => ({ DraftMessageQuotePreview: () => null }));
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
-jest.mock('@/frontend/data', () => ({ useApiClient: () => ({}) }));
+jest.mock('@/frontend/data', () => ({
+  useApiClient: () => ({}),
+  useBackendModule: () => ({ isAvailable: () => false, getTarget: () => null }),
+}));
+jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockNoop }) }));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => mockNoop }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({ chatReturnToHref: () => '/chat' }));
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -33,9 +37,11 @@ jest.mock('@/frontend/hooks/plugin', () => ({
   usePluginCatalog: () => ({}),
   usePluginConnections: () => ({}),
 }));
+jest.mock('@/frontend/hooks/ssh', () => ({ sshErrorLabel: () => 'ssh.error.connection' }));
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachments: () => null,
   useComposerActions: () => ({ setDraft: mockNoop }),
+  useComposerPresentationActions: () => ({ runInputReplacement: mockNoop }),
   useComposerState: () => ({ draft: '', attachments: [] }),
 }));
 jest.mock('@/frontend/components/McpApp', () => ({
@@ -71,6 +77,9 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
+jest.mock('../components/ChatInputSsh', () => ({
+  ChatInputSshPopover: ({ children }: { children: ReactNode }) => children,
+}));
 jest.mock('../components/ChatInputPluginPopover', () => ({
   ChatInputPluginPopover: ({ children }: { children: ReactNode }) => children,
 }));

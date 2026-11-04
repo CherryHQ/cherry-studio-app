@@ -27,10 +27,16 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   const isOpen = Boolean(interaction) && !retired;
   const canRespond =
     isOpen && interaction?.respond?.availability.state === 'enabled' && input.isSuccess;
-  const respond = async ({ approvalId, approved }: ToolApprovalRespondInput) => {
+  const respond = async ({
+    approvalId,
+    approved,
+    sshDiagnosticsGrant,
+  }: ToolApprovalRespondInput) => {
     if (!canRespond || interaction?.id !== approvalId) return;
     const result = await interaction.respond!.execute(
-      approved ? { kind: 'approve' } : { kind: 'deny' },
+      approved
+        ? { kind: 'approve', ...(sshDiagnosticsGrant ? { sshDiagnosticsGrant } : {}) }
+        : { kind: 'deny' },
     );
     if (result.state === 'rejected' || result.state === 'interrupted')
       toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
@@ -44,6 +50,8 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
               {
                 approvalId: interaction.id,
                 displayName: interaction.title,
+                sshCommand: interaction.sshCommand,
+                canGrantSshDiagnostics: interaction.canGrantSshDiagnostics,
                 input: input.data?.kind === 'json' ? input.data.value : undefined,
               },
             ]

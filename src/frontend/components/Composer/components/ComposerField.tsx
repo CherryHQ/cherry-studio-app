@@ -53,7 +53,7 @@ export function ComposerField({
     [addAttachments, attachmentMode],
   );
 
-  // A plugin, Skill or Office selection mention is the only link this field can contain — nothing here
+  // Plugin, Skill, SSH and Office selection mentions are the links this field creates — nothing here
   // creates any other kind, and auto-detection is off — so the base `link`
   // style is set alongside the variant rather than left to the library's blue.
   const markdownStyle = useMemo(() => {
@@ -67,6 +67,7 @@ export function ComposerField({
         // Menus and the sidebar use the same ToolCase shape as a Lucide SVG.
         '^skill://': { ...mentionStyle, icon: skillInlineIcon['tool-case'], iconTint: true },
         '^selection://': { ...mentionStyle, icon: pluginInlineIcons['file-text'], iconTint: true },
+        '^ssh://': mentionStyle,
       },
     };
   }, [linkColor, theme]);

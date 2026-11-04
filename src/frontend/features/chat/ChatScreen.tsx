@@ -31,6 +31,7 @@ import {
 } from '@/frontend/components/Composer';
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
+import { useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
@@ -39,6 +40,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { ChatInput } from './components/ChatInput';
 import { createSelectionMention } from './components/ChatInput/utils/selectionMentions';
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
+import { createSshMention } from './components/ChatInput/utils/sshMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import {
@@ -150,6 +152,7 @@ function ChatRouteContent() {
 
 function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const { t } = useTranslation();
+  const ssh = useBackendModule('ssh');
   const isPreview = useIsPreview();
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
@@ -165,6 +168,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     agentId: resolvedAgentId,
     sessionId,
     composerKey: composerSession.key,
+    sshDraftId: target.kind === 'draft' ? target.sshDraftId : undefined,
     workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
   const agent = useAgentApiById(resolvedAgentId);
@@ -210,11 +214,17 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   );
   // Entry actions seed the rich draft; only the user's send creates a message.
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
+  const sshProfile =
+    target.kind === 'draft' && target.sshDraftId
+      ? ssh.getTarget(`draft:${target.sshDraftId}`)?.profile
+      : undefined;
   const initialDraft = composerHandoff?.skillAction
     ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
     : composerHandoff?.selection
       ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
-      : composerHandoff?.draft;
+      : sshProfile
+        ? `${createSshMention(`SSH · ${sshProfile.name.replace(/\s+/g, ' ')}`, sshProfile)} ${composerHandoff?.draft ?? ''}`
+        : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
@@ -334,6 +344,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
                     }
                     sessionId={sessionId}
+                    sshDraftId={target.kind === 'draft' ? target.sshDraftId : undefined}
                     selectionHandoff={target.selectionHandoff}
                   />
                   <ChatDockFooter>

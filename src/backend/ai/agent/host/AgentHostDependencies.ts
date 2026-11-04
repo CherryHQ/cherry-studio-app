@@ -37,6 +37,7 @@ import { createInternalEntry, discardInternalEntries } from '@/backend/services/
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { skillStorage } from '@/backend/services/skill';
+import type { SshRuntime } from '@/backend/services/ssh';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { VoiceModule } from '@/shared/contracts/voice';
@@ -77,6 +78,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'AgentRuntime',
   'TrashRuntime',
   'KeepAliveCoordinator',
+  'SshRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   scriptSandbox() {
@@ -163,6 +165,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly textGenerator: RuntimeTextGenerator,
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
+    private readonly ssh?: SshRuntime,
   ) {
     super();
     this.imageGeneration = createAgentImageGeneration({
@@ -214,6 +217,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
+      ssh: this.ssh,
     }));
   }
 

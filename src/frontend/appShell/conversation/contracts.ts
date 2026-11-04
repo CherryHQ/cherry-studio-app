@@ -110,6 +110,7 @@ export type ResourceRead =
   | { kind: 'deferred'; key: string; read(signal: AbortSignal): Promise<ResourceValue> };
 export type ConversationInteractionResponse =
   | InteractionResponse
+  | { kind: 'approve'; sshDiagnosticsGrant: true }
   | { kind: 'user-answer'; answer: AgentUserAnswers };
 export type ConversationInteraction = {
   execution?: string;
@@ -119,6 +120,10 @@ export type ConversationInteraction = {
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
+  /** Identified from the local tool reference, never from model-authored arguments. */
+  sshCommand?: boolean;
+  /** Only a locally bound, still-current SSH target can offer this narrower future grant. */
+  canGrantSshDiagnostics?: boolean;
   input: ResourceRead;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };
