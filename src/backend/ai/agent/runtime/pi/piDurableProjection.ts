@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
-import { isCompactTool } from '@/shared/utils/agentMessageDisplay';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
 import {
@@ -432,11 +431,7 @@ export function projectPiTurn(options: {
         state: streaming
           ? 'input-streaming'
           : (options.toolStates?.get(block.id) ?? 'input-available'),
-        ...(options.active && target?.ref.source !== 'mcp' && isCompactTool(block.name)
-          ? {}
-          : inputPreview
-            ? { inputPreview }
-            : { input: RuntimeJsonValueSchema.parse(args) }),
+        ...(inputPreview ? { inputPreview } : { input: RuntimeJsonValueSchema.parse(args) }),
       };
       parts.push(part);
       toolsByCall.set(block.id, part);
@@ -451,7 +446,7 @@ export function projectPiTurn(options: {
                 name: call.name,
                 // The client translates built-in names; an MCP alias needs its display name.
                 ...(tool?.ref.source === 'mcp' ? { title: tool.displayName } : {}),
-                ...(call.args !== undefined ? { args: call.args } : {}),
+                args: call.args,
                 status: call.status,
               },
             ];

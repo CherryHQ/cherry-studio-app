@@ -234,6 +234,7 @@ export class PiDurableObserver {
         this.nestedTools.set(tool.callId, {
           parentCallId: tool.parentCallId,
           name: tool.name,
+          args: JSON.stringify(tool.arguments).slice(0, 1000),
           status: tool.summary
             ? tool.summary.isError
               ? 'error'

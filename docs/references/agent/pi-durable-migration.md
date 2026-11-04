@@ -489,9 +489,10 @@ rewritten for model requests.
 New calls reuse short references; historical context compaction remains upstream-owned.
 
 The supported `afterTool` hook bounds invalid-argument diagnostics before settlement: at most five
-issues / 2,000 characters, without the full `Received arguments` echo. Application status projection
-omits nested arguments. Upstream validation and Code Mode may still serialize arguments internally;
-this change does not patch those paths or claim to eliminate their allocation cost.
+issues / 2,000 characters, without the full `Received arguments` echo. Nested tool progress retains
+the existing 1,000-character argument preview for detail readers. Upstream validation and Code Mode
+may still serialize arguments internally; this change does not patch those paths or claim to
+eliminate their allocation cost.
 
 [piCodemodeSandbox.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeSandbox.test.ts)
 covers staged source reuse and the separate creation/checking bridge contract;

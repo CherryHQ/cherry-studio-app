@@ -1,6 +1,6 @@
 import type { AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
 
-import { projectAgentMessageDisplay, TOOL_RESULT_PREVIEW_CHARACTERS } from '../agentMessageDisplay';
+import { projectAgentMessageDisplay } from '../agentMessageDisplay';
 
 function message(parts: AgentMessagePart[]): AgentMessageView {
   return {
@@ -76,9 +76,9 @@ test('keeps readable status-only history and empty streaming placeholders', () =
   ]);
 });
 
-test('omits script inputs and nested output without serializing them, retains final attachments', () => {
+test('retains full script inputs, nested output and attachments without serializing them', () => {
   const toJSON = jest.fn(() => {
-    throw new Error('Do not serialize hidden input');
+    throw new Error('Display projection must not serialize input');
   });
   const input = { code: 'x'.repeat(100_000) };
   Object.defineProperty(input, 'toJSON', { value: toJSON });
@@ -93,17 +93,24 @@ test('omits script inputs and nested output without serializing them, retains fi
     },
   });
   const projected = projectAgentMessageDisplay(message([source])).parts[0];
-  expect(projected).not.toHaveProperty('input');
+  expect(projected).toBe(source);
   expect(projected).toMatchObject({
-    output: { value: { output: 'x'.repeat(TOOL_RESULT_PREVIEW_CHARACTERS) }, artifacts },
+    input,
+    output: {
+      value: {
+        output: 'x'.repeat(100_000),
+        details: { input },
+        logs: 'logs'.repeat(30_000),
+      },
+      modelValue: 'model text'.repeat(30_000),
+      artifacts,
+    },
   });
-  expect(projected).not.toHaveProperty('output.modelValue');
-  expect(projected).not.toHaveProperty('output.value.details');
   expect(toJSON).not.toHaveBeenCalled();
   expect(source).toHaveProperty('input', input);
 });
 
-test('bounds failed scripts and preserves approval inputs and MCP results', () => {
+test('preserves full failed scripts, approval inputs and MCP results', () => {
   const input = { code: 'x'.repeat(100_000) };
   const awaiting = tool({ state: 'awaiting-approval', input, approvalId: 'approval' });
   const remote = tool({
@@ -119,7 +126,8 @@ test('bounds failed scripts and preserves approval inputs and MCP results', () =
   const parts = projectAgentMessageDisplay(message([awaiting, remote, failed])).parts;
   expect(parts[0]).toBe(awaiting);
   expect(parts[1]).toBe(remote);
-  expect(parts[2]).not.toHaveProperty('input');
-  expect(parts[2]).not.toHaveProperty('output');
-  expect(parts[2]).toHaveProperty('error.message', 'e'.repeat(TOOL_RESULT_PREVIEW_CHARACTERS));
+  expect(parts[2]).toBe(failed);
+  expect(parts[2]).toHaveProperty('input', input);
+  expect(parts[2]).toHaveProperty('output.value.error.arguments', input);
+  expect(parts[2]).toHaveProperty('error.message', 'e'.repeat(10_000));
 });

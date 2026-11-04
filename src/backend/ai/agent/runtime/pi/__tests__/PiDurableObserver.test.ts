@@ -289,7 +289,10 @@ test('projects nested tool progress and drops it when the parent result commits'
       state: 'running',
       progress: { calls: [{ id: 'call/child', status: 'running' }] },
     });
-    expect(initial.parts[0]).not.toHaveProperty('progress.calls.0.args');
+    expect(initial.parts[0]).toHaveProperty(
+      'progress.calls.0.args',
+      JSON.stringify(child.arguments).slice(0, 1000),
+    );
     await fixture.advance(
       view(
         {

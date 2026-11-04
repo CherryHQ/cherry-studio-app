@@ -864,7 +864,7 @@ describe('Pi turn projection', () => {
   });
 });
 
-test('live reasoning carries no text while settled replay retains exact input', () => {
+test('live reasoning carries no text while live and settled tool inputs remain complete', () => {
   const text = '思考'.repeat(20_000);
   const code = 'const data = [];'.repeat(10_000);
   const message: AssistantMessage = {
@@ -884,7 +884,7 @@ test('live reasoning carries no text while settled replay retains exact input', 
   };
   const live = projectPiTurn({ ...options, active: true });
   expect(live.parts[0]).toMatchObject({ type: 'reasoning', text: '', hasText: true });
-  expect(live.parts[1]).not.toHaveProperty('input');
+  expect(live.parts[1]).toHaveProperty('input.code', code);
   const settled = projectPiTurn({ ...options, active: false });
   expect(settled.parts[0]).toMatchObject({ text });
   expect(settled.parts[1]).toHaveProperty('input.code', code);
