@@ -15,6 +15,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
 } from '@/shared/contracts/fileAttachment';
+import type { VoiceEngineId } from '@/shared/contracts/voice';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -67,6 +68,18 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  /** Null disables voice input and keeps the composer's send action. */
+  'feature.voice.dictation_engine': VoiceEngineId | null;
+  /** Null follows the app language. */
+  'feature.voice.dictation_language': LanguageVarious | null;
+  /** Null uses the first engine this device supports. */
+  'feature.voice.speech_engine': VoiceEngineId | null;
+  /** Audio files use SenseVoice unless the user selects the system's offline recognizer. */
+  'feature.voice.transcription_engine': VoiceEngineId;
+  /** Null follows the app language; independent of microphone dictation. */
+  'feature.voice.transcription_language': LanguageVarious | null;
+  /** Empty uses the system default voice for the app language. */
+  'feature.voice.system_voice': string;
 
   'file.document_parser.mode': DocumentParserMode;
   'file.export.watermark_enabled': boolean;
@@ -113,6 +126,12 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'feature.voice.dictation_engine': null,
+  'feature.voice.dictation_language': null,
+  'feature.voice.speech_engine': null,
+  'feature.voice.system_voice': '',
+  'feature.voice.transcription_engine': 'sensevoice',
+  'feature.voice.transcription_language': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
   'file.export.watermark_enabled': true,
@@ -144,5 +163,10 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   'app.user.id',
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
+  // Engine support and system voices differ per device.
+  'feature.voice.dictation_engine',
+  'feature.voice.speech_engine',
+  'feature.voice.transcription_engine',
+  'feature.voice.system_voice',
   'ui.sidebar.collapsed',
 ] as const satisfies readonly PreferenceKeyType[];

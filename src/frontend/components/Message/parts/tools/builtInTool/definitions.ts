@@ -64,6 +64,7 @@ export const builtInToolIconNames = {
   edit_file: 'fileEdit',
   read_file: 'fileText',
   write_file: 'fileText',
+  transcribe_audio: 'fileText',
   generate_image: 'image',
   web_search: 'web',
   run_js: 'code',

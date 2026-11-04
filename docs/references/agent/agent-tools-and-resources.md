@@ -15,8 +15,8 @@ managed-resource gates still apply. The file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
-Focused tests pass; native/Office acceptance remains pending. See [Office Tools Design](./office-tools-design.md)
+Office generation, structural reads, integrity checks and bounded editing use the native QuickJS compute sandbox.
+Desktop Office fidelity remains a separate acceptance concern. See [Office Tools Design](./office-tools-design.md)
 and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
 tool still diverges from carry an **As-built** note.
 
@@ -256,6 +256,16 @@ The Host creates `TurnResourceLedger` and captures `workspaceFolderId` before fr
 name search, and subfolder creation use `list_workspace`, `find_workspace_files`, and
 `create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
 live destination ancestry. Without a workspace, new outputs use the library root.
+
+Audio attachments are managed references, with no audio bytes in model input. When the native
+file decoder and selected offline transcription engine are ready, `transcribe_audio` accepts a conversation
+file reference or workspace-relative path. It creates a plain-text artifact in the captured workspace
+(or library root) and the Host grants it before the next `read_file` call. Like `write_file`, it is
+auto-approved. It uses the shared voice runtime and never uploads audio. SenseVoice needs no
+recognition permission; the optional system engine uses platform speech permissions, including
+Android’s required `RECORD_AUDIO` permission for file input.
+Limits are 100 MiB and two hours; unsupported/corrupt audio, unavailable models and cancellation do
+not produce partial documents. See [Voice Input And Speech](../voice.md#audio-file-transcription).
 
 The `fileLibrary` capability adds library search/read and management tools, enabled by default
 through the Agent's deny-list model. They follow the shared approval rule: reads
@@ -622,7 +632,11 @@ Results contain managed file metadata and a created artifact, never package byte
 Sources and images use `WorkspaceFileAccess.resolveRead`, admitting conversation grants or live
 membership in the selected workspace. Outputs are separate logical files in that workspace, or at
 the library root when none is selected; storage validates workspace placement at commit.
-`inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
+`inspect_office_file` pages through body paragraphs, sheets or slide shapes. Its `kind: "structure"`
+inventories Word blocks/comments/revisions, Excel formula caches/errors, or PowerPoint geometry
+and estimated layout findings. `kind: "check"` validates bounded package XML, content types,
+relationships and selected IDs; optional `against_file_entry_id` compares against a separately
+authorized original. Counts precede paging, and existing findings remain distinct from new ones. `read_office_content`
 returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
 source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
 hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
@@ -681,11 +695,10 @@ compute pool and publishes its returned DOCX/XLSX/PPTX as a new created artifact
 spec tools cannot express, including template filling, formulas, free layouts and package-level edits
 of existing files. Its inputs are authorized managed file ids exposed to the script as bytes; the
 job has no app, file or network port. A script that returns nothing reports `{ status: "read", logs }`
-and saves no file, so package inspection does not leave scratch files. Outputs whose XML parts do
-not parse are refused before publication. Script errors and console output return as
-`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
-pending. Executed tests cover package contents and supported patch preservation in a Node VM;
-they do not establish native QuickJS compatibility or Office visual fidelity.
+and saves no file, so package inspection does not leave scratch files. Outputs pass the same package integrity checks before publication. Scripts may supply
+`against_file_entry_id` to reject only newly introduced errors; the baseline is an independent
+snapshot that script mutations cannot replace. Script errors and console output return as
+`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope.
 
 ### Managed File Write And Edit
 

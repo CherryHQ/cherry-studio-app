@@ -104,4 +104,20 @@ describe('StartupRouteReadyReporter', () => {
     expect(reportContentReady).toHaveBeenCalledTimes(1);
     reporter.unmount();
   });
+
+  test('keeps the cold UU callback covered until the restored route is laid out', () => {
+    const reportContentReady = jest.fn();
+    mockSegments = ['uu-remote', 'callback'];
+    const reporter = renderReporter(reportContentReady);
+    reporter.layout();
+    expect(frames).toHaveLength(0);
+    expect(reportContentReady).not.toHaveBeenCalled();
+
+    mockSegments = ['(drawer)', '(main)', '(chat)', 'remote'];
+    reporter.rerender();
+    act(() => frames.shift()?.());
+    act(() => frames.shift()?.());
+    expect(reportContentReady).toHaveBeenCalledTimes(1);
+    reporter.unmount();
+  });
 });

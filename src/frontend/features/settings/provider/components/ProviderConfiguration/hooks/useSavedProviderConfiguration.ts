@@ -172,13 +172,15 @@ export function useSavedProviderConfiguration(providerId: string) {
       showAddressError(error);
       return false;
     }
-    const removedEndpoints = Object.keys(current.endpointConfigs ?? {}).filter(
-      (type) =>
-        current.endpointConfigs?.[type as EndpointType]?.baseUrl?.trim() &&
-        !updates.endpointConfigs[type as EndpointType]?.baseUrl?.trim(),
+    const removedEndpoints = new Set(
+      Object.keys(current.endpointConfigs ?? {}).filter(
+        (type) =>
+          current.endpointConfigs?.[type as EndpointType]?.baseUrl?.trim() &&
+          !updates.endpointConfigs[type as EndpointType]?.baseUrl?.trim(),
+      ),
     );
     const referencedCount = models.filter((model) =>
-      removedEndpoints.includes(model.endpointTypes?.[0] ?? ''),
+      removedEndpoints.has(model.endpointTypes?.[0] ?? ''),
     ).length;
     if (referencedCount > 0) {
       alert.show({

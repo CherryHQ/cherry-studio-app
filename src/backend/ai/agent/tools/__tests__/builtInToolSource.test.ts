@@ -38,6 +38,17 @@ describe('createSystemCapabilitySource', () => {
     jest.restoreAllMocks();
   });
 
+  test.each(['needs-model', 'unsupported', 'ready'] as const)(
+    'offers audio transcription only when ready: %s',
+    async (status) => {
+      const tools = await resolve({
+        voice: { getTranscriptionStatus: async () => status, transcribeAudio: jest.fn() },
+      });
+      expect(capabilityIds(tools).includes('transcribe_audio')).toBe(status === 'ready');
+      if (status === 'ready') expect(approvalOf(tools, 'transcribe_audio')).toBe('auto');
+    },
+  );
+
   test('offers the always-available catalog when nothing is granted or configured', async () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 
@@ -734,6 +745,7 @@ type Scenario = {
   jsSandbox?: JsSandbox;
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
+  voice?: SystemCapabilitySourceDependencies['voice'];
   webSearchProviders?: { fetchUrls?: boolean; searchKeywords?: boolean };
   workspaceFolderId?: string;
 };
@@ -808,6 +820,7 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
     } as unknown as SystemCapabilitySourceDependencies['preference'],
     jsSandbox: scenario.jsSandbox ?? null,
     supportsToolCalling: async () => scenario.supportsToolCalling ?? true,
+    voice: scenario.voice,
     webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
   };
 }

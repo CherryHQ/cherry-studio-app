@@ -54,7 +54,20 @@ export function FileCardPreview({
       )}
     >
       {variant === 'card' ? filename : icon}
-      {variant === 'card' ? icon : filename}
+      {variant === 'card' ? (
+        icon
+      ) : file.kind === 'audio' ? (
+        <View className="w-full min-h-0 shrink gap-1">
+          {filename}
+          {file.extensionLabel ? (
+            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              {file.extensionLabel}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        filename
+      )}
     </View>
   );
 }

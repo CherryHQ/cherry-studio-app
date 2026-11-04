@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/VoiceInput.podspec",
+    "modules": ["VoiceInputModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.voiceinput.VoiceInputModule"]
+  }
+}

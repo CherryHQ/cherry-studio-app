@@ -37,6 +37,19 @@ const readyFileAttachment: ComposerAttachmentReady = {
 };
 
 describe('composer attachments', () => {
+  test.each([undefined, 'application/octet-stream'])(
+    'keeps audio sendable when the picker supplies the generic type %s',
+    (mediaType) => {
+      expect(
+        createDocumentAttachmentDraft({
+          name: 'Interview.M4A',
+          uri: 'file:///recording.m4a',
+          mediaType,
+        }),
+      ).toMatchObject({ kind: 'file', mediaType: 'audio/mp4', name: 'Interview.M4A' });
+    },
+  );
+
   test('replaces only the matching draft image and sends the replacement managed reference', () => {
     const replacement: ComposerAttachmentReady = {
       ...readyFileAttachment,

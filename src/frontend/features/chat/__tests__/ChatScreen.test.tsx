@@ -85,6 +85,7 @@ jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn(),
   useIsPreview: () => false,
   useLocalSearchParams: () => mockRouteParams,
   useRouter: () => ({ push: jest.fn() }),
