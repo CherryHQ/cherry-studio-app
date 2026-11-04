@@ -1,22 +1,21 @@
-import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { CloudQuotaWindow } from '@/shared/contracts/cloud';
+import type { CloudQuotaPool, CloudQuotaWindow } from '@/shared/contracts/cloud';
 
 import { formatQuotaWindow, formatSubscriptionDate } from './subscriptionFormatters';
 
-export function SubscriptionQuotaCard({ windows }: { windows: readonly CloudQuotaWindow[] }) {
+export function SubscriptionQuotaCard({ pools }: { pools: readonly CloudQuotaPool[] }) {
   return (
-    <View className="rounded-2xl bg-card px-5">
-      {windows.map((window, index) => (
-        <View
-          className={cn('py-5', index > 0 && 'border-t border-border')}
-          key={`${window.window_type}:${window.duration_seconds}`}
-        >
-          <QuotaWindowSummary window={window} />
-        </View>
-      ))}
+    <View className="gap-6 rounded-2xl border border-border bg-card px-4 py-5">
+      {pools.flatMap((pool) =>
+        pool.windows.map((window) => (
+          <QuotaWindowSummary
+            key={`${pool.allocation_id}:${window.window_type}:${window.duration_seconds}`}
+            window={window}
+          />
+        )),
+      )}
     </View>
   );
 }
@@ -32,10 +31,12 @@ function QuotaWindowSummary({ window }: { window: CloudQuotaWindow }) {
   const label = formatQuotaWindow(window, i18n.language, t);
 
   return (
-    <View className="gap-3">
-      <View className="flex-row items-center justify-between gap-4">
-        <Text className="min-w-0 flex-1 font-medium text-base text-foreground">{label}</Text>
-        <Text className="font-semibold text-2xl text-foreground tabular-nums">{remaining}</Text>
+    <View className="gap-2">
+      <View className="flex-row flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <Text className="shrink font-medium text-xs text-foreground">{label}</Text>
+        <Text className="text-xs text-muted-foreground tabular-nums">
+          {t('cloud.remainingPercent', { percent: remaining })}
+        </Text>
       </View>
       <View
         accessible
@@ -52,12 +53,11 @@ function QuotaWindowSummary({ window }: { window: CloudQuotaWindow }) {
         <View className="h-full rounded-full bg-primary" style={{ width: `${ratio * 100}%` }} />
       </View>
       {window.next_recovery_at ? (
-        <View className="flex-row flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <Text className="text-xs text-muted-foreground">{t('cloud.recoveryTime')}</Text>
-          <Text className="text-xs text-muted-foreground tabular-nums">
-            {formatSubscriptionDate(window.next_recovery_at, i18n.language)}
-          </Text>
-        </View>
+        <Text className="text-xs text-muted-foreground tabular-nums">
+          {t('cloud.recoveryTime', {
+            time: formatSubscriptionDate(window.next_recovery_at, i18n.language),
+          })}
+        </Text>
       ) : null}
     </View>
   );

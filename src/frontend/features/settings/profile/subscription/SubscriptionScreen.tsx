@@ -1,4 +1,3 @@
-import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import ExternalLinkIcon from '@cherrystudio/app-icons/icons/external-link';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, ContentState } from '@cherrystudio/ui/components';
@@ -19,7 +18,9 @@ export default function SubscriptionScreen() {
   const { cloud, state } = useCloud();
   const { subscription, plan } = getSubscriptionOverview(state.plans);
   const pools = subscription?.quota_pools.filter((pool) => pool.windows.length > 0) ?? [];
-  const price = plan ? formatSubscriptionPrice(plan, i18n.language, t) : undefined;
+  const price = subscription
+    ? formatSubscriptionPrice(subscription.plan, i18n.language, t)
+    : undefined;
   useEffect(() => {
     void cloud.refresh().catch(() => {});
   }, [cloud]);
@@ -31,12 +32,7 @@ export default function SubscriptionScreen() {
     await cloud.refresh().catch(() => {});
   };
   const webAction = state.webUrl ? (
-    <Button
-      accessibilityRole="link"
-      onPress={() => void openSubscriptionWeb()}
-      shape="pill"
-      variant="secondary"
-    >
+    <Button accessibilityRole="link" onPress={() => void openSubscriptionWeb()} variant="outline">
       <Text className="shrink text-center font-medium text-sm text-foreground">
         {t(!state.plans || subscription ? 'cloud.manageOnWeb' : 'cloud.subscribe')}
       </Text>
@@ -46,7 +42,7 @@ export default function SubscriptionScreen() {
 
   return (
     <SettingsScrollPage
-      contentClassName="gap-10 px-6 pt-7"
+      contentClassName="gap-6"
       headerProps={{
         title: t('cloud.title'),
         rightActions: [
@@ -84,63 +80,30 @@ export default function SubscriptionScreen() {
               {t('cloud.stale')}
             </Text>
           ) : null}
-          <View className="items-start gap-2">
-            {plan ? (
-              <Text className="text-sm text-muted-foreground">
-                {t(subscription ? 'cloud.currentPlan' : 'cloud.availablePlan')}
+          <View className="flex-row flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4">
+            <View className="min-w-0 max-w-full grow gap-1">
+              <Text accessibilityRole="header" className="font-medium text-base text-foreground">
+                {plan?.display_name ?? t('cloud.noPlans')}
               </Text>
-            ) : null}
-            <Text accessibilityRole="header" className="font-semibold text-3xl text-foreground">
-              {plan?.display_name ?? t('cloud.noPlans')}
-            </Text>
-            {price ? <Text className="text-base text-muted-foreground">{price}</Text> : null}
-            {webAction ? <View className="pt-3">{webAction}</View> : null}
+              {price ? <Text className="text-xs text-muted-foreground">{price}</Text> : null}
+            </View>
+            {webAction ? <View className="max-w-full">{webAction}</View> : null}
           </View>
           <View className="gap-3">
-            <View className="flex-row flex-wrap items-baseline justify-between gap-3">
-              <Text accessibilityRole="header" className="font-semibold text-lg text-foreground">
-                {t('cloud.usage')}
-              </Text>
-              {pools.length > 0 ? (
-                <Text className="text-xs text-muted-foreground">{t('cloud.remainingQuota')}</Text>
-              ) : null}
-            </View>
+            <Text accessibilityRole="header" className="font-medium text-sm text-foreground">
+              {t('cloud.usage')}
+            </Text>
             {pools.length > 0 ? (
-              pools.map((pool) => (
-                <View className="gap-2" key={pool.allocation_id}>
-                  {pools.length > 1 ? (
-                    <Text className="font-medium text-base text-foreground">
-                      {pool.display_name}
-                    </Text>
-                  ) : null}
-                  <SubscriptionQuotaCard windows={pool.windows} />
-                </View>
-              ))
+              <SubscriptionQuotaCard pools={pools} />
             ) : (
-              <View className="rounded-2xl bg-card px-5 py-7">
+              <View className="min-h-24 items-center justify-center rounded-2xl border border-border bg-card px-4 py-6">
                 <ContentState.Empty
-                  description={
-                    subscription ? undefined : t('cloud.subscribeToViewUsageDescription')
-                  }
-                  title={t(subscription ? 'cloud.noQuota' : 'cloud.subscribeToViewUsage')}
+                  description={t(
+                    subscription ? 'cloud.noQuota' : 'cloud.subscribeToViewUsageDescription',
+                  )}
                 />
               </View>
             )}
-            {subscription ? (
-              <View className="flex-row items-center justify-center gap-1.5 pt-1">
-                <ClockIcon className="size-3 text-muted-foreground" />
-                <Text className="shrink text-center text-xs text-muted-foreground">
-                  {state.isRefreshing
-                    ? t('cloud.loading')
-                    : t('cloud.measuredAt', {
-                        time: new Date(state.plans.measured_at).toLocaleTimeString(i18n.language, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }),
-                      })}
-                </Text>
-              </View>
-            ) : null}
           </View>
         </>
       )}
