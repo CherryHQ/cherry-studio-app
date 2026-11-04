@@ -1,9 +1,11 @@
+import { useToast } from '@cherrystudio/ui/components';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { setStringAsync } from 'expo-clipboard';
 import { clearInitialURL } from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Keyboard, Linking } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
@@ -40,6 +42,8 @@ export function useProviderAccount(
   onBusyChange: (busy: boolean) => void,
   interactive = false,
 ) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const accounts = useBackendModule('providers').accounts;
   const queryClient = useQueryClient();
   const [error, setError] = useState<ProviderAccountErrorReason | null>(null);
@@ -180,8 +184,12 @@ export function useProviderAccount(
       if (loginEvent?.type !== 'device-code') return;
       try {
         await setStringAsync(loginEvent.code);
+        toast.show({ label: t('settings.provider.account.deviceCodeCopied'), variant: 'success' });
       } catch {
-        setError('request');
+        toast.show({
+          label: t('settings.provider.account.deviceCodeCopyFailed'),
+          variant: 'danger',
+        });
       }
     },
     openLoginBrowser: async () => {
