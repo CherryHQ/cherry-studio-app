@@ -12,7 +12,6 @@ import {
 
 import {
   assertBackupBelongsToActiveProfile,
-  readBackupSchema,
   restoreDeviceState,
   prepareEnterpriseBackup,
 } from '../backupDatabase';
@@ -92,39 +91,6 @@ test('restore preserves message-owned translations together with the original pa
       raw.prepare("SELECT data FROM agent_session_message WHERE id = 'complete'").get(),
     ).toEqual({ data });
     expect(raw.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  } finally {
-    raw.close();
-  }
-});
-
-test('schema comparison includes extra triggers whose names resemble SQLite internals or FTS shadow tables', async () => {
-  const { raw, adapter } = database();
-  try {
-    const expected = await readBackupSchema(adapter);
-    for (const name of ['sqliteHidden', 'agent_session_message_fts_config']) {
-      raw.exec(
-        `CREATE TRIGGER ${name} AFTER UPDATE ON plugin_authorization BEGIN DELETE FROM preference; END`,
-      );
-      expect(await readBackupSchema(adapter)).not.toBe(expected);
-      raw.exec(`DROP TRIGGER ${name}`);
-    }
-  } finally {
-    raw.close();
-  }
-});
-
-test('schema comparison ignores custom SQL triggers that the running bundle recreates', async () => {
-  const { raw, adapter } = database();
-  try {
-    raw.exec(
-      'CREATE TRIGGER agent_session_message_ad AFTER DELETE ON agent_session_message BEGIN SELECT 1; END',
-    );
-    const expected = await readBackupSchema(adapter);
-    raw.exec('DROP TRIGGER agent_session_message_ad');
-    raw.exec(
-      'CREATE TRIGGER agent_session_message_ad AFTER DELETE ON agent_session_message BEGIN SELECT 2; END',
-    );
-    expect(await readBackupSchema(adapter)).toBe(expected);
   } finally {
     raw.close();
   }

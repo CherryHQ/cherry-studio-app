@@ -1,0 +1,317 @@
+diff --git a/android/CMakeLists.txt b/android/CMakeLists.txt
+--- a/android/CMakeLists.txt
++++ b/android/CMakeLists.txt
+@@ -81,10 +81,8 @@ add_library(
+         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JSICache.cpp"
+         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiPromises.cpp"
+         "${PROJECT_SOURCE_DIR}/../cpp/jsi/Promise.cpp"
+-        "${PROJECT_SOURCE_DIR}/../cpp/jsi/ViewProperty.cpp"
+ 
+         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkManager.cpp"
+-        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkPictureView.cpp"
+ 
+         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/CSSColorParser.cpp"
+         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/base64.cpp"
+diff --git a/cpp/api/recorder/ColorFilters.h b/cpp/api/recorder/ColorFilters.h
+--- a/cpp/api/recorder/ColorFilters.h
++++ b/cpp/api/recorder/ColorFilters.h
+@@ -6,6 +6,7 @@
+ #include <vector>
+ 
+ #include <include/core/SkColorFilter.h>
++#include <include/effects/SkLumaColorFilter.h>
+ 
+ #include "Command.h"
+ #include "Convertor.h"
+diff --git a/cpp/api/recorder/Convertor.h b/cpp/api/recorder/Convertor.h
+--- a/cpp/api/recorder/Convertor.h
++++ b/cpp/api/recorder/Convertor.h
+@@ -10,12 +10,24 @@
+ #include <include/core/SkPaint.h>
+ #include <include/core/SkPathEffect.h>
+ #include <include/core/SkPoint.h>
++#include <include/effects/Sk1DPathEffect.h>
+ #include <include/effects/SkRuntimeEffect.h>
+ #include <modules/skparagraph/include/Paragraph.h>
+ #include <modules/skparagraph/include/ParagraphBuilder.h>
+ #include <modules/skparagraph/include/ParagraphStyle.h>
+ 
+ #include "../CustomBlendModes.h"
++#include "api/JsiSkFont.h"
++#include "api/JsiSkImage.h"
++#include "api/JsiSkImageFilter.h"
++#include "api/JsiSkMatrix.h"
++#include "api/JsiSkPaint.h"
++#include "api/JsiSkParagraph.h"
++#include "api/JsiSkPicture.h"
++#include "api/JsiSkRSXform.h"
++#include "api/JsiSkSVG.h"
++#include "api/JsiSkSkottie.h"
++#include "api/JsiSkTextBlob.h"
+ #include "api/third_party/CSSColorParser.h"
+ 
+ #include "DataTypes.h"
+diff --git a/cpp/api/recorder/DataTypes.h b/cpp/api/recorder/DataTypes.h
+--- a/cpp/api/recorder/DataTypes.h
++++ b/cpp/api/recorder/DataTypes.h
+@@ -2,6 +2,11 @@
+ 
+ #include <jsi/jsi.h>
+ 
++#include "api/JsiSkPath.h"
++#include "api/JsiSkRRect.h"
++#include "api/JsiSkRect.h"
++#include "api/JsiSkRuntimeEffect.h"
++
+ namespace RNSkia {
+ 
+ using Uniforms = std::map<std::string, std::vector<float>>;
+diff --git a/cpp/api/recorder/DrawingCtx.h b/cpp/api/recorder/DrawingCtx.h
+--- a/cpp/api/recorder/DrawingCtx.h
++++ b/cpp/api/recorder/DrawingCtx.h
+@@ -1,8 +1,13 @@
+ #pragma once
+ 
+ #include <memory>
++#include <numeric>
+ #include <vector>
+ 
++#include <include/core/SkColorFilter.h>
++#include <include/core/SkPathEffect.h>
++#include <include/effects/SkImageFilters.h>
++
+ namespace RNSkia {
+ 
+ // Generic composer type using std::function
+diff --git a/cpp/api/recorder/Drawings.h b/cpp/api/recorder/Drawings.h
+--- a/cpp/api/recorder/Drawings.h
++++ b/cpp/api/recorder/Drawings.h
+@@ -8,6 +8,7 @@
+ #include "ImageFit.h"
+ #include "rnskia/RNSkPlatformContext.h"
+ 
++#include "include/core/SkContourMeasure.h"
+ #include "include/core/SkPathBuilder.h"
+ #include "include/core/SkStrokeRec.h"
+ 
+diff --git a/cpp/api/recorder/PathEffects.h b/cpp/api/recorder/PathEffects.h
+--- a/cpp/api/recorder/PathEffects.h
++++ b/cpp/api/recorder/PathEffects.h
+@@ -4,6 +4,12 @@
+ #include <string>
+ #include <variant>
+ 
++#include <include/effects/Sk1DPathEffect.h>
++#include <include/effects/Sk2DPathEffect.h>
++#include <include/effects/SkCornerPathEffect.h>
++#include <include/effects/SkDashPathEffect.h>
++#include <include/effects/SkDiscretePathEffect.h>
++
+ #include "Command.h"
+ #include "Convertor.h"
+ #include "DrawingCtx.h"
+diff --git a/cpp/api/recorder/Shaders.h b/cpp/api/recorder/Shaders.h
+--- a/cpp/api/recorder/Shaders.h
++++ b/cpp/api/recorder/Shaders.h
+@@ -6,6 +6,7 @@
+ 
+ #include <include/core/SkSamplingOptions.h>
+ #include <include/effects/SkGradient.h>
++#include <include/effects/SkPerlinNoiseShader.h>
+ 
+ #include "Command.h"
+ #include "Convertor.h"
+diff --git a/cpp/jsi/ViewProperty.cpp b/cpp/jsi/ViewProperty.cpp
+deleted file mode 100644
+--- a/cpp/jsi/ViewProperty.cpp
++++ /dev/null
+@@ -1,23 +0,0 @@
+-// The recorder headers depend on the include order established by
+-// JsiSkApi.h, so the probe lives here rather than in ViewProperty.h (which
+-// every platform view includes on its own).
+-#include "api/JsiSkApi.h"
+-
+-#include "jsi/ViewProperty.h"
+-
+-#include "api/JsiSkPicture.h"
+-#include "api/recorder/JsiRecorder.h"
+-
+-namespace RNJsi {
+-
+-ViewProperty::ViewProperty(jsi::Runtime &runtime, const jsi::Value &value) {
+-  if (auto picture =
+-          RNSkia::tryGetJsiObject<RNSkia::JsiSkPicture>(runtime, value)) {
+-    _value = picture->getObject();
+-  } else if (auto recorder =
+-                 RNSkia::tryGetJsiObject<RNSkia::JsiRecorder>(runtime, value)) {
+-    _value = recorder->getObject();
+-  }
+-}
+-
+-} // namespace RNJsi
+diff --git a/cpp/jsi/ViewProperty.h b/cpp/jsi/ViewProperty.h
+--- a/cpp/jsi/ViewProperty.h
++++ b/cpp/jsi/ViewProperty.h
+@@ -26,9 +26,8 @@ class ViewProperty {
+   /**
+    * Probes the JS value for the native objects a view can display (a picture
+    * or a recorder); anything else yields an empty property. Defined in
+-   * ViewProperty.cpp: the recorder headers depend on the include order
+-   * established by JsiSkApi.h, which this header (included by every platform
+-   * view) must not pull in.
++   * RNSkManager.cpp so that this header (included by every platform view)
++   * does not pull in the recorder headers.
+    */
+   ViewProperty(jsi::Runtime &runtime, const jsi::Value &value);
+ 
+diff --git a/cpp/rnskia/RNSkManager.cpp b/cpp/rnskia/RNSkManager.cpp
+--- a/cpp/rnskia/RNSkManager.cpp
++++ b/cpp/rnskia/RNSkManager.cpp
+@@ -6,8 +6,14 @@
+ #include <jsi/jsi.h>
+ 
+ #include "RNSkJsiViewApi.h"
++#include "RNSkPictureView.h"
+ #include "RNSkView.h"
+ #include "api/JsiSkApi.h"
++#include "api/JsiSkPicture.h"
++#include "api/recorder/DrawingCtx.h"
++#include "api/recorder/JsiRecorder.h"
++#include "api/recorder/RNRecorder.h"
++#include "jsi/ViewProperty.h"
+ 
+ namespace RNSkia {
+ namespace jsi = facebook::jsi;
+@@ -59,4 +65,69 @@ void RNSkManager::installBindings() {
+   // surface for React Native. Graphite keeps Dawn as an internal
+   // implementation detail only.
+ }
++
++// The definitions below need the complete recorder types. Parsing the
++// recorder headers costs about 1.5 GB of compiler memory, so they live in this
++// translation unit, which parses them already. A separate translation unit
++// would compile in parallel and add to the peak memory of the build.
++
++void RNSkPictureRenderer::setRecorder(std::shared_ptr<Recorder> recorder) {
++  sk_sp<SkPicture> picture;
++  if (recorder != nullptr && recorder->variables.empty()) {
++    picture = recorder->makePicture();
++    recorder = nullptr;
++  }
++  std::shared_ptr<Recorder> retired;
++  {
++    std::lock_guard<std::mutex> lock(_mutex);
++    retired = std::move(_recorder);
++    _recorder = std::move(recorder);
++    _picture = std::move(picture);
++  }
++  retired = nullptr;
++  _requestRedraw();
++}
++
++bool RNSkPictureRenderer::applyUpdatesTo(
++    const std::shared_ptr<Recorder> &recorder, jsi::Runtime &runtime,
++    double recorderId, const jsi::Array &values) {
++  if (recorder == nullptr || recorder->id != recorderId) {
++    return false;
++  }
++  recorder->applyUpdates(runtime, values);
++  return true;
++}
++
++bool RNSkPictureRenderer::applyUpdates(jsi::Runtime &runtime, double recorderId,
++                                       const jsi::Array &values) {
++  std::shared_ptr<Recorder> recorder;
++  {
++    std::lock_guard<std::mutex> lock(_mutex);
++    recorder = _recorder;
++  }
++  // Outside the renderer lock: a commit replacing the recorder must not wait
++  // for the update. Should it land while this runs, the update goes into the
++  // retired recorder and the redraw that follows draws the new one.
++  return applyUpdatesTo(recorder, runtime, recorderId, values);
++}
++
++void RNSkPictureRenderer::replay(SkCanvas *canvas, Recorder *recorder) {
++  DrawingCtx ctx(canvas);
++  recorder->play(&ctx);
++}
++
+ } // namespace RNSkia
++
++namespace RNJsi {
++
++ViewProperty::ViewProperty(jsi::Runtime &runtime, const jsi::Value &value) {
++  if (auto picture =
++          RNSkia::tryGetJsiObject<RNSkia::JsiSkPicture>(runtime, value)) {
++    _value = picture->getObject();
++  } else if (auto recorder =
++                 RNSkia::tryGetJsiObject<RNSkia::JsiRecorder>(runtime, value)) {
++    _value = recorder->getObject();
++  }
++}
++
++} // namespace RNJsi
+diff --git a/cpp/rnskia/RNSkPictureView.cpp b/cpp/rnskia/RNSkPictureView.cpp
+deleted file mode 100644
+--- a/cpp/rnskia/RNSkPictureView.cpp
++++ /dev/null
+@@ -1,58 +0,0 @@
+-// The recorder headers depend on the include order established by
+-// JsiSkApi.h, so everything that needs a complete Recorder lives here rather
+-// than in RNSkPictureView.h (which platform views include on its own).
+-#include "api/JsiSkApi.h"
+-
+-#include "RNSkPictureView.h"
+-
+-#include "api/recorder/DrawingCtx.h"
+-#include "api/recorder/RNRecorder.h"
+-
+-namespace RNSkia {
+-
+-void RNSkPictureRenderer::setRecorder(std::shared_ptr<Recorder> recorder) {
+-  sk_sp<SkPicture> picture;
+-  if (recorder != nullptr && recorder->variables.empty()) {
+-    picture = recorder->makePicture();
+-    recorder = nullptr;
+-  }
+-  std::shared_ptr<Recorder> retired;
+-  {
+-    std::lock_guard<std::mutex> lock(_mutex);
+-    retired = std::move(_recorder);
+-    _recorder = std::move(recorder);
+-    _picture = std::move(picture);
+-  }
+-  retired = nullptr;
+-  _requestRedraw();
+-}
+-
+-bool RNSkPictureRenderer::applyUpdatesTo(
+-    const std::shared_ptr<Recorder> &recorder, jsi::Runtime &runtime,
+-    double recorderId, const jsi::Array &values) {
+-  if (recorder == nullptr || recorder->id != recorderId) {
+-    return false;
+-  }
+-  recorder->applyUpdates(runtime, values);
+-  return true;
+-}
+-
+-bool RNSkPictureRenderer::applyUpdates(jsi::Runtime &runtime, double recorderId,
+-                                       const jsi::Array &values) {
+-  std::shared_ptr<Recorder> recorder;
+-  {
+-    std::lock_guard<std::mutex> lock(_mutex);
+-    recorder = _recorder;
+-  }
+-  // Outside the renderer lock: a commit replacing the recorder must not wait
+-  // for the update. Should it land while this runs, the update goes into the
+-  // retired recorder and the redraw that follows draws the new one.
+-  return applyUpdatesTo(recorder, runtime, recorderId, values);
+-}
+-
+-void RNSkPictureRenderer::replay(SkCanvas *canvas, Recorder *recorder) {
+-  DrawingCtx ctx(canvas);
+-  recorder->play(&ctx);
+-}
+-
+-} // namespace RNSkia
