@@ -1283,7 +1283,51 @@ describe('Persistent Agent facade', () => {
           turnId: 'turn-owning-request',
           requestId: 'owning-request',
         },
-        expect.objectContaining({ usage: expect.objectContaining({ totalTokens: 5 }) }),
+        expect.objectContaining({
+          purpose: 'conversation-response',
+          usage: expect.objectContaining({ totalTokens: 5 }),
+        }),
+      );
+      const bridge = (
+        runtime as unknown as {
+          models: ReturnType<typeof import('../piDurableModels').createPiDurableModels>;
+        }
+      ).models;
+      await bridge.models.completeSimple(
+        bridge.getModel(reference)!,
+        { messages: [] },
+        {
+          sessionId: state.providerSessions[0],
+          signal: new AbortController().signal,
+        },
+      );
+      await runtime.drainUsage();
+      expect(state.ports.recordUsage).toHaveBeenCalledWith(
+        { sessionId: 'session', slot: 0, turnId: null, requestId: null },
+        expect.objectContaining({
+          purpose: 'context-compaction',
+          usage: expect.objectContaining({ totalTokens: 5 }),
+        }),
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('delivers a legacy receipt without purpose as unknown', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      const durable = (runtime as unknown as { runtime: PiDurableRuntime }).runtime;
+      await durable.saveUsage('legacy', {
+        owner: { sessionId: 'session', slot: 0, turnId: 'turn-legacy', requestId: 'legacy' },
+        report: { requestId: 'legacy', completedAt: 1, usage: {}, context: {} },
+      });
+      await runtime.drainUsage();
+      expect(state.ports.recordUsage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ requestId: 'legacy', purpose: null }),
       );
     } finally {
       await runtime.close();

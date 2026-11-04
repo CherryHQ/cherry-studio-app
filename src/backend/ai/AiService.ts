@@ -29,6 +29,7 @@ import {
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
+import type { AiUsagePurpose } from '@/shared/data/types/aiUsagePurpose';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
@@ -47,6 +48,7 @@ export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
 /** Image requests accept transport options only; text generation controls have no image meaning. */
 export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | 'requestOptions'> {
+  purpose: AiUsagePurpose;
   usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
@@ -121,9 +123,11 @@ function createCaptureContext(input: {
 function createProviderCallHandler(
   context: AiUsageCaptureContext,
   recorder: AiServiceDependencies['aiUsageRecord'],
+  purpose: AiUsagePurpose,
 ): RuntimeProviderCallHandler {
   return (event: RuntimeProviderCallEvent) => {
     void recorder.recordInvocation({
+      purpose,
       requestId: event.requestId,
       context,
       modality: event.modality,
@@ -280,6 +284,7 @@ export class AiService extends BaseService {
               usageAttribution: request.usageAttribution,
             }),
             this.services.aiUsageRecord,
+            request.purpose,
           ),
       },
     ).catch((error: unknown) => {

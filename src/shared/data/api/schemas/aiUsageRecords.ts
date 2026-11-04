@@ -3,6 +3,7 @@
 import * as z from 'zod';
 
 import type { CursorPaginationParams, CursorPaginationResponse } from '@/shared/data/api/types';
+import type { AiUsagePurpose } from '@/shared/data/types/aiUsagePurpose';
 import {
   type AiUsageRecordAttribution,
   type AiUsageRecordEntry,
@@ -83,6 +84,19 @@ export const AiUsageRecordListQuerySchema = z
 export type AiUsageRecordListQuery = z.infer<typeof AiUsageRecordListQuerySchema>;
 export type AiUsageRecordListQueryParams = z.input<typeof AiUsageRecordListQuerySchema> &
   CursorPaginationParams;
+
+export const AiUsageInvocationListQuerySchema = z.strictObject({
+  cursor: z.string().optional(),
+  limit: z.int().positive().max(AI_USAGE_RECORD_MAX_LIMIT).default(AI_USAGE_RECORD_DEFAULT_LIMIT),
+});
+export type AiUsageInvocationListQueryParams = z.input<typeof AiUsageInvocationListQuerySchema>;
+export interface AiUsageInvocation {
+  record: AiUsageRecordEntry;
+  purpose: AiUsagePurpose | null;
+}
+export interface AiUsageInvocationListResponse extends CursorPaginationResponse<AiUsageInvocation> {
+  total: number;
+}
 
 export const AiUsageRecordGroupBySchema = z.enum(['provider', 'apiKey', 'model', 'source']);
 export type AiUsageRecordGroupBy = z.infer<typeof AiUsageRecordGroupBySchema>;
@@ -224,6 +238,9 @@ export interface AiUsageRecordTimelineResponse {
 export type AiUsageRecordSchemas = {
   '/ai-usage-records': {
     GET: { query?: AiUsageRecordListQueryParams; response: AiUsageRecordListResponse };
+  };
+  '/ai-usage-records/invocations': {
+    GET: { query?: AiUsageInvocationListQueryParams; response: AiUsageInvocationListResponse };
   };
   '/ai-usage-records/stats': {
     GET: { query: AiUsageRecordStatsQuery; response: AiUsageRecordStatsResponse };

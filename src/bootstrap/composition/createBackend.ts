@@ -185,6 +185,7 @@ export function createBackend(
         onUsage: async (report, requestId) => {
           try {
             await services.aiUsageRecord.recordInvocation({
+              purpose: 'model-check',
               completedAt: report.completedAt,
               context: { ...report.context, messageRef: null, source: null },
               modality: 'language',
@@ -425,6 +426,7 @@ export function createBackend(
                 try {
                   await services.aiUsageRecord.recordInvocation({
                     ...report,
+                    purpose: 'translation',
                     context: { ...report.context, messageRef: null, source: null },
                     modality: 'language',
                   });

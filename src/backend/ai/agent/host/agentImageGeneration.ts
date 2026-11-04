@@ -136,6 +136,7 @@ export function createAgentImageGeneration(dependencies: {
               requestSignal.throwIfAborted();
               const result = await raceAbort(
                 dependencies.ai.generateImage({
+                  purpose: 'image-response',
                   ...capturedSettings,
                   inputImages,
                   prompt: [instructions.trim(), modelPrompt.trim()].filter(Boolean).join('\n\n'),

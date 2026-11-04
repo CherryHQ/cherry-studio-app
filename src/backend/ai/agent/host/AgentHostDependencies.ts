@@ -139,6 +139,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     attribution,
   ) => {
     await aiUsageRecordService.recordInvocation({
+      purpose: report.purpose ?? null,
       completedAt: report.completedAt,
       metrics: report.metrics,
       context: {
@@ -251,6 +252,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
         try {
           await aiUsageRecordService.recordInvocation({
             ...report,
+            purpose: 'session-naming',
             context: { ...report.context, source: null, messageRef: null },
             modality: 'language',
           });

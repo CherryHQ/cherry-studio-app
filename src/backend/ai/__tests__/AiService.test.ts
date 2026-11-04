@@ -136,6 +136,7 @@ describe('AiService.generateImage', () => {
 
       await expect(
         new AiService(services).generateImage({
+          purpose: 'image-response',
           apiKeyOverride: 'image-key',
           inputImages,
           mode,

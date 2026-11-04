@@ -1,6 +1,7 @@
 import { Section, useToast } from '@cherrystudio/ui/components';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
@@ -18,6 +19,8 @@ import { usePreference } from '@/frontend/data/hooks';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { useEffectiveTaskModels } from './hooks/useEffectiveTaskModels';
+import type { EffectiveTaskModel } from './utils/effectiveTaskModel';
 
 // 快速模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
 const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter(
@@ -30,6 +33,17 @@ function isNamingModelVisible(item: ModelPickerModelItem): boolean {
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
+  const effective = useEffectiveTaskModels();
+  const describe = (result: EffectiveTaskModel) => {
+    if (result.status === 'loading') return t('settings.provider.loading');
+    if (result.status === 'configured' || result.status === 'useDefault') {
+      return t(`settings.model.effective.${result.status}`, {
+        model: result.model.name,
+        provider: result.provider.name,
+      });
+    }
+    return t(`settings.model.effective.${result.status}`);
+  };
   const { toast } = useToast();
   const { saveSelections, selections } = useModelSettingSelections();
   const [isNamingEnabled, setIsNamingEnabled] = usePreference('agent.session_naming.enabled');
@@ -81,27 +95,32 @@ export default function ModelSettingsScreen() {
       setIsNamingSaving(false);
     }
   };
-  const items = useMemo(
-    () =>
-      VISIBLE_MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => {
-        const item =
-          kind === 'painting'
-            ? imageModelPickerData.getModelItem(selections[kind])
-            : textModelPickerData.getModelItem(selections[kind]);
+  const items = VISIBLE_MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => {
+    const item =
+      kind === 'painting'
+        ? imageModelPickerData.getModelItem(selections[kind])
+        : textModelPickerData.getModelItem(selections[kind]);
 
-        return {
-          key: kind,
-          disabled: isSaving,
-          label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-          onPress: () => setActiveKind(kind),
-          value: item?.model.name ?? t('settings.select.placeholder'),
-          valueLeading: item ? (
-            <ModelAvatar model={item.model} provider={item.provider} />
-          ) : undefined,
-        };
-      }),
-    [imageModelPickerData, isSaving, selections, t, textModelPickerData],
-  );
+    return {
+      key: kind,
+      disabled: isSaving,
+      testID: `settings-model-${kind}`,
+      description:
+        kind === 'translate' || kind === 'painting' ? (
+          <Text
+            className="text-sm text-muted-foreground"
+            testID={`settings-model-${kind}-effective`}
+          >
+            {describe(effective[kind])}
+            {kind === 'painting' ? ` ${t('settings.model.painting.defaultUsage')}` : ''}
+          </Text>
+        ) : undefined,
+      label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
+      onPress: () => setActiveKind(kind),
+      value: item?.model.name ?? t('settings.select.placeholder'),
+      valueLeading: item ? <ModelAvatar model={item.model} provider={item.provider} /> : undefined,
+    };
+  });
   const selectedModelId = activeKind ? selections[activeKind] : null;
   const namingModelItem = textModelPickerData.getModelItem(selections.naming);
 
@@ -128,6 +147,14 @@ export default function ModelSettingsScreen() {
           />
           <Section.SelectItem
             disabled={!isNamingEnabled || isNamingSaving || isSaving}
+            description={
+              <Text
+                className="text-sm text-muted-foreground"
+                testID="settings-model-naming-effective"
+              >
+                {describe(effective.naming)}
+              </Text>
+            }
             label={t('settings.model.naming.title')}
             onPress={() => setActiveKind('naming')}
             testID="settings-session-naming-model"

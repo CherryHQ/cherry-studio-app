@@ -55,6 +55,7 @@ describe('AgentSessionUsageRecorder', () => {
     await recorder.drain();
 
     expect(recordInvocation).toHaveBeenCalledWith({
+      purpose: null,
       completedAt: 1_500,
       context: expect.objectContaining({
         messageRef: { id: 'message-1', kind: 'agent-session' },

@@ -190,6 +190,7 @@ function captureContext(): AiUsageCaptureContext {
 function invocation(overrides: Partial<RecordAiInvocationInput> = {}): RecordAiInvocationInput {
   return {
     requestId: 'request-1',
+    purpose: null,
     context: captureContext(),
     modality: 'language',
     usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },

@@ -75,6 +75,57 @@ describe('AI usage analytics', () => {
     sqlite.close();
   });
 
+  test('commits purpose atomically, preserves the first delivery, and permits unknown purpose', async () => {
+    const first = { ...invocation('purpose-1', 1000), purpose: 'translation' as const };
+    await service.recordInvocation(first);
+    await service.recordInvocation(first);
+    await service.recordInvocation({ ...first, purpose: 'model-check' });
+    await service.recordInvocation(invocation('purpose-null', 1001));
+    expect(sqlite.prepare('SELECT request_id, purpose FROM ai_usage_record_purpose').all()).toEqual(
+      [{ request_id: 'purpose-1', purpose: 'translation' }],
+    );
+    expect(sqlite.prepare('SELECT count(*) AS count FROM ai_usage_record').get()).toEqual({
+      count: 2,
+    });
+    sqlite.exec(
+      "CREATE TRIGGER reject_purpose BEFORE INSERT ON ai_usage_record_purpose BEGIN SELECT RAISE(ABORT, 'rejected'); END",
+    );
+    await service.recordInvocation({ ...invocation('rollback', 1002), purpose: 'translation' });
+    expect(
+      sqlite
+        .prepare("SELECT count(*) AS count FROM ai_usage_record WHERE request_id = 'rollback'")
+        .get(),
+    ).toEqual({ count: 0 });
+  });
+
+  test('pages individual invocations by completion time and id with optional purpose', async () => {
+    await service.recordInvocation({ ...invocation('a', 1000), purpose: 'translation' });
+    await service.recordInvocation(invocation('b', 1000));
+    await service.recordInvocation(invocation('c', 2000));
+    sqlite.exec(
+      `INSERT INTO ai_usage_record (id, request_id, record_kind, request_count, message_kind, message_id, modality, api_key_attribution, created_at) VALUES ('legacy', 'legacy', 'legacy-aggregate', 20, 'chat', 'msg', 'language', 'unknown', 3000)`,
+    );
+    const first = await service.listInvocations({ limit: 2 });
+    const second = await service.listInvocations({ limit: 2, cursor: first.nextCursor });
+    expect(first.total).toBe(3);
+    expect(second.total).toBe(3);
+    expect([...first.items, ...second.items].map(({ record }) => record.requestId)).toEqual([
+      'c',
+      ...first.items
+        .concat(second.items)
+        .filter(({ record }) => record.createdAt === new Date(1000).toISOString())
+        .sort((a, b) => a.record.id.localeCompare(b.record.id))
+        .map(({ record }) => record.requestId),
+    ]);
+    expect(
+      [...first.items, ...second.items].find(({ record }) => record.requestId === 'a')?.purpose,
+    ).toBe('translation');
+    expect(
+      [...first.items, ...second.items].find(({ record }) => record.requestId === 'b')?.purpose,
+    ).toBeNull();
+    expect(second.nextCursor).toBeUndefined();
+  });
+
   test('commits message projections with usage and notifies only new facts', async () => {
     sqlite.exec(`
       INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
@@ -123,6 +174,7 @@ describe('AI usage analytics', () => {
       expect(listener).toHaveBeenCalledTimes(1);
       expect(listener).toHaveBeenCalledWith([
         '/ai-usage-records',
+        '/ai-usage-records/invocations',
         '/ai-usage-records/stats',
         '/ai-usage-records/timeline',
         '/agent-sessions/session-1/messages',
@@ -197,6 +249,7 @@ describe('AI usage analytics', () => {
       const unsubscribe = subscribeDataApiChanges(listener);
       const analyticsPaths = [
         '/ai-usage-records',
+        '/ai-usage-records/invocations',
         '/ai-usage-records/stats',
         '/ai-usage-records/timeline',
       ];
@@ -489,6 +542,7 @@ function invocation(
 ): RecordAiInvocationInput {
   return {
     requestId,
+    purpose: null,
     context: captureContext,
     modality: 'language',
     usage,

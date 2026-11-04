@@ -55,6 +55,7 @@ declare module '@/backend/services/jobs/jobRegistry' {
 
 export type PaintingAi = {
   generateImage(input: {
+    purpose: 'painting-generation';
     inputImages: string[];
     mode: ImageGenerationMode;
     paramValues: ParamValues;
@@ -150,6 +151,7 @@ export function createPaintingGenerateJobHandler(
         );
         throwIfAborted(ctx.signal);
         const result = await ai.generateImage({
+          purpose: 'painting-generation',
           inputImages,
           mode,
           paramValues,

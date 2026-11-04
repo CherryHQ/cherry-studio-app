@@ -47,6 +47,7 @@ export class AgentSessionUsageRecorder {
 
   private async recordNow(input: RecordAgentSessionUsageInput): Promise<void> {
     await this.dependencies.usage.recordInvocation({
+      purpose: input.report.purpose ?? null,
       completedAt: input.report.completedAt,
       context: {
         ...input.report.context,

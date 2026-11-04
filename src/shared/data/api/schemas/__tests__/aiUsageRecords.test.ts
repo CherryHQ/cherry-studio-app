@@ -1,5 +1,6 @@
 import {
   AI_USAGE_RECORD_MAX_RANGE_DAYS,
+  AiUsageInvocationListQuerySchema,
   AiUsageRecordListQuerySchema,
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
@@ -8,6 +9,16 @@ import {
 describe('AI usage record query schemas', () => {
   const from = Date.UTC(2026, 0, 1);
   const to = Date.UTC(2026, 0, 31);
+
+  test('validates invocation pagination and rejects other filters', () => {
+    expect(AiUsageInvocationListQuerySchema.parse({})).toEqual({ limit: 50 });
+    expect(AiUsageInvocationListQuerySchema.safeParse({ cursor: 'next', limit: 200 }).success).toBe(
+      true,
+    );
+    for (const query of [{ limit: 0 }, { limit: 201 }, { limit: 1.5 }, { from: 0 }]) {
+      expect(AiUsageInvocationListQuerySchema.safeParse(query).success).toBe(false);
+    }
+  });
 
   test('applies list and aggregate defaults', () => {
     expect(AiUsageRecordListQuerySchema.parse({})).toMatchObject({

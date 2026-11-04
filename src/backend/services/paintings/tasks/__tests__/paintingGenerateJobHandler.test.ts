@@ -140,6 +140,7 @@ describe('createPaintingGenerateJobHandler', () => {
     );
     expect(dependencies.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
+        purpose: 'painting-generation',
         inputImages: ['data:image/png;base64,aW1hZ2U='],
         prompt: 'draw',
         uniqueModelId: modelId,

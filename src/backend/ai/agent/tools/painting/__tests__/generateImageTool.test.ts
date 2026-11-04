@@ -59,7 +59,11 @@ describe('createGenerateImageTool', () => {
     const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
 
     expect(deps.ai.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: 'generate', prompt: 'A cherry orchard at dawn' }),
+      expect.objectContaining({
+        purpose: 'agent-image-tool',
+        mode: 'generate',
+        prompt: 'A cherry orchard at dawn',
+      }),
     );
     // The library entry is named after the prompt, not an id.
     expect(deps.files.createInternalEntry).toHaveBeenCalledWith(

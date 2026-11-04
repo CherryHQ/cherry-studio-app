@@ -145,6 +145,14 @@ separate records. Input-token tiers select one rate set for the entire request u
 precedence. The shared usage contract also represents `legacy-aggregate` records whose individual
 provider boundaries are unknown; new Mobile calls write `invocation` records.
 
+The 37 ledger columns and existing list, stats, and timeline meanings are unchanged. A
+Mobile-owned `ai_usage_record_purpose` sidecar records the triggering task per invocation in the
+same transaction; historical rows have no sidecar and a null purpose. The
+`/ai-usage-records/invocations` read endpoint returns individual `invocation` rows with purpose,
+newest first and cursor paginated. `createdAt` is completion time. Terminal errors with positive
+token counts can be recorded, while zero-token failures and credential-failover attempts may have
+no row. The ledger is not a provider billing receipt.
+
 Provider model creation and editing expose `pricing.inputTokenTiers` alongside base and cache rates.
 The editor preserves unknown prices and per-image/per-minute rates, and validates increasing tier
 thresholds before saving. Neither bundled catalog currently supplies tiers; catalog tier ingestion

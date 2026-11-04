@@ -139,7 +139,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       async (providerId, signal) => {
         const owner = this.executionOwner(providerId, signal);
         return async (report) => {
-          await this.requireRuntime().saveUsage(report.requestId, detachedJson({ owner, report }));
+          const capturedReport: RuntimeUsageReport = {
+            ...report,
+            purpose: owner.requestId ? 'conversation-response' : 'context-compaction',
+          };
+          await this.requireRuntime().saveUsage(
+            report.requestId,
+            detachedJson({ owner, report: capturedReport }),
+          );
           // Delivery failure retains the outbox record. It must not cause the model to resend an answer.
           this.delivery = this.delivery
             .then(() => this.deliverUsage())
@@ -982,7 +989,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         throw new Error('The durable usage receipt has an invalid identity.');
       await this.requirePorts().recordUsage(
         { ...value.owner, slot: value.owner.slot ?? 0 } as RuntimeUsageOwner,
-        value.report,
+        { ...value.report, purpose: value.report.purpose ?? null },
       );
       await this.requireRuntime().acknowledgeUsage(delivery.id);
     }

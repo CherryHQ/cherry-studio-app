@@ -2,6 +2,7 @@ import type {
   FileAttachmentContent,
   FileAttachmentReport,
 } from '@/shared/contracts/fileAttachment';
+import type { AiUsagePurpose } from '@/shared/data/types/aiUsagePurpose';
 /**
  * Agent Runtime contract types.
  *
@@ -438,6 +439,7 @@ export type RuntimeUsageContext = {
 
 /** One completed provider invocation, including context compaction; never a turn aggregate. */
 export type RuntimeUsageReport = {
+  purpose?: AiUsagePurpose | null;
   requestId: string;
   usage: RuntimeUsage;
   context: RuntimeUsageContext;

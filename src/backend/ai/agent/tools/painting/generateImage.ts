@@ -206,6 +206,7 @@ export async function generateImageFromPrompt(
     const result = await withImageGenerationDeadline(signal, (requestSignal) =>
       raceAbort(
         dependencies.ai.generateImage({
+          purpose: 'agent-image-tool',
           ...request,
           ...(inputImages.length > 0 && { inputImages }),
           requestOptions: { signal: requestSignal },

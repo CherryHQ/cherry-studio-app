@@ -96,6 +96,7 @@ describe('Agent image generation', () => {
     expect(entries).toEqual([ENTRY]);
     expect(ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
+        purpose: 'image-response',
         uniqueModelId: MODEL.id,
         mode: 'generate',
         paramValues: settings.paramValues,

@@ -47,6 +47,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     restoreProvider = installMockProvider({ image: imageModel });
 
     const result = await new AiService(fixture.services).generateImage({
+      purpose: 'image-response',
       mode: 'generate',
       paramValues: {
         background: 'transparent',
@@ -82,6 +83,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     restoreProvider = installMockProvider({ image: imageModel });
 
     await new AiService(fixture.services).generateImage({
+      purpose: 'image-response',
       inputImages: [`data:image/png;base64,${PNG_BASE64}`],
       mode: 'edit',
       paramValues: {},
@@ -128,6 +130,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     });
 
     const result = await new AiService(fixture.services).generateImage({
+      purpose: 'image-response',
       mode: 'generate',
       paramValues: { numImages: 2 },
       prompt: 'Two batches.',
@@ -145,6 +148,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     expect(records[0].context).not.toBe(records[1].context);
     for (const record of records) {
       expect(record).toMatchObject({
+        purpose: 'image-response',
         imageCount: 1,
         usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
         context: {
@@ -188,6 +192,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     });
 
     const result = await new AiService(fixture.services).generateImage({
+      purpose: 'image-response',
       mode: 'generate',
       paramValues: {},
       prompt: 'Retry once.',
@@ -228,6 +233,7 @@ describe('AiService.generateImage AI SDK contract', () => {
 
       await expect(
         new AiService(fixture.services).generateImage({
+          purpose: 'image-response',
           mode: 'generate',
           paramValues: {},
           prompt: 'Still return the image.',
@@ -256,6 +262,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     }));
 
     await new AiService(fixture.services).generateImage({
+      purpose: 'image-response',
       mode: 'generate',
       paramValues: {},
       prompt: 'Route this request.',
@@ -295,6 +302,7 @@ describe('AiService.generateImage AI SDK contract', () => {
 
     const error = await captureRejection(
       new AiService(fixture.services).generateImage({
+        purpose: 'image-response',
         mode: 'generate',
         paramValues: {},
         prompt: 'Fail.',
@@ -348,6 +356,7 @@ describe('AiService.generateImage AI SDK contract', () => {
 
     const rejection = captureRejection(
       new AiService(fixture.services).generateImage({
+        purpose: 'image-response',
         mode: 'generate',
         paramValues: {},
         prompt: 'Wait.',

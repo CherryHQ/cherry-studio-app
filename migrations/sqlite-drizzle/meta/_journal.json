@@ -92,6 +92,13 @@
       "when": 1792209852632,
       "tag": "0012_message_tree",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793793532535,
+      "tag": "0013_ai_usage_record_purpose",
+      "breakpoints": true
     }
   ]
 }

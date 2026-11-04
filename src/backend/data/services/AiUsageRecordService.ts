@@ -27,7 +27,10 @@ import {
   aiUsageRecordTable,
   type InsertAiUsageRecordRow,
 } from '@/backend/data/db/schemas/aiUsageRecord';
+import { aiUsageRecordPurposeTable } from '@/backend/data/db/schemas/aiUsageRecordPurpose';
 import type {
+  AiUsageInvocationListQueryParams,
+  AiUsageInvocationListResponse,
   AiUsageRecordGroupBy,
   AiUsageRecordListQuery,
   AiUsageRecordListQueryParams,
@@ -45,10 +48,12 @@ import type {
   AiUsageRecordTimelineResponse,
 } from '@/shared/data/api/schemas/aiUsageRecords';
 import {
+  AiUsageInvocationListQuerySchema,
   AiUsageRecordListQuerySchema,
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
 } from '@/shared/data/api/schemas/aiUsageRecords';
+import type { AiUsagePurpose } from '@/shared/data/types/aiUsagePurpose';
 import type {
   AiUsageCostBreakdown,
   AiUsagePricingSnapshot,
@@ -91,6 +96,7 @@ export interface AiUsageCaptureContext {
 }
 
 export interface RecordAiInvocationInput {
+  purpose: AiUsagePurpose | null;
   requestId: string;
   context: AiUsageCaptureContext;
   modality: AiUsageRecordModality;
@@ -1102,6 +1108,7 @@ export type CommittedAiInvocationUsage = Readonly<
 /** Endpoint caches a newly committed usage record invalidates. */
 const USAGE_ANALYTICS_PATHS = [
   '/ai-usage-records',
+  '/ai-usage-records/invocations',
   '/ai-usage-records/stats',
   '/ai-usage-records/timeline',
 ] as const;
@@ -1140,13 +1147,18 @@ export class AiUsageRecordService {
         const insertedRows: InsertAiUsageRecordRow[] = [];
         const messageRefs = new Map<string, MessageRef>();
         const messagePaths = new Set<string>();
-        for (const row of rows) {
+        for (const [index, row] of rows.entries()) {
+          const purpose = inputs[index].purpose;
           const returned = await tx
             .insert(aiUsageRecordTable)
             .values(row)
             .onConflictDoNothing()
             .returning({ id: aiUsageRecordTable.id });
           if (returned.length > 0) {
+            if (purpose != null)
+              await tx
+                .insert(aiUsageRecordPurposeTable)
+                .values({ requestId: row.requestId, purpose });
             insertedRows.push(row);
             if (row.messageKind && row.messageId)
               messageRefs.set(`${row.messageKind}:${row.messageId}`, {
@@ -1161,6 +1173,16 @@ export class AiUsageRecordService {
             .from(aiUsageRecordTable)
             .where(eq(aiUsageRecordTable.requestId, row.requestId))
             .limit(1);
+          const [existingPurpose] = await tx
+            .select()
+            .from(aiUsageRecordPurposeTable)
+            .where(eq(aiUsageRecordPurposeTable.requestId, row.requestId))
+            .limit(1);
+          if ((existingPurpose?.purpose ?? null) !== purpose) {
+            logger.warn('Duplicate requestId has a different purpose', {
+              requestId: row.requestId,
+            });
+          }
           if (existing && !sameImmutablePayload(existing, row)) {
             logger.warn('Duplicate requestId has a different immutable payload', {
               requestId: row.requestId,
@@ -1200,6 +1222,47 @@ export class AiUsageRecordService {
 
   async list(query: AiUsageRecordListQueryParams = {}): Promise<AiUsageRecordListResponse> {
     return listAiUsageRecords(this.dbService.getDb(), AiUsageRecordListQuerySchema.parse(query));
+  }
+
+  async listInvocations(
+    params: AiUsageInvocationListQueryParams = {},
+  ): Promise<AiUsageInvocationListResponse> {
+    const query = AiUsageInvocationListQuerySchema.parse(params);
+    const db = this.dbService.getDb();
+    const filter = eq(aiUsageRecordTable.recordKind, 'invocation');
+    const cursor = decodeCursor(query.cursor);
+    const where = cursor
+      ? and(filter, cursorWhere(aiUsageRecordTable.createdAt, 'desc', cursor))
+      : filter;
+    const rows = await db
+      .select({ record: aiUsageRecordTable, purpose: aiUsageRecordPurposeTable.purpose })
+      .from(aiUsageRecordTable)
+      .leftJoin(
+        aiUsageRecordPurposeTable,
+        eq(aiUsageRecordTable.requestId, aiUsageRecordPurposeTable.requestId),
+      )
+      .where(where)
+      .orderBy(desc(aiUsageRecordTable.createdAt), asc(aiUsageRecordTable.id))
+      .limit(query.limit + 1);
+    const [count] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(aiUsageRecordTable)
+      .where(filter);
+    const page = rows.slice(0, query.limit);
+    const tail = page.at(-1)?.record;
+    return {
+      items: page.map(({ record, purpose }) => ({ record: rowToRecord(record), purpose })),
+      total: count?.count ?? 0,
+      ...(rows.length > query.limit && tail
+        ? {
+            nextCursor: encodeCursor({
+              value: tail.createdAt,
+              createdAt: tail.createdAt,
+              id: tail.id,
+            }),
+          }
+        : {}),
+    };
   }
 
   async stats(query: AiUsageRecordStatsQueryParams): Promise<AiUsageRecordStatsResponse> {
