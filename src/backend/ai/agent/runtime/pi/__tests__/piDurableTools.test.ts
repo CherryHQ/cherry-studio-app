@@ -26,14 +26,14 @@ import {
   type SubmissionRecord,
   type ToolTaskCheckpoint,
 } from '@earendil-works/pi-durable';
-import { CodemodeStoreDoc } from '@earendil-works/pi-durable/codemode';
+import { CodemodeStoreDoc, createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 
 import { officeInputSchemas } from '@/backend/services/office';
 
 import { toRuntimeInputSchema } from '../../../tools/runtimeToolSchema';
 import type { RuntimeArtifact, RuntimeTool, RuntimeToolResult } from '../../types';
 import { PiCodemodeArtifactsEntry, PiCodemodeFiles } from '../piCodemodeFiles';
-import { retainPiCodemodeOutput } from '../piCodemodeOutput';
+import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from '../piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
 import { PI_CODEMODE_VM_SOURCE } from '../piCodemodeSandbox';
 import { projectPiTurn } from '../piDurableProjection';
@@ -47,8 +47,8 @@ class ReopenableMemoryStorage extends MemoryStorage {
 }
 
 /** Use the real host serialization and native prelude for store/load, without native execution. */
-async function runCachedScript(store: Record<string, JsonValue>, code: string) {
-  const sandbox = new CodemodeSandboxBase({}, (data, events) => {
+function createCacheSandbox() {
+  return new CodemodeSandboxBase({}, (data, events) => {
     const realm = createContext(constants.DONT_CONTEXTIFY, { microtaskMode: 'afterEvaluate' });
     runInContext('delete globalThis.console', realm);
     const factory = runInContext(PI_CODEMODE_VM_SOURCE, realm);
@@ -67,6 +67,10 @@ async function runCachedScript(store: Record<string, JsonValue>, code: string) {
       async stop() {},
     };
   });
+}
+
+async function runCachedScript(store: Record<string, JsonValue>, code: string) {
+  const sandbox = createCacheSandbox();
   try {
     return await sandbox.start(code, { store, startedAt: 100, seed: 1, onCall() {} }).result;
   } finally {
@@ -1761,6 +1765,174 @@ test('bounds overflow by encoded value and total cache size while preserving scr
     });
   } finally {
     await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('accounts for pending script writes before saving overflow and leaves small receipts writable', async () => {
+  const sandbox = createCacheSandbox();
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
+    writeOutput: async (name, data, api, context, writes) => {
+      if (typeof data !== 'string') throw new Error('Expected text output');
+      return retainPiCodemodeOutput(name, data, api, context, writes);
+    },
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await harness.waitForTask(
+      await toolTask(conversation, 'codemode', {
+        code: `
+          for (let index = 0; index < 4; index++) store('chunk' + index, 'x'.repeat(250 * 1024));
+          console.log('y'.repeat(64 * 1024));
+        `,
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    const message = (await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1);
+    expect(message).toMatchObject({ role: 'toolResult', isError: false });
+    const output =
+      message?.role === 'toolResult'
+        ? message.content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n')
+        : '';
+    expect(output).toContain('Could not save the full output');
+    expect(output).not.toContain('Full output: store:');
+    expect(
+      Object.keys(
+        (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))!.values,
+      ).sort(),
+    ).toEqual(['chunk0', 'chunk1', 'chunk2', 'chunk3']);
+
+    await harness.waitForTask(
+      await toolTask(
+        conversation,
+        'codemode',
+        {
+          code: `store('receipt', { fileEntryId: 'created-file' }); return load('chunk0').length;`,
+        },
+        'receipt',
+      ),
+      BACKGROUND_CONTEXT,
+    );
+    expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+      isError: false,
+    });
+    expect(
+      (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values
+        .receipt,
+    ).toEqual({ fileEntryId: 'created-file' });
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+    await sandbox.close();
+  }
+});
+
+test('accounts for replaced and deleted values when admitting overflow before script settlement', async () => {
+  const sandbox = createCacheSandbox();
+  let outputKey = '';
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
+    writeOutput: async (name, data, api, context, writes) => {
+      if (typeof data !== 'string') throw new Error('Expected text output');
+      const saved = await retainPiCodemodeOutput(name, data, api, context, writes);
+      if ('path' in saved) outputKey = saved.path.slice('store:'.length);
+      return saved;
+    },
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await conversation.commit(async (tx) => {
+      (await tx.doc(CodemodeStoreDoc, conversation.id)).values = {
+        obsolete: 'x'.repeat(200 * 1024),
+        source: 'y'.repeat(200 * 1024),
+      };
+    }, BACKGROUND_CONTEXT);
+    await harness.waitForTask(
+      await toolTask(conversation, 'codemode', {
+        code: `
+          store('obsolete', undefined);
+          store('source', 's'.repeat(250 * 1024));
+          store('data', 'd'.repeat(200 * 1024));
+          console.log('z'.repeat(200 * 1024));
+        `,
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+      isError: false,
+    });
+    const values = (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))!
+      .values;
+    expect(Object.keys(values).sort()).toEqual([outputKey, 'data', 'source'].sort());
+    expect(values.source).toBe('s'.repeat(250 * 1024));
+    expect(values.data).toBe('d'.repeat(200 * 1024));
+    await expect(
+      runCachedScript(values, `return load(${JSON.stringify(outputKey)});`),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: expect.stringContaining('z'.repeat(200 * 1024)),
+    });
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+    await sandbox.close();
+  }
+});
+
+test('rejects all pending cache writes when another commit consumes their space before settlement', async () => {
+  const sandbox = createCacheSandbox();
+  const peerValues = { first: 'p'.repeat(200 * 1024), second: 'q'.repeat(200 * 1024) };
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
+    writeOutput: async (name, data, api, context, writes) => {
+      if (typeof data !== 'string') throw new Error('Expected text output');
+      // The VM has already checked its own writes; another task commits before it settles.
+      await api.commit(async (tx) => {
+        Object.assign((await tx.doc(CodemodeStoreDoc, api.conversationId)).values, peerValues);
+      }, context);
+      return retainPiCodemodeOutput(name, data, api, context, writes);
+    },
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await harness.waitForTask(
+      await toolTask(conversation, 'codemode', {
+        code: `
+          for (let index = 0; index < 3; index++) store('chunk' + index, 'x'.repeat(250 * 1024));
+          console.log('y'.repeat(64 * 1024));
+        `,
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    const message = (await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1);
+    expect(message).toMatchObject({ role: 'toolResult', isError: true });
+    const output =
+      message?.role === 'toolResult'
+        ? message.content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n')
+        : '';
+    expect(output).toContain("This script's cache writes were not saved");
+    expect(
+      (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values,
+    ).toEqual(peerValues);
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+    await sandbox.close();
   }
 });
 

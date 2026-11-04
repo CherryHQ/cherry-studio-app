@@ -304,6 +304,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   return {
     host,
     store,
+    raw: harness.raw,
     seedFolder: harness.seedFolder,
     conversations,
     sessionId,
@@ -324,6 +325,54 @@ async function settle() {
 }
 
 describe('durable tool diagnostics', () => {
+  test('reads valid saved reasoning around an unsupported part without relaxing execution reads', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    try {
+      f.copies.clear();
+      const text = 'Full saved reasoning.\n'.repeat(500);
+      const data = JSON.stringify({
+        parts: [
+          { id: 'first', type: 'reasoning', text, state: 'done' },
+          { id: 'future', type: 'future' },
+          { id: 'later', type: 'reasoning', text: 'A separate phase.', state: 'done' },
+        ],
+      });
+      f.raw
+        .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+        .run(data, turn.assistantMessageId);
+
+      for (const [partId, expected] of [
+        ['first', text],
+        ['later', 'A separate phase.'],
+      ] as const) {
+        await expect(
+          f.host.readReasoning({
+            sessionId: f.sessionId,
+            messageId: turn.assistantMessageId,
+            partId,
+          }),
+        ).resolves.toEqual({ text: expected, state: 'done' });
+      }
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'future',
+        }),
+      ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+      await expect(f.store.getMessage(f.sessionId, turn.assistantMessageId)).rejects.toThrow();
+      expect(
+        f.raw
+          .prepare('SELECT data FROM agent_session_message WHERE id = ?')
+          .get(turn.assistantMessageId),
+      ).toEqual({ data });
+    } finally {
+      await f.host.close();
+    }
+  });
+
   test('reads a full saved reasoning phase without including the next phase or answer', async () => {
     const f = fixture();
     const turn = await f.reserve();

@@ -1333,7 +1333,9 @@ export class DurableAgentHost implements AgentProtocol {
       : undefined;
     const message = runtimeMessage
       ? projectDurableHostTurn(runtimeMessage.turn).assistant
-      : await this.store.getMessage(parsed.sessionId, parsed.messageId);
+      : await this.store.getMessage(parsed.sessionId, parsed.messageId, {
+          tolerateInvalidParts: true,
+        });
     if (!message || message.role !== 'assistant')
       fail('MESSAGE_NOT_FOUND', 'The reasoning message no longer exists.');
     const index = message.parts.findIndex((part) => part.id === parsed.partId);

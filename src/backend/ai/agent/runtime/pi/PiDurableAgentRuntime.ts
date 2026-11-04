@@ -44,7 +44,7 @@ import {
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
-import { retainPiCodemodeOutput } from './piCodemodeOutput';
+import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -749,18 +749,19 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               models: false,
               // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
               inlineBudget: 0,
+              maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [
                 { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
               ],
-              writeOutput: async (name, data, api, context) => {
+              writeOutput: async (name, data, api, context, storeWrites) => {
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(lane, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
                 // Text overflow is an intermediate, not a generated user document. Images remain deliverables.
                 if (typeof data === 'string')
-                  return retainPiCodemodeOutput(name, data, api, context);
+                  return retainPiCodemodeOutput(name, data, api, context, storeWrites);
                 const writer = this.requirePorts().writeToolOutput;
                 if (!writer) return { error: 'Managed output storage is unavailable.' };
                 try {

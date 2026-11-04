@@ -1,11 +1,13 @@
 import type { Context } from '@earendil-works/chord';
+import type { CodemodeStoreWrites } from '@earendil-works/pi-codemode';
 import type { ToolExecutionApi, ToolExecutionResult } from '@earendil-works/pi-durable';
 import { CodemodeStoreDoc } from '@earendil-works/pi-durable/codemode';
 
 // Pi 1.5's native entry does not export its store limits. Match its 256 Ki-character
 // JSON value limit and reserve 256 Ki characters in the 1 Mi-character store for scripts/receipts.
 const MAX_OUTPUT_JSON_CHARACTERS = 256 * 1024;
-const MAX_OUTPUT_STORE_CHARACTERS = 3 * MAX_OUTPUT_JSON_CHARACTERS;
+export const PI_CODEMODE_STORE_CHARACTERS = 4 * MAX_OUTPUT_JSON_CHARACTERS;
+const MAX_OUTPUT_STORE_CHARACTERS = PI_CODEMODE_STORE_CHARACTERS - MAX_OUTPUT_JSON_CHARACTERS;
 
 /** Console overflow is private working data, not a file-library artifact. */
 export async function retainPiCodemodeOutput(
@@ -13,6 +15,7 @@ export async function retainPiCodemodeOutput(
   text: string,
   api: ToolExecutionApi,
   context: Context,
+  storeWrites?: CodemodeStoreWrites,
 ): Promise<{ path: string } | { error: string }> {
   // Avoid serializing text already known to exceed the limit.
   const outputCharacters =
@@ -23,11 +26,19 @@ export async function retainPiCodemodeOutput(
   return api.commit(async (tx) => {
     const store = await tx.doc(CodemodeStoreDoc, api.conversationId);
     if (store.values[key] === undefined) {
-      const characters = Object.entries(store.values).reduce(
-        (total, [name, value]) => total + name.length + JSON.stringify(value).length,
-        key.length + outputCharacters,
+      // The native runner commits these writes after formatting output. Check both snapshots;
+      // future deletions must not make the independent overflow commit exceed its budget either.
+      const values: Record<string, unknown> = Object.assign(Object.create(null), store.values);
+      for (const name of storeWrites?.delete ?? []) delete values[name];
+      Object.assign(values, storeWrites?.set);
+      const exceedsBudget = [store.values, values].some(
+        (candidate) =>
+          Object.entries(candidate).reduce(
+            (total, [name, value]) => total + name.length + JSON.stringify(value).length,
+            key.length + outputCharacters,
+          ) > MAX_OUTPUT_STORE_CHARACTERS,
       );
-      if (characters > MAX_OUTPUT_STORE_CHARACTERS)
+      if (exceedsBudget)
         return { error: 'Working cache has no room for this output. Print a smaller result.' };
       // CodemodeSandboxBase serializes JsonValues before load() sees them; retain the raw text.
       store.values[key] = text;
