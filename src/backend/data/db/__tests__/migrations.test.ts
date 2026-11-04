@@ -736,6 +736,7 @@ describe('bundled SQLite migrations', () => {
         'agent_skill',
         'agent_tool_binding',
         'ai_usage_record',
+        'ai_usage_record_purpose',
         'app_state',
         'desktop_connection',
         'file_entry',
@@ -751,6 +752,7 @@ describe('bundled SQLite migrations', () => {
         'user_provider',
       ]);
 
+      expect(columnNames(database, 'ai_usage_record_purpose')).toEqual(['request_id', 'purpose']);
       expect(columnNames(database, 'mcp_server')).toEqual([
         'id',
         'name',
