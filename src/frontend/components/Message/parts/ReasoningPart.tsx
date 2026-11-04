@@ -1,7 +1,8 @@
-import { ContentState, MessagePart } from '@cherrystudio/ui/components';
+import { BackgroundPressArea, ContentState, MessagePart } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createContext, type PropsWithChildren, use, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { queryKeys, useBackendModule } from '@/frontend/data';
@@ -9,6 +10,7 @@ import type { AgentReadReasoningInput } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
+import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
 import type { MessageListItem } from '../types';
 import { findLatestActivityPart } from './partitionMessageParts';
 
@@ -79,6 +81,8 @@ type ReasoningPartProps = {
 export function ReasoningPart({ isStreaming, part, source, partId }: ReasoningPartProps) {
   const { t } = useTranslation();
   const openDetail = use(ReasoningDetailContext);
+  const handleDisclosureToggle = useMessageListDisclosureToggle();
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const isThinking = isStreaming && part.state === 'streaming';
   const statusText = t(
     isThinking ? 'chat.reasoningStatus.thinking' : 'chat.reasoningStatus.thought',
@@ -89,43 +93,72 @@ export function ReasoningPart({ isStreaming, part, source, partId }: ReasoningPa
     return null;
   }
 
-  if (openDetail && partId) {
-    return (
-      <MessagePart.Summary
-        onPress={() => openDetail(partId)}
+  const showDetail = () => {
+    if (openDetail && partId) openDetail(partId);
+    else setIsDetailOpen(true);
+  };
+
+  return (
+    <>
+      <MessagePart.ToolGroup
+        onDisclosureToggle={handleDisclosureToggle}
         state={isThinking ? 'running' : 'complete'}
         testID="reasoning"
         title={statusText}
-      />
-    );
-  }
-
-  return (
-    <MessagePart.Reasoning
-      detailTitle={t('chat.reasoningDetail.title')}
-      state={isThinking ? 'running' : 'complete'}
-      statusText={statusText}
-    >
-      {source ? (
-        <LocalReasoningContent
-          key={`${source.sessionId}:${source.messageId}:${source.partId}`}
-          isStreaming={isThinking}
-          source={source}
-        />
-      ) : (
-        <ReasoningText isStreaming={isThinking} text={part.text} />
-      )}
-    </MessagePart.Reasoning>
+      >
+        <BackgroundPressArea onPress={showDetail} testID="reasoning-preview">
+          <View
+            accessible
+            accessibilityActions={[{ name: 'activate' }]}
+            accessibilityLabel={t('chat.reasoningDetail.open')}
+            accessibilityRole="button"
+            onAccessibilityAction={({ nativeEvent }) => {
+              if (nativeEvent.actionName === 'activate') showDetail();
+            }}
+          >
+            {source ? (
+              <LocalReasoningContent
+                key={`${source.sessionId}:${source.messageId}:${source.partId}`}
+                isStreaming={isThinking}
+                source={source}
+                variant="preview"
+              />
+            ) : (
+              <ReasoningText isStreaming={isThinking} text={part.text} variant="preview" />
+            )}
+          </View>
+        </BackgroundPressArea>
+      </MessagePart.ToolGroup>
+      {isDetailOpen ? (
+        <MessagePart.Detail
+          onClose={() => setIsDetailOpen(false)}
+          testID="reasoning-detail"
+          title={t('chat.reasoningDetail.title')}
+        >
+          {source ? (
+            <LocalReasoningContent
+              key={`${source.sessionId}:${source.messageId}:${source.partId}`}
+              isStreaming={isThinking}
+              source={source}
+            />
+          ) : (
+            <ReasoningText isStreaming={isThinking} text={part.text} />
+          )}
+        </MessagePart.Detail>
+      ) : null}
+    </>
   );
 }
 
-/** Mounted only inside the open sheet; full text never joins observations or paged history. */
+/** Readers mount on demand; full text never joins observations or paged history. */
 function LocalReasoningContent({
   isStreaming,
   source,
+  variant = 'full',
 }: {
   isStreaming: boolean;
   source: AgentReadReasoningInput;
+  variant?: 'full' | 'preview';
 }) {
   const { t } = useTranslation();
   const agent = useBackendModule('agent');
@@ -160,6 +193,7 @@ function LocalReasoningContent({
         <ReasoningText
           isStreaming={isStreaming && result.data.state === 'streaming'}
           text={result.data.text}
+          variant={variant}
         />
       ) : !result.isError ? (
         <ContentState.Loading title={t('chat.reasoningDetail.loading')} />
@@ -168,12 +202,21 @@ function LocalReasoningContent({
   );
 }
 
-function ReasoningText({ text, isStreaming }: { text: string; isStreaming: boolean }) {
+function ReasoningText({
+  text,
+  isStreaming,
+  variant = 'full',
+}: {
+  text: string;
+  isStreaming: boolean;
+  variant?: 'full' | 'preview';
+}) {
   const { t } = useTranslation();
-  // Sheet visibility, rather than the chat list's live-tail visibility, owns this reader.
-  return text ? (
-    <MarkdownText isStreaming={isStreaming} markdown={text} />
+  if (!text) return <ContentState.Loading title={t('chat.reasoningStatus.thinking')} />;
+  // Inline text uses bounded native blocks; only the full reader mounts Markdown.
+  return variant === 'preview' ? (
+    <MessagePart.TextBody value={text} variant="preview" />
   ) : (
-    <ContentState.Loading title={t('chat.reasoningStatus.thinking')} />
+    <MarkdownText isStreaming={isStreaming} markdown={text} />
   );
 }

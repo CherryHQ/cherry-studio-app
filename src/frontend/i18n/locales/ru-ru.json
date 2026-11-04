@@ -576,6 +576,7 @@
   "chat.reasoning.xhigh": "Очень высокий",
   "chat.reasoningDetail.loadFailed": "Не удалось загрузить содержание рассуждений.",
   "chat.reasoningDetail.loading": "Загрузка содержания рассуждений…",
+  "chat.reasoningDetail.open": "Открыть полный ход рассуждений",
   "chat.reasoningDetail.title": "Ход рассуждений",
   "chat.reasoningStatus.thinking": "Мышление",
   "chat.reasoningStatus.thought": "Продумал это",

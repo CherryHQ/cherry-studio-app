@@ -561,6 +561,7 @@
   "chat.reasoning.xhigh": "エクストラハイ",
   "chat.reasoningDetail.loadFailed": "思考内容を読み込めませんでした。",
   "chat.reasoningDetail.loading": "思考内容を読み込み中…",
+  "chat.reasoningDetail.open": "思考過程の全文を開く",
   "chat.reasoningDetail.title": "思考過程",
   "chat.reasoningStatus.thinking": "思考",
   "chat.reasoningStatus.thought": "考え抜いた",

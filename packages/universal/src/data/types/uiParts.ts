@@ -173,6 +173,7 @@ export const CherryTextMetaSchema: z.ZodType<CherryTextMeta> = z.object({
 });
 
 export const CherryReasoningMetaSchema: z.ZodType<CherryReasoningMeta> = z.object({
+  hasText: z.boolean().optional(),
   thinkingMs: z.number().optional(),
   startedAt: z.number().optional(),
 });

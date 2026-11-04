@@ -561,6 +561,7 @@
   "chat.reasoning.xhigh": "极高",
   "chat.reasoningDetail.loadFailed": "无法加载思考内容。",
   "chat.reasoningDetail.loading": "正在加载思考内容…",
+  "chat.reasoningDetail.open": "查看完整思考过程",
   "chat.reasoningDetail.title": "思考过程",
   "chat.reasoningStatus.thinking": "思考中",
   "chat.reasoningStatus.thought": "已深度思考",

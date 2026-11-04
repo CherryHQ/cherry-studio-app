@@ -16,22 +16,22 @@ jest.mock('@/frontend/data', () => ({
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
+    BackgroundPressArea: ({ children, ...props }: { children: ReactNode }) =>
+      React.createElement('ReasoningPreview', props, children),
     ContentState: {
       Loading: (props: object) => React.createElement('LoadingState', props),
       Error: (props: object) => React.createElement('ErrorState', props),
     },
     MessagePart: {
-      Summary: (props: object) => React.createElement('ReasoningSummary', props),
       Detail: ({ children, ...props }: { children: ReactNode }) =>
         React.createElement('ReasoningDetail', props, children),
-      Reasoning: ({ children, ...props }: { children: ReactNode }) => {
+      TextBody: (props: object) => React.createElement('ReasoningPreviewText', props),
+      ToolGroup: ({ children, ...props }: { children: ReactNode }) => {
         const [open, setOpen] = React.useState(false);
         return React.createElement(
           'Reasoning',
-          { ...props, onPress: () => setOpen(true) },
-          open
-            ? React.createElement('ReasoningDetail', { onClose: () => setOpen(false) }, children)
-            : null,
+          { ...props, onPress: () => setOpen((value: boolean) => !value) },
+          open ? children : null,
         );
       },
     },
@@ -87,9 +87,13 @@ describe('ReasoningPart', () => {
     );
   }
   const open = () => act(() => renderer!.root.findByType('Reasoning' as never).props.onPress());
+  const openDetail = () =>
+    act(() => renderer!.root.findByType('ReasoningPreview' as never).props.onPress());
   const close = () =>
     act(() => renderer!.root.findByType('ReasoningDetail' as never).props.onClose());
   const shown = () => renderer!.root.findByType('MarkdownText' as never).props.markdown as string;
+  const previewed = () =>
+    renderer!.root.findByType('ReasoningPreviewText' as never).props.value as string;
   const flush = () =>
     act(async () => {
       await jest.advanceTimersByTimeAsync(20);
@@ -103,10 +107,16 @@ describe('ReasoningPart', () => {
     expect(renderer!.root.findByType('Reasoning' as never).props.state).toBe('complete');
   });
 
-  test('mounts the complete document only on opening and keeps it through streaming completion', () => {
+  test('expands a plain-text window and opens full Markdown only when the window is tapped', () => {
     render(longReasoning.slice(0, 8000), true);
     expect(renderer!.root.findAllByType('MarkdownText' as never)).toHaveLength(0);
     open();
+    expect(previewed()).toBe(longReasoning.slice(0, 8000));
+    expect(renderer!.root.findByType('ReasoningPreviewText' as never).props.variant).toBe(
+      'preview',
+    );
+    expect(renderer!.root.findAllByType('MarkdownText' as never)).toHaveLength(0);
+    openDetail();
     const markdown = renderer!.root.findByType('MarkdownText' as never);
     render(longReasoning, true);
     expect(shown()).toBe(longReasoning);
@@ -119,24 +129,26 @@ describe('ReasoningPart', () => {
   test('updates the open sheet even when the chat live tail is off screen and reopens current text', () => {
     render(longReasoning, true, false);
     open();
+    openDetail();
     render(longReasoning + 'More thought', true, false);
     expect(shown()).toBe(longReasoning + 'More thought');
     close();
     expect(renderer!.root.findAllByType('MarkdownText' as never)).toHaveLength(0);
     render(longReasoning + 'Final thought');
-    open();
+    openDetail();
     expect(shown()).toBe(longReasoning + 'Final thought');
   });
 
-  test('requests full local text only while open and stops reads after closing', async () => {
+  test('reads local text only while expanded and stops polling after collapse', async () => {
     mockReadReasoning.mockResolvedValue({ text: longReasoning, state: 'streaming' });
     render('', true, true, source);
     expect(mockReadReasoning).not.toHaveBeenCalled();
     open();
     await flush();
     expect(mockReadReasoning).toHaveBeenCalledWith(source);
-    expect(shown()).toBe(longReasoning);
-    close();
+    expect(previewed()).toBe(longReasoning);
+    expect(renderer!.root.findAllByType('MarkdownText' as never)).toHaveLength(0);
+    open();
     const calls = mockReadReasoning.mock.calls.length;
     await act(async () => {
       await jest.advanceTimersByTimeAsync(2500);
@@ -163,13 +175,16 @@ describe('ReasoningPart', () => {
             data: { parts: [part] },
           }}
         >
-          {streaming ? <ReasoningPart isStreaming part={part} partId={partId} /> : null}
+          {streaming ? (
+            <ReasoningPart isStreaming part={part} partId={partId} source={{ ...source, partId }} />
+          ) : null}
         </ReasoningDetailProvider>
       );
     };
     mockReadReasoning.mockResolvedValue({ text: longReasoning, state: 'streaming' });
     mount(view('pi:live:phase', true));
-    act(() => renderer!.root.findByType('ReasoningSummary' as never).props.onPress());
+    open();
+    openDetail();
     await flush();
     const sheet = renderer!.root.findByType('ReasoningDetail' as never);
     const markdown = renderer!.root.findByType('MarkdownText' as never);
@@ -182,7 +197,7 @@ describe('ReasoningPart', () => {
     expect(mockReadReasoning).toHaveBeenLastCalledWith({ ...source, partId: 'pi:committed:phase' });
   });
 
-  test('shows a retryable read error when a status-only phase cannot load its full text', async () => {
+  test('shows a retryable read error inside an expanded status-only phase', async () => {
     mockReadReasoning.mockRejectedValueOnce(new Error('Unavailable'));
     render('', false, true, source);
     open();
@@ -191,6 +206,6 @@ describe('ReasoningPart', () => {
     mockReadReasoning.mockResolvedValue({ text: longReasoning, state: 'done' });
     act(() => renderer!.root.findByType('ErrorState' as never).props.primaryAction.onPress());
     await flush();
-    expect(shown()).toBe(longReasoning);
+    expect(previewed()).toBe(longReasoning);
   });
 });

@@ -566,6 +566,7 @@
   "chat.reasoning.xhigh": "Εξαιρετικά υψηλό",
   "chat.reasoningDetail.loadFailed": "Δεν ήταν δυνατή η φόρτωση του περιεχομένου σκέψης.",
   "chat.reasoningDetail.loading": "Φόρτωση περιεχομένου σκέψης…",
+  "chat.reasoningDetail.open": "Άνοιγμα πλήρους διαδικασίας σκέψης",
   "chat.reasoningDetail.title": "Διαδικασία σκέψης",
   "chat.reasoningStatus.thinking": "Σκέψη",
   "chat.reasoningStatus.thought": "Το σκέφτηκα καλά",

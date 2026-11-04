@@ -566,6 +566,7 @@
   "chat.reasoning.xhigh": "Extra high",
   "chat.reasoningDetail.loadFailed": "Could not load the thinking content.",
   "chat.reasoningDetail.loading": "Loading thinking content…",
+  "chat.reasoningDetail.open": "Open the full thinking process",
   "chat.reasoningDetail.title": "Thinking process",
   "chat.reasoningStatus.thinking": "Thinking",
   "chat.reasoningStatus.thought": "Thought it through",

@@ -571,6 +571,7 @@
   "chat.reasoning.xhigh": "Très élevé",
   "chat.reasoningDetail.loadFailed": "Impossible de charger le contenu de la réflexion.",
   "chat.reasoningDetail.loading": "Chargement du contenu de la réflexion…",
+  "chat.reasoningDetail.open": "Afficher le raisonnement complet",
   "chat.reasoningDetail.title": "Processus de réflexion",
   "chat.reasoningStatus.thinking": "Réflexion",
   "chat.reasoningStatus.thought": "J'y ai bien réfléchi",

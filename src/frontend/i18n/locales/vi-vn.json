@@ -561,6 +561,7 @@
   "chat.reasoning.xhigh": "Cực cao",
   "chat.reasoningDetail.loadFailed": "Không thể tải nội dung suy nghĩ.",
   "chat.reasoningDetail.loading": "Đang tải nội dung suy nghĩ…",
+  "chat.reasoningDetail.open": "Mở toàn bộ quá trình suy nghĩ",
   "chat.reasoningDetail.title": "Quá trình suy nghĩ",
   "chat.reasoningStatus.thinking": "Suy nghĩ",
   "chat.reasoningStatus.thought": "Đã nghĩ kỹ rồi",
