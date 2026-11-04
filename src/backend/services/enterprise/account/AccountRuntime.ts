@@ -53,7 +53,7 @@ export interface AccountRuntimeOptions {
   portal: Portal | null;
   /** The SDK integration supplies app-owned context for this exact current or candidate session. */
   resolveSessionContext(session: AuthState): AccountSessionContext | null;
-  /** Enterprise API addresses selected by the SDK's signed-in environment. */
+  /** Enterprise API addresses selected by the normalized account environment. */
   enterpriseAddresses?: Partial<Record<AccountEnvironment, string>>;
   /** The profile this runtime serves. */
   active: ActiveProfile;

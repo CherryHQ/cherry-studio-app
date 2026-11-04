@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-/** App-owned service environments; the SDK integration maps its decision to one of these values. */
+/** App-owned service environments supplied by the account integration. */
 export const AccountEnvironmentSchema = z.enum(['cn', 'global']);
 export type AccountEnvironment = z.infer<typeof AccountEnvironmentSchema>;
 
