@@ -79,14 +79,15 @@ function RootLayout() {
                                       <AppUpdateObserver />
                                       <BackgroundActivityBridge />
                                       <LanguagePreferenceObserver />
-                                      <SystemEntryBridge />
                                       <UuRemoteCallbackBridge />
                                       {/* Before the navigator, so opaque screens cover the renderer page. */}
                                       <MermaidRendererHost />
                                       <FeedbackCaptureProvider>
                                         <FeedbackHintProvider>
                                           <ConversationProvider>
-                                            <RootStack />
+                                            <SystemEntryBridge>
+                                              <RootStack />
+                                            </SystemEntryBridge>
                                           </ConversationProvider>
                                         </FeedbackHintProvider>
                                       </FeedbackCaptureProvider>
@@ -175,6 +176,7 @@ function RootStack() {
         name="files/[fileEntryId]"
         options={{ headerTransparent: false }}
       />
+      <Stack.Screen name="share-destination" options={{ headerTransparent: false }} />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
       <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
