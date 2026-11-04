@@ -436,10 +436,7 @@ function DestinationSessionRow({
           leading={leading}
           className={cn('w-full', pressed && 'bg-sidebar-accent')}
         >
-          <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-            {session.title || t('session.list.untitled')}
-          </Text>
-          <SidebarSessionStatus status={status} />
+          <SidebarSessionContent title={session.title} status={status} />
         </SidebarRowContent>
       )}
     </Pressable>
@@ -552,16 +549,11 @@ function SidebarSessionRow({
             pressed && 'bg-sidebar-accent',
           )}
         >
-          <Text
-            className={cn(
-              'min-w-0 flex-1 text-base text-sidebar-foreground',
-              !isSelecting && selected && 'font-medium',
-            )}
-            numberOfLines={1}
-          >
-            {session.title || t('session.list.untitled')}
-          </Text>
-          <SidebarSessionStatus status={status} />
+          <SidebarSessionContent
+            title={session.title}
+            status={status}
+            isSelected={!isSelecting && selected}
+          />
           {isSelecting ? (
             <Animated.View entering={selectionEntrance} exiting={rowExit}>
               <SelectionIndicator
@@ -584,6 +576,32 @@ function SidebarSessionRow({
         </ContextMenuLink>
       )}
     </Animated.View>
+  );
+}
+
+function SidebarSessionContent({
+  title,
+  status,
+  isSelected = false,
+}: {
+  title: string;
+  status?: ConversationListStatus;
+  isSelected?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Text
+        className={cn(
+          'min-w-0 flex-1 text-base text-sidebar-foreground',
+          isSelected && 'font-medium',
+        )}
+        numberOfLines={1}
+      >
+        {title || t('session.list.untitled')}
+      </Text>
+      <SidebarSessionStatus status={status} />
+    </>
   );
 }
 

@@ -18,7 +18,6 @@ import {
   isComposerImageMediaType,
 } from '@/frontend/components/Composer/utils/composerAttachments';
 import { useBackendModule } from '@/frontend/data';
-import { useAgentsApi } from '@/frontend/hooks/agent';
 import type { SystemAction, SystemSharedFile } from '@/shared/contracts';
 
 import { useSystemEntryClaims } from './useSystemEntryClaims';
@@ -45,7 +44,6 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
   const navigation = useRootNavigationState();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { agents } = useAgentsApi();
   const [pendingAction, setPendingAction] = useState<SystemAction>();
   // The phase prevents same-pass deliveries and double taps before React commits state.
   const phase = useRef<'idle' | 'choosing' | 'leaving'>('idle');
@@ -63,8 +61,7 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
   }, [isDestination]);
 
   const deliver = (action: SystemAction) => {
-    if (!navigation?.key || !agents.length || phase.current !== 'idle' || isDestination)
-      return false;
+    if (!navigation?.key || phase.current !== 'idle' || isDestination) return false;
     phase.current = 'choosing';
     setPendingAction(action);
     router.push('/share-destination');
@@ -97,7 +94,7 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
 
   useSystemEntryClaims({
     deliver,
-    isReady: Boolean(navigation?.key && agents.length && !pendingAction && !isDestination),
+    isReady: Boolean(navigation?.key && !pendingAction && !isDestination),
     module,
     onFailure: () => toast.show({ label: t('systemEntry.failed'), variant: 'danger' }),
   });

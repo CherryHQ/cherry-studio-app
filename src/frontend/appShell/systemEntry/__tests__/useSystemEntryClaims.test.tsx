@@ -65,6 +65,14 @@ afterEach(() => {
   appStateListeners.clear();
 });
 
+it('releases native pending and foreground subscriptions on unmount', () => {
+  render({ deliver: jest.fn(() => true) });
+  act(() => renderer!.unmount());
+  renderer = undefined;
+  expect(pendingListeners.size).toBe(0);
+  expect(appStateListeners.size).toBe(0);
+});
+
 it('delivers a claim through the latest render after its effect was replaced', async () => {
   const first = jest.fn(() => true);
   const latest = jest.fn(() => true);

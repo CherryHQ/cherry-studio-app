@@ -8,8 +8,9 @@ share in React context while `/share-destination` chooses its destination. Later
 A share is composer content, not a submission. The destination page consumes
 `useSystemShareDestination` and the sidebar's `ConversationDestinationList`. Choosing an Agent
 opens its draft; choosing a conversation adds a composer handoff to that Session. Nothing is sent
-until the user sends it. Without an Agent to open, the share stays staged for a later pass. Route
-parameters carry a memory-only handoff token, never shared text, file paths or callback functions.
+until the user sends it. The destination list owns Agent loading, empty and error states; opening
+the page does not wait for an Agent query. Route parameters carry a memory-only handoff token,
+never shared text, file paths or callback functions.
 
 `useSystemEntryClaims` owns the claim loop. A resolved claim has already completed its native entry,
 so the hook delivers it through the latest render rather than the effect that started it, holds it
