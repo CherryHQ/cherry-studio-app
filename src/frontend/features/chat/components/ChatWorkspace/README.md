@@ -93,6 +93,9 @@ and it confirms destructively before removing the pressed answer together with t
 produced it: a transcript replays tool calls paired with their results, so half a turn is not
 replayable. The button is disabled while the Session is busy, like retry, because a running turn's
 rows must not disappear underneath it.
+For a question with multiple answers, the existing delete action targets the pressed answer and
+its descendants instead. Its shared question, sibling answers and independent fork Sessions remain.
+Single-answer deletion keeps the existing turn-removal behavior and confirmation presentation.
 Holding these regions belongs to the child interaction and does not open the message menu.
 
 `ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled

@@ -317,6 +317,8 @@ restore the messages and history, not loaded tool instructions or Skill sections
 "Branch to a new chat" copies the selected branch into a new Cherry Session with new message/turn
 identities. Checkpoints are cleared because their old turn anchors are not valid in the copy. The
 new session creates an independent Pi conversation on its first submission.
+The Host remembers newly created forks in memory and triggers the existing title policy on their
+first admitted user message. This does not override a manual rename or persist workflow state.
 
 Regenerating any settled answer reserves a sibling answer to the same question in the same Session
 and submits the original input on its own working copy. Retrying a failed leaf answer retains its message
@@ -330,6 +332,8 @@ Deleting a settled turn removes both Cherry rows, clears checkpoints that may in
 increments `runtimeRevision` in the same transaction. Retry increments this revision too. A stale
 copy is rejected after a crash even if retirement failed. A missing Cherry session never reappears.
 Deletion does not undo tool side effects or erase the independent usage ledger.
+For a question with alternative answers, the message-scoped delete removes only the chosen answer
+subtree and selects a surviving continuation. The shared question and sibling answers remain.
 
 `retireDoc` detaches application bindings; the unreachable upstream entries stay in the Pi file.
 Deletion removes Cherry data immediately, while retired Pi bytes remain inside the app sandbox. The

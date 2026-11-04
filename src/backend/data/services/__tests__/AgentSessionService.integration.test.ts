@@ -60,6 +60,51 @@ describe('AgentSessionService persistence', () => {
     });
   });
 
+  test('paginates main conversations by family activity and loads every generation of forks separately', async () => {
+    for (const [id, lastActivityAt] of [
+      ['main', 100],
+      ['other', 200],
+      ['fork', 300],
+      ['nested', 400],
+    ] as const)
+      insertSession(sqlite, { id, lastActivityAt, agentId: 'agent-1' });
+    insertSession(sqlite, { id: 'another-agent', lastActivityAt: 500, agentId: 'agent-2' });
+    sqlite
+      .prepare('UPDATE agent_session SET forked_from_session_id = ? WHERE id = ?')
+      .run('main', 'fork');
+    sqlite
+      .prepare('UPDATE agent_session SET forked_from_session_id = ? WHERE id = ?')
+      .run('fork', 'nested');
+
+    const first = await agentSessionService.listByCursor({
+      groupBy: 'root',
+      agentId: 'agent-1',
+      limit: 1,
+    });
+    expect(first.items.map(({ id, forkCount }) => ({ id, forkCount }))).toEqual([
+      { id: 'main', forkCount: 2 },
+    ]);
+    const next = await agentSessionService.listByCursor({
+      groupBy: 'root',
+      agentId: 'agent-1',
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(next.items.map(({ id }) => id)).toEqual(['other']);
+    expect(next.nextCursor).toBeUndefined();
+
+    const branches = await agentSessionService.listByCursor({ rootSessionId: 'main', limit: 1 });
+    expect(branches.items.map(({ id }) => id)).toEqual(['nested']);
+    const remaining = await agentSessionService.listByCursor({
+      rootSessionId: 'main',
+      limit: 1,
+      cursor: branches.nextCursor,
+    });
+    expect(remaining.items.map(({ id }) => id)).toEqual(['fork']);
+    expect(remaining.nextCursor).toBeUndefined();
+    expect((await agentSessionService.listByCursor()).items).toHaveLength(5);
+  });
+
   test('searches titles across agents with literal wildcards and cursor pagination', async () => {
     insertSession(sqlite, { agentId: 'agent-1', id: '计划 100%_a', lastActivityAt: 100 });
     insertSession(sqlite, { agentId: 'agent-2', id: '计划 100%_b', lastActivityAt: 200 });

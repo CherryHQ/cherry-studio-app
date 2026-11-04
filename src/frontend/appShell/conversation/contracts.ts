@@ -226,6 +226,7 @@ export type ConversationSummary = {
   agentId?: string;
   title: string;
   updatedAt?: string;
+  forkCount?: number;
 };
 export type ConversationListStatus =
   | 'running'
@@ -245,6 +246,11 @@ export interface ConversationCatalog {
   subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
   readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
   previewSession?(ref: ConversationRef): ConversationPreview;
+  listSessionBranches?(
+    root: ConversationRef,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<ConversationSummary>>;
   listAgents(
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,

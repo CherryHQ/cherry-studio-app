@@ -66,7 +66,11 @@ Multi-select deletion removes sessions serially so active work settles before it
 Deleted rows hide immediately, and each removal's catalog change notification refreshes the lists;
 selection never refreshes them itself. Failed deletions remain selected for retry.
 
-The recent-list menu switches between a flat conversation list and conversations grouped by Agent.
+The recent-list menu switches between the conversation list and conversations grouped by Agent.
+Local conversation rows with forks form collapsible groups under their main conversation in both
+views. Expanding a group lists the main conversation followed by its descendant Sessions, including
+forks of forks. Root groups are paginated by the family's latest activity; expanded branches have
+their own paginated metadata query. No transcript observation is opened to form a group.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
 its conversations without navigating; multiple groups can stay open. Only expanded groups query
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.

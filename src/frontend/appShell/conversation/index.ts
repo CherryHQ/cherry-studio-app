@@ -41,6 +41,7 @@ export {
 export {
   useConversationAgents,
   useConversationSessions,
+  useConversationSessionBranches,
   useConversationPreview,
   useConversationSummary,
   useConversationWorkspaces,

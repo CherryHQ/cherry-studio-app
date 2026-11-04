@@ -93,13 +93,27 @@ test('lists Agents and Sessions as source-local addresses without opening transc
   });
   expect(f.api.get).toHaveBeenLastCalledWith(
     '/agent-sessions',
-    expect.objectContaining({ query: { agentId: 'agent', cursor: undefined } }),
+    expect.objectContaining({ query: { agentId: 'agent', cursor: undefined, groupBy: 'root' } }),
   );
   expect(f.protocol.observeSession).not.toHaveBeenCalled();
   f.source.dispose();
   await expect(f.source.catalog.listAgents(undefined, f.signal)).rejects.toMatchObject({
     failure: { code: 'retired' },
   });
+});
+
+test('loads a main conversation’s branches without opening a transcript', async () => {
+  const f = fixture();
+  const root = { source: { kind: 'local' } as const, sessionId: 'main' };
+  await f.source.catalog.listSessionBranches!(root, undefined, f.signal);
+  expect(f.api.get).toHaveBeenCalledWith(
+    '/agent-sessions',
+    expect.objectContaining({
+      query: { agentId: undefined, rootSessionId: 'main', cursor: undefined },
+    }),
+  );
+  expect(f.protocol.observeSession).not.toHaveBeenCalled();
+  f.source.dispose();
 });
 
 test('catalog previews retain status and unread updates without opening transcripts', async () => {

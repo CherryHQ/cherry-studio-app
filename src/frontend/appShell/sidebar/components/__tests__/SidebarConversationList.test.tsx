@@ -17,6 +17,7 @@ const mockSession: ConversationSummary = {
   title: 'Existing discussion',
 };
 const mockSessions = jest.fn();
+const mockBranches = jest.fn();
 const mockPreview = jest.fn((_ref: ConversationSummary['ref']) => ({}));
 const mockDrawerSelection = jest.fn((): { registerList: (...args: unknown[]) => () => void } => {
   throw new Error('The destination list must not require drawer selection');
@@ -30,7 +31,12 @@ jest.mock('@/frontend/appShell/conversation', () => ({
     isSuccess: true,
   }),
   useConversationSessions: (...args: unknown[]) => mockSessions(...args),
-  useConversationSource: () => ({ scope: 'local-scope', ref: { kind: 'local' } }),
+  useConversationSessionBranches: (...args: unknown[]) => mockBranches(...args),
+  useConversationSource: () => ({
+    scope: 'local-scope',
+    ref: { kind: 'local' },
+    catalog: { listSessionBranches: jest.fn() },
+  }),
   useConversationPreview: (ref: ConversationSummary['ref']) => mockPreview(ref),
   useConversationSourceState: () => ({ availability: { state: 'enabled' } }),
 }));
@@ -106,6 +112,34 @@ beforeEach(() => {
 });
 
 afterEach(() => act(() => renderer.unmount()));
+
+it('expands a main conversation to show the original and all its loaded branches', () => {
+  const branch = {
+    ...mockSession,
+    ref: { source: { kind: 'local' } as const, sessionId: 'fork-1' },
+    title: 'A different discussion',
+  };
+  mockSessions.mockReturnValue({
+    data: {},
+    items: [{ ...mockSession, forkCount: 1 }],
+    isSuccess: true,
+  });
+  mockBranches.mockReturnValue({
+    items: [branch],
+    isLoading: false,
+    isError: false,
+    hasNextPage: false,
+  });
+  press('share-agent-expand-agent-1');
+  expect(mockBranches).not.toHaveBeenCalled();
+  press('sidebar-session-expand-session-1');
+  expect(mockBranches).toHaveBeenCalledWith(mockSession.ref);
+  expect(renderer.root.findAllByProps({ testID: 'share-session-session-1' })).not.toHaveLength(0);
+  press('share-session-fork-1');
+  expect(onSelect).toHaveBeenCalledWith({ kind: 'session', session: branch });
+  press('sidebar-session-expand-session-1');
+  expect(renderer.root.findAllByProps({ testID: 'share-session-fork-1' })).toHaveLength(0);
+});
 
 function press(testID: string) {
   act(() => renderer.root.findByProps({ testID }).props.onPress());

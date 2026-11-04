@@ -2543,6 +2543,99 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     await state.host.close();
   });
 
+  test('a new fork names itself from its first accepted input and leading answer only once', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({ naming: () => naming });
+    const source = await state.reserve();
+    await state.host.initialize();
+    try {
+      const fork = await state.host.forkSession({
+        sessionId: state.sessionId,
+        fromMessageId: source.assistantMessageId,
+        name: 'Branch - Original',
+      });
+      const send = (text: string) =>
+        state.host.submitMessage({
+          sessionId: fork.id,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text }],
+        });
+      const finish = async (assistantMessageId: string) => {
+        const turn = [...state.copies.values()]
+          .flatMap(({ turns }) => turns)
+          .find((candidate) => candidate.assistantMessageId === assistantMessageId)!;
+        state.emit({
+          ...turn,
+          status: 'completed',
+          answerBoundary: 'pi:done',
+          updatedAt: turn.updatedAt + 1,
+          parts: [{ id: 'answer', type: 'text', text: 'Branch answer', state: 'done' }],
+        });
+        await settle();
+      };
+      jest
+        .spyOn(state.store, 'reserveSubmission')
+        .mockRejectedValueOnce(new Error('write rejected'));
+      await expect(send('Rejected input')).rejects.toBeDefined();
+      expect(naming.maybeRenameFromFirstUserMessage).not.toHaveBeenCalled();
+      const first = await send('First branch question');
+      expect(naming.maybeRenameFromFirstUserMessage).toHaveBeenCalledWith(
+        fork.id,
+        expect.arrayContaining([expect.objectContaining({ text: 'First branch question' })]),
+        true,
+      );
+      await finish(first.assistantMessageId);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: fork.id,
+          userParts: expect.arrayContaining([
+            expect.objectContaining({ text: 'First branch question' }),
+          ]),
+        }),
+      );
+      const next = await send('Follow-up');
+      await finish(next.assistantMessageId);
+      expect(naming.maybeRenameFromFirstUserMessage).toHaveBeenCalledTimes(1);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('manually renaming a new fork cancels its first-input naming trigger', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({ naming: () => naming });
+    const source = await state.reserve();
+    await state.host.initialize();
+    try {
+      const fork = await state.host.forkSession({
+        sessionId: state.sessionId,
+        fromMessageId: source.assistantMessageId,
+      });
+      await state.host.renameSession({ sessionId: fork.id, name: 'My branch' });
+      await state.host.submitMessage({
+        sessionId: fork.id,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'New question' }],
+      });
+      expect((await state.store.getSession(fork.id))?.name).toBe('My branch');
+      expect(naming.maybeRenameFromFirstUserMessage).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('deleting a source physically removes its rows while an independent fork remains readable', async () => {
     const state = fixture();
     const turn = await state.reserve();

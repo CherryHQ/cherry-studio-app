@@ -25,6 +25,7 @@ import {
   type ConversationListStatus,
   useConversationAgents,
   useConversationSessions,
+  useConversationSessionBranches,
   useConversationSource,
   useConversationSourceState,
   useConversationPreview,
@@ -351,7 +352,14 @@ function SidebarSessions({
       {sessions
         .slice(0, limit)
         .map((session) =>
-          onSelect ? (
+          session.forkCount && source.catalog.listSessionBranches ? (
+            <SidebarSessionGroup
+              key={session.ref.sessionId}
+              session={session}
+              leading={leading}
+              onSelect={onSelect}
+            />
+          ) : onSelect ? (
             <DestinationSessionRow
               key={session.ref.sessionId}
               leading={leading}
@@ -394,21 +402,131 @@ function SidebarSessions({
   );
 }
 
+function SidebarSessionGroup({
+  session,
+  leading,
+  onSelect,
+}: {
+  session: ConversationSummary;
+  leading?: ReactNode;
+  onSelect?: SelectDestination;
+}) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const title = session.title || t('session.list.untitled');
+  return (
+    <View testID={`sidebar-session-group-${session.ref.sessionId}`}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t(
+          expanded ? 'conversation.destination.collapse' : 'conversation.destination.expand',
+          { name: title },
+        )}
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((value) => !value)}
+        testID={`sidebar-session-expand-${session.ref.sessionId}`}
+      >
+        {({ pressed }) => (
+          <SidebarRowContent leading={leading} className={cn(pressed && 'bg-sidebar-accent')}>
+            <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+              {title}
+            </Text>
+            {expanded ? (
+              <ChevronDownIcon className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronRightIcon className="size-4 text-muted-foreground" />
+            )}
+          </SidebarRowContent>
+        )}
+      </Pressable>
+      {expanded ? (
+        <SidebarSessionBranches root={session} leading={leading} onSelect={onSelect} />
+      ) : null}
+    </View>
+  );
+}
+
+function SidebarSessionBranches({
+  root,
+  leading,
+  onSelect,
+}: {
+  root: ConversationSummary;
+  leading?: ReactNode;
+  onSelect?: SelectDestination;
+}) {
+  const { t } = useTranslation();
+  const source = useConversationSource();
+  const navigation = useConversationTarget(source.ref);
+  const query = useConversationSessionBranches(root.ref);
+  const sessions = [root, ...query.items];
+  return (
+    <View className="pl-5">
+      {onSelect ? null : (
+        <SidebarSessionSelectionRegistration
+          listKey={`branches:${root.ref.sessionId}`}
+          sessions={sessions}
+          limit={sessions.length}
+        />
+      )}
+      {sessions.map((session) =>
+        onSelect ? (
+          <DestinationSessionRow
+            key={session.ref.sessionId}
+            session={session}
+            leading={leading}
+            onSelect={onSelect}
+          />
+        ) : (
+          <SidebarSessionRow
+            key={session.ref.sessionId}
+            session={session}
+            leading={leading}
+            selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
+            selected={session.ref.sessionId === navigation.sessionId}
+          />
+        ),
+      )}
+      {query.isLoading ? <ContentState.Loading title={t('session.list.loading')} /> : null}
+      {query.isError ? (
+        <LoadMore
+          leading={leading}
+          label={t('common.retry')}
+          onPress={() => void query.refetch()}
+        />
+      ) : query.hasNextPage ? (
+        <LoadMore
+          leading={leading}
+          disabled={query.isFetchingNextPage}
+          onPress={() => void query.fetchNextPage()}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 /** Drawer management stays out of the destination picker. */
 function SidebarSessionSelectionRegistration({
   agentRef,
+  listKey,
   limit,
   sessions,
 }: {
   agentRef?: AgentRef;
+  listKey?: string;
   limit: number;
   sessions: readonly ConversationSummary[];
 }) {
   const source = useConversationSource();
   const { registerList } = useSidebarSelection();
   useEffect(
-    () => registerList(`${source.scope}:${agentRef ?? ''}`, source, sessions.slice(0, limit)),
-    [agentRef, limit, registerList, sessions, source],
+    () =>
+      registerList(
+        `${source.scope}:${listKey ?? agentRef ?? ''}`,
+        source,
+        sessions.slice(0, limit),
+      ),
+    [agentRef, listKey, limit, registerList, sessions, source],
   );
   return null;
 }

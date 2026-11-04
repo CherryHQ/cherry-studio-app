@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 
 import type { AgentProtocol } from '@/shared/contracts/agent';
+import type { ListAgentSessionsQueryParams } from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import type {
@@ -8,6 +9,7 @@ import type {
   Availability,
   CatalogCursor,
   ConversationSource,
+  ConversationRef,
   QueryScope,
 } from '../contracts';
 import {
@@ -53,6 +55,36 @@ export function createLocalConversationSource(input: {
   const state = createConversationState<{ availability: Availability }>({
     availability: { state: 'enabled' },
   });
+  const readSessions = async (
+    { agent, root }: { agent?: AgentRef; root?: ConversationRef },
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ) => {
+    assertSource();
+    signal.throwIfAborted();
+    if (root && root.source.kind !== 'local')
+      throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+    const agentId = agent ? refs.resolve(agent, 'agent').id : undefined;
+    const key = root ? `branches:${root.sessionId}` : `sessions:${agentId ?? ''}`;
+    const query: ListAgentSessionsQueryParams = {
+      agentId,
+      ...(root ? { rootSessionId: root.sessionId } : { groupBy: 'root' }),
+      cursor: cursor ? refs.resolve(cursor, key).id : undefined,
+    };
+    const result = await input.api.get('/agent-sessions', { query, signal });
+    assertSource();
+    signal.throwIfAborted();
+    return {
+      items: result.items.map((session) => ({
+        ref: { source: ref, sessionId: session.id },
+        agentId: session.agentId,
+        title: session.name,
+        updatedAt: session.lastActivityAt,
+        ...(session.forkCount ? { forkCount: session.forkCount } : {}),
+      })),
+      ...(result.nextCursor ? { next: refs.issue<CatalogCursor>(key, result.nextCursor) } : {}),
+    };
+  };
   return {
     ref,
     scope,
@@ -119,31 +151,8 @@ export function createLocalConversationSource(input: {
             : {}),
         };
       },
-      listSessions: async ({ agent }, cursor, signal) => {
-        assertSource();
-        signal.throwIfAborted();
-        const agentId = agent ? refs.resolve(agent, 'agent').id : undefined;
-        const result = await input.api.get('/agent-sessions', {
-          query: {
-            agentId,
-            cursor: cursor ? refs.resolve(cursor, `sessions:${agentId ?? ''}`).id : undefined,
-          },
-          signal,
-        });
-        assertSource();
-        signal.throwIfAborted();
-        return {
-          items: result.items.map((session) => ({
-            ref: { source: ref, sessionId: session.id },
-            agentId: session.agentId,
-            title: session.name,
-            updatedAt: session.lastActivityAt,
-          })),
-          ...(result.nextCursor
-            ? { next: refs.issue<CatalogCursor>(`sessions:${agentId ?? ''}`, result.nextCursor) }
-            : {}),
-        };
-      },
+      listSessions: readSessions,
+      listSessionBranches: (root, cursor, signal) => readSessions({ root }, cursor, signal),
     },
     dispose: () => {
       if (disposed) return;

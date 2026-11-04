@@ -674,6 +674,40 @@ describe('AgentSessionChatClient', () => {
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
 
+  test('a branch deletion retains the question and other answers sharing its turn', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    listener?.({
+      type: 'message.finalized',
+      message: { ...assistantMessage(), id: 'another-answer' },
+    });
+    listener?.({
+      type: 'turn.updated',
+      turn: {
+        id: 'turn-1',
+        sessionId: 'session-1',
+        assistantMessageId: 'assistant-1',
+        status: 'completed',
+        error: null,
+        startedAt: '2026-09-22T00:00:00.000Z',
+        endedAt: '2026-09-22T00:00:01.000Z',
+      },
+    });
+    listener?.({ type: 'messages.deleted', messageIds: ['another-answer'] });
+    expect(client.getState('session-1').activeTurn?.assistantMessageId).toBe('assistant-1');
+    expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+  });
+
   test('cancels the active turn with the correlated session and turn ids', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;
     const protocol = protocolWithObservation(async (_sessionId, nextListener) => {

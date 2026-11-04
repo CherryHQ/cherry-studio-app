@@ -6,11 +6,15 @@ import type { CursorPaginationResponse } from '@/shared/data/api/types';
 export const AgentSessionEntitySchema = AgentSessionViewSchema.extend({
   /** Last real conversation activity, used for recency ordering. */
   lastActivityAt: z.iso.datetime(),
+  /** Present on root-group catalog rows; descendants are loaded when expanded. */
+  forkCount: z.number().int().nonnegative().optional(),
 });
 export type AgentSessionEntity = z.infer<typeof AgentSessionEntitySchema>;
 
 export const ListAgentSessionsQuerySchema = z.strictObject({
   agentId: z.string().min(1).optional(),
+  groupBy: z.literal('root').optional(),
+  rootSessionId: z.string().min(1).optional(),
   /** Literal substring of the conversation title, across the complete collection. */
   q: z.string().trim().min(1).optional(),
   cursor: z.string().optional(),

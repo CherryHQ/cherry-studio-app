@@ -66,6 +66,7 @@ export interface AgentProtocol {
    * Removes one settled turn from the transcript and clears any context
    * checkpoint that may have summarized it. The turn's side effects are not
    * undone: this erases the record, not what the record describes.
+   * Naming an answer with siblings removes only that answer's subtree.
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 

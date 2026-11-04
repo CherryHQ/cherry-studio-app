@@ -113,8 +113,9 @@ export type ForkSessionResult =
 
 export type DeleteTurnInput = {
   sessionId: string;
-  /** Deletion is turn-scoped: a lone message would orphan its tool pairing. */
   turnId: string;
+  /** Restricts deletion to this answer's subtree when sibling answers remain. */
+  messageId?: string;
 };
 
 export type EditMessageInput = AgentEditMessageInput & {
@@ -134,7 +135,7 @@ export type EditMessageResult =
  * leave that turn persisting into a transcript it no longer belongs to.
  */
 export type DeleteTurnResult =
-  | { status: 'deleted'; deletedMessageIds: string[] }
+  | { status: 'deleted'; deletedMessageIds: string[]; branchDeleted?: true }
   | { status: 'session-not-found' }
   | { status: 'turn-not-found' }
   | { status: 'turn-unsettled' };
@@ -236,6 +237,8 @@ export interface AgentSessionStore {
    * transcript pairs every `tool-call` with its `tool-result`, and half a turn
    * cannot be sent to a provider. Later questions below the removed answers move
    * to the removed question's parent, as Desktop's non-cascading delete does.
+   * When messageId names one of several answers, only that answer and its
+   * descendants are removed; the shared question and sibling answers survive.
    *
    * Any context checkpoint whose summary covers the removed turn is cleared in
    * the same transaction. The summary text is opaque to the store, so a

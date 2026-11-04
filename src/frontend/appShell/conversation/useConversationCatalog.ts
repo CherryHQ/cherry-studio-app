@@ -15,7 +15,7 @@ function useCatalog<T>(
   read: (cursor: CatalogCursor | undefined, signal: AbortSignal) => Promise<CatalogPage<T>>,
   enabled = true,
 ) {
-  const kind = key[0] === 'selected-session' ? 'sessions' : key[0];
+  const kind = key[0] === 'selected-session' || key[0] === 'session-branches' ? 'sessions' : key[0];
   const source = useConversationSource();
   const { availability } = useConversationSourceState();
   const queryClient = useQueryClient();
@@ -92,6 +92,14 @@ export function useConversationSessions(agent?: AgentRef) {
   const { catalog } = useConversationSource();
   return useCatalog(['sessions', agent ?? ''], (cursor, signal) =>
     catalog.listSessions({ agent }, cursor, signal),
+  );
+}
+export function useConversationSessionBranches(root: ConversationRef) {
+  const { catalog } = useConversationSource();
+  return useCatalog(
+    ['session-branches', root.sessionId],
+    (cursor, signal) => catalog.listSessionBranches!(root, cursor, signal),
+    Boolean(catalog.listSessionBranches),
   );
 }
 export function useConversationWorkspaces(agent?: AgentRef) {
