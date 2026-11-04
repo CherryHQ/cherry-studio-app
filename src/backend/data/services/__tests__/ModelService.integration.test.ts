@@ -252,7 +252,15 @@ describe('ModelService legacy MiMo identities', () => {
   ] as const)(
     'preserves explicit aliases for %s with preset %s and model preset %s',
     async (providerId, presetProviderId, presetModelId) => {
-      await new ProviderService().create({ name: 'Custom alias', providerId, presetProviderId });
+      await new ProviderService().create({
+        name: 'Custom alias',
+        providerId,
+        presetProviderId,
+        defaultChatEndpoint: 'openai-chat-completions',
+        endpointConfigs: {
+          'openai-chat-completions': { baseUrl: 'https://example.test/v1' },
+        },
+      });
       const modelId = 'mimo-v2-6-pro';
       await db.database.insert(userModelTable).values({
         id: createUniqueModelId(providerId, modelId),
