@@ -1,3 +1,5 @@
+import { constants, createContext, runInContext } from 'node:vm';
+
 import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createModels } from '@earendil-works/pi-ai/models';
@@ -5,6 +7,7 @@ import { parseToolCallArguments } from '@earendil-works/pi-ai/utils/json-parse';
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
 import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
+import { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
   AssistantEntry,
   createRegistry,
@@ -26,13 +29,13 @@ import {
 import { CodemodeStoreDoc } from '@earendil-works/pi-durable/codemode';
 
 import { officeInputSchemas } from '@/backend/services/office';
-import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
 import { toRuntimeInputSchema } from '../../../tools/runtimeToolSchema';
 import type { RuntimeArtifact, RuntimeTool, RuntimeToolResult } from '../../types';
 import { PiCodemodeArtifactsEntry, PiCodemodeFiles } from '../piCodemodeFiles';
 import { retainPiCodemodeOutput } from '../piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
+import { PI_CODEMODE_VM_SOURCE } from '../piCodemodeSandbox';
 import { projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -41,6 +44,34 @@ import { ToolInstructions } from '../piToolInstructions';
 /** Preserve the same durable records across Harness instances, as a reopened SQL adapter does. */
 class ReopenableMemoryStorage extends MemoryStorage {
   override async close(): Promise<void> {}
+}
+
+/** Use the real host serialization and native prelude for store/load, without native execution. */
+async function runCachedScript(store: Record<string, JsonValue>, code: string) {
+  const sandbox = new CodemodeSandboxBase({}, (data, events) => {
+    const realm = createContext(constants.DONT_CONTEXTIFY, { microtaskMode: 'afterEvaluate' });
+    runInContext('delete globalThis.console', realm);
+    const factory = runInContext(PI_CODEMODE_VM_SOURCE, realm);
+    const bridge = factory(
+      (message: string) => events.message(JSON.parse(message)),
+      () => {},
+      JSON.stringify({ ...data, fingerprint: 'test' }),
+      'test-engine',
+    );
+    runInContext('void 0', realm);
+    expect(bridge.drained()).toBe('done');
+    return {
+      post() {
+        throw new Error('Cache scripts must not call tools.');
+      },
+      async stop() {},
+    };
+  });
+  try {
+    return await sandbox.start(code, { store, startedAt: 100, seed: 1, onCall() {} }).result;
+  } finally {
+    await sandbox.close();
+  }
 }
 
 function cancelled(context: Context): Promise<never> {
@@ -1576,7 +1607,7 @@ describe('durable capability boundary', () => {
 test('retains console overflow in the native store across parent failure and reopen, without library artifacts', async () => {
   const storage = new ReopenableMemoryStorage();
   const code = '/* input stays in the transcript */'.repeat(500);
-  const log = 'console output'.repeat(500);
+  const log = 'console "output"\\path\n中文🍒'.repeat(500);
   let outputKey = '';
   const extension = capabilityExtension({
     name: 'cherry',
@@ -1595,7 +1626,7 @@ test('retains console overflow in the native store across parent failure and reo
             expect(
               await retainPiCodemodeOutput(
                 'too-large.txt',
-                'x'.repeat(MAX_TEXT_ATTACHMENT_BYTES + 1),
+                'x'.repeat(2 * 1024 * 1024),
                 api,
                 context,
               ),
@@ -1631,12 +1662,103 @@ test('retains console overflow in the native store across parent failure and reo
     await harness.close(BACKGROUND_CONTEXT);
     const reopened = await open(storage, extension);
     try {
-      expect(
-        (await reopened.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values,
-      ).toEqual({ [outputKey]: log });
+      const values = (
+        await reopened.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT)
+      )?.values;
+      expect(values).toEqual({ [outputKey]: log });
+      if (!values) throw new Error('Expected persisted working data');
+      await expect(
+        runCachedScript(values, `return load(${JSON.stringify(outputKey)});`),
+      ).resolves.toMatchObject({ ok: true, value: log });
     } finally {
       await reopened.close(BACKGROUND_CONTEXT);
     }
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('bounds overflow by encoded value and total cache size while preserving scripts and receipt capacity', async () => {
+  const preserved = {
+    'office.script': 'return 1;',
+    'office.data.1': 'x'.repeat(200 * 1024),
+    'office.data.2': 'y'.repeat(200 * 1024),
+    'office.receipt': { fileEntryId: 'existing-file' },
+  };
+  const text = 'x'.repeat(256 * 1024 - 2); // Including JSON's quotes, exactly one native value.
+  let outputKey = '';
+  const extension = defineExtension({
+    name: 'test-output-budget',
+    tools: [
+      defineTool({
+        name: 'cache_output',
+        description: 'Retain bounded output.',
+        parameters: { type: 'object' },
+        async execute(_raw, api, context) {
+          for (const oversized of ['x'.repeat(2 * 1024 * 1024), '\n'.repeat(150 * 1024)]) {
+            expect(await retainPiCodemodeOutput('oversized.txt', oversized, api, context)).toEqual({
+              error: expect.stringContaining('working cache limit'),
+            });
+          }
+          // Both outputs individually fit; concurrent commits must share the same total budget.
+          const outputs = await Promise.all(
+            ['first.txt', 'second.txt'].map((name) =>
+              retainPiCodemodeOutput(name, text, api, context),
+            ),
+          );
+          expect(outputs.filter((output) => 'error' in output)).toHaveLength(1);
+          const savedIndex = outputs.findIndex((output) => 'path' in output);
+          const saved = outputs[savedIndex];
+          if (!saved || !('path' in saved)) throw new Error('Expected one saved output');
+          outputKey = saved.path.slice('store:'.length);
+          expect(
+            await retainPiCodemodeOutput(
+              savedIndex === 0 ? 'first.txt' : 'second.txt',
+              text,
+              api,
+              context,
+            ),
+          ).toEqual(saved);
+          return { output: [] };
+        },
+      }),
+    ],
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await conversation.commit(async (tx) => {
+      (await tx.doc(CodemodeStoreDoc, conversation.id)).values = preserved;
+    }, BACKGROUND_CONTEXT);
+    await harness.waitForTask(await toolTask(conversation, 'cache_output', {}), BACKGROUND_CONTEXT);
+    expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+      isError: false,
+    });
+    const values = (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))
+      ?.values;
+    expect(values).toEqual({ ...preserved, [outputKey]: text });
+    if (!values) throw new Error('Expected persisted working data');
+    const next = await runCachedScript(
+      values,
+      `
+      store('office.script', 's'.repeat(128 * 1024));
+      store('office.next-receipt', { fileEntryId: 'new-file' });
+      return load(${JSON.stringify(outputKey)}).length;
+    `,
+    );
+    expect(next).toMatchObject({
+      ok: true,
+      value: text.length,
+      storeWrites: {
+        set: {
+          'office.script': 's'.repeat(128 * 1024),
+          'office.next-receipt': { fileEntryId: 'new-file' },
+        },
+      },
+    });
   } finally {
     await harness.close(BACKGROUND_CONTEXT);
   }

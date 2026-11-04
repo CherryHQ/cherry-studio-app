@@ -473,9 +473,13 @@ cache-file API or automatic scheduler.
 
 Text console overflow also goes into `CodemodeStoreDoc` through the existing host output callback,
 under a task-specific key. The returned `store:<key>` is read with `load(key)`; output exceeding the
-existing text byte limit returns a size error. Saving overflow commits independently of the parent
-script's outcome. Explicit image outputs keep the existing managed-artifact path. Execution inputs
-are not automatically duplicated and historical tool arguments are not rewritten for model requests.
+native 256 Ki-character JSON value limit or the host's 768 Ki-character total cache budget is not
+saved, reserving 256 Ki characters for scripts and receipts. Existing keys are retained;
+the model receives an error rather than a dangling reference. Values stay as raw JSON values in the
+document; the sandbox serializes them before `load()` reads them. Saving overflow commits
+independently of the parent script's outcome. Explicit image outputs keep the existing managed-artifact
+path. Execution inputs are not automatically duplicated and historical tool arguments are not
+rewritten for model requests.
 New calls reuse short references; historical context compaction remains upstream-owned.
 
 The supported `afterTool` hook bounds invalid-argument diagnostics before settlement: at most five
