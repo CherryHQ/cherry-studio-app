@@ -43,7 +43,6 @@ type ChatInputSurfaceProps = {
   fieldStyle?: StyleProp<TextStyle>;
   placeholder?: string;
   attachmentMode?: 'images' | 'text-only';
-  layout?: 'adaptive' | 'expanded';
   /** Voice input takes the send slot while there is nothing to send. */
   dictation?: boolean;
 };
@@ -95,7 +94,6 @@ function ChatInputLayout({
   fieldStyle,
   placeholder,
   attachmentMode = 'images',
-  layout = 'adaptive',
   status,
   renderPrimary,
 }: Omit<ChatInputSurfaceProps, 'dictation'> & {
@@ -114,7 +112,7 @@ function ChatInputLayout({
   );
   return (
     <ComposerEditor
-      active={layout === 'expanded' || isEditing || draft.length > 0 || attachments.length > 0}
+      active={isEditing || draft.length > 0 || attachments.length > 0}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
       placeholder={placeholder}

@@ -403,7 +403,6 @@ function TextChatInput({
                 </View>
               </ChatInputAccessories>
               <ChatInputSurface
-                layout="expanded"
                 streaming={isBusy}
                 placeholder={
                   skillAction

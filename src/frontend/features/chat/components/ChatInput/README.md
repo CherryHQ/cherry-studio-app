@@ -20,7 +20,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   incoming system share opens a fresh Draft composer seeded with its text and library attachments,
   replacing whatever draft was there; nothing is sent until the user sends it.
 - Sending a message blurs the input, ends editing, and dismisses the keyboard immediately on
-  submission. Local-send scrolling does not dismiss again.
+  submission. The empty composer returns to one row; local-send scrolling does not dismiss again.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a submission or the selected branch's answer is active, the send control becomes stop.
@@ -28,9 +28,10 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer; afterwards it stops the selected answer by its message and turn IDs. Switching to
   a completed answer restores the send control; it stays disabled until the other answers finish.
   A queued follow-up keeps its running ancestor as the stop target.
-- Local chat always shows the field above its action row, including the model and reasoning
-  controls when the draft is empty. Remote chat retains the adaptive one-row resting layout.
-  The field grows with its content up to the shared composer cap.
+- Local and remote chat rest in one row when empty and outside an editing interaction. Focusing
+  the field, draft text, or attachments expand the field above its action row. The model and
+  reasoning controls appear in that row where available. The field grows with its content up to
+  the shared composer cap.
 - Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
   surface below the top safe area, with a collapse action and no heading. Its background fills
   both screen edges and extends through the footer and bottom safe area. Local and
