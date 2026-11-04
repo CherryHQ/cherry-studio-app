@@ -33,6 +33,7 @@ import {
   SshFilePathSchema,
   SshCredentialSchema,
   SshError,
+  SshDownloadError,
   SshErrorCodeSchema,
   SshReferenceSchema,
   type SaveSshProfile,
@@ -422,7 +423,8 @@ export class SshRuntime extends BaseService implements SshModule {
   setCommandGrant = (sessionId: string, expected: SshTarget, allowCommands: boolean) =>
     this.serialize(async () => {
       this.assertAgentTarget(sessionId, expected);
-      await this.profiles.getRow(expected.profile);
+      // Revocation must remain possible even if profile storage is unavailable.
+      if (allowCommands) await this.profiles.getRow(expected.profile);
       this.assertActive();
       this.assertAgentTarget(sessionId, expected);
       if (!allowCommands)
@@ -438,6 +440,7 @@ export class SshRuntime extends BaseService implements SshModule {
       this.targets.set(sessionId, target);
       this.scheduleGrantExpiry(sessionId, target);
       this.notifyTargets();
+      return target;
     });
 
   attachDraftTarget = (draftId: string, sessionId: string) =>
@@ -570,6 +573,7 @@ export class SshRuntime extends BaseService implements SshModule {
         const parsed = SshFilePathSchema.safeParse(path);
         if (!parsed.success) throw new SshError('invalid-input');
         const stage = createSshStagingFile();
+        let state: 'not-started' | 'unknown' = 'not-started';
         try {
           const result = await this.runOperation(
             reference,
@@ -579,6 +583,7 @@ export class SshRuntime extends BaseService implements SshModule {
             agent,
             onProgress,
           );
+          state = result.state === 'not-started' ? 'not-started' : 'unknown';
           if (result.state !== 'completed' || result.error)
             throw new SshError(result.error || 'sftp');
           // Admission remains counted through managed publication. A changed profile or
@@ -595,6 +600,15 @@ export class SshRuntime extends BaseService implements SshModule {
               transferSignal,
             );
           });
+        } catch (error) {
+          throw new SshDownloadError(
+            error instanceof SshError
+              ? error.code
+              : transferSignal.aborted
+                ? 'cancelled'
+                : 'local-file',
+            state,
+          );
         } finally {
           stage.dispose();
         }

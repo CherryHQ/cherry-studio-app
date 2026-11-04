@@ -523,6 +523,51 @@ test('does not publish a late download after its conversation target is cleared'
   expect(runtime.hasPendingStorageWork()).toBe(false);
 });
 
+test.each(['not-started', 'unknown'] as const)(
+  'retains the native %s download outcome and cleans its staging file',
+  async (state) => {
+    const profile = await trusted();
+    const dispose = jest.fn();
+    jest.mocked(createSshStagingFile).mockReturnValue({
+      file: { uri: 'file:///owned-stage' } as ReturnType<typeof createSshStagingFile>['file'],
+      path: '/owned-stage',
+      dispose,
+    });
+    native.run.mockResolvedValue(outcome(state, 'connection'));
+    await expect(
+      runtime.download(profile, 'report.txt', new AbortController().signal),
+    ).rejects.toMatchObject({ code: 'connection', state });
+    expect(importSshDownload).not.toHaveBeenCalled();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  },
+);
+
+test('a failed download publication cannot claim the transfer never started', async () => {
+  const profile = await trusted();
+  jest.mocked(createSshStagingFile).mockReturnValue({
+    file: { uri: 'file:///owned-stage' } as ReturnType<typeof createSshStagingFile>['file'],
+    path: '/owned-stage',
+    dispose: jest.fn(),
+  });
+  native.run.mockResolvedValue(outcome('completed'));
+  jest.mocked(importSshDownload).mockRejectedValue(new Error('Local storage failed'));
+  await expect(
+    runtime.download(profile, 'report.txt', new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'local-file', state: 'unknown' });
+});
+
+test('rolling back an older grant cannot revoke a newer authorization', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const pendingTarget = runtime.getTarget('conversation')!;
+  const granted = await runtime.setCommandGrant('conversation', pendingTarget, true);
+  const replacement = await runtime.setCommandGrant('conversation', granted, true);
+  await expect(runtime.setCommandGrant('conversation', granted, false)).rejects.toMatchObject({
+    code: 'changed',
+  });
+  expect(runtime.getTarget('conversation')).toEqual(replacement);
+});
+
 const reusedFailure = (state = 'not-started') =>
   JSON.stringify({
     state,

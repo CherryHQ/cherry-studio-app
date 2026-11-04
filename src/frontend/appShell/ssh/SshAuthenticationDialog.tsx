@@ -1,4 +1,5 @@
 import { Button, Dialog, Input, TextField } from '@cherrystudio/ui/components';
+import { randomUUID } from 'expo-crypto';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -18,6 +19,9 @@ function AuthenticationForm({ request }: { request: SshAuthenticationRequest }) 
   const { t } = useTranslation();
   const ssh = useBackendModule('ssh');
   const [responses, setResponses] = useState(() => request.prompts.map(() => ''));
+  const [fields] = useState(() =>
+    request.prompts.map((prompt) => ({ ...prompt, id: randomUUID() })),
+  );
   const [invalid, setInvalid] = useState(false);
   function respond(value: string[] | null) {
     if (
@@ -51,9 +55,8 @@ function AuthenticationForm({ request }: { request: SshAuthenticationRequest }) 
         {request.instruction ? (
           <Text className="text-sm text-foreground">{request.instruction}</Text>
         ) : null}
-        {request.prompts.map((prompt, index) => (
-          // A challenge has immutable protocol slots; repeated prompt text is valid.
-          <TextField key={index} invalid={invalid}>
+        {fields.map((prompt, index) => (
+          <TextField key={prompt.id} invalid={invalid}>
             <TextField.Label>{prompt.text || t('ssh.auth.response')}</TextField.Label>
             <Input
               accessibilityLabel={prompt.text || t('ssh.auth.response')}

@@ -167,9 +167,13 @@ const sshApproval = {
     command: 'pwd',
   },
 };
+const grantedTarget: SshTarget = {
+  ...sshTarget,
+  grant: { id: 'created-grant', expiresAt: Date.now() + 3600000 },
+};
 
 test('only a matching local SSH approval can grant diagnostics, before approving the command', async () => {
-  const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => undefined) };
+  const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => grantedTarget) };
   const f = fixture({ pendingApprovals: [sshApproval] }, ssh);
   const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
   expect(interaction.canGrantSshDiagnostics).toBe(true);
@@ -185,7 +189,7 @@ test('only a matching local SSH approval can grant diagnostics, before approving
 test.each(['mcp', 'stale', 'denied', 'plain'] as const)(
   'does not create a diagnostics grant for %s approval',
   async (mode) => {
-    const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => undefined) };
+    const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => grantedTarget) };
     const pending =
       mode === 'mcp'
         ? {
@@ -224,6 +228,20 @@ test('a target invalidated during grant admission leaves the command pending', a
     await interaction.respond!.execute({ kind: 'approve', sshDiagnosticsGrant: true }),
   ).toMatchObject({ state: 'rejected' });
   expect(f.client.respondApproval).not.toHaveBeenCalled();
+});
+
+test('a rejected approval rolls back the exact diagnostics grant it created', async () => {
+  const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => grantedTarget) };
+  const f = fixture({ pendingApprovals: [sshApproval] }, ssh);
+  f.client.respondApproval.mockRejectedValue(new Error('Approval is no longer pending'));
+  const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
+  expect(
+    await interaction.respond!.execute({ kind: 'approve', sshDiagnosticsGrant: true }),
+  ).toMatchObject({ state: 'rejected' });
+  expect(ssh.setCommandGrant.mock.calls).toEqual([
+    ['session', sshTarget, true],
+    ['session', grantedTarget, false],
+  ]);
 });
 
 test('health sharing identifies the executing turn model and never matches an MCP name collision', () => {

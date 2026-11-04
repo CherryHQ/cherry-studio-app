@@ -49,7 +49,12 @@ export interface SshModule {
   subscribeAuthentication(listener: () => void): () => void;
   respondAuthentication(id: string, responses: readonly string[] | null): void;
   selectTarget(sessionId: string, reference: SshReference | null): Promise<void>;
-  setCommandGrant(sessionId: string, expected: SshTarget, allowCommands: boolean): Promise<void>;
+  /** Returns the exact new authorization so a failed approval can revoke only its own grant. */
+  setCommandGrant(
+    sessionId: string,
+    expected: SshTarget,
+    allowCommands: boolean,
+  ): Promise<SshTarget>;
   /** Copies a user-selected draft binding to the session allocated by its first send. */
   attachDraftTarget(draftId: string, sessionId: string): Promise<void>;
   getTarget(sessionId: string): SshTarget | null;

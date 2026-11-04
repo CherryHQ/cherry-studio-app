@@ -251,7 +251,17 @@ export function createLocalConversationProjector(input: {
             ) {
               if (!canGrantSshDiagnostics || !sshTarget || !input.ssh)
                 throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
-              await input.ssh.setCommandGrant(sessionId, sshTarget, true);
+              const grantedTarget = await input.ssh.setCommandGrant(sessionId, sshTarget, true);
+              try {
+                await client.respondApproval(sessionId, approval.id, decision.kind);
+              } catch (error) {
+                // A concurrent selection or grant replacement must not be revoked here.
+                await input.ssh
+                  .setCommandGrant(sessionId, grantedTarget, false)
+                  .catch(() => undefined);
+                throw error;
+              }
+              return;
             }
             await client.respondApproval(sessionId, approval.id, decision.kind);
           }),

@@ -37,6 +37,7 @@ jest.mock('@/frontend/hooks/plugin', () => ({
   usePluginCatalog: () => ({}),
   usePluginConnections: () => ({}),
 }));
+jest.mock('@/frontend/hooks/ssh', () => ({ sshErrorLabel: () => 'ssh.error.connection' }));
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachments: () => null,
   useComposerActions: () => ({ setDraft: mockNoop }),
@@ -78,7 +79,6 @@ jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () =>
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
 jest.mock('../components/ChatInputSsh', () => ({
   ChatInputSshPopover: ({ children }: { children: ReactNode }) => children,
-  ChatInputSshTarget: () => null,
 }));
 jest.mock('../components/ChatInputPluginPopover', () => ({
   ChatInputPluginPopover: ({ children }: { children: ReactNode }) => children,

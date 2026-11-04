@@ -1,13 +1,13 @@
 # SSH connections
 
-SSH is a local connection capability separate from Cherry desktop pairing. Settings > SSH
-connections owns saved profiles, remote directories, identity verification, the manual command panel
-and remote file browser. A connection
-can open a new Agent draft, or the chat composer's plus menu can open the SSH target sheet for its
-conversation. The sheet selects a saved connection, controls the one-hour command grant, and links
-to the selected connection's files and back to Settings to manage profiles. The composer shows a target indicator only after selection;
-tapping it reopens the sheet. Opening a draft or selecting a target does not send a message or run
-a command.
+SSH is a local connection capability separate from Cherry desktop pairing. The Plugins page owns
+saved SSH connections, with routes and page implementations beneath `plugins/ssh` and
+`frontend/features/plugin/ssh`. Adding or opening a connection uses the same form with a fixed
+save footer. Its menu owns enable/disable, remote files, opening an Agent draft, and deletion;
+host verification stays next to the saved fingerprint. Unchanged forms cannot be saved.
+The chat composer's plus menu opens an anchored server picker and inserts the selected server as
+an inline mention. That picker only selects servers. Opening a draft or selecting a target does
+not send a message or run a command. There is no standalone command panel.
 
 ## Owners
 
@@ -49,11 +49,17 @@ The file interface provides directory listing, UTF-8 reading/writing, downloadin
 Paths are relative to the profile directory. Listings are bounded to 500 entries, text to 256 KiB,
 and transfers to 20 MiB. The browser shows a bounded text preview; downloads retain the original
 bytes and use the existing library preview. Binary files are downloadable but cannot be read as
-text. Settings uploads select an existing managed file and confirm the destination. Agent uploads
+text. Browser uploads select an existing managed file and confirm the destination. Agent uploads
 must resolve a file explicitly available to the admitted turn or its local workspace; models never
 choose a device path. Agent downloads publish managed artifacts into that turn's local workspace,
 or the library root when unbound. Staging files are owned per transfer and disposed on completion
 or failure, with cancellation and target checks retained through managed publication.
+Download failures preserve the native `not-started` or `unknown` outcome. A transfer that completed
+but failed during managed publication is also reported as `unknown`, without exposing an artifact
+or automatically retrying it.
+
+Completed command details show output and the command in two code sections. The summary owns
+failure/unknown status and exit code; full execution inputs remain visible before approval.
 
 Writes use a temporary sibling and rename, with replacement disabled unless explicitly requested.
 The browser asks before replacing an existing file. Atomic replacement requires the server's
@@ -70,18 +76,19 @@ changes the revision. Every new connection checks the actual peer key, including
 successful probe. Reuse is limited to the same profile revision, endpoint, username and trusted
 fingerprint; edits and trust changes retire that pooled connection. Passwords/private keys are never
 sent to an unverified host. A changed host key uses destructive styling, shows the saved and new
-fingerprints side by side, and requires a second confirmation after independent verification.
+fingerprints side by side, and opens a separate destructive system confirmation before replacement.
 
 By default, every AI command requires approval. Global auto approval cannot promote SSH. Users can
-grant one-hour access to a fixed set of read-only diagnostics: `pwd`, `whoami`, `id`, `uptime`,
-`uname`, `df`, and `free`, with limited diagnostic flags. Any other command, shell composition,
+grant one-hour access while approving a command to a fixed set of read-only diagnostics: `pwd`,
+`whoami`, `id`, `uptime`, `uname`, `df`, and `free`, with limited diagnostic flags. Any other command, shell composition,
 nonempty stdin, or custom working directory still requires approval. The SSH approval sheet shows
 the complete command, resolved cwd, stdin, target and timeout. Background actions must open the app
 for SSH approvals. Revocation, expiry, target changes, profile changes and deletion
 cancel affected AI operations. SSH file tools always require their own approval; the command grant
-does not promote them. Manual and AI operations share a connection only through exclusive leases.
-All conversation
-bindings and grants disappear when the process restarts. Draft bindings are copied to the session
+does not promote them. If approval submission fails, only the grant created for that submission is
+revoked; a newer selection or replacement grant is preserved. Browser and AI operations share a
+connection only through exclusive leases. All conversation bindings and grants disappear when the
+process restarts. Draft bindings are copied to the session
 allocated by its first send; a failed admission removes that session's temporary binding.
 
 The runtime admits one native operation per target and at most four native operations overall. A busy
@@ -94,9 +101,8 @@ a reused connection fails before execution, using only its remaining deadline an
 profile, target, grant and cancellation state. Unknown outcomes are never replayed. Pooling does not preserve shell state or recover an interrupted task.
 The Agent runtime already marks tool side effects unsafe to replay after uncertain recovery.
 
-The manual panel's lifetime owns its command; leaving it cancels that operation. Cancellation may
-leave the remote outcome unknown. A remote process can continue after a channel closes. Long-lived
-remote jobs require a future remote task protocol and are outside this interface.
+Cancellation may leave the remote outcome unknown. A remote process can continue after a channel
+closes. Long-lived remote jobs require a future remote task protocol and are outside this interface.
 
 ## Persistence and distribution
 

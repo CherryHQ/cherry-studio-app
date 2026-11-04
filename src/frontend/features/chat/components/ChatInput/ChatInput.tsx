@@ -53,7 +53,7 @@ import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
-import { ChatInputSshPopover, ChatInputSshTarget } from './components/ChatInputSsh';
+import { ChatInputSshPopover } from './components/ChatInputSsh';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
@@ -516,9 +516,6 @@ function TextChatInput({
                           <ComposerAttachments />
                           <AudioAttachmentNotice />
                           {mode === 'standard' ? <McpAppContextNotice /> : null}
-                          {isSshAvailable ? (
-                            <ChatInputSshTarget contextId={sshContextId} onPress={openSshPicker} />
-                          ) : null}
                         </View>
                       </ChatInputAccessories>
                       <ChatInputSurface

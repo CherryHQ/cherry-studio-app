@@ -15,11 +15,11 @@ export function SshConnectionGroup() {
   const router = useRouter();
   const profiles = useSshProfiles();
   const ssh = useBackendModule('ssh');
-  const add = () => router.push('/settings/ssh/new');
+  const add = () => router.push('/plugins/ssh/new');
   return (
     <PluginGroup title={t('ssh.title')} testID="plugins-ssh">
       {!ssh.isAvailable() ? (
-        <Text className="text-sm text-warning">{t('ssh.error.unavailable')}</Text>
+        <Text className="text-sm text-muted-foreground">{t('ssh.error.unavailable')}</Text>
       ) : null}
       {profiles.isLoading ? <ContentState.Loading title={t('ssh.loading')} /> : null}
       {profiles.error ? (
@@ -43,7 +43,7 @@ export function SshConnectionGroup() {
           }
           onPress={() =>
             router.push({
-              pathname: '/settings/ssh/[profileId]',
+              pathname: '/plugins/ssh/[profileId]',
               params: { profileId: profile.id },
             })
           }

@@ -125,7 +125,9 @@ export function ToolApprovalSheet({
           <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         )}
         {approval.canGrantSshDiagnostics ? (
-          <Section footer={t('ssh.grant.ask')}>
+          <Section
+            footer={t(response.allowSshDiagnostics ? 'ssh.grant.onApproval' : 'ssh.grant.ask')}
+          >
             <Section.SwitchItem
               label={t('ssh.grant.title')}
               disabled={!canDecide}
@@ -184,7 +186,7 @@ function SshCommandApproval({ input }: { input: unknown }) {
   const fields = input as Record<string, unknown>;
   return (
     <View className="gap-4">
-      <Text className="text-sm text-warning">{t('ssh.approval.notice')}</Text>
+      <Text className="text-sm text-muted-foreground">{t('ssh.approval.notice')}</Text>
       {[
         ['target', t('ssh.selectTarget')],
         ['cwd', t('ssh.command.cwd')],

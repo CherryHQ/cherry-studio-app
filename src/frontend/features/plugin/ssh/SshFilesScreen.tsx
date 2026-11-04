@@ -6,15 +6,15 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
-import { splitTextBlocks } from '@cherrystudio/ui/utils';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { RouteHeader } from '@/frontend/appShell/header';
 import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import { useBackendModule } from '@/frontend/data';
-import { SettingsScrollPage } from '@/frontend/features/settings/components/SettingsScrollPage';
 import { useFileEntryPages } from '@/frontend/hooks/file';
 import { sshErrorLabel, useSshAction, useSshProfiles } from '@/frontend/hooks/ssh';
 import type { ResolvedFile } from '@/shared/contracts/file';
@@ -27,6 +27,7 @@ import {
   type SshTransferProgress,
 } from '@/shared/data/types/ssh';
 
+import { PluginPage } from '../components/PluginPage';
 import { SshDiagnosticsButton } from './SshDiagnosticsButton';
 
 export function SshFilesScreen() {
@@ -34,19 +35,22 @@ export function SshFilesScreen() {
   const profiles = useSshProfiles();
   const { t } = useTranslation();
   const profile = profiles.data?.find((item) => item.id === profileId);
-  return profile ? (
-    <RemoteFiles key={profile.revision} profile={profile} />
-  ) : (
-    <SettingsScrollPage headerProps={{ title: t('ssh.files.title') }}>
-      {profiles.isLoading ? (
-        <ContentState.Loading title={t('ssh.loading')} />
-      ) : (
-        <ContentState.Error
-          title={t('ssh.loadFailed')}
-          primaryAction={{ children: t('common.retry'), onPress: () => void profiles.refetch() }}
-        />
-      )}
-    </SettingsScrollPage>
+  return (
+    <>
+      <RouteHeader title={t('ssh.files.title')} />
+      <PluginPage>
+        {profile ? (
+          <RemoteFiles key={profile.revision} profile={profile} />
+        ) : profiles.isLoading ? (
+          <ContentState.Loading title={t('ssh.loading')} />
+        ) : (
+          <ContentState.Error
+            title={t('ssh.loadFailed')}
+            primaryAction={{ children: t('common.retry'), onPress: () => void profiles.refetch() }}
+          />
+        )}
+      </PluginPage>
+    </>
   );
 }
 
@@ -155,7 +159,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
     }
   }
   return (
-    <SettingsScrollPage contentClassName="gap-5" headerProps={{ title: t('ssh.files.title') }}>
+    <>
       <View className="gap-2">
         <Text className="text-base font-medium text-foreground">{profile.name}</Text>
         <Text selectable className="font-mono text-sm text-muted-foreground">
@@ -233,7 +237,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
         <ContentState.Empty title={t('ssh.files.empty')} />
       )}
       {directory?.truncated ? (
-        <Text className="text-sm text-warning">{t('ssh.files.listTruncated')}</Text>
+        <Text className="text-sm text-muted-foreground">{t('ssh.files.listTruncated')}</Text>
       ) : null}
       {directory?.diagnostics ? <SshDiagnosticsButton diagnostics={directory.diagnostics} /> : null}
       {downloaded ? (
@@ -256,12 +260,11 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
                 {sshErrorLabel(new SshError(preview.result.error), t)}
               </Text>
             ) : null}
-            {splitTextBlocks(preview.result.content.slice(0, 16000)).map((block, index) => (
-              // Preview blocks are immutable and may contain identical text.
-              <Text key={index} selectable className="font-mono text-sm text-foreground">
-                {block}
-              </Text>
-            ))}
+            <MessageDetailText
+              title={t('chat.tool.output')}
+              value={preview.result.content.slice(0, 16000)}
+              variant="code"
+            />
             {preview.result.content.length > 16000 ? (
               <Text className="text-sm text-muted-foreground">
                 {t('ssh.files.previewTruncated')}
@@ -315,7 +318,7 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
           }}
         />
       ) : null}
-    </SettingsScrollPage>
+    </>
   );
 }
 

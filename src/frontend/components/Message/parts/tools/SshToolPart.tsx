@@ -1,7 +1,7 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import { sshErrorLabel } from '@/frontend/hooks/ssh';
 import { SshError, SshErrorCodeSchema } from '@/shared/data/types/ssh';
 
@@ -21,31 +21,35 @@ export function SshToolPart({ part }: { part: ToolMessagePart }) {
     Boolean(output.error) ||
     (typeof output.exitCode === 'number' && output.exitCode !== 0);
   const unknown = output.state === 'unknown';
+  const outputText = [
+    error.success ? sshErrorLabel(new SshError(error.data), t) : '',
+    typeof output.stdout === 'string' ? output.stdout : '',
+    typeof output.stderr === 'string' && output.stderr ? `stderr:\n${output.stderr}` : '',
+    output.truncated ? t('ssh.command.truncated') : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
   return (
     <MessagePart.Tool
       title={t('ssh.command.run')}
       state="complete"
       statusText={
-        unknown ? t('ssh.command.outcomeUnknown') : failed ? t('chat.tool.callError') : undefined
+        unknown
+          ? t('ssh.command.outcomeUnknown')
+          : typeof output.exitCode === 'number'
+            ? t('ssh.command.exit', { code: output.exitCode })
+            : failed
+              ? t('chat.tool.callError')
+              : undefined
       }
       statusTone={unknown ? 'warning' : failed ? 'danger' : 'default'}
       testID="ssh-tool-part"
     >
-      {error.success ? (
-        <MessageDetailText
-          title={t('chat.tool.error')}
-          value={sshErrorLabel(new SshError(error.data), t)}
-          tone="danger"
-        />
-      ) : null}
-      {typeof output.target === 'string' ? (
-        <MessageDetailText title={t('ssh.selectTarget')} value={output.target} />
-      ) : null}
-      {(['stdout', 'stderr'] as const).map((stream) =>
-        typeof output[stream] === 'string' && output[stream] ? (
-          <MessageDetailText key={stream} title={stream} value={output[stream]} variant="code" />
-        ) : null,
-      )}
+      <MessageDetailText
+        title={t('chat.tool.output')}
+        value={outputText || t('ssh.approval.empty')}
+        variant="code"
+      />
       {typeof input.command === 'string' ? (
         <MessageDetailText
           title={t('ssh.command.label')}
@@ -54,23 +58,6 @@ export function SshToolPart({ part }: { part: ToolMessagePart }) {
           language="bash"
         />
       ) : null}
-      {typeof input.cwd === 'string' ? (
-        <MessageDetailText title={t('ssh.command.cwd')} value={input.cwd} variant="code" />
-      ) : null}
-      {typeof input.stdin === 'string' && input.stdin ? (
-        <MessageDetailText title={t('ssh.command.stdin')} value={input.stdin} variant="code" />
-      ) : null}
-      {output.truncated ? (
-        <MessageDetailText title={t('chat.tool.output')} value={t('ssh.command.truncated')} />
-      ) : null}
-      <MessageDetailValue
-        title={t('chat.tool.result')}
-        value={{
-          exitCode: output.exitCode,
-          stdoutBytes: output.stdoutBytes,
-          stderrBytes: output.stderrBytes,
-        }}
-      />
     </MessagePart.Tool>
   );
 }

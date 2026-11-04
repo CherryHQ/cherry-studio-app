@@ -1,5 +1,5 @@
 import { FileEntrySchema } from '@/shared/data/types/file';
-import type { SshTarget } from '@/shared/data/types/ssh';
+import { SshDownloadError, type SshTarget } from '@/shared/data/types/ssh';
 
 import { createSshFileTools } from '../sshFileTools';
 import type { SshToolAccess } from '../sshTool';
@@ -119,3 +119,14 @@ test('preserves an uncertain write outcome and does not replay it', async () => 
   expect(result.value).toMatchObject({ state: 'unknown', error: 'connection' });
   expect(ssh.filesForAgent).toHaveBeenCalledTimes(1);
 });
+
+test.each(['not-started', 'unknown'] as const)(
+  'preserves a %s download failure without publishing an artifact or retrying',
+  async (state) => {
+    ssh.downloadForAgent.mockRejectedValue(new SshDownloadError('connection', state));
+    const result = await tool('ssh_download_file').execute(call(input));
+    expect(result.value).toMatchObject({ state, error: 'connection' });
+    expect(result.artifacts).toEqual([]);
+    expect(ssh.downloadForAgent).toHaveBeenCalledTimes(1);
+  },
+);

@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 import {
   SshError,
+  SshDownloadError,
   SshFilePathSchema,
   SshFileRequestSchema,
   type SshTarget,
@@ -168,7 +169,7 @@ export function createSshFileTools(
           if (!(error instanceof SshError)) throw error;
           return {
             value: {
-              state: 'not-started',
+              state: error instanceof SshDownloadError ? error.state : 'not-started',
               error: error.code,
               target: destination,
               path: parsed.path,

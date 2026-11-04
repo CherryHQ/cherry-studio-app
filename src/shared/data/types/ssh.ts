@@ -133,6 +133,17 @@ export class SshError extends Error {
   }
 }
 
+/** A failed download retains whether remote execution may already have started. */
+export class SshDownloadError extends SshError {
+  constructor(
+    code: SshErrorCode,
+    readonly state: 'not-started' | 'unknown',
+  ) {
+    super(code);
+    this.name = 'SshDownloadError';
+  }
+}
+
 export type SshCommandResult = {
   state: 'not-started' | 'exited' | 'unknown';
   stdout: string;
