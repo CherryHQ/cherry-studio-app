@@ -18,6 +18,12 @@ export const AgentRenameSessionInputSchema = z.strictObject({
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
+export const AgentReadReasoningInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  partId: z.string().min(1),
+});
+export type AgentReadReasoningInput = z.infer<typeof AgentReadReasoningInputSchema>;
 /**
  * Further models answering the same question in parallel. Each answer is an
  * ordinary assistant message in the same multi-model sibling group.

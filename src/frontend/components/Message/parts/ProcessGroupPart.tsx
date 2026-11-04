@@ -68,6 +68,8 @@ export function ProcessGroupPart({
       isStreaming={isStreaming && (part.type !== 'reasoning' || part === latestActivityPart)}
       key={key}
       messageId={message.id}
+      sessionId={message.agentSessionId}
+      partId={key}
       messageParts={messageParts}
       part={part}
       renderMode={renderMode}

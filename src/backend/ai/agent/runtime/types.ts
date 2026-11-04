@@ -366,7 +366,7 @@ export type RuntimeOutputPart =
       id: string;
       type: 'text' | 'reasoning';
       text: string;
-      truncated?: boolean;
+      hasText?: boolean;
       state: 'streaming' | 'done';
     }
   | {

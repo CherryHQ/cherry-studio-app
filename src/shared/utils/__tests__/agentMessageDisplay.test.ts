@@ -1,10 +1,6 @@
 import type { AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
 
-import {
-  projectAgentMessageDisplay,
-  REASONING_PREVIEW_CHARACTERS,
-  TOOL_RESULT_PREVIEW_CHARACTERS,
-} from '../agentMessageDisplay';
+import { projectAgentMessageDisplay, TOOL_RESULT_PREVIEW_CHARACTERS } from '../agentMessageDisplay';
 
 function message(parts: AgentMessagePart[]): AgentMessageView {
   return {
@@ -37,7 +33,7 @@ function tool(
   };
 }
 
-test('bounds adjacent reasoning before publication while keeping originals and ordinary replies', () => {
+test('publishes adjacent reasoning as status only while keeping originals and ordinary replies', () => {
   const original = message([
     { id: 'empty', type: 'reasoning', text: '', state: 'done' },
     { id: 'first', type: 'reasoning', text: '前'.repeat(20_000), state: 'done' },
@@ -49,13 +45,35 @@ test('bounds adjacent reasoning before publication while keeping originals and o
   expect(view.parts[0]).toEqual({
     id: 'first',
     type: 'reasoning',
-    text: '尾'.repeat(REASONING_PREVIEW_CHARACTERS),
-    truncated: true,
+    text: '',
+    hasText: true,
     state: 'streaming',
   });
   expect(view.parts[1]).toBe(original.parts[3]);
   expect(original.parts[1]).toMatchObject({ text: '前'.repeat(20_000) });
   expect(projectAgentMessageDisplay(view)).toBe(view);
+});
+
+test.each(['Short thought', 'Long thought.\n'.repeat(3000)])(
+  'never includes reasoning text in a list message',
+  (text) => {
+    const original = message([{ id: 'phase', type: 'reasoning', text, state: 'done' }]);
+    expect(projectAgentMessageDisplay(original).parts).toEqual([
+      { id: 'phase', type: 'reasoning', text: '', hasText: true, state: 'done' },
+    ]);
+    expect(original.parts[0]).toHaveProperty('text', text);
+  },
+);
+
+test('keeps readable status-only history and empty streaming placeholders', () => {
+  const saved = message([
+    { id: 'phase', type: 'reasoning', text: '', hasText: true, state: 'done' },
+  ]);
+  expect(projectAgentMessageDisplay(saved)).toBe(saved);
+  const empty = message([{ id: 'phase', type: 'reasoning', text: '', state: 'streaming' }]);
+  expect(projectAgentMessageDisplay(empty).parts).toEqual([
+    { id: 'phase', type: 'reasoning', text: '', hasText: false, state: 'streaming' },
+  ]);
 });
 
 test('omits script inputs and nested output without serializing them, retains final attachments', () => {

@@ -1,17 +1,7 @@
 import type { AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
 
-import { createTextPreview } from './textPreview';
-
 /** A display budget, never a generation or execution limit. */
-export const REASONING_PREVIEW_CHARACTERS = 2_000;
 export const TOOL_RESULT_PREVIEW_CHARACTERS = 2_000;
-
-export function reasoningPreview(text: string) {
-  return createTextPreview(text, {
-    characters: REASONING_PREVIEW_CHARACTERS,
-    lines: Number.POSITIVE_INFINITY,
-  });
-}
 
 export function isCompactTool(name: string): boolean {
   return [
@@ -58,8 +48,8 @@ function displayPart(part: AgentMessagePart): AgentMessagePart {
   if (cached) return cached;
   let projected = part;
   if (part.type === 'reasoning') {
-    const preview = reasoningPreview(part.text);
-    if (preview.truncated) projected = { ...part, ...preview };
+    const hasText = part.hasText || Boolean(part.text.trim());
+    if (part.text || part.hasText === undefined) projected = { ...part, text: '', hasText };
   } else if (
     part.type === 'dynamic-tool' &&
     part.toolRef.source !== 'mcp' &&
@@ -103,16 +93,12 @@ export function projectAgentMessageDisplay(message: AgentMessageView): AgentMess
     const part = displayPart(source);
     const previous = parts.at(-1);
     if (part.type === 'reasoning' && previous?.type === 'reasoning') {
-      const combined = reasoningPreview(
-        part.text.trim() ? `${previous.text}\n\n${part.text}` : previous.text,
-      );
       parts[parts.length - 1] = {
         ...previous,
-        text: combined.text,
-        ...(previous.truncated || part.truncated || combined.truncated ? { truncated: true } : {}),
+        hasText: previous.hasText || part.hasText,
         state: part.state,
       };
-    } else if (part.type !== 'reasoning' || part.text.trim() || part.state === 'streaming')
+    } else if (part.type !== 'reasoning' || part.hasText || part.state === 'streaming')
       parts.push(part);
   }
   return parts.length === message.parts.length &&

@@ -108,10 +108,10 @@ calls the client directly for the same operation.
 ## Rendering
 
 - Text and reasoning remain Markdown-capable shared message parts.
-- Expanded reasoning renders one continuous, selectable Markdown document. It is not truncated or
-  split by character count: code fences, formulas, links, and other Markdown constructs retain
-  their complete source. Like answer text, streaming reasoning holds its last rendered content
-  while the list end is off screen, then catches up when the end is visible or the part finishes.
+- Reasoning in the list carries only its identity, state and content availability, with no text
+  preview or inline expansion. Pressing its status opens the shared detail sheet and reads the
+  complete Markdown on demand. The open reader updates independently of list visibility and stays
+  open when the process folds or a streamed part receives its committed identity.
 - Each text or reasoning part leaves native streaming mode when its own state reaches `done`,
   even if the turn continues with tools or another part. Turn completion, cancellation, and failure
   also end streaming mode. This releases pending Markdown tail blocks and finalizes layout without

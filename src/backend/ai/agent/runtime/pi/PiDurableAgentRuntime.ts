@@ -581,11 +581,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return { turns, ...(nextCursor ? { nextCursor } : {}) };
   }
 
-  async message(lane: RuntimeLane, messageId: string) {
+  async message(lane: RuntimeLane, messageId: string, options?: { fullReasoning?: boolean }) {
     const runtime = this.requireRuntime();
+    if (options?.fullReasoning) {
+      for (const observer of this.observers) {
+        const turn = observer.readReasoningTurn(lane, messageId);
+        if (turn) return { turn, role: 'assistant' as const };
+      }
+    }
     const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
     if (!selected) return undefined;
-    const turn = await this.project(lane, selected.record, selected.metadata);
+    const turn = await this.project(lane, selected.record, selected.metadata, options);
     if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
     // Forking would drop that edit; Cherry rebuilds the edited history instead.
     if (
@@ -694,6 +700,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     lane: RuntimeLane,
     record: SubmissionRecord,
     metadata: JsonObject | undefined,
+    options?: { fullReasoning?: boolean },
   ) {
     const runtime = this.requireRuntime();
     const conversation = await runtime.conversation(laneKey(lane));
@@ -705,6 +712,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       metadata,
       entries: await runtime.turnEntries(laneKey(lane), record),
       active,
+      fullReasoning: options?.fullReasoning,
       inherited: record.conversationId !== conversation.id,
     });
   }

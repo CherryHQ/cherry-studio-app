@@ -50,7 +50,8 @@ it already exists.
 | Editable assistant reply prose | `editableReplyParts` and `applyReplyEdits` in `src/shared/utils/assistantReply.ts`; every non-empty text part is editable, reasoning and tool receipts are not |
 | Safe Markdown code fences | `createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` |
 | Markdown prose to plain text, code kept literal | `stripMarkdownFormatting` in `src/shared/utils/markdownFormatting.ts`, shared by search indexing and quote excerpts |
-| Bounded chat reasoning and script display data | `projectAgentMessageDisplay` in `src/shared/utils/agentMessageDisplay.ts`; execution and recovery records remain complete |
+| Status-only reasoning and bounded script display data | `projectAgentMessageDisplay` in `src/shared/utils/agentMessageDisplay.ts`; list reasoning carries no text, while execution and recovery records remain complete |
+| Full reasoning detail reads | `AgentProtocol.readReasoning`; the host reads the current Pi watch frame or saved transcript, and the message-owned detail sheet loads it only while open |
 | Private Agent working materials | Upstream `CodemodeStoreDoc` via Code Mode `store/load`; successful preparation calls precede execution/checking, never library files or backups |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |

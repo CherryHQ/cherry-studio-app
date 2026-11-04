@@ -324,6 +324,75 @@ async function settle() {
 }
 
 describe('durable tool diagnostics', () => {
+  test('reads a full saved reasoning phase without including the next phase or answer', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    const text = 'Earlier reasoning.\n'.repeat(500);
+    turn.parts = [
+      { id: 'first', type: 'reasoning', text, state: 'done' },
+      { id: 'summary', type: 'reasoning', text: 'A continuation.', state: 'done' },
+      { id: 'answer', type: 'text', text: 'Answer', state: 'done' },
+      { id: 'later', type: 'reasoning', text: 'Another phase.', state: 'done' },
+    ];
+    await f.host.initialize();
+    try {
+      f.copies.clear();
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'first',
+        }),
+      ).resolves.toEqual({ text: `${text}\n\nA continuation.`, state: 'done' });
+      for (const { messageId, partId } of [
+        { messageId: turn.userMessageId, partId: 'question' },
+        { messageId: turn.assistantMessageId, partId: 'answer' },
+      ])
+        await expect(
+          f.host.readReasoning({ sessionId: f.sessionId, messageId, partId }),
+        ).rejects.toMatchObject({
+          view: { code: 'MESSAGE_NOT_FOUND' },
+        });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('reads full live reasoning without expanding the normal observation payload', async () => {
+    const f = fixture();
+    const turn = await f.reserve('running');
+    const text = 'Full live thinking.\n'.repeat(500);
+    turn.parts = [{ id: 'phase', type: 'reasoning', text, state: 'streaming' }];
+    const read = jest.spyOn(f.conversations, 'message');
+    await f.host.initialize();
+    const observation = await f.host.observeSession(f.sessionId, () => {});
+    try {
+      expect(observation.snapshot.streamingMessage?.parts[0]).toMatchObject({
+        text: '',
+        hasText: true,
+      });
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'phase',
+        }),
+      ).resolves.toEqual({ text, state: 'streaming' });
+      expect(read).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: f.sessionId }),
+        turn.assistantMessageId,
+        { fullReasoning: true },
+      );
+      expect(observation.snapshot.streamingMessage?.parts[0]).toMatchObject({
+        text: '',
+        hasText: true,
+      });
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
   test('editing a completed answer invalidates an uneditable copy and publishes only committed text', async () => {
     const f = fixture();
     const turn = await f.reserve();

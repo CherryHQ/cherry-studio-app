@@ -101,6 +101,8 @@ export interface CherryTextMeta {
 
 /** Cherry metadata on a ReasoningUIPart. */
 export interface CherryReasoningMeta {
+  /** Local status-only list parts retain content availability for the full-text detail reader. */
+  hasText?: boolean;
   /** Thinking duration in ms. */
   thinkingMs?: number;
   /** Thinking start timestamp in epoch ms. */

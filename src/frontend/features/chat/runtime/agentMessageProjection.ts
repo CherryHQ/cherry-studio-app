@@ -202,7 +202,9 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
         type: part.type,
         text: part.text,
         state: part.state,
-        ...(part.truncated ? { providerMetadata: { cherry: { reasoningPreview: true } } } : {}),
+        ...(part.hasText !== undefined
+          ? { providerMetadata: { cherry: { hasText: part.hasText } } }
+          : {}),
       } as CherryMessagePart;
     case 'file':
       return withCherryMeta(
@@ -351,6 +353,7 @@ export function toAgentMessageListItem(
 
   const model = resolveMessageModel(message);
   const item = {
+    agentSessionId: message.sessionId,
     createdAt: message.createdAt,
     data: {
       ...toDisplayParts(

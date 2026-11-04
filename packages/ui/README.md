@@ -267,6 +267,11 @@ primitive owns the quiet divider, running shimmer, disclosure state, and compact
 `expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
 unmounts; new calls and completion never override the reader's choice.
 
+`MessagePart.Reasoning` opens the existing detail sheet at its default large height;
+it never expands content inline. `detailTitle` supplies a stable reader title. Content mounts only
+while open. The chat adapter owns one message-level reader above process folding, so committing a
+streamed part or completing a reply cannot close a reader already open.
+
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
 the default title animation is `shimmer`.

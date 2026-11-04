@@ -393,8 +393,8 @@ export const AgentMessagePartSchema = z.union([
     id: z.string().min(1),
     type: z.literal('reasoning'),
     text: z.string(),
-    /** This is a bounded display excerpt; the execution record retains the full reasoning. */
-    truncated: z.boolean().optional(),
+    /** Status-only list parts omit text while retaining whether full reading content exists. */
+    hasText: z.boolean().optional(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
     selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
@@ -419,6 +419,13 @@ export const AgentMessagePartSchema = z.union([
   }),
 ]);
 export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
+
+/** Full text for one consecutive reasoning phase, requested outside status-only list messages. */
+export const AgentReasoningDetailSchema = z.strictObject({
+  text: z.string(),
+  state: z.enum(['streaming', 'done']),
+});
+export type AgentReasoningDetail = z.infer<typeof AgentReasoningDetailSchema>;
 
 /** One alternative at a message-tree branch point, in creation order. */
 export const AgentMessageSiblingSchema = z.strictObject({
