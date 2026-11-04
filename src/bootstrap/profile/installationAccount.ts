@@ -112,7 +112,7 @@ function createAccount(): AccountRuntime {
   const active = getActiveProfile();
   const runtime = new AccountRuntime({
     portal,
-    resolveSessionContext: resolvePortalSessionContext,
+    resolveSessionContext: (session) => resolvePortalSessionContext(session, config?.issuer),
     enterpriseAddresses: config?.enterpriseAddresses,
     active,
     profiles: installationProfiles(),
@@ -151,7 +151,7 @@ function createAccount(): AccountRuntime {
     if (active.identity && 'authentication' in active.identity)
       return { accountStatus, accountSubjectId: active.identity.subject };
     const session = portal?.getState();
-    const context = session ? resolvePortalSessionContext(session) : null;
+    const context = session ? resolvePortalSessionContext(session, config?.issuer) : null;
     return {
       accountStatus,
       ...(session?._tag === 'signedIn' && context
@@ -166,11 +166,14 @@ function createAccount(): AccountRuntime {
 }
 
 /**
- * Sole mapping point from SDK session metadata to the app's environment and issuer.
- * Field names and values here belong to the app contract, not a requirement on the SDK.
- * The pinned SDK has no environment result yet; its eventual mapping belongs here.
+ * The current Accounts Portal SDK serves China only. Bind its signed-in sessions to cn and
+ * the issuer used to configure that SDK. Replace this mapping when multi-region login ships.
  */
-function resolvePortalSessionContext(session: AuthState): AccountSessionContext | null {
-  const context = AccountSessionContextSchema.safeParse(session);
+function resolvePortalSessionContext(
+  session: AuthState,
+  issuer: string | undefined,
+): AccountSessionContext | null {
+  if (session._tag !== 'signedIn') return null;
+  const context = AccountSessionContextSchema.safeParse({ environment: 'cn', issuer });
   return context.success ? context.data : null;
 }

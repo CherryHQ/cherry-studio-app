@@ -93,10 +93,12 @@ current, candidate and restored sessions; `AccountRuntime` consumes its typed re
 SDK field, value or structure changes are translated at that integration point, without changing
 enterprise or subscription environment selection.
 
-The app accepts the SDK's environment decision and never derives it from IP, locale, a hostname
-or a build profile. Accounts Portal 0.2.1 cannot supply that decision yet, so the integration has
-no usable context and cloud sessions remain unavailable. There is no legacy-session or
-default-environment path. Private deployment sign-in remains independent.
+The current Accounts Portal 0.2.1 deployment serves China only. The integration explicitly maps
+signed-in sessions to `cn` and uses the same `ACCOUNTS_PORTAL_ISSUER` that configures the SDK.
+Candidate sign-in, restored sessions and community identity reads share this mapping; they do not
+require environment metadata from the SDK. When multi-region login becomes available, replace
+this mapping with the SDK's environment result. No IP, locale, hostname or build-profile inference
+is involved. Private deployment sign-in remains independent.
 
 `AccountRuntime` exposes backend-only community identity and matched identity-token reads. The
 identity key includes environment, issuer, subject, product profile and sign-in generation. Reads
@@ -204,8 +206,8 @@ Portal client, as described above.
 Configure `ACCOUNTS_PORTAL_ENTERPRISE_API_CN` and `ACCOUNTS_PORTAL_ENTERPRISE_API_GLOBAL` in each
 EAS deployment environment (`development`, `preview`, `production`). `app.config.ts` embeds both
 under `extra.accountsPortal.enterpriseAddresses`. SDK login configuration remains under its own
-`origin`, `issuer`, `clientId` and `scopes` inputs; it is not a source of a default account environment.
-After the SDK selects a session, its environment selects the enterprise API used for admission,
+`origin`, `issuer`, `clientId` and `scopes` inputs. The current China-only integration supplies `cn`
+and the configured issuer. The normalized account environment selects the enterprise API used for admission,
 product entry and the active profile's synchronization. Missing configuration rejects that entry;
 it never tries the other environment. A changed service address is admitted before reloading the
 profile, and the existing server identity continues to own its local data.

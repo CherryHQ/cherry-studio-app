@@ -1,4 +1,9 @@
+import type { AuthState } from '@cherryinternal/accounts-portal/client';
+
+import type { AccountSessionContext } from '@/shared/contracts/account';
+
 const mockCreatePortal = jest.fn();
+const mockCreateRuntime = jest.fn();
 const mockCreateBridge = jest.fn();
 const mockConfigurationError = jest.fn();
 let mockScheme: string | undefined;
@@ -28,7 +33,9 @@ jest.mock('expo-crypto', () => ({}));
 jest.mock('expo-secure-store', () => ({}));
 jest.mock('expo-web-browser', () => ({}));
 jest.mock('react-native-mmkv', () => ({ createMMKV: () => ({}) }));
-jest.mock('@/backend/services/enterprise', () => ({ AccountRuntime: jest.fn() }));
+jest.mock('@/backend/services/enterprise', () => ({
+  AccountRuntime: jest.fn((options: unknown) => mockCreateRuntime(options)),
+}));
 jest.mock('@/backend/services/http', () => ({
   createFetchBridge: (options: unknown) => mockCreateBridge(options),
 }));
@@ -50,6 +57,7 @@ function compose(scheme?: string, values: Record<string, unknown> = configuratio
   mockScheme = scheme;
   mockConfiguration = values;
   mockCreatePortal.mockReset().mockReturnValue({ ready: Promise.resolve() });
+  mockCreateRuntime.mockClear();
   mockCreateBridge.mockClear();
   mockConfigurationError.mockClear();
   jest.isolateModules(() => {
@@ -57,6 +65,9 @@ function compose(scheme?: string, values: Record<string, unknown> = configuratio
       jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
     installationAccount();
   });
+  return mockCreateRuntime.mock.calls[0]![0] as {
+    resolveSessionContext(session: AuthState): AccountSessionContext | null;
+  };
 }
 
 test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
@@ -101,4 +112,35 @@ test('allows userinfo only on the configured identity issuer', () => {
   );
   expect(() => assertUrl('https://other.example.com/oidc/v1/userinfo')).toThrow();
   expect(() => assertUrl('https://auth.example.com/oidc/v1/userinfo?redirect=other')).toThrow();
+});
+
+test.each(['cloud', 'enterprise'] as const)(
+  'maps a current %s SDK session without region metadata to the configured China identity',
+  (product) => {
+    const issuer = 'https://auth.cherryai.com.cn';
+    const { resolveSessionContext } = compose('cherrystudio', { ...configuration, issuer });
+    expect(
+      resolveSessionContext({
+        _tag: 'signedIn',
+        subject: 'user-1',
+        profile: { product, profileId: 'profile-1' },
+      }),
+    ).toEqual({ environment: 'cn', issuer });
+  },
+);
+
+test('does not create an account context for a signed-out SDK session', () => {
+  const { resolveSessionContext } = compose('cherrystudio');
+  expect(resolveSessionContext({ _tag: 'signedOut' })).toBeNull();
+});
+
+test('does not create an account context without a valid configured issuer', () => {
+  const { resolveSessionContext } = compose('cherrystudio', { ...configuration, issuer: '' });
+  expect(
+    resolveSessionContext({
+      _tag: 'signedIn',
+      subject: 'user-1',
+      profile: { product: 'cloud', profileId: 'profile-1' },
+    }),
+  ).toBeNull();
 });
