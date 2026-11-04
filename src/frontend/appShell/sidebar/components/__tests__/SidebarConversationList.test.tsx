@@ -65,6 +65,9 @@ jest.mock('@cherrystudio/ui/motion', () => ({
   duration: { base: 1, fast: 1 },
   easing: { settle: undefined },
 }));
+jest.mock('@cherrystudio/ui/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
