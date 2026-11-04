@@ -42,6 +42,17 @@ import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from '.
 
 type RegisterEndReached = (handler?: () => void) => void;
 
+export type ConversationDestination =
+  | { kind: 'agent'; agent: AgentSummary }
+  | { kind: 'session'; session: ConversationSummary };
+
+type SelectDestination = (destination: ConversationDestination) => void;
+
+/** The sidebar's grouped catalog with destination callbacks instead of drawer management. */
+export function ConversationDestinationList({ onSelect }: { onSelect: SelectDestination }) {
+  return <SidebarAgentGroups onSelect={onSelect} showLoading />;
+}
+
 const rowLayout = LinearTransition.duration(duration.base)
   .easing(easing.settle)
   .reduceMotion(ReduceMotion.System);
@@ -110,7 +121,13 @@ function SidebarCatalog({
   );
 }
 
-function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
+function SidebarAgentGroups({
+  onSelect,
+  showLoading,
+}: {
+  onSelect?: SelectDestination;
+  showLoading: boolean;
+}) {
   const { t } = useTranslation();
   const query = useConversationAgents();
   if (query.isPending)
@@ -137,7 +154,12 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   return (
     <View className="gap-2">
       {query.items.map((agent) => (
-        <SidebarAgentGroup key={agent.id} agent={agent} showLoading={showLoading} />
+        <SidebarAgentGroup
+          key={agent.id}
+          agent={agent}
+          onSelect={onSelect}
+          showLoading={showLoading}
+        />
       ))}
       {query.isError ? (
         <View className="px-2">
@@ -156,57 +178,124 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
 }
 
 /** Every group starts collapsed; only the user's toggle expands one. */
-function SidebarAgentGroup({ agent, showLoading }: { agent: AgentSummary; showLoading: boolean }) {
+function SidebarAgentGroup({
+  agent,
+  onSelect,
+  showLoading,
+}: {
+  agent: AgentSummary;
+  onSelect?: SelectDestination;
+  showLoading: boolean;
+}) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const toggle = () => setExpanded((value) => !value);
+  const disclosure = expanded ? (
+    <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+  ) : (
+    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+  );
   return (
     <View testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={agent.name}
-          accessibilityState={{ expanded }}
-          testID={`sidebar-agent-${agent.id}`}
-          onPress={() => setExpanded((value) => !value)}
-        >
-          {({ pressed }) => (
-            <SidebarRowContent
-              className={cn('w-full', pressed && 'bg-sidebar-accent')}
-              leading={
-                <SidebarAgentIconSlot>
-                  <AgentAvatar
-                    name={agent.name}
-                    accessibilityLabel={agent.name}
-                    avatar={agent.avatar}
-                    emoji={agent.emoji}
-                    uri={agent.avatarUri}
-                    size={SIDEBAR_LEADING_SIZE}
-                  />
-                </SidebarAgentIconSlot>
-              }
-            >
-              <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-                {agent.name}
-              </Text>
-              {expanded ? (
-                <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        {onSelect ? (
+          <View className="flex-row items-center">
+            <View className="min-w-0 flex-1">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('conversation.destination.new', { name: agent.name })}
+                onPress={() => onSelect({ kind: 'agent', agent })}
+                testID={`share-agent-${agent.id}`}
+              >
+                {({ pressed }) => <SidebarAgentRowContent agent={agent} pressed={pressed} />}
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t(
+                expanded ? 'conversation.destination.collapse' : 'conversation.destination.expand',
+                { name: agent.name },
               )}
-            </SidebarRowContent>
-          )}
-        </Pressable>
+              accessibilityState={{ expanded }}
+              onPress={toggle}
+              testID={`share-agent-expand-${agent.id}`}
+            >
+              {({ pressed }) => (
+                <View
+                  className={cn(
+                    'min-h-12 w-11 items-center justify-center rounded-xl',
+                    pressed && 'bg-sidebar-accent',
+                  )}
+                >
+                  {disclosure}
+                </View>
+              )}
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={agent.name}
+            accessibilityState={{ expanded }}
+            testID={`sidebar-agent-${agent.id}`}
+            onPress={toggle}
+          >
+            {({ pressed }) => (
+              <SidebarAgentRowContent agent={agent} pressed={pressed}>
+                {disclosure}
+              </SidebarAgentRowContent>
+            )}
+          </Pressable>
+        )}
       </View>
-      {expanded ? <SidebarSessions agentRef={agent.ref} showLoading={showLoading} /> : null}
+      {expanded ? (
+        <SidebarSessions agentRef={agent.ref} onSelect={onSelect} showLoading={showLoading} />
+      ) : null}
     </View>
+  );
+}
+
+function SidebarAgentRowContent({
+  agent,
+  children,
+  pressed,
+}: {
+  agent: AgentSummary;
+  children?: ReactNode;
+  pressed: boolean;
+}) {
+  return (
+    <SidebarRowContent
+      className={cn('w-full', pressed && 'bg-sidebar-accent')}
+      leading={
+        <SidebarAgentIconSlot>
+          <AgentAvatar
+            name={agent.name}
+            accessibilityLabel={agent.name}
+            avatar={agent.avatar}
+            emoji={agent.emoji}
+            uri={agent.avatarUri}
+            size={SIDEBAR_LEADING_SIZE}
+          />
+        </SidebarAgentIconSlot>
+      }
+    >
+      <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+        {agent.name}
+      </Text>
+      {children}
+    </SidebarRowContent>
   );
 }
 
 function SidebarSessions({
   agentRef,
+  onSelect,
   registerEndReachedHandler,
   showLoading,
 }: {
   agentRef?: AgentRef;
+  onSelect?: SelectDestination;
   registerEndReachedHandler?: RegisterEndReached;
   showLoading: boolean;
 }) {
@@ -218,11 +307,6 @@ function SidebarSessions({
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
   const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions, isError } = query;
-  const { registerList } = useSidebarSelection();
-  useEffect(
-    () => registerList(`${source.scope}:${agentRef ?? ''}`, source, sessions.slice(0, limit)),
-    [agentRef, limit, registerList, sessions, source],
-  );
   const loadMore = useCallback(() => {
     if (isFetchingNextPage || isError || (limit >= sessions.length && !hasNextPage)) return;
     const next = limit + appSidebar.recentSessionLimit;
@@ -257,15 +341,33 @@ function SidebarSessions({
     );
   return (
     <View className="px-2">
-      {sessions.slice(0, limit).map((session) => (
-        <SidebarSessionRow
-          key={session.ref.sessionId}
-          session={session}
-          selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
-          leading={leading}
-          selected={session.ref.sessionId === navigation.sessionId}
+      {onSelect ? null : (
+        <SidebarSessionSelectionRegistration
+          agentRef={agentRef}
+          sessions={sessions}
+          limit={limit}
         />
-      ))}
+      )}
+      {sessions
+        .slice(0, limit)
+        .map((session) =>
+          onSelect ? (
+            <DestinationSessionRow
+              key={session.ref.sessionId}
+              leading={leading}
+              onSelect={onSelect}
+              session={session}
+            />
+          ) : (
+            <SidebarSessionRow
+              key={session.ref.sessionId}
+              session={session}
+              selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
+              leading={leading}
+              selected={session.ref.sessionId === navigation.sessionId}
+            />
+          ),
+        )}
       {query.isError ? (
         <LoadMore
           leading={leading}
@@ -289,6 +391,58 @@ function SidebarSessions({
         </SidebarRowContent>
       ) : null}
     </View>
+  );
+}
+
+/** Drawer management stays out of the destination picker. */
+function SidebarSessionSelectionRegistration({
+  agentRef,
+  limit,
+  sessions,
+}: {
+  agentRef?: AgentRef;
+  limit: number;
+  sessions: readonly ConversationSummary[];
+}) {
+  const source = useConversationSource();
+  const { registerList } = useSidebarSelection();
+  useEffect(
+    () => registerList(`${source.scope}:${agentRef ?? ''}`, source, sessions.slice(0, limit)),
+    [agentRef, limit, registerList, sessions, source],
+  );
+  return null;
+}
+
+function DestinationSessionRow({
+  leading,
+  onSelect,
+  session,
+}: {
+  leading?: ReactNode;
+  onSelect: SelectDestination;
+  session: ConversationSummary;
+}) {
+  const { t } = useTranslation();
+  const { status } = useConversationPreview(session.ref);
+  return (
+    <Pressable
+      accessibilityLabel={session.title || t('session.list.untitled')}
+      accessibilityRole="button"
+      onPress={() => onSelect({ kind: 'session', session })}
+      testID={`share-session-${session.ref.sessionId}`}
+    >
+      {({ pressed }) => (
+        <SidebarRowContent
+          leading={leading}
+          className={cn('w-full', pressed && 'bg-sidebar-accent')}
+        >
+          <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+            {session.title || t('session.list.untitled')}
+          </Text>
+          <SidebarSessionStatus status={status} />
+        </SidebarRowContent>
+      )}
+    </Pressable>
   );
 }
 

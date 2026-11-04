@@ -117,6 +117,19 @@ it('keeps a share that delivery declines for the next ready pass', async () => {
   expect(accept).toHaveBeenCalledWith(share('declined'));
 });
 
+it('retains multiple declined shares in their original order', async () => {
+  const decline = jest.fn(() => false);
+  render({ deliver: decline });
+  await settle(0, share('first'));
+  act(() => pendingListeners.forEach((listener) => listener()));
+  await settle(1, share('second'));
+
+  render({ deliver: decline, isReady: false });
+  const accept = jest.fn((_action: SystemAction) => true);
+  render({ deliver: accept, isReady: true });
+  expect(accept.mock.calls.map(([action]) => action.text)).toEqual(['first', 'second']);
+});
+
 it('reports a failed import and claims again only when asked', async () => {
   const onFailure = jest.fn();
   render({ deliver: jest.fn(() => true), onFailure });
