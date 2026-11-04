@@ -9,6 +9,7 @@ const bootPreferenceKeys = {
   fontSizeStep: 'ui.font_size_step',
   language: 'app.language',
   themeMode: 'ui.theme_mode',
+  themePalette: 'ui.theme_palette',
 } as const;
 
 export async function initializeAppRuntime(services: BackendServices) {
@@ -19,7 +20,11 @@ export async function initializeAppRuntime(services: BackendServices) {
   await measureStartupStage('startup.cover.wait', waitForStartupCoverPresented);
   const finishTheme = startStartupStage('startup.theme');
   try {
-    applyThemePreferences(preferences.themeMode, preferences.fontSizeStep);
+    applyThemePreferences(
+      preferences.themeMode,
+      preferences.fontSizeStep,
+      preferences.themePalette,
+    );
     finishTheme();
   } catch (error) {
     finishTheme('failed');

@@ -42,6 +42,7 @@ module.exports = {
   // them out of the Haste map so package names remain unique during tests.
   modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
+    '^@cherrystudio/design-tokens/palettes$': '<rootDir>/packages/design-tokens/src/palettes.ts',
     // pnpm installs several peer-resolved copies of `expo`, and which copy a
     // package like `@expo/ui` links to shifts whenever the lockfile is
     // re-resolved. jest-expo neutralises Expo.fx's dev-server side effects with

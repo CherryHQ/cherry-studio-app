@@ -5,7 +5,9 @@ domains.
 
 ## Public Interface
 
-- `NavigationThemeProvider` supplies the app-wide navigation theme.
+- `NavigationThemeProvider` supplies the app-wide navigation theme and applies runtime palette
+  preferences after bootstrap. It observes the same preference stream for selection, external
+  updates, and optimistic-write rollback.
 - `ContextMenuLink` and `ContextMenuLinkItem` define the shared link-with-context-menu adapter.
 - `resolveHeaderContentInset` normalizes native and custom-overlay header insets for full-screen
   content.

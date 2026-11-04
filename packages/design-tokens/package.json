@@ -6,6 +6,7 @@
     "**/*.css"
   ],
   "exports": {
+    "./palettes": "./src/palettes.ts",
     "./tokens.css": "./src/styles/tokens.css",
     "./contract.css": "./src/styles/contract.css",
     "./native.css": "./src/styles/native.css"

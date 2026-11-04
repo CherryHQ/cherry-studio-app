@@ -11,6 +11,8 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order.
+  Single and multiple selected-model marks follow the theme palette; model artwork, unselected rows,
+  and other list selection controls retain their existing colors.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
   embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value

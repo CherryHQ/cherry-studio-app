@@ -1,16 +1,21 @@
+import {
+  createThemePaletteVariables,
+  type ThemeAppearance,
+  type ThemePaletteId,
+} from '@cherrystudio/design-tokens/palettes';
 import { createTypographyCSSVariables } from '@cherrystudio/ui/utils';
 import { Uniwind } from 'uniwind';
 
 import { type FontSizeStep, ThemeMode } from '@/shared/data/preference';
 
-// Action colors are authored in shadcn.css; Mobile currently exposes only mode and font-size settings.
-
-function updateBothThemes(variables: Record<string, string | number>) {
+function updateBothThemes(
+  variables: (appearance: ThemeAppearance) => Record<string, string | number>,
+) {
   const activeTheme = Uniwind.currentTheme === 'dark' ? 'dark' : 'light';
   const inactiveTheme = activeTheme === 'light' ? 'dark' : 'light';
 
-  Uniwind.updateCSSVariables(inactiveTheme, variables);
-  Uniwind.updateCSSVariables(activeTheme, variables);
+  Uniwind.updateCSSVariables(inactiveTheme, variables(inactiveTheme));
+  Uniwind.updateCSSVariables(activeTheme, variables(activeTheme));
 }
 
 export function applyThemeModePreference(themeMode: ThemeMode) {
@@ -28,10 +33,23 @@ export function applyThemeModePreference(themeMode: ThemeMode) {
 }
 
 export function applyFontSizeStepPreference(fontSizeStep: FontSizeStep) {
-  updateBothThemes(createTypographyCSSVariables(fontSizeStep));
+  const variables = createTypographyCSSVariables(fontSizeStep);
+  updateBothThemes(() => variables);
 }
 
-export function applyThemePreferences(themeMode: ThemeMode, fontSizeStep: FontSizeStep) {
+export function applyThemePalettePreference(themePalette: ThemePaletteId) {
+  updateBothThemes((appearance) => createThemePaletteVariables(themePalette, appearance));
+}
+
+export function applyThemePreferences(
+  themeMode: ThemeMode,
+  fontSizeStep: FontSizeStep,
+  themePalette: ThemePaletteId,
+) {
   applyThemeModePreference(themeMode);
-  updateBothThemes(createTypographyCSSVariables(fontSizeStep));
+  const typography = createTypographyCSSVariables(fontSizeStep);
+  updateBothThemes((appearance) => ({
+    ...createThemePaletteVariables(themePalette, appearance),
+    ...typography,
+  }));
 }
