@@ -2,15 +2,15 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PreferenceDefaults } from '@/shared/data/preference';
 
-import { AutoCollapseReasoningSetting } from '../AutoCollapseReasoningSetting';
+import { AutoCollapseProcessSetting } from '../AutoCollapseProcessSetting';
 
-let mockIsAutoCollapseEnabled = false;
+let mockIsAutoCollapseEnabled = true;
 const mockSetAutoCollapseEnabled = jest.fn<Promise<void>, [boolean]>();
 const mockToastShow = jest.fn();
 
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: (key: string) => {
-    if (key !== 'chat.reasoning.auto_collapse') throw new Error(`Unexpected preference: ${key}`);
+    if (key !== 'chat.process.auto_collapse') throw new Error(`Unexpected preference: ${key}`);
     return [mockIsAutoCollapseEnabled, mockSetAutoCollapseEnabled];
   },
 }));
@@ -29,18 +29,18 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-describe('AutoCollapseReasoningSetting', () => {
+describe('AutoCollapseProcessSetting', () => {
   let renderer: ReactTestRenderer | undefined;
   const switchItem = () => renderer!.root.findByType('SwitchItem' as never);
   const mount = () => {
     act(() => {
-      renderer = create(<AutoCollapseReasoningSetting />);
+      renderer = create(<AutoCollapseProcessSetting />);
     });
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockIsAutoCollapseEnabled = PreferenceDefaults['chat.reasoning.auto_collapse'];
+    mockIsAutoCollapseEnabled = PreferenceDefaults['chat.process.auto_collapse'];
     mockSetAutoCollapseEnabled.mockReset().mockResolvedValue(undefined);
   });
 
@@ -49,19 +49,19 @@ describe('AutoCollapseReasoningSetting', () => {
     renderer = undefined;
   });
 
-  test('starts off by default and saves both switch values', async () => {
+  test('starts enabled by default and saves both switch values', async () => {
     mount();
-    expect(switchItem().props.testID).toBe('settings-auto-collapse-reasoning');
-    expect(switchItem().props.value).toBe(false);
-
-    await act(async () => switchItem().props.onValueChange(true));
-    expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(true);
-    mockIsAutoCollapseEnabled = true;
-    act(() => renderer!.update(<AutoCollapseReasoningSetting />));
+    expect(switchItem().props.testID).toBe('settings-auto-collapse-process');
     expect(switchItem().props.value).toBe(true);
 
     await act(async () => switchItem().props.onValueChange(false));
     expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(false);
+    mockIsAutoCollapseEnabled = false;
+    act(() => renderer!.update(<AutoCollapseProcessSetting />));
+    expect(switchItem().props.value).toBe(false);
+
+    await act(async () => switchItem().props.onValueChange(true));
+    expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(true);
     expect(mockToastShow).not.toHaveBeenCalled();
   });
 
@@ -73,7 +73,7 @@ describe('AutoCollapseReasoningSetting', () => {
       }),
     );
     mount();
-    act(() => switchItem().props.onValueChange(true));
+    act(() => switchItem().props.onValueChange(false));
     expect(switchItem().props.disabled).toBe(true);
 
     await act(async () => finishSave());
@@ -90,7 +90,7 @@ describe('AutoCollapseReasoningSetting', () => {
     expect(switchItem().props.value).toBe(true);
     expect(switchItem().props.disabled).toBe(false);
     expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.autoCollapseReasoning.saveFailed',
+      label: 'settings.autoCollapseProcess.saveFailed',
       variant: 'danger',
     });
   });

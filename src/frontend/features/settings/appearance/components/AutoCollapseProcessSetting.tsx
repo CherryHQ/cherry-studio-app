@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 
 import { usePreference } from '@/frontend/data/hooks';
 
-export function AutoCollapseReasoningSetting() {
+export function AutoCollapseProcessSetting() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoCollapseEnabled, setIsAutoCollapseEnabled] = usePreference(
-    'chat.reasoning.auto_collapse',
+    'chat.process.auto_collapse',
   );
 
   const changeAutoCollapse = async (value: boolean) => {
@@ -17,7 +17,7 @@ export function AutoCollapseReasoningSetting() {
     try {
       await setIsAutoCollapseEnabled(value);
     } catch {
-      toast.show({ label: t('settings.autoCollapseReasoning.saveFailed'), variant: 'danger' });
+      toast.show({ label: t('settings.autoCollapseProcess.saveFailed'), variant: 'danger' });
     } finally {
       setIsSaving(false);
     }
@@ -25,13 +25,13 @@ export function AutoCollapseReasoningSetting() {
 
   return (
     <Section.SwitchItem
-      description={t('settings.autoCollapseReasoning.description')}
+      description={t('settings.autoCollapseProcess.description')}
       disabled={isSaving}
-      label={t('settings.autoCollapseReasoning.title')}
+      label={t('settings.autoCollapseProcess.title')}
       onValueChange={(value) => {
         void changeAutoCollapse(value);
       }}
-      testID="settings-auto-collapse-reasoning"
+      testID="settings-auto-collapse-process"
       value={isAutoCollapseEnabled}
     />
   );

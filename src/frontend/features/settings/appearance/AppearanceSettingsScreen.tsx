@@ -11,7 +11,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
-import { AutoCollapseReasoningSetting } from './components/AutoCollapseReasoningSetting';
+import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSetting';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
@@ -79,7 +79,7 @@ export default function AppearanceSettingsScreen() {
             value={isWatermarkEnabled}
           />
           <DocumentParserSetting />
-          <AutoCollapseReasoningSetting />
+          <AutoCollapseProcessSetting />
         </Section>
       </SettingsScrollPage>
       <OptionPickerBottomSheet

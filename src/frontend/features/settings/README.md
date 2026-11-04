@@ -23,7 +23,7 @@ This page tree owns the settings home and every page reached beneath `/settings`
 - `about/`, `appearance/`, `fontSize/`, `notifications/`, `permissions/`, and `profile/` each own one
   direct child page.
 - `appearance/` is presented as General settings and owns theme, app language, font size, Share
-  watermark, document parser, and reasoning auto-collapse settings. It retains the existing
+  watermark, document parser, and process auto-collapse settings. It retains the existing
   `/settings/appearance` route.
 - `model/` and `provider/` remain under `settings/` because they implement `/settings/*` page flows.
   Their own nested routes continue as child directories.

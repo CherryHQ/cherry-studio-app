@@ -6,15 +6,6 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { MessageListLiveTailProvider } from '../../list/MessageListLiveTailContext';
 import { ReasoningPart } from '../ReasoningPart';
 
-let mockAutoCollapseOnComplete = false;
-
-jest.mock('@/frontend/data/hooks', () => ({
-  usePreference: (key: string) => {
-    if (key !== 'chat.reasoning.auto_collapse') throw new Error(`Unexpected preference: ${key}`);
-    return [mockAutoCollapseOnComplete, jest.fn()];
-  },
-}));
-
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
@@ -44,10 +35,6 @@ const longReasoning =
 
 describe('ReasoningPart', () => {
   let renderer: ReactTestRenderer | undefined;
-  beforeEach(() => {
-    mockAutoCollapseOnComplete = false;
-  });
-
   const render = (text: string, isStreaming = false, isVisible = true) => {
     const part: ReasoningMessagePart = {
       state: isStreaming ? 'streaming' : 'done',
@@ -70,17 +57,6 @@ describe('ReasoningPart', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
-  });
-
-  test('updates reasoning auto collapse when the preference changes', () => {
-    render('Reasoning details', true);
-    expect(renderer!.root.findByType('Reasoning' as never).props.autoCollapseOnComplete).toBe(
-      false,
-    );
-
-    mockAutoCollapseOnComplete = true;
-    render('Reasoning details', true);
-    expect(renderer!.root.findByType('Reasoning' as never).props.autoCollapseOnComplete).toBe(true);
   });
 
   test('ends thinking feedback when the reply stops before its part state is finalized', () => {

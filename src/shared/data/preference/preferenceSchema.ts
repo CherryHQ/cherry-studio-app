@@ -56,7 +56,7 @@ export interface PreferenceSchema {
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
   'chat.completion_notifications.enabled': boolean;
-  'chat.reasoning.auto_collapse': boolean;
+  'chat.process.auto_collapse': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
@@ -115,7 +115,7 @@ export const PreferenceDefaults = {
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
-  'chat.reasoning.auto_collapse': false,
+  'chat.process.auto_collapse': true,
   'agent.default_model_id': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'cutoff',
