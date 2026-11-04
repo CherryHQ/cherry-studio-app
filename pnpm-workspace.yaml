@@ -81,6 +81,7 @@ allowBuilds:
   dtrace-provider: false
 
 patchedDependencies:
+  '@shopify/react-native-skia@2.14.0': patches/@shopify__react-native-skia@2.14.0.patch
   '@noble/hashes@1.8.0': patches/@noble__hashes@1.8.0.patch
   multiformats@14.0.5: patches/multiformats@14.0.5.patch
   '@anthropic-ai/vertex-sdk@0.22.0': patches/@anthropic-ai__vertex-sdk@0.22.0.patch
