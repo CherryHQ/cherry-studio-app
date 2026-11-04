@@ -859,6 +859,7 @@ export class ModelService {
   private async getUserDefaultModelIds(): Promise<Set<string>> {
     const values = await Promise.all([
       this.preferenceService.get('agent.default_model_id'),
+      this.preferenceService.get('agent.session_naming.model_id'),
       this.preferenceService.get('feature.paintings.default_model_id'),
       this.preferenceService.get('feature.quick_assistant.model_id'),
       this.preferenceService.get('feature.translate.model_id'),
