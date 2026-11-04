@@ -68,6 +68,10 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 
 - `/api/v1/account` is the admission snapshot; `/api/v1/account/plans` supplies display details;
   `/v1/models` supplies the catalog and features.
+- The subscription page shows the first active paid entitlement, or an available paid plan from
+  `available_plans` when there is no current subscription. It displays each quota window's remaining
+  percentage and optional recovery time, plus a webpage action for subscription management.
+  Historical/free entitlements, model lists and raw quota-unit details are not displayed here.
 - An active, currently effective entitlement and an available model feature are required. Every
   window of a quota pool must have credit; any independent pool can admit the model. Reserved
   units are already reflected in the server's remaining units. The gateway owns final admission,

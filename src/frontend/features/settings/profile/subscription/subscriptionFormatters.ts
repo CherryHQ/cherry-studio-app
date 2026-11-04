@@ -1,13 +1,6 @@
 import type { TFunction } from 'i18next';
 
-import type { CloudPlans, CloudQuotaPool, CloudQuotaWindow } from '@/shared/contracts/cloud';
-
-export const SUBSCRIPTION_STATE_KEYS = {
-  active: 'cloud.active',
-  upcoming: 'cloud.upcoming',
-  expired: 'cloud.expired',
-  disabled: 'cloud.disabled',
-} as const;
+import type { CloudPlans, CloudQuotaWindow } from '@/shared/contracts/cloud';
 
 const INTERVAL_KEYS = {
   day: 'cloud.perDay',
@@ -16,16 +9,13 @@ const INTERVAL_KEYS = {
   year: 'cloud.perYear',
 } as const;
 
-export function formatSubscriptionDate(
-  value: string | undefined,
-  language: string,
-  precise = false,
-) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return precise
-    ? date.toLocaleString(language)
-    : date.toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric' });
+export function formatSubscriptionDate(value: string, language: string) {
+  return new Date(value).toLocaleString(language, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function formatSubscriptionPrice(
@@ -34,7 +24,7 @@ export function formatSubscriptionPrice(
   t: TFunction,
 ) {
   const price = plan.subscription_price;
-  if (!price) return plan.is_free ? t('cloud.free') : '—';
+  if (!price) return undefined;
   const amount = new Intl.NumberFormat(language, {
     style: 'currency',
     currency: price.currency,
@@ -45,24 +35,10 @@ export function formatSubscriptionPrice(
   return interval ? t('cloud.pricePerInterval', { amount, interval }) : amount;
 }
 
-export function formatQuotaQuantity(
-  units: number,
-  pool: CloudQuotaPool,
-  language: string,
-  t: TFunction,
-) {
-  return pool.measurement_kind === 'money' && pool.currency
-    ? new Intl.NumberFormat(language, {
-        style: 'currency',
-        currency: pool.currency,
-        maximumFractionDigits: 6,
-      }).format(units / 1_000_000)
-    : t('cloud.requests', { count: units, value: new Intl.NumberFormat(language).format(units) });
-}
-
 export function formatQuotaWindow(window: CloudQuotaWindow, language: string, t: TFunction) {
   if (window.window_type === 'subscription_month') return t('cloud.subscriptionMonth');
   if (window.window_type === 'calendar_day') return t('cloud.calendarDay');
+  if (window.duration_seconds === 7 * 86400) return t('cloud.weeklyQuota');
   if (window.duration_seconds % 86400 === 0) {
     const days = window.duration_seconds / 86400;
     return t('cloud.rollingDays', {

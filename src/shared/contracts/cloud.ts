@@ -43,6 +43,7 @@ const PlanSchema = z.object({
 });
 export const CloudPlansSchema = z.object({
   measured_at: z.iso.datetime(),
+  available_plans: z.array(PlanSchema),
   entitlements: z.array(
     z.object({
       id: z.string().min(1),

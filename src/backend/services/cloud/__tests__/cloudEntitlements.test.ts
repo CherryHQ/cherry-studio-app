@@ -67,3 +67,23 @@ test('the wire contract retains reserved money units and subscription-month date
   delete state.account!.quota_pools[0].currency;
   expect(CloudAccountSchema.safeParse(state.account).success).toBe(false);
 });
+
+test('the plans contract keeps available paid plans when there is no current subscription', () => {
+  const plan = {
+    id: 'available-paid-plan',
+    display_name: 'Paid plan',
+    is_free: false,
+    subscription_price: {
+      product_name: 'Monthly plan',
+      currency: 'USD',
+      interval: 'month',
+      unit_amount: 1000,
+    },
+  };
+  const plans = CloudPlansSchema.parse({
+    measured_at: '2026-10-31T00:00:00Z',
+    available_plans: [plan],
+    entitlements: [],
+  });
+  expect(plans.available_plans).toEqual([plan]);
+});
