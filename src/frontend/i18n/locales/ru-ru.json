@@ -1894,6 +1894,8 @@
   "settings.provider.account.authorizationCode": "Код авторизации или URL перенаправления",
   "settings.provider.account.authorizationCodeHint": "После авторизации вставьте сюда конечный URL перенаправления или код.",
   "settings.provider.account.deviceCode": "Код подтверждения",
+  "settings.provider.account.deviceCodeCopied": "Код подтверждения скопирован",
+  "settings.provider.account.deviceCodeCopyFailed": "Не удалось скопировать код подтверждения. Повторите попытку.",
   "settings.provider.account.deviceCodeHint": "Скопируйте код, откройте браузер и вернитесь сюда после авторизации.",
   "settings.provider.account.enterpriseDomain": "Домен GitHub Enterprise",
   "settings.provider.account.enterpriseDomainHint": "например, company.ghe.com",

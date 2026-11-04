@@ -1877,6 +1877,8 @@
   "settings.provider.account.authorizationCode": "Code d’autorisation ou URL de redirection",
   "settings.provider.account.authorizationCodeHint": "Après l’autorisation, collez ici l’URL de redirection finale ou le code.",
   "settings.provider.account.deviceCode": "Code de vérification",
+  "settings.provider.account.deviceCodeCopied": "Code de vérification copié",
+  "settings.provider.account.deviceCodeCopyFailed": "Impossible de copier le code de vérification. Veuillez réessayer.",
   "settings.provider.account.deviceCodeHint": "Copiez ce code, ouvrez le navigateur et revenez ici après l’autorisation.",
   "settings.provider.account.enterpriseDomain": "Domaine GitHub Enterprise",
   "settings.provider.account.enterpriseDomainHint": "ex. company.ghe.com",

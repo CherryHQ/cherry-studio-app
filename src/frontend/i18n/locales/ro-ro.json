@@ -1877,6 +1877,8 @@
   "settings.provider.account.authorizationCode": "Cod de autorizare sau URL de redirecționare",
   "settings.provider.account.authorizationCodeHint": "După autorizare, lipește aici URL-ul final de redirecționare sau codul.",
   "settings.provider.account.deviceCode": "Cod de verificare",
+  "settings.provider.account.deviceCodeCopied": "Cod de verificare copiat",
+  "settings.provider.account.deviceCodeCopyFailed": "Codul de verificare nu a putut fi copiat. Încearcă din nou.",
   "settings.provider.account.deviceCodeHint": "Copiază acest cod, deschide browserul și revino aici după autorizare.",
   "settings.provider.account.enterpriseDomain": "Domeniu GitHub Enterprise",
   "settings.provider.account.enterpriseDomainHint": "de ex. company.ghe.com",
