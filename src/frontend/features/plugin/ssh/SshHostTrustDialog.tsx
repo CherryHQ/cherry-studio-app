@@ -1,9 +1,7 @@
-import { Button, Dialog, useAlert } from '@cherrystudio/ui/components';
+import { Button, Dialog } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { useBackendModule } from '@/frontend/data';
-import { useSshAction } from '@/frontend/hooks/ssh';
 import type { SshHostProbe } from '@/shared/contracts/ssh';
 import type { SshProfile } from '@/shared/data/types/ssh';
 
@@ -11,29 +9,21 @@ export function SshHostTrustDialog({
   profile,
   probe,
   onClose,
+  onConfirm,
 }: {
   profile: SshProfile;
   probe: SshHostProbe;
   onClose: () => void;
+  onConfirm: () => void;
 }) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
-  const ssh = useBackendModule('ssh');
-  const action = useSshAction();
   const changed = Boolean(profile.fingerprint && profile.fingerprint !== probe.fingerprint);
-  function trust() {
-    void action
-      .run(() => ssh.trust(probe.token))
-      .then((trusted) => {
-        if (trusted) onClose();
-      });
-  }
   return (
     <Dialog
       open
       title={t(changed ? 'ssh.hostKeyChanged' : 'ssh.trustTitle')}
       onOpenChange={(open) => {
-        if (!open && !action.busy) onClose();
+        if (!open) onClose();
       }}
     >
       <ScrollView className="max-h-96" contentContainerClassName="gap-4">
@@ -65,25 +55,10 @@ export function SshHostTrustDialog({
         ) : null}
       </ScrollView>
       <View className="gap-2 pt-4">
-        <Button
-          variant={changed ? 'destructive' : 'default'}
-          disabled={action.busy}
-          loading={action.busy}
-          onPress={() => {
-            if (changed) {
-              alert.confirm({
-                title: t('ssh.hostKeyChanged'),
-                description: t('ssh.hostKey.confirm'),
-                confirmLabel: t('ssh.trust'),
-                role: 'destructive',
-                onConfirm: trust,
-              });
-            } else trust();
-          }}
-        >
+        <Button variant={changed ? 'destructive' : 'default'} onPress={onConfirm}>
           {t(changed ? 'ssh.hostKey.reviewed' : 'ssh.trust')}
         </Button>
-        <Button variant="secondary" disabled={action.busy} onPress={onClose}>
+        <Button variant="secondary" onPress={onClose}>
           {t('common.cancel')}
         </Button>
       </View>

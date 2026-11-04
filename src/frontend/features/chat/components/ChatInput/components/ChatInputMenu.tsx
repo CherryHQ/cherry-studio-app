@@ -1,5 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
@@ -79,7 +79,7 @@ export function ChatInputMenu({
         ) : null}
         {onPickSsh ? (
           <Composer.Menu.Item
-            icon={<NetworkIcon className="size-5 text-foreground" />}
+            icon={<TerminalIcon className="size-5 text-foreground" />}
             label={t('ssh.title')}
             onPress={onPickSsh}
             testID="chat-composer-ssh"

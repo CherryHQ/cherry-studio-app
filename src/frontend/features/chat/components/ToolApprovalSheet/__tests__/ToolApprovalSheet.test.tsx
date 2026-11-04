@@ -40,7 +40,9 @@ jest.mock('@cherrystudio/ui/components', () => {
       </MockView>
     );
   }
-  MockSection.SwitchItem = (props: object) => <MockView {...props} />;
+  MockSection.SwitchItem = function MockSwitchItem(props: object) {
+    return <MockView {...props} />;
+  };
 
   function MockBottomSheet({
     children,

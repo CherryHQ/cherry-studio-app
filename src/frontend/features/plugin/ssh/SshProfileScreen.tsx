@@ -1,5 +1,5 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import {
   Button,
   ContentState,
@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { useBackendModule } from '@/frontend/data';
 import { useSshAction, useSshProfiles } from '@/frontend/hooks/ssh';
 import type { SshHostProbe } from '@/shared/contracts/ssh';
@@ -225,7 +226,7 @@ function SshProfileEditor({ profile }: { profile?: SshProfile }) {
         }
       >
         <View className="flex-row items-center gap-4">
-          <NetworkIcon className="size-10 text-foreground" />
+          <PluginIcon glyph={TerminalIcon} size="large" />
           <View className="min-w-0 flex-1 gap-1">
             <Text
               accessibilityRole="header"
@@ -393,6 +394,19 @@ function SshProfileEditor({ profile }: { profile?: SshProfile }) {
             profile={profile}
             probe={hostProbe}
             onClose={() => setHostProbe(null)}
+            onConfirm={() => {
+              const token = hostProbe.token;
+              setHostProbe(null);
+              alert.confirm({
+                title: t('ssh.hostKeyChanged'),
+                description: t('ssh.hostKey.confirm'),
+                confirmLabel: t('ssh.trust'),
+                role: 'destructive',
+                onConfirm: () => {
+                  void action.run(() => ssh.trust(token));
+                },
+              });
+            }}
           />
         ) : null}
         {pickAgent && profile ? (

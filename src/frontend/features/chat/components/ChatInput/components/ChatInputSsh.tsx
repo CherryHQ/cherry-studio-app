@@ -1,5 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import { Button, Composer } from '@cherrystudio/ui/components';
 import { useFocusEffect } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
 import { useComposerActions, useComposerMeta } from '@/frontend/components/Composer';
+import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { useBackendModule } from '@/frontend/data';
 import { useSshAction, useSshProfiles, useSshTarget } from '@/frontend/hooks/ssh';
 import type { SshProfile } from '@/shared/data/types/ssh';
@@ -140,7 +141,7 @@ export function ChatInputSshPopover({
             onPress={() => void select(profile)}
             testID={`chat-ssh-${profile.id}`}
           >
-            <NetworkIcon className="size-5 text-foreground" />
+            <PluginIcon glyph={TerminalIcon} size="small" />
             <View className="min-w-0 flex-1">
               <Text className="text-base text-foreground" numberOfLines={2}>
                 {profile.name}

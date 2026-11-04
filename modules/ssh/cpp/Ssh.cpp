@@ -308,7 +308,8 @@ void keyboardInteractive(const char *name, int nameLength, const char *instructi
     for (int i = 0; i < count; ++i) {
       if (prompts[i].length > 1024) throw Failure("authentication-required");
       if (i) message += ',';
-      message += "{\"text\":" + encoded(std::string(prompts[i].text, prompts[i].length)) +
+      const auto *text = reinterpret_cast<const char *>(prompts[i].text);
+      message += "{\"text\":" + encoded(std::string(text, prompts[i].length)) +
         ",\"echo\":" + (prompts[i].echo ? "true" : "false") + "}";
     }
     const auto remaining = std::chrono::milliseconds(120000) - auth.waited;

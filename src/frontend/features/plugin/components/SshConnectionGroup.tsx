@@ -1,9 +1,10 @@
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import { ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
+import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { useBackendModule } from '@/frontend/data';
 import { useSshProfiles } from '@/frontend/hooks/ssh';
 
@@ -33,7 +34,7 @@ export function SshConnectionGroup() {
           key={profile.id}
           title={profile.name}
           description={`${profile.username}@${profile.host}:${profile.port} · ${profile.remoteDirectory}`}
-          icon={<NetworkIcon className="size-6 text-foreground" />}
+          icon={<PluginIcon glyph={TerminalIcon} />}
           status={
             !profile.isEnabled
               ? { label: t('ssh.disabled'), tone: 'default' }
@@ -52,7 +53,7 @@ export function SshConnectionGroup() {
       ))}
       <PluginRow
         title={t('ssh.add')}
-        icon={<NetworkIcon className="size-6 text-foreground" />}
+        icon={<PluginIcon glyph={TerminalIcon} />}
         addAction={{ accessibilityLabel: t('ssh.add'), onPress: add }}
         onPress={add}
         testID="plugins-ssh-create"
