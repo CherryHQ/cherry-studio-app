@@ -1,15 +1,18 @@
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import { Spinner, Surface } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useUniwind } from 'uniwind';
 
 import { useAccount } from '@/frontend/appShell/account';
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
 import { useCloud } from '@/frontend/hooks/useCloud';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
@@ -24,6 +27,10 @@ export function SidebarFooter() {
   const { t } = useTranslation();
   const [userName] = usePreference('app.user.name');
   const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
+  const { theme } = useUniwind();
+  const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
+  const fadeHeight = appSidebar.headerGapY * 2;
+  const backgroundHeight = bottomPadding + appSidebar.dockHeight + fadeHeight;
   const { openSettings } = useSidebarActions('SidebarFooter');
   const displayName = userName.trim();
   const isSettingsOpen = useSidebarDestination() === 'settings';
@@ -47,12 +54,17 @@ export function SidebarFooter() {
       pointerEvents="box-none"
       style={{ paddingBottom: bottomPadding, paddingEnd: insetEnd, paddingStart: insetStart }}
     >
-      {/* Rows scrolled under the dock blur toward the bottom edge, as they do under the title row,
-          instead of showing in full below the buttons on a short window. */}
-      <View className="absolute right-0 bottom-0 left-0" pointerEvents="none">
-        <SidebarFade
-          edge="bottom"
-          size={bottomPadding + appSidebar.dockHeight + appSidebar.headerGapY * 2}
+      {/* Tint the profile row through the bottom safe area, with a soft leading edge above it. */}
+      <View
+        className="absolute right-0 bottom-0 left-0"
+        pointerEvents="none"
+        style={{ height: backgroundHeight }}
+      >
+        <SidebarFade edge="bottom" size={backgroundHeight} />
+        <LinearGradient
+          colors={['transparent', surfaceColor, surfaceColor]}
+          locations={[0, fadeHeight / backgroundHeight, 1]}
+          style={[StyleSheet.absoluteFill, { opacity: 0.9 }]}
         />
       </View>
       <View style={{ height: appSidebar.dockHeight }}>

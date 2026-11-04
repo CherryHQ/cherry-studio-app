@@ -35,8 +35,10 @@ selected while the pane is open beside the chat. In compact windows the `/librar
 current local chat, so its previews can add files to that chat.
 
 The floating dock insets from the sidebar's leading safe area only: the column sits at the window's
-leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. Rows
-scrolled under the dock blur toward the bottom edge, as they do under the title row.
+leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. A
+theme-colored translucent layer covers the full width behind the profile row through the bottom
+safe area, with a soft fade above the row. It keeps scrolling rows subdued on Android and layers
+over the existing progressive blur on iOS.
 `useSidebarHeaderTop` places the title row below the top safe area, except where the chat header
 fills that inset (an upright iPhone Duo inner display) or keeps its own margin below a zero inset
 (the same display on its side); there the row centers on the header's controls.
