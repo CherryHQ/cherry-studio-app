@@ -11,15 +11,29 @@ import {
 import { cn } from '@cherrystudio/ui/utils';
 import { loggerService } from '@logger';
 import { useIsFocused, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import {
+  KeyboardAvoidingView,
+  KeyboardAwareScrollView,
+  type KeyboardAwareScrollViewRef,
+} from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { RouteHeader } from '@/frontend/appShell/header/RouteHeader';
-import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
+import { useFocusedBackPress, useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/Avatar';
 import {
@@ -90,7 +104,16 @@ export function AgentEditor({
   ...presentation
 }: AgentEditorProps) {
   const { t } = useTranslation();
-
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
+  const headerHeight = useHeaderHeight();
+  const handleInstructionsBack = useCallback(() => {
+    if (Keyboard.isVisible()) Keyboard.dismiss();
+    else setIsInstructionsExpanded(false);
+  }, []);
+  useFocusedBackPress(
+    handleInstructionsBack,
+    isInstructionsExpanded && presentation.presentation !== 'sheet',
+  );
   const focused = useIsFocused();
   const closeOnBlur = useEffectEvent(() => {
     if (presentation.presentation === 'sheet') presentation.onClose();
@@ -158,9 +181,12 @@ export function AgentEditor({
           agent={agent}
           agentId={agentId}
           hasServersError={Boolean(serversError)}
+          headerHeight={headerHeight}
           isFocused={focused}
+          isInstructionsExpanded={isInstructionsExpanded}
           isServersLoading={areServersLoading}
           originalToolBindings={bindings}
+          onInstructionsExpandedChange={setIsInstructionsExpanded}
           servers={servers}
           shouldStartChat={shouldStartChat}
           presentation={presentation}
@@ -174,10 +200,18 @@ export function AgentEditor({
   return presentation.presentation === 'sheet' ? (
     <BottomSheet
       avoidKeyboard
+      backAction={
+        isInstructionsExpanded
+          ? {
+              accessibilityLabel: t('chat.input.action.collapseEditor'),
+              onPress: handleInstructionsBack,
+            }
+          : undefined
+      }
       onClose={presentation.onClose}
       open
       presentation="overlay"
-      size="large"
+      size={isInstructionsExpanded ? 'full' : 'large'}
       title={agentId ? t('agent.edit.title') : t('agent.create.title')}
     >
       {content}
@@ -189,11 +223,13 @@ export function AgentEditor({
 
 function AgentEditorFrame({
   children,
+  onBack,
   presentation,
   rightActions,
   title,
 }: {
   children: ReactNode;
+  onBack?: () => void;
   presentation: AgentEditorPresentation;
   rightActions?: readonly HeaderToolbarAction[];
   title: string;
@@ -202,7 +238,7 @@ function AgentEditorFrame({
     children
   ) : (
     <>
-      <RouteHeader rightActions={rightActions} title={title} />
+      <RouteHeader onBack={onBack} rightActions={rightActions} title={title} />
       {children}
     </>
   );
@@ -212,9 +248,12 @@ function AgentEditForm({
   agent,
   agentId,
   hasServersError,
+  headerHeight,
   isFocused,
+  isInstructionsExpanded,
   isServersLoading,
   originalToolBindings,
+  onInstructionsExpandedChange,
   servers,
   shouldStartChat,
   skills,
@@ -224,9 +263,12 @@ function AgentEditForm({
   agent: Agent | undefined;
   agentId?: string;
   hasServersError: boolean;
+  headerHeight: number;
   isFocused: boolean;
+  isInstructionsExpanded: boolean;
   isServersLoading: boolean;
   originalToolBindings: readonly AgentToolBinding[];
+  onInstructionsExpandedChange: (expanded: boolean) => void;
   servers: readonly McpServer[];
   shouldStartChat: boolean;
   skills: readonly SkillListItem[];
@@ -272,6 +314,14 @@ function AgentEditForm({
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isSettingAvatar;
   const isNameInvalid = isEditing && !form.name.trim();
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
+  const formScrollOffset = useRef(0);
+  const pendingScrollOffset = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const offset = isInstructionsExpanded ? 0 : formScrollOffset.current;
+    pendingScrollOffset.current = offset;
+    scrollRef.current?.scrollTo({ y: offset, animated: false });
+  }, [isInstructionsExpanded]);
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -461,8 +511,9 @@ function AgentEditForm({
           agentFormContentPadding +
           (presentation.presentation === 'sheet' ? 0 : safeAreaInsets.bottom),
       },
+      isInstructionsExpanded ? styles.expandedScrollContent : undefined,
     ],
-    [presentation.presentation, safeAreaInsets.bottom],
+    [isInstructionsExpanded, presentation.presentation, safeAreaInsets.bottom],
   );
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
@@ -503,108 +554,195 @@ function AgentEditForm({
 
   const content = (
     <>
-      <KeyboardAwareScrollView
-        alwaysBounceVertical={false}
-        bottomOffset={keyboardBottomOffset}
-        contentContainerStyle={scrollContentStyle}
-        contentInsetAdjustmentBehavior="never"
-        disableScrollOnKeyboardHide
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior="padding"
+        enabled={isInstructionsExpanded && presentation.presentation !== 'sheet'}
+        keyboardVerticalOffset={headerHeight}
         style={styles.scroll}
       >
-        {/* The hero is the one primary object: who this Agent is. Create and edit
-            share it, so a new Agent is filled in exactly where it will later be read. */}
-        <View className="items-center gap-4 pb-2">
-          <PolicyEditable
-            field="avatar"
-            fallback={
-              <AgentAvatar
-                avatar={agent?.avatar}
-                name={form.name}
-                size={agentFormAvatarSize}
-                uri={form.avatarUri}
-              />
+        <KeyboardAwareScrollView
+          alwaysBounceVertical={false}
+          bottomOffset={keyboardBottomOffset}
+          contentContainerStyle={scrollContentStyle}
+          contentInsetAdjustmentBehavior="never"
+          disableScrollOnKeyboardHide
+          enabled={!isInstructionsExpanded}
+          keyboardDismissMode={isInstructionsExpanded ? 'none' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => {
+            if (pendingScrollOffset.current !== null) {
+              scrollRef.current?.scrollTo({ y: pendingScrollOffset.current, animated: false });
+              pendingScrollOffset.current = null;
             }
-          >
-            <AvatarImagePicker
-              accessibilityLabel={t('agent.form.setAvatar')}
-              onBeforeOpen={Keyboard.dismiss}
-              onError={reportAvatarPickError}
-              onSelect={handleAvatarSelect}
-              size={agentFormAvatarSize}
-            >
-              <View>
-                <AgentAvatar
-                  accessibilityLabel={t('agent.form.setAvatar')}
-                  avatar={agent?.avatar}
-                  name={form.name}
-                  size={agentFormAvatarSize}
-                  uri={form.avatarUri}
-                />
-                <View className="absolute right-0 bottom-0 size-7 items-center justify-center rounded-full border border-border bg-card">
-                  <CameraIcon className="size-4 text-muted-foreground" />
-                </View>
-              </View>
-            </AvatarImagePicker>
-          </PolicyEditable>
-          <View className="items-center gap-1 self-stretch">
-            <PolicyEditable
-              field="name"
-              fallback={
-                <View className="max-w-full flex-row items-center gap-1.5 px-2">
-                  <Text
-                    accessibilityRole="header"
-                    className="shrink text-center font-semibold text-2xl text-foreground"
-                  >
-                    {form.name}
-                  </Text>
-                  <ManagedMark />
-                </View>
-              }
-            >
-              {/* The underline marks the name as a field, as on a provider. */}
-              <TextInput
-                accessibilityLabel={t('agent.form.name')}
-                autoCorrect={false}
-                className={cn(
-                  'min-w-40 max-w-full border-b px-2 pb-1.5 text-center font-semibold text-2xl text-foreground',
-                  isNameInvalid ? 'border-error' : 'border-border-strong',
-                )}
-                cursorColor={mutedForegroundColor}
-                onBlur={flush}
-                onChangeText={(value) => updateForm('name', value)}
-                placeholder={t('agent.form.namePlaceholder')}
-                placeholderTextColor={mutedForegroundColor}
-                returnKeyType="done"
-                selectionColor={mutedForegroundColor}
-                value={form.name}
-              />
-              {isNameInvalid ? (
-                <Text accessibilityLiveRegion="polite" className="text-error text-sm">
-                  {t('agent.form.nameRequired')}
-                </Text>
-              ) : null}
-            </PolicyEditable>
-          </View>
-        </View>
-        {/* What the organization decides sits together in one locked group; the rest stays
-            editable below it. */}
-        <PolicyManaged>
-          <PolicyGroup>
-            <Section>
-              <Section.Item
-                label={t('agent.form.instructions')}
-                locked
-                trailing={
-                  <Text className="text-base text-muted-foreground">
-                    {t('enterprise.managed.hidden')}
-                  </Text>
+          }}
+          onScroll={(event) => {
+            if (!isInstructionsExpanded) {
+              formScrollOffset.current = event.nativeEvent.contentOffset.y;
+            }
+          }}
+          ref={scrollRef}
+          scrollEnabled={!isInstructionsExpanded}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          style={styles.scroll}
+        >
+          <View className="gap-6" style={isInstructionsExpanded ? styles.hidden : undefined}>
+            {/* The hero is the one primary object: who this Agent is. Create and edit
+            share it, so a new Agent is filled in exactly where it will later be read. */}
+            <View className="items-center gap-4 pb-2">
+              <PolicyEditable
+                field="avatar"
+                fallback={
+                  <AgentAvatar
+                    avatar={agent?.avatar}
+                    name={form.name}
+                    size={agentFormAvatarSize}
+                    uri={form.avatarUri}
+                  />
                 }
-              />
-              {isModelLocked ? modelRow : null}
-            </Section>
+              >
+                <AvatarImagePicker
+                  accessibilityLabel={t('agent.form.setAvatar')}
+                  onBeforeOpen={Keyboard.dismiss}
+                  onError={reportAvatarPickError}
+                  onSelect={handleAvatarSelect}
+                  size={agentFormAvatarSize}
+                >
+                  <View>
+                    <AgentAvatar
+                      accessibilityLabel={t('agent.form.setAvatar')}
+                      avatar={agent?.avatar}
+                      name={form.name}
+                      size={agentFormAvatarSize}
+                      uri={form.avatarUri}
+                    />
+                    <View className="absolute right-0 bottom-0 size-7 items-center justify-center rounded-full border border-border bg-card">
+                      <CameraIcon className="size-4 text-muted-foreground" />
+                    </View>
+                  </View>
+                </AvatarImagePicker>
+              </PolicyEditable>
+              <View className="items-center gap-1 self-stretch">
+                <PolicyEditable
+                  field="name"
+                  fallback={
+                    <View className="max-w-full flex-row items-center gap-1.5 px-2">
+                      <Text
+                        accessibilityRole="header"
+                        className="shrink text-center font-semibold text-2xl text-foreground"
+                      >
+                        {form.name}
+                      </Text>
+                      <ManagedMark />
+                    </View>
+                  }
+                >
+                  {/* The underline marks the name as a field, as on a provider. */}
+                  <TextInput
+                    accessibilityLabel={t('agent.form.name')}
+                    autoCorrect={false}
+                    className={cn(
+                      'min-w-40 max-w-full border-b px-2 pb-1.5 text-center font-semibold text-2xl text-foreground',
+                      isNameInvalid ? 'border-error' : 'border-border-strong',
+                    )}
+                    cursorColor={mutedForegroundColor}
+                    onBlur={flush}
+                    onChangeText={(value) => updateForm('name', value)}
+                    placeholder={t('agent.form.namePlaceholder')}
+                    placeholderTextColor={mutedForegroundColor}
+                    returnKeyType="done"
+                    selectionColor={mutedForegroundColor}
+                    value={form.name}
+                  />
+                  {isNameInvalid ? (
+                    <Text accessibilityLiveRegion="polite" className="text-error text-sm">
+                      {t('agent.form.nameRequired')}
+                    </Text>
+                  ) : null}
+                </PolicyEditable>
+              </View>
+            </View>
+            {/* What the organization decides sits together in one locked group; the rest stays
+            editable below it. */}
+            <PolicyManaged>
+              <PolicyGroup>
+                <Section>
+                  <Section.Item
+                    label={t('agent.form.instructions')}
+                    locked
+                    trailing={
+                      <Text className="text-base text-muted-foreground">
+                        {t('enterprise.managed.hidden')}
+                      </Text>
+                    }
+                  />
+                  {isModelLocked ? modelRow : null}
+                </Section>
+                {form.mode === 'standard' ? (
+                  <AgentToolsSection
+                    bindings={toolBindings}
+                    hasServersError={hasServersError}
+                    isServersLoading={isServersLoading}
+                    onChange={handleToolBindingsChange}
+                    originalBindings={originalToolBindings}
+                    readOnly
+                    servers={servers}
+                  />
+                ) : null}
+                {isEditing && form.mode === 'standard' ? (
+                  <AgentSkillsSection
+                    agentId={agentId}
+                    bindings={skillBindings}
+                    onChange={saveSkillBindings}
+                    readOnly
+                    skills={skills}
+                  />
+                ) : null}
+              </PolicyGroup>
+            </PolicyManaged>
+          </View>
+          <PolicySecret>
+            <AgentInstructionsSection
+              expanded={isInstructionsExpanded}
+              onBlur={flush}
+              onChangeText={(value) => updateForm('instructions', value)}
+              onExpandedChange={onInstructionsExpandedChange}
+              presentation={presentation.presentation ?? 'page'}
+              value={form.instructions}
+            />
+          </PolicySecret>
+          <View className="gap-6" style={isInstructionsExpanded ? styles.hidden : undefined}>
+            <View className="gap-3">
+              <Section
+                footer={
+                  form.mode === 'minimal'
+                    ? t('agent.mode.minimal.description')
+                    : t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)
+                }
+              >
+                <Section.SelectItem
+                  label={t('agent.mode.title')}
+                  onPress={openModePicker}
+                  value={t(MODE_LABEL_KEYS[form.mode])}
+                />
+                {isModelLocked ? null : modelRow}
+                {form.mode === 'standard' ? (
+                  <Section.SelectItem
+                    accessibilityHint={t(
+                      `agent.toolApproval.mode.${form.toolApprovalMode}.description`,
+                    )}
+                    label={t('agent.toolApproval.title')}
+                    onPress={openToolApprovalModePicker}
+                    value={t(`agent.toolApproval.mode.${form.toolApprovalMode}.label`)}
+                  />
+                ) : null}
+              </Section>
+              {!modelPickerData.isLoading && modelPickerData.modelItems.length === 0 ? (
+                <AddProviderButton onPress={handleAddProvider} size="sm" variant="secondary">
+                  {t('modelPicker.addProvider')}
+                </AddProviderButton>
+              ) : null}
+            </View>
             {form.mode === 'standard' ? (
               <AgentToolsSection
                 bindings={toolBindings}
@@ -612,7 +750,6 @@ function AgentEditForm({
                 isServersLoading={isServersLoading}
                 onChange={handleToolBindingsChange}
                 originalBindings={originalToolBindings}
-                readOnly
                 servers={servers}
               />
             ) : null}
@@ -621,87 +758,30 @@ function AgentEditForm({
                 agentId={agentId}
                 bindings={skillBindings}
                 onChange={saveSkillBindings}
-                readOnly
                 skills={skills}
               />
             ) : null}
-          </PolicyGroup>
-        </PolicyManaged>
-        <PolicySecret>
-          <AgentInstructionsSection
-            onBlur={flush}
-            onChangeText={(value) => updateForm('instructions', value)}
-            value={form.instructions}
-          />
-        </PolicySecret>
-        <View className="gap-3">
-          <Section
-            footer={
-              form.mode === 'minimal'
-                ? t('agent.mode.minimal.description')
-                : t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)
-            }
-          >
-            <Section.SelectItem
-              label={t('agent.mode.title')}
-              onPress={openModePicker}
-              value={t(MODE_LABEL_KEYS[form.mode])}
-            />
-            {isModelLocked ? null : modelRow}
-            {form.mode === 'standard' ? (
-              <Section.SelectItem
-                accessibilityHint={t(
-                  `agent.toolApproval.mode.${form.toolApprovalMode}.description`,
-                )}
-                label={t('agent.toolApproval.title')}
-                onPress={openToolApprovalModePicker}
-                value={t(`agent.toolApproval.mode.${form.toolApprovalMode}.label`)}
-              />
+            {hasFailedSave ? (
+              <Button onPress={retry} size="sm" variant="secondary">
+                {t('agent.actions.retry')}
+              </Button>
             ) : null}
-          </Section>
-          {!modelPickerData.isLoading && modelPickerData.modelItems.length === 0 ? (
-            <AddProviderButton onPress={handleAddProvider} size="sm" variant="secondary">
-              {t('modelPicker.addProvider')}
-            </AddProviderButton>
-          ) : null}
-        </View>
-        {form.mode === 'standard' ? (
-          <AgentToolsSection
-            bindings={toolBindings}
-            hasServersError={hasServersError}
-            isServersLoading={isServersLoading}
-            onChange={handleToolBindingsChange}
-            originalBindings={originalToolBindings}
-            servers={servers}
-          />
-        ) : null}
-        {isEditing && form.mode === 'standard' ? (
-          <AgentSkillsSection
-            agentId={agentId}
-            bindings={skillBindings}
-            onChange={saveSkillBindings}
-            skills={skills}
-          />
-        ) : null}
-        {hasFailedSave ? (
-          <Button onPress={retry} size="sm" variant="secondary">
-            {t('agent.actions.retry')}
-          </Button>
-        ) : null}
-        {agentId ? (
-          <PolicyDeletable>
-            <Section>
-              <Section.Item
-                destructive
-                label={t('agent.actions.delete')}
-                onPress={() => confirmDelete(agentId)}
-                showChevron={false}
-                testID="agent-delete"
-              />
-            </Section>
-          </PolicyDeletable>
-        ) : null}
-      </KeyboardAwareScrollView>
+            {agentId ? (
+              <PolicyDeletable>
+                <Section>
+                  <Section.Item
+                    destructive
+                    label={t('agent.actions.delete')}
+                    onPress={() => confirmDelete(agentId)}
+                    showChevron={false}
+                    testID="agent-delete"
+                  />
+                </Section>
+              </PolicyDeletable>
+            ) : null}
+          </View>
+        </KeyboardAwareScrollView>
+      </KeyboardAvoidingView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           modelType={form.mode === 'minimal' ? 'text' : 'all'}
@@ -759,6 +839,14 @@ function AgentEditForm({
 
   return (
     <AgentEditorFrame
+      onBack={
+        isInstructionsExpanded
+          ? () => {
+              onInstructionsExpandedChange(false);
+              flush();
+            }
+          : undefined
+      }
       presentation={presentation}
       rightActions={isEditing ? undefined : saveActions}
       title={title}
@@ -769,6 +857,15 @@ function AgentEditForm({
 }
 
 const styles = StyleSheet.create({
+  hidden: {
+    display: 'none',
+  },
+  expandedScrollContent: {
+    flex: 1,
+    gap: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+  },
   scroll: {
     flex: 1,
   },

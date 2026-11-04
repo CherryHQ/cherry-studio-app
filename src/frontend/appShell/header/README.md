@@ -70,8 +70,10 @@ This module owns Expo Router header adapters used by the app screens.
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.
   Long names truncate at the end. In local chat the capsule opens the shared auto-saving Agent
-  editor as a handle-only sheet. An independent `circle-user-round` button opens the Agent picker;
-  selecting the current Agent only closes it. Switching within a draft preserves text and attachments,
+  editor as a handle-only sheet. An independent `circle-user-round` button reuses the Agent picker
+  with its title, per-row management edit action, and fixed Create footer. Remote catalogs omit
+  management callbacks and stay selection-only. Selecting the current Agent only closes the picker.
+  Switching within a draft preserves text and attachments,
   while switching from an existing Session opens a draft for that Agent. The upper-right new-chat
   action always starts a blank draft with the current Agent, including from an unsent draft.
   Remote capsules retain their catalog picker and selection behavior. The sheet owns presentation and pagination controls, while

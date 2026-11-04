@@ -87,7 +87,8 @@ function LocalAgentPicker({
       catalog={catalog}
       open={open}
       onClose={onClose}
-      presentation="overlay"
+      onEdit={(agentId) => router.push({ params: { agentId }, pathname: '/agents/[agentId]/edit' })}
+      onCreate={() => router.push({ params: { startChat: 'true' }, pathname: '/agents/new' })}
       onSelect={(agentId) =>
         router.setParams(chatRouteParams({ agentId, kind: 'draft', workspaceDraftId }))
       }
