@@ -1642,7 +1642,6 @@
   "settings.autoCollapseReasoning.description": "Replier automatiquement le raisonnement développé une fois la réflexion terminée.",
   "settings.autoCollapseReasoning.saveFailed": "Impossible d’enregistrer le paramètre de repli automatique du raisonnement",
   "settings.autoCollapseReasoning.title": "Replier automatiquement le raisonnement",
-  "settings.chat.title": "Discussion",
   "settings.data.runtimeCache.clear": "Vider le cache d'exécution des conversations",
   "settings.data.runtimeCache.cleared": "{{size}} libérés",
   "settings.data.runtimeCache.confirm": "Vider",

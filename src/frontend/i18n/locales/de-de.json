@@ -1625,7 +1625,6 @@
   "settings.autoCollapseReasoning.description": "Den aufgeklappten Denkprozess automatisch einklappen, sobald das Nachdenken abgeschlossen ist.",
   "settings.autoCollapseReasoning.saveFailed": "Die Einstellung zum automatischen Einklappen des Denkprozesses konnte nicht gespeichert werden",
   "settings.autoCollapseReasoning.title": "Denkprozess automatisch einklappen",
-  "settings.chat.title": "Chat",
   "settings.data.runtimeCache.clear": "Laufzeit-Cache für Unterhaltungen leeren",
   "settings.data.runtimeCache.cleared": "{{size}} freigegeben",
   "settings.data.runtimeCache.confirm": "Leeren",

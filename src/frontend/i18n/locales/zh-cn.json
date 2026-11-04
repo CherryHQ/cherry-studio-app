@@ -1608,7 +1608,6 @@
   "settings.autoCollapseReasoning.description": "思考结束时，自动收起已展开的思考过程。",
   "settings.autoCollapseReasoning.saveFailed": "保存自动收起思考过程设置失败",
   "settings.autoCollapseReasoning.title": "自动收起思考过程",
-  "settings.chat.title": "聊天",
   "settings.data.runtimeCache.clear": "清理对话运行缓存",
   "settings.data.runtimeCache.cleared": "已释放 {{size}}",
   "settings.data.runtimeCache.confirm": "清理",

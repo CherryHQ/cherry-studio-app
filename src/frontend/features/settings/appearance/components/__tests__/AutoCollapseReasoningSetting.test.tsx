@@ -1,9 +1,8 @@
-import type { PropsWithChildren } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PreferenceDefaults } from '@/shared/data/preference';
 
-import ChatSettingsScreen from '../ChatSettingsScreen';
+import { AutoCollapseReasoningSetting } from '../AutoCollapseReasoningSetting';
 
 let mockIsAutoCollapseEnabled = false;
 const mockSetAutoCollapseEnabled = jest.fn<Promise<void>, [boolean]>();
@@ -23,23 +22,19 @@ jest.mock('react-i18next', () => ({
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
-    Section: Object.assign(({ children }: PropsWithChildren) => children, {
+    Section: {
       SwitchItem: (props: object) => React.createElement('SwitchItem', props),
-    }),
+    },
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
 
-jest.mock('../../components/SettingsScrollPage', () => ({
-  SettingsScrollPage: ({ children }: PropsWithChildren) => children,
-}));
-
-describe('ChatSettingsScreen', () => {
+describe('AutoCollapseReasoningSetting', () => {
   let renderer: ReactTestRenderer | undefined;
   const switchItem = () => renderer!.root.findByType('SwitchItem' as never);
   const mount = () => {
     act(() => {
-      renderer = create(<ChatSettingsScreen />);
+      renderer = create(<AutoCollapseReasoningSetting />);
     });
   };
 
@@ -62,7 +57,7 @@ describe('ChatSettingsScreen', () => {
     await act(async () => switchItem().props.onValueChange(true));
     expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(true);
     mockIsAutoCollapseEnabled = true;
-    act(() => renderer!.update(<ChatSettingsScreen />));
+    act(() => renderer!.update(<AutoCollapseReasoningSetting />));
     expect(switchItem().props.value).toBe(true);
 
     await act(async () => switchItem().props.onValueChange(false));

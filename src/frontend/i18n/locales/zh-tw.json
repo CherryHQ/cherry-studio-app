@@ -1608,7 +1608,6 @@
   "settings.autoCollapseReasoning.description": "思考結束時，自動收合已展開的思考過程。",
   "settings.autoCollapseReasoning.saveFailed": "儲存自動收合思考過程設定失敗",
   "settings.autoCollapseReasoning.title": "自動收合思考過程",
-  "settings.chat.title": "聊天",
   "settings.data.runtimeCache.clear": "清除對話執行快取",
   "settings.data.runtimeCache.cleared": "已釋放 {{size}}",
   "settings.data.runtimeCache.confirm": "清除",

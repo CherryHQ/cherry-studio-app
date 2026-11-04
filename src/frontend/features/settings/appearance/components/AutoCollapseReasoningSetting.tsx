@@ -4,9 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePreference } from '@/frontend/data/hooks';
 
-import { SettingsScrollPage } from '../components/SettingsScrollPage';
-
-export default function ChatSettingsScreen() {
+export function AutoCollapseReasoningSetting() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -26,19 +24,15 @@ export default function ChatSettingsScreen() {
   };
 
   return (
-    <SettingsScrollPage headerProps={{ title: t('settings.chat.title') }}>
-      <Section>
-        <Section.SwitchItem
-          description={t('settings.autoCollapseReasoning.description')}
-          disabled={isSaving}
-          label={t('settings.autoCollapseReasoning.title')}
-          onValueChange={(value) => {
-            void changeAutoCollapse(value);
-          }}
-          testID="settings-auto-collapse-reasoning"
-          value={isAutoCollapseEnabled}
-        />
-      </Section>
-    </SettingsScrollPage>
+    <Section.SwitchItem
+      description={t('settings.autoCollapseReasoning.description')}
+      disabled={isSaving}
+      label={t('settings.autoCollapseReasoning.title')}
+      onValueChange={(value) => {
+        void changeAutoCollapse(value);
+      }}
+      testID="settings-auto-collapse-reasoning"
+      value={isAutoCollapseEnabled}
+    />
   );
 }

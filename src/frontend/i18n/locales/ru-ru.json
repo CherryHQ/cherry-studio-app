@@ -1659,7 +1659,6 @@
   "settings.autoCollapseReasoning.description": "Автоматически сворачивать раскрытый блок рассуждений после завершения обдумывания.",
   "settings.autoCollapseReasoning.saveFailed": "Не удалось сохранить настройку автоматического сворачивания рассуждений",
   "settings.autoCollapseReasoning.title": "Автоматически сворачивать рассуждения",
-  "settings.chat.title": "Чат",
   "settings.data.runtimeCache.clear": "Очистить кэш выполнения бесед",
   "settings.data.runtimeCache.cleared": "Освобождено {{size}}",
   "settings.data.runtimeCache.confirm": "Очистить",

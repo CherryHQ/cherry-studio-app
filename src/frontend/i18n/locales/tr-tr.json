@@ -1625,7 +1625,6 @@
   "settings.autoCollapseReasoning.description": "Düşünme tamamlandığında genişletilmiş akıl yürütme bölümünü otomatik olarak daralt.",
   "settings.autoCollapseReasoning.saveFailed": "Akıl yürütmeyi otomatik daraltma ayarı kaydedilemedi",
   "settings.autoCollapseReasoning.title": "Akıl yürütmeyi otomatik daralt",
-  "settings.chat.title": "Sohbet",
   "settings.data.runtimeCache.clear": "Sohbet çalışma önbelleğini temizle",
   "settings.data.runtimeCache.cleared": "{{size}} boşaltıldı",
   "settings.data.runtimeCache.confirm": "Temizle",

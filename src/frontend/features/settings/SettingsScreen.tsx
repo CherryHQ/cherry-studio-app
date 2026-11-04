@@ -3,7 +3,6 @@ import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
-import MessageCircleIcon from '@cherrystudio/app-icons/icons/message-circle';
 import MicIcon from '@cherrystudio/app-icons/icons/mic';
 import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PackageIcon from '@cherrystudio/app-icons/icons/package';
@@ -64,12 +63,6 @@ export default function SettingsScreen() {
               leading={<Settings2Icon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
               testID="settings-general"
-            />
-            <Section.Item
-              label={t('settings.chat.title')}
-              leading={<MessageCircleIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/chat')}
-              testID="settings-chat"
             />
             <Section.Item
               label={t('settings.voice.title')}
