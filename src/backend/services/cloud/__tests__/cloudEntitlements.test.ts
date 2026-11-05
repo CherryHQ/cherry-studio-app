@@ -8,6 +8,18 @@ import { cloudSnapshot } from './cloudFixtures';
 
 const now = Date.parse('2026-10-31T00:00:00Z');
 
+test('only an effective paid entitlement for the selected model grants Plan access', () => {
+  const state = cloudSnapshot();
+  const entitlement = state.account!.entitlements[0];
+  entitlement.is_free = true;
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('not_entitled');
+  const paid = { ...entitlement, is_free: false, model_ids: ['another-model'] };
+  state.account!.entitlements.push(paid);
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('not_entitled');
+  paid.model_ids.push('cloud-model');
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
+});
+
 test('all windows in a pool constrain credit, while another pool can independently admit a model', () => {
   const state = cloudSnapshot();
   const pool = state.account!.quota_pools[0];

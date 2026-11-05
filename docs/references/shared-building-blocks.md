@@ -89,7 +89,6 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy; management pages use `RouteHeader.selection` for the count and single exit |
 | Opening external links | `openExternalUrl` in `src/frontend/utils/openExternalUrl.ts` |
 | Compact counts | `formatCompactNumber` in `src/frontend/utils/compactNumber.ts` |
-| Full and compact Cloud quota-window labels | `formatQuotaWindow` and `formatQuotaWindowShort` in `src/frontend/utils/cloudQuota.ts`, shared by subscription details and the sidebar badge |
 | Library folder browsing, creation, and selection for moves and Session workspaces | `FileFolderPicker` and `useCreateFileFolder` in `src/frontend/components/FileFolderPicker`; `FileFolderBreadcrumbs` owns the shared path navigation |
 | Optional conversation workspace association, including unsent drafts | `useFileWorkspace` in `src/frontend/hooks/file`; chat owns `FileWorkspaceSheet`, reusing the shared file pages and `FileEntryPreview` viewer |
 | Logical folder, file lineage, and workspace metadata | `FileLibraryService` and `fileLibraryRows` in `src/backend/data/services` |

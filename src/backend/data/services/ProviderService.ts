@@ -1,6 +1,6 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import { loggerService } from '@logger';
-import { and, asc, desc, eq, gt, inArray, isNull, notInArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, or, type SQL } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
@@ -327,6 +327,10 @@ function decodeProviderCursor(raw: string | undefined): ProviderCursor | null {
 }
 
 function afterProviderCursor(cursor: ProviderCursor): SQL {
+  const notPlan = ne(userProviderTable.providerId, CLOUD_PROVIDER_ID);
+  // Plan is pinned independently of its saved order key, so its cursor precedes every other row.
+  if (cursor.providerId === CLOUD_PROVIDER_ID) return notPlan;
+
   const afterWithinSection = or(
     gt(userProviderTable.orderKey, cursor.orderKey),
     and(
@@ -336,13 +340,16 @@ function afterProviderCursor(cursor: ProviderCursor): SQL {
   )!;
 
   if (cursor.isEnabled) {
-    return or(
-      eq(userProviderTable.isEnabled, false),
-      and(eq(userProviderTable.isEnabled, true), afterWithinSection),
+    return and(
+      notPlan,
+      or(
+        eq(userProviderTable.isEnabled, false),
+        and(eq(userProviderTable.isEnabled, true), afterWithinSection),
+      ),
     )!;
   }
 
-  return and(eq(userProviderTable.isEnabled, false), afterWithinSection)!;
+  return and(notPlan, eq(userProviderTable.isEnabled, false), afterWithinSection)!;
 }
 
 function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
@@ -441,12 +448,21 @@ export class ProviderService {
   async list(query: { enabled?: boolean } = {}): Promise<Provider[]> {
     const rows =
       query.enabled === undefined
-        ? await this.db.select().from(userProviderTable).orderBy(asc(userProviderTable.orderKey))
+        ? await this.db
+            .select()
+            .from(userProviderTable)
+            .orderBy(
+              desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
+              asc(userProviderTable.orderKey),
+            )
         : await this.db
             .select()
             .from(userProviderTable)
             .where(eq(userProviderTable.isEnabled, query.enabled))
-            .orderBy(asc(userProviderTable.orderKey));
+            .orderBy(
+              desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
+              asc(userProviderTable.orderKey),
+            );
 
     return rows.filter(isMobileSupportedProviderRow).map(rowToProvider);
   }
@@ -477,6 +493,7 @@ export class ProviderService {
       .from(userProviderTable)
       .where(and(...conditions))
       .orderBy(
+        desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
         desc(userProviderTable.isEnabled),
         asc(userProviderTable.orderKey),
         asc(userProviderTable.providerId),

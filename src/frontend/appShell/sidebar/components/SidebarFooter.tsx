@@ -18,7 +18,6 @@ import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarFade } from './SidebarFade/SidebarFade';
-import { SidebarPlanBadge } from './SidebarPlanBadge';
 
 // Floats over the session list while the body owns enough bottom padding to
 // keep its final row reachable.
@@ -101,7 +100,6 @@ export function SidebarFooter() {
                 >
                   {displayName || t('settings.profile.title')}
                 </Text>
-                <SidebarPlanBadge />
               </View>
             )}
           </Pressable>
