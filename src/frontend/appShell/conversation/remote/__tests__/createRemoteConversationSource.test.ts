@@ -70,6 +70,11 @@ function fixture(scope = 'scope', binding = 'binding') {
       status: 'pending' as const,
       sessionId: 'created',
     })),
+    renameSession: jest.fn(async () => ({
+      id: 'rename',
+      kind: 'rename' as const,
+      status: 'applied' as const,
+    })),
     send: jest.fn(async () => ({
       id: 'send',
       kind: 'send' as const,
@@ -153,7 +158,7 @@ it('rejects retired callbacks and local-only input before crossing the remote bo
   const send = session.state.getSnapshot().actions.send!;
   const unsupported = await send.execute({
     parts: [{ type: 'text', text: 'hello' }],
-    reasoningEffort: 'high',
+    imageGeneration: 'flux' as never,
   });
   expect(unsupported).toMatchObject({ state: 'rejected', failure: { code: 'unsupported' } });
   expect(test.remote.send).not.toHaveBeenCalled();
@@ -419,7 +424,9 @@ test('selected catalog metadata does not observe history or expose unsupported r
     title: 'Conversation',
   });
   expect(remote.observe).not.toHaveBeenCalled();
-  expect(source.catalog.previewSession?.(ref)).toBeUndefined();
+  const preview = source.catalog.previewSession?.(ref);
+  expect(preview?.remove).toBeUndefined();
+  expect(preview?.rename?.availability.state).toBe('enabled');
   await expect(
     source.catalog.readSession!(
       { source: { kind: 'desktop', connectionId: 'other' }, sessionId: 's' },
@@ -680,4 +687,143 @@ test('remote input explicitly rejects injected quote and orphan author metadata'
   expect(() =>
     remoteInput({ parts: [{ type: 'text', text: 'Request', quoteAuthor: fields.quoteAuthor }] }),
   ).toThrow();
+});
+
+it('previews session with rename capability and notifies catalog listeners on applied', async () => {
+  const test = fixture();
+  const catalogListener = jest.fn();
+  test.source.catalog.subscribe!(catalogListener);
+
+  // Enabled by default (sessionRename !== false)
+  const preview = test.source.catalog.previewSession!(address);
+  expect(preview.rename?.availability).toEqual({ state: 'enabled' });
+
+  // Disabled when sessionRename === false
+  test.setState({ status: 'ready', sessionRename: false });
+  const upgradePreview = test.source.catalog.previewSession!(address);
+  expect(upgradePreview.rename?.availability).toEqual({
+    state: 'disabled',
+    reason: 'upgrade-required',
+  });
+
+  // Disabled when rename command is pending
+  test.setState({ status: 'ready', sessionRename: true });
+  test.remote.getCommands = () => [
+    {
+      id: 'cmd-rename',
+      kind: 'rename',
+      sessionId: 's',
+      status: 'pending',
+    },
+  ];
+  const busyPreview = test.source.catalog.previewSession!(address);
+  expect(busyPreview.rename?.availability).toEqual({
+    state: 'disabled',
+    reason: 'busy',
+  });
+
+  // Execute rename trims title and notifies catalog on applied
+  test.remote.getCommands = () => [];
+  const activePreview = test.source.catalog.previewSession!(address);
+  const result = await activePreview.rename!.execute({ title: '  Trimmed Title  ' });
+  expect(result).toEqual({ state: 'applied', value: undefined });
+  expect(test.remote.renameSession).toHaveBeenCalledWith('s', 'Trimmed Title');
+  expect(catalogListener).toHaveBeenCalledWith('sessions');
+
+  test.source.dispose();
+});
+
+it('forwards model and reasoning effort from prepareDraft to remote.start and respects policy', async () => {
+  const test = fixture();
+  test.setState({ status: 'ready', modelSelection: true });
+
+  const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
+  const workspace = (await test.source.catalog.listWorkspaces!(agent, undefined, signal())).items[0]
+    .ref;
+
+  const draft = await test.source.catalog.prepareDraft(
+    { agent, workspace, draftId: 'draft-controls' as DraftId },
+    signal(),
+  );
+
+  expect(draft.state.getSnapshot().inputPolicy.modelSelection).toBe(true);
+
+  await draft.state.getSnapshot().start.execute({
+    parts: [{ type: 'text', text: 'hello' }],
+    modelId: 'openai:gpt-4o' as never,
+    reasoningEffort: 'medium',
+  });
+
+  expect(test.remote.start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      draftId: 'draft-controls',
+      text: 'hello',
+      model: { providerId: 'openai', modelId: 'gpt-4o' },
+      reasoningEffort: 'medium',
+    }),
+  );
+
+  // When modelSelection is false, submitting model controls throws upgrade-required
+  test.setState({ status: 'ready', modelSelection: false });
+  const outcome = await draft.state.getSnapshot().start.execute({
+    parts: [{ type: 'text', text: 'hello again' }],
+    modelId: 'openai:gpt-4o' as never,
+  });
+  expect(outcome).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'upgrade-required' },
+  });
+
+  draft.dispose();
+  test.source.dispose();
+});
+
+it('exposes canDenyWithReason, source ref, and forwards model controls in remote conversation session', async () => {
+  const test = fixture();
+  test.setState({ status: 'ready', modelSelection: true });
+
+  const handle = await test.source.openSession(address, signal());
+  handle.activate();
+
+  test.publish({
+    ...test.snapshot,
+    interactions: [
+      {
+        id: 'i-1',
+        title: 'Approve tool',
+        state: 'pending',
+        input: 'res-1',
+      },
+    ],
+  });
+
+  const snapshot = handle.state.getSnapshot();
+  expect(snapshot.source).toEqual(address.source);
+  expect(snapshot.interactions[0].canDenyWithReason).toBe(true);
+  expect(snapshot.actions.inputPolicy.modelSelection).toBe(true);
+
+  await snapshot.actions.send!.execute({
+    parts: [{ type: 'text', text: 'send with model' }],
+    modelId: 'anthropic:claude-3-5-sonnet' as never,
+    reasoningEffort: 'high',
+  });
+
+  expect(test.remote.send).toHaveBeenCalledWith('idle-1', 'send with model', undefined, {
+    model: { providerId: 'anthropic', modelId: 'claude-3-5-sonnet' },
+    reasoningEffort: 'high',
+  });
+
+  // When desktop modelSelection is false, send with model fails with upgrade-required
+  test.setState({ status: 'ready', modelSelection: false });
+  const failed = await handle.state.getSnapshot().actions.send!.execute({
+    parts: [{ type: 'text', text: 'send with model' }],
+    modelId: 'anthropic:claude-3-5-sonnet' as never,
+  });
+  expect(failed).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'upgrade-required' },
+  });
+
+  handle.dispose();
+  test.source.dispose();
 });

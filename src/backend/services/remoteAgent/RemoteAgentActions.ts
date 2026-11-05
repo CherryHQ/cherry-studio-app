@@ -30,11 +30,14 @@ const AttachmentSchema = z.object({
 type Request = (method: string, params: unknown) => Promise<unknown>;
 const ActionSchema = z.object({
   id: z.string(),
-  kind: z.enum(['create', 'send', 'cancel', 'respond']),
+  kind: z.enum(['create', 'send', 'cancel', 'respond', 'rename']),
   sessionId: z.string().optional(),
   agentId: z.string().optional(),
   userMessageId: z.string().optional(),
   text: z.string().optional(),
+  title: z.string().optional(),
+  model: z.object({ modelId: z.string(), providerId: z.string() }).optional(),
+  reasoningEffort: z.string().optional(),
   attachments: z.array(AttachmentSchema).optional(),
   status: z.enum(['confirming', 'accepted', 'applied', 'rejected', 'interrupted']),
   error: z.string().optional(),
@@ -56,6 +59,8 @@ const StartSchema = z
     workspace: workspaceSelectionSchema.optional(),
     text: z.string(),
     attachments: z.array(AttachmentSchema).optional(),
+    model: z.object({ modelId: z.string(), providerId: z.string() }).optional(),
+    reasoningEffort: z.string().optional(),
     createId: z.string(),
     sendId: z.string(),
     uploads: z.array(uploadProgressSchema).optional(),
@@ -206,6 +211,7 @@ export class RemoteAgentActions {
     text?: string,
     commandId = randomUUID(),
     attachments?: RemoteAttachment[],
+    options?: { model?: { modelId: string; providerId: string }; reasoningEffort?: string },
   ): Promise<RemoteCommand> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     // Keep pending work, open start records and each Session's one undelivered send; a new send
@@ -224,14 +230,29 @@ export class RemoteAgentActions {
           !(kind === 'send' && entry.action.sessionId === params.sessionId)),
     );
     if (retained.length >= 200) throw new RemoteAgentError('ACTION_LIMIT');
+    const model =
+      options?.model ??
+      (params.model &&
+      typeof params.model === 'object' &&
+      'modelId' in params.model &&
+      'providerId' in params.model
+        ? (params.model as { modelId: string; providerId: string })
+        : undefined);
+    const reasoningEffort =
+      options?.reasoningEffort ??
+      (typeof params.reasoningEffort === 'string' ? params.reasoningEffort : undefined);
+    const title = typeof params.title === 'string' ? params.title : undefined;
     const action: RecordEntry['action'] = {
       id: commandId,
       kind,
       status: 'confirming',
       ...(typeof params.agentId === 'string' ? { agentId: params.agentId } : {}),
       ...(typeof params.sessionId === 'string' ? { sessionId: params.sessionId } : {}),
+      ...(title ? { title } : {}),
       ...(text ? { text } : {}),
       ...(attachments?.length ? { attachments } : {}),
+      ...(model ? { model } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
     };
     const entry = RecordSchema.parse({
       action,
@@ -360,7 +381,10 @@ export class RemoteAgentActions {
           input.workspace?.kind === 'registered' &&
           entry.workspace.id !== input.workspace.id) ||
         entry.text !== input.text ||
-        JSON.stringify(entry.attachments ?? []) !== JSON.stringify(input.attachments ?? []))
+        JSON.stringify(entry.attachments ?? []) !== JSON.stringify(input.attachments ?? []) ||
+        entry.model?.modelId !== input.model?.modelId ||
+        entry.model?.providerId !== input.model?.providerId ||
+        entry.reasoningEffort !== input.reasoningEffort)
     )
       throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
     if (!entry) {
@@ -374,6 +398,8 @@ export class RemoteAgentActions {
         ...(input.attachments?.length
           ? { attachments: input.attachments.map((file) => ({ uploadId: file.fileEntryId })) }
           : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
       });
       StartSchema.parse({
         ...input,
@@ -422,10 +448,11 @@ export class RemoteAgentActions {
     params: Record<string, z.infer<typeof JsonValueSchema>>,
     text?: string,
     attachments?: RemoteAttachment[],
+    options?: { model?: { modelId: string; providerId: string }; reasoningEffort?: string },
   ) {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     if (this.records.some((entry) => entry.action.id === id)) await this.run(id, true);
-    else await this.create(kind, method, params, text, id, attachments);
+    else await this.create(kind, method, params, text, id, attachments, options);
     return this.snapshot.find((entry) => entry.id === id)!;
   }
   private async executeStart(original: StartEntry): Promise<RemoteStartOperation> {
@@ -455,12 +482,25 @@ export class RemoteAgentActions {
         this.updateStart(entry);
       }
       if (!entry.sessionId) {
-        const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
-          agentId: entry.agentId,
-          ...(entry.workspace?.kind === 'system'
-            ? { workspace: entry.workspace }
-            : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
-        });
+        const created = await this.startCommand(
+          entry.createId,
+          'create',
+          'agent.sessions.create',
+          {
+            agentId: entry.agentId,
+            ...(entry.workspace?.kind === 'system'
+              ? { workspace: entry.workspace }
+              : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
+            ...(entry.model ? { model: entry.model } : {}),
+            ...(entry.reasoningEffort ? { reasoningEffort: entry.reasoningEffort } : {}),
+          },
+          undefined,
+          undefined,
+          {
+            model: entry.model,
+            reasoningEffort: entry.reasoningEffort,
+          },
+        );
         if (this.stopped) return settled;
         if (created.status !== 'applied') return this.finishStart(entry, created);
         if (!created.sessionId) throw new RemoteAgentError('PROTOCOL_ERROR');
@@ -492,9 +532,15 @@ export class RemoteAgentActions {
               : entry.uploaded
                 ? { attachments: entry.uploaded }
                 : {}),
+            ...(entry.model ? { model: entry.model } : {}),
+            ...(entry.reasoningEffort ? { reasoningEffort: entry.reasoningEffort } : {}),
           },
           entry.text,
           entry.attachments,
+          {
+            model: entry.model,
+            reasoningEffort: entry.reasoningEffort,
+          },
         );
       }
       if (!this.stopped) return this.finishStart(entry, sent, true);
@@ -522,11 +568,19 @@ export class RemoteAgentActions {
                     sessionId: entry.sessionId,
                     text: entry.text,
                     attachments: entry.attachments,
+                    ...(entry.model ? { model: entry.model } : {}),
+                    ...(entry.reasoningEffort ? { reasoningEffort: entry.reasoningEffort } : {}),
                     status,
                     ...failure,
                   },
                   method: 'agent.messages.send',
-                  params: { commandId: entry.sendId, sessionId: entry.sessionId, text: entry.text },
+                  params: {
+                    commandId: entry.sendId,
+                    sessionId: entry.sessionId,
+                    text: entry.text,
+                    ...(entry.model ? { model: entry.model } : {}),
+                    ...(entry.reasoningEffort ? { reasoningEffort: entry.reasoningEffort } : {}),
+                  },
                 },
               ]
             : [];
