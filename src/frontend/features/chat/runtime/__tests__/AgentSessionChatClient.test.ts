@@ -134,6 +134,7 @@ function protocolWithObservation(
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
     editMessage: jest.fn(),
+    readReasoning: jest.fn(),
     selectMessage: jest.fn(),
     getWorkingStorageSize: jest.fn(),
     getSessionStatus: jest.fn<

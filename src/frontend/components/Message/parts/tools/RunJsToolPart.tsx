@@ -6,7 +6,7 @@ import type { AgentToolProgress } from '@/shared/contracts/agent';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { GenericToolPart } from './GenericToolPart';
-import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
+import { getToolDisplayState, getToolName, isRecord, type ToolMessagePart } from './toolPartState';
 import { ToolProgress } from './ToolProgress';
 
 /** The stored tool of clients before Code Mode. */
@@ -22,7 +22,7 @@ type RunJsToolPartProps = {
  * A finished run shows the code as code rather than as an escaped argument
  * string, beside its result or error, the tool calls it made and any console
  * output. Output over the model's budget arrives as one cut text, shown in
- * place of both; its full text is a generated file attached to the message.
+ * place of both; its full text is read through the returned working-cache reference.
  */
 export function RunJsToolPart({ part }: RunJsToolPartProps) {
   const { t } = useTranslation();
@@ -34,7 +34,15 @@ export function RunJsToolPart({ part }: RunJsToolPartProps) {
         : null;
 
   if (run === null) {
-    return <GenericToolPart part={part} />;
+    const runningStatusText =
+      part.state === 'input-streaming'
+        ? t('chat.tool.preparingScript')
+        : part.executionState === 'pending'
+          ? t('chat.tool.inputReady')
+          : getToolDisplayState(part) === 'running'
+            ? t('chat.tool.running')
+            : undefined;
+    return <GenericToolPart part={part} runningStatusText={runningStatusText} />;
   }
 
   const code = isRecord(part.input) && typeof part.input.code === 'string' ? part.input.code : '';
@@ -71,7 +79,7 @@ export function RunJsToolPart({ part }: RunJsToolPartProps) {
 
 export function isRunJsToolPart(part: ToolMessagePart) {
   const name = getToolName(part);
-  return name === RUN_JS_TOOL_NAME || name === CODE_MODE_TOOL_NAME;
+  return name === RUN_JS_TOOL_NAME || name === CODE_MODE_TOOL_NAME || name === 'run_office_script';
 }
 
 type Run = { logs: string; calls?: AgentToolProgress['calls'] } & (

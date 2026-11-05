@@ -17,6 +17,8 @@ import {
   AgentForkSessionInputSchema,
   AgentInputPartSchema,
   AgentProtocolError,
+  AgentReadReasoningInputSchema,
+  AgentReasoningDetailSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentRespondQuestionSchema,
@@ -46,6 +48,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
@@ -1345,6 +1348,37 @@ export class DurableAgentHost implements AgentProtocol {
     state.questions.respond(parsed.toolCallId, parsed.answer);
   }
 
+  async readReasoning(input: Parameters<AgentProtocol['readReasoning']>[0]) {
+    const parsed = AgentReadReasoningInputSchema.parse(input);
+    await this.requireSession(parsed.sessionId);
+    const live = this.liveStates(parsed.sessionId).find(
+      (state) => state.active?.assistantMessageId === parsed.messageId,
+    );
+    // Active list snapshots carry status only. Read the authoritative runtime explicitly.
+    const runtimeMessage = live
+      ? await this.conversations.message(live.lane, parsed.messageId, { fullReasoning: true })
+      : undefined;
+    const message = runtimeMessage
+      ? projectDurableHostTurn(runtimeMessage.turn).assistant
+      : await this.store.getMessage(parsed.sessionId, parsed.messageId, {
+          tolerateInvalidParts: true,
+        });
+    if (!message || message.role !== 'assistant')
+      fail('MESSAGE_NOT_FOUND', 'The reasoning message no longer exists.');
+    const index = message.parts.findIndex((part) => part.id === parsed.partId);
+    const first = message.parts[index];
+    if (first?.type !== 'reasoning')
+      fail('MESSAGE_NOT_FOUND', 'The reasoning phase no longer exists.');
+    let text = first.text;
+    let state = first.state;
+    for (const part of message.parts.slice(index + 1)) {
+      if (part.type !== 'reasoning') break;
+      if (part.text.trim()) text = text ? `${text}\n\n${part.text}` : part.text;
+      state = part.state;
+    }
+    return AgentReasoningDetailSchema.parse({ text, state });
+  }
+
   async observeSession(
     sessionId: string,
     listener: (event: AgentEvent) => void,
@@ -1369,7 +1403,7 @@ export class DurableAgentHost implements AgentProtocol {
       streamingMessage: view?.assistant ?? null,
       additionalMessages: running
         .slice(1)
-        .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? []),
+        .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? []),
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
@@ -1404,7 +1438,7 @@ export class DurableAgentHost implements AgentProtocol {
         };
         messages.delete(snapshot.streamingMessage.id);
       }
-      snapshot.additionalMessages = [...messages.values()];
+      snapshot.additionalMessages = [...messages.values()].map(projectAgentMessageDisplay);
       return { snapshot, unsubscribe };
     } catch (error) {
       unsubscribe();
@@ -2134,6 +2168,7 @@ export class DurableAgentHost implements AgentProtocol {
           (part.type === 'text' || part.type === 'reasoning') &&
           old.type === part.type &&
           part.state === old.state &&
+          (part.type !== 'reasoning' || old.type !== 'reasoning' || part.hasText === old.hasText) &&
           part.text.startsWith(old.text)
         ) {
           const text = part.text.slice(old.text.length);
@@ -2370,6 +2405,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   private projectTurn(turn: RuntimeDurableTurn) {
     const view = projectDurableHostTurn(turn);
+    if (view.assistant) view.assistant = projectAgentMessageDisplay(view.assistant);
     const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
     let parentId = view.user.parentId;
     while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);

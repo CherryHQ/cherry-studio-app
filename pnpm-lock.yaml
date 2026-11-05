@@ -134,7 +134,7 @@ patchedDependencies:
   '@earendil-works/chord@1.5.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
   '@earendil-works/pi-ai@1.5.0': a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9
   '@earendil-works/pi-codemode@1.5.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
-  '@earendil-works/pi-durable@1.5.0': 5edbedcd0d8b1a29740dc6a6fadccf982f27c1f092c1dbb1c2dd5df5ab9ccd91
+  '@earendil-works/pi-durable@1.5.0': a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4
   '@google/genai@2.21.0': 983ccdfd42605ab2b240e038dce5736c0745313e7aced3b7e269b0e6911a97b5
   '@magrinj/expo-quick-look@0.3.1': 35520d77ed4612922b6a4ec70813738d976812225a1f806b1a40329e8adf6277
   '@noble/hashes@1.8.0': d01f7c80279d99c93f2d4879f21c72760af853ca4f15bb965324af52c5de60f9
@@ -227,8 +227,8 @@ importers:
         specifier: ^7.29.2
         version: 7.29.7
       '@cherrystudio/ai-core':
-        specifier: 2.4.4
-        version: 2.4.4(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
+        specifier: 2.4.5
+        version: 2.4.5(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
       '@cherrystudio/ai-runtime':
         specifier: workspace:*
         version: link:packages/ai-runtime
@@ -254,8 +254,8 @@ importers:
         specifier: workspace:*
         version: link:packages/mermaid-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.3.3
-        version: 0.3.3(zod@4.4.3)
+        specifier: 0.3.4
+        version: 0.3.4(zod@4.4.3)
       '@cherrystudio/remote-protocol':
         specifier: 0.7.0
         version: 0.7.0(zod@4.4.3)
@@ -285,7 +285,7 @@ importers:
         version: 1.5.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
       '@earendil-works/pi-durable':
         specifier: 1.5.0
-        version: 1.5.0(patch_hash=5edbedcd0d8b1a29740dc6a6fadccf982f27c1f092c1dbb1c2dd5df5ab9ccd91)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        version: 1.5.0(patch_hash=a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@expo/dom-webview':
         specifier: ~58.0.2
         version: 58.0.2(expo@58.0.22)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -358,6 +358,9 @@ importers:
       base64-js:
         specifier: 1.5.1
         version: 1.5.1
+      dayjs:
+        specifier: 1.11.23
+        version: 1.11.23
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(patch_hash=f0752da0b8bbfb3f31057a6735061860ec0a2facb1c608a25795bb5a9ad845d6)(@opentelemetry/api@1.9.1)(expo-sqlite@58.0.15(expo@58.0.22)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0))
@@ -586,6 +589,9 @@ importers:
       react-native-svg:
         specifier: 15.16.0
         version: 15.16.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+      react-native-ui-datepicker:
+        specifier: 3.3.0
+        version: 3.3.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-view-shot:
         specifier: 6.1.1
         version: 6.1.1(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -795,14 +801,14 @@ importers:
         specifier: ^2.0.53
         version: 2.0.53(zod@4.4.3)
       '@cherrystudio/ai-core':
-        specifier: 2.4.4
-        version: 2.4.4(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
+        specifier: 2.4.5
+        version: 2.4.5(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
       '@cherrystudio/ai-sdk-provider':
         specifier: 0.1.10
         version: 0.1.10(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.3.3
-        version: 0.3.3(zod@4.4.3)
+        specifier: 0.3.4
+        version: 0.3.4(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -865,8 +871,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@cherrystudio/file-preview':
-        specifier: 0.2.3
-        version: 0.2.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 0.2.4
+        version: 0.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/node':
         specifier: ^25.7.0
         version: 25.9.5
@@ -932,6 +938,9 @@ importers:
       '@swmansion/react-native-bottom-sheet':
         specifier: '*'
         version: 0.15.3(react-native-safe-area-context@5.10.1(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+      dayjs:
+        specifier: '*'
+        version: 1.11.23
       expo-blur:
         specifier: '*'
         version: 58.0.5(expo@58.0.22)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -992,6 +1001,9 @@ importers:
       react-native-svg:
         specifier: 15.16.0
         version: 15.16.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+      react-native-ui-datepicker:
+        specifier: '*'
+        version: 3.3.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-worklets:
         specifier: '*'
         version: 0.13.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1)
@@ -1006,8 +1018,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.3.3
-        version: 0.3.3(zod@4.4.3)
+        specifier: 0.3.4
+        version: 0.3.4(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3)
@@ -1825,8 +1837,8 @@ packages:
   '@chainsafe/netmask@2.0.0':
     resolution: {integrity: sha512-I3Z+6SWUoaljh3TBzCnCxjlUyN8tA+NAk5L6m9IxvCf1BENQTePzPMis97CoN/iMW1St3WN+AWCCRp+TTBRiDg==}
 
-  '@cherrystudio/ai-core@2.4.4':
-    resolution: {integrity: sha512-1RETvhorUe5xu9nDMWBKSJXAD/zRz+hf12IrfcWM2Yulyk7gaGLu7qS9D00E/Krh/wAouapUVu6s6fmGdA9ckQ==}
+  '@cherrystudio/ai-core@2.4.5':
+    resolution: {integrity: sha512-p3d5BYvFYVUd3mB/Eq7iW/HRkESkZPyKbcSqE7kvfzst9X+9+BQGAVtsELrLvBusr56ASzcjKwVU/qWqltjfsA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@ai-sdk/google': 3.0.132
@@ -1851,14 +1863,14 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/file-preview@0.2.3':
-    resolution: {integrity: sha512-+rTBG1tlGmsmu+WYTqYHnmAX1tpFoA3v+0q+sq/9vdxSGMld5mDtD0unhASICwsGXoM2T4H/ztNSKdhSaf0VyQ==}
+  '@cherrystudio/file-preview@0.2.4':
+    resolution: {integrity: sha512-WFIqNumVqzSJvZs6wddO33PNztl66fdJfaMZAQDlb91inGdBw894HIjIh43FmQUcMWQyovaZz8aG1oLoxhQ2Yg==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.3.3':
-    resolution: {integrity: sha512-vXtD2u0iQPO2In2sjMWE4+UBIRSrwUCbehA8SHD8b+CTQACGJyjLv2e5by69C0Hq5zJKRJ+ruYeN79eppVq4aw==}
+  '@cherrystudio/provider-registry@0.3.4':
+    resolution: {integrity: sha512-CnBhPF2dzXKVKzMl8HDhrKdEiQu7gHM5FIP09oR/wL/WxqGaOZe4aP1nJ1CC4guR7JH7+XsbAjIVNj8k0ERFdQ==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -6502,6 +6514,10 @@ packages:
     resolution: {integrity: sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==}
     engines: {node: '>=0.8'}
 
+  clsx@2.1.1:
+    resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
+    engines: {node: '>=6'}
+
   co@4.6.0:
     resolution: {integrity: sha512-QVb0dM5HvG+uaxitm8wONl7jltx8dqhfU33DcqtOZcLSVIKSDDLDi7+0LbAKiyI8hD9u42m2YxXSkMGWThaecQ==}
     engines: {iojs: '>= 1.0.0', node: '>= 0.12.0'}
@@ -8757,6 +8773,9 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  jalali-plugin-dayjs@1.1.4:
+    resolution: {integrity: sha512-d62QGMTufGQ1TSov4a85gBU58PA8aL6wVQs9BnC3+d/VA+v4Sq0OqM3o6RoY+/VZjliYJroGIPwlSVf7uLnZ3w==}
+
   jest-changed-files@30.5.1:
     resolution: {integrity: sha512-0+bvMM/ENhDI29Z8q1r4HxiDIi4G5tnBmSw4esfPQoj9q8Nik7KIyuxHkTVnnniJQf05SxpGaKDQ+4h28ynGPg==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
@@ -10500,6 +10519,13 @@ packages:
 
   react-native-svg@15.16.0:
     resolution: {integrity: sha512-uh8yktufYeRU3W9Omi8+SPyLF9BVN4JmLflSgc9oOcKkSKk/S5JUmmTjKZq/L8GHfQUtCvcu/W6X4xhEfBBAjQ==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
+  react-native-ui-datepicker@3.3.0:
+    resolution: {integrity: sha512-TdiOADwpQQDEtD6RxzPFfu9iZlMrQkmIMlqYNXE9zigyTlG8kstnSLSCS/lJ+fS5/L4LGU/26xp0oVuYMzDzCg==}
+    engines: {node: '>= 18'}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -12997,7 +13023,7 @@ snapshots:
     dependencies:
       '@chainsafe/is-ip': 2.1.0
 
-  '@cherrystudio/ai-core@2.4.4(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
+  '@cherrystudio/ai-core@2.4.5(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.109(patch_hash=2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(zod@4.4.3)
       '@ai-sdk/azure': 3.0.116(zod@4.4.3)
@@ -13029,13 +13055,13 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/file-preview@0.2.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@cherrystudio/file-preview@0.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.3.3(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.3.4(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
@@ -13157,7 +13183,7 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-durable@1.5.0(patch_hash=5edbedcd0d8b1a29740dc6a6fadccf982f27c1f092c1dbb1c2dd5df5ab9ccd91)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-durable@1.5.0(patch_hash=a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@earendil-works/chord': 1.5.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)(esbuild@0.28.2)(ws@8.21.1)
       '@earendil-works/pi-ai': 1.5.0(patch_hash=a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
@@ -17818,6 +17844,8 @@ snapshots:
 
   clone@1.0.4: {}
 
+  clsx@2.1.1: {}
+
   co@4.6.0: {}
 
   code-block-writer@13.0.3: {}
@@ -20431,6 +20459,8 @@ snapshots:
       filelist: 1.0.6
       picocolors: 1.1.1
 
+  jalali-plugin-dayjs@1.1.4: {}
+
   jest-changed-files@30.5.1:
     dependencies:
       execa: 5.1.1
@@ -22512,6 +22542,16 @@ snapshots:
       css-tree: 1.1.3
       react: 19.3.0
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
+
+  react-native-ui-datepicker@3.3.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
+    dependencies:
+      clsx: 2.1.1
+      dayjs: 1.11.23
+      jalali-plugin-dayjs: 1.1.4
+      lodash: 4.18.1
+      react: 19.3.0
+      react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
+      tailwind-merge: 3.6.0
 
   react-native-url-polyfill@3.0.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)):
     dependencies:

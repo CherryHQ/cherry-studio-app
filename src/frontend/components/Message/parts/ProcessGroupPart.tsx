@@ -70,6 +70,8 @@ export function ProcessGroupPart({
       isStreaming={isStreaming && (part.type !== 'reasoning' || part === latestActivityPart)}
       key={key}
       messageId={message.id}
+      sessionId={message.agentSessionId}
+      partId={key}
       messageParts={messageParts}
       part={part}
       renderMode={renderMode}
@@ -90,6 +92,10 @@ export function ProcessGroupPart({
         expanded={expandedGroups[key] ?? false}
         isStreaming={isStreaming}
         isThinking={isThinking}
+        startedAt={
+          message.stats?.runtimeTiming?.startedAt ??
+          (message.createdAt ? Date.parse(message.createdAt) : undefined)
+        }
         onExpandedChange={(expanded) =>
           setExpandedGroups((current) => ({ ...current, [key]: expanded }))
         }

@@ -5,17 +5,24 @@ import { splitTextBlocks } from '../../../utils/text-blocks';
 import { MessagePartSectionBody } from './message-part-sections';
 
 /** Bounded native text blocks; the section's copy action retains the complete original value. */
-export function MessagePartTextBody({ value }: { value: string }) {
+export function MessagePartTextBody({
+  variant = 'default',
+  value,
+}: {
+  variant?: 'default' | 'preview';
+  value: string;
+}) {
   const blocks = splitTextBlocks(value);
 
   return (
     <MessagePartSectionBody>
-      {blocks.length === 1 ? (
-        <TextBlock value={value} />
+      {variant === 'default' && blocks.length === 1 ? (
+        <TextBlock selectable value={value} />
       ) : (
         <LegendList
           data={blocks}
           estimatedItemSize={480}
+          extraData={variant}
           keyExtractor={blockKeyExtractor}
           nestedScrollEnabled
           // A native selection belongs to one block and must not follow a recycled text view.
@@ -30,16 +37,16 @@ export function MessagePartTextBody({ value }: { value: string }) {
   );
 }
 
-function TextBlock({ value }: { value: string }) {
+function TextBlock({ selectable, value }: { selectable: boolean; value: string }) {
   return (
-    <Text className="text-base text-foreground" selectable>
+    <Text className="text-base text-foreground" selectable={selectable}>
       {value}
     </Text>
   );
 }
 
-function renderTextBlock({ item }: LegendListRenderItemProps<string>) {
-  return <TextBlock value={item} />;
+function renderTextBlock({ extraData, item }: LegendListRenderItemProps<string>) {
+  return <TextBlock selectable={extraData !== 'preview'} value={item} />;
 }
 
 // Blocks stay in source order; updates replace their text, never reorder it.

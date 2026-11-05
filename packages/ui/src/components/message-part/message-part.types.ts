@@ -19,8 +19,7 @@ export type MessagePartStatusProps = {
 
 export type MessagePartReasoningProps = {
   children: ReactNode;
-  /** Runs before a reader-initiated inline disclosure toggle. */
-  onDisclosureToggle?: () => void;
+  detailTitle?: string;
   state: 'complete' | 'running';
   statusText: string;
   testID?: string;

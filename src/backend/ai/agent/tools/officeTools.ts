@@ -1,5 +1,3 @@
-import * as z from 'zod';
-
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import {
   generateOfficeFile,
@@ -18,6 +16,7 @@ import type { RuntimeTool } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
 import { createOfficeScriptTool } from './officeScriptTool';
 import {
+  createOfficeTiming,
   mebibytes,
   normalizeOfficeFilename,
   officeFailure as invalid,
@@ -26,7 +25,7 @@ import {
   type OfficeFiles,
 } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
-import { toRuntimeInputSchema } from './runtimeToolSchema';
+import { toRuntimeInputSchema, toolValidationError } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 const formats: readonly {
@@ -69,11 +68,11 @@ export function createOfficeTools(
       providerName: name,
       displayName,
       description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments, generated images or the selected workspace: pass their existing file ids, never regenerate an image to place it. Up to ${OFFICE_MAX_IMAGES} distinct images per file in any image format; large ones are compressed for embedding automatically. Input JSON must fit 128 KiB; the output is limited to ${mebibytes(OFFICE_MAX_FILE_BYTES)}. Use a plain filename with the matching extension. In Code Mode, use result.value.fileEntryId; a failed call throws its message. store() changes survive only a successful script. Finish a short creation script after storing ids, then perform dependent reads and edits in another script.`,
-      inputSchema: toRuntimeInputSchema(officeInputSchemas[format]),
+      inputSchema: toRuntimeInputSchema(officeInputSchemas[format], 'input'),
       outputSchema: officeToolOutputSchemas[name],
       approval: 'auto',
       deferred: true,
-      async execute({ input, signal }) {
+      async execute({ input, signal, toolCallId }) {
         signal.throwIfAborted();
         if (new TextEncoder().encode(JSON.stringify(input)).length > OFFICE_MAX_INPUT_BYTES) {
           return invalid(
@@ -81,7 +80,7 @@ export function createOfficeTools(
           );
         }
         const parsed = officeInputSchemas[format].safeParse(input);
-        if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
+        if (!parsed.success) return invalid(toolValidationError(parsed.error));
         const filename = normalizeOfficeFilename(parsed.data.filename, format);
         if (!filename) return invalid(`Use a plain filename ending in .${format}.`);
         // The schema and format are selected together from officeInputSchemas above.
@@ -96,8 +95,14 @@ export function createOfficeTools(
           await access.resolveRead({ file_entry_id: id });
         }
 
-        const operation = await startOfficeOperation(files, signal);
+        const timing = createOfficeTiming(toolCallId, name);
+        timing.stage('operation_queue');
+        const operation = await startOfficeOperation(files, signal).catch((error) => {
+          timing.finish(signal.aborted ? 'cancelled' : 'failed');
+          throw error;
+        });
         try {
+          timing.stage('prepare_images');
           const images = await prepareOfficeImages(ids, files, operation, signal);
           const output = operation.output(format);
           await generateOfficeFile({
@@ -107,8 +112,10 @@ export function createOfficeTools(
             sandbox,
             signal,
             onSettled: operation.job(),
+            onStage: timing.stage,
           });
           signal.throwIfAborted();
+          timing.stage('publish_file');
           const entry = await files.createFileEntry(
             {
               uri: output,
@@ -142,6 +149,7 @@ export function createOfficeTools(
           if (error instanceof OfficeGenerationError) return invalid(error.message);
           throw error;
         } finally {
+          timing.finish(signal.aborted ? 'cancelled' : 'ended');
           operation.finish();
         }
       },

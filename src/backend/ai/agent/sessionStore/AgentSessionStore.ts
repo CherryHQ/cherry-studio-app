@@ -263,7 +263,12 @@ export interface AgentSessionStore {
   /** The ancestor chain ending at `through`, oldest first. */
   listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]>;
 
-  getMessage(sessionId: string, messageId: string): Promise<AgentMessageView | null>;
+  /** Execution reads stay strict; readers may isolate unrelated invalid parts like transcript pages. */
+  getMessage(
+    sessionId: string,
+    messageId: string,
+    options?: { tolerateInvalidParts?: boolean },
+  ): Promise<AgentMessageView | null>;
 
   /** The question and all its answers, including settled siblings of an active answer. */
   listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]>;

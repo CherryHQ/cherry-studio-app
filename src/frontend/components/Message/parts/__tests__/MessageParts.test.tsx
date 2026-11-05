@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -6,6 +6,10 @@ import type { MessageStatus } from '@/shared/data/types/message';
 
 import type { MessageListItem } from '../../types';
 import { MessageParts } from '../MessageParts';
+
+jest.mock('../ReasoningPart', () => ({
+  ReasoningDetailProvider: ({ children }: { children: ReactNode }) => children,
+}));
 
 jest.mock('@cherrystudio/ui/components', () => ({
   ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),

@@ -48,6 +48,18 @@ describe('readCherryMeta', () => {
     expect(readCherryMeta(part)).toEqual({ thinkingMs: 1200, startedAt: 42 });
   });
 
+  test.each([true, false])('preserves reasoning content availability: %s', (hasText) => {
+    const part = { ...reasoningPart({ cherry: { hasText } }), text: '' };
+
+    expect(readCherryMeta(part)).toEqual({ hasText });
+  });
+
+  test('rejects malformed reasoning content availability', () => {
+    const part = reasoningPart({ cherry: { hasText: 'true' } });
+
+    expect(readCherryMeta(part)).toBeUndefined();
+  });
+
   test('returns undefined for a malformed payload instead of throwing', () => {
     const part = reasoningPart({ cherry: { thinkingMs: 'not-a-number' } });
 

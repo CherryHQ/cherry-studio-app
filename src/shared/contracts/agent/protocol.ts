@@ -9,6 +9,7 @@ import type {
   AgentEditMessageInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
+  AgentReadReasoningInput,
   AgentSelectMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
@@ -17,6 +18,7 @@ import type { AgentRespondQuestionInput } from './userQuestion';
 import type {
   AgentErrorView,
   AgentMessageView,
+  AgentReasoningDetail,
   AgentSessionStatus,
   AgentSessionView,
 } from './views';
@@ -33,6 +35,8 @@ export class AgentProtocolError extends Error {
 }
 
 export interface AgentProtocol {
+  /** Read one full reasoning phase on demand, from the active runtime or saved transcript. */
+  readReasoning(input: AgentReadReasoningInput): Promise<AgentReasoningDetail>;
   /** Edits a successful answer while idle, including its future model context. */
   editMessage(input: AgentEditMessageInput): Promise<AgentMessageView>;
   /** Stable, immutable snapshot; null until this generation runs a turn in the Session. */
