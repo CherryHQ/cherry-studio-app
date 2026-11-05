@@ -15,7 +15,9 @@ function useCatalog<T>(
   read: (cursor: CatalogCursor | undefined, signal: AbortSignal) => Promise<CatalogPage<T>>,
   enabled = true,
 ) {
-  const kind = key[0] === 'selected-session' || key[0] === 'session-branches' ? 'sessions' : key[0];
+  const kind = ['selected-session', 'session-children', 'session-path'].includes(key[0]!)
+    ? 'sessions'
+    : key[0];
   const source = useConversationSource();
   const { availability } = useConversationSourceState();
   const queryClient = useQueryClient();
@@ -94,12 +96,25 @@ export function useConversationSessions(agent?: AgentRef) {
     catalog.listSessions({ agent }, cursor, signal),
   );
 }
-export function useConversationSessionBranches(root: ConversationRef) {
+export function useConversationSessionChildren(parent: ConversationRef, enabled = true) {
   const { catalog } = useConversationSource();
   return useCatalog(
-    ['session-branches', root.sessionId],
-    (cursor, signal) => catalog.listSessionBranches!(root, cursor, signal),
-    Boolean(catalog.listSessionBranches),
+    ['session-children', parent.sessionId],
+    (cursor, signal) => catalog.listSessionChildren!(parent, cursor, signal),
+    enabled && Boolean(catalog.listSessionChildren),
+  );
+}
+export function useConversationSessionPath(sessionId?: string) {
+  const source = useConversationSource();
+  return useCatalog(
+    ['session-path', sessionId ?? ''],
+    async (_cursor, signal) => ({
+      items: await source.catalog.readSessionPath!(
+        { source: source.ref, sessionId: sessionId! },
+        signal,
+      ),
+    }),
+    Boolean(sessionId && source.catalog.readSessionPath),
   );
 }
 export function useConversationWorkspaces(agent?: AgentRef) {
@@ -119,12 +134,27 @@ const emptyStatus = {
   subscribe: () => () => {},
 };
 
-export function useConversationPreview(ref: ConversationRef) {
+export function useConversationPreview(
+  ref: ConversationRef,
+  { includeDescendants = false }: { includeDescendants?: boolean } = {},
+) {
   const source = useConversationSource();
-  const preview = useMemo(() => source.catalog.previewSession?.(ref) ?? {}, [source, ref]);
+  const preview = useMemo(
+    () => source.catalog.previewSession?.(ref, { includeDescendants }) ?? {},
+    [source, ref, includeDescendants],
+  );
   const state = preview.status ?? emptyStatus;
   const status = useSyncExternalStore(state.subscribe, state.getSnapshot, state.getSnapshot);
   return { ...preview, status };
+}
+
+export function useConversationAgentStatus(ref: AgentRef, enabled: boolean) {
+  const source = useConversationSource();
+  const state = useMemo(
+    () => (enabled ? source.catalog.previewAgent?.(ref) : undefined) ?? emptyStatus,
+    [source, ref, enabled],
+  );
+  return useSyncExternalStore(state.subscribe, state.getSnapshot, state.getSnapshot);
 }
 
 /** Reads metadata for the selected conversation only, never each visible row's history. */

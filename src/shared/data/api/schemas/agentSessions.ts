@@ -6,20 +6,25 @@ import type { CursorPaginationResponse } from '@/shared/data/api/types';
 export const AgentSessionEntitySchema = AgentSessionViewSchema.extend({
   /** Last real conversation activity, used for recency ordering. */
   lastActivityAt: z.iso.datetime(),
-  /** Present on root-group catalog rows; descendants are loaded when expanded. */
-  forkCount: z.number().int().nonnegative().optional(),
+  /** Whether the catalog row has direct child conversations. */
+  hasChildren: z.boolean().optional(),
 });
 export type AgentSessionEntity = z.infer<typeof AgentSessionEntitySchema>;
 
-export const ListAgentSessionsQuerySchema = z.strictObject({
-  agentId: z.string().min(1).optional(),
-  groupBy: z.literal('root').optional(),
-  rootSessionId: z.string().min(1).optional(),
-  /** Literal substring of the conversation title, across the complete collection. */
-  q: z.string().trim().min(1).optional(),
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().positive().max(200).optional(),
-});
+export const ListAgentSessionsQuerySchema = z
+  .strictObject({
+    agentId: z.string().min(1).optional(),
+    groupBy: z.literal('root').optional(),
+    parentSessionId: z.string().min(1).optional(),
+    /** Literal substring of the conversation title, across the complete collection. */
+    q: z.string().trim().min(1).optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().positive().max(200).optional(),
+  })
+  .refine((query) => !(query.groupBy && query.parentSessionId), {
+    message: 'Root groups and direct children are separate catalog queries.',
+    path: ['parentSessionId'],
+  });
 export type ListAgentSessionsQueryParams = z.input<typeof ListAgentSessionsQuerySchema>;
 export type ListAgentSessionsQuery = z.output<typeof ListAgentSessionsQuerySchema>;
 
@@ -48,6 +53,13 @@ export type AgentSessionSchemas = {
       body: UpdateAgentSessionDto;
       params: { id: string };
       response: AgentSessionEntity;
+    };
+  };
+  '/agent-sessions/:id/path': {
+    GET: {
+      params: { id: string };
+      /** Root first, followed by each direct descendant through the requested Session. */
+      response: AgentSessionEntity[];
     };
   };
 };

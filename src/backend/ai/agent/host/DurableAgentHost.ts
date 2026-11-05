@@ -163,6 +163,7 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly statuses = new Map<string, AgentSessionStatus>();
   private readonly statusListeners = new Map<string, Set<() => void>>();
+  private readonly allStatusListeners = new Set<() => void>();
   private readonly deleting = new Set<string>();
   /** Null awaits the fork's first input; an id identifies its leading answer for naming. */
   private readonly forksToName = new Map<string, string | null>();
@@ -498,6 +499,15 @@ export class DurableAgentHost implements AgentProtocol {
 
   getSessionStatus(sessionId: string) {
     return this.statuses.get(sessionId) ?? null;
+  }
+  getSessionStatusIds() {
+    return [...this.statuses.keys()];
+  }
+  subscribeSessionStatuses(listener: () => void) {
+    this.allStatusListeners.add(listener);
+    return () => {
+      this.allStatusListeners.delete(listener);
+    };
   }
   subscribeSessionStatus(sessionId: string, listener: () => void) {
     const listeners = this.statusListeners.get(sessionId) ?? new Set();
@@ -2230,7 +2240,10 @@ export class DurableAgentHost implements AgentProtocol {
       this.recordTurnState({ sessionId, turnId: status.turnId }, status.status);
     if (status) this.statuses.set(sessionId, Object.freeze(status));
     else this.statuses.delete(sessionId);
-    for (const listener of this.statusListeners.get(sessionId) ?? [])
+    for (const listener of [
+      ...(this.statusListeners.get(sessionId) ?? []),
+      ...this.allStatusListeners,
+    ])
       try {
         listener();
       } catch (error) {

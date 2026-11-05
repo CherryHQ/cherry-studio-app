@@ -74,6 +74,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   getSessionStatus = (sessionId: string) => this.host.getSessionStatus(sessionId);
   subscribeSessionStatus = (sessionId: string, listener: () => void) =>
     this.host.subscribeSessionStatus(sessionId, listener);
+  getSessionStatusIds = () => this.host.getSessionStatusIds();
+  subscribeSessionStatuses = (listener: () => void) => this.host.subscribeSessionStatuses(listener);
   startSession: AgentProtocol['startSession'] = (input) => this.host.startSession(input);
   submitMessage: AgentProtocol['submitMessage'] = (input) => this.host.submitMessage(input);
   forkSession: AgentProtocol['forkSession'] = (input) => this.host.forkSession(input);

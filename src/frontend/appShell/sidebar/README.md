@@ -68,21 +68,37 @@ selection never refreshes them itself. Failed deletions remain selected for retr
 
 The recent-list menu switches between the conversation list and conversations grouped by Agent.
 Local conversation rows with forks form collapsible groups under their main conversation in both
-views. Expanding a group lists the main conversation followed by its descendant Sessions, including
-forks of forks. Root groups are paginated by the family's latest activity; expanded branches have
-their own paginated metadata query. No transcript observation is opened to form a group.
+views. The root row opens its conversation; its separate disclosure target expands only its direct
+children. Each expanded node owns an independently paginated metadata query, ordered by creation
+time and id so new replies do not move sibling nodes. Collapsing it releases the child queries.
+Root groups are paginated by the family's latest activity. A lightweight root-first path read
+restores the selected conversation's ancestors when the drawer opens, including ancestors outside
+the loaded pages. It never loads transcripts. Relationship rails use the ordinary row's measured
+height, with 12-point indentation per generation; titles follow their node without a fixed gutter.
+Selection uses the existing whole-row surface, with no additional selected label or branch count.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
 its conversations without navigating; multiple groups can stay open. Only expanded groups query
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
 Conversation rows share selection and navigation; status, rename and deletion are supplied by the
 source preview contract. Local previews retain these capabilities without opening transcripts.
+Status consumes space only while present: progress uses a spinner, failure an alert icon, and
+unread completion a dot; pending approval or input keeps a short translated label. Full labels
+remain in each row's accessibility value. Default and read-completed rows have no status slot.
+The disclosure stays at the same trailing edge at every depth, with no empty disclosure slot on
+leaves. A collapsed family or Agent group shows its highest-priority status; expanded nodes show
+their own status and leave descendant hints with the visible child rows. Status hints never
+fetch child pages or transcripts.
 Remote previews currently omit them because the desktop catalog does not supply them. Agent header labels
 toggle their groups. The existing dock's "New chat" action opens a draft, where the user can
 select an Agent.
-Within Agent groups, Agent names, conversation titles, and pagination actions share one text
-column. Grouped conversation and pagination rows keep the avatar column empty; the ordinary
-conversation list has no avatar column and retains its original left gutter. Selection surfaces
-keep the same outer gutters across groups.
+Within Agent groups, ordinary conversation titles and pagination actions share the Agent's text
+column. Branch rails start in that column, with titles following their node. Grouped rows keep the
+avatar column empty; the ordinary conversation list has no avatar column and retains its original
+left gutter. Selection surfaces keep the same outer gutters across groups. The navigation/menu
+target and disclosure are siblings: a tap on the disclosure only expands or collapses, long press
+on the conversation opens its existing native menu, and scrolling cancels those actions through
+the shared gesture owners. In selection mode, the main target toggles the checkbox while disclosure
+remains available for selecting descendants; all targets disable during deletion.
 
 The drawer title names whose chats it shows: "Cherry Studio" for this phone, or the selected
 desktop's name. The name always reads in full and never ends in an ellipsis: a long one shrinks

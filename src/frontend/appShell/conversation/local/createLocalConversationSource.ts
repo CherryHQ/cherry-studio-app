@@ -1,7 +1,10 @@
 import { v7 as uuidv7 } from 'uuid';
 
 import type { AgentProtocol } from '@/shared/contracts/agent';
-import type { ListAgentSessionsQueryParams } from '@/shared/data/api/schemas/agentSessions';
+import type {
+  AgentSessionEntity,
+  ListAgentSessionsQueryParams,
+} from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import type {
@@ -10,6 +13,7 @@ import type {
   CatalogCursor,
   ConversationSource,
   ConversationRef,
+  ConversationSummary,
   QueryScope,
 } from '../contracts';
 import {
@@ -17,6 +21,7 @@ import {
   createConversationState,
   ConversationReadError,
 } from '../conversationState';
+import { createLocalConversationGroupStatus } from './localConversationGroupStatus';
 import {
   createLocalConversationPreview,
   type ConversationReadMarks,
@@ -35,6 +40,7 @@ export function createLocalConversationSource(input: {
   const ref = { kind: 'local' } as const;
   const scope = uuidv7() as QueryScope;
   const refs = createConversationReferences(scope);
+  const groupStatus = createLocalConversationGroupStatus(input);
   let disposed = false;
   const assertSource = () => {
     if (disposed) throw new ConversationReadError({ code: 'retired', retry: 'none' });
@@ -55,33 +61,36 @@ export function createLocalConversationSource(input: {
   const state = createConversationState<{ availability: Availability }>({
     availability: { state: 'enabled' },
   });
+  const toSummary = (session: AgentSessionEntity): ConversationSummary => ({
+    ref: { source: ref, sessionId: session.id },
+    agentId: session.agentId,
+    title: session.name,
+    createdAt: session.createdAt,
+    updatedAt: session.lastActivityAt,
+    forkedFromSessionId: session.forkedFromSessionId,
+    hasChildren: session.hasChildren,
+  });
   const readSessions = async (
-    { agent, root }: { agent?: AgentRef; root?: ConversationRef },
+    { agent, parent }: { agent?: AgentRef; parent?: ConversationRef },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ) => {
     assertSource();
     signal.throwIfAborted();
-    if (root && root.source.kind !== 'local')
+    if (parent && parent.source.kind !== 'local')
       throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
     const agentId = agent ? refs.resolve(agent, 'agent').id : undefined;
-    const key = root ? `branches:${root.sessionId}` : `sessions:${agentId ?? ''}`;
+    const key = parent ? `children:${parent.sessionId}` : `sessions:${agentId ?? ''}`;
     const query: ListAgentSessionsQueryParams = {
       agentId,
-      ...(root ? { rootSessionId: root.sessionId } : { groupBy: 'root' }),
+      ...(parent ? { parentSessionId: parent.sessionId } : { groupBy: 'root' }),
       cursor: cursor ? refs.resolve(cursor, key).id : undefined,
     };
     const result = await input.api.get('/agent-sessions', { query, signal });
     assertSource();
     signal.throwIfAborted();
     return {
-      items: result.items.map((session) => ({
-        ref: { source: ref, sessionId: session.id },
-        agentId: session.agentId,
-        title: session.name,
-        updatedAt: session.lastActivityAt,
-        ...(session.forkCount ? { forkCount: session.forkCount } : {}),
-      })),
+      items: result.items.map(toSummary),
       ...(result.nextCursor ? { next: refs.issue<CatalogCursor>(key, result.nextCursor) } : {}),
     };
   };
@@ -110,23 +119,37 @@ export function createLocalConversationSource(input: {
         const session = await input.api.get(`/agent-sessions/${address.sessionId}`, { signal });
         assertSource();
         signal.throwIfAborted();
-        return {
-          ref: address,
-          agentId: session.agentId,
-          title: session.name,
-          updatedAt: session.lastActivityAt,
-        };
+        return toSummary(session);
       },
-      previewSession: (address) =>
+      readSessionPath: async (address, signal) => {
+        assertSource();
+        signal.throwIfAborted();
+        if (address.source.kind !== 'local')
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+        const sessions = await input.api.get(`/agent-sessions/${address.sessionId}/path`, {
+          signal,
+        });
+        assertSource();
+        signal.throwIfAborted();
+        return sessions.map(toSummary);
+      },
+      previewSession: (address, options) =>
         createLocalConversationPreview({
           ...input,
           address,
+          status: options?.includeDescendants
+            ? groupStatus.read({ sessionId: address.sessionId })
+            : undefined,
           assertSource,
           onChanged: (id) => {
             publishCatalog('sessions');
             input.onSessionChanged?.(id);
           },
         }),
+      previewAgent: (agent) => {
+        assertSource();
+        return groupStatus.read({ agentId: refs.resolve(agent, 'agent').id });
+      },
       listAgents: async (cursor, signal) => {
         assertSource();
         signal.throwIfAborted();
@@ -152,11 +175,12 @@ export function createLocalConversationSource(input: {
         };
       },
       listSessions: readSessions,
-      listSessionBranches: (root, cursor, signal) => readSessions({ root }, cursor, signal),
+      listSessionChildren: (parent, cursor, signal) => readSessions({ parent }, cursor, signal),
     },
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      groupStatus.dispose();
       state.set({ availability: { state: 'disabled', reason: 'retired' } });
       unchanges?.();
       unchanges = undefined;

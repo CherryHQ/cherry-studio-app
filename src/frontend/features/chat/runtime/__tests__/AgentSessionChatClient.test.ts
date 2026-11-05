@@ -144,6 +144,8 @@ function protocolWithObservation(
       ReturnType<AgentProtocol['subscribeSessionStatus']>,
       Parameters<AgentProtocol['subscribeSessionStatus']>
     >(() => () => undefined),
+    getSessionStatusIds: jest.fn(() => []),
+    subscribeSessionStatuses: jest.fn(() => () => undefined),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),

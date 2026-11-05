@@ -39,6 +39,9 @@ export interface AgentProtocol {
   getSessionStatus(sessionId: string): AgentSessionStatus | null;
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
+  /** Sessions with a status in this generation; used for collapsed catalog groups. */
+  getSessionStatusIds(): readonly string[];
+  subscribeSessionStatuses(listener: () => void): () => void;
 
   /** Bytes held by disposable execution copies; transcripts and attachments are excluded. */
   getWorkingStorageSize(): Promise<number>;

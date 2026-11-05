@@ -41,8 +41,10 @@ export {
 export {
   useConversationAgents,
   useConversationSessions,
-  useConversationSessionBranches,
+  useConversationSessionChildren,
+  useConversationSessionPath,
   useConversationPreview,
+  useConversationAgentStatus,
   useConversationSummary,
   useConversationWorkspaces,
 } from './useConversationCatalog';

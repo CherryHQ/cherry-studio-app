@@ -421,6 +421,8 @@ Runtime identity.
 interface AgentProtocol {
   getSessionStatus(sessionId: string): AgentSessionStatus | null
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void
+  getSessionStatusIds(): readonly string[]
+  subscribeSessionStatuses(listener: () => void): () => void
 
   renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
@@ -490,6 +492,9 @@ changes; consumers subscribe and then read the snapshot. These in-process list o
 load messages or open Runtime sessions. Terminal status remains available after chat observers
 unsubscribe, clears on Session deletion, and resets with the Host generation. Completion read
 receipts are frontend-owned, per turn, and live only for the app process, matching Desktop.
+`getSessionStatusIds` enumerates the Sessions with such a snapshot; `subscribeSessionStatuses`
+notifies when any snapshot changes or is removed. Collapsed catalog groups combine these status
+values with metadata paths and read receipts, without opening transcripts or Runtime sessions.
 
 `startSession` is the Draft-to-Session boundary. It performs the same write-free turn preparation
 as `submitMessage`, opens the Runtime, and then atomically creates the durable Session together with
