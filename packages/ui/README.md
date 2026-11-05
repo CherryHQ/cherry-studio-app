@@ -423,6 +423,24 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
 
+`Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
+and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all
+platforms. They support the existing `fill`/`hug` layouts; labels grow with system text size.
+
+`DateRangePicker` is a controlled calendar for selecting a start and end day on one surface.
+It adapts `react-native-ui-datepicker` with Cherry typography, theme tokens, range highlighting,
+month/year navigation, and the caller's resolved `locale`, including both Chinese scripts.
+Its `value` and `onValueChange` use `DateRangeValue` (`startDate`/`endDate`, both optional `Date`s);
+the end stays absent while a new range is being selected. `minimumDate` and `maximumDate` constrain
+selection. The caller owns surrounding insets, presets, incomplete-selection copy, confirmation,
+and conversion to application-specific day boundaries. Tapping a completed range starts a new one;
+tapping its pending start again selects that single day.
+Public `Date` values represent local calendar days. The adapter exchanges date-only values with
+the vendor in UTC and reconstructs local dates on selection, avoiding the vendor's timezone
+conversion shifting a pressed day. The vendor's UTC-based today decoration is not used; the
+calendar uses Monday-first weeks, matching the app's usage calendar.
+It adds no native module or platform-specific component API.
+
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
 value and persistence. The default grouped `Section` supplies its surface and separators. Use
