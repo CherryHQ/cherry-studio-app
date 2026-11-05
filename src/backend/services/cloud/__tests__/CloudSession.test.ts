@@ -22,8 +22,9 @@ function setup() {
     getIdentity: jest.fn(
       (): CloudIdentity => ({
         key: 'a',
-        environment: 'cn',
         profileId: 'account-a',
+        apiOrigin: 'https://cloud.example',
+        webUrl: 'https://cloud.example/account/plans',
       }),
     ),
     getTokens: jest.fn(async () => ({ accessToken: 'idp-access', idToken: 'idp-id' })),
@@ -121,14 +122,20 @@ test('a late product-entry response cannot reopen an account after replacement',
   );
   const pending = session.headers('GET', '/v1/models');
   await Promise.resolve();
-  source.getIdentity.mockReturnValue({ key: 'b', environment: 'cn', profileId: 'account-b' });
+  source.getIdentity.mockReturnValue({ ...source.getIdentity(), key: 'b', profileId: 'account-b' });
   resolve(entry());
   await expect(pending).rejects.toMatchObject({ code: 'cloud_signed_out' });
 });
 
-test('an environment change invalidates a session even when the source identity key is unchanged', async () => {
-  const { session, source } = setup();
-  source.getIdentity.mockReturnValue({ ...source.getIdentity(), environment: 'global' });
-  await expect(session.get('/v1/models')).rejects.toMatchObject({ code: 'cloud_signed_out' });
-  expect(mockRequest).not.toHaveBeenCalled();
-});
+test.each([
+  { apiOrigin: 'https://replacement.example' },
+  { webUrl: 'https://replacement.example/account/plans' },
+])(
+  'a service address change invalidates a session even when the source identity key is unchanged: %j',
+  async (service) => {
+    const { session, source } = setup();
+    source.getIdentity.mockReturnValue({ ...source.getIdentity(), ...service });
+    await expect(session.get('/v1/models')).rejects.toMatchObject({ code: 'cloud_signed_out' });
+    expect(mockRequest).not.toHaveBeenCalled();
+  },
+);

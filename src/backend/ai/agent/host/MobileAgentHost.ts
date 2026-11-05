@@ -76,6 +76,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   getWorkingStorageSize = () => this.host.getWorkingStorageSize();
   clearWorkingStorage = () => this.host.clearWorkingStorage();
+  readReasoning: AgentProtocol['readReasoning'] = (input) => this.host.readReasoning(input);
   getSessionStatus = (sessionId: string) => this.host.getSessionStatus(sessionId);
   subscribeSessionStatus = (sessionId: string, listener: () => void) =>
     this.host.subscribeSessionStatus(sessionId, listener);

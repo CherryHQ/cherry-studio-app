@@ -16,7 +16,6 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
-import { AccountEnvironmentSchema, type AccountEnvironment } from '@/shared/contracts/account';
 import {
   CLOUD_PROVIDER_ID,
   CloudAccessError,
@@ -43,7 +42,7 @@ const EMPTY: CloudState = {
   webUrl: null,
 };
 
-const EnvironmentConfigSchema = z.object({
+const CloudServiceConfigSchema = z.object({
   apiOrigin: z.url({ protocol: /^https$/ }).transform((value, context) => {
     const url = new URL(value);
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
@@ -57,7 +56,7 @@ const EnvironmentConfigSchema = z.object({
     return !url.username && !url.password;
   }, 'Subscription pages cannot contain credentials'),
 });
-type EnvironmentConfig = z.infer<typeof EnvironmentConfigSchema>;
+type CloudServiceConfig = z.infer<typeof CloudServiceConfigSchema>;
 
 @Injectable('CloudRuntime')
 @ServicePhase(Phase.PostReady)
@@ -67,8 +66,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private snapshot = EMPTY;
   private readonly changes = new Emitter<void>();
   private source: CloudIdentitySource | undefined;
-  private readonly environments: Partial<Record<AccountEnvironment, EnvironmentConfig>> = {};
-  private configuration: EnvironmentConfig | undefined;
+  private configuration: CloudServiceConfig | undefined;
   private version = '';
   private identityKey: string | null = null;
   private lifetime = new AbortController();
@@ -86,23 +84,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
     super();
   }
 
-  configure(
-    source: CloudIdentitySource,
-    environments: Partial<Record<AccountEnvironment, unknown>> | undefined,
-    version: string,
-  ): void {
+  configure(source: CloudIdentitySource, version: string): void {
     this.source = source;
-    // Only explicitly configured HTTPS services may receive the selected account's credentials.
-    for (const environment of AccountEnvironmentSchema.options) {
-      const parsed = EnvironmentConfigSchema.safeParse(environments?.[environment]);
-      if (parsed.success) this.environments[environment] = parsed.data;
-      else {
-        delete this.environments[environment];
-        loggerService
-          .withContext('CloudRuntime')
-          .error('Cloud environment is not configured correctly', { environment });
-      }
-    }
     this.version = version;
   }
 
@@ -128,13 +111,21 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private changeIdentity(): void {
     if (this.stopped) return;
     const identity = this.source?.getIdentity();
-    const key = identity ? JSON.stringify([identity.key, identity.environment]) : null;
+    const key = identity
+      ? JSON.stringify([identity.key, identity.apiOrigin, identity.webUrl])
+      : null;
     if (key === this.identityKey) return;
     this.lifetime.abort();
     void this.session?.revoke().catch(() => {});
     this.lifetime = new AbortController();
     this.session = undefined;
-    this.configuration = identity ? this.environments[identity.environment] : undefined;
+    // Only the selected account's validated HTTPS services may receive its credentials.
+    const configuration = CloudServiceConfigSchema.safeParse(identity);
+    this.configuration = configuration.success ? configuration.data : undefined;
+    if (identity && !configuration.success)
+      loggerService
+        .withContext('CloudRuntime')
+        .error('Cloud services are not configured correctly');
     this.identityKey = key;
     this.refreshing = undefined;
     this.refreshedAt = 0;

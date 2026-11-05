@@ -8,23 +8,23 @@ methods. Tokens and device secrets never reach the frontend or database.
 
 ## Configuration
 
-Configure both environments through EAS, separately for each `development`, `preview` and
-`production` deployment:
+The account identity source supplies the current session's concrete `apiOrigin` and `webUrl`.
+`CloudRuntime` validates both before account reads, model synchronization or inference. It does not
+read a regional address map or select a service from a region marker. Missing or invalid addresses
+make Cloud unavailable without changing ordinary provider use or reusing the previous session's
+service. API origins must be HTTPS and cannot contain a path, query, fragment or credentials;
+webpage URLs must be HTTPS and contain no credentials.
 
-| Environment | HTTPS Cloud API origin | Full subscription-management page URL |
-| --- | --- | --- |
-| `cn` | `CHERRY_CLOUD_API_ORIGIN_CN` | `CHERRY_CLOUD_WEB_URL_CN` |
-| `global` | `CHERRY_CLOUD_API_ORIGIN_GLOBAL` | `CHERRY_CLOUD_WEB_URL_GLOBAL` |
-
-`app.config.ts` embeds these values under `extra.cloud`. After sign-in, the account environment selects
-one configured pair for account reads, models, inference and the webpage. There is no single-origin
-compatibility setting, geographic inference or fallback to the other environment. Missing or
-invalid configuration makes that environment unavailable without changing ordinary provider use.
-API origins cannot contain a path, query, fragment or credentials; webpage URLs must be HTTPS and
-contain no credentials. The app does not retrieve variables from EAS at runtime.
+Accounts Portal 0.2.1 does not expose session service metadata yet. Its installation adapter
+temporarily receives `CHERRY_CLOUD_API_ORIGIN_CN` and `CHERRY_CLOUD_WEB_URL_CN` through
+`extra.accountsPortal.cloudApiOrigin` and `extra.accountsPortal.cloudWebUrl`. Configure these in
+each EAS deployment environment (`development`, `preview`, `production`). The existing `_CN`
+variable names preserve deployment configuration; product code consumes only the resulting
+addresses. Once the SDK supplies service metadata, replace the installation mapping without
+changing this consumer. The app does not retrieve variables from EAS at runtime.
 
 Supply the Cloud product audience in `ACCOUNTS_PORTAL_SCOPES`, alongside any enterprise audience.
-Prices, SKUs and models come from the service. The subscription page opens the selected environment's
+Prices, SKUs and models come from the service. The subscription page opens the current session's
 configured webpage, and refreshes the current account when the browser returns or the app enters
 the foreground. Payment, purchase and renewal management stay on the webpage; closing it is never
 treated as proof of payment. No app credentials are added to its URL.
@@ -35,12 +35,10 @@ access/ID pair after refresh and checks the SDK's session, profile and sign-in g
 regressions for matched token refresh and sign-out isolation remain in
 `scripts/__tests__/accountsPortalIdentityTokens.test.ts`.
 
-The account layer supplies the app's normalized session environment and actual issuer, as described
+The account layer owns the actual issuer, matched identity tokens and service addresses, as described
 in [Enterprise Edition](../../../../docs/references/enterprise.md#account). SDK fields and values
-are translated at the installation's account integration point; they do not define the subscription
-contract. The current China-only Accounts Portal 0.2.1 integration supplies `cn` and its configured
-issuer. When multi-region login ships, only that integration mapping needs to consume the SDK's
-environment result; subscription APIs and environment selection remain unchanged.
+are translated at the installation's account integration point. Account and address changes update
+the identity source atomically, including when the subject and product profile stay the same.
 
 ## Session and transport
 
@@ -84,7 +82,7 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 - State refreshes after sign-in/account replacement, foreground entry, subscription-page opening,
   inference completion/cancellation, and periodically. Admission refreshes a stale snapshot.
   Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
-- Account or SDK-environment replacement clears the public snapshot synchronously, cancels old
+- Account or service-address replacement clears the public snapshot synchronously, cancels old
   requests and discards late results. Revocation uses the old session's service; the replacement's
   queries, inference and webpage use the new one. Catalog withdrawal disables old rows without
   writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.

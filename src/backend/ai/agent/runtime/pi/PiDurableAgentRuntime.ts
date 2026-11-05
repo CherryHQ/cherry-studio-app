@@ -44,7 +44,7 @@ import {
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
-import { fitPiCodemodeOutput } from './piCodemodeOutput';
+import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -581,11 +581,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return { turns, ...(nextCursor ? { nextCursor } : {}) };
   }
 
-  async message(lane: RuntimeLane, messageId: string) {
+  async message(lane: RuntimeLane, messageId: string, options?: { fullReasoning?: boolean }) {
     const runtime = this.requireRuntime();
+    if (options?.fullReasoning) {
+      for (const observer of this.observers) {
+        const turn = observer.readReasoningTurn(lane, messageId);
+        if (turn) return { turn, role: 'assistant' as const };
+      }
+    }
     const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
     if (!selected) return undefined;
-    const turn = await this.project(lane, selected.record, selected.metadata);
+    const turn = await this.project(lane, selected.record, selected.metadata, options);
     if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
     // Forking would drop that edit; Cherry rebuilds the edited history instead.
     if (
@@ -694,6 +700,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     lane: RuntimeLane,
     record: SubmissionRecord,
     metadata: JsonObject | undefined,
+    options?: { fullReasoning?: boolean },
   ) {
     const runtime = this.requireRuntime();
     const conversation = await runtime.conversation(laneKey(lane));
@@ -705,6 +712,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       metadata,
       entries: await runtime.turnEntries(laneKey(lane), record),
       active,
+      fullReasoning: options?.fullReasoning,
       inherited: record.conversationId !== conversation.id,
     });
   }
@@ -741,22 +749,25 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               models: false,
               // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
               inlineBudget: 0,
+              maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [
                 { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
               ],
-              writeOutput: async (name, data, api, context) => {
-                const writer = this.requirePorts().writeToolOutput;
-                if (!writer) return { error: 'Managed output storage is unavailable.' };
+              writeOutput: async (name, data, api, context, storeWrites) => {
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(lane, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
+                // Text overflow is an intermediate, not a generated user document. Images remain deliverables.
+                if (typeof data === 'string')
+                  return retainPiCodemodeOutput(name, data, api, context, storeWrites);
+                const writer = this.requirePorts().writeToolOutput;
+                if (!writer) return { error: 'Managed output storage is unavailable.' };
                 try {
                   const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
                   const artifact =
-                    previous?.outputs[name] ??
-                    (await writer(identity, { name, data: fitPiCodemodeOutput(data) }, signal));
+                    previous?.outputs[name] ?? (await writer(identity, { name, data }, signal));
                   await api.commit(async (tx) => {
                     (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = artifact;
                   }, context);

@@ -6,7 +6,7 @@ import type { RuntimeScriptSandbox } from '../../durableTypes';
 import { createPiCodemodeSandbox, PI_CODEMODE_VM_SOURCE } from '../piCodemodeSandbox';
 
 /** Exercise the exact bridge and upstream prelude in their own realm, without native execution. */
-function driver(code: string) {
+function driver(code: string, store: Record<string, string> = { previous: '7' }) {
   // An ordinary global: the prelude freezes globals, which a contextified sandbox object would
   // turn into undefined shadows of the realm's built-ins.
   const context = createContext(constants.DONT_CONTEXTIFY, { microtaskMode: 'afterEvaluate' });
@@ -22,7 +22,7 @@ function driver(code: string) {
       code,
       tools: [{ name: 'echo', jsName: 'echo', description: 'Echo' }],
       globals: [],
-      store: { previous: '7' },
+      store,
       deterministic: { startedAt: 100, seed: 1 },
       fingerprint: 'test',
     }),
@@ -75,6 +75,70 @@ test('buffers out-of-order replies, acknowledges each drain, and returns upstrea
     writes: '[["answer","[1,2]"]]',
     during: { seq: 2, issued: 2 },
   });
+});
+
+test('reuses saved script chunks and keeps an earlier creation receipt when a separate check fails', () => {
+  const stored: Record<string, string> = {};
+  for (const code of [
+    `store('office.script', 'return ');`,
+    `store('office.script', load('office.script') + '42;');`,
+    `store('office.script', load('office.script').replace('42', '43'));`,
+  ]) {
+    const vm = driver(code, stored);
+    expect(vm.drain()).toBe('done');
+    const done = vm.messages.at(-1);
+    if (done?.type !== 'done' || !done.ok) throw new Error('Expected a saved preparation stage');
+    Object.assign(stored, Object.fromEntries(JSON.parse(done.writes)));
+  }
+  const create = driver(
+    `
+    const created = await tools.echo({ code: load('office.script') });
+    store('office.result', created);
+    return created;
+  `,
+    stored,
+  );
+  expect(create.drain()).toBe('idle');
+  const call = create.messages.find((item) => item.type === 'call');
+  if (!call || call.type !== 'call') throw new Error('Expected the creation call');
+  expect(JSON.parse(call.args!)).toEqual({ code: 'return 43;' });
+  create.deliver({
+    type: 'result',
+    id: call.id,
+    seq: 1,
+    now: 200,
+    ok: true,
+    payload: JSON.stringify({ fileEntryId: 'created-file' }),
+  });
+  expect(create.drain()).toBe('done');
+  const created = create.messages.at(-1);
+  if (created?.type !== 'done' || !created.ok) throw new Error('Expected successful creation');
+  Object.assign(stored, Object.fromEntries(JSON.parse(created.writes)));
+
+  const check = driver(
+    `
+    const created = load('office.result');
+    await tools.echo({ fileEntryId: created.fileEntryId });
+  `,
+    stored,
+  );
+  expect(check.drain()).toBe('idle');
+  const inspection = check.messages.find((item) => item.type === 'call');
+  if (!inspection || inspection.type !== 'call') throw new Error('Expected the inspection call');
+  expect(JSON.parse(inspection.args!)).toEqual({ fileEntryId: 'created-file' });
+  check.deliver({
+    type: 'result',
+    id: inspection.id,
+    seq: 1,
+    now: 300,
+    ok: false,
+    payload: 'Inspection failed',
+  });
+  expect(check.drain()).toBe('done');
+  expect(check.messages.at(-1)).toMatchObject({ type: 'done', ok: false });
+  expect(check.messages.at(-1)).not.toHaveProperty('writes');
+  expect(JSON.parse(stored['office.script']!)).toBe('return 43;');
+  expect(JSON.parse(stored['office.result']!)).toEqual({ fileEntryId: 'created-file' });
 });
 
 test('does not expose native callbacks or nondeterministic collection APIs to scripts', () => {

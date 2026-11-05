@@ -103,6 +103,9 @@
 @layer theme {
   :root {
     @variant light {
+      --indigo-700: oklch(0.52 0.17 275);
+      --violet-700: oklch(0.58 0.15 305);
+      --cyan-700: oklch(0.53 0.1 215);
       --background-100: oklch(1 0 0);
       --background-200: oklch(0.984 0 0);
       --gray-100: oklch(0.961 0 0);
@@ -164,11 +167,11 @@
       --border: var(--gray-alpha-200);
       --input: var(--gray-alpha-200);
       --ring: color-mix(in srgb, var(--primary) 40%, transparent);
-      --chart-1: var(--gray-1000);
-      --chart-2: var(--gray-900);
-      --chart-3: var(--gray-800);
-      --chart-4: var(--gray-700);
-      --chart-5: var(--gray-600);
+      --chart-1: var(--indigo-700);
+      --chart-2: var(--violet-700);
+      --chart-3: var(--cyan-700);
+      --chart-4: var(--blue-900);
+      --chart-5: var(--gray-900);
       --sidebar: var(--background-200);
       --sidebar-foreground: var(--gray-1000);
       --sidebar-primary: var(--gray-1000);
@@ -227,6 +230,9 @@
     }
 
     @variant dark {
+      --indigo-700: oklch(0.76 0.12 275);
+      --violet-700: oklch(0.79 0.12 305);
+      --cyan-700: oklch(0.77 0.1 215);
       --background-100: oklch(0 0 0);
       --background-200: oklch(0.027 0 0);
       --gray-100: oklch(0.218 0 0);
@@ -288,11 +294,11 @@
       --border: var(--gray-alpha-200);
       --input: var(--gray-alpha-200);
       --ring: color-mix(in srgb, var(--primary) 40%, transparent);
-      --chart-1: var(--gray-1000);
-      --chart-2: var(--gray-900);
-      --chart-3: var(--gray-800);
-      --chart-4: var(--gray-700);
-      --chart-5: var(--gray-600);
+      --chart-1: var(--indigo-700);
+      --chart-2: var(--violet-700);
+      --chart-3: var(--cyan-700);
+      --chart-4: var(--blue-900);
+      --chart-5: var(--gray-900);
       --sidebar: var(--gray-100);
       --sidebar-foreground: var(--gray-1000);
       --sidebar-primary: var(--gray-1000);

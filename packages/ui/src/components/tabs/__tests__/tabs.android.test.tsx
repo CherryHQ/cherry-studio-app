@@ -5,6 +5,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Tabs } from '../tabs.android';
 import type { TabsItemState } from '../tabs.types';
 
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
 jest.mock('heroui-native/tabs', () => {
   const React = jest.requireActual('react');
   const { Text, View } = jest.requireActual('react-native');

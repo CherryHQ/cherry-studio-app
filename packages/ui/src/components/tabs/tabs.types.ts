@@ -32,4 +32,6 @@ export type TabsProps<TValue extends string> = {
   style?: StyleProp<ViewStyle>;
   testID?: string;
   value: TValue;
+  /** Omit for the existing platform control; explicit styles share one product rendering. */
+  variant?: 'segmented' | 'underline' | 'chips';
 };

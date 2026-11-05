@@ -16,6 +16,7 @@ import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/d
 
 import type { RuntimeTool } from '../runtime';
 import {
+  createOfficeTiming,
   mebibytes,
   officeFailure as invalid,
   prepareOfficeImages,
@@ -23,7 +24,7 @@ import {
   type OfficeFiles,
 } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
-import { toRuntimeInputSchema } from './runtimeToolSchema';
+import { toRuntimeInputSchema, toolValidationError } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 export const RUN_OFFICE_SCRIPT_TOOL_NAME = 'run_office_script';
@@ -69,12 +70,12 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
     outputSchema: officeToolOutputSchemas[RUN_OFFICE_SCRIPT_TOOL_NAME],
     approval: 'auto',
     deferred: true,
-    async execute({ input, signal }) {
+    async execute({ input, signal, toolCallId }) {
       signal.throwIfAborted();
       if (new TextEncoder().encode(JSON.stringify(input)).length > OFFICE_MAX_INPUT_BYTES)
         return invalid('Input exceeds 128 KiB. Shorten the script.');
       const parsed = schema.safeParse(input);
-      if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
+      if (!parsed.success) return invalid(toolValidationError(parsed.error));
       const format = formats.find((format) => format === filenameExtension(parsed.data.filename));
       if (!format) return invalid('Use a plain filename ending in .docx, .xlsx or .pptx.');
       const againstId = parsed.data.against_file_entry_id;
@@ -86,12 +87,19 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
         await access.resolveRead({ file_entry_id: id });
       }
 
-      const operation = await startOfficeOperation(files, signal);
+      const timing = createOfficeTiming(toolCallId, RUN_OFFICE_SCRIPT_TOOL_NAME);
+      timing.stage('operation_queue');
+      const operation = await startOfficeOperation(files, signal).catch((error) => {
+        timing.finish(signal.aborted ? 'cancelled' : 'failed');
+        throw error;
+      });
       try {
+        timing.stage('read_inputs');
         const facts = await files.resolveAvailable(ids);
         signal.throwIfAborted();
         if (againstId && facts.get(againstId)?.mediaType !== OFFICE_MEDIA_TYPES[format])
           return invalid('The comparison must be an available Office file of the output format.');
+        timing.stage('prepare_images');
         const images = await prepareOfficeImages(
           ids.filter((id) => facts.get(id)?.mediaType.startsWith('image/')),
           files,
@@ -128,9 +136,11 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
           sandbox,
           signal,
           onSettled: operation.job(),
+          onStage: timing.stage,
         });
         signal.throwIfAborted();
         if (size === null) return { value: { status: 'read', logs }, artifacts: [] };
+        timing.stage('publish_file');
         const entry = await files.createFileEntry(
           {
             uri: output,
@@ -165,6 +175,7 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
         if (error instanceof OfficeGenerationError) return invalid(error.message);
         throw error;
       } finally {
+        timing.finish(signal.aborted ? 'cancelled' : 'ended');
         operation.finish();
       }
     },
