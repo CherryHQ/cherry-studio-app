@@ -30,3 +30,11 @@ This module owns the model selection surface, model metadata UI, and model setti
   `PolicyScope` the sheet offers only the policy's allowed models (`useModelChoice`).
 - `hooks/` owns model picker data and preference-backed model selection state.
 - `utils/` contains pure model setting and model type helpers and tests.
+
+## Community Cloud availability
+
+The picker observes `Backend.cloud` through `useCloud`. Cloud rows receive account-scoped free
+labels and unavailability reasons; exhausted or unauthorized rows cannot be selected. The
+`cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
+chat and translation rights). Selection is only a presentation check: the Cloud request boundary
+rechecks entitlement, expiry and quota before every send.

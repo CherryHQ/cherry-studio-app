@@ -11,6 +11,7 @@ import type {
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { ProviderListPageQuery } from '@/shared/data/api/schemas/providers';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -33,6 +34,7 @@ import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
 import {
   assertEnterpriseSessionAdmitted,
+  assertUserOwnedProvider,
   guardMethods,
   providerSettingsChecks,
 } from './managedResources';
@@ -256,7 +258,9 @@ function rowToProvider(row: UserProviderRow): Provider {
     },
     apiKeys,
     authMethods: metadata.authMethods,
-    authOptional: resolveAuthOptional(row.authConfig, metadata.authOptional),
+    authOptional:
+      row.providerId === CLOUD_PROVIDER_ID ||
+      resolveAuthOptional(row.authConfig, metadata.authOptional),
     authType,
     defaultChatEndpoint: row.defaultChatEndpoint ?? undefined,
     description: metadata.description,
@@ -813,6 +817,15 @@ guardMethods(
     'batchUpsert',
   ]),
 );
+
+guardMethods(ProviderService, {
+  create: (input) => assertUserOwnedProvider(input.providerId),
+  update: (id) => assertUserOwnedProvider(id),
+  replaceApiKeys: (id) => assertUserOwnedProvider(id),
+  updateApiKey: (id) => assertUserOwnedProvider(id),
+  delete: (id) => assertUserOwnedProvider(id),
+  batchUpsert: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+});
 
 export const providerService = new ProviderService();
 

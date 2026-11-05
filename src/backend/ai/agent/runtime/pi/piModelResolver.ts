@@ -26,6 +26,7 @@ import {
 import { providerService } from '@/backend/data/services/ProviderService';
 import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { resolveEndpointDialect } from '@/shared/data/types/provider';
@@ -93,6 +94,7 @@ export function createPiModelResolver(
       sessionId,
       apiKeyOverride,
       signal,
+      cloudUse = 'agent',
     ): Promise<PiModelResolution> {
       const {
         adapter: configuredAdapter,
@@ -312,7 +314,9 @@ export function createPiModelResolver(
           : {}),
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
-        fetch: expoFetch as unknown as FetchFunction,
+        fetch: (provider.id === CLOUD_PROVIDER_ID
+          ? application.get('CloudRuntime').createModelFetch(modelId, cloudUse)
+          : expoFetch) as unknown as FetchFunction,
         headers,
         maxRetries: 0,
         maxTokens: oauth ? Math.min(outputReservation, piModel.maxTokens) : outputReservation,
