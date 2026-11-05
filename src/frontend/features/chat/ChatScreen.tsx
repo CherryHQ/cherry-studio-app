@@ -10,7 +10,6 @@ import { Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MainHeader } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
@@ -35,6 +34,7 @@ import { useFileWorkspace } from '@/frontend/hooks/file';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
+import { ChatHeader } from './components/ChatHeader';
 import { ChatInput } from './components/ChatInput';
 import { createSelectionMention } from './components/ChatInput/utils/selectionMentions';
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
@@ -66,7 +66,7 @@ const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage me
 
 export function ChatScreen() {
   return (
-    <ChatScreenFrame header={MainHeader}>
+    <ChatScreenFrame header={ChatHeader}>
       <ChatRouteContent />
     </ChatScreenFrame>
   );

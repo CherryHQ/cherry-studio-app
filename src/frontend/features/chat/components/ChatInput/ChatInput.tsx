@@ -196,6 +196,15 @@ export function ChatInput({
             accessory={<DraftMessageQuotePreview />}
             canSend={canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
+            menu={
+              <ChatInputMenu
+                key={agentId}
+                agentId={agentId}
+                enabled={!controls.isApprovalPending}
+                media="images"
+                prompts={[]}
+              />
+            }
             modelSelection={modelSelection}
             onCancel={cancelGeneration}
             onGenerate={generateImage}

@@ -84,6 +84,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   file previews preserve its expansion state unless a reference is handed back to the composer.
   The folder picker keeps New folder in its fixed footer, using the shared folder-name prompt to
   create a root folder that appears in the selection list.
+  Image chat reuses this menu with image media actions and workspace selection. A history chat
+  whose Agent is unavailable keeps its workspace entry in the header because it has no composer.
+  Reopening waits for the current close to finish; openings queued before that close cannot replay.
 - The composer menu offers media, Plugins, and a separate Skills row. The Plugins row remains visible
   when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
@@ -109,6 +112,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   review and explicit save/binding choices. Trial opens a fresh unsent installed-Skill draft.
 - The plus menu selects installed Skills for use. The plugin and Skill pickers keep an Add button
   in their fixed footer, opening the corresponding management page after both tool sheets close.
+  The Skill management entry carries the current Agent or Session so its chat actions return to
+  that Agent.
   The file, folder, plugin, and Skill pickers open at the large height and can be dragged to full height.
   The menu labels the conversation workspace entry Folders; the file picker's heading remains Recent.
 - The menu's Skills row opens a covering sheet like Plugins, listing eligible installed bindings

@@ -99,6 +99,7 @@ export function ChatInputMenu({
   const closePanel = useCallback(() => setPanel(null), []);
   const closingSurfaces = useRef(new Set<'menu' | 'panel'>());
   const closeMenu = useCallback(() => {
+    if (closingSurfaces.current.size > 0) return;
     closingSurfaces.current = new Set(panel ? ['menu', 'panel'] : ['menu']);
     setIsOpen(false);
   }, [panel]);
@@ -126,6 +127,15 @@ export function ChatInputMenu({
     closeMenu();
   }
 
+  function openMenu() {
+    const surfaces = closingSurfaces.current;
+    if (surfaces.size > 0) return;
+    void runInputReplacement(() => {
+      // Ignore an opening queued before a newer close, even after that close finishes.
+      if (closingSurfaces.current === surfaces) setIsOpen(true);
+    });
+  }
+
   function openWorkspace() {
     if (!target) return;
     if (target.kind === 'session') {
@@ -146,7 +156,7 @@ export function ChatInputMenu({
         <Composer.Action
           accessibilityLabel={t('chat.media.attach')}
           disabled={!enabled}
-          onPress={() => void runInputReplacement(() => setIsOpen(true))}
+          onPress={openMenu}
           testID="composer-menu"
         >
           <PlusIcon className="size-5 text-foreground" />
@@ -263,7 +273,14 @@ export function ChatInputMenu({
         <ChatInputSkillSheet
           agentId={skillAgentId}
           onAdd={() => {
-            pendingAction.current = () => router.push('/skills');
+            pendingAction.current = () =>
+              router.push({
+                pathname: '/skills',
+                params:
+                  target?.kind === 'session'
+                    ? { sessionId: target.sessionId }
+                    : { agentId: skillAgentId },
+              });
             closeMenu();
           }}
           onClose={closePanel}
