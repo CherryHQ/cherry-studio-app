@@ -292,7 +292,7 @@ describe('Pi durable request diagnostics', () => {
       attributes: {
         'error.stage': 'stream',
         'error.category': failure.category,
-        'error.code': failure.code,
+        'error.code': failure.code === 'runtime_error' ? 'provider_error' : failure.code,
         'error.retryable': failure.retryable,
         'error.retry_scope': 'automatic',
       },
