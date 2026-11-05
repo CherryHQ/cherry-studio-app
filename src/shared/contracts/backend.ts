@@ -1,3 +1,4 @@
+import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
@@ -22,6 +23,7 @@ import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly account: AccountModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;

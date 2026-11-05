@@ -3,9 +3,11 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PluginIcon } from '@/frontend/components/PluginIcon';
+import { PolicyScope } from '@/frontend/components/Policy';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { PluginGroup } from './PluginGroup';
@@ -34,22 +36,24 @@ export function McpServerGroup() {
         const summary = summaries[server.id];
         const status = getServerStatus(server, summary);
         return (
-          <PluginRow
-            description={
-              summary?.toolCount === undefined
-                ? undefined
-                : t('settings.mcp.list.toolCount', { count: summary.toolCount })
-            }
-            icon={<PluginIcon source={mcpIcon} />}
-            key={server.id}
-            onPress={() => openServer(server.id)}
-            status={{
-              label: t(`settings.mcp.list.status.${status}`),
-              tone: status === 'connected' ? 'success' : status === 'error' ? 'danger' : 'default',
-            }}
-            testID={`plugins-mcp-${server.id}`}
-            title={server.name}
-          />
+          <PolicyScope key={server.id} policy={managedResourcePolicy(server)}>
+            <PluginRow
+              description={
+                summary?.toolCount === undefined
+                  ? undefined
+                  : t('settings.mcp.list.toolCount', { count: summary.toolCount })
+              }
+              icon={<PluginIcon source={mcpIcon} />}
+              onPress={() => openServer(server.id)}
+              status={{
+                label: t(`settings.mcp.list.status.${status}`),
+                tone:
+                  status === 'connected' ? 'success' : status === 'error' ? 'danger' : 'default',
+              }}
+              testID={`plugins-mcp-${server.id}`}
+              title={server.name}
+            />
+          </PolicyScope>
         );
       })}
       <PluginRow

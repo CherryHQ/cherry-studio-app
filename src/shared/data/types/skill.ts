@@ -213,6 +213,8 @@ export const SkillSchema = z.strictObject({
   invocation: SkillInvocationSchema,
   /** Global enablement; Agent enablement lives on the binding. */
   isEnabled: z.boolean(),
+  /** Delivered and owned by the enterprise server. */
+  isManaged: z.boolean().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

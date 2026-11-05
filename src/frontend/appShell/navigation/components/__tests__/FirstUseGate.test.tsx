@@ -5,16 +5,21 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { useLatestAgentSession } from '@/frontend/hooks/agent';
+import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import { FirstUseGate } from '../FirstUseGate';
 
 let mockStatus: 'unseen' | 'skipped' | 'completed' = 'unseen';
+let mockAccount = { hasPrompted: true };
 
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data/hooks/useDataApi'),
   usePreference: () => [mockStatus],
+}));
+jest.mock('@/frontend/appShell/account', () => ({
+  useAccount: () => ({ state: mockAccount }),
 }));
 jest.mock('@/frontend/hooks/agent', () =>
   jest.requireActual('@/frontend/hooks/agent/useAgentSessions'),
@@ -77,6 +82,7 @@ describe('first-use admission and chat restoration', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockStatus = 'unseen';
+    mockAccount = { hasPrompted: true };
     latest = undefined;
     chatMountCount = 0;
     chatUnmountCount = 0;
@@ -139,6 +145,37 @@ describe('first-use admission and chat restoration', () => {
       expect(dataApi.get.mock.calls.some(([path]) => path === '/models')).toBe(false);
     },
   );
+
+  it('offers sign-in before onboarding until the prompt is dismissed', async () => {
+    mockAccount = { hasPrompted: false };
+    await renderGate();
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/login');
+
+    mockAccount = { hasPrompted: true };
+    await renderGate();
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
+  });
+
+  it('admits an enterprise profile without onboarding, whose setup the organization owns', async () => {
+    setActiveProfile({
+      id: 'enterprise-1',
+      identity: {
+        deployment: 'server-1',
+        issuer: 'https://issuer.example',
+        productProfileId: 'profile-1',
+        subject: 'user-1',
+      },
+      address: 'https://enterprise.example',
+    });
+    try {
+      await renderGate();
+    } finally {
+      setActiveProfile(LOCAL_PROFILE);
+    }
+
+    expect(chatMountCount).toBe(1);
+    expect(renderer?.root.findAllByType(Redirect)).toHaveLength(0);
+  });
 
   it('keeps the admitted chat mounted while its latest session refreshes', async () => {
     dataApi.get.mockImplementation(

@@ -35,7 +35,7 @@ export * from './pluginAuthorization';
 export * from './userModel';
 export * from './userProvider';
 
-export { appStateTable } from './appState';
+export { appStateTable, ENTERPRISE_SYNC_STATE_KEY } from './appState';
 export { fileEntryTable } from './file';
 export * from './fileLibrary';
 export { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from './preference';

@@ -19,6 +19,7 @@ import {
   UpdateMcpServerSchema,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import {
   McpOAuthReferenceSchema,
   McpServerSchema,
@@ -26,6 +27,7 @@ import {
   type RemoteMcpServer,
 } from '@/shared/data/types/mcpServer';
 
+import { denyUnless, guardMethods, managedRowPolicy } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 export type ListMcpServersQuery = {
@@ -45,6 +47,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     endpointUrl: row.endpointUrl,
     headers: row.headers ?? undefined,
     ...(row.origin === 'remote' && row.oauth && { oauth: row.oauth }),
+    ...(row.managedRemoteId !== null && { isManaged: true }),
     id: row.id,
     isEnabled: row.isEnabled,
     name: row.name,
@@ -203,6 +206,7 @@ export class McpServerService {
           .select()
           .from(mcpServerTable)
           .where(eq(mcpServerTable.id, previous.id));
+        denyUnless(managedRowPolicy(current).canEdit('oauth'), 'mcp.saveOAuthConnection');
         if (
           !current ||
           current.origin !== 'remote' ||
@@ -237,19 +241,25 @@ export class McpServerService {
   }
 
   async disconnectOAuth(id: string): Promise<McpServer> {
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select({ managedRemoteId: mcpServerTable.managedRemoteId })
+        .from(mcpServerTable)
+        .where(eq(mcpServerTable.id, id));
+      denyUnless(managedRowPolicy(current).canEdit('oauth'), 'mcp.disconnectOAuth');
+      return tx
         .update(mcpServerTable)
         .set({ oauth: null, isEnabled: false })
         .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.origin, 'remote')))
-        .returning(),
-    );
+        .returning();
+    });
     if (!row) throw DataApiErrorFactory.notFound('McpServer', id);
     return rowToMcpServer(row);
   }
 
   async delete(id: string): Promise<void> {
-    if ((await this.getById(id)).origin === 'builtin') {
+    const existing = await this.getById(id);
+    if (existing.origin === 'builtin') {
       throw DataApiErrorFactory.validation({ origin: ['Disconnect this connection from Plugins'] });
     }
     await this.dbService.withWriteTx(async (tx) => {
@@ -304,5 +314,15 @@ export class McpServerService {
     }
   }
 }
+
+// A delivered MCP server is read-only.
+guardMethods(McpServerService, {
+  async update(id) {
+    denyUnless(managedResourcePolicy(await this.getById(id)).canEdit('server'), 'mcp.update');
+  },
+  async delete(id) {
+    denyUnless(managedResourcePolicy(await this.getById(id)).canDelete, 'mcp.delete');
+  },
+});
 
 export const mcpServerService = new McpServerService();

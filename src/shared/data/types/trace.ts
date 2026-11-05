@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import { DiagnosticEventContextSchema } from './diagnostics';
+
 export const TraceIdSchema = z
   .string()
   .regex(/^[0-9a-f]{32}$/, 'traceId must be 32 lowercase hex chars');
@@ -34,6 +36,7 @@ export const TraceSpanRecordSchema = z.strictObject({
     .nullable(),
   name: z.string(),
   context: TraceContextSchema,
+  environment: DiagnosticEventContextSchema.optional(),
   attributes: TraceAttributesSchema,
   status: TraceSpanStatusSchema,
   startedAt: z.number().finite(),

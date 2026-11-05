@@ -5,8 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
+import { ManagedMark, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
 import { useApiClient } from '@/frontend/data';
 import { useSkillsApi } from '@/frontend/hooks/skill';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
 function useOpenSkill() {
@@ -97,11 +99,11 @@ export function SkillLibraryTab({ onDiscover }: { onDiscover: () => void }) {
   );
 }
 
-function InstalledSkillRow({ onPress, skill }: { onPress: () => void; skill: SkillListItem }) {
+function InstalledSkillRowView({ onPress, skill }: { onPress: () => void; skill: SkillListItem }) {
   const { t } = useTranslation();
   return (
     <Section.Item
-      accessibilityLabel={skill.name}
+      accessibilityLabel={useManagedLabel(skill.name)}
       description={
         <View className="gap-0.5">
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
@@ -112,10 +114,20 @@ function InstalledSkillRow({ onPress, skill }: { onPress: () => void; skill: Ski
           ) : null}
         </View>
       }
-      label={skill.name}
+      label={
+        <View className="min-w-0 flex-row items-center gap-2">
+          <Text className="shrink text-base text-foreground">{skill.name}</Text>
+          <ManagedMark />
+        </View>
+      }
       onPress={onPress}
       testID={`skill-${skill.id}`}
       trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
     />
   );
 }
+
+/** Each row follows its own Skill's policy. */
+const InstalledSkillRow = withResourcePolicy(InstalledSkillRowView, ({ skill }) =>
+  managedResourcePolicy(skill),
+);

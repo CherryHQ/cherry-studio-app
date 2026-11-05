@@ -6,6 +6,7 @@ type RecoveryScreenProps = {
   onLayout?: (event: LayoutChangeEvent) => void;
   onRetry: () => void;
   retryLabel: string;
+  secondaryAction?: { label: string; onPress: () => void };
   title: string;
 };
 
@@ -14,6 +15,7 @@ export function RecoveryScreen({
   onLayout,
   onRetry,
   retryLabel,
+  secondaryAction,
   title,
 }: RecoveryScreenProps) {
   return (
@@ -25,6 +27,9 @@ export function RecoveryScreen({
       <ContentState.Error
         description={description}
         primaryAction={{ children: retryLabel, onPress: onRetry }}
+        secondaryAction={
+          secondaryAction && { children: secondaryAction.label, onPress: secondaryAction.onPress }
+        }
         prominence="prominent"
         title={title}
       />
