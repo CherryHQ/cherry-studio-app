@@ -105,7 +105,10 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 - **Create Skill** in the same library menu seeds a removable `create-skill` reference. Its `create`
   action shares the discovery handoff, send, retry and history contract. The Host owns full-content
   review and explicit save/binding choices. Trial opens a fresh unsent installed-Skill draft.
-- The plus menu does not add or discover Skills; it only selects installed Skills for use.
+- The plus menu selects installed Skills for use. The plugin and Skill pickers keep an Add button
+  in their fixed footer, opening the corresponding management page after both tool sheets close.
+  The file, plugin, and Skill pickers open at the large height and can be dragged to full height.
+  The menu labels the conversation workspace entry Folders; the file picker's heading remains Recent.
 - The menu's Skills row opens a covering sheet like Plugins, listing eligible installed bindings
   for the current Agent. A row inserts an inline Skill reference and returns to the composer. Selected rows show a checkmark and do not insert
   duplicates; deleting a reference in the editor removes its selection.
@@ -118,16 +121,17 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   them and records name/revision receipts on the user message. Rejected sends retain selections,
   successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
   remain selectable when user invocation is allowed. Selection never creates an Agent binding.
-- The menu's File tile opens the full-height library picker with only a drag handle at the top.
+- The menu's File tile opens the resizable library picker with only a drag handle at the top.
   Like the library, each level lists its folders first, then its files newest first. A folder's
   own timestamp does not change when files are added inside it, so folders are not ordered among
   files. Folder rows only expand/collapse; their children remain under the folder and reuse the
   library's cursor pages and batched previews. Expanded directories use the workspace tree's inline
   paging pattern. File dates are content modification dates, as in the library.
   Selection belongs to the sheet and survives collapsing or recycling a directory. A fixed footer
-  appears for newly selected, available attachments and confirms their count. Already attached files
-  are marked and cannot be added twice. Dismissing by drag, scrim, back, or accessibility escape
-  discards the pending selection. Search is not offered.
+  offers New folder at the library root through the shared folder-name prompt and confirms newly
+  selected files with their count. Already attached files are marked and cannot be added twice.
+  Dismissing by drag, scrim, back, or accessibility escape discards the pending selection. Search is
+  not offered.
   The app-wide file-change subscription keeps these shared pages current; opening the picker
   reuses fresh pages without forcing another fetch.
 - Upload files closes the library picker and presents the system document picker from chat. Each

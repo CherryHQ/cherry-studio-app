@@ -16,6 +16,7 @@ import { createSkillMentionUrl, readSkillMentions } from '../utils/skillMentions
 /** Selects an installed Skill into the mounted composer without changing its Agent binding. */
 export function ChatInputSkillSheet({
   agentId,
+  onAdd,
   onClose,
   onClosed,
   onSelect,
@@ -23,6 +24,7 @@ export function ChatInputSkillSheet({
   returnFocusRef,
 }: {
   agentId?: string;
+  onAdd(): void;
   onClose(): void;
   onClosed?: () => void;
   onSelect(): void;
@@ -117,13 +119,18 @@ export function ChatInputSkillSheet({
 
   return (
     <BottomSheet
+      footer={
+        <Button onPress={onAdd} testID="chat-skill-add">
+          {t('skills.composer.add')}
+        </Button>
+      }
       onClosed={onClosed}
       initialFocusRef={initialFocusRef}
       onClose={onClose}
       open={open}
       presentation="overlay"
       returnFocusRef={returnFocusRef}
-      size="full"
+      sizes={['large', 'full']}
       testID="chat-skill-sheet"
       title={t('skills.title')}
     >

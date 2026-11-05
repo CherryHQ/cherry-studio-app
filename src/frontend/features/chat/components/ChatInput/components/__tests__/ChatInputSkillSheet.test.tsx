@@ -68,6 +68,7 @@ async function render(open: boolean) {
             <AgentSkillsProbe />
             <ChatInputSkillSheet
               agentId="agent-1"
+              onAdd={onClose}
               onClose={onClose}
               onSelect={onClose}
               open={open}

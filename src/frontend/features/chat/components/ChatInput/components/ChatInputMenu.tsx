@@ -188,7 +188,7 @@ export function ChatInputMenu({
             {target ? (
               <ToolRow
                 icon={<FolderIcon className="size-5 text-muted-foreground" />}
-                label={t('workspace.title')}
+                label={t('library.folders.title')}
                 value={workspace.workspace?.name ?? t('workspace.none')}
                 onPress={openWorkspace}
                 ref={workspaceRef}
@@ -262,6 +262,10 @@ export function ChatInputMenu({
       {panel === 'skills' && skillAgentId ? (
         <ChatInputSkillSheet
           agentId={skillAgentId}
+          onAdd={() => {
+            pendingAction.current = () => router.push('/skills');
+            closeMenu();
+          }}
           onClose={closePanel}
           onClosed={() => surfaceClosed('panel')}
           onSelect={completeSelection}

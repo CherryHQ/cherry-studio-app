@@ -10,6 +10,7 @@ import {
   createReadyAttachmentDraft,
   isComposerAttachmentReady,
 } from '@/frontend/components/Composer/utils/composerAttachments';
+import { useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import type { ResolvedFileEntry } from '@/frontend/hooks/file';
 import type { FileEntryId } from '@/shared/data/types/file';
 
@@ -36,6 +37,7 @@ export function FilePickerBottomSheet({
   const { t } = useTranslation();
   const { attachments } = useComposerState();
   const { addAttachments } = useComposerActions();
+  const { requestCreate, isCreating } = useCreateFileFolder(null);
   const [selection, setSelection] = useState<ReadonlyMap<FileEntryId, ComposerAttachmentReady>>(
     () => new Map(),
   );
@@ -70,17 +72,31 @@ export function FilePickerBottomSheet({
     <BottomSheet
       onClosed={onClosed}
       footer={
-        selectedAttachments.length > 0 ? (
-          <Button onPress={addSelectedFiles} testID="file-picker-add">
-            {t('chat.filePicker.addSelected', { count: selectedAttachments.length })}
-          </Button>
-        ) : undefined
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Button
+              disabled={isCreating}
+              onPress={requestCreate}
+              testID="file-picker-create-folder"
+              variant="secondary"
+            >
+              {t('library.folders.create')}
+            </Button>
+          </View>
+          {selectedAttachments.length > 0 ? (
+            <View className="flex-1">
+              <Button onPress={addSelectedFiles} testID="file-picker-add">
+                {t('chat.filePicker.addSelected', { count: selectedAttachments.length })}
+              </Button>
+            </View>
+          ) : null}
+        </View>
       }
       onClose={onClose}
       open={open}
       presentation="overlay"
       returnFocusRef={returnFocusRef}
-      size="full"
+      sizes={['large', 'full']}
       testID="file-picker"
       title={t('chat.filePicker.title')}
       titleAlign="center"

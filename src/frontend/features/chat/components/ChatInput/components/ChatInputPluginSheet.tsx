@@ -76,9 +76,6 @@ export function ChatInputPluginSheet({
       {plugins.length === 0 ? (
         <View className="gap-2 px-3 py-2">
           <Text className="text-sm text-muted-foreground">{t('plugins.composer.empty')}</Text>
-          <Button onPress={onConnect} size="sm" variant="ghost">
-            {t('plugins.connect')}
-          </Button>
         </View>
       ) : null}
       {plugins.map((plugin, index) => {
@@ -106,13 +103,18 @@ export function ChatInputPluginSheet({
 
   return (
     <BottomSheet
+      footer={
+        <Button onPress={onConnect} testID="chat-plugin-add">
+          {t('plugins.composer.add')}
+        </Button>
+      }
       onClosed={onClosed}
       initialFocusRef={initialFocusRef}
       onClose={onClose}
       open={open}
       presentation="overlay"
       returnFocusRef={returnFocusRef}
-      size="full"
+      sizes={['large', 'full']}
       testID="chat-plugin-sheet"
       title={t('plugins.title')}
     >
