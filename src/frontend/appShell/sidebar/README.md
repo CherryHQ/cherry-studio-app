@@ -121,3 +121,13 @@ Device selection still reads the pairing directory; action availability comes fr
 source. Local Data API metadata changes invalidate the catalog; lightweight Host status and read marks
 update individual rows. Search availability is supplied by the sidebar navigation owner. Concurrent readers share catalog requests. The last reader cancels unfinished reads and releases
 connection demand; completed metadata remains briefly in memory for reopening the sidebar.
+
+`ConversationDestinationList`, exported from the module root, reuses those same Agent groups,
+conversation queries, pagination and row frames for a caller-owned destination choice. It requires
+`ConversationSourceBoundary`; it does not require drawer actions or sidebar selection state. In
+this explicit consumer, pressing the Agent name/avatar chooses a new conversation under that Agent,
+and a separate disclosure target expands its conversations. Pressing a conversation reports its
+summary to the caller without closing a drawer or mounting rename/delete/multiselect controls.
+The ordinary sidebar retains its full-row expansion and management behavior. The name and
+arrow are sibling press targets; scroll cancellation remains with Gesture Handler and the shared
+scroll interaction boundary. The picker changes neither row typography nor the avatar/text columns.

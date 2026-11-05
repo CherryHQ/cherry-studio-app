@@ -116,6 +116,15 @@ export class PiDurableObserver {
     this.retrying = false;
   }
 
+  /** Reuse the coherent watch frame, including the uncommitted provider text, only on demand. */
+  readReasoningTurn(lane: RuntimeLane, messageId: string) {
+    if (this.stopped || !this.ready || laneKey(lane) !== laneKey(this.lane)) return undefined;
+    const input = [...this.inputs.values()].find(
+      (item) => readPiSubmission(item.metadata).assistantMessageId === messageId,
+    );
+    return input ? this.project(input, true) : undefined;
+  }
+
   private flushSubmissions() {
     // Commit observers only buffer synchronously. All Session reads happen on this async queue.
     void this.enqueue().catch((error) => {
@@ -221,7 +230,7 @@ export class PiDurableObserver {
         else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
       }
       this.nestedTools.clear();
-      for (const tool of live.nestedTools ?? [])
+      for (const tool of live.nestedTools ?? []) {
         this.nestedTools.set(tool.callId, {
           parentCallId: tool.parentCallId,
           name: tool.name,
@@ -234,6 +243,7 @@ export class PiDurableObserver {
               ? 'interrupted'
               : tool.status,
         });
+      }
       if (initial) return;
 
       if (this.contextStatus() !== previousContext)
@@ -336,7 +346,7 @@ export class PiDurableObserver {
       });
   }
 
-  private project(input: InputView) {
+  private project(input: InputView, fullReasoning = false) {
     const active =
       input.record.status === 'placed' && this.live.run?.inputs.includes(input.record.id) === true;
     const start = input.record.entry;
@@ -358,6 +368,7 @@ export class PiDurableObserver {
       ...input,
       entries,
       active,
+      fullReasoning,
       toolStates: this.toolStates,
       nestedTools: this.nestedTools,
       ...(active && partial

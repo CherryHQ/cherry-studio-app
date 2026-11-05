@@ -31,9 +31,9 @@ const ConfigSchema = z.object({
   origin: z.string().min(1),
   clientId: z.string().min(1),
   scopes: z.array(z.string()).min(1),
-  enterpriseAddresses: z
-    .object({ cn: z.string().optional(), global: z.string().optional() })
-    .optional(),
+  enterpriseApiBaseUrl: z.string().optional(),
+  cloudApiOrigin: z.string().optional(),
+  cloudWebUrl: z.string().optional(),
 });
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
@@ -112,8 +112,7 @@ function createAccount(): AccountRuntime {
   const active = getActiveProfile();
   const runtime = new AccountRuntime({
     portal,
-    resolveSessionContext: (session) => resolvePortalSessionContext(session, config?.issuer),
-    enterpriseAddresses: config?.enterpriseAddresses,
+    resolveSessionContext: (session) => resolvePortalSessionContext(session, config),
     active,
     profiles: installationProfiles(),
     prompt: {
@@ -151,7 +150,7 @@ function createAccount(): AccountRuntime {
     if (active.identity && 'authentication' in active.identity)
       return { accountStatus, accountSubjectId: active.identity.subject };
     const session = portal?.getState();
-    const context = session ? resolvePortalSessionContext(session, config?.issuer) : null;
+    const context = session ? resolvePortalSessionContext(session, config) : null;
     return {
       accountStatus,
       ...(session?._tag === 'signedIn' && context
@@ -166,14 +165,15 @@ function createAccount(): AccountRuntime {
 }
 
 /**
- * The current Accounts Portal SDK serves China only. Bind its signed-in sessions to cn and
- * the issuer used to configure that SDK. Replace this mapping when multi-region login ships.
+ * SDK 0.2.1 has no session service metadata. Its current deployment supplies concrete addresses
+ * here from configuration. Replace this mapping with the SDK's session result when available;
+ * product code consumes actual addresses and never selects a region.
  */
 function resolvePortalSessionContext(
   session: AuthState,
-  issuer: string | undefined,
+  config: z.infer<typeof ConfigSchema> | undefined,
 ): AccountSessionContext | null {
   if (session._tag !== 'signedIn') return null;
-  const context = AccountSessionContextSchema.safeParse({ environment: 'cn', issuer });
+  const context = AccountSessionContextSchema.safeParse(config);
   return context.success ? context.data : null;
 }

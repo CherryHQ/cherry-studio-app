@@ -47,10 +47,14 @@ export async function transformOfficeFile(input: {
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
+  onStage?: (
+    stage: 'prepare_script' | 'sandbox_queue' | 'sandbox_execution' | 'decode_result',
+  ) => void;
 }): Promise<{ size: number } | { content: Record<string, z.core.util.JSONType> }> {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
+    input.onStage?.('prepare_script');
     const entries = Object.entries(input.images ?? {});
     const code = createOfficeTransformCode(
       input.request,
@@ -58,6 +62,7 @@ export async function transformOfficeFile(input: {
         entries.map(([id, image], index) => [id, { index: index + 1, mediaType: image.mediaType }]),
       ),
     );
+    input.onStage?.('sandbox_queue');
     submitted = true;
     const outcome = await input.sandbox.run({
       code,
@@ -71,6 +76,7 @@ export async function transformOfficeFile(input: {
       },
       signal: input.signal,
       onSettled: input.onSettled,
+      onStarted: () => input.onStage?.('sandbox_execution'),
       limits: {
         ...officeLimits(0, 128 * 1024),
         // Only app code runs here, and a parsed XML part takes about 180 times its text (a 2 MiB
@@ -79,6 +85,7 @@ export async function transformOfficeFile(input: {
       },
     });
     input.signal.throwIfAborted();
+    input.onStage?.('decode_result');
     if (outcome.status === 'error')
       throw new OfficeGenerationError(
         outcome.kind === 'memory'

@@ -1,13 +1,12 @@
 import * as z from 'zod';
 
-/** App-owned service environments supplied by the account integration. */
-export const AccountEnvironmentSchema = z.enum(['cn', 'global']);
-export type AccountEnvironment = z.infer<typeof AccountEnvironmentSchema>;
-
 /** Normalized app input, independent of the SDK's field names and response structure. */
 export const AccountSessionContextSchema = z.object({
-  environment: AccountEnvironmentSchema,
   issuer: z.url({ protocol: /^https$/ }),
+  /** Each product validates its own service addresses before sending credentials. */
+  enterpriseApiBaseUrl: z.string().optional(),
+  cloudApiOrigin: z.string().optional(),
+  cloudWebUrl: z.string().optional(),
 });
 export type AccountSessionContext = z.infer<typeof AccountSessionContextSchema>;
 

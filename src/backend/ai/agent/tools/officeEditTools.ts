@@ -1,5 +1,3 @@
-import * as z from 'zod';
-
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import {
   OfficeGenerationError,
@@ -17,6 +15,7 @@ import {
 
 import type { RuntimeTool } from '../runtime';
 import {
+  createOfficeTiming,
   mebibytes,
   normalizeOfficeFilename,
   officeFailure as invalid,
@@ -25,7 +24,7 @@ import {
   type OfficeFiles,
 } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
-import { toRuntimeInputSchema } from './runtimeToolSchema';
+import { toRuntimeInputSchema, toolValidationError } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 const definitions = [
@@ -72,12 +71,12 @@ export function createOfficeEditTools(
       outputSchema: officeToolOutputSchemas[definition.name],
       approval: 'auto',
       deferred: true,
-      async execute({ input, signal }) {
+      async execute({ input, signal, toolCallId }) {
         signal.throwIfAborted();
         if (new TextEncoder().encode(JSON.stringify(input)).length > OFFICE_MAX_INPUT_BYTES)
           return invalid('Office input exceeds 128 KiB.');
         const parsed = definition.schema.safeParse(input);
-        if (!parsed.success) return invalid(z.prettifyError(parsed.error));
+        if (!parsed.success) return invalid(toolValidationError(parsed.error));
         const againstId =
           'against_file_entry_id' in parsed.data ? parsed.data.against_file_entry_id : undefined;
         if (againstId && (!('kind' in parsed.data) || parsed.data.kind !== 'check'))
@@ -92,8 +91,14 @@ export function createOfficeEditTools(
           signal.throwIfAborted();
           await access.resolveRead({ file_entry_id: id });
         }
-        const operation = await startOfficeOperation(files, signal);
+        const timing = createOfficeTiming(toolCallId, definition.name);
+        timing.stage('operation_queue');
+        const operation = await startOfficeOperation(files, signal).catch((error) => {
+          timing.finish(signal.aborted ? 'cancelled' : 'failed');
+          throw error;
+        });
         try {
+          timing.stage('read_inputs');
           const facts = await files.resolveAvailable([sourceId, ...(againstId ? [againstId] : [])]);
           signal.throwIfAborted();
           const fact = facts.get(sourceId);
@@ -124,6 +129,7 @@ export function createOfficeEditTools(
             ('anchor' in parsed.data && parsed.data.anchor.format !== format)
           )
             return invalid('Operation format does not match the source file.');
+          timing.stage('hash_input');
           const digest = await files.hash(uri, signal);
           signal.throwIfAborted();
           if ('source_sha256' in parsed.data && parsed.data.source_sha256 !== digest)
@@ -140,6 +146,7 @@ export function createOfficeEditTools(
             format,
             ...(against ? { against: true } : {}),
           } as OfficeTransformRequest;
+          timing.stage('prepare_images');
           const images = await prepareOfficeImages(imageIds, files, operation, signal);
           const output = definition.operation === 'edit' ? operation.output(format) : undefined;
           const result = await transformOfficeFile({
@@ -151,6 +158,7 @@ export function createOfficeEditTools(
             sandbox,
             signal,
             onSettled: operation.job(),
+            onStage: timing.stage,
           });
           signal.throwIfAborted();
           if ('content' in result)
@@ -166,6 +174,7 @@ export function createOfficeEditTools(
               artifacts: [],
             };
           const sha256 = await files.hash(output!, signal);
+          timing.stage('publish_file');
           const entry = await files.createFileEntry(
             {
               uri: output!,
@@ -209,6 +218,7 @@ export function createOfficeEditTools(
           if (error instanceof OfficeGenerationError) return invalid(error.message);
           throw error;
         } finally {
+          timing.finish(signal.aborted ? 'cancelled' : 'ended');
           operation.finish();
         }
       },

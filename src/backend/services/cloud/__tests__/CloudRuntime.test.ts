@@ -1,6 +1,5 @@
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
-import type { AccountEnvironment } from '@/shared/contracts/account';
 import type { CloudModel, CloudState } from '@/shared/contracts/cloud';
 
 import { CloudRuntime } from '../CloudRuntime';
@@ -50,13 +49,17 @@ function reply(account: string, path: string) {
   return { data: state.models };
 }
 
-const environments = {
-  cn: { apiOrigin: 'https://cloud.example', webUrl: 'https://cloud.example/account/plans' },
-  global: { apiOrigin: 'https://global.example', webUrl: 'https://global.example/account/plans' },
+const service = {
+  apiOrigin: 'https://cloud.example',
+  webUrl: 'https://cloud.example/account/plans',
+};
+const replacementService = {
+  apiOrigin: 'https://replacement.example',
+  webUrl: 'https://replacement.example/account/plans',
 };
 
-async function setup(configuration: Partial<Record<AccountEnvironment, unknown>> = environments) {
-  let identity: CloudIdentity | null = { key: 'a', environment: 'cn', profileId: 'account-a' };
+async function setup(configuration: Pick<CloudIdentity, 'apiOrigin' | 'webUrl'> = service) {
+  let identity: CloudIdentity | null = { key: 'a', profileId: 'account-a', ...configuration };
   let changed: () => void = () => {};
   const source = {
     getIdentity: () => identity,
@@ -70,7 +73,7 @@ async function setup(configuration: Partial<Record<AccountEnvironment, unknown>>
     withWriteTx: (write: (tx: unknown) => Promise<unknown>) => write({}),
   } as unknown as DbService;
   const runtime = new CloudRuntime(db);
-  runtime.configure(source, configuration, '0.5.1');
+  runtime.configure(source, '0.5.1');
   await runtime._doInit();
   await runtime._doAllReady();
   return {
@@ -103,7 +106,7 @@ test('account replacement immediately clears state and drops late responses even
   );
   const { runtime, change } = await setup();
   const previous = runtime.refresh().catch(() => {});
-  change({ key: 'b', environment: 'cn', profileId: 'account-b' });
+  change({ key: 'b', profileId: 'account-b', ...service });
   expect(runtime.getState()).toMatchObject({ account: null, plans: null, models: [] });
   await runtime.refresh();
   expect(runtime.getState().account?.account.id).toBe('account-b');
@@ -130,7 +133,7 @@ test('sign-out removes grants and invalidates previously resolved transports aft
   await runtime._doStop();
 });
 
-test('environment replacement switches API and webpage together, cancels old inference and drops late reads', async () => {
+test('service address replacement switches API and webpage together, cancels old inference and drops late reads', async () => {
   const { runtime, change } = await setup();
   await runtime.refresh();
   const previousFetch = runtime.createModelFetch('cloud-model', 'agent');
@@ -140,7 +143,7 @@ test('environment replacement switches API and webpage together, cancels old inf
     started = resolve;
   });
   mockGet.mockImplementation((account: string, path: string, origin: string) =>
-    origin === environments.cn.apiOrigin && path === '/api/v1/account'
+    origin === service.apiOrigin && path === '/api/v1/account'
       ? new Promise((resolve) => {
           finish = resolve;
           started();
@@ -149,24 +152,24 @@ test('environment replacement switches API and webpage together, cancels old inf
   );
   const previous = runtime.refresh().catch(() => {});
   await reading;
-  change({ key: 'a', environment: 'global', profileId: 'account-a' });
+  change({ key: 'a', profileId: 'account-a', ...replacementService });
   expect(runtime.getState()).toMatchObject({
     account: null,
     plans: null,
     models: [],
-    webUrl: environments.global.webUrl,
+    webUrl: replacementService.webUrl,
   });
-  expect(mockRevoke).toHaveBeenCalledWith(environments.cn.apiOrigin);
+  expect(mockRevoke).toHaveBeenCalledWith(service.apiOrigin);
   await expect(previousFetch('https://cloud.example/v1/messages')).rejects.toBeDefined();
   await runtime.refresh();
   expect(mockGet).toHaveBeenCalledWith(
     'account-a',
     '/api/v1/account',
-    environments.global.apiOrigin,
+    replacementService.apiOrigin,
   );
   expect(mockProject).toHaveBeenLastCalledWith(
     expect.anything(),
-    environments.global.apiOrigin,
+    replacementService.apiOrigin,
     expect.any(Array),
     expect.any(Function),
   );
@@ -177,21 +180,30 @@ test('environment replacement switches API and webpage together, cancels old inf
   await runtime._doStop();
 });
 
-test('a missing selected environment cannot fall back to the other API or keep its webpage', async () => {
-  const { runtime, change } = await setup({ cn: environments.cn });
-  await runtime.refresh();
-  mockGet.mockClear();
-  change({ key: 'a', environment: 'global', profileId: 'account-a' });
-  await expect(runtime.refresh()).rejects.toMatchObject({ code: 'cloud_unavailable' });
-  expect(mockGet).not.toHaveBeenCalled();
-  expect(runtime.getState()).toMatchObject({
-    phase: 'error',
-    account: null,
-    models: [],
-    webUrl: null,
-  });
-  await runtime._doStop();
-});
+test.each([
+  { apiOrigin: undefined, webUrl: replacementService.webUrl },
+  { apiOrigin: replacementService.apiOrigin, webUrl: undefined },
+  { apiOrigin: 'http://replacement.example', webUrl: replacementService.webUrl },
+  { apiOrigin: 'https://replacement.example/api', webUrl: replacementService.webUrl },
+  { apiOrigin: replacementService.apiOrigin, webUrl: 'https://user:pass@replacement.example' },
+])(
+  'missing or invalid service addresses cannot reuse the previous API or webpage: %j',
+  async (configuration) => {
+    const { runtime, change } = await setup();
+    await runtime.refresh();
+    mockGet.mockClear();
+    change({ key: 'a', profileId: 'account-a', ...configuration });
+    await expect(runtime.refresh()).rejects.toMatchObject({ code: 'cloud_unavailable' });
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(runtime.getState()).toMatchObject({
+      phase: 'error',
+      account: null,
+      models: [],
+      webUrl: null,
+    });
+    await runtime._doStop();
+  },
+);
 
 test('an outage keeps display data but fails closed, and unchanged refreshes do not rewrite the catalog', async () => {
   const { runtime } = await setup();

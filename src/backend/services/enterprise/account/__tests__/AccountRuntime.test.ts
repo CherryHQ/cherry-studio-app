@@ -2,7 +2,10 @@ import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-
 
 import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
-import { AccountSessionContextSchema } from '@/shared/contracts/account';
+import {
+  type AccountSessionContext,
+  AccountSessionContextSchema,
+} from '@/shared/contracts/account';
 import {
   type ActiveProfile,
   type EnterpriseIdentity,
@@ -16,7 +19,7 @@ jest.mock('@logger', () => ({
   loggerService: { withContext: () => ({ warn: jest.fn(), error: jest.fn() }) },
 }));
 
-type PortalState = AuthState & { environment?: string; issuer?: string };
+type PortalState = AuthState & Partial<AccountSessionContext>;
 
 const enterpriseProfile: ActiveProfile = {
   id: '8a1f4e9c-2b7d-4c1a-9e3f-1d2c3b4a5f60',
@@ -89,10 +92,6 @@ function setup(
       const context = AccountSessionContextSchema.safeParse(state);
       return context.success ? context.data : null;
     }),
-    enterpriseAddresses: {
-      cn: 'https://cse.example.com',
-      global: 'https://enterprise.global.example.com',
-    },
     active,
     profiles: {
       resolve: jest.fn((_identity: EnterpriseIdentity, _address: string) => enterpriseProfile),
@@ -143,8 +142,10 @@ function setup(
 
 const signedIn = (product: 'cloud' | 'enterprise'): Extract<PortalState, { _tag: 'signedIn' }> => ({
   _tag: 'signedIn',
-  environment: 'cn',
   issuer: 'https://auth',
+  enterpriseApiBaseUrl: 'https://cse.example.com',
+  cloudApiOrigin: 'https://cloud.example.com',
+  cloudWebUrl: 'https://cloud.example.com/subscription',
   subject: 'user-1',
   name: 'Ada',
   profile: { product, profileId: product === 'enterprise' ? 'org-1' : 'me' },
@@ -158,11 +159,10 @@ describe('AccountRuntime', () => {
     expect(runtime.getState().hasPrompted).toBe(true);
   });
 
-  it.each(['', '://invalid'])(
+  it.each([undefined, '', '://invalid'])(
     'signs into a community account without an enterprise address (%s)',
     async (address) => {
-      const { options } = setup(signedIn('cloud'));
-      const runtime = new AccountRuntime({ ...options, enterpriseAddresses: { cn: address } });
+      const { runtime, options } = setup({ ...signedIn('cloud'), enterpriseApiBaseUrl: address });
       await expect(runtime.signIn()).resolves.toBe(true);
       expect(runtime.getState().isSignedIn).toBe(true);
       expect(options.createApi).not.toHaveBeenCalled();
@@ -286,7 +286,7 @@ describe('AccountRuntime', () => {
     });
   });
 
-  it('opens the cloud enterprise profile using the configured cloud address', async () => {
+  it('opens the cloud enterprise profile using the session service address', async () => {
     const { runtime, options } = setup(signedIn('enterprise'));
     await expect(runtime.signIn()).resolves.toBe(false);
     expect(options.profiles.resolve).toHaveBeenCalledWith(
@@ -475,6 +475,11 @@ describe('AccountRuntime', () => {
 
   it.each([
     ['subject', { ...signedIn('enterprise'), subject: 'user-2' }],
+    ['issuer', { ...signedIn('enterprise'), issuer: 'https://another.identity.example.com' }],
+    [
+      'enterprise API',
+      { ...signedIn('enterprise'), enterpriseApiBaseUrl: 'https://another.enterprise.example.com' },
+    ],
     [
       'organization',
       {
@@ -568,7 +573,10 @@ describe('AccountRuntime', () => {
     await expect(runtime.getProductToken()).resolves.toBe('product-token');
   });
 
-  it('drops a token that finishes entering the product after the account has changed', async () => {
+  it.each([
+    { subject: 'user-2' },
+    { enterpriseApiBaseUrl: 'https://another.enterprise.example.com' },
+  ])('drops a product token after the session identity or service changed (%j)', async (change) => {
     const { runtime, options, publish } = setup(signedIn('enterprise'), enterpriseProfile);
     await runtime.verify();
     let finish!: (token: string) => void;
@@ -585,7 +593,7 @@ describe('AccountRuntime', () => {
     const token = runtime.getProductToken();
     const rejection = expect(token).rejects.toMatchObject({ code: 'rejected' });
     await started;
-    publish({ ...signedIn('enterprise'), subject: 'user-2' });
+    publish({ ...signedIn('enterprise'), ...change });
     finish('late-token');
     await rejection;
   });
@@ -896,25 +904,40 @@ describe('AccountRuntime', () => {
 });
 
 describe('community Cloud identity admission', () => {
-  it('exposes the SDK environment and discards credentials when that environment changes', async () => {
-    const { runtime, options, publish } = setup(signedIn('cloud'));
-    await options.portal.ready;
-    const identity = runtime.getCommunityIdentity()!;
-    expect(identity.environment).toBe('cn');
-    let finish!: (value: { accessToken: string; idToken: string }) => void;
-    options.portal.getIdentityTokens.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const pending = runtime.getCommunityTokens(identity.key);
-    publish({ ...signedIn('cloud'), environment: 'global' });
-    finish({ accessToken: 'cn-access', idToken: 'cn-id' });
-    await expect(pending).rejects.toMatchObject({ code: 'rejected' });
-    expect(runtime.getCommunityIdentity()).toMatchObject({ environment: 'global' });
-    expect(runtime.getCommunityIdentity()?.key).not.toBe(identity.key);
-  });
+  it.each([
+    { cloudApiOrigin: 'https://another-cloud.example.com' },
+    { cloudWebUrl: 'https://billing.example.com/subscriptions' },
+    { cloudApiOrigin: undefined, cloudWebUrl: undefined },
+    { issuer: 'https://another.identity.example.com' },
+  ])(
+    'discards credentials when the current session service context changes (%j)',
+    async (change) => {
+      const { runtime, options, publish } = setup(signedIn('cloud'));
+      await options.portal.ready;
+      const identity = runtime.getCommunityIdentity()!;
+      expect(identity).toMatchObject({
+        apiOrigin: 'https://cloud.example.com',
+        webUrl: 'https://cloud.example.com/subscription',
+      });
+      let finish!: (value: { accessToken: string; idToken: string }) => void;
+      options.portal.getIdentityTokens.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const pending = runtime.getCommunityTokens(identity.key);
+      const next = { ...signedIn('cloud'), ...change };
+      publish(next);
+      finish({ accessToken: 'old-access', idToken: 'old-id' });
+      await expect(pending).rejects.toMatchObject({ code: 'rejected' });
+      expect(runtime.getCommunityIdentity()).toMatchObject({
+        apiOrigin: next.cloudApiOrigin,
+        webUrl: next.cloudWebUrl,
+      });
+      expect(runtime.getCommunityIdentity()?.key).not.toBe(identity.key);
+    },
+  );
 
   it('discards a token pair returned after the community account changed', async () => {
     const { runtime, options, publish } = setup(signedIn('cloud'));
@@ -956,43 +979,44 @@ describe('community Cloud identity admission', () => {
   });
 });
 
-describe('normalized account environment admission', () => {
-  it('uses normalized context without requiring environment fields on the SDK state', async () => {
+describe('normalized account service admission', () => {
+  it('uses normalized service context without prescribing fields on the SDK state', async () => {
     const session = signedIn('enterprise');
-    delete session.environment;
     delete session.issuer;
+    delete session.enterpriseApiBaseUrl;
+    delete session.cloudApiOrigin;
+    delete session.cloudWebUrl;
     const { options } = setup(session);
     options.resolveSessionContext.mockReturnValue({
-      environment: 'global',
-      issuer: 'https://global.identity.example.com',
+      issuer: 'https://identity.example.com',
+      enterpriseApiBaseUrl: 'https://enterprise.example.com/api',
     });
     const runtime = new AccountRuntime(options);
 
     await runtime.signIn();
 
     expect(options.createApi).toHaveBeenCalledWith(
-      options.enterpriseAddresses.global,
+      'https://enterprise.example.com/api',
       expect.anything(),
     );
     expect(options.profiles.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ issuer: 'https://global.identity.example.com' }),
-      options.enterpriseAddresses.global,
+      expect.objectContaining({ issuer: 'https://identity.example.com' }),
+      'https://enterprise.example.com/api',
     );
   });
 
-  it.each(['cn', 'global'] as const)(
-    'enters the %s enterprise API selected by the candidate session',
-    async (environment) => {
-      const { runtime, options, select } = setup({ _tag: 'signedOut' });
-      const issuer = `https://${environment}.identity.example.com`;
-      select({ ...signedIn('enterprise'), environment, issuer });
+  it.each(['https://enterprise.example.com', 'https://another.example.com/api'])(
+    'enters the exact enterprise API supplied by the candidate session (%s)',
+    async (address) => {
+      const { runtime, options, select } = setup(signedIn('enterprise'));
+      const issuer = 'https://candidate.identity.example.com';
+      select({ ...signedIn('enterprise'), issuer, enterpriseApiBaseUrl: address });
       options.profiles.resolve.mockImplementation((identity, address) => ({
         ...enterpriseProfile,
         identity,
         address,
       }));
       await runtime.signIn();
-      const address = options.enterpriseAddresses[environment];
       expect(options.portal.getProductToken).not.toHaveBeenCalled();
       expect(options.createApi).toHaveBeenCalledWith(address, expect.any(Object));
       expect(options.profiles.setActive).toHaveBeenCalledWith(
@@ -1007,8 +1031,8 @@ describe('normalized account environment admission', () => {
     },
   );
 
-  it.each([{ environment: undefined }, { environment: 'unknown' }, { issuer: undefined }])(
-    'rejects context that cannot be normalized without choosing an environment (%j)',
+  it.each([{ issuer: undefined }, { issuer: 'invalid' }])(
+    'rejects a session without a valid issuer (%j)',
     async (context) => {
       const { runtime, options, select } = setup({ _tag: 'signedOut' });
       select({ ...signedIn('enterprise'), ...context });
@@ -1018,19 +1042,30 @@ describe('normalized account environment admission', () => {
     },
   );
 
-  it('does not use the other enterprise API when the selected environment is unconfigured', async () => {
-    const { options } = setup({ ...signedIn('enterprise'), environment: 'global' });
-    const runtime = new AccountRuntime({
-      ...options,
-      enterpriseAddresses: { cn: options.enterpriseAddresses.cn },
+  it.each([undefined, ''])(
+    'rejects a candidate without an enterprise API (%s)',
+    async (address) => {
+      const { runtime, options, select } = setup(signedIn('enterprise'));
+      select({ ...signedIn('enterprise'), enterpriseApiBaseUrl: address });
+      await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+      expect(options.createApi).not.toHaveBeenCalled();
+      expect(options.portal.getState()).toEqual(signedIn('enterprise'));
+    },
+  );
+
+  it('rejects an invalid enterprise API before sending credentials', async () => {
+    const { runtime, options } = setup({
+      ...signedIn('enterprise'),
+      enterpriseApiBaseUrl: 'https://user:password@enterprise.example.com',
     });
-    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'address' });
     expect(options.createApi).not.toHaveBeenCalled();
+    expect(options.portal.getProductToken).not.toHaveBeenCalled();
   });
 
-  it('refuses a restored environment that does not own the open enterprise address', async () => {
+  it('refuses a restored session whose enterprise API differs from the open profile', async () => {
     const { runtime, options } = setup(
-      { ...signedIn('enterprise'), environment: 'global' },
+      { ...signedIn('enterprise'), enterpriseApiBaseUrl: 'https://another.example.com' },
       enterpriseProfile,
     );
     await runtime.verify();
@@ -1039,8 +1074,8 @@ describe('normalized account environment admission', () => {
     expect(options.portal.getProductToken).not.toHaveBeenCalled();
   });
 
-  it('never exposes a community identity without normalized environment context', async () => {
-    const { runtime, options } = setup({ ...signedIn('cloud'), environment: undefined });
+  it('never exposes a community identity without a normalized issuer', async () => {
+    const { runtime, options } = setup({ ...signedIn('cloud'), issuer: undefined });
     await options.portal.ready;
     expect(runtime.getState().isSignedIn).toBe(false);
     expect(runtime.getCommunityIdentity()).toBeNull();

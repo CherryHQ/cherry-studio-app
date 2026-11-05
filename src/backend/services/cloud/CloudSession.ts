@@ -2,7 +2,6 @@ import * as z from 'zod';
 
 import { createHttpClient, type HttpClient, isHttpError } from '@/backend/services/http';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
-import type { AccountEnvironment } from '@/shared/contracts/account';
 import { CloudAccessError, CloudAccountSchema } from '@/shared/contracts/cloud';
 
 import { cloudSignatureHeaders, type CloudDevice } from './cloudDevice';
@@ -16,8 +15,9 @@ const TokenSetSchema = z.object({
 type Tokens = z.infer<typeof TokenSetSchema> & { expiresAt: number; deviceId: string };
 export interface CloudIdentity {
   key: string;
-  environment: AccountEnvironment;
   profileId: string;
+  apiOrigin?: string;
+  webUrl?: string;
 }
 export interface CloudIdentitySource {
   getIdentity(): CloudIdentity | null;
@@ -49,7 +49,11 @@ export class CloudSession {
   assertCurrent(): void {
     this.signal.throwIfAborted();
     const current = this.source.getIdentity();
-    if (current?.key !== this.identity.key || current.environment !== this.identity.environment)
+    if (
+      current?.key !== this.identity.key ||
+      current.apiOrigin !== this.identity.apiOrigin ||
+      current.webUrl !== this.identity.webUrl
+    )
       throw new CloudAccessError('signed_out');
   }
 

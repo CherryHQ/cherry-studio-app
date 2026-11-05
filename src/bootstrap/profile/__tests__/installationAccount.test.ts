@@ -47,10 +47,9 @@ const configuration = {
   origin: 'https://accounts.example.com',
   clientId: 'mobile',
   scopes: ['openid'],
-  enterpriseAddresses: {
-    cn: 'https://enterprise.example.com',
-    global: 'https://enterprise.global.example.com',
-  },
+  enterpriseApiBaseUrl: 'https://enterprise.example.com',
+  cloudApiOrigin: 'https://cloud.example.com',
+  cloudWebUrl: 'https://cloud.example.com/subscriptions',
 };
 
 function compose(scheme?: string, values: Record<string, unknown> = configuration) {
@@ -89,7 +88,7 @@ test.each([undefined, 'exp'])(
 );
 
 test('does not require enterprise configuration to compose ordinary account sign-in', () => {
-  const { enterpriseAddresses: _enterpriseAddresses, ...cloudConfiguration } = configuration;
+  const { enterpriseApiBaseUrl: _enterpriseApiBaseUrl, ...cloudConfiguration } = configuration;
   compose('cherrystudio', cloudConfiguration);
   expect(mockCreatePortal).toHaveBeenCalled();
   expect(mockConfigurationError).not.toHaveBeenCalled();
@@ -115,7 +114,7 @@ test('allows userinfo only on the configured identity issuer', () => {
 });
 
 test.each(['cloud', 'enterprise'] as const)(
-  'maps a current %s SDK session without region metadata to the configured China identity',
+  'maps a current %s SDK session to its configured issuer and concrete service addresses',
   (product) => {
     const issuer = 'https://auth.cherryai.com.cn';
     const { resolveSessionContext } = compose('cherrystudio', { ...configuration, issuer });
@@ -123,9 +122,15 @@ test.each(['cloud', 'enterprise'] as const)(
       resolveSessionContext({
         _tag: 'signedIn',
         subject: 'user-1',
+        name: undefined,
         profile: { product, profileId: 'profile-1' },
       }),
-    ).toEqual({ environment: 'cn', issuer });
+    ).toEqual({
+      issuer,
+      enterpriseApiBaseUrl: configuration.enterpriseApiBaseUrl,
+      cloudApiOrigin: configuration.cloudApiOrigin,
+      cloudWebUrl: configuration.cloudWebUrl,
+    });
   },
 );
 
@@ -140,6 +145,7 @@ test('does not create an account context without a valid configured issuer', () 
     resolveSessionContext({
       _tag: 'signedIn',
       subject: 'user-1',
+      name: undefined,
       profile: { product: 'cloud', profileId: 'profile-1' },
     }),
   ).toBeNull();

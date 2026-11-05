@@ -15,6 +15,7 @@ import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
+  type ChatComposerHandoff,
   conversationShareHref,
   parseChatRoute,
   getChatComposerHandoff,
@@ -47,6 +48,7 @@ import {
 } from './components/ChatWorkspace';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
+import { useComposerHandoffAppend } from './composer/useComposerHandoffAppend';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import { ChatQuoteProvider } from './quotes/ChatQuoteProvider';
@@ -91,7 +93,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     workspaceDraftId: target.kind === 'draft' ? target.workspaceDraftId : undefined,
   });
   const draftHandoff = useAgentChatDraftHandoff(sessionId);
-  const composerSession = useChatComposerSession(target, draftHandoff);
+  const { composerSession, completeAppend } = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);
   const resolvedAgentId = session.data?.agentId ?? composerSession.draftAgentId ?? agentId;
   const controls = useAgentChatControls({
@@ -143,11 +145,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   );
   // Entry actions seed the rich draft; only the user's send creates a message.
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
-  const initialDraft = composerHandoff?.skillAction
-    ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
-    : composerHandoff?.selection
-      ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
-      : composerHandoff?.draft;
+  const initialDraft = getHandoffDraft(composerHandoff, t);
   const { bottom: bottomInset } = useSafeAreaInsets();
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
@@ -169,6 +167,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       initialAttachments={composerHandoff?.attachments}
       initialDraft={initialDraft}
     >
+      {composerSession.pendingAppend ? (
+        <ComposerHandoffAppend token={composerSession.pendingAppend} onApplied={completeAppend} />
+      ) : null}
       <ChatQuoteProvider
         sessionId={sessionId}
         enabled={hasComposer}
@@ -285,6 +286,34 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       </ChatQuoteProvider>
     </ComposerSessionProvider>
   );
+}
+
+function ComposerHandoffAppend({
+  token,
+  onApplied,
+}: {
+  token: string;
+  onApplied: (token: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handoff = getChatComposerHandoff(token);
+  useComposerHandoffAppend(
+    token,
+    handoff ? { ...handoff, draft: getHandoffDraft(handoff, t) ?? '' } : undefined,
+    onApplied,
+  );
+  return null;
+}
+
+function getHandoffDraft(
+  handoff: ChatComposerHandoff | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+) {
+  return handoff?.skillAction
+    ? `${createSkillActionMention(handoff.skillAction, t(handoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${handoff.draft}`
+    : handoff?.selection
+      ? `${createSelectionMention(handoff.selection.label, handoff.selection.selection)} ${handoff.draft}`
+      : handoff?.draft;
 }
 
 function SessionReadReceipt({ sessionId }: { sessionId: string }) {
