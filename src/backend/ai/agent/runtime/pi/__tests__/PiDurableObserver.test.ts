@@ -145,6 +145,40 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
   };
 }
 
+test('reads full uncommitted reasoning on demand without changing the status-only observation', async () => {
+  const text = 'Keep the earliest thinking too.\n'.repeat(200);
+  const partial = {
+    ...response(''),
+    content: [{ type: 'thinking', thinking: text }],
+  } satisfies AssistantMessage;
+  const fixture = attach(view({ run, generation: { attempt: 0, message: partial } }), [input()]);
+  try {
+    const snapshot = await fixture.observer.start();
+    const preview = snapshot.activeTurn!.parts[0];
+    expect(preview).toMatchObject({ type: 'reasoning', text: '', hasText: true });
+    const detail = fixture.observer.readReasoningTurn(
+      { sessionId: 'session', slot: 0 },
+      'assistant-1',
+    );
+    expect(detail?.parts[0]).toMatchObject({
+      id: preview.id,
+      type: 'reasoning',
+      text,
+      state: 'streaming',
+    });
+    expect(
+      fixture.observer.readReasoningTurn({ sessionId: 'another-session', slot: 0 }, 'assistant-1'),
+    ).toBeUndefined();
+    expect(snapshot.activeTurn!.parts[0]).toBe(preview);
+    expect(preview).toMatchObject({ text: '', hasText: true });
+  } finally {
+    await fixture.observer.stop();
+  }
+  expect(
+    fixture.observer.readReasoningTurn({ sessionId: 'session', slot: 0 }, 'assistant-1'),
+  ).toBeUndefined();
+});
+
 test('projects immutable streamed values without changing earlier snapshots', async () => {
   const original = response('Answer');
   const fixture = attach(view({ run, generation: { attempt: 0, message: original } }), [input()]);
@@ -166,7 +200,7 @@ test('projects immutable streamed values without changing earlier snapshots', as
     expect(fixture.latest().parts[0]).toMatchObject({ text: 'Answer two' });
     expect(first.parts).toMatchObject([
       { type: 'text', text: 'Answer one' },
-      { type: 'reasoning', text: 'Reason' },
+      { type: 'reasoning', text: '', hasText: true },
       { type: 'tool', input: { rows: [{ text: 'A' }] } },
     ]);
     expect(initial.parts[0]).toMatchObject({ text: 'Answer' });
@@ -246,7 +280,7 @@ test('projects nested tool progress and drops it when the parent result commits'
     parentTaskId: taskId,
     taskId: 43 as TaskId,
     status: 'running' as const,
-    arguments: { query: 'calendar' },
+    arguments: { query: 'calendar', code: 'hidden'.repeat(20_000) },
   };
   const fixture = attach(view({ run, tools: [tool], nestedTools: [child] }, [call]), [input()]);
   try {
@@ -255,6 +289,10 @@ test('projects nested tool progress and drops it when the parent result commits'
       state: 'running',
       progress: { calls: [{ id: 'call/child', status: 'running' }] },
     });
+    expect(initial.parts[0]).toHaveProperty(
+      'progress.calls.0.args',
+      JSON.stringify(child.arguments).slice(0, 1000),
+    );
     await fixture.advance(
       view(
         {

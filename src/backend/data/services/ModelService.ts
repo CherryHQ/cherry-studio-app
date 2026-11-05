@@ -35,6 +35,17 @@ const sqliteMaxVariables = 999;
 const userModelGeneratedVariablesPerRow = 3;
 const modelInUseAsDefaultReason = 'model is in use as the default model';
 
+// Released catalogs stored these preset keys as request IDs. Keep their database identities
+// stable, including when the saved catalog predates the corrected apiModelId declarations.
+const LEGACY_MIMO_API_MODEL_IDS = new Map([
+  ['mimo-v2-5', 'mimo-v2.5'],
+  ['mimo-v2-5-pro', 'mimo-v2.5-pro'],
+  ['mimo-v2-5-pro-ultraspeed', 'mimo-v2.5-pro-ultraspeed'],
+  ['mimo-v2-6-flash', 'mimo-v2.6-flash'],
+  ['mimo-v2-6-pro', 'mimo-v2.6-pro'],
+  ['mimo-v2-6-pro-ultraspeed', 'mimo-v2.6-pro-ultraspeed'],
+]);
+
 export type CreateModelInput = {
   capabilities?: InsertUserModelRow['capabilities'];
   contextWindow?: number | null;
@@ -113,7 +124,7 @@ const presetDeltaFields = new Set<keyof InsertUserModelRow>([
   'pricing',
 ]);
 
-function applyStoredFields(baseline: Model, row: UserModelRow): Model {
+function applyStoredFields(baseline: Model, row: UserModelRow, apiModelId: string): Model {
   const reasoning = row.reasoning
     ? {
         ...row.reasoning,
@@ -123,7 +134,7 @@ function applyStoredFields(baseline: Model, row: UserModelRow): Model {
 
   return {
     ...baseline,
-    apiModelId: row.modelId,
+    apiModelId,
     ...(row.capabilities !== null ? { capabilities: row.capabilities } : {}),
     ...(row.contextWindow !== null ? { contextWindow: row.contextWindow } : {}),
     ...(row.description !== null ? { description: row.description } : {}),
@@ -192,7 +203,18 @@ function enrichModelFromRegistry(row: UserModelRow, providerConfig?: ModelProvid
   const baseline = row.presetModelId
     ? (registryBaseline ?? createCustomModel(row.providerId, row.modelId))
     : createCustomModel(row.providerId, row.modelId);
-  const model = applyStoredFields(baseline, row);
+  const legacyMimoApiModelId =
+    row.presetModelId === row.modelId &&
+    (row.providerId === 'mimo' || providerConfig?.presetProviderId === 'mimo')
+      ? LEGACY_MIMO_API_MODEL_IDS.get(row.modelId)
+      : undefined;
+  const model = applyStoredFields(
+    baseline,
+    row,
+    legacyMimoApiModelId
+      ? (registryData.registryOverride?.apiModelId ?? legacyMimoApiModelId)
+      : row.modelId,
+  );
 
   if (!row.presetModelId && registryBaseline) {
     return {
@@ -859,6 +881,7 @@ export class ModelService {
   private async getUserDefaultModelIds(): Promise<Set<string>> {
     const values = await Promise.all([
       this.preferenceService.get('agent.default_model_id'),
+      this.preferenceService.get('agent.session_naming.model_id'),
       this.preferenceService.get('feature.paintings.default_model_id'),
       this.preferenceService.get('feature.quick_assistant.model_id'),
       this.preferenceService.get('feature.translate.model_id'),

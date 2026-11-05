@@ -134,6 +134,43 @@ test('retains startup timings through file export while rejecting other info log
   expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
 });
 
+test('retains Office stage timings through file export without document contents or unrelated info logs', () => {
+  const raw = createLogRecord('info', 'Office stage', 'Office', {}, [
+    {
+      operation: 'office.sandbox_execution',
+      toolCallId: 'call-1',
+      capabilityId: 'run_office_script',
+      outcome: 'ended',
+      durationMs: 125,
+      path: '/private/report.xlsx',
+      arguments: { code: 'private document script' },
+      document: 'private document contents',
+    },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  const exported = projectDiagnosticLine(
+    { tooLarge: false, data: new TextEncoder().encode(JSON.stringify(persisted)) },
+    'logs',
+    { fromMs: 0, toMs: Date.now() + 1000 },
+  );
+  if (!exported || exported === 'malformed') throw new Error('Expected Office metadata');
+  expect(JSON.parse(new TextDecoder().decode(exported.data))).toMatchObject({
+    level: 'info',
+    module: 'Office',
+    message: 'Office stage',
+    facts: {
+      operation: 'office.sandbox_execution',
+      toolCallId: 'call-1',
+      capabilityId: 'run_office_script',
+      outcome: 'ended',
+      durationMs: 125,
+    },
+  });
+  expect(new TextDecoder().decode(exported.data)).not.toMatch(/private|arguments|document/);
+  expect(projectDiagnosticLog({ ...raw, message: 'arbitrary info' })).toBeUndefined();
+  expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
+});
+
 test('preserves the service and dependency responsible for a startup phase promotion', () => {
   const persisted = projectDiagnosticLog(
     createLogRecord('warn', 'Service promoted to startup gate', 'Lifecycle', {}, [

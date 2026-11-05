@@ -9,6 +9,8 @@ import {
   AgentInputPartSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
+  AgentReadReasoningInputSchema,
+  AgentReasoningDetailSchema,
   AgentMessageDeltaSchema,
   AgentSessionSnapshotSchema,
   AgentSessionStatusSchema,
@@ -23,6 +25,25 @@ import {
 } from '../agent';
 
 const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search' } as const;
+
+test('status-only reasoning retains its full-text availability through serialization', () => {
+  const status = { id: 'phase', type: 'reasoning', text: '', hasText: true, state: 'done' };
+  expect(AgentMessagePartSchema.parse(roundTrip(status))).toEqual(status);
+  expect(AgentMessagePartSchema.safeParse({ ...status, hasText: 'yes' }).success).toBe(false);
+});
+
+test('reasoning detail reads round-trip full text and accept only source identifiers', () => {
+  const input = { sessionId: 'session', messageId: 'answer', partId: 'phase' };
+  expect(AgentReadReasoningInputSchema.parse(roundTrip(input))).toEqual(input);
+  for (const invalid of [
+    { ...input, partId: '' },
+    { ...input, text: 'Client supplied text' },
+  ])
+    expect(AgentReadReasoningInputSchema.safeParse(invalid).success).toBe(false);
+  const detail = { text: 'Complete thinking text.\n'.repeat(1000), state: 'streaming' };
+  expect(AgentReasoningDetailSchema.parse(roundTrip(detail))).toEqual(detail);
+  expect(AgentReasoningDetailSchema.safeParse({ ...detail, state: 'pending' }).success).toBe(false);
+});
 
 test('transient context and runtime events round-trip without diagnostic payloads', () => {
   for (const event of [

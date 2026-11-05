@@ -306,6 +306,7 @@ export interface DurableAgentRuntime {
   message(
     lane: RuntimeLane,
     messageId: string,
+    options?: { fullReasoning?: boolean },
   ): Promise<{ turn: RuntimeDurableTurn; role: 'user' | 'assistant' } | undefined>;
   exportTurn(
     lane: RuntimeLane,

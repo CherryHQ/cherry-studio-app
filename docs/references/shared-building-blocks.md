@@ -50,6 +50,9 @@ it already exists.
 | Editable assistant reply prose | `editableReplyParts` and `applyReplyEdits` in `src/shared/utils/assistantReply.ts`; every non-empty text part is editable, reasoning and tool receipts are not |
 | Safe Markdown code fences | `createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` |
 | Markdown prose to plain text, code kept literal | `stripMarkdownFormatting` in `src/shared/utils/markdownFormatting.ts`, shared by search indexing and quote excerpts |
+| Status-only reasoning display data | `projectAgentMessageDisplay` in `src/shared/utils/agentMessageDisplay.ts`; list reasoning carries no text, while tool inputs, outputs and execution/recovery records remain complete |
+| On-demand reasoning reads | `AgentProtocol.readReasoning`; the host reads the current Pi watch frame or saved transcript, isolating unrelated invalid saved parts with the existing display reader; expanded previews use `MessagePart.TextBody`, and tapping the viewport opens the message-owned full-text sheet |
+| Private Agent working materials | Upstream `CodemodeStoreDoc` via Code Mode `store/load`; successful preparation calls precede execution/checking, never library files or backups |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
@@ -89,6 +92,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Library folder browsing, creation, and selection for moves and Session workspaces | `FileFolderPicker` and `useCreateFileFolder` in `src/frontend/components/FileFolderPicker`; `FileFolderBreadcrumbs` owns the shared path navigation |
 | Optional conversation workspace association, including unsent drafts | `useFileWorkspace` in `src/frontend/hooks/file`; chat owns `FileWorkspaceSheet`, reusing the shared file pages and `FileEntryPreview` viewer |
 | Logical folder, file lineage, and workspace metadata | `FileLibraryService` and `fileLibraryRows` in `src/backend/data/services` |
+| Choosing a new or existing conversation for an incoming share | `ConversationDestinationList` from `src/frontend/appShell/sidebar`, reusing the sidebar Agent groups; `systemEntry` owns the share handoff |
 | Choosing the Agent that receives a file or reference handed over from outside chat | `AgentMenu` in `src/frontend/components/AgentMenu`, rendered by CherryUI `ActionMenu` |
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |

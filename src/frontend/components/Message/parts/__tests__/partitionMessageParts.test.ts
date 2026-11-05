@@ -17,6 +17,17 @@ function text(value: string): CherryMessagePart {
 }
 
 describe('groupMessageProcessItems', () => {
+  test('keeps a completed status-only reasoning phase available without including empty phases', () => {
+    const phase = {
+      type: 'reasoning',
+      text: '',
+      state: 'done',
+      providerMetadata: { cherry: { hasText: true } },
+    } as const;
+    const empty = { type: 'reasoning', text: '', state: 'done' } as const;
+    const result = partitionMessageParts([empty, phase, text('Answer')]);
+    expect(result.process.map(({ part }) => part)).toEqual([phase]);
+  });
   test('folds narration, reasoning, and tool calls together while preserving their order', () => {
     const parts = [
       text('First phase'),
