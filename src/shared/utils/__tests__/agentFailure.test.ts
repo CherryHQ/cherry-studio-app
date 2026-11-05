@@ -42,6 +42,13 @@ describe('classifyAgentFailureReason', () => {
     [{ message: 'request failed', statusCode: 503 }, 'provider_unavailable'],
     [{ message: '503: upstream temporarily unavailable' }, 'provider_unavailable'],
     [{ message: 'Pi Runtime requires an API key from the selected provider.' }, 'auth'],
+    [{ code: 'no_response', message: 'Self-signed certificate' }, 'proxy_tls'],
+    [{ code: 'no_response', message: 'Request timed out' }, 'timeout'],
+    [{ code: 'stream_disconnected', message: 'Stream ended unexpectedly' }, 'stream_interrupted'],
+    [{ code: 'server_error', message: 'Quota exhausted' }, 'quota'],
+    [{ code: 'server_error', message: 'Request failed' }, 'provider_unavailable'],
+    [{ code: 'stream_disconnected', message: 'Request failed' }, 'network'],
+    [{ code: 'usage_limit_reached', message: 'Request failed' }, 'quota'],
     [{ message: 'unclassified provider response' }, 'unknown'],
   ] as const)('classifies %o as %s', (facts, expected) => {
     expect(classifyAgentFailureReason(facts)).toBe(expected);
@@ -75,27 +82,42 @@ describe('structured safety evidence', () => {
     );
   });
 
-  test.each(['content-filter', 'content_filter', 'safety', 'recitation'])(
-    'recognizes the exact structured finish %s',
-    (finishReason) => {
-      expect(classifyAgentFailureReason({ message: 'Request failed', finishReason })).toBe(
+  test.each([
+    'content-filter',
+    'content_filter',
+    'safety',
+    'recitation',
+    'PROHIBITED_CONTENT',
+    'IMAGE_PROHIBITED_CONTENT',
+    'IMAGE_RECITATION',
+    'IMAGE_SAFETY',
+    'BLOCKLIST',
+    'SPII',
+  ])('recognizes the exact structured finish %s', (finishReason) => {
+    expect(classifyAgentFailureReason({ message: 'Request failed', finishReason })).toBe(
+      'content_filter',
+    );
+  });
+
+  test.each(['content_filter', 'content_policy_violation', 'contentFilter'])(
+    'recognizes the explicit safety code %s',
+    (code) => {
+      expect(classifyAgentFailureReason({ code, message: 'Request failed' })).toBe(
         'content_filter',
       );
     },
   );
 
-  test('recognizes an explicit safety code', () => {
-    expect(classifyAgentFailureReason({ code: 'content_filter', message: 'Request failed' })).toBe(
-      'content_filter',
+  test.each([
+    'content_filter_results',
+    'prohibited_content_info',
+    'IMAGE_OTHER',
+    'NO_IMAGE',
+    'OTHER',
+    'private safety description',
+  ])('rejects near-match code and finish %s', (value) => {
+    expect(classifyAgentFailureReason({ code: value, finishReason: value, message: '' })).toBe(
+      'unknown',
     );
   });
-
-  test.each(['content_filter_results', 'OTHER', 'private safety description'])(
-    'rejects near-match code and finish %s',
-    (value) => {
-      expect(classifyAgentFailureReason({ code: value, finishReason: value, message: '' })).toBe(
-        'unknown',
-      );
-    },
-  );
 });

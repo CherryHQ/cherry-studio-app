@@ -925,13 +925,28 @@ describe('terminal provider reason parity', () => {
       label: 'only network prose',
       body: metadataBody,
       message: 'Network request failed',
-      reason: 'unknown',
+      reason: 'network',
     },
     {
       label: 'only stream prose',
       body: metadataBody,
       message: 'Stream ended unexpectedly',
-      reason: 'unknown',
+      reason: 'stream_interrupted',
+    },
+    { label: 'timeout prose', message: 'Request timed out', reason: 'timeout' },
+    {
+      label: 'TLS evidence refines a generic transport code',
+      code: 'no_response',
+      message: 'Self-signed certificate',
+      reason: 'proxy_tls',
+    },
+    {
+      label: 'quota evidence refines forbidden status',
+      code: 'forbidden',
+      status: 403,
+      expectedStatusCode: 403,
+      body: { error: { message: 'Quota exhausted', content_filter_results: {} } },
+      reason: 'quota',
     },
     {
       label: 'OpenAI authentic safety',
@@ -951,6 +966,20 @@ describe('terminal provider reason parity', () => {
       message: 'Provider stopped with: RECITATION',
       reason: 'content_filter',
     },
+    ...[
+      'PROHIBITED_CONTENT',
+      'IMAGE_PROHIBITED_CONTENT',
+      'IMAGE_RECITATION',
+      'IMAGE_SAFETY',
+      'BLOCKLIST',
+      'SPII',
+    ].map(
+      (rawStopReason): Scenario => ({
+        label: `Google safety finish ${rawStopReason}`,
+        rawStopReason,
+        reason: 'content_filter',
+      }),
+    ),
     ...[' CoNtEnT-FiLtEr ', ' CONTENT_FILTER ', ' safety ', ' recitation '].map(
       (rawStopReason): Scenario => ({
         label: `exact normalized raw ${rawStopReason}`,
@@ -975,19 +1004,19 @@ describe('terminal provider reason parity', () => {
       reason: 'auth',
     },
     {
-      label: 'diagnostic code beats safety and TLS prose',
+      label: 'exact safety finish beats generic transport code and TLS prose',
       code: 'no_response',
       rawStopReason: 'SAFETY',
       message: 'Self-signed certificate',
-      reason: 'network',
+      reason: 'content_filter',
     },
     {
-      label: 'forbidden status beats quota prose',
+      label: 'quota prose refines forbidden status',
       code: 'forbidden',
       status: 403,
       expectedStatusCode: 403,
       message: 'Quota exhausted',
-      reason: 'permission',
+      reason: 'quota',
     },
     { label: 'bare forbidden', code: 'forbidden', reason: 'unknown' },
     {
@@ -1107,7 +1136,11 @@ describe('terminal provider reason parity', () => {
             code: code === undefined || code === 'runtime_error' ? 'provider_error' : code,
             name: 'ProviderError',
           },
-          context: { providerId: 'provider', modelId: 'model', finishReason: 'error' },
+          context: {
+            providerId: 'provider',
+            modelId: 'model',
+            finishReason: scenario.rawStopReason?.trim() ?? 'error',
+          },
         },
       });
       if (scenario.body !== undefined)

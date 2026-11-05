@@ -1,8 +1,4 @@
-import {
-  AiFailureSnapshotSchema,
-  type AiFailureInput,
-  type AiFailureReason,
-} from '@/shared/contracts/aiFailure';
+import { AiFailureSnapshotSchema, type AiFailureInput } from '@/shared/contracts/aiFailure';
 
 import { classifyAiFailureReason } from './aiFailure';
 
@@ -23,7 +19,7 @@ function boundedOptional(value: string | undefined, maxChars: number): string | 
 /**
  * Preserve bounded diagnostic facts in a versioned, JSON-safe snapshot.
  */
-export function createAiFailure(error: AiFailureInput, reasonCode?: AiFailureReason) {
+export function createAiFailure(error: AiFailureInput) {
   const code = bounded(error.code, MAX_ERROR_CODE_CHARS) || 'runtime_error';
   const message = bounded(error.message, MAX_ERROR_MESSAGE_CHARS) || 'The Agent turn failed.';
   const rawStatusCode = error.context?.statusCode;
@@ -48,16 +44,14 @@ export function createAiFailure(error: AiFailureInput, reasonCode?: AiFailureRea
   const name = boundedOptional(error.name, 256);
   const failure = AiFailureSnapshotSchema.parse({
     version: 1,
-    reasonCode:
-      reasonCode ??
-      classifyAiFailureReason({
-        code,
-        message,
-        ...(name !== undefined ? { name } : {}),
-        ...(statusCode !== undefined ? { statusCode } : {}),
-        ...(finishReason !== undefined ? { finishReason } : {}),
-        ...(responseBody !== undefined ? { responseBody } : {}),
-      }),
+    reasonCode: classifyAiFailureReason({
+      code,
+      message,
+      ...(name !== undefined ? { name } : {}),
+      ...(statusCode !== undefined ? { statusCode } : {}),
+      ...(finishReason !== undefined ? { finishReason } : {}),
+      ...(responseBody !== undefined ? { responseBody } : {}),
+    }),
     source: {
       layer: error.origin ?? 'runtime',
       code,

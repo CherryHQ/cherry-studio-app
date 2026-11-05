@@ -9,7 +9,6 @@ import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
 import { TOOL_SEARCH_TOOL_NAME } from '@earendil-works/pi-durable/tool-search';
 import { z } from 'zod';
 
-import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
@@ -36,7 +35,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
-import { readPiTerminalFailure } from './piModelDiagnostics';
+import { readPiTerminalError } from './piModelError';
 import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
@@ -320,10 +319,8 @@ export function projectPiTurn(options: {
       for (const key of Object.keys(billed) as (keyof RuntimeUsage)[])
         usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
-    const terminalFailure = readPiTerminalFailure(message);
-    if (terminalFailure) {
-      const { diagnostic, code, statusCode, reasonCode } = terminalFailure;
-      const body = diagnostic?.details?.body;
+    const terminalError = readPiTerminalError(message);
+    if (terminalError) {
       const imageTool =
         message.api === 'cherry-image'
           ? parts.findLast(
@@ -332,25 +329,7 @@ export function projectPiTurn(options: {
           : undefined;
       // The image scheduling message carries no new provider response. Its tool receipt owns
       // the failure shown by the Host, including explicit-user-retry eligibility.
-      error = (imageTool?.type === 'tool' ? imageTool.error : undefined) ?? {
-        ...normalizeAiError(
-          {
-            code,
-            name: diagnostic?.error?.name,
-            message:
-              message.errorMessage ?? diagnostic?.error?.message ?? 'The provider request failed.',
-            statusCode,
-            responseBody: typeof body === 'string' ? body : JSON.stringify(body),
-            // This flag permits a user retry after correcting configuration or account limits.
-            // Automatic retry is decided separately by Pi from the terminal diagnostic.
-            retryable: message.api !== 'cherry-image',
-            finishReason: message.stopReason,
-          },
-          [],
-          { providerId: message.provider, modelId: message.model },
-        ),
-        ...(message.api !== 'cherry-image' ? { reasonCode } : {}),
-      };
+      error = (imageTool?.type === 'tool' ? imageTool.error : undefined) ?? terminalError;
     }
     const web = readPiWebResult(message);
     // Anthropic splits one answer at every citation; the fragments are a single paragraph flow.

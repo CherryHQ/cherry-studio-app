@@ -242,12 +242,9 @@ describe('Runtime output projection', () => {
   });
 });
 
-test.each([
-  { reasonCode: 'unknown' as const, expected: 'unknown' },
-  { reasonCode: undefined, expected: 'quota' },
-])(
-  'honors the internal reason $reasonCode without adding a wire field',
-  ({ reasonCode, expected }) => {
+test.each(['unknown', 'content_filter', undefined])(
+  'classifies the facts instead of accepting an injected reason %s',
+  (reasonCode) => {
     const error = {
       code: 'provider_error',
       message: 'Quota exhausted; content_filter_results: filtered false',
@@ -262,7 +259,7 @@ test.each([
       retryable: true,
       failure: {
         version: 1,
-        reasonCode: expected,
+        reasonCode: 'quota',
         source: { layer: 'provider', code: 'provider_error' },
       },
     });

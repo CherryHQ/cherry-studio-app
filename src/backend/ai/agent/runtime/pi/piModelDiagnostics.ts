@@ -3,79 +3,24 @@ import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 
-import { readAiErrorStatus } from '@/backend/ai/normalizeAiError';
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 import { classifyAiFailureReason } from '@/shared/utils/aiFailure';
 
 import { traceErrorAttributes, type TraceAttributes } from '../../../observability';
+import { readPiTerminalError } from './piModelError';
 import type { PiModelResolution } from './piModelTypes';
 
 export type PiModelFailureStage = 'configuration' | 'model_resolution' | 'stream';
 
-// Keep these provider codes outside the product table so other consumers retain their
-// message-based classification policy.
-const DIAGNOSTIC_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
-  api_error: 'provider_unavailable',
-  billing_not_active: 'quota',
-  freeusagelimiterror: 'quota',
-  gousagelimiterror: 'quota',
-  // No response covers every failure before headers, including native timeouts and TLS errors.
-  no_response: 'network',
-  overloaded_error: 'provider_unavailable',
-  permission_error: 'permission',
-  server_error: 'provider_unavailable',
-  stream_disconnected: 'network',
-  stream_idle_timeout: 'timeout',
-  subscription_sharing_usage_limit_exceeded: 'quota',
-  usage_limit_reached: 'quota',
-  usage_not_included: 'quota',
-};
-
-/** Classify only structured facts. Unknown failures must not acquire a cause from their message. */
-function errorCategory(facts: TraceAttributes, finishReason?: string): AiFailureReason {
+/** Pre-stream failures expose only safe structured facts to diagnostics. */
+function errorCategory(facts: TraceAttributes): AiFailureReason {
   const code = facts['error.code'] === undefined ? undefined : String(facts['error.code']);
   const status = facts['http.status_code'];
-  return (
-    (code && DIAGNOSTIC_CODE_REASONS[code.toLowerCase()]) ||
-    classifyAiFailureReason({
-      code,
-      message: '',
-      finishReason,
-      statusCode: typeof status === 'number' ? status : undefined,
-    })
-  );
-}
-
-export type PiTerminalFailure = {
-  diagnostic: NonNullable<AssistantMessage['diagnostics']>[number] | undefined;
-  code: string;
-  statusCode?: number;
-  reasonCode: AiFailureReason;
-};
-
-/** One structured reason decision for a terminal provider failure at both projection layers. */
-export function readPiTerminalFailure(message: AssistantMessage): PiTerminalFailure | undefined {
-  if (message.stopReason !== 'error') return undefined;
-  const diagnostic = message.diagnostics?.findLast(
-    (entry) =>
-      entry.type === 'pi_messages_response_failure' || entry.type === 'provider_response_failure',
-  );
-  // Stored diagnostics fill a missing code with `runtime_error`; that placeholder does not
-  // describe a provider failure.
-  const code =
-    diagnostic?.error?.code === undefined || diagnostic.error.code === 'runtime_error'
-      ? 'provider_error'
-      : String(diagnostic.error.code);
-  const statusCode = readAiErrorStatus(diagnostic?.details);
-  return {
-    diagnostic,
+  return classifyAiFailureReason({
     code,
-    statusCode,
-    reasonCode: errorCategory(
-      { 'error.code': code, 'http.status_code': statusCode },
-      typeof message.rawStopReason === 'string' ? message.rawStopReason : undefined,
-    ),
-  };
+    message: '',
+    statusCode: typeof status === 'number' ? status : undefined,
+  });
 }
 
 export function piModelErrorAttributes(
@@ -87,20 +32,19 @@ export function piModelErrorAttributes(
 }
 
 export function piModelTerminalErrorAttributes(message: AssistantMessage): TraceAttributes {
-  const failure = readPiTerminalFailure(message);
-  if (!failure) return {};
-  const { diagnostic } = failure;
+  const error = readPiTerminalError(message);
+  if (!error) return {};
   return {
     ...traceErrorAttributes({
-      name: diagnostic?.error?.name,
-      code: diagnostic?.error?.code,
-      statusCode: failure.statusCode,
+      name: error.name,
+      code: error.code,
+      statusCode: error.context?.statusCode,
       // Use Pi's existing classifier, including its quota and cancellation rules.
       retryable: isRetryableAssistantError(message),
       origin: 'provider',
     }),
     'error.stage': 'stream',
-    'error.category': failure.reasonCode,
+    'error.category': classifyAiFailureReason({ ...error, ...error.context }),
     'error.retry_scope': 'automatic',
   };
 }

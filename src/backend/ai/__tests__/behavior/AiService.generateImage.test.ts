@@ -339,6 +339,16 @@ describe('AiService.generateImage AI SDK contract', () => {
       facts: { message: 'Quota exhausted' },
       reason: 'quota',
     },
+    {
+      label: 'explicit source code takes priority over nested data',
+      facts: { code: 'invalid_api_key', data: { error: { code: 'content_filter' } } },
+      reason: 'auth',
+    },
+    {
+      label: 'invalid nested source code',
+      facts: { data: { error: { code: 400, content_filter_results: {} } } },
+      reason: 'unknown',
+    },
   ])('classifies $label at the image request boundary', async ({ facts, reason }) => {
     const fixture = imageFixture();
     const modelError = Object.assign(new Error('Request failed'), facts);
@@ -378,6 +388,65 @@ describe('AiService.generateImage AI SDK contract', () => {
         facts.responseBody,
       );
     expect((error as AiRequestError).detail).not.toHaveProperty('reasonCode');
+  });
+
+  test.each([
+    { code: 'content_policy_violation', reason: 'content_filter' },
+    { code: 'content_filter', reason: 'content_filter' },
+    { code: 'contentFilter', reason: 'content_filter' },
+    { code: 'content_filter_results', reason: 'unknown' },
+    { code: undefined, reason: 'unknown' },
+  ])('classifies a real APICallError with nested code $code', async ({ code, reason }) => {
+    const fixture = imageFixture();
+    const data = {
+      error: { code, message: 'Request rejected' },
+      content_filter_results: { hate: { filtered: false } },
+    };
+    const modelError = new APICallError({
+      message: data.error.message,
+      url: 'https://provider.example/v1/images/generations',
+      requestBodyValues: {},
+      statusCode: 400,
+      responseBody: JSON.stringify(data),
+      data,
+    });
+    restoreProvider = installMockProvider({
+      image: new MockImageModelV3({
+        modelId: fixture.model.modelId,
+        provider: 'contract-provider',
+        doGenerate: async () => {
+          throw modelError;
+        },
+      }),
+    });
+
+    const error = await captureRejection(
+      new AiService(fixture.services).generateImage({
+        mode: 'generate',
+        paramValues: {},
+        prompt: 'Fail.',
+        requestOptions: { maxRetries: 0 },
+        uniqueModelId: fixture.model.id,
+      }),
+    );
+
+    expect(modelError).not.toHaveProperty('code');
+    expect(error).toBeInstanceOf(AiRequestError);
+    expect(error).toMatchObject({
+      detail: {
+        retryable: false,
+        failure: {
+          reasonCode: reason,
+          source: { layer: 'provider', name: 'AI_APICallError', code: code ?? 'runtime_error' },
+          context: {
+            statusCode: 400,
+            providerId: fixture.provider.id,
+            modelId: fixture.model.modelId,
+            responseBody: JSON.stringify(data),
+          },
+        },
+      },
+    });
   });
 
   test('forwards aborts to the image model and preserves the abort reason', async () => {

@@ -36,7 +36,7 @@ function sanitizeErrorText(value: string, secrets: readonly string[], maxChars: 
   return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
 }
 
-export function readAiErrorStatus(record: Record<string, unknown> | undefined): number | undefined {
+function readErrorStatus(record: Record<string, unknown> | undefined): number | undefined {
   const value = record?.statusCode ?? record?.status;
   const status =
     typeof value === 'number'
@@ -88,9 +88,12 @@ export function normalizeAiError(
           ? record.message
           : '';
   const message = sanitizeErrorText(rawMessage, secrets, MAX_EXECUTION_ERROR_MESSAGE_CHARS);
+  // AI SDK APICallError retains the parsed provider error under data.error.
+  const providerError = errorRecord(errorRecord(record?.data)?.error);
+  const codeValue = typeof record?.code === 'string' ? record.code : providerError?.code;
   const code =
-    typeof record?.code === 'string'
-      ? sanitizeErrorText(record.code, secrets, 128) || 'runtime_error'
+    typeof codeValue === 'string'
+      ? sanitizeErrorText(codeValue, secrets, 128) || 'runtime_error'
       : 'runtime_error';
   const nameValue =
     error instanceof Error
@@ -99,7 +102,7 @@ export function normalizeAiError(
         ? record.name
         : undefined;
   const name = nameValue ? sanitizeErrorText(nameValue, secrets, 256) : undefined;
-  const statusCode = readAiErrorStatus(record);
+  const statusCode = readErrorStatus(record);
   const finishReason =
     typeof record?.finishReason === 'string'
       ? sanitizeErrorText(record.finishReason, secrets, 256)

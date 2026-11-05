@@ -303,6 +303,8 @@ describe('Pi durable request diagnostics', () => {
   test.each([
     { rawStopReason: undefined, code: 'provider_error', category: 'unknown' },
     { rawStopReason: 'SAFETY', code: 'provider_error', category: 'content_filter' },
+    { rawStopReason: 'PROHIBITED_CONTENT', code: 'provider_error', category: 'content_filter' },
+    { rawStopReason: 'IMAGE_RECITATION', code: 'provider_error', category: 'content_filter' },
     { rawStopReason: undefined, code: 'content_filter', category: 'content_filter' },
   ])(
     'emits $category for structured safety $rawStopReason / $code',
