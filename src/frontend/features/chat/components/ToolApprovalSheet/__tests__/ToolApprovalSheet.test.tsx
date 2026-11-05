@@ -1,9 +1,13 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Input } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
+import {
+  type PendingToolApproval,
+  ToolApprovalSheet,
+  type ToolApprovalRespondInput,
+} from '../ToolApprovalSheet';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -24,7 +28,11 @@ jest.mock('@/frontend/components/MessageDetail', () => {
 });
 
 jest.mock('@cherrystudio/ui/components', () => {
-  const { Text: MockText, View: MockView } = jest.requireActual('react-native');
+  const {
+    Text: MockText,
+    TextInput: MockTextInput,
+    View: MockView,
+  } = jest.requireActual('react-native');
 
   function MockButton({ children, ...props }: { children?: ReactNode }) {
     return <MockView {...props}>{children}</MockView>;
@@ -56,6 +64,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: MockBottomSheet,
     Button: MockButton,
+    Input: MockTextInput,
     MessagePart: {
       ValueSection: ({ value }: { value: unknown }) => (
         <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
@@ -88,7 +97,8 @@ describe('ToolApprovalSheet', () => {
       approvals?: readonly PendingToolApproval[];
       canRespond?: boolean;
       canApprove?: boolean;
-      onRespond?: () => Promise<void>;
+      canDenyWithReason?: boolean;
+      onRespond?: (input: ToolApprovalRespondInput) => Promise<void>;
     } = {},
   ) {
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
@@ -97,6 +107,7 @@ describe('ToolApprovalSheet', () => {
         approvals={approvals}
         canRespond={overrides.canRespond}
         canApprove={overrides.canApprove}
+        canDenyWithReason={overrides.canDenyWithReason}
         isOpen
         onRespond={onRespond}
       />
@@ -318,5 +329,106 @@ describe('ToolApprovalSheet', () => {
     rerender([makeApproval({ input: { command: 'ls' } })]);
     rerender([]);
     expect(renderedTexts()).toContain(JSON.stringify({ command: 'ls' }));
+  });
+
+  test('does not render a denial reason input when canDenyWithReason is false', () => {
+    render({ canDenyWithReason: false });
+
+    expect(renderer.root.findAllByType(Input)).toHaveLength(0);
+  });
+
+  test('renders a denial reason input when canDenyWithReason is true', () => {
+    render({ canDenyWithReason: true });
+
+    const input = renderer.root.findByType(Input);
+    expect(input.props.placeholder).toBe('chat.tool.approval.denialReasonPlaceholder');
+    expect(input.props.accessibilityLabel).toBe('chat.tool.approval.denialReasonLabel');
+    expect(input.props.maxLength).toBe(4096);
+    expect(input.props.disabled).toBe(false);
+  });
+
+  test('forwards denial reason when Deny is pressed with reason text', async () => {
+    const { onRespond } = render({ canDenyWithReason: true });
+
+    const input = renderer.root.findByType(Input);
+    await act(async () => {
+      input.props.onChangeText('This operation is unsafe');
+    });
+
+    await press(denyLabel);
+
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-1',
+      approved: false,
+      reason: 'This operation is unsafe',
+    });
+  });
+
+  test('trims whitespace and treats whitespace-only denial reason as undefined', async () => {
+    const { onRespond } = render({ canDenyWithReason: true });
+
+    const input = renderer.root.findByType(Input);
+    await act(async () => {
+      input.props.onChangeText('   ');
+    });
+
+    await press(denyLabel);
+
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-1',
+      approved: false,
+      reason: undefined,
+    });
+  });
+
+  test('passes reason as undefined when approved even if text was entered', async () => {
+    const { onRespond } = render({ canDenyWithReason: true });
+
+    const input = renderer.root.findByType(Input);
+    await act(async () => {
+      input.props.onChangeText('Some text');
+    });
+
+    await press(approveLabel);
+
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-1',
+      approved: true,
+      reason: undefined,
+    });
+  });
+
+  test('resets denial reason when advancing to another approval', async () => {
+    const { onRespond, rerender } = render({
+      canDenyWithReason: true,
+      approvals: [
+        makeApproval(),
+        makeApproval({ approvalId: 'approval-2', displayName: 'Second' }),
+      ],
+    });
+
+    let input = renderer.root.findByType(Input);
+    await act(async () => {
+      input.props.onChangeText('Reason for first');
+    });
+
+    rerender([makeApproval({ approvalId: 'approval-2', displayName: 'Second' })]);
+
+    input = renderer.root.findByType(Input);
+    expect(input.props.value).toBe('');
+
+    await press(denyLabel);
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-2',
+      approved: false,
+      reason: undefined,
+    });
+  });
+
+  test('disables the reason input when canRespond is false', () => {
+    render({ canDenyWithReason: true, canRespond: false });
+
+    const input = renderer.root.findByType(Input);
+    expect(input.props.disabled).toBe(true);
   });
 });

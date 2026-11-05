@@ -37,6 +37,7 @@ jest.mock('@/frontend/data', () => ({
 }));
 let sheet: {
   canRespond: boolean;
+  canDenyWithReason?: boolean;
   onRespond(input: ToolApprovalRespondInput): Promise<void>;
   approvals: { approvalId: string; input: unknown }[];
 };
@@ -416,4 +417,53 @@ it('keeps the question visible but blocks responses while an approval takes prio
   expect(questionSheet?.questions).toBe(questions);
   expect(questionSheet?.open).toBe(false);
   expect(questionSheet?.disabled).toBe(true);
+});
+
+it('forwards trimmed denial reason when denying with a reason', async () => {
+  const test = fixture();
+  await render(test);
+  await act(async () =>
+    sheet.onRespond({ approvalId: 'decision', approved: false, reason: '  unsafe call  ' }),
+  );
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'deny', reason: 'unsafe call' });
+});
+
+it('omits denial reason when denying without reason or with whitespace-only reason', async () => {
+  const test = fixture();
+  await render(test);
+  await act(async () => sheet.onRespond({ approvalId: 'decision', approved: false }));
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'deny' });
+
+  test.respond.mockClear();
+  await act(async () =>
+    sheet.onRespond({ approvalId: 'decision', approved: false, reason: '    ' }),
+  );
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'deny' });
+});
+
+it('enables denial reason when interaction or snapshot source indicates desktop', async () => {
+  const test = fixture();
+  await render(test);
+  expect(sheet.canDenyWithReason).toBe(false);
+
+  test.update({
+    ...test.snapshot,
+    interactions: test.snapshot.interactions.map((item) => ({
+      ...item,
+      canDenyWithReason: true,
+    })),
+  });
+  await render(test);
+  expect(sheet.canDenyWithReason).toBe(true);
+
+  test.update({
+    ...test.snapshot,
+    source: { kind: 'desktop', connectionId: 'desktop-1' },
+    interactions: test.snapshot.interactions.map((item) => ({
+      ...item,
+      canDenyWithReason: undefined,
+    })),
+  });
+  await render(test);
+  expect(sheet.canDenyWithReason).toBe(true);
 });
