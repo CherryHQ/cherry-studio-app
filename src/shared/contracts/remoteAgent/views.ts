@@ -27,6 +27,8 @@ export type RemoteStartInput = {
   agentId: string;
   text: string;
   attachments?: RemoteAttachment[];
+  model?: { modelId: string; providerId: string };
+  reasoningEffort?: string;
 } & (
   | { workspace: RemoteWorkspaceSelection; workspaceId?: never }
   | { workspaceId: string; workspace?: never }
@@ -36,12 +38,15 @@ export type RemoteOperationStatus = 'pending' | 'applied' | 'rejected' | 'interr
 /** Durable operation views contain product state, never authorization or wire envelopes. */
 export type RemoteCommand = Readonly<{
   id: string;
-  kind: 'create' | 'send' | 'cancel' | 'respond';
+  kind: 'create' | 'send' | 'cancel' | 'respond' | 'rename';
   agentId?: string;
   userMessageId?: string;
   sessionId?: string;
   interactionId?: string;
   text?: string;
+  title?: string;
+  model?: { modelId: string; providerId: string };
+  reasoningEffort?: string;
   attachments?: RemoteAttachment[];
   status: RemoteOperationStatus;
   error?: string;
@@ -55,6 +60,8 @@ export type RemoteStartOperation = Readonly<{
   workspace?: RemoteWorkspaceSelection;
   text: string;
   attachments?: RemoteAttachment[];
+  model?: { modelId: string; providerId: string };
+  reasoningEffort?: string;
   status: RemoteOperationStatus;
   sessionId?: string;
   error?: string;
@@ -66,9 +73,20 @@ export type RemoteSourceState = Readonly<{
   reason?: string;
   attachments?: boolean;
   preupload?: boolean;
+  sessionRename?: boolean;
+  modelSelection?: boolean;
   attachmentDrafts?: readonly RemoteAttachmentDraftView[];
   upload?: { id: string; sent: number; total: number; sessionId?: string; draftId?: string };
 }>;
+export type RemoteWorkspaceFileView = {
+  path: string;
+  name: string;
+  revision: string;
+  byteLength: number;
+  sha256: string;
+  isCurrent: boolean;
+};
+
 export type RemoteSessionView = {
   id: string;
   agentId: string;
@@ -109,6 +127,20 @@ export type RemoteMessagePart =
     }
   | { id: string; kind: 'data'; name: string; resource: RemoteResource };
 export type RemoteModelSummary = { modelId: string; providerId: string; name: string };
+export type RemoteAgentModelOption = {
+  modelId: string;
+  providerId: string;
+  name: string;
+  reasoningEfforts?: readonly string[];
+};
+export type RemoteAgentView = {
+  id: string;
+  name: string;
+  emoji?: string;
+  model?: RemoteModelSummary | null;
+  reasoningEffort?: string;
+  availableModels?: readonly RemoteAgentModelOption[];
+};
 export type RemoteMessageView = {
   model?: RemoteModelSummary;
   usage?: MessageUsageSummary;

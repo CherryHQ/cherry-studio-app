@@ -168,6 +168,18 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         assertActive();
         return scope.readResource(...args);
       },
+      getWorkspaceFile: (...args) => {
+        assertActive();
+        return scope.getWorkspaceFile(...args);
+      },
+      checkFileRevision: (...args) => {
+        assertActive();
+        return scope.checkFileRevision(...args);
+      },
+      subscribeFileStale: (listener) => {
+        assertActive();
+        return subscribe(scope.subscribeFileStale(listener));
+      },
       observe: (...args) => {
         assertActive();
         return subscribe(scope.observe(...args));
@@ -175,6 +187,10 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       start: (...args) => {
         assertActive();
         return scope.start(...args);
+      },
+      renameSession: (...args) => {
+        assertActive();
+        return scope.renameSession(...args);
       },
       send: (...args) => {
         assertActive();

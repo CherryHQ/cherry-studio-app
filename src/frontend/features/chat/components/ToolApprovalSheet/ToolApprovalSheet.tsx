@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Input } from '@cherrystudio/ui/components';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -16,6 +16,7 @@ export type PendingToolApproval = {
 export type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
+  reason?: string;
 };
 
 type ToolApprovalSheetProps = {
@@ -23,6 +24,7 @@ type ToolApprovalSheetProps = {
   isOpen: boolean;
   canRespond?: boolean;
   canApprove?: boolean;
+  canDenyWithReason?: boolean;
   children?: ReactNode;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
@@ -33,6 +35,7 @@ export function ToolApprovalSheet({
   isOpen,
   canRespond = true,
   canApprove = true,
+  canDenyWithReason = false,
   children,
   onRespond,
 }: ToolApprovalSheetProps) {
@@ -43,12 +46,14 @@ export function ToolApprovalSheet({
     approvalId: approvals[0]?.approvalId,
     isSubmitting: false,
   });
+  const [reason, setReason] = useState('');
   const submitting = useRef(new Set<string>());
   if (approvals[0] && approvals[0] !== lastApproval) {
     setLastApproval(approvals[0]);
   }
   if (approvals[0] && approvals[0].approvalId !== response.approvalId) {
     setResponse({ approvalId: approvals[0].approvalId, isSubmitting: false });
+    setReason('');
   }
   const approval = approvals[0] ?? lastApproval;
 
@@ -63,10 +68,15 @@ export function ToolApprovalSheet({
     if (!canDecide || (approved && !canApprove) || submitting.current.has(approvalId)) {
       return;
     }
+    const trimmed = reason.trim();
     submitting.current.add(approvalId);
     setResponse((current) => ({ ...current, isSubmitting: true }));
     try {
-      await onRespond({ approvalId, approved });
+      await onRespond({
+        approvalId,
+        approved,
+        reason: approved ? undefined : trimmed || undefined,
+      });
     } finally {
       submitting.current.delete(approvalId);
       setResponse((current) =>
@@ -77,6 +87,7 @@ export function ToolApprovalSheet({
 
   return (
     <BottomSheet
+      avoidKeyboard
       dismissible={false}
       footer={
         <ToolApprovalSheetActions
@@ -107,6 +118,16 @@ export function ToolApprovalSheet({
       >
         <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
         {children}
+        {canDenyWithReason ? (
+          <Input
+            accessibilityLabel={t('chat.tool.approval.denialReasonLabel')}
+            disabled={!canDecide}
+            maxLength={4096}
+            onChangeText={setReason}
+            placeholder={t('chat.tool.approval.denialReasonPlaceholder')}
+            value={reason}
+          />
+        ) : null}
       </ScrollView>
     </BottomSheet>
   );

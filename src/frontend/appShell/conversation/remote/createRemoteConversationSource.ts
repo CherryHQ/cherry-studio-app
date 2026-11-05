@@ -131,6 +131,65 @@ export function createRemoteConversationSource(
             updatedAt: session.updatedAt,
           };
         }),
+      previewSession: (address) => {
+        assertSource();
+        if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+        const sourceAvailability = remoteAvailability(remote.getState(), disposed);
+        const availability =
+          sourceAvailability.state === 'disabled'
+            ? sourceAvailability
+            : remote.getState().sessionRename === false
+              ? ({ state: 'disabled', reason: 'upgrade-required' } as const)
+              : remote
+                    .getCommands()
+                    .some(
+                      (cmd) =>
+                        cmd.kind === 'rename' &&
+                        cmd.sessionId === address.sessionId &&
+                        cmd.status === 'pending',
+                    )
+                ? ({ state: 'disabled', reason: 'busy' } as const)
+                : ({ state: 'enabled' } as const);
+        return {
+          rename: {
+            availability,
+            execute: async ({ title }) => {
+              try {
+                assertSource();
+                const trimmed = title.trim();
+                const command = await remote.renameSession(address.sessionId, trimmed);
+                const operationId = refs.issue<OperationId>('operation', command.id);
+                if (command.status === 'applied') {
+                  for (const listener of catalogListeners) listener('sessions');
+                  return { state: 'applied', value: undefined };
+                }
+                if (command.status === 'rejected') {
+                  return {
+                    state: 'rejected',
+                    failure: remoteConversationFailure({
+                      code: command.error,
+                      detail: command.errorMessage,
+                    }),
+                  };
+                }
+                if (command.status === 'interrupted') {
+                  return { state: 'interrupted', operationId };
+                }
+                return { state: 'pending', operationId };
+              } catch (error) {
+                return {
+                  state: 'rejected',
+                  failure:
+                    error instanceof ConversationReadError
+                      ? error.failure
+                      : remoteConversationFailure(error),
+                };
+              }
+            },
+          },
+        };
+      },
       listAgents: (cursor, signal) =>
         read(signal, async () => {
           const page = await remote.listAgents(
@@ -150,6 +209,13 @@ export function createRemoteConversationSource(
                   : agent.model === null
                     ? ('unavailable' as const)
                     : ('available' as const),
+              ...(agent.model !== undefined ? { model: agent.model } : {}),
+              ...(agent.reasoningEffort !== undefined
+                ? { reasoningEffort: agent.reasoningEffort }
+                : {}),
+              ...(agent.availableModels !== undefined
+                ? { availableModels: agent.availableModels }
+                : {}),
             })),
             ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('agents', page.next) } : {}),
           };
@@ -227,6 +293,11 @@ export function createRemoteConversationSource(
             if (!target.workspace)
               throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
             const preparedInput = remoteInput(value);
+            if (
+              remote.getState().modelSelection === false &&
+              (preparedInput.model || preparedInput.reasoningEffort)
+            )
+              throw new ConversationReadError({ code: 'upgrade-required', retry: 'revise-input' });
             pending = true;
             state.set(snapshot());
             return outcome(
@@ -320,6 +391,9 @@ export function createRemoteConversationSource(
             inputPolicy: {
               ...REMOTE_INPUT_POLICY,
               attachments: remote.getState().attachments === true,
+              ...(remote.getState().modelSelection !== undefined
+                ? { modelSelection: remote.getState().modelSelection }
+                : {}),
             },
             attachmentPreparation:
               workspace && remote.getState().preupload && remote.stageAttachments

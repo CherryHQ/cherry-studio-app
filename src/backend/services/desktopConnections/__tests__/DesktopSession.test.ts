@@ -261,6 +261,62 @@ describe('DesktopSession', () => {
     });
     session.close();
   });
+
+  it('negotiates session rename and model selection capabilities from hello and guards update', async () => {
+    const channel = fakeChannel({
+      'connection.hello': () => ({
+        ...hello['connection.hello'](),
+        agentFailureVersion: 1,
+        agentSessionRenameVersion: 1,
+        agentModelSelectionVersion: 1,
+      }),
+      'agent.sessions.update': (params: any) => ({
+        commandId: params.commandId,
+        method: 'agent.sessions.update',
+        status: 'applied',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+        sessionId: params.sessionId,
+      }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    try {
+      expect(session.agentSessionRenameVersion).toBe(1);
+      expect(session.agentModelSelectionVersion).toBe(1);
+      await expect(
+        session.request('agent.sessions.update', {
+          commandId: 'cmd-1',
+          sessionId: 's-1',
+          title: 'New Title',
+        }),
+      ).resolves.toMatchObject({ status: 'applied', sessionId: 's-1' });
+    } finally {
+      session.close();
+    }
+
+    const legacyChannel = fakeChannel({
+      'connection.hello': () => ({
+        ...hello['connection.hello'](),
+        agentFailureVersion: 1,
+      }),
+    });
+    const legacySession = await DesktopSession.connect(options({ '10.0.0.1': legacyChannel }));
+    try {
+      expect(legacySession.agentSessionRenameVersion).toBeUndefined();
+      expect(legacySession.agentModelSelectionVersion).toBeUndefined();
+      await expect(
+        legacySession.request('agent.sessions.update', {
+          commandId: 'cmd-2',
+          sessionId: 's-1',
+          title: 'New Title',
+        }),
+      ).rejects.toMatchObject({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support session rename',
+      });
+    } finally {
+      legacySession.close();
+    }
+  });
   it('leaves a Noise identity mismatch as an address failure, without inventing an authorization rejection', async () => {
     const mismatch = Object.assign(new Error('Wrong peer'), { name: 'UnexpectedPeerError' });
     jest.mocked(connectSecureChannel).mockRejectedValueOnce(mismatch);
@@ -275,6 +331,57 @@ describe('DesktopSession', () => {
         signal: new AbortController().signal,
       }),
     ).rejects.toBe(mismatch);
+  });
+
+  it('extracts desktop profile on authenticate and emits onProfile updates', async () => {
+    const profiles: unknown[] = [];
+    const channel = fakeChannel({
+      'connection.hello': () => hello['connection.hello'](),
+      'connection.authenticate': () => ({
+        accessToken: 'token-1',
+        authorization: { grants: [{ domain: 'agent', grantId: 'g1' }] },
+        deviceId: 'device-1',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        profile: { name: 'Alice', avatar: '🦊' },
+      }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    try {
+      session.onProfile((profile) => profiles.push(profile));
+      await session.authenticate('device-1');
+      expect(session.currentProfile).toEqual({ name: 'Alice', avatar: '🦊' });
+      expect(profiles).toEqual([{ name: 'Alice', avatar: '🦊' }]);
+    } finally {
+      session.close();
+    }
+  });
+
+  it('extracts desktop profile from approved pairing.get decision', async () => {
+    const profiles: unknown[] = [];
+    const channel = fakeChannel({
+      'connection.hello': () => hello['connection.hello'](),
+      'pairing.get': () => ({
+        status: 'approved',
+        accessToken: 'token-pair',
+        authorization: { grants: [{ domain: 'agent', grantId: 'g1' }] },
+        deviceId: 'device-1',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        profile: { name: 'Bob Studio', avatar: 'data:image/png;base64,abc' },
+      }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    try {
+      session.onProfile((profile) => profiles.push(profile));
+      const res = await session.request('pairing.get', { claimId: 'claim-1' });
+      expect(res.status).toBe('approved');
+      expect(session.currentProfile).toEqual({
+        name: 'Bob Studio',
+        avatar: 'data:image/png;base64,abc',
+      });
+      expect(profiles).toEqual([{ name: 'Bob Studio', avatar: 'data:image/png;base64,abc' }]);
+    } finally {
+      session.close();
+    }
   });
 
   it('turns desktop failures into typed errors and validates results against the protocol schema', async () => {

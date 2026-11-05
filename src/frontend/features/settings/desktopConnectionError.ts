@@ -2,7 +2,10 @@ import type { TFunction } from 'i18next';
 import { Platform } from 'react-native';
 
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
-import { DesktopConnectionFailureSchema } from '@/shared/data/api/schemas/desktopConnections';
+import {
+  type DesktopConnectionFailure,
+  DesktopConnectionFailureSchema,
+} from '@/shared/data/api/schemas/desktopConnections';
 
 export function isMissingPairingConnection(error: unknown): boolean {
   return (
@@ -10,6 +13,52 @@ export function isMissingPairingConnection(error: unknown): boolean {
     error.code === ErrorCode.NOT_FOUND &&
     error.details?.reason === 'connection-not-found'
   );
+}
+
+export function formatConnectionFailures(
+  failures: DesktopConnectionFailure[],
+  t: TFunction,
+): string {
+  const defaultTranslated = t(
+    Platform.OS === 'ios'
+      ? 'settings.desktopConnection.error.unreachable.ios'
+      : 'settings.desktopConnection.error.unreachable',
+  );
+  return failures
+    .map((failure) => {
+      if (failure.kind === 'timeout')
+        return `${failure.address}\n${t('settings.desktopConnection.error.connection-timeout')}`;
+      // OkHttp and SocketRocket expose HTTP rejection only through their native close reason.
+      const status = failure.message?.match(
+        /^(?:Expected HTTP 101 response but was '([1-5]\d{2})\b|Received bad response code from server: ([1-5]\d{2})\.)/,
+      );
+      const httpStatus = status ? Number(status[1] ?? status[2]) : undefined;
+      const message =
+        httpStatus !== undefined && httpStatus !== 101
+          ? t(
+              httpStatus === 401 || httpStatus === 403
+                ? 'settings.desktopConnection.error.http-access-denied'
+                : httpStatus >= 500
+                  ? 'settings.desktopConnection.error.http-service-unavailable'
+                  : 'settings.desktopConnection.error.http-upgrade-rejected',
+              { status: httpStatus },
+            )
+          : defaultTranslated;
+      const details = failure.message
+        ? t('settings.desktopConnection.error.connection-detail', {
+            message: failure.message,
+          })
+        : '';
+      return [
+        failure.address,
+        message,
+        failure.closeCode ? `WebSocket ${failure.closeCode}` : '',
+        details,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    })
+    .join('\n\n');
 }
 
 export function desktopConnectionErrorMessage(error: unknown, t: TFunction): string {
@@ -27,42 +76,9 @@ export function desktopConnectionErrorMessage(error: unknown, t: TFunction): str
         .min(1)
         .max(32)
         .safeParse(error.details?.connectionFailures);
-      if (failures.success)
-        return failures.data
-          .map((failure) => {
-            if (failure.kind === 'timeout')
-              return `${failure.address}\n${t('settings.desktopConnection.error.connection-timeout')}`;
-            // OkHttp and SocketRocket expose HTTP rejection only through their native close reason.
-            const status = failure.message?.match(
-              /^(?:Expected HTTP 101 response but was '([1-5]\d{2})\b|Received bad response code from server: ([1-5]\d{2})\.)/,
-            );
-            const httpStatus = status ? Number(status[1] ?? status[2]) : undefined;
-            const message =
-              httpStatus !== undefined && httpStatus !== 101
-                ? t(
-                    httpStatus === 401 || httpStatus === 403
-                      ? 'settings.desktopConnection.error.http-access-denied'
-                      : httpStatus >= 500
-                        ? 'settings.desktopConnection.error.http-service-unavailable'
-                        : 'settings.desktopConnection.error.http-upgrade-rejected',
-                    { status: httpStatus },
-                  )
-                : translated;
-            const details = failure.message
-              ? t('settings.desktopConnection.error.connection-detail', {
-                  message: failure.message,
-                })
-              : '';
-            return [
-              failure.address,
-              message,
-              failure.closeCode ? `WebSocket ${failure.closeCode}` : '',
-              details,
-            ]
-              .filter(Boolean)
-              .join('\n');
-          })
-          .join('\n\n');
+      if (failures.success) {
+        return formatConnectionFailures(failures.data, t);
+      }
     }
     if (translated !== key) {
       return translated;

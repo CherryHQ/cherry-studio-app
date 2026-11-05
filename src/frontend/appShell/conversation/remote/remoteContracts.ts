@@ -2,6 +2,7 @@ import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
 import type { RemoteAttachment, RemoteAttachmentDraftView } from '@/shared/contracts/remoteAgent';
 
 import type {
+  AgentModelOption,
   AgentRef,
   ConversationAction,
   ConversationCatalog,
@@ -122,6 +123,9 @@ export interface ConversationDraft {
     attachmentPreparation?: AttachmentPreparation;
     upload?: { sent: number; total: number; cancel(): void };
     undelivered?: UndeliveredMessage;
+    model?: { modelId: string; providerId: string; name?: string } | null;
+    reasoningEffort?: string;
+    availableModels?: readonly AgentModelOption[];
   }>;
   dispose(): void;
 }

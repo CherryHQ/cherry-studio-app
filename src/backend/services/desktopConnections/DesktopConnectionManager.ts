@@ -27,6 +27,7 @@ import type {
   DesktopDomain,
   DesktopDomainLease,
   DesktopLeaseState,
+  DesktopLiveStatus,
   DesktopConnectionIntentStore,
   PersistentDesktopConnection,
 } from './connectionPorts';
@@ -62,6 +63,8 @@ type ConnectionEntry = {
   revoked: Set<string>;
   connectionToken?: string;
   disconnected?: boolean;
+  reconnectingDemand?: boolean;
+  liveStatus?: DesktopLiveStatus;
 };
 
 class DesktopAuthorizationError extends RemoteFailureError {}
@@ -102,10 +105,53 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private persistentConnectionsEnabled = false;
   private intents?: DesktopConnectionIntentStore;
   private readonly connectionListeners = new Set<() => void>();
+  private readonly liveStatusListeners = new Map<string, Set<() => void>>();
 
   configure(store: DesktopConnectionStore, intents?: DesktopConnectionIntentStore) {
     this.store = store;
     this.intents = intents;
+  }
+
+  getConnectionLiveStatus = (id: string): DesktopLiveStatus => {
+    if (this.intents?.isDisconnected(id)) {
+      return { state: 'disconnected' };
+    }
+    const entry = this.entries.get(id);
+    if (!entry) {
+      return { state: 'unreachable', reason: 'no-location' };
+    }
+    if (entry.disconnected) {
+      return { state: 'disconnected' };
+    }
+    if (entry.row.status === 'needs-repair') {
+      return { state: 'needs-repair', reason: 'unauthenticated' };
+    }
+    if (entry.session?.isOpen) {
+      return { state: 'connected' };
+    }
+    return entry.liveStatus ?? { state: 'unreachable', reason: 'no-location' };
+  };
+
+  subscribeConnectionLiveStatus = (id: string, listener: () => void): (() => void) => {
+    let listeners = this.liveStatusListeners.get(id);
+    if (!listeners) {
+      listeners = new Set();
+      this.liveStatusListeners.set(id, listeners);
+    }
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        this.liveStatusListeners.delete(id);
+      }
+    };
+  };
+
+  private notifyLiveStatus(id: string): void {
+    const listeners = this.liveStatusListeners.get(id);
+    if (listeners) {
+      for (const listener of listeners) listener();
+    }
   }
 
   /** Android's connection notification owns this demand independently of page/task leases. */
@@ -145,31 +191,65 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   disconnect(id: string): void {
     this.intents?.setDisconnected(id, true);
     const entry = this.entries.get(id);
-    if (!entry) return;
-    entry.disconnected = true;
-    entry.connectionToken = undefined;
-    this.close(entry);
-    for (const lease of entry.leases)
-      this.update(lease, { status: 'suspended', reason: 'disconnected' });
-    this.refreshDiscoveryActivity();
+    if (entry) {
+      entry.disconnected = true;
+      entry.reconnectingDemand = false;
+      entry.connectionToken = undefined;
+      entry.liveStatus = { state: 'disconnected' };
+      this.close(entry);
+      for (const lease of entry.leases)
+        this.update(lease, { status: 'suspended', reason: 'disconnected' });
+      this.refreshDiscoveryActivity();
+    }
+    this.notifyLiveStatus(id);
     this.publishConnections();
   }
 
   reconnect(id: string): void {
     this.assertAvailable();
     this.intents?.setDisconnected(id, false);
-    const entry = this.entries.get(id);
-    if (!entry) return;
-    entry.disconnected = false;
-    entry.backgroundExpired = false;
-    entry.retry = 0;
-    if (
-      this.persistentConnectionsEnabled &&
-      entry.row.grants.some((grant) => grant.domain === 'agent')
-    )
-      entry.connectionToken ??= randomUUID();
-    this.reconcileVisibility(id, entry);
-    this.refreshDiscoveryActivity();
+    let entry = this.entries.get(id);
+    if (!entry && this.store) {
+      void this.track(
+        this.store
+          .getRow(id)
+          .then((row) => {
+            if (this.entries.has(id)) return;
+            const newEntry: ConnectionEntry = {
+              row,
+              leases: new Set(),
+              retry: 0,
+              updates: Promise.resolve(),
+              revoked: new Set(),
+              disconnected: false,
+              reconnectingDemand: true,
+              liveStatus: { state: 'connecting' },
+            };
+            this.entries.set(id, newEntry);
+            this.ensureConnected(id, newEntry);
+            this.notifyLiveStatus(id);
+            this.publishConnections();
+          })
+          .catch(() => undefined),
+      );
+      this.notifyLiveStatus(id);
+      return;
+    }
+    if (entry) {
+      entry.disconnected = false;
+      entry.backgroundExpired = false;
+      entry.reconnectingDemand = true;
+      entry.retry = 0;
+      entry.liveStatus = { state: 'connecting' };
+      if (
+        this.persistentConnectionsEnabled &&
+        entry.row.grants.some((grant) => grant.domain === 'agent')
+      )
+        entry.connectionToken ??= randomUUID();
+      this.reconcileVisibility(id, entry);
+      this.refreshDiscoveryActivity();
+      this.notifyLiveStatus(id);
+    }
     this.publishConnections();
   }
 
@@ -180,6 +260,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private hasDemand(entry: ConnectionEntry): boolean {
     return (
       Boolean(entry.connectionToken) ||
+      Boolean(entry.reconnectingDemand) ||
       [...entry.leases].some((lease) => !lease.controller.signal.aborted)
     );
   }
@@ -243,6 +324,10 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
         updates: Promise.resolve(),
         revoked: new Set(),
         disconnected: this.intents?.isDisconnected(id) ?? false,
+        liveStatus:
+          (this.intents?.isDisconnected(id) ?? false)
+            ? { state: 'disconnected' }
+            : { state: 'connecting' },
       };
       this.entries.set(id, entry);
     }
@@ -519,6 +604,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     for (const lease of entry.leases) this.retire(lease, reason);
     this.close(entry);
     this.refreshDiscoveryActivity();
+    this.notifyLiveStatus(id);
     this.publishConnections();
   }
   async revoke(id: string, domain: DesktopDomain, grantId: string) {
@@ -634,8 +720,10 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     clearTimeout(entry.retryTimer);
     const controller = new AbortController();
     entry.dial = controller;
+    entry.liveStatus = { state: 'connecting' };
     for (const lease of entry.leases)
       this.update(lease, { status: 'connecting', reason: lease.state.reason });
+    this.notifyLiveStatus(id);
     const promise = this.track(
       Promise.resolve().then(async () => {
         let session: DesktopSession | undefined;
@@ -678,12 +766,26 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           entry.session = session;
           entry.connectionFailures = undefined;
           entry.retry = 0;
+          entry.liveStatus = { state: 'connected' };
+          session.onProfile?.((profile) => {
+            void this.store?.updateProfile?.(id, {
+              name: profile.name,
+              avatar: profile.avatar,
+            });
+          });
+          if (session.currentProfile) {
+            void this.store?.updateProfile?.(id, {
+              name: session.currentProfile.name,
+              avatar: session.currentProfile.avatar,
+            });
+          }
           session.onAuthorization((next) => {
             this.updateAuthorization(entry, () =>
               this.installAuthorization(id, entry, next, controller.signal),
             ).catch(() => session?.close());
           });
           for (const lease of entry.leases) this.update(lease, { status: 'ready' });
+          this.notifyLiveStatus(id);
           this.publishConnections();
           this.watchBackgroundLoss(id, entry);
           const connected = session;
@@ -693,10 +795,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
               controller.abort();
               if (entry.session !== connected) return;
               entry.session = undefined;
+              entry.liveStatus = entry.disconnected
+                ? { state: 'disconnected' }
+                : { state: 'reconnecting', retry: entry.retry };
               for (const lease of entry.leases)
                 this.update(lease, { status: this.canConnect(entry) ? 'offline' : 'suspended' });
               this.watchBackgroundLoss(id, entry);
               this.scheduleReconnect(id, entry);
+              this.notifyLiveStatus(id);
               this.publishConnections();
             })
             .catch(() => undefined);
@@ -705,6 +811,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           if (!controller.signal.aborted && this.entries.get(id) === entry) {
             if (error instanceof DesktopAuthorizationError) {
               entry.connectionToken = undefined;
+              entry.liveStatus = { state: 'needs-repair', reason: 'unauthenticated' };
               for (const listener of this.invalidations) listener({ connectionId: id });
               for (const lease of entry.leases) this.retire(lease, 'needs-repair');
               await this.store!.updateStatus(
@@ -725,11 +832,37 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
                   status: this.canConnect(entry) ? 'offline' : 'suspended',
                   reason: error instanceof DesktopUnreachableError ? error.reason : 'unreachable',
                 });
+              if (
+                error instanceof DesktopUnreachableError &&
+                error.reason === 'unsupported-version'
+              ) {
+                entry.liveStatus = { state: 'unsupported' };
+              } else if (
+                error instanceof DesktopUnreachableError &&
+                error.connectionFailures?.length
+              ) {
+                entry.liveStatus = {
+                  state: 'unreachable',
+                  reason: 'unreachable',
+                  failures: error.connectionFailures,
+                };
+              } else if (
+                error instanceof DesktopUnreachableError &&
+                (error.reason === 'no-location' || error.reason === 'discovery-unavailable')
+              ) {
+                entry.liveStatus = { state: 'unreachable', reason: error.reason };
+              } else {
+                entry.liveStatus = {
+                  state: 'reconnecting',
+                  retry: Math.max(1, entry.retry),
+                };
+              }
             }
           }
         } finally {
           if (entry.pending === promise) entry.pending = undefined;
           this.scheduleReconnect(id, entry);
+          this.notifyLiveStatus(id);
           this.publishConnections();
         }
       }),
@@ -789,6 +922,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       () => this.ensureConnected(id, entry),
       Math.min(20_000, 1000 * 2 ** Math.min(entry.retry++, 5)) * (0.8 + Math.random() * 0.2),
     );
+    if (
+      entry.liveStatus?.state !== 'unreachable' &&
+      entry.liveStatus?.state !== 'unsupported' &&
+      entry.liveStatus?.state !== 'needs-repair'
+    ) {
+      entry.liveStatus = { state: 'reconnecting', retry: entry.retry };
+    }
   }
   private retiredError(reason: DesktopLeaseState['reason']) {
     if (reason === 'stopped' || reason === 'removed' || reason === 'replaced')
@@ -813,6 +953,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   private close(entry: ConnectionEntry) {
     clearTimeout(entry.retryTimer);
+    entry.retryTimer = undefined;
     clearTimeout(entry.idleTimer);
     clearTimeout(entry.backgroundLossTimer);
     entry.backgroundLossTimer = undefined;
@@ -820,6 +961,9 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     entry.session?.close();
     entry.session = undefined;
     entry.connectionFailures = undefined;
+    if (entry.disconnected) {
+      entry.liveStatus = { state: 'disconnected' };
+    }
   }
   seedLocation(id: string, desktopIdentity: string, endpoints: DirectEndpoint[]) {
     this.resolver.seed(id, desktopIdentity, endpoints);

@@ -1,9 +1,11 @@
 import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import type { DesktopLiveStatus } from '@/shared/contracts/desktopConnections';
 
 import type { DesktopSession } from './DesktopSession';
 
+export type { DesktopLiveStatus } from '@/shared/contracts/desktopConnections';
 export type DesktopDomain = 'agent' | 'configuration';
 export type DesktopLeaseState = {
   status: 'connecting' | 'ready' | 'offline' | 'suspended' | 'retired';
@@ -34,7 +36,7 @@ export interface DesktopDomainLease {
 }
 export type DesktopConnectionStore = Pick<
   DesktopConnectionService,
-  'getRow' | 'updateStatus' | 'updateLearnedEndpoints'
+  'getRow' | 'updateStatus' | 'updateLearnedEndpoints' | 'updateProfile'
 >;
 /** User disconnect survives process replacement, without changing pairing or grants. */
 export type DesktopConnectionIntentStore = {
@@ -60,4 +62,6 @@ export interface DesktopConnections {
   subscribeInvalidation(listener: (event: DesktopBindingInvalidation) => void): () => void;
   retain(id: string, domain: DesktopDomain, signal: AbortSignal): Promise<DesktopDomainLease>;
   revoke(id: string, domain: DesktopDomain, grantId: string): Promise<void>;
+  getConnectionLiveStatus(id: string): DesktopLiveStatus;
+  subscribeConnectionLiveStatus(id: string, listener: () => void): () => void;
 }

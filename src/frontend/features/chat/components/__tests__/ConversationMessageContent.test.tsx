@@ -263,3 +263,109 @@ it('shows a remote image thumbnail and opens the same downloaded image', async (
     client.clear();
   }
 });
+
+it('does not auto-download a large image attachment over 1 MiB on history open, but downloads on tap', async () => {
+  const client = new QueryClient();
+  const uri = 'file:///cache/RemoteAttachments/large-photo.png';
+  const read = jest.fn<Promise<ResourceValue>, [AbortSignal]>().mockResolvedValue({
+    kind: 'file',
+    uri,
+    name: 'large-photo.png',
+    mediaType: 'image/png',
+    byteLength: '2097152',
+  });
+  let row!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      row = create(
+        <QueryClientProvider client={client}>
+          <ConversationAttachments
+            attachments={[
+              {
+                key: 'large-photo',
+                name: 'large-photo.png',
+                mediaType: 'image/png',
+                byteLength: '2097152', // 2 MiB > 1 MiB
+                resource: { kind: 'deferred', key: 'large-photo-ref', read },
+              },
+            ]}
+          />
+        </QueryClientProvider>,
+      );
+    });
+    // On initial mount, must NOT eagerly download large image
+    expect(read).not.toHaveBeenCalled();
+
+    // User taps to open
+    await act(async () => row.root.findByProps({ testID: 'attachment' }).props.onPress());
+    expect(read).toHaveBeenCalledTimes(1);
+  } finally {
+    await act(async () => row?.unmount());
+    client.clear();
+  }
+});
+
+it('surfaces report_artifacts deliverables clearly as deliverable cards', async () => {
+  const client = new QueryClient();
+  const readArtifacts = jest.fn<Promise<ResourceValue>, [AbortSignal]>().mockResolvedValue({
+    kind: 'json',
+    value: {
+      artifacts: [
+        { path: 'output/report.pdf', description: 'Financial analysis report' },
+        { path: 'charts/revenue.png' },
+      ],
+    },
+    complete: true,
+  });
+
+  const artifactMessage = {
+    tools: [
+      {
+        key: 'call',
+        title: 'report_artifacts',
+        state: 'completed',
+        input: { kind: 'deferred', key: 'artifacts-ref', read: readArtifacts },
+      },
+    ],
+  } as unknown as ConversationMessage;
+
+  let row!: ReactTestRenderer;
+  let sheet!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      row = create(
+        <QueryClientProvider client={client}>
+          <ConversationMessageContent messageState="success" tools={artifactMessage.tools}>
+            <></>
+          </ConversationMessageContent>
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      sheet = create(<QueryClientProvider client={client}>{mockSheetContent}</QueryClientProvider>);
+    });
+    // Wait for query to resolve
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const filenames = sheet.root.findAll(
+      (node) => node.props.testID === 'deliverable-filename' && typeof node.type === 'function',
+    );
+    expect(filenames).toHaveLength(2);
+    expect(filenames[0].props.children).toBe('report.pdf');
+    expect(filenames[1].props.children).toBe('revenue.png');
+
+    const descriptions = sheet.root.findAll(
+      (node) => node.props.testID === 'deliverable-description' && typeof node.type === 'function',
+    );
+    expect(descriptions).toHaveLength(1);
+    expect(descriptions[0].props.children).toBe('Financial analysis report');
+  } finally {
+    await act(async () => {
+      sheet?.unmount();
+      row?.unmount();
+    });
+    client.clear();
+  }
+});

@@ -27,10 +27,13 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   const isOpen = Boolean(interaction) && !retired;
   const canRespond =
     isOpen && interaction?.respond?.availability.state === 'enabled' && input.isSuccess;
-  const respond = async ({ approvalId, approved }: ToolApprovalRespondInput) => {
+  const respond = async ({ approvalId, approved, reason }: ToolApprovalRespondInput) => {
     if (!canRespond || interaction?.id !== approvalId) return;
+    const trimmedReason = reason?.trim();
     const result = await interaction.respond!.execute(
-      approved ? { kind: 'approve' } : { kind: 'deny' },
+      approved
+        ? { kind: 'approve' }
+        : { kind: 'deny', ...(trimmedReason ? { reason: trimmedReason } : {}) },
     );
     if (result.state === 'rejected' || result.state === 'interrupted')
       toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
@@ -52,6 +55,7 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       isOpen={isOpen}
       canRespond={canRespond}
       canApprove={!healthDataSharing || Boolean(recipient.data)}
+      canDenyWithReason={interaction?.canDenyWithReason ?? snapshot.source?.kind === 'desktop'}
       onRespond={respond}
     >
       {healthDataSharing && recipient.data ? (

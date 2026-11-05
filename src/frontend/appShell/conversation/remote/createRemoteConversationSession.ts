@@ -7,6 +7,7 @@ import type {
   RemoteSessionView,
 } from '@/shared/contracts/remoteAgent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
 import type {
   ConversationAction,
@@ -43,16 +44,16 @@ import {
 export const REMOTE_INPUT_POLICY = {
   attachments: false,
   pluginReferences: false,
-  modelSelection: false,
+  modelSelection: true,
   textLimit: { unit: 'utf16-units' as const, value: 32768 },
 };
 export function remoteInput(input: ConversationInput): {
   text: string;
   attachments?: RemoteAttachment[];
+  model?: { modelId: string; providerId: string };
+  reasoningEffort?: string;
 } {
   if (
-    input.modelId !== undefined ||
-    input.reasoningEffort !== undefined ||
     input.imageGeneration !== undefined ||
     input.parts.some(
       (part) =>
@@ -74,7 +75,37 @@ export function remoteInput(input: ConversationInput): {
   });
   if ((!text.trim() && !attachments.length) || text.length > 32768 || attachments.length > 8)
     throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
-  return { text, ...(attachments.length ? { attachments } : {}) };
+  let model: { modelId: string; providerId: string } | undefined;
+  if (input.modelId !== undefined) {
+    if (
+      typeof input.modelId === 'object' &&
+      input.modelId !== null &&
+      'modelId' in input.modelId &&
+      'providerId' in input.modelId
+    ) {
+      model = input.modelId as { modelId: string; providerId: string };
+    } else if (typeof input.modelId === 'string') {
+      try {
+        model = parseUniqueModelId(input.modelId as UniqueModelId);
+      } catch {
+        const colonIdx = input.modelId.indexOf(':');
+        if (colonIdx !== -1) {
+          model = {
+            providerId: input.modelId.slice(0, colonIdx),
+            modelId: input.modelId.slice(colonIdx + 1),
+          };
+        } else {
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
+        }
+      }
+    }
+  }
+  return {
+    text,
+    ...(attachments.length ? { attachments } : {}),
+    ...(model ? { model } : {}),
+    ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+  };
 }
 function commandOutcome<T>(command: RemoteCommand, id: OperationId, value: T): OperationOutcome<T> {
   if (command.status === 'applied') return { state: 'applied', value };
@@ -241,7 +272,18 @@ export function createRemoteConversationSession(
       latest?.sendTarget,
       (target, input) => {
         const value = remoteInput(input);
-        return source.send(target, value.text, value.attachments);
+        if (sourceState.modelSelection === false && (value.model || value.reasoningEffort))
+          throw new ConversationReadError({ code: 'upgrade-required', retry: 'revise-input' });
+        const options =
+          value.model || value.reasoningEffort
+            ? {
+                ...(value.model ? { model: value.model } : {}),
+                ...(value.reasoningEffort ? { reasoningEffort: value.reasoningEffort } : {}),
+              }
+            : undefined;
+        return options
+          ? source.send(target, value.text, value.attachments, options)
+          : source.send(target, value.text, value.attachments);
       },
       { conversation: ref },
     );
@@ -251,6 +293,7 @@ export function createRemoteConversationSession(
     return {
       title: session.title,
       agentId: session.agentId,
+      source: ref.source,
       workspaceId: session.workspaceId,
       workspaceKind: session.workspaceKind,
       freshness:
@@ -307,6 +350,7 @@ export function createRemoteConversationSession(
           kind: interaction.kind ?? 'decision',
           title: interaction.title,
           state: interaction.state,
+          canDenyWithReason: true,
           input: resource(interaction.input),
           ...(interaction.state === 'pending'
             ? {
@@ -324,7 +368,13 @@ export function createRemoteConversationSession(
             : {}),
         })) ?? [],
       actions: {
-        inputPolicy: { ...REMOTE_INPUT_POLICY, attachments: sourceState.attachments === true },
+        inputPolicy: {
+          ...REMOTE_INPUT_POLICY,
+          attachments: sourceState.attachments === true,
+          ...(sourceState.modelSelection !== undefined
+            ? { modelSelection: sourceState.modelSelection }
+            : {}),
+        },
         send,
       },
       attachmentPreparation:

@@ -16,12 +16,18 @@ import type { SecureChannel } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
 import { randomUUID } from 'expo-crypto';
 import { createJSONRPCErrorResponse, JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
-import type * as z from 'zod';
+import * as z from 'zod';
 
 import { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
 import { transportLogger } from './transportLogger';
 
 export { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
+
+export const desktopProfileSchema = z.strictObject({
+  name: z.string().trim().min(1).max(128).optional(),
+  avatar: z.string().max(32768).optional(),
+});
+export type DesktopProfile = z.infer<typeof desktopProfileSchema>;
 
 const PROTOCOL_VERSIONS = [1];
 const REFRESH_MARGIN_MS = 60_000;
@@ -84,6 +90,8 @@ export class DesktopSession {
   agentUploadChecksum?: 'sha256';
   agentAttachmentSelections?: boolean;
   agentMessageSummariesVersion?: number;
+  agentSessionRenameVersion?: number;
+  agentModelSelectionVersion?: number;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
@@ -109,6 +117,8 @@ export class DesktopSession {
       session.agentUploadChecksum = hello.agentUploadChecksum;
       session.agentAttachmentSelections = hello.agentAttachmentSelections;
       session.agentMessageSummariesVersion = hello.agentMessageSummariesVersion;
+      session.agentSessionRenameVersion = hello.agentSessionRenameVersion;
+      session.agentModelSelectionVersion = hello.agentModelSelectionVersion;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;
@@ -172,6 +182,8 @@ export class DesktopSession {
   private readonly listeners = new Set<(notification: DesktopNotification) => void>();
   private authorization: RemoteAuthorization | undefined;
   private readonly authorizationListeners = new Set<(authorization: RemoteAuthorization) => void>();
+  private profile: DesktopProfile | undefined;
+  private readonly profileListeners = new Set<(profile: DesktopProfile) => void>();
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly heartbeat: ReturnType<typeof setInterval>;
   private closed = false;
@@ -200,6 +212,10 @@ export class DesktopSession {
     return this.authorization;
   }
 
+  get currentProfile(): DesktopProfile | undefined {
+    return this.profile;
+  }
+
   get isOpen(): boolean {
     return !this.closed;
   }
@@ -211,6 +227,11 @@ export class DesktopSession {
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
+    if (method === 'agent.sessions.update' && this.agentSessionRenameVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support session rename',
+      });
     if (
       (method === 'agent.attachments.present' ||
         (method === 'agent.messages.send' && 'attachmentDraft' in params)) &&
@@ -259,7 +280,12 @@ export class DesktopSession {
       const parsed = schema.result.parse(result);
       if (method === 'pairing.get') {
         const decision = parsed as DesktopResult<'pairing.get'>;
-        if (decision.status === 'approved') this.adopt(decision.authorization, decision.expiresAt);
+        if (decision.status === 'approved')
+          this.adopt(
+            decision.authorization,
+            decision.expiresAt,
+            (decision as { profile?: unknown }).profile,
+          );
       }
       return parsed as DesktopResult<M>;
     } catch (error) {
@@ -299,7 +325,7 @@ export class DesktopSession {
   /** Identity is the Noise key, so no stored token is needed; the desktop's current grants come back. */
   async authenticate(deviceId: string, signal?: AbortSignal): Promise<RemoteAuthorization> {
     const result = await this.request('connection.authenticate', { deviceId }, signal);
-    this.adopt(result.authorization, result.expiresAt);
+    this.adopt(result.authorization, result.expiresAt, (result as { profile?: unknown }).profile);
     return result.authorization;
   }
 
@@ -313,6 +339,11 @@ export class DesktopSession {
     return () => this.authorizationListeners.delete(listener);
   }
 
+  onProfile(listener: (profile: DesktopProfile) => void): () => void {
+    this.profileListeners.add(listener);
+    return () => this.profileListeners.delete(listener);
+  }
+
   close(): void {
     for (const entry of this.uploads.values())
       entry.reject(new DesktopUnreachableError(['connection closed']));
@@ -324,14 +355,27 @@ export class DesktopSession {
     void this.channel.close().catch(() => undefined);
   }
 
-  private adopt(authorization: RemoteAuthorization, expiresAt: string): void {
+  private adopt(authorization: RemoteAuthorization, expiresAt: string, rawProfile?: unknown): void {
     this.authorization = authorization;
+    if (rawProfile !== undefined) {
+      const parsed = desktopProfileSchema.safeParse(rawProfile);
+      if (parsed.success) {
+        this.profile = parsed.data;
+        for (const listener of this.profileListeners) listener(parsed.data);
+      }
+    }
     for (const listener of this.authorizationListeners) listener(authorization);
     clearTimeout(this.refreshTimer);
     const delay = Math.max(1_000, Date.parse(expiresAt) - Date.now() - REFRESH_MARGIN_MS);
     this.refreshTimer = setTimeout(() => {
       void this.request('connection.refresh', {})
-        .then((result) => this.adopt(result.authorization, result.expiresAt))
+        .then((result) =>
+          this.adopt(
+            result.authorization,
+            result.expiresAt,
+            (result as { profile?: unknown }).profile,
+          ),
+        )
         .catch(() => this.close());
     }, delay);
   }
@@ -357,6 +401,7 @@ export class DesktopSession {
       this.client.rejectAllPendingRequests(CLOSED_MESSAGE);
       this.listeners.clear();
       this.authorizationListeners.clear();
+      this.profileListeners.clear();
     }
   }
 }

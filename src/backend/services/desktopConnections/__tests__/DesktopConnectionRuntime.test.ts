@@ -55,6 +55,8 @@ const row = {
   grants,
   status: 'paired' as const,
   lastFetchedAt: null,
+  profileName: null,
+  profileAvatar: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -106,6 +108,7 @@ function createStore() {
       },
     ),
     addEndpoint: jest.fn(async () => undefined),
+    updateProfile: jest.fn(async () => undefined),
     updateLearnedEndpoints: jest.fn(async (_id, endpoints) => {
       currentRow = { ...currentRow, learnedEndpoints: endpoints };
       return endpoints;
@@ -130,6 +133,7 @@ function createStore() {
     | 'preview'
     | 'import'
     | 'addEndpoint'
+    | 'updateProfile'
     | 'updateLearnedEndpoints'
   >;
 }
@@ -620,6 +624,40 @@ describe('DesktopConnectionRuntime', () => {
       expect.any(AbortSignal),
     );
     expect(session.close).toHaveBeenCalled();
+  });
+
+  it('stores desktop profile when returned upon pairing approval', async () => {
+    const session = createSession({
+      'pairing.claim': () => ({
+        claimId: 'claim-1',
+        verificationCode: '123456',
+        expiresAt: '2026-09-22T00:02:00.000Z',
+      }),
+      'pairing.get': () => ({
+        status: 'approved',
+        deviceId: 'device-1',
+        authorization: { grants },
+        profile: { name: 'Alice Desktop', avatar: '🦊' },
+      }),
+    });
+    (session as any).currentProfile = { name: 'Alice Desktop', avatar: '🦊' };
+    connect.mockResolvedValue(session as never);
+
+    await runtime.pair(pairing, signal());
+
+    expect(store.savePair).toHaveBeenCalledWith(
+      {
+        id,
+        name: 'Desktop',
+        deviceId: 'device-1',
+        desktopIdentity: '12D3KooWDesktop',
+        grants,
+        profileName: 'Alice Desktop',
+        profileAvatar: '🦊',
+      },
+      true,
+      expect.any(AbortSignal),
+    );
   });
 
   it.each([

@@ -7,7 +7,7 @@ import {
   useToast,
 } from '@cherrystudio/ui/components';
 import * as Sharing from 'expo-sharing';
-import { useState, type PropsWithChildren } from 'react';
+import { useMemo, useState, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -37,7 +37,12 @@ export function ConversationMessageContent({
       getToolTitle={(name) => getConversationToolTitle(name, t)}
       renderTool={(part) => {
         const tool = tools.find((item) => item.key === part.toolCallId);
-        return tool ? (
+        if (!tool) return null;
+        const isReportArtifacts =
+          tool.title === 'report_artifacts' ||
+          part.toolCallId.includes('report_artifacts') ||
+          tool.key.includes('report_artifacts');
+        return (
           <MessagePart.Tool
             title={getConversationToolTitle(tool.title, t)}
             state={
@@ -48,6 +53,9 @@ export function ConversationMessageContent({
             }
             statusTone={tool.state === 'failed' ? 'danger' : 'default'}
           >
+            {isReportArtifacts && tool.input ? (
+              <ReportArtifactsDeliverables input={tool.input} />
+            ) : null}
             {tool.output ? (
               <ConversationResourceSection resource={tool.output} title={t('chat.tool.output')} />
             ) : null}
@@ -58,11 +66,73 @@ export function ConversationMessageContent({
               <Text className="text-sm text-muted-foreground">{t('chat.tool.noOutput')}</Text>
             ) : null}
           </MessagePart.Tool>
-        ) : null;
+        );
       }}
     >
       {children}
     </ToolRendererProvider>
+  );
+}
+
+function ReportArtifactsDeliverables({ input }: { input: ResourceRead }) {
+  const { t } = useTranslation();
+  const inputResult = useConversationResourceValue(input);
+  const artifacts = useMemo(() => {
+    if (!inputResult.data) return [];
+    try {
+      const parsed =
+        inputResult.data.kind === 'json'
+          ? inputResult.data.value
+          : inputResult.data.kind === 'text'
+            ? JSON.parse(inputResult.data.text)
+            : null;
+      if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).artifacts)) {
+        return (parsed as any).artifacts as Array<{ path: string; description?: string }>;
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }, [inputResult.data]);
+
+  if (!artifacts.length) return null;
+
+  return (
+    <View className="my-2 gap-2" testID="deliverables-section">
+      <Text className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('chat.deliverables.title', 'Session Deliverables')}
+      </Text>
+      {artifacts.map((artifact, index) => {
+        const filename = artifact.path.split(/[/\\]/).pop() || artifact.path;
+        return (
+          <View
+            key={`${artifact.path}-${index}`}
+            testID="deliverable-card"
+            className="gap-1 rounded-lg border border-border bg-card p-3"
+          >
+            <Text
+              testID="deliverable-filename"
+              className="font-medium text-foreground"
+              numberOfLines={1}
+            >
+              {filename}
+            </Text>
+            {artifact.description ? (
+              <Text
+                testID="deliverable-description"
+                className="text-xs text-muted-foreground"
+                numberOfLines={2}
+              >
+                {artifact.description}
+              </Text>
+            ) : null}
+            <Text className="font-mono text-xs text-muted-foreground" numberOfLines={1}>
+              {artifact.path}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 function ConversationResourceSection({
@@ -131,8 +201,11 @@ function ConversationAttachment({
   const { toast } = useToast();
   const [opened, setOpened] = useState(false);
   const kind = fileEntryPreviewKind({ mediaType: item.mediaType ?? 'application/octet-stream' });
+  const byteLength = item.byteLength ? Number(item.byteLength) : undefined;
+  const isLarge = byteLength !== undefined && byteLength > 1_048_576;
+  const shouldAutoDownload = kind === 'image' && !isLarge;
   const result = useConversationResourceValue(
-    opened || kind === 'image' ? item.resource : undefined,
+    opened || shouldAutoDownload ? item.resource : undefined,
   );
   const file = result.data?.kind === 'file' ? result.data : undefined;
   const share = async () => {

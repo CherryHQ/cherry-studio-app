@@ -20,6 +20,8 @@ export const desktopConnectionTable = sqliteTable('desktop_connection', {
   grants: text({ mode: 'json' }).$type<RemoteAuthorization['grants']>().notNull(),
   status: text().$type<'needs-repair' | 'paired'>().notNull().default('paired'),
   lastFetchedAt: integer('last_fetched_at'),
+  profileName: text('profile_name'),
+  profileAvatar: text('profile_avatar'),
   ...createUpdateTimestamps,
 });
 

@@ -117,6 +117,7 @@ export type ConversationInteraction = {
   kind: 'decision' | 'question';
   title: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
+  canDenyWithReason?: boolean;
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
   input: ResourceRead;
@@ -157,6 +158,7 @@ export type ConversationMessage = {
     key: string;
     name: string;
     mediaType?: string;
+    byteLength?: string | number;
     resource?: ResourceRead;
   }[];
   /** Unsupported actions are absent; temporary unavailability is explicit. */
@@ -174,6 +176,7 @@ export type ConversationMessage = {
 };
 export type ConversationSnapshot = {
   agentId?: string;
+  source?: ConversationSourceRef;
   workspaceId?: string;
   workspaceKind?: 'registered' | 'system';
   title: string;
@@ -183,6 +186,9 @@ export type ConversationSnapshot = {
   interactions: readonly ConversationInteraction[];
   enteringMessageKey?: string;
   hasHistoryBeforeExecution?: boolean;
+  model?: { modelId: string; providerId: string; name?: string } | null;
+  reasoningEffort?: string;
+  availableModels?: readonly AgentModelOption[];
 };
 /** One paginated transcript window as the workspace consumes it; each source owns its hook. */
 export type ConversationHistoryView = {
@@ -207,6 +213,12 @@ export type TranscriptSnapshot = {
   messages: readonly TranscriptMessage[];
 };
 export type CatalogPage<T> = { items: readonly T[]; next?: CatalogCursor };
+export type AgentModelOption = {
+  modelId: string;
+  providerId: string;
+  name: string;
+  reasoningEfforts?: readonly string[];
+};
 export type AgentSummary = {
   /** Stable source-local address for navigation; never a grant or capability. */
   id: string;
@@ -217,6 +229,9 @@ export type AgentSummary = {
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;
+  model?: { modelId: string; providerId: string; name?: string } | null;
+  reasoningEffort?: string;
+  availableModels?: readonly AgentModelOption[];
 };
 export type WorkspaceSummary =
   | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }

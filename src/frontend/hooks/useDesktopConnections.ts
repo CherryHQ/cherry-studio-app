@@ -107,11 +107,15 @@ export function useDesktopConnectionActions() {
       run('import', (signal) => connections.import(id, input, signal)),
     [connections, run],
   );
+  const disconnect = useCallback((id: string) => connections.disconnect(id), [connections]);
+  const reconnect = useCallback((id: string) => connections.reconnect(id), [connections]);
 
   return {
     isRemoving: pending === 'remove',
     isPreviewing: pending === 'preview',
     isImporting: pending === 'import',
+    disconnect,
+    reconnect,
     remove,
     preview,
     importSelected,

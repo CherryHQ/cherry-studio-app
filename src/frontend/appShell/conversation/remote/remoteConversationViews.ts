@@ -76,7 +76,10 @@ function classifyRemoteFailure(error: unknown): ConversationFailure {
 }
 /** A final send or start outcome the user still has to resolve; resending through `action` replaces it. */
 export function undeliveredMessage(
-  operation: Pick<RemoteCommand, 'status' | 'text' | 'error' | 'errorMessage' | 'attachments'>,
+  operation: Pick<
+    RemoteCommand,
+    'status' | 'text' | 'error' | 'errorMessage' | 'attachments' | 'model' | 'reasoningEffort'
+  >,
   id: OperationId,
   action: ConversationAction<ConversationInput, Submission>,
   discard: () => void,
@@ -94,6 +97,10 @@ export function undeliveredMessage(
         fileEntryId: file.fileEntryId,
       })),
     ],
+    ...(operation.model
+      ? { modelId: `${operation.model.providerId}::${operation.model.modelId}` as any }
+      : {}),
+    ...(operation.reasoningEffort ? { reasoningEffort: operation.reasoningEffort as any } : {}),
   };
   return {
     id,
@@ -208,6 +215,7 @@ export function remoteMessage(
         key: part.id,
         name: part.name,
         mediaType: part.mediaType,
+        byteLength: part.byteLength,
         resource: resource(part.resource),
       });
       continue;

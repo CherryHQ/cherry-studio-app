@@ -77,6 +77,14 @@ function fixture(
         return { closed: true };
       case 'agent.subscriptions.ack':
         return { acknowledged: params.cursor };
+      case 'agent.sessions.update':
+        return {
+          commandId: params.commandId,
+          method,
+          status: 'applied',
+          admittedAt: '2026-09-22T00:00:00.000Z',
+          sessionId: params.sessionId,
+        };
       case 'agent.messages.send':
         return {
           commandId: params.commandId,
@@ -95,6 +103,8 @@ function fixture(
     agentAttachmentSelections: false,
     agentUploadsVersion: 1,
     agentUploadChecksum: 'sha256',
+    agentSessionRenameVersion: undefined as number | undefined,
+    agentModelSelectionVersion: undefined as number | undefined,
     request,
     onNotification: (listener: (notification: DesktopNotification) => void) => {
       notifications.add(listener);
@@ -128,7 +138,13 @@ function fixture(
   });
   const source = new RemoteAgentScope(
     lease,
-    { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
+    {
+      retain: jest.fn(),
+      revoke: jest.fn(),
+      subscribeInvalidation: () => () => undefined,
+      getConnectionLiveStatus: jest.fn(),
+      subscribeConnectionLiveStatus: () => () => undefined,
+    },
     journal,
     cache,
     background,
@@ -506,7 +522,13 @@ it('resumes observation when a persisted uncertain send is confirmed after a sou
   });
   const restored = new RemoteAgentScope(
     test.lease,
-    { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
+    {
+      retain: jest.fn(),
+      revoke: jest.fn(),
+      subscribeInvalidation: () => () => undefined,
+      getConnectionLiveStatus: jest.fn(),
+      subscribeConnectionLiveStatus: () => () => undefined,
+    },
     test.journal,
     new RemoteSessionReadCache(),
     test.background,
@@ -862,6 +884,56 @@ test('catalog preserves the desktop emoji without creating a session observation
   await f.source.drain();
 });
 
+it('inspects workspace file metadata and detects revision changes', async () => {
+  const f = fixture();
+  const fileData = {
+    path: 'reports/summary.md',
+    name: 'summary.md',
+    revision: '100',
+    byteLength: 1024,
+    sha256: 'abc123sha256',
+  };
+
+  const request = f.request.getMockImplementation()!;
+  f.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.files.get') {
+      expect(params).toEqual({ sessionId: 's', path: 'reports/summary.md' });
+      return { file: fileData } as never;
+    }
+    return request(method, params);
+  });
+
+  const file = await f.source.getWorkspaceFile!('s', 'reports/summary.md');
+  expect(file).toEqual({
+    path: 'reports/summary.md',
+    name: 'summary.md',
+    revision: '100',
+    byteLength: 1024,
+    sha256: 'abc123sha256',
+    isCurrent: true,
+  });
+
+  // checkFileRevision matches current revision
+  const currentCheck = await f.source.checkFileRevision!('s', 'reports/summary.md', '100');
+  expect(currentCheck).toEqual({ isCurrent: true, latestRevision: '100' });
+
+  // Update revision on server
+  fileData.revision = '101';
+
+  const staleEvents: any[] = [];
+  const unsubscribe = f.source.subscribeFileStale!((event) => staleEvents.push(event));
+
+  const staleCheck = await f.source.checkFileRevision!('s', 'reports/summary.md', '100');
+  expect(staleCheck).toEqual({ isCurrent: false, latestRevision: '101' });
+  expect(staleEvents).toEqual([
+    { sessionId: 's', path: 'reports/summary.md', latestRevision: '101' },
+  ]);
+
+  unsubscribe();
+  f.source.dispose();
+  await f.source.drain();
+});
+
 it('negotiates history summaries from the current connection after each reconnect', async () => {
   const test = fixture();
   test.request.mockResolvedValue({ items: [], nextCursor: null });
@@ -1193,6 +1265,128 @@ it('keeps a command whose reply was lost in transit uncertain rather than failed
     retryable: true,
   });
   unobserve();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('negotiates session rename and model selection capability flags', async () => {
+  const test = fixture();
+  test.connection.agentSessionRenameVersion = 1;
+  test.connection.agentModelSelectionVersion = 1;
+  const signal = new AbortController().signal;
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState().sessionRename).toBe(true);
+  expect(test.source.getState().modelSelection).toBe(true);
+
+  test.setState({ status: 'suspended' });
+  test.connection.agentSessionRenameVersion = 0;
+  test.connection.agentModelSelectionVersion = 0;
+  test.setState({ status: 'ready' });
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState().sessionRename).toBe(false);
+  expect(test.source.getState().modelSelection).toBe(false);
+
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('renames a session and updates observation snapshot and cache', async () => {
+  const test = fixture();
+  test.connection.agentSessionRenameVersion = 1;
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  expect(snapshot?.session.title).toBe('Session');
+
+  const command = await test.source.renameSession('s', 'New Renamed Title');
+  expect(command).toMatchObject({
+    kind: 'rename',
+    sessionId: 's',
+    title: 'New Renamed Title',
+    status: 'applied',
+  });
+  expect(snapshot?.session.title).toBe('New Renamed Title');
+
+  const cached = test.source.peekSession('s');
+  expect(cached?.session.title).toBe('New Renamed Title');
+
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('returns reasoning effort and available models in listAgents and sends them in message', async () => {
+  const test = fixture();
+  test.connection.agentModelSelectionVersion = 1;
+  const origRequest = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method: string, params: any) => {
+    if (method === 'agent.agents.list') {
+      return {
+        items: [
+          {
+            agentId: 'a',
+            name: 'Agent',
+            emoji: '🧑🏽‍💻',
+            model: { modelId: 'm-1', providerId: 'desktop', name: 'M1' },
+            reasoningEffort: 'medium',
+            availableModels: [
+              {
+                modelId: 'm-1',
+                providerId: 'desktop',
+                name: 'M1',
+                reasoningEfforts: ['low', 'medium', 'high'],
+              },
+            ],
+          },
+        ],
+        nextCursor: null,
+      };
+    }
+    return origRequest(method, params);
+  });
+
+  const signal = new AbortController().signal;
+  const page = await test.source.listAgents(undefined, signal);
+  expect(page.items[0]).toMatchObject({
+    id: 'a',
+    reasoningEffort: 'medium',
+    availableModels: [
+      {
+        modelId: 'm-1',
+        providerId: 'desktop',
+        name: 'M1',
+        reasoningEfforts: ['low', 'medium', 'high'],
+      },
+    ],
+  });
+
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const sendTarget = snapshot!.sendTarget!;
+
+  const command = await test.source.send(sendTarget, 'hello with model', undefined, {
+    model: { modelId: 'm-1', providerId: 'desktop' },
+    reasoningEffort: 'high',
+  });
+  expect(command).toMatchObject({
+    kind: 'send',
+    sessionId: 's',
+    text: 'hello with model',
+    model: { modelId: 'm-1', providerId: 'desktop' },
+    reasoningEffort: 'high',
+    status: 'pending',
+  });
+
+  const sendCall = test.request.mock.calls.find(([method]) => method === 'agent.messages.send')!;
+  expect(sendCall[1]).toMatchObject({
+    model: { modelId: 'm-1', providerId: 'desktop' },
+    reasoningEffort: 'high',
+  });
+
   test.source.dispose();
   await test.source.drain();
 });

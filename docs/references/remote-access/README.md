@@ -51,8 +51,11 @@ native module ownership and the network-independent pairing migration.
   requests, 256 KiB unacknowledged event bytes, 10-minute access tokens with a 30-second refresh
   grace, 20-second heartbeat, 60-second idle timeout.
 - **Methods**: `connection.hello|authenticate|refresh|ping`, `pairing.claim|get`,
-  `configuration.export.prepare|read`, and the `agent.*` map from `@cherrystudio/remote-protocol/agent`.
-  Notifications: `agent.events`, `agent.subscriptions.resetRequired`, `connection.closed`.
+  `configuration.export.prepare|read`, and the `agent.*` map from `@cherrystudio/remote-protocol/agent`
+  (including `agent.sessions.update`). Notifications: `agent.events`, `agent.subscriptions.resetRequired`,
+  `connection.closed`. Capability flags in `connection.hello` negotiate feature availability:
+  `agentSessionRenameVersion: 1` enables remote session renaming, and `agentModelSelectionVersion: 1`
+  enables per-turn model and reasoning-effort selection.
 - **Authorization**: the desktop user approves a subset of the requested capabilities
   (`configuration`, `agent`) while pairing; each becomes a grant id. `connection.authenticate`
   needs only `deviceId` because identity is the Noise key. Revocation surfaces as `GRANT_REVOKED`
@@ -186,6 +189,12 @@ records both create/send IDs before creating a session and retains the created s
 fails. `accepted` remains pending until the owner outcome is known. `messages.send` carries `expectedIdleRevision` from the projection's session; `CONFLICT`
 restores the draft. `executions.cancel` carries the active execution id. `interactions.respond`
 carries `expectedRevision`, `expectedExecutionId` and `inputDigest` from the interaction it shows.
+`agent.sessions.update` carries `sessionId` and `title`; it records a `'rename'` journal entry recovered
+via `commands.get` across reconnects. Desktop validates session existence, executes `agentSessionService.update`
+(setting `isNameManuallyEdited = true` to protect against LLM auto-title overwrite), records the receipt,
+and broadcasts `session.updated` on the live event stream. Mobile enables sidebar renaming only when
+`connection.hello` advertises `agentSessionRenameVersion: 1`; older peers report rename availability as
+`disabled` (`upgrade-required`).
 A lost response is recovered with `agent.commands.get` and, when absent, by resending the same
 `commandId`; `IDEMPOTENCY_CONFLICT` and `interrupted` stop recovery and surface to the user.
 Only a JSON-RPC error carrying protocol `data` is a desktop verdict. A local idle timeout, a
@@ -243,8 +252,12 @@ a fabricated workspace ID on the wire.
 Legacy `decision: approve | deny` and `workspaceId` commands remain valid for existing clients and
 persisted journals. Mobile keeps these wire forms for plain decisions and registered workspaces;
 new answers, denial text and system creation use the explicit forms. A command cannot combine both
-forms. Desktop supports denial reasons in the protocol; the current mobile sheet has no reason
-editor. Local Agent approvals retain their existing decision-only capability.
+forms. Desktop supports denial reasons in the protocol (`response: { kind: 'deny', reason?: string }`
+up to 4096 characters, tagged with `reasonSource: 'user'`). Mobile's tool approval sheet provides an optional
+denial-reason editor when connected to a remote desktop session (`canDenyWithReason: true`); denying with
+a non-empty reason sends the trimmed reason, denying with a blank reason sends `{ kind: 'deny' }`, and
+approving ignores any draft reason. Local Agent approvals retain their existing decision-only capability
+(`canDenyWithReason` omitted/false).
 
 These additions require the matching desktop implementation. Device acceptance is still pending.
 
@@ -271,13 +284,24 @@ Only the local detail adapter loads `/ai-usage-records` from the mobile database
 the host snapshot and never query a local message ID. Mobile still needs an updated desktop process
 to receive this additive field; local checks do not constitute device acceptance.
 
-Model identity has two owners: `agent.agents.list[].model` describes the Agent's current configured
+Model identity has two owners: `agent.agents.list[].model` describes the Agent's default configured
 model; `AgentMessage.model` describes the actual model used by that historical message. The Agent
 catalog uses the existing shared picker `modelName` presentation. Explicit `null` means unconfigured;
 an omitted catalog field from an older host remains unknown. Message names come from the matching
-immutable snapshot and fall back to the recorded model ID, never the Agent's current configuration
+immutable snapshot and fall back to the recorded model ID, never the Agent's default configuration
 or the phone's provider catalog. Terminal events and checkpoints retain the same identity. Only
 public model ID, provider ID, and display name cross the boundary.
+
+When `connection.hello` advertises `agentModelSelectionVersion: 1`, `agent.agents.list` enriches each
+Agent with `reasoningEffort` (the Agent's default effort) and `availableModels: AgentModelOption[]`.
+Desktop filters available models via `AGENT_RUNTIME_CAPABILITIES[agent.type].isModelCompatible` and
+derives supported `reasoningEfforts` per model. Mobile's remote composer allows users to select
+compatible model and reasoning-effort overrides per turn. These selections are sent as optional
+`model: { providerId, modelId }` and `reasoningEffort` parameters on `agent.messages.send` (and initial
+turn parameters on `agent.sessions.create`), rather than mutating Desktop's shared `agentTable`. Desktop
+validates model compatibility at dispatch time, applies the overrides to the turn and historical
+`agent_session_message` snapshot, and keeps the shared Agent definition unchanged. Older hosts that omit
+`agentModelSelectionVersion` gracefully hide or disable model and reasoning-effort selection in Mobile.
 
 ## Upgrading from the connection foundation
 

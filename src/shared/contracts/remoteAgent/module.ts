@@ -1,5 +1,6 @@
 import type { InteractionResponse } from '../interaction';
 import type {
+  RemoteAgentView,
   RemoteAttachment,
   RemoteAttachmentDraftTarget,
   RemoteCommand,
@@ -14,6 +15,7 @@ import type {
   RemoteSessionReadPreview,
   RemoteSourceState,
   RemoteStartOperation,
+  RemoteWorkspaceFileView,
 } from './views';
 
 /** One retained credential-free scope. Disposing observations never cancels desktop execution. */
@@ -22,12 +24,7 @@ export interface RemoteAgentSource {
   readonly draftScope: string;
   getState(): RemoteSourceState;
   subscribeState(listener: () => void): () => void;
-  listAgents(
-    cursor: string | undefined,
-    signal: AbortSignal,
-  ): Promise<
-    RemotePage<{ id: string; name: string; emoji?: string; model?: RemoteModelSummary | null }>
-  >;
+  listAgents(cursor: string | undefined, signal: AbortSignal): Promise<RemotePage<RemoteAgentView>>;
   listWorkspaces(
     agentId: string,
     cursor: string | undefined,
@@ -49,8 +46,27 @@ export interface RemoteAgentSource {
     signal: AbortSignal,
   ): Promise<RemotePage<RemoteMessageView>>;
   readResource(resource: RemoteResource, signal: AbortSignal): Promise<RemoteResourceValue>;
+  getWorkspaceFile?(
+    sessionId: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<RemoteWorkspaceFileView>;
+  checkFileRevision?(
+    sessionId: string,
+    path: string,
+    expectedRevision?: string,
+  ): Promise<{ isCurrent: boolean; latestRevision: string }>;
+  subscribeFileStale?(
+    listener: (event: { sessionId: string; path: string; latestRevision: string }) => void,
+  ): () => void;
   start(input: RemoteStartInput): Promise<RemoteStartOperation>;
-  send(target: string, text: string, attachments?: RemoteAttachment[]): Promise<RemoteCommand>;
+  renameSession(sessionId: string, title: string): Promise<RemoteCommand>;
+  send(
+    target: string,
+    text: string,
+    attachments?: readonly RemoteAttachment[],
+    options?: { model?: { modelId: string; providerId: string }; reasoningEffort?: string },
+  ): Promise<RemoteCommand>;
   stageAttachments?(
     key: string,
     target: RemoteAttachmentDraftTarget,

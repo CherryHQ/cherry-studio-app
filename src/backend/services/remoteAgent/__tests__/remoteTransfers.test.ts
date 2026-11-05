@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  readdirSync,
+  existsSync,
+  mkdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -10,21 +18,33 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { RemoteAgentError } from '../RemoteAgentError';
 import { RemoteAttachmentDrafts } from '../RemoteAttachmentDrafts';
 import { integrity, type AgentRequest } from '../remoteContent';
-import { createAttachmentDownloader, downloadAttachment } from '../remoteDownloads';
+import {
+  createAttachmentDownloader,
+  downloadAttachment,
+  createWorkspaceFileDownloader,
+  downloadWorkspaceFile,
+  getRemoteAttachmentCacheSize,
+  clearRemoteAttachmentCache,
+  pruneRemoteAttachmentCache,
+  activeTransfers,
+} from '../remoteDownloads';
 import { uploadAttachments, type SavedUpload, type RemoteUploadFiles } from '../remoteUploads';
 
 const mockNativeReads: number[] = [];
+let mockCacheRoot = '';
 
 jest.mock('expo-file-system', () => {
   const fs = jest.requireActual<typeof import('node:fs')>('node:fs');
   const path = jest.requireActual<typeof import('node:path')>('node:path');
-  const root = jest.requireActual<typeof import('node:os')>('node:os').tmpdir();
   const location = (parts: any[]) =>
-    path.join(...parts.map((part) => (typeof part === 'string' ? part : part.uri)));
+    path.join(...parts.map((part) => (typeof part === 'string' ? part : (part?.uri ?? part))));
   class Directory {
     uri: string;
     constructor(...parts: any[]) {
       this.uri = location(parts);
+    }
+    get name() {
+      return path.basename(this.uri);
     }
     get exists() {
       return fs.existsSync(this.uri);
@@ -35,11 +55,21 @@ jest.mock('expo-file-system', () => {
     delete() {
       fs.rmSync(this.uri, { recursive: true, force: true });
     }
+    list() {
+      if (!this.exists) return [];
+      const entries = fs.readdirSync(this.uri, { withFileTypes: true });
+      return entries.map((entry: any) =>
+        entry.isDirectory() ? new Directory(this.uri, entry.name) : new File(this.uri, entry.name),
+      );
+    }
   }
   class File {
     uri: string;
     constructor(...parts: any[]) {
       this.uri = location(parts);
+    }
+    get name() {
+      return path.basename(this.uri);
     }
     get exists() {
       return fs.existsSync(this.uri);
@@ -78,12 +108,21 @@ jest.mock('expo-file-system', () => {
       };
     }
   }
-  return { File, Directory, Paths: { cache: root } };
+  return {
+    File,
+    Directory,
+    Paths: {
+      get cache() {
+        return mockCacheRoot;
+      },
+    },
+  };
 });
 
 let root: string;
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'mobile-transfer-'));
+  mockCacheRoot = root;
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 const attachment = {
@@ -172,7 +211,7 @@ it('reuses verified downloads across reopen and scope recreation, isolates deskt
   for (const uri of [first, other]) rmSync(path.dirname(uri), { recursive: true, force: true });
 });
 
-it('closing one consumer does not cancel a shared download, while closing all removes partial bytes', async () => {
+it('closing one consumer does not cancel a shared download, while closing all keeps partial bytes on disk', async () => {
   const bytes = Buffer.from('shared');
   const ref = {
     contentId: root,
@@ -220,7 +259,9 @@ it('closing one consumer does not cancel a shared download, while closing all re
   expect(transferSignal.aborted).toBe(true);
   reply();
   await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(existsSync(path.dirname(uri)) ? readdirSync(path.dirname(uri)) : []).toEqual([]);
+  expect(existsSync(path.dirname(uri)) ? readdirSync(path.dirname(uri)) : []).toEqual([
+    'shared.txt.part',
+  ]);
   rmSync(path.dirname(uri), { recursive: true, force: true });
 });
 
@@ -722,4 +763,202 @@ it('rejects an unsupported desktop before retaining, hashing or transmitting sou
   expect(task.request.mock.calls).toEqual([]);
   expect(jest.mocked(task.files.hashFile).mock.calls).toEqual([]);
   expect(task.writes).toEqual([]);
+});
+
+it('resumes interrupted download from chunk boundary and verifies full file sha256', async () => {
+  const chunkSize = 24_576;
+  const bytes = Buffer.alloc(chunkSize * 2, 77);
+  const ref = {
+    contentId: 'resumable-message:0',
+    revision: '1',
+    byteLength: String(bytes.length),
+    sha256: integrity.sha256(bytes),
+    mediaType: 'application/octet-stream',
+  };
+
+  const requestedOffsets: number[] = [];
+  let shouldFailSecondChunk = true;
+
+  const request = (async (_method: string, params: any) => {
+    const start = Number(params.offset);
+    requestedOffsets.push(start);
+    if (shouldFailSecondChunk && start === chunkSize) {
+      throw new RemoteAgentError('CONNECTION_LOST', true);
+    }
+    const chunk = Buffer.from(bytes.subarray(start, start + params.maxBytes));
+    return {
+      contentId: ref.contentId,
+      revision: ref.revision,
+      sha256: ref.sha256,
+      offset: String(start),
+      nextOffset: String(start + chunk.length),
+      eof: start + chunk.length === bytes.length,
+      dataBase64: chunk.toString('base64'),
+    };
+  }) as AgentRequest;
+
+  const cacheKey = 'resumable-test-key';
+  // First attempt: chunk 0 succeeds, chunk 1 fails with CONNECTION_LOST
+  await expect(
+    downloadAttachment(
+      request,
+      'session',
+      ref,
+      'resumable.bin',
+      new AbortController().signal,
+      cacheKey,
+    ),
+  ).rejects.toMatchObject({ code: 'CONNECTION_LOST' });
+
+  // Second attempt: resume with new call, should resume from offset = chunkSize
+  shouldFailSecondChunk = false;
+  requestedOffsets.length = 0;
+  const uri = await downloadAttachment(
+    request,
+    'session',
+    ref,
+    'resumable.bin',
+    new AbortController().signal,
+    cacheKey,
+  );
+
+  // Offset 0 must NOT be re-requested from server! It resumed from chunkSize
+  expect(requestedOffsets).toEqual([chunkSize]);
+  expect(readFileSync(uri)).toEqual(bytes);
+  rmSync(path.dirname(uri), { recursive: true, force: true });
+});
+
+it('discards partial file when server reports REVISION_EXPIRED', async () => {
+  const chunkSize = 24_576;
+  const bytes = Buffer.alloc(chunkSize * 2, 88);
+  const ref = {
+    contentId: 'expired-message:0',
+    revision: '1',
+    byteLength: String(bytes.length),
+    sha256: integrity.sha256(bytes),
+    mediaType: 'application/octet-stream',
+  };
+
+  let firstAttempt = true;
+  const request = (async (_method: string, params: any) => {
+    const start = Number(params.offset);
+    if (!firstAttempt) {
+      throw new RemoteAgentError('REVISION_EXPIRED');
+    }
+    if (start === chunkSize) {
+      throw new RemoteAgentError('CONNECTION_LOST', true);
+    }
+    const chunk = Buffer.from(bytes.subarray(start, start + params.maxBytes));
+    return {
+      contentId: ref.contentId,
+      revision: ref.revision,
+      sha256: ref.sha256,
+      offset: String(start),
+      nextOffset: String(start + chunk.length),
+      eof: start + chunk.length === bytes.length,
+      dataBase64: chunk.toString('base64'),
+    };
+  }) as AgentRequest;
+
+  const cacheKey = 'expired-test-key';
+  await expect(
+    downloadAttachment(
+      request,
+      'session',
+      ref,
+      'expired.bin',
+      new AbortController().signal,
+      cacheKey,
+    ),
+  ).rejects.toMatchObject({ code: 'CONNECTION_LOST' });
+
+  firstAttempt = false;
+  await expect(
+    downloadAttachment(
+      request,
+      'session',
+      ref,
+      'expired.bin',
+      new AbortController().signal,
+      cacheKey,
+    ),
+  ).rejects.toMatchObject({ code: 'REVISION_EXPIRED' });
+
+  // Partial file must be deleted upon REVISION_EXPIRED
+  const dirPath = path.join(root, 'RemoteAttachments', cacheKey);
+  if (existsSync(dirPath)) {
+    const remaining = readdirSync(dirPath).filter((f) => f.endsWith('.part'));
+    expect(remaining).toEqual([]);
+    rmSync(dirPath, { recursive: true, force: true });
+  }
+});
+
+it('downloads workspace file using agent.files.read and verifies bytes', async () => {
+  const bytes = Buffer.from('workspace file contents');
+  const file = {
+    path: 'src/output.txt',
+    revision: '100',
+    sha256: integrity.sha256(bytes),
+    byteLength: bytes.length,
+    name: 'output.txt',
+  };
+
+  const requestedMethods: string[] = [];
+  const request = (async (method: string, params: any) => {
+    requestedMethods.push(method);
+    expect(method).toBe('agent.files.read');
+    expect(params.path).toBe(file.path);
+    expect(params.expectedRevision).toBe(file.revision);
+    return {
+      path: file.path,
+      revision: file.revision,
+      sha256: file.sha256,
+      offset: '0',
+      nextOffset: String(bytes.length),
+      eof: true,
+      dataBase64: bytes.toString('base64'),
+    };
+  }) as AgentRequest;
+
+  const uri = await downloadWorkspaceFile(
+    request,
+    'session',
+    file,
+    new AbortController().signal,
+    'ws-file-key',
+  );
+
+  expect(requestedMethods).toEqual(['agent.files.read']);
+  expect(readFileSync(uri)).toEqual(bytes);
+  rmSync(path.dirname(uri), { recursive: true, force: true });
+});
+
+it('calculates cache size, clears cache, and protects active in-flight transfers', async () => {
+  const cacheKey = 'in-flight-key';
+  activeTransfers.add(cacheKey);
+
+  // Create a directory with a file for the active transfer under root
+  const activeDir = path.join(root, 'RemoteAttachments', cacheKey);
+  mkdirSync(activeDir, { recursive: true });
+  writeFileSync(path.join(activeDir, 'active.txt'), Buffer.alloc(100, 1));
+
+  // Create another directory for an idle cache entry under root
+  const idleDir = path.join(root, 'RemoteAttachments', 'idle-key');
+  mkdirSync(idleDir, { recursive: true });
+  writeFileSync(path.join(idleDir, 'idle.txt'), Buffer.alloc(200, 2));
+
+  try {
+    const size = getRemoteAttachmentCacheSize();
+    expect(size).toBeGreaterThanOrEqual(300);
+
+    // Clear cache; active in-flight transfer must NOT be deleted
+    clearRemoteAttachmentCache();
+
+    expect(existsSync(path.join(activeDir, 'active.txt'))).toBe(true);
+    expect(existsSync(path.join(idleDir, 'idle.txt'))).toBe(false);
+  } finally {
+    activeTransfers.delete(cacheKey);
+    rmSync(activeDir, { recursive: true, force: true });
+    rmSync(idleDir, { recursive: true, force: true });
+  }
 });

@@ -40,6 +40,7 @@ type ConnectionStore = Pick<
   | 'preview'
   | 'import'
   | 'addEndpoint'
+  | 'updateProfile'
 >;
 const EXCLUDED_PROVIDER_IDS = new Set(['cherryai', 'local-embedding']);
 const CLAIM_POLL_MS = 2_000;
@@ -146,7 +147,16 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
             onProgress?.({ stage: 'saving' });
             await store.updateStatus(
               id,
-              { grants: authorization.grants, status: 'paired' },
+              {
+                grants: authorization.grants,
+                status: 'paired',
+                ...(session.currentProfile
+                  ? {
+                      profileName: session.currentProfile.name ?? null,
+                      profileAvatar: session.currentProfile.avatar ?? null,
+                    }
+                  : {}),
+              },
               signal,
               existing,
             );
@@ -188,6 +198,12 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
                 grants: decision.authorization.grants,
                 id,
                 name: qr.name,
+                ...(session.currentProfile
+                  ? {
+                      profileName: session.currentProfile.name ?? null,
+                      profileAvatar: session.currentProfile.avatar ?? null,
+                    }
+                  : {}),
               },
               Boolean(qr.connectionId),
               signal,
@@ -220,6 +236,23 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
 
   reconnect(id: string): void {
     this.connections?.reconnect(id);
+  }
+
+  disconnect(id: string): void {
+    this.connections?.disconnect(id);
+  }
+
+  getConnectionLiveStatus(id: string): import('./connectionPorts').DesktopLiveStatus {
+    return (
+      this.connections?.getConnectionLiveStatus(id) ?? {
+        state: 'unreachable',
+        reason: 'no-location',
+      }
+    );
+  }
+
+  subscribeConnectionLiveStatus(id: string, listener: () => void): () => void {
+    return this.connections?.subscribeConnectionLiveStatus(id, listener) ?? (() => {});
   }
 
   getEndpoints(id: string, signal: AbortSignal) {

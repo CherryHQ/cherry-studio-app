@@ -737,3 +737,98 @@ it('recovers a first message after upload completed without losing its frozen re
   expect(recovered.getStarts()[0].status).toBe('applied');
   expect(sent).toEqual([expect.objectContaining({ text: startInput.text, attachments: refs })]);
 });
+
+it('creates, journals, and recovers session rename commands', async () => {
+  const { storage, port } = journal();
+  const updateMethod = 'agent.sessions.update';
+  const renameParams = { sessionId: 's', title: 'Renamed Session' };
+  const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+  const original = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const action = await original.create('rename', updateMethod, renameParams);
+  expect(action).toMatchObject({
+    kind: 'rename',
+    sessionId: 's',
+    title: 'Renamed Session',
+    status: 'pending',
+  });
+  original.stop();
+
+  const stored = JSON.parse(storage.read('pc:grant')!);
+  expect(stored.records[0].action).toMatchObject({
+    kind: 'rename',
+    sessionId: 's',
+    title: 'Renamed Session',
+  });
+
+  const recoveringRequest = jest
+    .fn()
+    .mockRejectedValueOnce(new RemoteAgentError('NOT_FOUND'))
+    .mockResolvedValueOnce({
+      commandId: action.id,
+      method: updateMethod,
+      status: 'applied',
+      admittedAt: '2026-09-22T00:00:00.000Z',
+      sessionId: 's',
+    });
+  const recovered = new RemoteAgentActions('pc:grant', port, recoveringRequest, () => {});
+  await recovered.recover();
+  expect(recoveringRequest.mock.calls).toEqual([
+    ['agent.commands.get', { commandId: action.id }],
+    [updateMethod, { ...renameParams, commandId: action.id }],
+  ]);
+  expect(recovered.get()[0]).toMatchObject({
+    kind: 'rename',
+    sessionId: 's',
+    title: 'Renamed Session',
+    status: 'applied',
+  });
+});
+
+it('forwards model and reasoning effort on start and checks idempotency', async () => {
+  const { port } = journal();
+  const startWithControls = {
+    ...startInput,
+    model: { modelId: 'gpt-4o', providerId: 'openai' },
+    reasoningEffort: 'medium',
+  };
+  const request = jest.fn(async (name: string, body: any) => {
+    if (name === 'agent.sessions.get') return sessionResult('s');
+    return { ...receipt(body.commandId, 'applied'), method: name };
+  });
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const result = await actions.start(startWithControls);
+  expect(result).toMatchObject({
+    status: 'applied',
+    sessionId: 's',
+    model: { modelId: 'gpt-4o', providerId: 'openai' },
+    reasoningEffort: 'medium',
+  });
+  expect(request.mock.calls.find(([name]) => name === 'agent.sessions.create')![1]).toMatchObject({
+    model: { modelId: 'gpt-4o', providerId: 'openai' },
+    reasoningEffort: 'medium',
+  });
+  expect(request.mock.calls.find(([name]) => name === 'agent.messages.send')![1]).toMatchObject({
+    model: { modelId: 'gpt-4o', providerId: 'openai' },
+    reasoningEffort: 'medium',
+  });
+
+  // Idempotency check with different model
+  request.mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+  await actions.start({ ...startWithControls, draftId: 'd-2' });
+  await expect(
+    actions.start({
+      ...startWithControls,
+      draftId: 'd-2',
+      model: { modelId: 'claude-3-5-sonnet', providerId: 'anthropic' },
+    }),
+  ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+
+  // Idempotency check with different reasoning effort
+  await expect(
+    actions.start({
+      ...startWithControls,
+      draftId: 'd-2',
+      reasoningEffort: 'high',
+    }),
+  ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+});
