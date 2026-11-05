@@ -98,7 +98,16 @@ pagination, selection and menu presentation consume catalog summaries and bound 
 The original local sidebar is the visual and interaction baseline for both sources. Agent headers
 keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
 group. New chat lives in the chat header. The bottom dock shows the avatar, nickname and current
-subscription badge in one settings row; organization accounts omit the community plan badge. Row gutters,
+subscription badge in one settings row; organization accounts omit the community plan badge.
+`SidebarPlanBadge` reads the active plan's server name and remaining quota windows. With quota,
+its fixed-width frame reserves 104 points (26 points high at the default text size); the text keeps
+system scaling. `TextAnimation.Rotating` shows the plan for four seconds, then each quota window for
+three seconds with a small vertical slide. Multiple windows carry compact period labels; their
+percentages are never combined across independent pools. The complete accessible label names each
+pool, period and remaining percentage without announcing each animation. Closing the drawer,
+backgrounding or entering selection unmounts the timer; the next appearance starts with the plan.
+Reduce Motion keeps the plan and first window's percentage static. Without quota the badge retains
+the plan/free/loading fallback. Row gutters,
 text columns, selection/pressed surfaces, empty/loading/error spacing and pagination feedback
 follow the local presentation. Avatar rendering is shared; desktop emoji is preserved, while a source without avatar metadata uses
 the common fallback.

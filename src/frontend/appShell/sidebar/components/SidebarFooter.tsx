@@ -8,10 +8,8 @@ import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
 
-import { useAccount } from '@/frontend/appShell/account';
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
-import { useCloud } from '@/frontend/hooks/useCloud';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -20,6 +18,7 @@ import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarFade } from './SidebarFade/SidebarFade';
+import { SidebarPlanBadge } from './SidebarPlanBadge';
 
 // Floats over the session list while the body owns enough bottom padding to
 // keep its final row reachable.
@@ -166,27 +165,6 @@ export function SidebarFooter() {
           </Surface>
         </Animated.View>
       </View>
-    </View>
-  );
-}
-
-/** Subscription updates stay local to the small account badge. */
-function SidebarPlanBadge() {
-  const { t } = useTranslation();
-  const { state: account } = useAccount();
-  const { state } = useCloud();
-  if (account.isEnterprise) return null;
-  const activePlan =
-    state.plans?.entitlements.find((entry) => entry.state === 'active' && !entry.plan.is_free) ??
-    state.plans?.entitlements.find((entry) => entry.state === 'active');
-  const label =
-    activePlan?.plan.display_name ??
-    (state.phase === 'loading' || state.phase === 'error' ? '—' : t('cloud.free'));
-  return (
-    <View className="max-w-28 shrink rounded-lg border border-dashed border-border-strong px-3 py-0.5">
-      <Text className="text-sm text-sidebar-foreground" numberOfLines={1}>
-        {label}
-      </Text>
     </View>
   );
 }

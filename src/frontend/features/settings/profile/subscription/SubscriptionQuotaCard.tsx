@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { formatQuotaWindow } from '@/frontend/utils/cloudQuota';
 import type { CloudQuotaPool, CloudQuotaWindow } from '@/shared/contracts/cloud';
 
-import { formatQuotaWindow, formatSubscriptionDate } from './subscriptionFormatters';
+import { formatSubscriptionDate } from './subscriptionFormatters';
 
 export function SubscriptionQuotaCard({ pools }: { pools: readonly CloudQuotaPool[] }) {
   return (
