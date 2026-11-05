@@ -15,6 +15,23 @@ export function ErrorPart({
 }) {
   const { t } = useTranslation();
   const report = useMessageFailureReport();
+  const source = part.data.source;
+  if (
+    source &&
+    typeof source === 'object' &&
+    !Array.isArray(source) &&
+    source.layer === 'host' &&
+    source.code === 'recovery_blocked'
+  ) {
+    return (
+      <ContextMenuExclusion>
+        <MessagePart.Error
+          message={t('chat.errorPart.recoveryBlocked.message')}
+          title={t('chat.errorPart.recoveryBlocked.title')}
+        />
+      </ContextMenuExclusion>
+    );
+  }
   if (part.data.code === 'MESSAGE_UNREADABLE') {
     return (
       <ContextMenuExclusion>

@@ -61,16 +61,6 @@ type AgentChatContextValue = {
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
-const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
-  activeTurn: null,
-  queuedInputs: Object.freeze([]),
-  liveMessages: Object.freeze([]),
-  pendingApprovals: Object.freeze([]),
-  pendingQuestion: null,
-  sessionId: '',
-  status: 'idle',
-});
-
 const AgentChatContext = createContext<AgentChatContextValue | null>(null);
 
 /** Owns the local Session observation client together with composer navigation. */
@@ -272,6 +262,7 @@ export function useAgentChatControls(input: {
   const { agentId, composerKey, sessionId, workspaceFolderId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
+  const recoveryBlocked = useAgentSessionSelection(client, sessionId, selectRecoveryBlocked);
   const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
   const isSessionExecuting = useAgentSessionSelection(client, sessionId, isAgentSessionExecuting);
   const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
@@ -420,6 +411,7 @@ export function useAgentChatControls(input: {
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
+      recoveryBlocked ||
       isAdmitting ||
       isSubmitting ||
       (isSessionExecuting && !isComposerBusy) ||
@@ -439,11 +431,11 @@ function useAgentSessionSelection<TValue>(
   select: (state: AgentSessionChatState) => TValue,
 ): TValue {
   const subscribe = useCallback(
-    (listener: () => void) => (sessionId ? client.subscribe(sessionId, listener) : () => undefined),
+    (listener: () => void) => client.subscribe(sessionId ?? '', listener),
     [client, sessionId],
   );
   const getSnapshot = useCallback(
-    () => select(sessionId ? client.getState(sessionId) : EMPTY_AGENT_SESSION_STATE),
+    () => select(client.getState(sessionId ?? '')),
     [client, select, sessionId],
   );
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -499,4 +491,8 @@ function selectSessionState(state: AgentSessionChatState) {
 }
 function selectObservationStatus(state: AgentSessionChatState) {
   return state.status;
+}
+
+function selectRecoveryBlocked(state: AgentSessionChatState) {
+  return Boolean(state.localRecoveryStatus);
 }

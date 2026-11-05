@@ -16,12 +16,17 @@ import type {
   AgentTurnView,
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import type {
+  LocalAgentRecovery,
+  LocalAgentRecoveryStatus,
+} from '@/shared/contracts/localAgentRecovery';
 
 import { ToolInputPreviewStore } from './ToolInputPreviewStore';
 
 export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
 
 export type AgentSessionChatState = {
+  localRecoveryStatus?: LocalAgentRecoveryStatus;
   isSubmitting?: boolean;
   activeTurn: AgentTurnView | null;
   queuedInputs: readonly AgentQueuedInput[];
@@ -43,6 +48,7 @@ type AgentSessionChatClientOptions = {
 };
 
 type SessionEntry = {
+  unsubscribeRecovery?: () => void;
   generation: number;
   listeners: Set<() => void>;
   liveMessages: Map<string, AgentMessageView>;
@@ -157,7 +163,7 @@ export class AgentSessionChatClient {
   private isObservationPaused = false;
 
   constructor(
-    private readonly protocol: AgentProtocol,
+    private readonly protocol: AgentProtocol & Partial<LocalAgentRecovery>,
     private readonly options: AgentSessionChatClientOptions = {},
   ) {}
 
@@ -168,7 +174,20 @@ export class AgentSessionChatClient {
   subscribe(sessionId: string, listener: () => void): () => void {
     const entry = this.getEntry(sessionId);
     entry.listeners.add(listener);
-    void this.observe(sessionId).catch(() => undefined);
+    // An unsent chat still observes global local availability, without a Session to load.
+    if (sessionId) void this.observe(sessionId).catch(() => undefined);
+    else if (!entry.unsubscribeRecovery) {
+      entry.unsubscribeRecovery = this.protocol.subscribeLocalRecoveryStatus?.(() => {
+        this.updateState(entry, {
+          ...entry.state,
+          localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
+        });
+      });
+      this.updateState(entry, {
+        ...entry.state,
+        localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
+      });
+    }
 
     return () => {
       entry.listeners.delete(listener);
@@ -195,8 +214,16 @@ export class AgentSessionChatClient {
 
     this.stopObservation(entry);
     const generation = entry.generation;
+    entry.unsubscribeRecovery = this.protocol.subscribeLocalRecoveryStatus?.(() => {
+      this.updateState(entry, {
+        ...entry.state,
+        localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
+      });
+      this.options.onTranscriptChanged?.(sessionId);
+    });
     this.updateState(entry, {
       ...entry.state,
+      localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
       error: undefined,
       status: 'observing',
     });
@@ -259,13 +286,24 @@ export class AgentSessionChatClient {
     await this.observe(sessionId, true);
   }
 
+  async resetBlockedAgent(): Promise<void> {
+    await this.protocol.resetBlockedAgentState?.();
+    for (const [sessionId, entry] of this.sessions) {
+      this.updateState(entry, {
+        ...entry.state,
+        localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
+      });
+      this.options.onTranscriptChanged?.(sessionId);
+    }
+  }
+
   pauseObservedSessions(): void {
     if (this.isObservationPaused) {
       return;
     }
     this.isObservationPaused = true;
-    for (const entry of this.sessions.values()) {
-      this.stopObservation(entry);
+    for (const [sessionId, entry] of this.sessions) {
+      if (sessionId) this.stopObservation(entry);
     }
   }
 
@@ -273,7 +311,7 @@ export class AgentSessionChatClient {
     this.isObservationPaused = false;
     await Promise.allSettled(
       [...this.sessions.entries()]
-        .filter(([, entry]) => entry.listeners.size > 0)
+        .filter(([sessionId, entry]) => sessionId && entry.listeners.size > 0)
         .map(([sessionId]) => this.refresh(sessionId)),
     );
   }
@@ -380,6 +418,13 @@ export class AgentSessionChatClient {
     entry: SessionEntry,
     allowQueue = false,
   ): NonNullable<SessionEntry['submission']> {
+    if (this.protocol.localRecoveryStatus?.()) {
+      throw new AgentProtocolError({
+        code: 'EXECUTION_UNAVAILABLE',
+        message: 'Local Agent recovery requires an explicit reset.',
+        retryable: false,
+      });
+    }
     if (
       entry.state.isSubmitting ||
       (!allowQueue &&
@@ -537,13 +582,18 @@ export class AgentSessionChatClient {
       listeners: new Set(),
       liveMessages: new Map(),
       pendingTextDeltas: new Map(),
-      state: createSessionState(sessionId),
+      state: {
+        ...createSessionState(sessionId),
+        localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
+      },
     };
     this.sessions.set(sessionId, entry);
     return entry;
   }
 
   private stopObservation(entry: SessionEntry): void {
+    entry.unsubscribeRecovery?.();
+    entry.unsubscribeRecovery = undefined;
     entry.generation += 1;
     this.cancelLiveMessagesFlush(entry);
     entry.pendingTextDeltas.clear();
@@ -571,6 +621,7 @@ export class AgentSessionChatClient {
     }
     this.updateState(entry, {
       isSubmitting: entry.state.isSubmitting,
+      localRecoveryStatus: this.protocol.localRecoveryStatus?.(),
       activeTurn: snapshot.activeTurn,
       queuedInputs: snapshot.queuedInputs,
       ...(snapshot.activeUserMessage

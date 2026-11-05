@@ -7,8 +7,102 @@ import type {
   AgentTurnView,
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import type {
+  LocalAgentRecovery,
+  LocalAgentRecoveryStatus,
+} from '@/shared/contracts/localAgentRecovery';
 
 import { AgentSessionChatClient, isAgentSessionBusy } from '../AgentSessionChatClient';
+
+test('local blocked status survives snapshots, refresh and foreground until reset succeeds', async () => {
+  const block: LocalAgentRecoveryStatus = {
+    kind: 'blocked',
+    admissions: 2,
+    executions: [{ sessionId: 'session-1', assistantMessageId: 'assistant-1', turnId: 'turn-1' }],
+  };
+  let status: LocalAgentRecoveryStatus = block;
+  const listeners = new Set<() => void>();
+  const protocol = Object.assign(
+    protocolWithObservation(async () => ({ snapshot: snapshot(), unsubscribe() {} })),
+    {
+      localRecoveryStatus: () => status,
+      subscribeLocalRecoveryStatus: (listener: () => void) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      resetBlockedAgentState: jest.fn(async () => {
+        status = undefined;
+        for (const listener of listeners) listener();
+      }),
+    } satisfies LocalAgentRecovery,
+  );
+  const client = new AgentSessionChatClient(protocol);
+  const unsubscribe = client.subscribe('session-1', () => {});
+  const draft = client.subscribe('', () => {});
+  try {
+    await client.observe('session-1');
+    expect(client.getState('session-1')).toMatchObject({
+      status: 'ready',
+      localRecoveryStatus: block,
+    });
+    await client.refresh('session-1');
+    client.pauseObservedSessions();
+    await client.resumeObservedSessions();
+    expect(client.getState('session-1').localRecoveryStatus).toBe(block);
+    expect(client.getState('').localRecoveryStatus).toBe(block);
+    await expect(
+      client.submitMessage({
+        sessionId: 'session-1',
+        userMessageId: 'new-user',
+        assistantMessageId: 'new-answer',
+        parts: [{ type: 'text', text: 'Hello' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+    expect(protocol.submitMessage).not.toHaveBeenCalled();
+    protocol.resetBlockedAgentState.mockRejectedValueOnce(new Error('discard failed'));
+    await expect(client.resetBlockedAgent()).rejects.toThrow('discard failed');
+    expect(client.getState('session-1').localRecoveryStatus).toBe(block);
+    await client.resetBlockedAgent();
+    expect(protocol.resetBlockedAgentState).toHaveBeenCalledTimes(2);
+    expect(client.getState('session-1').localRecoveryStatus).toBeUndefined();
+    expect(client.getState('').localRecoveryStatus).toBeUndefined();
+    // Clearing status never resends an input automatically.
+    expect(protocol.submitMessage).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+    draft();
+    client.dispose();
+  }
+  expect(listeners.size).toBe(0);
+});
+
+test('a local unavailable status disables admission without poisoning ordinary observations', async () => {
+  const protocol = Object.assign(
+    protocolWithObservation(async () => ({ snapshot: snapshot(), unsubscribe() {} })),
+    {
+      localRecoveryStatus: () => ({ kind: 'unavailable', reason: 'claim-failed' }) as const,
+    },
+  );
+  const client = new AgentSessionChatClient(protocol);
+  await client.observe('session-1');
+  expect(client.getState('session-1')).toMatchObject({
+    status: 'ready',
+    localRecoveryStatus: { kind: 'unavailable', reason: 'claim-failed' },
+  });
+  await expect(
+    client.startSession({
+      sessionId: 'draft',
+      agentId: 'agent-1',
+      userMessageId: 'user',
+      assistantMessageId: 'answer',
+      parts: [{ type: 'text', text: 'Hello' }],
+    }),
+  ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+  expect(protocol.startSession).not.toHaveBeenCalled();
+  client.dispose();
+});
 
 function deferred<TValue>() {
   let resolve!: (value: TValue) => void;

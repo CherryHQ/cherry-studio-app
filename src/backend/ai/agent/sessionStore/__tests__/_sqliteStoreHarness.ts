@@ -27,8 +27,8 @@ export type SqliteStoreHarness = {
 };
 
 /** The durable store over a real migrated in-memory database. */
-export function createSqliteStoreHarness(): SqliteStoreHarness {
-  const sqlite = new DatabaseSync(':memory:');
+export function createSqliteStoreHarness(path = ':memory:'): SqliteStoreHarness {
+  const sqlite = new DatabaseSync(path);
   sqlite.exec('PRAGMA foreign_keys = ON');
   applyMigrations(sqlite);
   for (const statement of customSqlStatements) {

@@ -319,7 +319,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 onHeightChange={setComposerHeight}
               >
                 <View>
-                  {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+                  <LocalRuntimeStatus sessionId={sessionId} />
                   <ChatInput
                     agentId={resolvedAgentId}
                     controls={controls}

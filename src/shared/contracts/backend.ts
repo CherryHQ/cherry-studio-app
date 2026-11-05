@@ -6,6 +6,7 @@ import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
+import type { LocalAgentRecovery } from './localAgentRecovery';
 import type { McpModule } from './mcp';
 import type { ModelsModule } from './models';
 import type { PaintingsModule } from './paintings';
@@ -26,7 +27,7 @@ export interface Backend {
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;
   readonly systemEntry: SystemEntryModule;
-  readonly agent: AgentProtocol;
+  readonly agent: AgentProtocol & LocalAgentRecovery;
   readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly uuRemote: UuRemoteModule;

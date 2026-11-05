@@ -16,6 +16,8 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
   [Agent Skills](../../../../../docs/references/agent/agent-skills.md#persistence-and-lifecycle).
 - Mobile adds `agent_session_message_created_id_idx` to support bounded global history scans for
   short search terms that cannot use the trigram index. It changes no persisted message fields.
+- Mobile adds private recovery admission and quarantine columns to `agent_session_message` to
+  protect its local durable runtime across process restarts. They are not transcript fields.
 
 ## Migration Flow
 

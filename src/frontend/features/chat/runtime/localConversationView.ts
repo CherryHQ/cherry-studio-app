@@ -77,7 +77,7 @@ export function createLocalConversationProjector(input: {
     | { source: readonly AgentMessageView[]; busy: boolean; messages: ConversationMessage[] }
     | undefined;
   const isBusy = (state: AgentSessionChatState) =>
-    isAgentSessionBusy(state) || state.status === 'error';
+    isAgentSessionBusy(state) || state.status === 'error' || Boolean(state.localRecoveryStatus);
   const outcome = async <T>(run: () => Promise<T>): Promise<OperationOutcome<T>> => {
     try {
       return { state: 'applied', value: await run() };
@@ -86,11 +86,13 @@ export function createLocalConversationProjector(input: {
     }
   };
   const availability = (state: AgentSessionChatState, requiresIdle: boolean): Availability =>
-    requiresIdle && isAgentSessionBusy(state)
-      ? { state: 'disabled', reason: 'busy' }
-      : state.status === 'error'
-        ? { state: 'disabled', reason: 'synchronizing' }
-        : { state: 'enabled' };
+    state.localRecoveryStatus
+      ? { state: 'disabled', reason: 'synchronizing' }
+      : requiresIdle && isAgentSessionBusy(state)
+        ? { state: 'disabled', reason: 'busy' }
+        : state.status === 'error'
+          ? { state: 'disabled', reason: 'synchronizing' }
+          : { state: 'enabled' };
   function action<Input, Output>(
     state: AgentSessionChatState,
     requiresIdle: boolean,

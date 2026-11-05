@@ -6,6 +6,37 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('recovery columns upgrade with defaults without rewriting stored payloads', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0013_steep_absorbing_man',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('a', 'A', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, runtime_revision, last_activity_at, created_at, updated_at) VALUES ('s', 'a', 0, 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, context_checkpoint, inference_snapshot, created_at, updated_at) VALUES ('m', 's', 'assistant', '{"parts":[{"text":"saved"}]}', 'success', '{"checkpoint":1}', '{"inference":2}', 1, 1);`);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare(
+            'SELECT recovery_admissions, recovery_state, last_recovery_process_id, data, context_checkpoint, inference_snapshot FROM agent_session_message WHERE id = ?',
+          )
+          .get('m'),
+      ).toEqual({
+        recovery_admissions: 0,
+        recovery_state: 'eligible',
+        last_recovery_process_id: null,
+        data: '{"parts":[{"text":"saved"}]}',
+        context_checkpoint: '{"checkpoint":1}',
+        inference_snapshot: '{"inference":2}',
+      });
+    } finally {
+      database.close();
+    }
+  });
   test('turns each linear transcript into one branch selected at its newest message', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -881,6 +912,9 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'parent_id',
         'siblings_group_id',
+        'recovery_admissions',
+        'recovery_state',
+        'last_recovery_process_id',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',

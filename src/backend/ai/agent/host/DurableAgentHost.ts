@@ -41,6 +41,7 @@ import {
   type AgentTurnView,
 } from '@/shared/contracts/agent';
 import { BackupError } from '@/shared/contracts/backup';
+import type { LocalAgentRecoveryStatus } from '@/shared/contracts/localAgentRecovery';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
@@ -70,6 +71,7 @@ import {
 import type {
   AgentSessionStore,
   EditMessageInput,
+  RecoveryExecution,
   ReserveSubmissionResult,
 } from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
@@ -102,6 +104,8 @@ import {
 import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('DurableAgentHost');
+// Reopening or recreating a Host in this process must not spend another cold recovery admission.
+let recoveryProcessId: string | undefined;
 type Admission = { controller: AbortController; promise: Promise<unknown> };
 /** Presentation state of one observed working copy. */
 type LiveSession = {
@@ -169,6 +173,10 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly controller = new AbortController();
   private readonly naming: MobileAgentHostNaming;
   private accepting = false;
+  private recoveryBlock: LocalAgentRecoveryStatus;
+  private readonly recoveryListeners = new Set<() => void>();
+  private initializing: Promise<void> | undefined;
+  private resetting: Promise<void> | undefined;
   private closing: Promise<void> | undefined;
   private suspension: Promise<void> | undefined;
   private resuming: Promise<void> | undefined;
@@ -184,6 +192,56 @@ export class DurableAgentHost implements AgentProtocol {
 
   get isReady() {
     return this.accepting;
+  }
+  localRecoveryStatus(): LocalAgentRecoveryStatus {
+    return this.recoveryBlock;
+  }
+
+  subscribeLocalRecoveryStatus(listener: () => void): () => void {
+    this.recoveryListeners.add(listener);
+    return () => this.recoveryListeners.delete(listener);
+  }
+
+  private publishRecoveryStatus() {
+    for (const listener of this.recoveryListeners) {
+      try {
+        listener();
+      } catch (error) {
+        logger.warn('Local recovery listener failed', error as Error);
+      }
+    }
+  }
+
+  async resetBlockedAgentState(): Promise<void> {
+    if (this.resetting) return this.resetting;
+    this.resetting = this.resetRecovery().finally(() => {
+      this.resetting = undefined;
+    });
+    return this.resetting;
+  }
+
+  private async resetRecovery(): Promise<void> {
+    await this.initializing;
+    if (!this.recoveryBlock) return;
+    this.controller.signal.throwIfAborted();
+    const release = storageMutationGate.freeze();
+    try {
+      // The recovery gate precedes open: this generation has no runtime owner to close.
+      const blocked =
+        this.recoveryBlock.kind === 'blocked'
+          ? this.recoveryBlock.executions
+          : await this.store.listQuarantinedExecutions();
+      await this.ports.durableStorage!.discard();
+      await this.settleRecoveryExecutions(await this.store.listRecoveryCandidates());
+      this.controller.signal.throwIfAborted();
+      await this.store.clearRecoveryBlock(blocked);
+      this.recoveryBlock = undefined;
+      // The next explicit send/observation may initialize fresh storage.
+      this.suspended = true;
+    } finally {
+      release();
+    }
+    this.publishRecoveryStatus();
   }
   hasPendingStorageWork() {
     return (
@@ -242,12 +300,14 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   async initialize(signal?: AbortSignal) {
+    if (this.recoveryBlock) return;
     signal?.throwIfAborted();
     const cancel = () => this.controller.abort(signal?.reason);
     signal?.addEventListener('abort', cancel, { once: true });
     try {
-      await this.initializeGeneration();
+      await (this.initializing ??= this.initializeGeneration());
     } finally {
+      this.initializing = undefined;
       signal?.removeEventListener('abort', cancel);
     }
   }
@@ -352,6 +412,26 @@ export class DurableAgentHost implements AgentProtocol {
     const recovery = this.ports.traces?.startTrace('ai.recovery');
     try {
       this.controller.signal.throwIfAborted();
+      if (this.recoveryBlock) return;
+      const decisions = await this.claimRecoveryBatch((recoveryProcessId ??= uuidv7()));
+      this.controller.signal.throwIfAborted();
+      if (!decisions) {
+        recovery?.end('error');
+        return;
+      }
+      if (decisions.blocked.length) {
+        this.recoveryBlock = { kind: 'blocked', executions: decisions.blocked, admissions: 2 };
+        try {
+          await this.settleRecoveryExecutions([...decisions.blocked, ...decisions.candidates]);
+        } catch (error) {
+          this.controller.signal.throwIfAborted();
+          logger.error('Failed to settle blocked Agent receipts', error as Error);
+          this.recoveryBlock = { kind: 'unavailable', reason: 'blocked' };
+        }
+        this.publishRecoveryStatus();
+        recovery?.end('ok');
+        return;
+      }
       const database = await this.ports.durableStorage.open();
       if (this.controller.signal.aborted) {
         await database.close();
@@ -402,6 +482,86 @@ export class DurableAgentHost implements AgentProtocol {
         await this.suspend(error instanceof Error ? error : new Error(String(error)));
       }
       throw error;
+    }
+  }
+
+  private async claimRecoveryBatch(processId: string) {
+    try {
+      const blocked = await this.store.listQuarantinedExecutions();
+      const candidates = await this.store.listRecoveryCandidates();
+      this.controller.signal.throwIfAborted();
+      if (!blocked.length) {
+        for (const execution of candidates) {
+          const decision = await this.store.claimRecovery({ ...execution, processId });
+          this.controller.signal.throwIfAborted();
+          if (decision.kind === 'quarantine' || decision.kind === 'quarantined')
+            blocked.push(execution);
+        }
+      }
+      return { blocked, candidates };
+    } catch (error) {
+      this.controller.signal.throwIfAborted();
+      this.recoveryBlock = { kind: 'unavailable', reason: 'claim-failed' };
+      this.publishRecoveryStatus();
+      logger.error('Failed to claim Agent recovery', error as Error);
+      return undefined;
+    }
+  }
+
+  /** Read only Cherry receipts; Pi must remain unopened throughout blocked recovery. */
+  private async settleRecoveryExecutions(executions: readonly RecoveryExecution[]) {
+    const error: AgentErrorView = {
+      code: 'EXECUTION_FAILED',
+      message:
+        'Automatic recovery stopped after repeated interruptions. Reset local Agent state to continue.',
+      retryable: false,
+      failure: {
+        version: 1,
+        reasonCode: 'internal',
+        source: { layer: 'host', code: 'recovery_blocked' },
+      },
+    };
+    const unfinished = await this.store.listUnsettledAssistantMessages();
+    this.controller.signal.throwIfAborted();
+    const sessions = new Set<string>();
+    for (const execution of executions) {
+      if (sessions.has(execution.sessionId)) continue;
+      const message = await this.store.getMessage(
+        execution.sessionId,
+        execution.assistantMessageId,
+      );
+      this.controller.signal.throwIfAborted();
+      if (!message || message.turnId !== execution.turnId) continue;
+      const queued = [];
+      for (const row of unfinished) {
+        if (
+          row.sessionId !== execution.sessionId ||
+          row.assistantMessageId === execution.assistantMessageId
+        )
+          continue;
+        const receipt = await this.store.getMessage(row.sessionId, row.assistantMessageId);
+        this.controller.signal.throwIfAborted();
+        if (receipt)
+          queued.push({
+            id: receipt.id,
+            parts: settleInterruptedAssistantParts(receipt.parts, error, `recovery-${receipt.id}`),
+          });
+      }
+      await this.store.settleBlockedRecovery({
+        execution,
+        parts: settleInterruptedAssistantParts(
+          message.parts.filter(
+            (part) =>
+              part.type !== 'data-error' || part.data.failure?.source.code !== 'recovery_blocked',
+          ),
+          error,
+          `recovery-${message.id}`,
+        ),
+        queued,
+        error,
+      });
+      sessions.add(execution.sessionId);
+      this.ports.durableStorage?.notifyTranscript(execution.sessionId);
     }
   }
 
@@ -473,6 +633,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   async resumeSuspended() {
+    if (this.recoveryBlock) return;
     if (this.resuming) return this.resuming;
     if (!this.suspended || this.controller.signal.aborted) return;
     this.resuming = (async () => {
@@ -1322,7 +1483,7 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
-    await this.resumeSuspended();
+    if (!this.recoveryBlock) await this.resumeSuspended();
     const session = await this.requireSession(sessionId);
     const agent = await this.ports.agents.getAgent(session.agentId);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
@@ -1739,7 +1900,20 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  private isBlockedExecution(turn: RuntimeDurableTurn) {
+    return (
+      this.recoveryBlock?.kind === 'blocked' &&
+      this.recoveryBlock.executions.some(
+        (execution) =>
+          execution.sessionId === turn.identity.sessionId &&
+          execution.assistantMessageId === turn.assistantMessageId &&
+          execution.turnId === turn.identity.turnId,
+      )
+    );
+  }
+
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
+    if (this.isBlockedExecution(turn)) return;
     signal?.throwIfAborted();
     if (turn.status === 'cancelled' && turn.inputBoundary === null) {
       // A withdrawn inbox item never entered model context. Remove its reservation without
@@ -1952,6 +2126,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private presentSettled(turn: RuntimeDurableTurn) {
+    if (this.isBlockedExecution(turn)) return;
     if (turn.status === 'queued' || (turn.status === 'cancelled' && turn.inputBoundary === null))
       return;
     const lane = turn.identity;
@@ -2277,6 +2452,8 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     operation: (signal: AbortSignal) => Promise<Result>,
   ): Promise<Result> {
+    if (this.recoveryBlock)
+      fail('EXECUTION_UNAVAILABLE', 'Local Agent recovery requires an explicit reset.');
     // A submission reopens a suspended engine, as observing a session does: a new chat has no
     // session on screen to carry the retry action.
     if (this.suspended && !this.controller.signal.aborted)

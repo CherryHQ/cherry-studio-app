@@ -50,12 +50,15 @@ import type {
   ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
+  RecoveryDecision,
+  RecoveryExecution,
 } from './AgentSessionStore';
 import { finalizeMessageStats } from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 // 50 rows bind fewer parameters than SQLite's historical 999-variable ceiling.
 const FORK_INSERT_CHUNK_SIZE = 50;
+const MAX_RECOVERY_ADMISSIONS = 2;
 
 /**
  * Durable SQLite adapter for {@link AgentSessionStore}
@@ -71,6 +74,147 @@ const FORK_INSERT_CHUNK_SIZE = 50;
 export class SqliteAgentSessionStore extends BaseService implements AgentSessionStore {
   constructor(private readonly dbService: DbService) {
     super();
+  }
+
+  async claimRecovery(input: RecoveryExecution & { processId: string }): Promise<RecoveryDecision> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.id, input.assistantMessageId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+            eq(agentSessionMessageTable.role, 'assistant'),
+          ),
+        )
+        .limit(1);
+      if (!row) return { kind: 'stale' };
+      if (row.recoveryState === 'blocked')
+        return row.lastRecoveryProcessId === input.processId
+          ? { kind: 'quarantine', freshAttempt: false }
+          : { kind: 'quarantined' };
+      if (row.lastRecoveryProcessId === input.processId && row.recoveryAdmissions > 0)
+        return { kind: 'admit', admissions: row.recoveryAdmissions as 1 | 2 };
+      if (row.recoveryAdmissions >= MAX_RECOVERY_ADMISSIONS) {
+        await tx
+          .update(agentSessionMessageTable)
+          .set({ recoveryState: 'blocked', lastRecoveryProcessId: input.processId })
+          .where(eq(agentSessionMessageTable.id, row.id));
+        return { kind: 'quarantine', freshAttempt: true };
+      }
+      const admissions = (row.recoveryAdmissions + 1) as 1 | 2;
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ recoveryAdmissions: admissions, lastRecoveryProcessId: input.processId })
+        .where(eq(agentSessionMessageTable.id, row.id));
+      return { kind: 'admit', admissions };
+    });
+  }
+
+  async listRecoveryCandidates(): Promise<RecoveryExecution[]> {
+    const rows = await this.listUnsettledAssistantMessages();
+    return rows.filter((row): row is RecoveryExecution => row.turnId !== null);
+  }
+
+  async listQuarantinedExecutions(): Promise<RecoveryExecution[]> {
+    const rows = await this.dbService
+      .getDb()
+      .select({
+        sessionId: agentSessionMessageTable.sessionId,
+        assistantMessageId: agentSessionMessageTable.id,
+        turnId: agentSessionMessageTable.turnId,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.role, 'assistant'),
+          eq(agentSessionMessageTable.recoveryState, 'blocked'),
+          isNotNull(agentSessionMessageTable.turnId),
+        ),
+      );
+    return rows.filter((row): row is RecoveryExecution => row.turnId !== null);
+  }
+
+  async settleBlockedRecovery(
+    input: Parameters<AgentSessionStore['settleBlockedRecovery']>[0],
+  ): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      const { execution } = input;
+      const [row] = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, execution.sessionId),
+            eq(agentSessionMessageTable.id, execution.assistantMessageId),
+            eq(agentSessionMessageTable.turnId, execution.turnId),
+            eq(agentSessionMessageTable.role, 'assistant'),
+          ),
+        )
+        .limit(1);
+      if (
+        !row ||
+        (row.recoveryState !== 'blocked' &&
+          !(UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(row.status))
+      )
+        throw new Error('Cannot settle a replaced execution.');
+      await tx
+        .update(agentSessionMessageTable)
+        .set({
+          status: 'interrupted',
+          data: { ...row.data, parts: input.parts },
+          searchableText: toSearchableText(input.parts),
+          error: input.error,
+          contextCheckpoint: null,
+        })
+        .where(eq(agentSessionMessageTable.id, row.id));
+      for (const queued of input.queued) {
+        const [receipt] = await tx
+          .select()
+          .from(agentSessionMessageTable)
+          .where(
+            and(
+              eq(agentSessionMessageTable.sessionId, execution.sessionId),
+              eq(agentSessionMessageTable.id, queued.id),
+              eq(agentSessionMessageTable.role, 'assistant'),
+              inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            ),
+          )
+          .limit(1);
+        if (!receipt) continue;
+        await tx
+          .update(agentSessionMessageTable)
+          .set({
+            status: 'interrupted',
+            data: { ...receipt.data, parts: queued.parts },
+            searchableText: toSearchableText(queued.parts),
+            error: input.error,
+            contextCheckpoint: null,
+          })
+          .where(eq(agentSessionMessageTable.id, receipt.id));
+      }
+    });
+    publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.execution.sessionId}`]);
+  }
+
+  async clearRecoveryBlock(executions: readonly RecoveryExecution[]): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      for (const execution of executions) {
+        await tx
+          .update(agentSessionMessageTable)
+          .set({ recoveryAdmissions: 0, recoveryState: 'eligible', lastRecoveryProcessId: null })
+          .where(
+            and(
+              eq(agentSessionMessageTable.sessionId, execution.sessionId),
+              eq(agentSessionMessageTable.id, execution.assistantMessageId),
+              eq(agentSessionMessageTable.turnId, execution.turnId),
+              eq(agentSessionMessageTable.role, 'assistant'),
+            ),
+          );
+      }
+    });
   }
 
   async listUnsettledAssistantMessages() {
@@ -165,6 +309,18 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   async deleteSession(sessionId: string): Promise<boolean> {
     return this.dbService.withWriteTx(async (tx) => {
+      const [quarantine] = await tx
+        .select({ id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            eq(agentSessionMessageTable.recoveryState, 'blocked'),
+          ),
+        )
+        .limit(1);
+      if (quarantine)
+        throw new Error('Cannot delete a session with unfinished recovery quarantine.');
       // Advance each surviving fork's row timestamp through Drizzle before the
       // FK's ON DELETE SET NULL fallback can clear the lineage invisibly.
       await tx
@@ -491,6 +647,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           parentId: agentSessionMessageTable.parentId,
           role: agentSessionMessageTable.role,
           status: agentSessionMessageTable.status,
+          recoveryState: agentSessionMessageTable.recoveryState,
         })
         .from(agentSessionMessageTable)
         .where(
@@ -499,7 +656,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
             eq(agentSessionMessageTable.turnId, input.turnId),
           ),
         );
-      if (!rows.some((row) => row.role === 'assistant' && row.status === 'pending')) return [];
+      if (
+        rows.some((row) => row.recoveryState === 'blocked') ||
+        !rows.some((row) => row.role === 'assistant' && row.status === 'pending')
+      )
+        return [];
       await removeTurnRows(tx, input.sessionId, rows);
       return rows.map((row) => row.id);
     });
@@ -552,6 +713,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           and(
             eq(agentSessionMessageTable.sessionId, input.sessionId),
             eq(agentSessionMessageTable.turnId, source.turnId),
+            eq(agentSessionMessageTable.recoveryState, 'eligible'),
           ),
         )
         .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id)
@@ -619,6 +781,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           parentId: agentSessionMessageTable.parentId,
           role: agentSessionMessageTable.role,
           status: agentSessionMessageTable.status,
+          recoveryState: agentSessionMessageTable.recoveryState,
         })
         .from(agentSessionMessageTable)
         .where(
@@ -632,8 +795,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         return { status: 'turn-not-found' };
       }
       if (
-        turnRows.some((row) =>
-          (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(row.status),
+        turnRows.some(
+          (row) =>
+            (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(row.status) ||
+            row.recoveryState === 'blocked',
         )
       ) {
         return { status: 'turn-unsettled' };
@@ -697,7 +862,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return this.dbService.withWriteTx(async (tx) => {
       // Only a settled leaf answer is replaceable: nothing below it responds to it.
       const [source] = await tx
-        .select(agentMessageViewColumns)
+        .select({
+          ...agentMessageViewColumns,
+          recoveryState: agentSessionMessageTable.recoveryState,
+        })
         .from(agentSessionMessageTable)
         .where(
           and(
@@ -721,6 +889,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (
         !source ||
         source.role !== 'assistant' ||
+        source.recoveryState === 'blocked' ||
         (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(source.status) ||
         child ||
         !user ||
@@ -756,6 +925,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         // The only summary that could cover the replaced answer is its own:
         // it is the last message, so earlier checkpoints stay valid.
         contextCheckpoint: null,
+        recoveryAdmissions: 0,
+        recoveryState: 'eligible' as const,
+        lastRecoveryProcessId: null,
         modelId: input.modelId,
         inferenceSnapshot: input.inferenceSnapshot,
         // Provider totals belong to the immutable invocation ledger. Only runtime timing resets.
@@ -1039,6 +1211,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           sessionId: agentSessionMessageTable.sessionId,
           stats: agentSessionMessageTable.stats,
           turnId: agentSessionMessageTable.turnId,
+          recoveryState: agentSessionMessageTable.recoveryState,
         })
         .from(agentSessionMessageTable)
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
@@ -1047,6 +1220,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
       }
       if (input.turnId !== undefined && existing.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
+      if (existing.recoveryState !== 'eligible')
         throw new Error('Cannot finalize a replaced execution.');
       const data = { ...existing.data, parts: input.parts };
       if (input.status === 'success' && data.translations) {

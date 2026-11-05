@@ -77,6 +77,10 @@ export const agentSessionMessageTable = sqliteTable(
     // Versioned Agent inference snapshot. Keep raw JSON so unknown future
     // versions can be projected as unsupported without losing the message.
     inferenceSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
+    // Mobile runtime compatibility exception; see schemas/README.md alignment rule.
+    recoveryAdmissions: integer().notNull().default(0),
+    recoveryState: text().$type<'eligible' | 'blocked'>().notNull().default('eligible'),
+    lastRecoveryProcessId: text(),
     // Visible plain text of data.parts' text parts, written by the store and
     // mirrored into FTS5 by triggers; mid-stream snapshots leave it unchanged.
     searchableText: text().notNull().default(''),

@@ -38,6 +38,23 @@ function errorPart(data: ErrorPartInput['data']): ErrorPartInput {
 }
 
 describe('ErrorPart', () => {
+  test('renders distinct blocked recovery copy without ordinary interrupted copy', () => {
+    const renderer = render(
+      <ErrorPart
+        part={errorPart({
+          code: 'EXECUTION_FAILED',
+          message: 'Automatic recovery stopped.',
+          retryable: false,
+          reasonCode: 'internal',
+          source: { layer: 'host', code: 'recovery_blocked' },
+        })}
+      />,
+    );
+    const props = renderer.root.findByType('MessagePartError').props;
+    expect(props.title).toBe('chat.errorPart.recoveryBlocked.title');
+    expect(props.message).toBe('chat.errorPart.recoveryBlocked.message');
+    expect(props.onPress).toBeUndefined();
+  });
   test('renders actionable local copy instead of provider diagnostics for auth failures', () => {
     const renderer = render(
       <ErrorPart

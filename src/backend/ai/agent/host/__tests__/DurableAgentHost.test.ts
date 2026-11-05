@@ -303,6 +303,8 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   };
   return {
     host,
+    ports,
+    raw: harness.raw,
     store,
     seedFolder: harness.seedFolder,
     conversations,
@@ -966,6 +968,291 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  const executionOf = (turn: RuntimeDurableTurn) => ({
+    sessionId: turn.identity.sessionId,
+    assistantMessageId: turn.assistantMessageId,
+    turnId: turn.identity.turnId,
+  });
+
+  async function exhaust(state: ReturnType<typeof fixture>, turn: RuntimeDurableTurn) {
+    await state.store.claimRecovery({ ...executionOf(turn), processId: 'cold-one' });
+    await state.store.claimRecovery({ ...executionOf(turn), processId: 'cold-two' });
+  }
+
+  test('the third cold claim settles saved receipts across sessions and never opens Pi', async () => {
+    const state = fixture();
+    const turn = await state.reserve('running');
+    await exhaust(state, turn);
+    state.raw.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?').run(
+      JSON.stringify({
+        parts: [{ id: 'saved', type: 'text', text: 'Saved partial', state: 'streaming' }],
+      }),
+      turn.assistantMessageId,
+    );
+    const queued = await state.store.reserveSubmission({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'queued', type: 'text', text: 'Queued question', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    const other = await state.store.reserveInitialSubmission({
+      sessionId: uuid(),
+      agentId: state.agentId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'other', type: 'text', text: 'Other session question', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    const open = jest.spyOn(state.ports.durableStorage!, 'open');
+    const readPi = jest.spyOn(state.conversations, 'sessions');
+    const statuses: unknown[] = [];
+    state.host.subscribeLocalRecoveryStatus(() => statuses.push(state.host.localRecoveryStatus()));
+    await state.host.initialize();
+
+    expect(statuses).toEqual([{ kind: 'blocked', executions: [executionOf(turn)], admissions: 2 }]);
+    expect(state.host.isReady).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+    expect(readPi).not.toHaveBeenCalled();
+    expect(state.conversations.initialize).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+    expect(state.conversations.abort).not.toHaveBeenCalled();
+    const answer = await state.store.getMessage(state.sessionId, turn.assistantMessageId);
+    expect(answer).toMatchObject({
+      status: 'interrupted',
+      parts: [
+        { id: 'saved', type: 'text', text: 'Saved partial', state: 'done' },
+        {
+          type: 'data-error',
+          data: { code: 'EXECUTION_FAILED', failure: { source: { code: 'recovery_blocked' } } },
+        },
+      ],
+    });
+    expect(
+      (await state.store.getMessage(state.sessionId, queued.assistantMessage.id))?.status,
+    ).toBe('interrupted');
+    expect((await state.store.getMessage(state.sessionId, queued.userMessage.id))?.parts).toEqual(
+      queued.userMessage.parts,
+    );
+    expect(
+      (await state.store.getMessage(other.session.id, other.assistantMessage.id))?.status,
+    ).toBe('interrupted');
+    expect((await state.store.getMessage(other.session.id, other.userMessage.id))?.parts).toEqual(
+      other.userMessage.parts,
+    );
+    expect(state.background.startTurn).not.toHaveBeenCalled();
+    expect(state.reply.finish).not.toHaveBeenCalled();
+    await state.host.close();
+  });
+
+  test('observe, foreground, repeated initialization and send preserve a persistent block', async () => {
+    const state = fixture();
+    const turn = await state.reserve('running');
+    await exhaust(state, turn);
+    await state.host.initialize();
+    // Even settled blocked rows must prevent a new Host generation from opening Pi.
+    await state.host.close();
+    const host = new DurableAgentHost(
+      state.store,
+      state.ports,
+      state.background,
+      state.conversations,
+    );
+    const claims = jest.spyOn(state.store, 'claimRecovery');
+    const open = jest.spyOn(state.ports.durableStorage!, 'open');
+    await host.initialize();
+    const blocked = host.localRecoveryStatus();
+    const observation = await host.observeSession(state.sessionId, () => {});
+    await host.resumeSuspended();
+    await host.initialize();
+    await expect(
+      Promise.resolve().then(() =>
+        host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Do not reserve' }],
+        }),
+      ),
+    ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+    expect(host.localRecoveryStatus()).toBe(blocked);
+    expect(observation.snapshot.activeTurn).toBeNull();
+    expect(observation.snapshot.queuedInputs).toEqual([]);
+    expect(await state.store.listRecoveryCandidates()).toEqual([]);
+    expect(claims).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+    observation.unsubscribe();
+    await host.close();
+  });
+
+  test('reset serializes discard, settles leftovers, clears the latch and permits the next send', async () => {
+    const state = fixture();
+    const turn = await state.reserve('running');
+    await exhaust(state, turn);
+    await state.host.initialize();
+    const leftover = await state.store.reserveInitialSubmission({
+      sessionId: uuid(),
+      agentId: state.agentId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'leftover', type: 'text', text: 'Leftover question', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    const order: string[] = [];
+    const discard = jest.spyOn(state.ports.durableStorage!, 'discard').mockImplementation(() => {
+      expect(state.host.localRecoveryStatus()?.kind).toBe('blocked');
+      expect(state.conversations.initialize).not.toHaveBeenCalled();
+      order.push('discard');
+      state.copies.clear();
+    });
+    const settleBlocked = state.store.settleBlockedRecovery.bind(state.store);
+    jest.spyOn(state.store, 'settleBlockedRecovery').mockImplementation(async (input) => {
+      order.push('settle');
+      await settleBlocked(input);
+    });
+    const clear = state.store.clearRecoveryBlock.bind(state.store);
+    jest.spyOn(state.store, 'clearRecoveryBlock').mockImplementation(async (executions) => {
+      order.push('clear');
+      expect(
+        (await state.store.getMessage(leftover.session.id, leftover.assistantMessage.id))?.status,
+      ).toBe('interrupted');
+      await clear(executions);
+    });
+    await Promise.all([state.host.resetBlockedAgentState(), state.host.resetBlockedAgentState()]);
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['discard', 'settle', 'clear']);
+    expect(state.host.localRecoveryStatus()).toBeUndefined();
+    expect(await state.store.listQuarantinedExecutions()).toEqual([]);
+    expect(await state.store.listRecoveryCandidates()).toEqual([]);
+    expect(state.conversations.initialize).not.toHaveBeenCalled();
+    await state.host.resetBlockedAgentState();
+    expect(discard).toHaveBeenCalledTimes(1);
+    await state.host.submitMessage({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Fresh work' }],
+    });
+    expect(state.conversations.initialize).toHaveBeenCalledTimes(1);
+    expect(state.conversations.resume).toHaveBeenCalledTimes(1);
+    expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    await state.host.close();
+  });
+
+  test.each(['discard', 'settlement', 'clear'] as const)(
+    'reset failure at %s keeps the block and can be retried',
+    async (stage) => {
+      const state = fixture();
+      const turn = await state.reserve('running');
+      await exhaust(state, turn);
+      await state.host.initialize();
+      const block = state.host.localRecoveryStatus();
+      if (stage === 'settlement') {
+        await state.store.reserveInitialSubmission({
+          sessionId: uuid(),
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          userParts: [{ id: 'leftover', type: 'text', text: 'Leftover question', state: 'done' }],
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          inferenceSnapshot,
+        });
+      }
+      if (stage === 'discard')
+        jest.spyOn(state.ports.durableStorage!, 'discard').mockImplementationOnce(() => {
+          throw new Error('reset failed');
+        });
+      if (stage === 'settlement')
+        jest
+          .spyOn(state.store, 'settleBlockedRecovery')
+          .mockRejectedValueOnce(new Error('reset failed'));
+      if (stage === 'clear')
+        jest
+          .spyOn(state.store, 'clearRecoveryBlock')
+          .mockRejectedValueOnce(new Error('reset failed'));
+      await expect(state.host.resetBlockedAgentState()).rejects.toThrow('reset failed');
+      expect(state.host.localRecoveryStatus()).toBe(block);
+      expect(await state.store.listQuarantinedExecutions()).toEqual([executionOf(turn)]);
+      await state.host.resumeSuspended();
+      expect(state.conversations.initialize).not.toHaveBeenCalled();
+      expect(state.conversations.resume).not.toHaveBeenCalled();
+      await state.host.resetBlockedAgentState();
+      expect(state.host.localRecoveryStatus()).toBeUndefined();
+      await state.host.close();
+    },
+  );
+
+  test.each([0, 1])(
+    'admits cold recovery with %i previous admissions and reopens without spending again',
+    async (previous) => {
+      const state = fixture();
+      const turn = await state.reserve('running');
+      if (previous)
+        await state.store.claimRecovery({ ...executionOf(turn), processId: 'previous' });
+      await state.host.initialize();
+      expect(state.host.localRecoveryStatus()).toBeUndefined();
+      expect(state.host.isReady).toBe(true);
+      expect(state.conversations.resume).toHaveBeenCalledTimes(1);
+      for (let index = 0; index < 3; index++) {
+        state.execution()!.onFailure!({
+          code: 'unknown',
+          message: 'storage failed',
+          retryable: true,
+        });
+        await state.host.resumeSuspended();
+        expect(state.host.localRecoveryStatus()).toBeUndefined();
+      }
+      expect(state.conversations.resume).toHaveBeenCalledTimes(4);
+      await state.host.close();
+    },
+  );
+
+  test('claim failure publishes unavailable and fails closed until explicit reset', async () => {
+    const state = fixture();
+    await state.reserve('running');
+    jest.spyOn(state.store, 'claimRecovery').mockRejectedValueOnce(new Error('claim failed'));
+    const changed = jest.fn();
+    state.host.subscribeLocalRecoveryStatus(changed);
+    const open = jest.spyOn(state.ports.durableStorage!, 'open');
+    await state.host.initialize();
+    expect(state.host.localRecoveryStatus()).toEqual({
+      kind: 'unavailable',
+      reason: 'claim-failed',
+    });
+    expect(changed).toHaveBeenCalledTimes(1);
+    await state.host.observeSession(state.sessionId, () => {});
+    await state.host.resumeSuspended();
+    expect(open).not.toHaveBeenCalled();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+    await state.host.resetBlockedAgentState();
+    expect(state.host.localRecoveryStatus()).toBeUndefined();
+    await state.host.close();
+  });
+
+  test('late blocked turns cannot export, overwrite saved parts or present a completion', async () => {
+    const state = fixture();
+    const turn = await state.reserve('running');
+    await exhaust(state, turn);
+    await state.host.initialize();
+    const exported = jest.spyOn(state.conversations, 'exportTurn');
+    const finalized = jest.spyOn(state.store, 'finalizeAssistantMessage');
+    const events: AgentEvent[] = [];
+    await state.host.observeSession(state.sessionId, (event) => events.push(event));
+    // Inject the same late terminal path a queued runtime callback would take.
+    const host = state.host as unknown as { settle(turn: RuntimeDurableTurn): void };
+    host.settle({ ...turn, status: 'completed' });
+    await settle();
+    expect(exported).not.toHaveBeenCalled();
+    expect(finalized).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+    expect(state.reply.finish).not.toHaveBeenCalled();
+    await state.host.close();
+  });
+
   test('closes a database that opens after startup cancellation without opening the runtime', async () => {
     const close = jest.fn(async () => {});
     let finishOpen!: (database: RuntimeSqlDatabase) => void;
@@ -982,6 +1269,8 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     });
     const controller = new AbortController();
     const initializing = state.host.initialize(controller.signal);
+    // Claims precede opening now; cancel only once the asynchronous open has begun.
+    await settle();
     controller.abort(new Error('Host replaced'));
     finishOpen({ close } as unknown as RuntimeSqlDatabase);
 

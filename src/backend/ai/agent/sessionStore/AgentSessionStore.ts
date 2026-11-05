@@ -174,7 +174,24 @@ export type FinalizeAssistantMessageInput = {
  * assistant message row. Multi-record operations are atomic at this boundary,
  * and the only Session creation operation reserves the first message pair with it.
  */
+export type RecoveryExecution = { sessionId: string; assistantMessageId: string; turnId: string };
+export type RecoveryDecision =
+  | { kind: 'admit'; admissions: 1 | 2 }
+  | { kind: 'quarantine'; freshAttempt: boolean }
+  | { kind: 'quarantined' }
+  | { kind: 'stale' };
+
 export interface AgentSessionStore {
+  claimRecovery(input: RecoveryExecution & { processId: string }): Promise<RecoveryDecision>;
+  listRecoveryCandidates(): Promise<RecoveryExecution[]>;
+  listQuarantinedExecutions(): Promise<RecoveryExecution[]>;
+  settleBlockedRecovery(input: {
+    execution: RecoveryExecution;
+    parts: AgentMessagePart[];
+    queued: readonly { id: string; parts: AgentMessagePart[] }[];
+    error: AgentErrorView;
+  }): Promise<void>;
+  clearRecoveryBlock(executions: readonly RecoveryExecution[]): Promise<void>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   getRuntimeRevision(sessionId: string): Promise<number | null>;
   renameSession(sessionId: string, name: string): Promise<AgentSessionView | null>;

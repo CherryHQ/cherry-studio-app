@@ -85,6 +85,128 @@ describe('SqliteAgentSessionStore conformance', () => {
     harness.cleanup();
   });
 
+  test('recovery claims are atomic, process-idempotent, and guard terminal writes', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const answer = await settleTurn(store, session.id, 'saved');
+    const execution = {
+      sessionId: session.id,
+      assistantMessageId: answer.assistantMessage.id,
+      turnId: answer.turnId,
+    };
+    expect(
+      await Promise.all([
+        store.claimRecovery({ ...execution, processId: 'one' }),
+        store.claimRecovery({ ...execution, processId: 'one' }),
+      ]),
+    ).toEqual([
+      { kind: 'admit', admissions: 1 },
+      { kind: 'admit', admissions: 1 },
+    ]);
+    expect(await store.claimRecovery({ ...execution, processId: 'two' })).toEqual({
+      kind: 'admit',
+      admissions: 2,
+    });
+    expect(await store.claimRecovery({ ...execution, processId: 'three' })).toEqual({
+      kind: 'quarantine',
+      freshAttempt: true,
+    });
+    expect(await store.claimRecovery({ ...execution, processId: 'four' })).toEqual({
+      kind: 'quarantined',
+    });
+    expect(await store.claimRecovery({ ...execution, turnId: 'stale', processId: 'four' })).toEqual(
+      { kind: 'stale' },
+    );
+    await expect(
+      store.finalizeAssistantMessage({
+        assistantMessageId: execution.assistantMessageId,
+        turnId: execution.turnId,
+        status: 'interrupted',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      }),
+    ).rejects.toThrow('Cannot finalize a replaced execution.');
+    expect(await store.claimRecovery({ ...execution, processId: 'five' })).toEqual({
+      kind: 'quarantined',
+    });
+    expect(await store.listQuarantinedExecutions()).toContainEqual(execution);
+    await store.clearRecoveryBlock([execution]);
+    expect(await store.claimRecovery({ ...execution, processId: 'five' })).toEqual({
+      kind: 'admit',
+      admissions: 1,
+    });
+  });
+
+  test('blocked settlement preserves saved output and queued receipts while rejecting late results', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'question', type: 'text', text: 'Question', state: 'done' }],
+    });
+    const queued = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'queued', type: 'text', text: 'Queued question', state: 'done' }],
+    });
+    const execution = {
+      sessionId: session.id,
+      assistantMessageId: first.assistantMessage.id,
+      turnId: first.turnId,
+    };
+    await store.claimRecovery({ ...execution, processId: 'one' });
+    await store.claimRecovery({ ...execution, processId: 'two' });
+    await store.claimRecovery({ ...execution, processId: 'three' });
+    const parts: AgentMessagePart[] = [
+      { id: 'partial', type: 'text', text: 'Saved partial', state: 'done' },
+    ];
+    const queuedParts: AgentMessagePart[] = [
+      { id: 'receipt', type: 'text', text: 'Queued question', state: 'done' },
+    ];
+    await store.settleBlockedRecovery({
+      execution,
+      parts,
+      queued: [{ id: queued.assistantMessage.id, parts: queuedParts }],
+      error: INTERRUPTED,
+    });
+    expect(await store.getMessage(session.id, first.assistantMessage.id)).toMatchObject({
+      status: 'interrupted',
+      parts,
+    });
+    expect(await store.getMessage(session.id, queued.assistantMessage.id)).toMatchObject({
+      status: 'interrupted',
+      parts: queuedParts,
+    });
+    expect((await store.getMessage(session.id, queued.userMessage.id))?.parts).toEqual(
+      queued.userMessage.parts,
+    );
+    await expect(
+      store.settleBlockedRecovery({
+        execution: { ...execution, turnId: 'stale' },
+        parts: [],
+        queued: [],
+        error: INTERRUPTED,
+      }),
+    ).rejects.toThrow('replaced execution');
+    await expect(
+      store.finalizeAssistantMessage({
+        assistantMessageId: execution.assistantMessageId,
+        turnId: execution.turnId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      }),
+    ).rejects.toThrow('replaced execution');
+    expect(await store.listQuarantinedExecutions()).toContainEqual(execution);
+  });
+
   test('editing an answer commits text, search and revision together while clearing stale translation and context', async () => {
     const session = await harness.createEmptySession({ agentId });
     const previous = await settleTurn(store, session.id, 'Earlier');
