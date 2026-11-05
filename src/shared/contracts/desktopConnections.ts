@@ -1,6 +1,7 @@
 import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 
 import type {
+  DesktopConnectionFailure,
   DesktopImportPreview,
   DesktopPairingClaim,
   DesktopImportResult,
@@ -8,6 +9,19 @@ import type {
   PairDesktopConnectionDto,
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
+
+export type DesktopLiveStatus =
+  | { state: 'connected' }
+  | { state: 'connecting' }
+  | { state: 'reconnecting'; retry: number }
+  | { state: 'disconnected' }
+  | {
+      state: 'unreachable';
+      reason: 'no-location' | 'discovery-unavailable' | 'unreachable';
+      failures?: DesktopConnectionFailure[];
+    }
+  | { state: 'needs-repair'; reason: 'unauthenticated' | 'revoked' }
+  | { state: 'unsupported'; message?: string };
 
 export type DesktopPairingProgress =
   | { stage: 'connecting' | 'requesting' | 'saving' | 'syncing' }
@@ -17,6 +31,10 @@ export type DesktopPairingProgress =
 export interface DesktopConnectionsModule {
   /** Explicitly resumes a user-disconnected local transport, preserving pairing and PC execution. */
   reconnect(id: string): void;
+  /** Explicitly disconnects the local transport without revoking pairing or grants. */
+  disconnect(id: string): void;
+  getConnectionLiveStatus(id: string): DesktopLiveStatus;
+  subscribeConnectionLiveStatus(id: string, listener: () => void): () => void;
   getEndpoints(id: string, signal: AbortSignal): Promise<DirectEndpoint[]>;
   saveEndpoint(
     id: string,

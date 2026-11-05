@@ -2,16 +2,21 @@ import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import { ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
+import type { TFunction } from 'i18next';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
+import { useDesktopConnectionLiveStatus } from '@/frontend/hooks/useDesktopConnectionLiveStatus';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
+import type { DesktopLiveStatus } from '@/shared/contracts/desktopConnections';
+import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 import { describeCapabilities } from '../describeCapabilities';
+import { DesktopAvatar } from './components/DesktopAvatar';
 
 export function DeviceConnectionsScreen() {
   const { t } = useTranslation();
@@ -64,14 +69,10 @@ export function DeviceConnectionsScreen() {
       ) : (
         <View className="overflow-hidden rounded-2xl bg-card" style={styles.card}>
           {connections.map((connection, index) => (
-            <SettingsServiceRow
-              id={connection.id}
+            <DeviceConnectionRow
+              connection={connection}
               key={connection.id}
-              name={connection.name}
               showSeparator={index > 0}
-              statusLabel={t(`settings.deviceConnections.status.${connection.status}`)}
-              statusTone={connection.status === 'paired' ? 'success' : 'danger'}
-              subtitle={describeCapabilities(connection.capabilities, t)}
               onPress={() =>
                 router.push({
                   params: { connectionId: connection.id },
@@ -84,6 +85,104 @@ export function DeviceConnectionsScreen() {
       )}
     </SettingsScrollPage>
   );
+}
+
+function DeviceConnectionRow({
+  connection,
+  showSeparator,
+  onPress,
+}: {
+  connection: DesktopConnection;
+  showSeparator: boolean;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const liveStatus = useDesktopConnectionLiveStatus(connection.id);
+
+  const displayName = connection.profileName || connection.name;
+  const capabilitiesText = describeCapabilities(connection.capabilities, t);
+  const subtitle =
+    connection.profileName && connection.profileName !== connection.name
+      ? `${connection.name} • ${capabilitiesText}`
+      : capabilitiesText;
+
+  const { statusLabel, statusTone } = getLiveStatusDisplay(liveStatus, connection.status, t);
+
+  return (
+    <SettingsServiceRow
+      avatar={<DesktopAvatar avatar={connection.profileAvatar} name={displayName} size={36} />}
+      id={connection.id}
+      name={displayName}
+      showSeparator={showSeparator}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      subtitle={subtitle}
+      onPress={onPress}
+    />
+  );
+}
+
+function getLiveStatusDisplay(
+  liveStatus: DesktopLiveStatus,
+  durableStatus: DesktopConnection['status'],
+  t: TFunction,
+): { statusLabel: string; statusTone: 'danger' | 'default' | 'success' } {
+  if (durableStatus === 'needs-repair' || liveStatus.state === 'needs-repair') {
+    return {
+      statusLabel: t('settings.deviceConnections.liveStatus.needsRepair', {
+        defaultValue: t('settings.deviceConnections.status.needs-repair', {
+          defaultValue: 'Needs Repair',
+        }),
+      }),
+      statusTone: 'danger',
+    };
+  }
+
+  switch (liveStatus.state) {
+    case 'connected':
+      return {
+        statusLabel: t('settings.deviceConnections.liveStatus.connected', {
+          defaultValue: 'Connected',
+        }),
+        statusTone: 'success',
+      };
+    case 'connecting':
+      return {
+        statusLabel: t('settings.deviceConnections.liveStatus.connecting', {
+          defaultValue: 'Connecting...',
+        }),
+        statusTone: 'default',
+      };
+    case 'reconnecting':
+      return {
+        statusLabel: t('settings.deviceConnections.liveStatus.reconnecting', {
+          defaultValue: 'Reconnecting...',
+        }),
+        statusTone: 'default',
+      };
+    case 'disconnected':
+      return {
+        statusLabel: t('settings.deviceConnections.liveStatus.disconnected', {
+          defaultValue: 'Disconnected',
+        }),
+        statusTone: 'default',
+      };
+    case 'unsupported':
+      return {
+        statusLabel: t('settings.deviceConnections.liveStatus.unsupported', {
+          defaultValue: 'Unsupported',
+        }),
+        statusTone: 'danger',
+      };
+    case 'unreachable':
+    default:
+      return {
+        statusLabel: t('settings.deviceConnections.liveStatus.unreachable', {
+          defaultValue: 'Offline',
+        }),
+        statusTone: 'default',
+      };
+  }
 }
 
 const styles = StyleSheet.create({

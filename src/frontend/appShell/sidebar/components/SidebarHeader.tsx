@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
+import { DesktopAvatar } from '@/frontend/features/settings/DeviceConnectionsScreen';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -96,7 +97,7 @@ function SidebarDeviceTitle() {
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
       : undefined;
   const remoteDesktop = useUuRemoteAction(prepareExternalNavigation);
-  const name = current?.name ?? brand;
+  const name = current ? current.profileName || current.name : brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
     <View
@@ -117,15 +118,26 @@ function SidebarDeviceTitle() {
         selectDevice();
       },
     },
-    ...connections.map((connection) => ({
-      id: `device-${connection.id}`,
-      checked: source === 'remote' && connection.id === remoteTarget.connectionId,
-      label: connection.name,
-      onPress: () => {
-        returnToChat();
-        selectDevice(connection.id);
-      },
-    })),
+    ...connections.map((connection) => {
+      const hasCustomProfile = Boolean(
+        connection.profileName && connection.profileName !== connection.name,
+      );
+      const title = connection.profileName || connection.name;
+      const label = hasCustomProfile ? `${title} (${connection.name})` : title;
+      const emojiPrefix =
+        connection.profileAvatar && !connection.profileAvatar.startsWith('data:')
+          ? `${connection.profileAvatar} `
+          : '';
+      return {
+        id: `device-${connection.id}`,
+        checked: source === 'remote' && connection.id === remoteTarget.connectionId,
+        label: `${emojiPrefix}${label}`,
+        onPress: () => {
+          returnToChat();
+          selectDevice(connection.id);
+        },
+      };
+    }),
     ...(current
       ? [
           {
@@ -153,10 +165,11 @@ function SidebarDeviceTitle() {
         accessibilityLabel={t('navigation.deviceSwitcher', { name })}
         accessibilityRole="button"
         accessibilityState={{ disabled }}
-        className="min-w-0 flex-row items-center gap-1"
+        className="min-w-0 flex-row items-center gap-1.5"
         testID="sidebar-device-switcher"
       >
-        <SidebarTitle name={name} width={Math.max(0, width - chevronWidth)} />
+        {current ? <DesktopAvatar avatar={current.profileAvatar} name={name} size={22} /> : null}
+        <SidebarTitle name={name} width={Math.max(0, width - chevronWidth - (current ? 28 : 0))} />
         <ChevronDownIcon className="size-4 text-muted-foreground" strokeWidth={2} />
       </View>
     </ActionMenu>,

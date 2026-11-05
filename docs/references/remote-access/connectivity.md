@@ -52,6 +52,24 @@ Only an `UNAUTHENTICATED` reply to authentication from the pinned desktop retire
 repair. Wrong peers, unavailable addresses and discovery failures leave grants and Agent state intact.
 The current channel and lease scope are independent of candidate expiry.
 
+## Live connection status and recovery controls
+
+`DesktopConnectionManager` publishes a reactive `DesktopLiveStatus` subscription for each paired
+desktop, distinguishing transient transport states from terminal configuration issues:
+
+- `connected`: Active, authenticated, responsive encrypted channel.
+- `connecting`: Actively opening a socket or negotiating the Noise/protocol handshake.
+- `reconnecting`: Backoff retry round in progress, carrying the current retry attempt count.
+- `disconnected`: The user explicitly paused or disconnected the connection.
+- `unreachable`: Network is unavailable, no endpoints exist, discovery is unavailable, or socket attempts failed. Includes collected failure details.
+- `needs-repair`: Desktop returned `UNAUTHENTICATED` or authorization was revoked. Requires re-pairing.
+- `unsupported`: Incompatible protocol version or capability mismatch.
+
+Device details settings expose explicit **Disconnect** and **Reconnect** recovery controls:
+
+- **Disconnect**: Immediately closes the active channel and pauses background reconnect attempts for that desktop without deleting pairing credentials or domain grants.
+- **Reconnect**: Resumes connection attempts on demand, immediately dispatching a recovery round across saved and learned endpoints without requiring a QR re-scan.
+
 ## Connection failure feedback
 
 Pairing and configuration errors retain each attempted address's WebSocket opening failure.
@@ -68,9 +86,11 @@ actual connection attempt, not a desktop-side reachability probe.
 
 ## Settings and migration
 
-Device details group **Use desktop Agents** and **Sync provider configuration** below the device
-status, showing only approved capabilities. A single **Scan to reconnect** action replaces separate
-location-update and re-pairing actions. Address editing is not exposed in settings.
+Device details display the reactive live status badge, desktop avatar and name, and group
+**Use desktop Agents** and **Sync provider configuration** below the device status, showing only
+approved capabilities. Explicit **Disconnect** and **Reconnect** actions provide immediate transport
+control, while a single **Scan to reconnect** (or **Re-pair Computer**) action handles address hints
+and re-pairing. Address editing is not exposed in settings.
 
 Scanning validates the QR payload and immediately opens the connection progress page. For an
 existing connection, the desktop identity must match the stored binding before any connection
@@ -92,6 +112,20 @@ re-pairing; automatic discovery addresses are never persisted as user configurat
 Migration `0002_orange_thunderbolt_ross` adds `learned_endpoints` with an empty-array default while
 preserving existing pairing, grants, and manual addresses. Existing paired devices populate this
 field on their next successful authenticated connection; no new pairing is needed.
+Migration `0013_add_desktop_profile` adds `profile_name` and `profile_avatar` columns to SQLite
+`desktop_connection` persistence, allowing custom desktop profiles and avatars to survive app restarts.
+
+## Desktop identity and profile synchronization
+
+`connection.hello.desktopProfileVersion: 1` advertises support for desktop profile metadata.
+`connection.authenticate`, `connection.refresh`, and approved `pairing.get` responses include an
+optional `desktopProfile: { name?: string, avatar?: string }`.
+
+The phone stores `profile_name` and `profile_avatar` in SQLite (`desktop_connection` table, migration
+`0013_add_desktop_profile`). Profiles are automatically adopted upon successful pairing,
+authentication, and token refresh without requiring separate queries. When a user updates their
+desktop profile or avatar, subsequent authentications or scheduled token refreshes persist the
+updated metadata locally, keeping device details and avatars in sync.
 
 ## Native module and release boundary
 

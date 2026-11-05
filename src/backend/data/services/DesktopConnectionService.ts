@@ -72,6 +72,8 @@ function rowToConnection(row: DesktopConnectionRow): DesktopConnection {
     id: row.id,
     lastFetchedAt: row.lastFetchedAt,
     name: displayName(row.name),
+    profileName: row.profileName,
+    profileAvatar: row.profileAvatar,
     status: row.status,
   };
 }
@@ -361,13 +363,20 @@ export class DesktopConnectionService {
   }
 
   async savePair(
-    input: Pick<DesktopConnectionRow, 'id' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name'>,
+    input: Pick<DesktopConnectionRow, 'id' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name'> &
+      Partial<Pick<DesktopConnectionRow, 'profileName' | 'profileAvatar'>>,
     replace: boolean,
     signal: AbortSignal,
   ): Promise<DesktopConnection> {
     const connection = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
-      const values = { ...input, learnedEndpoints: [], status: 'paired' as const };
+      const values = {
+        ...input,
+        profileName: input.profileName ?? null,
+        profileAvatar: input.profileAvatar ?? null,
+        learnedEndpoints: [],
+        status: 'paired' as const,
+      };
       const [row] = await (replace
         ? tx
             .update(desktopConnectionTable)
@@ -381,6 +390,24 @@ export class DesktopConnectionService {
     });
     publishDataApiChanges(['/desktop-connections', `/desktop-connections/${input.id}`]);
     return connection;
+  }
+
+  async updateProfile(
+    id: string,
+    profile: { name?: string | null; avatar?: string | null },
+  ): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .update(desktopConnectionTable)
+        .set({
+          profileName: profile.name ?? null,
+          profileAvatar: profile.avatar ?? null,
+        })
+        .where(eq(desktopConnectionTable.id, id))
+        .returning({ id: desktopConnectionTable.id });
+      if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
+    });
+    publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
   }
 
   async updateEndpoints(id: string, input: DirectEndpoint[]): Promise<DesktopConnection> {
@@ -498,7 +525,12 @@ export class DesktopConnectionService {
 
   async updateStatus(
     id: string,
-    values: Partial<Pick<DesktopConnectionRow, 'status' | 'grants' | 'lastFetchedAt'>>,
+    values: Partial<
+      Pick<
+        DesktopConnectionRow,
+        'status' | 'grants' | 'lastFetchedAt' | 'profileName' | 'profileAvatar'
+      >
+    >,
     signal: AbortSignal,
     expected?: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
   ): Promise<void> {

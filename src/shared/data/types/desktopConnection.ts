@@ -8,5 +8,7 @@ export type DesktopConnection = {
   id: string;
   lastFetchedAt: number | null;
   name: string;
+  profileName?: string | null;
+  profileAvatar?: string | null;
   status: DesktopConnectionStatus;
 };

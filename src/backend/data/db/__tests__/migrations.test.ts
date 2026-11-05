@@ -581,6 +581,54 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
+  test('adds desktop profile columns without losing existing pairing or learned addresses', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0013_add_desktop_profile',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO desktop_connection
+          (id, name, device_id, desktop_identity, configured_endpoints, learned_endpoints, grants, status, created_at, updated_at)
+        VALUES ('pc-1', 'Work-Mac.local', 'phone', 'peer-identity', '[]', '[]', '[]', 'paired', 1, 1);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare(
+            'SELECT id, name, profile_name, profile_avatar, status FROM desktop_connection WHERE id = ?',
+          )
+          .get('pc-1'),
+      ).toEqual({
+        id: 'pc-1',
+        name: 'Work-Mac.local',
+        profile_name: null,
+        profile_avatar: null,
+        status: 'paired',
+      });
+      database.exec(`
+        UPDATE desktop_connection
+        SET profile_name = 'Alice', profile_avatar = '🦊'
+        WHERE id = 'pc-1';
+      `);
+      expect(
+        database
+          .prepare('SELECT profile_name, profile_avatar FROM desktop_connection WHERE id = ?')
+          .get('pc-1'),
+      ).toEqual({
+        profile_name: 'Alice',
+        profile_avatar: '🦊',
+      });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('allows open plugin identifiers and methods while enforcing grant references', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -786,6 +834,8 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'learned_endpoints',
+        'profile_name',
+        'profile_avatar',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',

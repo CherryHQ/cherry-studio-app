@@ -47,6 +47,8 @@ const original: DesktopConnectionRow = {
   grants,
   status: 'paired',
   lastFetchedAt: null,
+  profileName: null,
+  profileAvatar: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -87,7 +89,12 @@ describe('DesktopConnectionManager ownership', () => {
   let row: DesktopConnectionRow;
   let appState: (state: AppStateStatus) => void;
   const connect = jest.mocked(DesktopSession.connect);
-  let store: { getRow: jest.Mock; updateStatus: jest.Mock; updateLearnedEndpoints: jest.Mock };
+  let store: {
+    getRow: jest.Mock;
+    updateStatus: jest.Mock;
+    updateLearnedEndpoints: jest.Mock;
+    updateProfile: jest.Mock;
+  };
   beforeEach(async () => {
     jest.resetAllMocks();
     jest.mocked(openWebSocketStream).mockImplementation(async () => ({ abort() {} }) as never);
@@ -117,6 +124,7 @@ describe('DesktopConnectionManager ownership', () => {
           throw new Error('Pairing replaced');
         row = { ...row, ...input };
       }),
+      updateProfile: jest.fn(async () => {}),
     };
     manager = new DesktopConnectionManager();
     manager.configure(store);
@@ -955,5 +963,160 @@ describe('DesktopConnectionManager ownership', () => {
     dial.resolve(channel as never);
     await rejected;
     expect(channel.close).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Live connection status and profile synchronization', () => {
+    it('reports disconnected when explicitly disconnected, connecting on reconnect, and connected when session opens', async () => {
+      const channel = session();
+      const nextChannel = session();
+      connect.mockResolvedValueOnce(channel as never).mockResolvedValueOnce(nextChannel as never);
+      const statuses: string[] = [];
+      const unsubscribe = manager.subscribeConnectionLiveStatus(row.id, () => {
+        statuses.push(manager.getConnectionLiveStatus(row.id).state);
+      });
+
+      // Initially no entry
+      expect(manager.getConnectionLiveStatus(row.id)).toEqual({
+        state: 'unreachable',
+        reason: 'no-location',
+      });
+
+      // Retain begins connecting and opens session
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await lease.ready(signal());
+      expect(manager.getConnectionLiveStatus(row.id)).toEqual({ state: 'connected' });
+
+      // Disconnect
+      manager.disconnect(row.id);
+      expect(manager.getConnectionLiveStatus(row.id)).toEqual({ state: 'disconnected' });
+      expect(statuses).toContain('disconnected');
+
+      // Reconnect
+      manager.reconnect(row.id);
+      expect(manager.getConnectionLiveStatus(row.id).state).toBe('connecting');
+      await lease.ready(signal());
+      expect(manager.getConnectionLiveStatus(row.id)).toEqual({ state: 'connected' });
+
+      unsubscribe();
+      lease.release();
+    });
+
+    it('transitions to unreachable with intact failures when all candidate addresses fail', async () => {
+      mockDiscoveryReceive({ type: 'unavailable' });
+      const failure: DesktopConnectionFailure = {
+        address: '192.168.1.2:23333',
+        kind: 'websocket',
+        closeCode: 1006,
+        message: 'WebSocket connection failed',
+      };
+      jest.mocked(openWebSocketStream).mockRejectedValue(new WebSocketOpeningError(failure));
+      const statuses: string[] = [];
+      const unsubscribe = manager.subscribeConnectionLiveStatus(row.id, () => {
+        statuses.push(manager.getConnectionLiveStatus(row.id).state);
+      });
+
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await expect(lease.ready(signal())).rejects.toMatchObject({
+        name: 'DesktopUnreachableError',
+      });
+
+      const live = manager.getConnectionLiveStatus(row.id);
+      expect(live).toEqual({
+        state: 'unreachable',
+        reason: 'unreachable',
+        failures: [failure],
+      });
+      expect(statuses).toContain('unreachable');
+
+      unsubscribe();
+      lease.release();
+    });
+
+    it('transitions to needs-repair when desktop returns UNAUTHENTICATED', async () => {
+      mockDiscoveryReceive({ type: 'unavailable' });
+      const badChannel = session();
+      badChannel.authenticate = jest
+        .fn()
+        .mockRejectedValue(
+          new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Token revoked' }),
+        );
+      connect.mockResolvedValue(badChannel as never);
+      const statuses: string[] = [];
+      const unsubscribe = manager.subscribeConnectionLiveStatus(row.id, () => {
+        statuses.push(manager.getConnectionLiveStatus(row.id).state);
+      });
+
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await expect(lease.ready(signal())).rejects.toMatchObject({
+        reason: 'UNAUTHENTICATED',
+      });
+
+      expect(manager.getConnectionLiveStatus(row.id)).toEqual({
+        state: 'needs-repair',
+        reason: 'unauthenticated',
+      });
+      expect(statuses).toContain('needs-repair');
+
+      unsubscribe();
+      lease.release();
+    });
+
+    it('transitions to unsupported when desktop returns UPGRADE_REQUIRED', async () => {
+      mockDiscoveryReceive({ type: 'unavailable' });
+      connect.mockRejectedValue(
+        new RemoteFailureError({ reason: 'UPGRADE_REQUIRED', message: 'Version mismatch' }),
+      );
+      const statuses: string[] = [];
+      const unsubscribe = manager.subscribeConnectionLiveStatus(row.id, () => {
+        statuses.push(manager.getConnectionLiveStatus(row.id).state);
+      });
+
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await expect(lease.ready(signal())).rejects.toMatchObject({
+        name: 'DesktopUnreachableError',
+      });
+
+      expect(manager.getConnectionLiveStatus(row.id)).toEqual({
+        state: 'unsupported',
+      });
+      expect(statuses).toContain('unsupported');
+
+      unsubscribe();
+      lease.release();
+    });
+
+    it('persists desktop profile updates when received from session', async () => {
+      const updateProfile = jest.fn(async () => {});
+      store = { ...store, updateProfile };
+      manager.configure(store as never);
+
+      let profileCallback: ((profile: { name?: string; avatar?: string }) => void) | undefined;
+      const channel = {
+        ...session(),
+        currentProfile: { name: 'Alice Desktop', avatar: '🦊' },
+        onProfile: (cb: (profile: { name?: string; avatar?: string }) => void) => {
+          profileCallback = cb;
+          return () => {};
+        },
+      };
+      connect.mockResolvedValue(channel as never);
+
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await lease.ready(signal());
+
+      expect(updateProfile).toHaveBeenCalledWith(row.id, {
+        name: 'Alice Desktop',
+        avatar: '🦊',
+      });
+
+      // Live update via onProfile
+      profileCallback?.({ name: 'Alice Renamed', avatar: '🐱' });
+      expect(updateProfile).toHaveBeenCalledWith(row.id, {
+        name: 'Alice Renamed',
+        avatar: '🐱',
+      });
+
+      lease.release();
+    });
   });
 });
