@@ -147,10 +147,10 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
 
 test('reads full uncommitted reasoning on demand without changing the status-only observation', async () => {
   const text = 'Keep the earliest thinking too.\n'.repeat(200);
-  const partial: AssistantMessage = {
+  const partial = {
     ...response(''),
     content: [{ type: 'thinking', thinking: text }],
-  };
+  } satisfies AssistantMessage;
   const fixture = attach(view({ run, generation: { attempt: 0, message: partial } }), [input()]);
   try {
     const snapshot = await fixture.observer.start();

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 
@@ -9,6 +9,9 @@ export type ChatComposerSessionState = Readonly<{
   key: number;
   /** The handoff the mounted composer was seeded from, so it is seeded only once. */
   seedHandoff?: string;
+  /** The latest append stays recorded after acknowledgement to prevent route replays. */
+  appendHandoff?: string;
+  pendingAppend?: string;
   target: ChatTarget;
 }>;
 
@@ -18,9 +21,7 @@ export function useChatComposerSession(
 ) {
   const [sessionState, setSessionState] = useState<ChatComposerSessionState>(() => ({
     key: 0,
-    ...(target.kind === 'draft' && target.composerHandoff
-      ? { seedHandoff: target.composerHandoff }
-      : {}),
+    ...(target.composerHandoff ? { seedHandoff: target.composerHandoff } : {}),
     target,
   }));
   const nextSessionState = resolveChatComposerSessionState(sessionState, target, draftHandoff);
@@ -29,7 +30,15 @@ export function useChatComposerSession(
     setSessionState(nextSessionState);
   }
 
-  return nextSessionState;
+  const completeAppend = useCallback((token: string) => {
+    setSessionState((current) => {
+      if (current.pendingAppend !== token) return current;
+      const { pendingAppend: _pendingAppend, ...rest } = current;
+      return rest;
+    });
+  }, []);
+
+  return { composerSession: nextSessionState, completeAppend };
 }
 
 function resolveChatComposerSessionState(
@@ -37,9 +46,11 @@ function resolveChatComposerSessionState(
   target: ChatTarget,
   draftHandoff: AgentChatDraftHandoff | undefined,
 ): ChatComposerSessionState {
-  const seedHandoff = target.kind === 'draft' ? target.composerHandoff : undefined;
-  // An arriving handoff always opens a fresh composer, replacing whatever draft was there.
-  if (seedHandoff && seedHandoff !== current.seedHandoff) {
+  const seedHandoff = target.composerHandoff;
+  if (seedHandoff && seedHandoff !== current.seedHandoff && seedHandoff !== current.appendHandoff) {
+    if (isSameChatTarget(current.target, target)) {
+      return { ...current, appendHandoff: seedHandoff, pendingAppend: seedHandoff, target };
+    }
     return { key: current.key + 1, seedHandoff, target };
   }
 
@@ -59,13 +70,9 @@ function resolveChatComposerSessionState(
     draftHandoff?.agentId === current.target.agentId &&
     draftHandoff.sessionId === target.sessionId;
 
-  return {
-    ...(preservesDraftComposer
-      ? { draftAgentId: current.target.agentId, seedHandoff: current.seedHandoff }
-      : {}),
-    key: preservesDraftComposer ? current.key : current.key + 1,
-    target,
-  };
+  return preservesDraftComposer
+    ? { ...current, draftAgentId: current.target.agentId, target }
+    : { key: current.key + 1, target };
 }
 
 function isSameChatTarget(left: ChatTarget, right: ChatTarget) {

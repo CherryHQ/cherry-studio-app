@@ -172,6 +172,25 @@ describe('useManagedComposerAttachments', () => {
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
   });
 
+  it('appends managed attachments in order and deduplicates file entry IDs across additions', async () => {
+    const existing = readyAttachment('00000000-0000-7000-8000-000000000045', 'existing.pdf');
+    const first = readyAttachment('00000000-0000-7000-8000-000000000046', 'first.pdf');
+    const second = readyAttachment('00000000-0000-7000-8000-000000000047', 'second.pdf');
+    await renderHook([existing]);
+
+    await act(async () => {
+      snapshot?.addAttachments([
+        first,
+        { ...existing, id: 'reselected-existing' },
+        second,
+        { ...first, id: 'duplicate-first' },
+      ]);
+    });
+
+    expect(snapshot?.attachments).toEqual([existing, first, second]);
+    expect(mockCreateInternalEntry).not.toHaveBeenCalled();
+  });
+
   it('notifies draft subscribers after an image edit and rejects a stale source', async () => {
     const source = {
       ...readyAttachment('00000000-0000-7000-8000-000000000042', 'source.png'),

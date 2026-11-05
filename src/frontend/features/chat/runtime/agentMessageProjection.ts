@@ -4,7 +4,7 @@ import {
   webSearchOutputSchema,
 } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { MessageListItem } from '@/frontend/components/Message';
+import type { MessageListItem, ToolMessagePart } from '@/frontend/components/Message';
 import {
   type AgentErrorView,
   type AgentMessagePart,
@@ -142,7 +142,7 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): 
         errorCode: part.error?.failure?.source.code ?? part.error?.code,
         errorText: part.error?.message ?? '',
         state: 'output-error',
-      } as CherryMessagePart;
+      } satisfies ToolMessagePart;
     case 'interrupted':
       return withCherryMeta(
         { ...base, errorText: '', state: 'output-error' } as Extract<

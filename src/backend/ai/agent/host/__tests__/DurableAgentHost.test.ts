@@ -2604,10 +2604,18 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     state.emit({ ...running, status: 'completed' });
     await state.host.quiesce();
     expect(await Promise.all(statuses)).toEqual(['success']);
+    expect(
+      (await state.store.getMessage(state.sessionId, running.assistantMessageId))?.parts,
+    ).toEqual(running.parts);
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'message.finalized',
-        message: expect.objectContaining({ parts: running.parts }),
+        message: expect.objectContaining({
+          parts: [
+            { id: 'reasoning', type: 'reasoning', text: '', hasText: true, state: 'done' },
+            { id: 'answer', type: 'text', text: 'Answer', state: 'done' },
+          ],
+        }),
       }),
     );
     expect(
