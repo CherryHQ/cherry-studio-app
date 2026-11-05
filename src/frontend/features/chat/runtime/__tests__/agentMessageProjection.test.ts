@@ -122,7 +122,7 @@ describe('agentMessageProjection', () => {
   });
 
   test.each(['streaming', 'success'] as const)(
-    'joins restored reasoning summaries without changing source history, status=%s',
+    'projects restored reasoning phases as status without changing source history, status=%s',
     (status) => {
       const first = '**我准备穷举验证数字排列**\n\n**我构造双重穷举校验**\n\n**我枚举全部排列**';
       const second = '**Refining search bounds**\n\n**Preparing validation output**';
@@ -167,11 +167,17 @@ describe('agentMessageProjection', () => {
       expect(item?.data.parts).toEqual([
         {
           type: 'reasoning',
-          text: `${first}\n\n${second}`,
+          text: '',
           state: 'done',
+          providerMetadata: { cherry: { hasText: true } },
         },
         expect.objectContaining({ type: 'dynamic-tool', toolCallId: 'js-call' }),
-        { type: 'reasoning', text: '**Checking A>399 solutions**', state: 'done' },
+        {
+          type: 'reasoning',
+          text: '',
+          state: 'done',
+          providerMetadata: { cherry: { hasText: true } },
+        },
         { type: 'text', text: '168 solutions.', state: 'done' },
       ]);
       expect(parts).toEqual(original);
@@ -199,10 +205,20 @@ describe('agentMessageProjection', () => {
 
     expect(growing?.data.partKeys).toEqual(['summary']);
     expect(growing?.data.parts).toEqual([
-      { type: 'reasoning', text: 'Received summary.', state: 'streaming' },
+      {
+        type: 'reasoning',
+        text: '',
+        state: 'streaming',
+        providerMetadata: { cherry: { hasText: true } },
+      },
     ]);
     expect(settled?.data.parts).toEqual([
-      { type: 'reasoning', text: 'Received summary.', state: 'done' },
+      {
+        type: 'reasoning',
+        text: '',
+        state: 'done',
+        providerMetadata: { cherry: { hasText: true } },
+      },
     ]);
   });
 
@@ -247,6 +263,7 @@ describe('agentMessageProjection', () => {
         type: 'reasoning',
         text: '',
         state: 'streaming',
+        providerMetadata: { cherry: { hasText: false } },
       });
       expect(settled?.data.partKeys).toEqual(precedingParts.map((part) => part.id));
       expect(settled?.data.parts).toEqual(growing?.data.parts?.slice(0, -1));
@@ -683,7 +700,12 @@ describe('agentMessageProjection', () => {
       data: {
         partKeys: ['reasoning-1', 'tool-1'],
         parts: [
-          { state: 'streaming', text: 'Thinking', type: 'reasoning' },
+          {
+            state: 'streaming',
+            text: '',
+            type: 'reasoning',
+            providerMetadata: { cherry: { hasText: true } },
+          },
           {
             approval: { id: 'approval-1' },
             state: 'approval-requested',

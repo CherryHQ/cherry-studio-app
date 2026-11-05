@@ -385,12 +385,13 @@ describe('Pi turn projection', () => {
     entry: 1,
   } as unknown as SubmissionRecord;
 
-  function projectMessage(message: AssistantMessage, streaming: boolean) {
+  function projectMessage(message: AssistantMessage, streaming: boolean, fullReasoning = false) {
     return projectPiTurn({
       lane: { sessionId: 'session', slot: 0 },
       record: placed,
       metadata,
       active: true,
+      fullReasoning,
       entries: streaming
         ? []
         : ([
@@ -399,6 +400,30 @@ describe('Pi turn projection', () => {
       ...(streaming ? { partial: message } : {}),
     });
   }
+
+  test.each([true, false])(
+    'full detail reads retain all reasoning while streaming=%s',
+    (streaming) => {
+      const text = 'Earlier thoughts must remain readable.\n'.repeat(200);
+      const message: AssistantMessage = {
+        ...call('', 2000),
+        content: [
+          { type: 'thinking', thinking: text },
+          { type: 'thinking', thinking: 'Continuation.' },
+        ],
+      };
+      expect(projectMessage(message, streaming).parts[0]).toMatchObject({
+        type: 'reasoning',
+        text: '',
+        hasText: true,
+      });
+      expect(projectMessage(message, streaming, true).parts[0]).toMatchObject({
+        type: 'reasoning',
+        text: `${text}\n\nContinuation.`,
+        state: streaming ? 'streaming' : 'done',
+      });
+    },
+  );
 
   test.each([true, false])(
     'joins consecutive reasoning summaries without truncating content while streaming=%s',
@@ -413,7 +438,7 @@ describe('Pi turn projection', () => {
           { type: 'text', text: 'The complete answer.' },
         ],
       };
-      const turn = projectMessage(message, streaming);
+      const turn = projectMessage(message, streaming, true);
 
       expect(turn.parts).toEqual([
         expect.objectContaining({
@@ -468,7 +493,7 @@ describe('Pi turn projection', () => {
         { type: 'thinking', thinking: 'More reasoning.' },
       ],
     };
-    const turn = projectMessage(message, true);
+    const turn = projectMessage(message, true, true);
 
     expect(turn.parts).toEqual([
       expect.objectContaining({ type: 'reasoning', text: 'Before the tool.', state: 'done' }),
@@ -549,6 +574,7 @@ describe('Pi turn projection', () => {
         record: placed,
         metadata,
         active: true,
+        fullReasoning: true,
         entries: [
           { id: 2, conversationId: 1, kind: 'pi.assistant', model: [earlier] },
           ...(streaming
@@ -581,10 +607,10 @@ describe('Pi turn projection', () => {
       ],
     };
     expect(projectMessage(message, true).parts).toEqual([
-      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'streaming' }),
+      expect.objectContaining({ type: 'reasoning', text: '', hasText: true, state: 'streaming' }),
     ]);
     expect(projectMessage(message, false).parts).toEqual([
-      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'done' }),
+      expect.objectContaining({ type: 'reasoning', text: '', hasText: true, state: 'done' }),
     ]);
   });
 
@@ -836,4 +862,32 @@ describe('Pi turn projection', () => {
       tools: [{ toolCallId: 'call', toolName: 'write_file', startedAt: 3_700, completedAt: 4_000 }],
     });
   });
+});
+
+test('live reasoning carries no text while live and settled tool inputs remain complete', () => {
+  const text = '思考'.repeat(20_000);
+  const code = 'const data = [];'.repeat(10_000);
+  const message: AssistantMessage = {
+    ...call('', 2_000),
+    content: [
+      { type: 'thinking', thinking: text },
+      { type: 'toolCall', id: 'script', name: 'codemode', arguments: { code } },
+    ],
+  };
+  const options = {
+    lane: { sessionId: 'session', slot: 0 },
+    metadata,
+    record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+    entries: [
+      { id: 2, conversationId: 1, kind: 'pi.assistant', model: [message] },
+    ] as unknown as EntryRecord[],
+  };
+  const live = projectPiTurn({ ...options, active: true });
+  expect(live.parts[0]).toMatchObject({ type: 'reasoning', text: '', hasText: true });
+  expect(live.parts[1]).toHaveProperty('input.code', code);
+  const settled = projectPiTurn({ ...options, active: false });
+  expect(settled.parts[0]).toMatchObject({ text });
+  expect(settled.parts[1]).toHaveProperty('input.code', code);
+  expect(message.content[0]).toHaveProperty('thinking', text);
+  expect(message.content[1]).toHaveProperty('arguments.code', code);
 });

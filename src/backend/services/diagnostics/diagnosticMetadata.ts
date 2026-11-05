@@ -5,6 +5,7 @@ import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 const LOG_MESSAGES = new Set([
   'Startup stage',
+  'Office stage',
   'Service promoted to startup gate',
   'Initial content did not report readiness before the startup timeout',
   'Skill storage reconciliation failed',
@@ -180,6 +181,7 @@ function projectRepetition(value: unknown, timestamp: string) {
 export function projectDiagnosticLog(record: Record<string, unknown>) {
   const isLifecycle =
     (record.module === 'Startup' && record.message === 'Startup stage') ||
+    (record.module === 'Office' && record.message === 'Office stage') ||
     (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction');
   if (
     record.level !== 'warn' &&

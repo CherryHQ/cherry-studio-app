@@ -285,6 +285,8 @@ export function projectPiTurn(options: {
   partial?: AssistantMessage;
   partialId?: string;
   active?: boolean;
+  /** Active observations carry reasoning status; explicit detail reads retain the full text. */
+  fullReasoning?: boolean;
   inherited?: boolean;
   toolStates?: ReadonlyMap<string, 'running' | 'input-available' | 'interrupted'>;
   nestedTools?: ReadonlyMap<
@@ -380,15 +382,24 @@ export function projectPiTurn(options: {
       }
       answer = undefined;
       if (block.type === 'thinking') {
+        const statusOnly = options.active && !options.fullReasoning;
+        const hasText = Boolean(block.thinking.trim());
         const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
         const previous = parts.at(-1);
         // Adjacent summaries remain one phase, including across provider retries.
         // Keep a growing phase visible even before its first readable summary arrives.
         if (previous?.type === 'reasoning') {
-          if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
+          if (statusOnly) previous.hasText = previous.hasText || hasText;
+          else if (hasText) previous.text = `${previous.text}\n\n${block.thinking}`;
           previous.state = state;
-        } else if (block.thinking.trim() || state === 'streaming') {
-          parts.push({ id, type: 'reasoning', text: block.thinking, state });
+        } else if (hasText || state === 'streaming') {
+          parts.push({
+            id,
+            type: 'reasoning',
+            text: statusOnly ? '' : block.thinking,
+            ...(statusOnly ? { hasText } : {}),
+            state,
+          });
         }
         return;
       }

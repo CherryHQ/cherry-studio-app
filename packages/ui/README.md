@@ -267,6 +267,13 @@ primitive owns the quiet divider, running shimmer, disclosure state, and compact
 `expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
 unmounts; new calls and completion never override the reader's choice.
 
+`MessagePart.Reasoning` opens the existing detail sheet at its default large height;
+it never expands content inline. `detailTitle` supplies a stable reader title. Content mounts only
+while open. The chat adapter owns one message-level reader above process folding, so committing a
+streamed part or completing a reply cannot close a reader already open.
+For inline reasoning, the chat adapter instead composes `MessagePart.ToolGroup` with
+`MessagePart.TextBody variant="preview"`; tapping the preview opens that message-owned reader.
+
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
 the default title animation is `shimmer`.
@@ -294,6 +301,9 @@ are not recycled between blocks. Native scroll and selection recognizers own can
 nested scrolling inside the detail sheet. There is no row tap or custom long-press handler. The
 section's explicit copy action always uses the original value, including text outside the viewport
 and original line endings. Gesture cancellation still requires acceptance on both platforms.
+`variant="preview"` always uses the fixed-height viewport and disables partial selection for a
+caller-owned tappable preview; wrap it in `BackgroundPressArea` so native scroll cancellation still
+owns the tap decision. Other readers keep block selection and natural short-text height by default.
 
 `splitTextBlocks` from `@cherrystudio/ui/utils` owns bounded reader chunks for `TextBody` and the file
 reader. It normalizes line endings for display and continues very long lines without splitting

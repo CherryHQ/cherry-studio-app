@@ -23,6 +23,7 @@ import {
   agentMessageViewSqlColumns,
   fromAgentMessageViewSqlRow,
   toAgentMessageView,
+  toReadableAgentMessageViews,
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
@@ -810,7 +811,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return rows.map(toAgentMessageView);
   }
 
-  async getMessage(sessionId: string, messageId: string): Promise<AgentMessageView | null> {
+  async getMessage(
+    sessionId: string,
+    messageId: string,
+    options?: { tolerateInvalidParts?: boolean },
+  ): Promise<AgentMessageView | null> {
     const [row] = await this.dbService
       .getDb()
       .select(agentMessageViewColumns)
@@ -822,7 +827,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         ),
       )
       .limit(1);
-    return row ? toAgentMessageView(row) : null;
+    if (!row) return null;
+    return options?.tolerateInvalidParts
+      ? (toReadableAgentMessageViews([row])[0] ?? null)
+      : toAgentMessageView(row);
   }
 
   async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {

@@ -164,12 +164,11 @@ describe('MessagePart', () => {
     expect(renderer!.root.findAllByProps({ testID: 'search-detail' })).toHaveLength(0);
   });
 
-  it('expands running reasoning inline instead of opening a sheet', () => {
-    const onDisclosureToggle = jest.fn();
+  it('opens running reasoning in the shared sheet without an inline disclosure', () => {
     act(() => {
       renderer = create(
         <MessagePart.Reasoning
-          onDisclosureToggle={onDisclosureToggle}
+          detailTitle="Thinking process"
           state="running"
           statusText="Thinking for 1.2s"
           testID="thinking"
@@ -181,24 +180,18 @@ describe('MessagePart', () => {
 
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
-    expect(mockBottomSheetProps).toEqual({});
-    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
+    expect(mockBottomSheetProps.size).toBe('large');
+    expect(mockBottomSheetProps.title).toBe('Thinking process');
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
 
-    act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
-    expect(onDisclosureToggle).toHaveBeenCalledTimes(2);
+    act(() => (mockBottomSheetProps.onClose as () => void)());
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
   });
 
-  it('keeps manually expanded inner reasoning open when thinking completes', () => {
-    const onDisclosureToggle = jest.fn();
+  it('keeps an open reasoning sheet when thinking completes', () => {
     const content = (state: 'running' | 'complete') => (
-      <MessagePart.Reasoning
-        onDisclosureToggle={onDisclosureToggle}
-        state={state}
-        statusText="Thinking"
-      >
+      <MessagePart.Reasoning detailTitle="Thinking process" state={state} statusText="Thinking">
         <Text>Reasoning details</Text>
       </MessagePart.Reasoning>
     );
@@ -211,7 +204,7 @@ describe('MessagePart', () => {
 
     expect(findRenderedByTestId(renderer!, 'reasoning-detail')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: 'Reasoning details' })).toBeDefined();
-    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
+    expect(mockBottomSheetProps.title).toBe('Thinking process');
   });
 
   it('reopens streaming reasoning before Markdown has reported any layout', () => {
@@ -226,7 +219,7 @@ describe('MessagePart', () => {
     const toggle = () =>
       act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
     toggle();
-    toggle();
+    act(() => (mockBottomSheetProps.onClose as () => void)());
     toggle();
     act(() => renderer!.update(content('Late reasoning result')));
 
@@ -235,7 +228,7 @@ describe('MessagePart', () => {
     // No height-zero wrapper or absolute child can keep a delayed native result hidden.
     expect(detail.props.style).toBeUndefined();
     expect(renderer!.root.findByProps({ children: 'Late reasoning result' })).toBeDefined();
-    toggle();
+    act(() => (mockBottomSheetProps.onClose as () => void)());
     expect(renderer!.root.findAllByProps({ children: 'Late reasoning result' })).toHaveLength(0);
   });
 
