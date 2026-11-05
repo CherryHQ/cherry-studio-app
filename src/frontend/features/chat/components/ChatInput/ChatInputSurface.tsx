@@ -10,14 +10,17 @@ import {
   ComposerSurface,
   useComposerPresentationState,
   useComposerState,
+  useComposerSubmit,
 } from '@/frontend/components/Composer';
 import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
+import { usePreference } from '@/frontend/data/hooks';
 
 import { ChatInputPrimaryAction } from '../../voice/ChatInputPrimaryAction';
 import { DictationCancelAction } from '../../voice/DictationCancelAction';
 import { DictationStatus } from '../../voice/DictationStatus';
 import { useDictation } from '../../voice/useDictation';
 import { useDictationAvailability } from '../../voice/useDictationAvailability';
+import { ChatInputNewlineAction } from './components/ChatInputNewlineAction';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
 export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
@@ -102,6 +105,8 @@ function ChatInputLayout({
   renderPrimary?: (send: ReactNode) => ReactNode;
 }) {
   const { t } = useTranslation();
+  const [submitOnReturn] = usePreference('chat.input.enter_to_send');
+  const submit = useComposerSubmit();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
@@ -115,16 +120,20 @@ function ChatInputLayout({
       active={isEditing || draft.length > 0 || attachments.length > 0}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
+      onReturnSubmit={submit}
       placeholder={placeholder}
+      submitOnReturn={submitOnReturn}
       testID="chat-composer"
     >
       {leadingAction ?? <View className="w-8" />}
       {status ?? <Composer.EditorSecondary>{secondaryAction}</Composer.EditorSecondary>}
-      <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
-        {trailingAction ? (
-          <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
-        ) : null}
-        {streaming && hasFollowUp && onStop ? (
+      {submitOnReturn && isEditing && draft.length > 0 && !status ? (
+        <Composer.EditorSecondary>
+          <ChatInputNewlineAction />
+        </Composer.EditorSecondary>
+      ) : null}
+      {streaming && hasFollowUp && onStop ? (
+        <Composer.EditorSecondary>
           <Composer.Action
             accessibilityLabel={t('chat.input.action.stopGenerating')}
             className="bg-transparent"
@@ -133,6 +142,11 @@ function ChatInputLayout({
           >
             <PauseIcon className="size-6 text-foreground" />
           </Composer.Action>
+        </Composer.EditorSecondary>
+      ) : null}
+      <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+        {trailingAction ? (
+          <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
         ) : null}
         {renderPrimary ? renderPrimary(send) : send}
       </View>

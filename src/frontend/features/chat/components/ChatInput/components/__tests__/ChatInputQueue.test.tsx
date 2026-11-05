@@ -1,16 +1,18 @@
 import { type ReactNode, useEffect } from 'react';
+import type { EnrichedMarkdownTextInputInstance } from 'react-native-enriched-markdown';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ComposerTestProvider } from '@/frontend/components/Composer/components/__tests__/_composerTestProvider';
-import { ComposerSurface } from '@/frontend/components/Composer/components/ComposerSurface';
 import {
   useComposerActions,
+  useComposerMeta,
   useComposerState,
 } from '@/frontend/components/Composer/context/ComposerProvider';
 import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import type { AgentQueuedInput, QuoteFields } from '@/shared/contracts/agent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
+import { ChatInputComposer, ChatInputSurface } from '../../ChatInputSurface';
 import { toAgentInputParts } from '../../utils/agentInputParts';
 import { ChatInputQueue } from '../ChatInputQueue';
 
@@ -19,6 +21,9 @@ const mockCancel = jest.fn();
 const mockSubmit = jest.fn();
 const mockStop = jest.fn();
 const mockOpenFile = jest.fn();
+const mockInsertText = jest.fn();
+let mockEnterToSend = true;
+let mockIsEditing = true;
 let mockInputs: AgentQueuedInput[];
 let composer: ReturnType<typeof useComposerState>;
 let actions: ReturnType<typeof useComposerActions>;
@@ -55,11 +60,37 @@ jest.mock('../../../../runtime', () => ({
   useAgentChatClient: () => ({ client: { cancelQueuedInput: mockCancel } }),
   useAgentQueuedInputs: () => mockInputs,
 }));
-jest.mock('@/frontend/components/Composer', () =>
-  jest.requireActual('@/frontend/components/Composer/context/ComposerProvider'),
-);
+jest.mock('@/frontend/components/Composer', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+  return {
+    ...jest.requireActual('@/frontend/components/Composer/context/ComposerProvider'),
+    ...jest.requireActual('@/frontend/components/Composer/components/ComposerSurface'),
+    // The editor is the native input boundary; the queue test exercises the
+    // actual ChatInputSurface callbacks, preferences and submission owner.
+    ComposerEditor: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement('ChatEditor', props, children),
+    ComposerEditorAccessories: ({ children }: { children?: ReactNode }) => children,
+  };
+});
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [mockEnterToSend, jest.fn()],
+}));
+jest.mock('../../../../voice/ChatInputPrimaryAction', () => ({
+  ChatInputPrimaryAction: () => null,
+}));
+jest.mock('../../../../voice/DictationCancelAction', () => ({
+  DictationCancelAction: () => null,
+}));
+jest.mock('../../../../voice/DictationStatus', () => ({ DictationStatus: () => null }));
+jest.mock('../../../../voice/useDictation', () => ({ useDictation: jest.fn() }));
+jest.mock('../../../../voice/useDictationAvailability', () => ({
+  useDictationAvailability: jest.fn(),
+}));
 jest.mock('@/frontend/components/Composer/hooks/useComposerPresentation', () => ({
-  useComposerPresentation: () => ({ state: {}, actions: { dismissInput: jest.fn() } }),
+  useComposerPresentation: () => ({
+    state: { isEditing: mockIsEditing },
+    actions: { dismissInput: jest.fn() },
+  }),
 }));
 jest.mock('@/frontend/components/Composer/hooks/useComposerSendError', () => ({
   useComposerSendError: () => jest.fn(),
@@ -92,7 +123,11 @@ jest.mock('@cherrystudio/ui/components', () => {
     Alert: host('QueueAlert'),
     Button: host('QueueButton'),
     Surface: host('Surface'),
-    Composer: host('NormalComposer'),
+    Composer: Object.assign(host('NormalComposer'), {
+      Action: host('ComposerAction'),
+      Send: host('ComposerSend'),
+      EditorSecondary: host('EditorSecondary'),
+    }),
     FilePreview: host('FilePreview'),
     BottomSheet: ({ children, footer, ...props }: { children?: ReactNode; footer?: ReactNode }) =>
       React.createElement('Sheet', props, children, footer),
@@ -147,13 +182,50 @@ function input(turnId = 'turn-1'): AgentQueuedInput {
 }
 const restoredText = `${longText}\n After attachment\n  whitespace `;
 let tree: ReactTestRenderer;
+function createInputHandle(): EnrichedMarkdownTextInputInstance {
+  return {
+    focus: jest.fn(),
+    blur: jest.fn(),
+    measure: jest.fn(),
+    measureInWindow: jest.fn(),
+    measureLayout: jest.fn(),
+    setValue: jest.fn(),
+    setSelection: jest.fn(),
+    toggleBold: jest.fn(),
+    toggleItalic: jest.fn(),
+    toggleUnderline: jest.fn(),
+    toggleStrikethrough: jest.fn(),
+    toggleSpoiler: jest.fn(),
+    toggleHeading: jest.fn(),
+    toggleUnorderedList: jest.fn(),
+    toggleOrderedList: jest.fn(),
+    indentList: jest.fn(),
+    outdentList: jest.fn(),
+    setLink: jest.fn(),
+    insertLink: jest.fn(),
+    insertText: mockInsertText,
+    insertMention: jest.fn(),
+    startMention: jest.fn(),
+    removeLink: jest.fn(),
+    copyToClipboard: jest.fn(),
+    getMarkdown: jest.fn(() => Promise.resolve('')),
+    getCaretRect: jest.fn(() => Promise.resolve({ x: 0, y: 0, width: 0, height: 0 })),
+  };
+}
 function Probe() {
   const state = useComposerState();
   const composerActions = useComposerActions();
+  const { inputRef } = useComposerMeta();
   useEffect(() => {
     composer = state;
     actions = composerActions;
   }, [state, composerActions]);
+  useEffect(() => {
+    inputRef.current = createInputHandle();
+    return () => {
+      inputRef.current = null;
+    };
+  }, [inputRef]);
   return null;
 }
 const NO_ATTACHMENTS: ComposerAttachmentReady[] = [];
@@ -168,7 +240,7 @@ function Harness({
     <ComposerTestProvider initialDraft={initialDraft} initialAttachments={initialAttachments}>
       <Probe />
       <ChatInputQueue sessionId="session-1" />
-      <ComposerSurface
+      <ChatInputComposer
         streaming
         onStop={mockStop}
         onSend={async (payload) => {
@@ -184,7 +256,9 @@ function Harness({
             },
           ];
         }}
-      />
+      >
+        <ChatInputSurface streaming onStop={mockStop} />
+      </ChatInputComposer>
     </ComposerTestProvider>
   );
 }
@@ -223,6 +297,8 @@ function refresh() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockQuoteFields = {};
+  mockEnterToSend = true;
+  mockIsEditing = true;
   mockInputs = [input(), input('turn-2')];
   mockCancel.mockImplementation(async (_sessionId: string, turnId: string) => {
     mockInputs = mockInputs.filter((queued) => queued.turnId !== turnId);
@@ -427,6 +503,104 @@ it('resends through the normal composer send path and appends after waiting mess
   expect(composer.draft).toBe('');
   expect(composer.attachments).toEqual([]);
   expect(mockStop).not.toHaveBeenCalled();
+});
+
+it('submits Return during streaming through the send path after waiting messages', async () => {
+  render('Follow up while streaming', [existingAttachment]);
+  expect(tree.root.findByType('ChatEditor' as never).props.submitOnReturn).toBe(true);
+  await act(async () =>
+    tree.root.findByType('ChatEditor' as never).props.onReturnSubmit('Follow up while streaming'),
+  );
+  refresh();
+
+  expect(mockSubmit).toHaveBeenCalledTimes(1);
+  expect(mockSubmit).toHaveBeenCalledWith([
+    { type: 'text', text: 'Follow up while streaming' },
+    {
+      type: 'file',
+      fileEntryId: existingAttachment.fileEntryId,
+      mediaType: existingAttachment.mediaType,
+      filename: existingAttachment.name,
+    },
+  ]);
+  expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-1', 'turn-2', 'resent']);
+  expect(composer.draft).toBe('');
+  expect(composer.attachments).toEqual([]);
+  expect(mockStop).not.toHaveBeenCalled();
+});
+
+it('ignores repeated Return while submission is pending and preserves a newer draft', async () => {
+  render('First follow-up');
+  let finish!: () => void;
+  mockSubmit.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const submit = tree.root.findByType('ChatEditor' as never).props.onReturnSubmit;
+  let sending!: Promise<void>;
+  act(() => {
+    sending = submit('First follow-up');
+    void submit('First follow-up');
+  });
+  act(() => actions.setDraft('Newer follow-up'));
+  await act(async () => submit('Newer follow-up'));
+  expect(mockSubmit).toHaveBeenCalledTimes(1);
+  expect(composer.draft).toBe('Newer follow-up');
+  await act(async () => {
+    finish();
+    await sending;
+  });
+  expect(composer.draft).toBe('Newer follow-up');
+  expect(mockStop).not.toHaveBeenCalled();
+});
+
+it('uses the latest native text even before the controlled draft catches up', async () => {
+  render('Older draft');
+  await act(async () =>
+    tree.root.findByType('ChatEditor' as never).props.onReturnSubmit('Latest native draft'),
+  );
+  expect(mockSubmit).toHaveBeenCalledWith([{ type: 'text', text: 'Latest native draft' }]);
+});
+
+it('ignores a whitespace-only keyboard submission', async () => {
+  render('');
+  await act(async () => tree.root.findByType('ChatEditor' as never).props.onReturnSubmit(' \n '));
+  expect(mockSubmit).not.toHaveBeenCalled();
+  expect(mockStop).not.toHaveBeenCalled();
+});
+
+it('hides the newline tool when editing ends, even with an unsent draft', () => {
+  mockIsEditing = false;
+  render('Keep this draft');
+  expect(tree.root.findAllByProps({ testID: 'composer-insert-newline' })).toHaveLength(0);
+});
+
+it('hides the newline tool for an empty draft while editing', () => {
+  render('');
+  expect(tree.root.findAllByProps({ testID: 'composer-insert-newline' })).toHaveLength(0);
+});
+
+it('inserts an explicit newline through the input ref without submitting or changing the queue', () => {
+  render('Keep editing');
+  const before = JSON.stringify(mockInputs);
+  const action = tree.root
+    .findAllByType('ComposerAction' as never)
+    .find((node) => node.props.testID === 'composer-insert-newline')!;
+  expect(action.props.accessibilityLabel).toBe('Insert newline');
+  act(() => action.props.onPress());
+  expect(mockInsertText).toHaveBeenCalledTimes(1);
+  expect(mockInsertText).toHaveBeenCalledWith('\n');
+  expect(composer.draft).toBe('Keep editing');
+  expect(JSON.stringify(mockInputs)).toBe(before);
+  expect(mockSubmit).not.toHaveBeenCalled();
+});
+
+it('removes the explicit newline action when the preference is off', () => {
+  mockEnterToSend = false;
+  render('Use keyboard newlines');
+  expect(tree.root.findAllByProps({ testID: 'composer-insert-newline' })).toHaveLength(0);
+  expect(tree.root.findByType('ChatEditor' as never).props.submitOnReturn).toBe(false);
 });
 
 it('closes the detail sheet when the existing preview opens beside chat', () => {

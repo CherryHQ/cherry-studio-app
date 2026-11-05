@@ -804,6 +804,15 @@ callers never need grouping views. `Composer.Action` is the button shell every t
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
 
+`Composer.Input` accepts `submitOnReturn` and `onReturnSubmit`. When both are set, the soft
+keyboard shows Send and a native submit event supplies the current Markdown without inserting a
+newline or blurring the field. The caller connects that snapshot to its normal guarded submission
+path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
+path; they never infer submission from text changes. With the preference off, Return keeps its
+ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+The native contract is maintained in the enriched-input dependency patch and needs an updated
+development client on both platforms.
+
 `Composer.Dock` applies horizontal and safe-area insets and follows the keyboard. It floats above
 screen content by default. Use `layoutMode="flow"` when the parent should reserve its space through
 normal flex layout; this avoids measuring the dock back into React state. Pair the floating mode

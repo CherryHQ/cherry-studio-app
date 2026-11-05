@@ -34,9 +34,11 @@ export function ComposerInput({
   onFocus,
   onLayout,
   onPaste,
+  onReturnSubmit,
   placeholder,
   ref,
   style,
+  submitOnReturn = false,
   testID,
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
@@ -123,6 +125,8 @@ export function ComposerInput({
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
         onLayout={onLayout}
+        onSubmit={submitOnReturn ? onReturnSubmit : undefined}
+        submitOnReturn={submitOnReturn && onReturnSubmit !== undefined}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined

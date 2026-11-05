@@ -1,5 +1,6 @@
-import { createRef, useLayoutEffect } from 'react';
+import { createRef, useLayoutEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
+import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Composer } from '../components/composer';
@@ -258,6 +259,85 @@ describe('Composer', () => {
     const input = tree.root.findByType(TextInput);
 
     expect(input.props.style).toEqual(expect.objectContaining({ color: '#111827', fontSize: 16 }));
+  });
+
+  function renderReturnInput(submitOnReturn: boolean) {
+    const inputRef = createRef<ComposerInputHandle>();
+    const onReturnSubmit = jest.fn();
+    const onChangeText = jest.fn();
+    function Harness() {
+      const [value, setValue] = useState('');
+      return (
+        <Composer
+          onChangeText={(next) => {
+            onChangeText(next);
+            setValue(next);
+          }}
+          onSend={jest.fn()}
+          value={value}
+        >
+          <Composer.Input
+            onReturnSubmit={onReturnSubmit}
+            ref={inputRef}
+            submitOnReturn={submitOnReturn}
+          />
+        </Composer>
+      );
+    }
+    act(() => {
+      renderer = create(<Harness />);
+    });
+    const edit = (next: string) =>
+      act(() => renderer!.root.findByType(TextInput).props.onChangeText(next));
+    const submit = (markdown: string) =>
+      act(() => renderer!.root.findByType(EnrichedMarkdownTextInput).props.onSubmit?.(markdown));
+    return { edit, inputRef, onChangeText, onReturnSubmit, submit };
+  }
+
+  it('submits the native Markdown snapshot without inserting or rolling back text', async () => {
+    const { edit, inputRef, onChangeText, onReturnSubmit, submit } = renderReturnInput(true);
+    edit('abc');
+    submit('abc');
+
+    expect(onReturnSubmit).toHaveBeenCalledWith('abc');
+    expect(onChangeText.mock.calls).toEqual([['abc']]);
+    expect(await inputRef.current!.getMarkdown()).toBe('abc');
+    expect(inputRef.current!.setValue).not.toHaveBeenCalled();
+  });
+
+  it('keeps Return as a newline when submission is disabled', async () => {
+    const { edit, inputRef, onChangeText, onReturnSubmit, submit } = renderReturnInput(false);
+    edit('abc');
+    edit('abc\n');
+    submit('abc');
+
+    expect(onReturnSubmit).not.toHaveBeenCalled();
+    expect(onChangeText).toHaveBeenLastCalledWith('abc\n');
+    expect(await inputRef.current!.getMarkdown()).toBe('abc\n');
+  });
+
+  it.each(['abc\n', 'ab\nc', 'abc\n- ', 'abc\npasted\ntext', '中文'])(
+    'keeps a native text change (%j) as an edit with submission enabled',
+    async (next) => {
+      const { edit, inputRef, onChangeText, onReturnSubmit } = renderReturnInput(true);
+      edit('abc');
+      edit(next);
+
+      expect(onReturnSubmit).not.toHaveBeenCalled();
+      expect(onChangeText).toHaveBeenLastCalledWith(next);
+      expect(await inputRef.current!.getMarkdown()).toBe(next);
+    },
+  );
+
+  it('keeps explicit insertion on the native edit path before a later keyboard submission', () => {
+    const { edit, inputRef, onReturnSubmit, submit } = renderReturnInput(true);
+    edit('abc');
+    act(() => inputRef.current!.insertText('\n'));
+    edit('abc\n');
+    expect(onReturnSubmit).not.toHaveBeenCalled();
+    expect(inputRef.current!.insertText).toHaveBeenCalledWith('\n');
+    submit('abc\n');
+    expect(onReturnSubmit).toHaveBeenCalledWith('abc\n');
   });
 
   // The field owns its own buffer, so a caller-side value has to be pushed into
