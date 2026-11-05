@@ -31,10 +31,11 @@ surfaces.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
   field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
-- The instructions input grows from 112 to a fixed maximum of 480 points, roughly filling the
-  remaining first-screen space on a typical phone without measuring the layout.
-  Longer instructions scroll internally without truncating the saved text. Native text selection
-  and scrolling stay owned by the input, while the outer scroll view moves the rest of the form.
+- Instructions show a five-line summary in both the page and chat details. Edit is the only entry
+  and opens the complete instructions directly. An independent full-height
+  instruction sheet keeps its header outside the scrolling body; the original form stays mounted
+  without expansion or scroll restoration. Done flushes existing auto-saves; new Agents keep their
+  instructions in the form draft until Save creates the record.
 - Built-in tools, including Health and Reminders, are available for user-directed conversation
   tasks when their model, system and service gates pass; they have no per-Agent switches. Health,
   reminders, calendar, location and image-generation tools load on demand through tool search.

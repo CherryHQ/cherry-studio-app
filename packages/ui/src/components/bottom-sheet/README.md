@@ -78,6 +78,10 @@ When showing a second level, `backAction` takes precedence over `closeAction`.
 For a title-only header, omit both actions and pass `titleAlign="center"`. Omitting `titleAlign`
 preserves the default: centered with `closeAction`, start-aligned otherwise.
 
+Pass `onBack` to handle system Back, web Escape, and accessibility escape without adding a header
+button. It takes precedence over the default system dismissal and `backAction`, including when
+`dismissible={false}`. Drag and scrim dismissal still follow `dismissible`.
+
 Set `avoidKeyboard` when the sheet holds a text field. The card then rises with the keyboard frame
 by frame and keeps its footer a small gap above it; once the card reaches the top inset, its body
 shrinks instead, so keep the field outside the scrolling body to keep it visible. Such a sheet has
@@ -85,9 +89,10 @@ one height: it follows its own animated height rather than switching detents, so
 changes the sheet's size class.
 
 Set `dismissible={false}` when a workflow must remain visible until it reaches an explicit outcome.
-The closed detent then becomes programmatic-only: drag, scrim, Android back, and accessibility
-escape cannot reach it, while changing `open` to `false` still performs the controlled close. Such a
-sheet hides its drag handle unless `sizes` still lets the user drag between heights; the handle's
+The closed detent then becomes programmatic-only: drag, scrim, and default system dismissal cannot
+reach it, while changing `open` to `false` still performs the controlled close. An explicit `onBack`
+or `backAction` can handle system Back separately. Such a sheet hides its drag handle unless
+`sizes` still lets the user drag between heights; the handle's
 space stays so the header does not move.
 
 ## Covering overlays

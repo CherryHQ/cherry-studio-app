@@ -12,28 +12,15 @@ import { cn } from '@cherrystudio/ui/utils';
 import { loggerService } from '@logger';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
-import {
-  KeyboardAvoidingView,
-  KeyboardAwareScrollView,
-  type KeyboardAwareScrollViewRef,
-} from 'react-native-keyboard-controller';
+import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { RouteHeader } from '@/frontend/appShell/header/RouteHeader';
-import { useFocusedBackPress, useOpenProviderSetup } from '@/frontend/appShell/navigation';
+import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/Avatar';
 import {
@@ -64,7 +51,6 @@ import {
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { useAgentSkillsApi } from '@/frontend/hooks/skill';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent, AgentMode } from '@/shared/data/types/agent';
@@ -104,16 +90,7 @@ export function AgentEditor({
   ...presentation
 }: AgentEditorProps) {
   const { t } = useTranslation();
-  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
   const headerHeight = useHeaderHeight();
-  const handleInstructionsBack = useCallback(() => {
-    if (Keyboard.isVisible()) Keyboard.dismiss();
-    else setIsInstructionsExpanded(false);
-  }, []);
-  useFocusedBackPress(
-    handleInstructionsBack,
-    isInstructionsExpanded && presentation.presentation !== 'sheet',
-  );
   const focused = useIsFocused();
   const closeOnBlur = useEffectEvent(() => {
     if (presentation.presentation === 'sheet') presentation.onClose();
@@ -183,10 +160,8 @@ export function AgentEditor({
           hasServersError={Boolean(serversError)}
           headerHeight={headerHeight}
           isFocused={focused}
-          isInstructionsExpanded={isInstructionsExpanded}
           isServersLoading={areServersLoading}
           originalToolBindings={bindings}
-          onInstructionsExpandedChange={setIsInstructionsExpanded}
           servers={servers}
           shouldStartChat={shouldStartChat}
           presentation={presentation}
@@ -200,18 +175,10 @@ export function AgentEditor({
   return presentation.presentation === 'sheet' ? (
     <BottomSheet
       avoidKeyboard
-      backAction={
-        isInstructionsExpanded
-          ? {
-              accessibilityLabel: t('chat.input.action.collapseEditor'),
-              onPress: handleInstructionsBack,
-            }
-          : undefined
-      }
       onClose={presentation.onClose}
       open
       presentation="overlay"
-      size={isInstructionsExpanded ? 'full' : 'large'}
+      size="large"
       title={agentId ? t('agent.edit.title') : t('agent.create.title')}
     >
       {content}
@@ -223,13 +190,11 @@ export function AgentEditor({
 
 function AgentEditorFrame({
   children,
-  onBack,
   presentation,
   rightActions,
   title,
 }: {
   children: ReactNode;
-  onBack?: () => void;
   presentation: AgentEditorPresentation;
   rightActions?: readonly HeaderToolbarAction[];
   title: string;
@@ -238,7 +203,7 @@ function AgentEditorFrame({
     children
   ) : (
     <>
-      <RouteHeader onBack={onBack} rightActions={rightActions} title={title} />
+      <RouteHeader rightActions={rightActions} title={title} />
       {children}
     </>
   );
@@ -250,10 +215,8 @@ function AgentEditForm({
   hasServersError,
   headerHeight,
   isFocused,
-  isInstructionsExpanded,
   isServersLoading,
   originalToolBindings,
-  onInstructionsExpandedChange,
   servers,
   shouldStartChat,
   skills,
@@ -265,10 +228,8 @@ function AgentEditForm({
   hasServersError: boolean;
   headerHeight: number;
   isFocused: boolean;
-  isInstructionsExpanded: boolean;
   isServersLoading: boolean;
   originalToolBindings: readonly AgentToolBinding[];
-  onInstructionsExpandedChange: (expanded: boolean) => void;
   servers: readonly McpServer[];
   shouldStartChat: boolean;
   skills: readonly SkillListItem[];
@@ -314,14 +275,6 @@ function AgentEditForm({
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isSettingAvatar;
   const isNameInvalid = isEditing && !form.name.trim();
-  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
-  const formScrollOffset = useRef(0);
-  const pendingScrollOffset = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    const offset = isInstructionsExpanded ? 0 : formScrollOffset.current;
-    pendingScrollOffset.current = offset;
-    scrollRef.current?.scrollTo({ y: offset, animated: false });
-  }, [isInstructionsExpanded]);
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -511,9 +464,8 @@ function AgentEditForm({
           agentFormContentPadding +
           (presentation.presentation === 'sheet' ? 0 : safeAreaInsets.bottom),
       },
-      isInstructionsExpanded ? styles.expandedScrollContent : undefined,
     ],
-    [isInstructionsExpanded, presentation.presentation, safeAreaInsets.bottom],
+    [presentation.presentation, safeAreaInsets.bottom],
   );
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
@@ -556,37 +508,20 @@ function AgentEditForm({
     <>
       <KeyboardAvoidingView
         behavior="padding"
-        enabled={isInstructionsExpanded && presentation.presentation !== 'sheet'}
+        enabled={presentation.presentation !== 'sheet'}
         keyboardVerticalOffset={headerHeight}
         style={styles.scroll}
       >
-        <KeyboardAwareScrollView
+        <ScrollView
           alwaysBounceVertical={false}
-          bottomOffset={keyboardBottomOffset}
           contentContainerStyle={scrollContentStyle}
           contentInsetAdjustmentBehavior="never"
-          disableScrollOnKeyboardHide
-          enabled={!isInstructionsExpanded}
-          keyboardDismissMode={isInstructionsExpanded ? 'none' : 'on-drag'}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => {
-            if (pendingScrollOffset.current !== null) {
-              scrollRef.current?.scrollTo({ y: pendingScrollOffset.current, animated: false });
-              pendingScrollOffset.current = null;
-            }
-          }}
-          onScroll={(event) => {
-            if (!isInstructionsExpanded) {
-              formScrollOffset.current = event.nativeEvent.contentOffset.y;
-            }
-          }}
-          ref={scrollRef}
-          scrollEnabled={!isInstructionsExpanded}
-          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           style={styles.scroll}
         >
-          <View className="gap-6" style={isInstructionsExpanded ? styles.hidden : undefined}>
+          <View className="gap-6">
             {/* The hero is the one primary object: who this Agent is. Create and edit
             share it, so a new Agent is filled in exactly where it will later be read. */}
             <View className="items-center gap-4 pb-2">
@@ -703,15 +638,12 @@ function AgentEditForm({
           </View>
           <PolicySecret>
             <AgentInstructionsSection
-              expanded={isInstructionsExpanded}
               onBlur={flush}
               onChangeText={(value) => updateForm('instructions', value)}
-              onExpandedChange={onInstructionsExpandedChange}
-              presentation={presentation.presentation ?? 'page'}
               value={form.instructions}
             />
           </PolicySecret>
-          <View className="gap-6" style={isInstructionsExpanded ? styles.hidden : undefined}>
+          <View className="gap-6">
             <View className="gap-3">
               <Section
                 footer={
@@ -780,7 +712,7 @@ function AgentEditForm({
               </PolicyDeletable>
             ) : null}
           </View>
-        </KeyboardAwareScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
@@ -839,14 +771,6 @@ function AgentEditForm({
 
   return (
     <AgentEditorFrame
-      onBack={
-        isInstructionsExpanded
-          ? () => {
-              onInstructionsExpandedChange(false);
-              flush();
-            }
-          : undefined
-      }
       presentation={presentation}
       rightActions={isEditing ? undefined : saveActions}
       title={title}
@@ -857,15 +781,6 @@ function AgentEditForm({
 }
 
 const styles = StyleSheet.create({
-  hidden: {
-    display: 'none',
-  },
-  expandedScrollContent: {
-    flex: 1,
-    gap: 0,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-  },
   scroll: {
     flex: 1,
   },

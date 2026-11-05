@@ -80,6 +80,8 @@ type BottomSheetBaseProps = {
   dismissible?: boolean;
   footer?: ReactNode;
   headerAction?: ReactNode;
+  /** Handles system Back/Escape without adding a visible header button. */
+  onBack?: () => void;
   onClose: () => void;
   /** Runs after a controlled or interactive dismissal finishes. */
   onClosed?: () => void;
@@ -137,6 +139,7 @@ export function BottomSheet(props: BottomSheetProps) {
     dismissible = true,
     footer,
     headerAction,
+    onBack,
     onClose,
     onClosed,
     open,
@@ -236,7 +239,9 @@ export function BottomSheet(props: BottomSheetProps) {
 
   const handleHardwareBackPress = useEffectEvent(() => {
     if (!active || childCount > 0) return false;
-    if (backAction) {
+    if (onBack) {
+      onBack();
+    } else if (backAction) {
       backAction.onPress();
     } else {
       requestClose();
@@ -352,7 +357,9 @@ export function BottomSheet(props: BottomSheetProps) {
             open && active && childCount === 0 ? 'yes' : 'no-hide-descendants'
           }
           onAccessibilityEscape={
-            dismissible && active && childCount === 0 ? requestClose : undefined
+            active && childCount === 0
+              ? (onBack ?? (dismissible ? requestClose : undefined))
+              : undefined
           }
           pointerEvents={!active || childCount > 0 ? 'none' : 'auto'}
           style={[

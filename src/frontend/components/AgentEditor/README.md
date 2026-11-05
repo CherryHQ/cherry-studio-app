@@ -10,18 +10,21 @@ Import it from `@/frontend/components/AgentEditor`.
   mounted while its loading, error and form content changes.
 - Existing records auto-save through `hooks/useAgentAutoSave`. The form keeps the same field,
   avatar, model, Skill, MCP and managed-resource policy behavior in both presentations.
-- Instructions keep one native multiline input mounted through expansion and collapse. The
-  ordinary field is capped at 384 logical points (20% below its previous 480-point cap).
-  Management pages allow direct editing; chat details use a scrollable reading preview while
-  keeping the input mounted and hidden. The preview also stays mounted, retaining its scroll.
-  This avoids disabling Android's native input scroller with a read-only field.
-  The maximize action fills the available form region and focuses that same input. Collapse
-  restores the surrounding form and its scroll position, and flushes pending auto-saves.
-- Expansion hides surrounding form layout without unmounting fields or resetting their drafts.
-  The existing sheet grows to full height and owns keyboard avoidance; pages use the shared
-  keyboard-avoiding view pattern. Android back first dismisses the keyboard, then collapses the
-  editor. Native selection and text scrolling stay with the input; the maximize/collapse
-  button uses ordinary press cancellation and does not add a competing pan or text gesture.
+- Both presentations show a five-line, non-selectable instruction summary without internal
+  scrolling. The summary stays plain text; Edit is the only entry and opens the complete instructions
+  directly in the input. There is no separate reading mode or View full text action.
+- Instructions use an independent `BottomSheet` with `size="full"` and `presentation="default"`.
+  Its shared header stays outside the body, with only Done on the right. There is no visible Back
+  button or repeated Agent name. System Back and accessibility escape close through `onBack`.
+  The sheet uses explicit navigation without a drag handle or swipe/scrim dismissal.
+  The native multiline input owns text scrolling, selection and caret visibility.
+  The instruction sheet owns its keyboard space. The chat sheet
+  becomes inactive through the existing nested-sheet lifecycle while keeping the form mounted.
+  The form does not resize, hide fields, or reset/restore its scroll for instruction editing.
+- Closing dismisses the keyboard and flushes existing auto-saves. The instruction sheet stays
+  mounted until its closing transition finishes. Its value remains the form's draft; new Agents
+  still require the form's explicit Save. `PolicySecret` gates the summary and sheet together, so
+  organization-hidden instructions are never exposed by either surface.
 - `utils/` owns form seeding, DTO construction and binding drafts. `components/` owns the private
   instruction, Skill and MCP sections. The route adapter only parses route parameters.
 - The form's `PolicyScope` lives inside the native sheet portal, so hooks and fields share it.
