@@ -16,6 +16,7 @@ import {
   fileEntryPreviewKind,
   useOpenFileEntry,
 } from '@/frontend/components/FileEntryPreview';
+import { useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import { useAgentSessionStatus } from '@/frontend/hooks/agent';
 import {
   type FileWorkspaceAddress,
@@ -63,6 +64,7 @@ export function FileWorkspaceSheet({
   const { toast } = useToast();
   const focused = useIsFocused();
   const workspace = useFileWorkspace(address);
+  const { requestCreate, isCreating } = useCreateFileFolder(null);
   const selectWorkspace = workspace.select;
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const folders = workspace.availableFolders;
@@ -135,6 +137,15 @@ export function FileWorkspaceSheet({
 
   return (
     <BottomSheet
+      footer={
+        <Button
+          disabled={isCreating || workspace.isSaving}
+          onPress={requestCreate}
+          testID="file-workspace-create-folder"
+        >
+          {t('library.folders.create')}
+        </Button>
+      }
       onClosed={onClosed}
       onClose={onClose}
       // Keep the list mounted under the existing file viewer. Controlled hiding
@@ -142,7 +153,7 @@ export function FileWorkspaceSheet({
       open={open && focused}
       presentation="overlay"
       returnFocusRef={returnFocusRef}
-      size="full"
+      sizes={['large', 'full']}
       testID="file-workspace-sheet"
       title={t('library.folders.title')}
     >
