@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+
 import type {
   AiUsageRecordStatsBucket,
   AiUsageRecordTimelineBucket,
@@ -52,26 +54,40 @@ describe('usage analytics presentation', () => {
   });
 
   test('fills calendar days across DST without shifting record drill-down boundaries', () => {
-    const previous = process.env.TZ;
-    process.env.TZ = 'America/New_York';
-    try {
-      const range = usageRange('7d', new Date(2026, 2, 10, 12));
-      const points = usagePoints([], range, null, 'day', 'tokens');
-      expect(points.map((point) => point.date)).toEqual([
-        '2026-03-04',
-        '2026-03-05',
-        '2026-03-06',
-        '2026-03-07',
-        '2026-03-08',
-        '2026-03-09',
-        '2026-03-10',
-      ]);
-      expect(points[4].to - points[4].from + 1).toBe(23 * 60 * 60 * 1000);
-      expect(points[4].to + 1).toBe(points[5].from);
-    } finally {
-      if (previous === undefined) delete process.env.TZ;
-      else process.env.TZ = previous;
+    if (process.env.TZ !== 'America/New_York') {
+      // Jest sandboxes process.env; set the real timezone before Node starts.
+      execFileSync(
+        process.execPath,
+        [
+          require.resolve('jest/bin/jest'),
+          '--runInBand',
+          '--runTestsByPath',
+          __filename,
+          '--testNamePattern',
+          'fills calendar days across DST',
+        ],
+        {
+          encoding: 'utf8',
+          env: { ...process.env, TZ: 'America/New_York' },
+          timeout: 15000,
+        },
+      );
+      return;
     }
+
+    const range = usageRange('7d', new Date(2026, 2, 10, 12));
+    const points = usagePoints([], range, null, 'day', 'tokens');
+    expect(points.map((point) => point.date)).toEqual([
+      '2026-03-04',
+      '2026-03-05',
+      '2026-03-06',
+      '2026-03-07',
+      '2026-03-08',
+      '2026-03-09',
+      '2026-03-10',
+    ]);
+    expect(points[4].to - points[4].from + 1).toBe(23 * 60 * 60 * 1000);
+    expect(points[4].to + 1).toBe(points[5].from);
   });
 
   test('preserves full history, zero-use periods and unknown token values', () => {

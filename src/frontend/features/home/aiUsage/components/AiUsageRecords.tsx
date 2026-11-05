@@ -21,7 +21,7 @@ import {
   type AiUsageRecordEntry,
   getAiUsageRecordTotalTokens,
 } from '@/shared/data/types/aiUsageRecord';
-import type { Currency } from '@/shared/data/types/model';
+import { type Currency, UNIQUE_MODEL_ID_SEPARATOR } from '@/shared/data/types/model';
 import { getAiUsageRecordTokensPerSecond } from '@/shared/utils/aiUsage';
 
 import { formatUsageDate, formatUsageNumber, type UsageRange } from '../utils/aiUsageAnalytics';
@@ -192,7 +192,7 @@ export function AiUsageRecords({
                 </Button>
               ) : null}
             </View>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => {
           const totalTokens = getAiUsageRecordTotalTokens(item);
@@ -409,7 +409,7 @@ function AiUsageRecordDetail({
 
 function recordModel(entry: AiUsageRecordEntry, unknownModel: string) {
   return {
-    id: entry.modelId || entry.id,
+    id: `${entry.providerId ?? ''}${UNIQUE_MODEL_ID_SEPARATOR}${entry.modelId || entry.id}` as const,
     modelId: entry.modelId || '',
     name: entry.modelName || entry.modelId || unknownModel,
     providerId: entry.providerId || '',

@@ -36,16 +36,18 @@ describe('AI usage analytics', () => {
     const database = drizzle(
       async (sql, params, method) => {
         const statement = sqlite.prepare(sql);
+        // Drizzle maps fields by position. Object rows reorder numeric column names
+        // and collapse duplicate SQL expressions.
+        statement.setReturnArrays(true);
         if (method === 'run') {
           statement.run(...params);
           return { rows: [] };
         }
         if (method === 'get') {
-          const row = statement.get(...params) as Record<string, unknown> | undefined;
-          return { rows: row ? [Object.values(row)] : [] };
+          const row = statement.get(...params);
+          return { rows: row ? Object.values(row) : [] };
         }
-        const rows = statement.all(...params) as Record<string, unknown>[];
-        return { rows: rows.map(Object.values) };
+        return { rows: statement.all(...params) };
       },
       undefined as never,
       { casing: 'snake_case', schema },
