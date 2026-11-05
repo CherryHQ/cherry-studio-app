@@ -134,15 +134,17 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): 
         ...base,
         state: 'output-denied',
       } as CherryMessagePart;
-    case 'error':
+    case 'error': {
       // The tool's own error text is diagnostic detail; renderers translate
       // the status and fall back to app copy when no detail exists.
-      return {
+      const failedPart = {
         ...base,
         errorCode: part.error?.failure?.source.code ?? part.error?.code,
         errorText: part.error?.message ?? '',
         state: 'output-error',
       } satisfies ToolMessagePart;
+      return failedPart;
+    }
     case 'interrupted':
       return withCherryMeta(
         { ...base, errorText: '', state: 'output-error' } as Extract<
