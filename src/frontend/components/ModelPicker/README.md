@@ -33,8 +33,8 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Community Cloud availability
 
-The picker observes `Backend.cloud` through `useCloud`. Cloud rows receive account-scoped free
-labels and unavailability reasons; exhausted or unauthorized rows cannot be selected. The
-`cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
+The picker observes `Backend.cloud` through `useCloud`. Plan rows require effective paid model
+entitlements and receive unavailability reasons; exhausted or unauthorized rows cannot be selected.
+The `cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
 chat and translation rights). Selection is only a presentation check: the Cloud request boundary
 rechecks entitlement, expiry and quota before every send.

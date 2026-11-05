@@ -35,8 +35,10 @@ selected while the pane is open beside the chat. In compact windows the `/librar
 current local chat, so its previews can add files to that chat.
 
 The floating dock insets from the sidebar's leading safe area only: the column sits at the window's
-leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. Rows
-scrolled under the dock blur toward the bottom edge, as they do under the title row.
+leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. A
+theme-colored translucent layer covers the full width behind the profile row through the bottom
+safe area, with a soft fade above the row. It keeps scrolling rows subdued on Android and layers
+over the existing progressive blur on iOS.
 `useSidebarHeaderTop` places the title row below the top safe area, except where the chat header
 fills that inset (an upright iPhone Duo inner display) or keeps its own margin below a zero inset
 (the same display on its side); there the row centers on the header's controls.
@@ -73,7 +75,7 @@ Sessions by their Agent id, show ten initially, and own independent "Load more" 
 Conversation rows share selection and navigation; status, rename and deletion are supplied by the
 source preview contract. Local previews retain these capabilities without opening transcripts.
 Remote previews currently omit them because the desktop catalog does not supply them. Agent header labels
-toggle their groups. The existing dock's "New chat" action opens a draft, where the user can
+toggle their groups. The chat header's new-chat action opens a draft, where the user can
 select an Agent.
 Within Agent groups, Agent names, conversation titles, and pagination actions share one text
 column. Grouped conversation and pagination rows keep the avatar column empty; the ordinary
@@ -95,7 +97,8 @@ pagination, selection and menu presentation consume catalog summaries and bound 
 `SidebarDesktopSource` owns only connection framing.
 The original local sidebar is the visual and interaction baseline for both sources. Agent headers
 keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
-group. New chat stays in the existing bottom dock, with no per-Agent new-chat icon. Row gutters,
+group. New chat lives in the chat header. The bottom dock shows the avatar and nickname in one
+settings row, without subscription, entitlement or quota badges. Row gutters,
 text columns, selection/pressed surfaces, empty/loading/error spacing and pagination feedback
 follow the local presentation. Avatar rendering is shared; desktop emoji is preserved, while a source without avatar metadata uses
 the common fallback.

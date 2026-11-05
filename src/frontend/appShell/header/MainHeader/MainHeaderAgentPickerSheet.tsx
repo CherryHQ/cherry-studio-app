@@ -33,7 +33,7 @@ export function MainHeaderAgentPickerSheet({
   const { items: agents, isError, isLoading, refetch } = catalog;
   const selectAgent = (agentId: string) => {
     onClose();
-    onSelect(agentId);
+    if (agentId !== currentAgentId) onSelect(agentId);
   };
   const editAgent = onEdit
     ? (agentId: string) => {
@@ -86,7 +86,10 @@ export function MainHeaderAgentPickerSheet({
           />
         ) : (
           <View className="gap-1">
-            {agents.map((agent) => (
+            {[
+              ...agents.filter((agent) => agent.id === currentAgentId),
+              ...agents.filter((agent) => agent.id !== currentAgentId),
+            ].map((agent) => (
               <AgentPickerRow
                 agent={agent}
                 key={agent.id}

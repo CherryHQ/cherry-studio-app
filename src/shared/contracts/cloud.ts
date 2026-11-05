@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 export const CLOUD_PROVIDER_ID = 'cherryai-subscription';
+export const CLOUD_PROVIDER_NAME = 'Cherry Studio Plan';
 export type CloudModelUse = 'agent' | 'general';
 
 const UnitsSchema = z.number().int().nonnegative();
@@ -43,6 +44,7 @@ const PlanSchema = z.object({
 });
 export const CloudPlansSchema = z.object({
   measured_at: z.iso.datetime(),
+  available_plans: z.array(PlanSchema),
   entitlements: z.array(
     z.object({
       id: z.string().min(1),
@@ -121,6 +123,7 @@ export function cloudModelUnavailable(
   const entitled = state.account.entitlements.some(
     (entry) =>
       entry.status === 'active' &&
+      !entry.is_free &&
       entry.model_ids.includes(modelId) &&
       (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
       (!entry.expires_at || Date.parse(entry.expires_at) > now),

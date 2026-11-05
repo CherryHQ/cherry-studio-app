@@ -20,6 +20,7 @@ import { InlineSearch } from '@/frontend/components/InlineSearch';
 import { withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -186,9 +187,11 @@ function ProviderListView() {
   });
   const listedProviders = useMemo(() => {
     const providers = isFiltering ? (allProvidersQuery.data ?? pagedProviders) : pagedProviders;
-    return isFiltering
-      ? providers.filter((provider) => matchesSearchKeywords(keywords, [provider.name]))
-      : providers;
+    return providers.filter(
+      (provider) =>
+        (provider.id !== CLOUD_PROVIDER_ID || provider.isEnabled) &&
+        (!isFiltering || matchesSearchKeywords(keywords, [provider.name])),
+    );
   }, [allProvidersQuery.data, isFiltering, keywords, pagedProviders]);
   const openProvider = useCallback(
     (provider: Provider) => {

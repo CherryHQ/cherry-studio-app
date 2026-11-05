@@ -1,5 +1,6 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { ProviderService } from '../ProviderService';
@@ -35,6 +36,45 @@ describe('ProviderService integration', () => {
     expect(first.nextCursor).toBeDefined();
     expect(second.items.map((provider) => provider.id)).toEqual(['disabled-b', 'disabled-a']);
     expect(second.nextCursor).toBeUndefined();
+  });
+
+  it('pins Plan first in full and enabled lists without changing other providers saved order', async () => {
+    insertProvider('disabled-a', false, 'a');
+    insertProvider('enabled-a', true, 'b');
+    insertProvider('enabled-b', true, 'c');
+    insertProvider(CLOUD_PROVIDER_ID, true, 'z');
+
+    const all = await service.list();
+    const enabled = await service.list({ enabled: true });
+    expect(all.map((provider) => provider.id)).toEqual([
+      CLOUD_PROVIDER_ID,
+      'disabled-a',
+      'enabled-a',
+      'enabled-b',
+    ]);
+    expect(enabled.map((provider) => provider.id)).toEqual([
+      CLOUD_PROVIDER_ID,
+      'enabled-a',
+      'enabled-b',
+    ]);
+  });
+
+  it('pages from pinned Plan through enabled and disabled providers without gaps or duplicates', async () => {
+    insertProvider('disabled-a', false, 'a');
+    insertProvider('enabled-a', true, 'a');
+    insertProvider('enabled-b', true, 'b');
+    insertProvider('disabled-b', false, 'b');
+    insertProvider(CLOUD_PROVIDER_ID, true, 'z');
+
+    const first = await service.listPage({ limit: 1 });
+    expect(first.items.map((provider) => provider.id)).toEqual([CLOUD_PROVIDER_ID]);
+    expect(first.nextCursor).toBeDefined();
+    const second = await service.listPage({ cursor: first.nextCursor, limit: 2 });
+    expect(second.items.map((provider) => provider.id)).toEqual(['enabled-a', 'enabled-b']);
+    expect(second.nextCursor).toBeDefined();
+    const third = await service.listPage({ cursor: second.nextCursor, limit: 2 });
+    expect(third.items.map((provider) => provider.id)).toEqual(['disabled-a', 'disabled-b']);
+    expect(third.nextCursor).toBeUndefined();
   });
 
   it('falls back to the first page when a cursor is malformed', async () => {

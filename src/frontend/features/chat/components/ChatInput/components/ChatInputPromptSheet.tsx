@@ -1,11 +1,10 @@
 import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-text';
-import { Composer, Spinner, useToast } from '@cherrystudio/ui/components';
+import { BottomSheet, Spinner, useToast } from '@cherrystudio/ui/components';
 import { useFocusEffect } from 'expo-router';
-import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
-import { useComposerPresentationActions } from '@/frontend/components/Composer';
 import { useMcpAppConversation } from '@/frontend/components/McpApp';
 import { addMcpContentToDraft } from '@/frontend/components/McpContent';
 import { useBackendModule } from '@/frontend/data';
@@ -28,18 +27,20 @@ function promptKey(choice: ChatInputMcpPrompt): string {
   return `${choice.serverId}:${choice.prompt.key}`;
 }
 
-/** The same compact picker as Plugins; its rows are already-discovered local metadata. */
-export function ChatInputPromptPopover({
+/** Resolves MCP prompt content; argument requests cover the list without losing its state. */
+export function ChatInputPromptSheet({
   agentId,
-  children,
   onClose,
+  onClosed,
+  onSelect,
   open,
   prompts,
   returnFocusRef,
 }: {
   agentId?: string;
-  children: ReactNode;
   onClose(): void;
+  onClosed?: () => void;
+  onSelect(): void;
   open: boolean;
   prompts: readonly ChatInputMcpPrompt[];
   returnFocusRef?: RefObject<ViewInstance | null>;
@@ -49,13 +50,13 @@ export function ChatInputPromptPopover({
   const mcp = useBackendModule('mcp');
   const files = useBackendModule('file');
   const conversation = useMcpAppConversation();
-  const { runInputReplacement } = useComposerPresentationActions();
   const initialFocusRef = useRef<ViewInstance>(null);
   const selected = useRef<PromptSelection | undefined>(undefined);
   const nextSelectionId = useRef(0);
-  const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);
   const [argumentRequest, setArgumentRequest] = useState<PromptSelection>();
   const [isArgumentSheetOpen, setIsArgumentSheetOpen] = useState(false);
+  const argumentIsPresented = useRef(false);
+  const listIsClosed = useRef(false);
   // A prompt without parameters resolves while the menu stays open, so its row shows progress.
   const [loading, setLoading] = useState<PromptSelection>();
   const cancelSelection = useCallback(() => {
@@ -66,14 +67,20 @@ export function ChatInputPromptPopover({
   }, []);
 
   useEffect(() => cancelSelection, [agentId, cancelSelection]);
+  useEffect(() => {
+    if (open) listIsClosed.current = false;
+    else {
+      selected.current?.controller.abort();
+      selected.current = undefined;
+    }
+  }, [open]);
   useFocusEffect(
     useCallback(
       () => () => {
         cancelSelection();
-        setShouldRestoreFocus(false);
         onClose();
       },
-      [cancelSelection, onClose, setShouldRestoreFocus],
+      [cancelSelection, onClose],
     ),
   );
 
@@ -95,15 +102,15 @@ export function ChatInputPromptPopover({
     selected.current = selection;
     if (choice.prompt.arguments.length > 0) {
       setLoading(undefined);
-      setShouldRestoreFocus(false);
-      onClose();
+      setArgumentRequest(selection);
+      argumentIsPresented.current = true;
+      setIsArgumentSheetOpen(true);
       return;
     }
     setLoading(selection);
-    setShouldRestoreFocus(true);
     void apply(selection, {})
       .then(() => {
-        if (!selection.controller.signal.aborted) onClose();
+        if (!selection.controller.signal.aborted) onSelect();
       })
       .catch(() => failed(selection))
       .finally(() => setLoading((current) => (current === selection ? undefined : current)));
@@ -134,21 +141,6 @@ export function ChatInputPromptPopover({
     }
   }
 
-  function openArgumentsAfterClose() {
-    const selection = selected.current;
-    if (
-      !selection ||
-      selection.controller.signal.aborted ||
-      selection.choice.prompt.arguments.length === 0
-    )
-      return;
-    void runInputReplacement(() => {
-      if (selection.controller.signal.aborted) return;
-      setArgumentRequest(selection);
-      setIsArgumentSheetOpen(true);
-    }).catch(() => failed(selection));
-  }
-
   async function submitArguments(answers: QuestionFormAnswer[]): Promise<'applied'> {
     if (!argumentRequest || selected.current !== argumentRequest)
       throw new Error('This prompt is no longer selected.');
@@ -156,6 +148,7 @@ export function ChatInputPromptPopover({
       answers.filter((answer) => !answer.skipped).map((answer) => [answer.questionId, answer.text]),
     );
     await apply(argumentRequest, args);
+    onSelect();
     return 'applied';
   }
 
@@ -173,8 +166,8 @@ export function ChatInputPromptPopover({
   const loadingKey = loading && promptKey(loading.choice);
   const content = (
     <ScrollView
-      className="grow-0 shrink"
-      contentContainerClassName="gap-0.5 p-2"
+      className="min-h-0 flex-1"
+      contentContainerClassName="gap-1 px-5 py-2"
       keyboardDismissMode="none"
       keyboardShouldPersistTaps="always"
     >
@@ -184,7 +177,7 @@ export function ChatInputPromptPopover({
           accessibilityHint={choice.serverName}
           accessibilityRole="button"
           accessibilityState={{ busy: loadingKey === promptKey(choice) }}
-          className="min-h-12 flex-row items-center gap-3 rounded-xl px-3 py-2 active:bg-secondary-active"
+          className="min-h-14 flex-row items-center gap-3 rounded-xl px-3 py-2 active:bg-secondary-active"
           key={promptKey(choice)}
           onPress={() => select(choice)}
           ref={index === 0 ? initialFocusRef : undefined}
@@ -203,34 +196,42 @@ export function ChatInputPromptPopover({
 
   return (
     <>
-      <Composer.Popover
-        accessibilityLabel={t('plugins.mcp.title')}
-        content={content}
+      <BottomSheet
+        onClosed={() => {
+          cancelSelection();
+          listIsClosed.current = true;
+          if (!argumentIsPresented.current) onClosed?.();
+        }}
+        active={!argumentRequest}
         initialFocusRef={initialFocusRef}
-        maxHeight={320}
-        maxWidth={280}
-        onClose={(reason) => {
-          // Dismissing the menu abandons a prompt still resolving in it.
-          if (loading) cancelSelection();
-          setShouldRestoreFocus(reason !== 'anchor');
+        onClose={() => {
+          cancelSelection();
           onClose();
         }}
-        onClosed={openArgumentsAfterClose}
         open={open}
-        returnFocusRef={shouldRestoreFocus ? returnFocusRef : undefined}
-        testID="chat-prompt-popover"
+        presentation="overlay"
+        returnFocusRef={returnFocusRef}
+        size="full"
+        testID="chat-prompt-sheet"
+        title={t('plugins.mcp.title')}
       >
-        {children}
-      </Composer.Popover>
+        {content}
+      </BottomSheet>
       {argumentRequest ? (
         <UserQuestionSheet
           key={argumentRequest.id}
-          open={isArgumentSheetOpen && argumentRequest.agentId === agentId}
+          open={open && isArgumentSheetOpen && argumentRequest.agentId === agentId}
           questions={argumentQuestions}
           allowSkip={false}
           disabled={!isArgumentSheetOpen || argumentRequest.controller.signal.aborted}
           onClose={cancelSelection}
+          onClosed={() => {
+            argumentIsPresented.current = false;
+            setArgumentRequest(undefined);
+            if (listIsClosed.current) onClosed?.();
+          }}
           onRespond={submitArguments}
+          presentation="overlay"
         />
       ) : null}
     </>

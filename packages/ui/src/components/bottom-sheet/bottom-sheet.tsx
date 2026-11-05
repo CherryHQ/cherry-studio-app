@@ -4,26 +4,49 @@ import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
   ModalBottomSheet,
+  type PositionChangeEventData,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  type RefObject,
+  use,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   BackHandler,
   Keyboard,
+  type NativeSyntheticEvent,
+  Platform,
   Pressable,
+  ScrollView,
   type StyleProp,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
+  type ViewInstance,
   type ViewStyle,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  createAnimatedComponent,
+  type SharedValue,
+  useAnimatedStyle,
+  useEvent,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
+import { focusMenuTarget } from '../menu/menu-focus';
 import { useNavigationOverlay } from '../portal/overlay-navigation';
 
 const CLOSED_INDEX = 0;
@@ -32,6 +55,7 @@ const TOP_INSET = 12;
 const MAX_CARD_WIDTH = 720;
 const TOP_CORNER_RADIUS = 32;
 const KEYBOARD_GAP = 12;
+const OVERLAY_HANDLE_HEIGHT = 32;
 const HEIGHT_RATIOS = {
   compact: 0.4,
   full: 1,
@@ -47,7 +71,15 @@ export type BottomSheetBackAction = {
   onPress: () => void;
 };
 
+const SheetPresentationContext = createContext<{
+  height: number;
+  registerChild: () => () => void;
+  returnFocusRef: RefObject<ViewInstance | null>;
+} | null>(null);
+
 type BottomSheetBaseProps = {
+  /** A sibling overlay may cover this sheet while its content and scroll state stay mounted. */
+  active?: boolean;
   /** Lift the sheet with the keyboard, frame by frame, so its inputs and footer stay above it. */
   avoidKeyboard?: boolean;
   backAction?: BottomSheetBackAction;
@@ -56,8 +88,16 @@ type BottomSheetBaseProps = {
   dismissible?: boolean;
   footer?: ReactNode;
   headerAction?: ReactNode;
+  /** Handles system Back/Escape without adding a visible header button. */
+  onBack?: () => void;
   onClose: () => void;
+  /** Runs after a controlled or interactive dismissal finishes. */
+  onClosed?: () => void;
   open: boolean;
+  /** Overlay flows have only a handle; nested sheets cover their parent at the same height. */
+  presentation?: 'default' | 'overlay';
+  initialFocusRef?: RefObject<ViewInstance | null>;
+  returnFocusRef?: RefObject<ViewInstance | null>;
   testID?: string;
   title: string;
   /** Title-only sheets may center their heading without reserving action slots. */
@@ -78,7 +118,7 @@ export type BottomSheetProps = BottomSheetBaseProps &
       }
     | {
         height?: never;
-        size: BottomSheetSize;
+        size: BottomSheetSize | 'content';
         sizes?: never;
       }
     | {
@@ -99,6 +139,7 @@ export function BottomSheetProvider({ children }: { children: ReactNode }) {
  */
 export function BottomSheet(props: BottomSheetProps) {
   const {
+    active = true,
     avoidKeyboard = false,
     backAction,
     children,
@@ -106,13 +147,31 @@ export function BottomSheet(props: BottomSheetProps) {
     dismissible = true,
     footer,
     headerAction,
+    onBack,
     onClose,
+    onClosed,
     open,
+    initialFocusRef,
+    returnFocusRef,
     testID,
     title,
     titleAlign,
     titleVariant = 'heading',
   } = props;
+  const parent = use(SheetPresentationContext);
+  const presentation = props.presentation ?? (parent ? 'overlay' : 'default');
+  const isOverlay = presentation === 'overlay';
+  const headingRef = useRef<ViewInstance>(null);
+  const [childCount, setChildCount] = useState(0);
+  const registerChild = useCallback(() => {
+    setChildCount((count) => count + 1);
+    return () => setChildCount((count) => count - 1);
+  }, []);
+  const [isPresented, setIsPresented] = useState(open);
+  const [hasOpened, setHasOpened] = useState(open);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const cardWidth = Math.max(0, Math.min(MAX_CARD_WIDTH, windowWidth - insets.left - insets.right));
@@ -121,9 +180,36 @@ export function BottomSheet(props: BottomSheetProps) {
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
   const { height, size, sizes } = props;
-  const { cardHeight, detents } = useMemo(
-    () => resolveSheetHeights(availableCardHeight, dismissible, height, size, sizes),
-    [availableCardHeight, dismissible, height, size, sizes],
+  const measuredHeight =
+    size === 'content'
+      ? contentHeight +
+        (isOverlay ? OVERLAY_HANDLE_HEIGHT : headerHeight + 16) +
+        (footer ? footerHeight : insets.bottom)
+      : height;
+  const { cardHeight, minimumCardHeight, detents } = useMemo(
+    () =>
+      resolveSheetHeights(
+        availableCardHeight,
+        dismissible,
+        measuredHeight,
+        size === 'content' ? undefined : size,
+        sizes,
+        isOverlay ? parent?.height : undefined,
+      ),
+    [availableCardHeight, dismissible, measuredHeight, size, sizes, isOverlay, parent?.height],
+  );
+  const position = useSharedValue(0);
+  const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
+    (event) => {
+      'worklet';
+      position.set(event.position);
+    },
+    ['onPositionChange'],
+  );
+  const isResizable = !avoidKeyboard && detents.length > 2;
+  const childPresentation = useMemo(
+    () => (isOverlay ? { height: cardHeight, registerChild, returnFocusRef: headingRef } : null),
+    [cardHeight, isOverlay, registerChild],
   );
   const hasFooter = footer != null;
   // A handle promises a drag; a sheet that can neither close nor resize offers none.
@@ -137,7 +223,16 @@ export function BottomSheet(props: BottomSheetProps) {
   if (open !== previousOpen) {
     setPreviousOpen(open);
     setIndex(open ? OPEN_INDEX : CLOSED_INDEX);
+    if (open) {
+      setIsPresented(true);
+      setHasOpened(true);
+    }
   }
+
+  const registerWithParent = parent?.registerChild;
+  useEffect(() => {
+    if (isPresented) return registerWithParent?.();
+  }, [isPresented, registerWithParent]);
 
   useEffect(() => {
     if (open) {
@@ -145,7 +240,7 @@ export function BottomSheet(props: BottomSheetProps) {
     }
   }, [open]);
 
-  const requestClose = useCallback(() => {
+  const dismiss = useCallback(() => {
     if (!dismissible) {
       return;
     }
@@ -153,44 +248,93 @@ export function BottomSheet(props: BottomSheetProps) {
     Keyboard.dismiss();
     setIndex(CLOSED_INDEX);
   }, [dismissible]);
+  const requestClose = useCallback(() => {
+    if (active && childCount === 0) dismiss();
+  }, [active, childCount, dismiss]);
 
-  useNavigationOverlay(open, dismissible ? requestClose : undefined);
+  useNavigationOverlay(open, dismissible ? dismiss : undefined);
 
-  const handleHardwareBackPress = useCallback(() => {
-    if (backAction) {
+  const handleHardwareBackPress = useEffectEvent(() => {
+    if (!active || childCount > 0) return false;
+    if (onBack) {
+      onBack();
+    } else if (backAction) {
       backAction.onPress();
     } else {
       requestClose();
     }
 
     return true;
-  }, [backAction, requestClose]);
+  });
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBackPress);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () =>
+      handleHardwareBackPress(),
+    );
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && handleHardwareBackPress()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    if (Platform.OS === 'web') document.addEventListener('keydown', onKeyDown);
 
-    return () => subscription.remove();
-  }, [handleHardwareBackPress, open]);
+    return () => {
+      subscription.remove();
+      if (Platform.OS === 'web') document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   const handleIndexChange = useCallback((nextIndex: number) => {
     setIndex(nextIndex);
   }, []);
   const handleSettle = useCallback(
     (nextIndex: number) => {
-      if (nextIndex !== CLOSED_INDEX || hasNotifiedCloseRef.current || !dismissible || !open) {
+      if (nextIndex !== CLOSED_INDEX) {
+        if (isOverlay && active && childCount === 0)
+          focusMenuTarget(initialFocusRef?.current ?? headingRef.current);
+        return;
+      }
+      if (hasNotifiedCloseRef.current || !isPresented) {
         return;
       }
 
       hasNotifiedCloseRef.current = true;
-      Keyboard.dismiss();
-      onClose();
+      setIsPresented(false);
+      if (open && dismissible) {
+        Keyboard.dismiss();
+        onClose();
+      }
+      if (isOverlay) {
+        requestAnimationFrame(() => {
+          focusMenuTarget(returnFocusRef?.current ?? parent?.returnFocusRef.current ?? null);
+          onClosed?.();
+        });
+      } else {
+        onClosed?.();
+      }
     },
-    [dismissible, onClose, open],
+    [
+      active,
+      childCount,
+      dismissible,
+      initialFocusRef,
+      isOverlay,
+      isPresented,
+      onClose,
+      onClosed,
+      open,
+      parent?.returnFocusRef,
+      returnFocusRef,
+    ],
   );
+
+  // Allocate a child portal after its parent first opens, then retain its scroll state on blur.
+  if (isOverlay && !hasOpened) return null;
 
   return (
     <ModalBottomSheet
@@ -199,14 +343,18 @@ export function BottomSheet(props: BottomSheetProps) {
       detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
+      onPositionChange={isResizable ? handlePositionChange : undefined}
       onSettle={handleSettle}
       scrimColor={scrimColor}
+      wrapNativeView={createAnimatedComponent}
     >
       <SheetLayout
         availableCardHeight={availableCardHeight}
         avoidKeyboard={avoidKeyboard}
         bottomInset={bottomInset}
         cardHeight={cardHeight}
+        minimumCardHeight={minimumCardHeight}
+        position={position}
         style={[
           styles.layout,
           { width: '100%', paddingLeft: insets.left, paddingRight: insets.right },
@@ -223,83 +371,116 @@ export function BottomSheet(props: BottomSheetProps) {
           style={StyleSheet.absoluteFill}
         />
         <View
-          accessibilityElementsHidden={!open}
+          accessibilityElementsHidden={!open || !active || childCount > 0}
           accessibilityViewIsModal
           className="overflow-hidden border-continuous bg-background dark:border dark:border-border dark:bg-popover"
-          importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
-          onAccessibilityEscape={dismissible ? requestClose : undefined}
+          importantForAccessibility={
+            open && active && childCount === 0 ? 'yes' : 'no-hide-descendants'
+          }
+          onAccessibilityEscape={
+            active && childCount === 0
+              ? (onBack ?? (dismissible ? requestClose : undefined))
+              : undefined
+          }
+          pointerEvents={!active || childCount > 0 ? 'none' : 'auto'}
           style={[
             styles.card,
-            avoidKeyboard
+            avoidKeyboard || isResizable
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
           ]}
           testID={testID}
         >
           <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
-          <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
+          <View
+            accessibilityElementsHidden={!isOverlay}
+            accessibilityLabel={isOverlay ? title : undefined}
+            accessibilityRole={isOverlay ? 'header' : undefined}
+            accessible={isOverlay}
+            className={cn('items-center pt-3', isOverlay && 'h-8')}
+            pointerEvents="none"
+            ref={headingRef}
+          >
             <View
               className={cn('h-1 w-9 rounded-full', isDraggable && 'bg-border-strong')}
               testID={isDraggable ? 'bottom-sheet-handle' : undefined}
             />
           </View>
           {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
-          <View className="min-h-14 flex-row items-start px-5 py-1.5">
-            {backAction ? (
-              <Pressable
-                accessibilityLabel={backAction.accessibilityLabel}
-                accessibilityRole="button"
-                className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
-                hitSlop={4}
-                onPress={backAction.onPress}
-              >
-                <ArrowLeftIcon className="size-6 text-foreground" />
-              </Pressable>
-            ) : closeAction ? (
-              <View className="min-w-11 flex-1 items-start">
-                <Pressable
-                  accessibilityLabel={closeAction.accessibilityLabel}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: !dismissible }}
-                  className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
-                  disabled={!dismissible}
-                  onPress={requestClose}
-                >
-                  <XIcon className="size-6 text-foreground" />
-                </Pressable>
-              </View>
-            ) : null}
-            <Text
-              accessibilityRole="header"
-              className={cn(
-                'min-w-0 font-semibold text-foreground',
-                // Both variants fill the 44-point first line that the header controls centre on.
-                titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                isCloseActionVisible ? 'shrink px-2' : 'flex-1',
-                (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
-                  'text-center',
-              )}
-              numberOfLines={titleVariant === 'prompt' ? undefined : 2}
+          {!isOverlay ? (
+            <View
+              className="min-h-14 flex-row items-start px-5 py-1.5"
+              onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
             >
-              {title}
-            </Text>
-            {isCloseActionVisible ? (
-              <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
-                {headerAction}
-              </View>
-            ) : headerAction ? (
-              <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
-            ) : null}
-          </View>
+              {backAction ? (
+                <Pressable
+                  accessibilityLabel={backAction.accessibilityLabel}
+                  accessibilityRole="button"
+                  className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
+                  hitSlop={4}
+                  onPress={backAction.onPress}
+                >
+                  <ArrowLeftIcon className="size-6 text-foreground" />
+                </Pressable>
+              ) : closeAction ? (
+                <View className="min-w-11 flex-1 items-start">
+                  <Pressable
+                    accessibilityLabel={closeAction.accessibilityLabel}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !dismissible }}
+                    className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
+                    disabled={!dismissible}
+                    onPress={requestClose}
+                  >
+                    <XIcon className="size-6 text-foreground" />
+                  </Pressable>
+                </View>
+              ) : null}
+              <Text
+                accessibilityRole="header"
+                className={cn(
+                  'min-w-0 font-semibold text-foreground',
+                  // Both variants fill the 44-point first line that the header controls centre on.
+                  titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
+                  isCloseActionVisible ? 'shrink px-2' : 'flex-1',
+                  (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
+                    'text-center',
+                )}
+                numberOfLines={titleVariant === 'prompt' ? undefined : 2}
+              >
+                {title}
+              </Text>
+              {isCloseActionVisible ? (
+                <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
+                  {headerAction}
+                </View>
+              ) : headerAction ? (
+                <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
+              ) : null}
+            </View>
+          ) : null}
           <View
             className="min-h-0 flex-1"
             style={hasFooter ? undefined : { paddingBottom: insets.bottom }}
           >
-            {children}
+            <SheetPresentationContext value={childPresentation}>
+              {size === 'content' ? (
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  onContentSizeChange={(_, nextHeight) => setContentHeight(nextHeight)}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {children}
+                </ScrollView>
+              ) : (
+                children
+              )}
+            </SheetPresentationContext>
           </View>
           {hasFooter ? (
             <View
               className="border-t border-border px-4 pt-3"
+              onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
               style={{ paddingBottom: Math.max(insets.bottom, 16) }}
             >
               {footer}
@@ -317,17 +498,32 @@ type SheetLayoutProps = {
   avoidKeyboard: boolean;
   bottomInset: number;
   cardHeight: number;
+  minimumCardHeight: number;
+  position: SharedValue<number>;
   children: ReactNode;
   style: StyleProp<ViewStyle>;
 };
 
-function SheetLayout({ avoidKeyboard, cardHeight, children, style, ...props }: SheetLayoutProps) {
+function SheetLayout({
+  avoidKeyboard,
+  cardHeight,
+  minimumCardHeight,
+  position,
+  children,
+  style,
+  ...props
+}: SheetLayoutProps) {
+  // Native detents move the content without resizing it. Follow the visible height so the
+  // scroll viewport and footer stay inside the sheet, without adding a second animation.
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: Math.min(cardHeight, Math.max(minimumCardHeight, position.get())),
+  }));
   return avoidKeyboard ? (
     <KeyboardSheetLayout cardHeight={cardHeight} style={style} {...props}>
       {children}
     </KeyboardSheetLayout>
   ) : (
-    <View style={[style, { height: cardHeight }]}>{children}</View>
+    <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>
   );
 }
 
@@ -338,7 +534,7 @@ function KeyboardSheetLayout({
   cardHeight,
   children,
   style,
-}: Omit<SheetLayoutProps, 'avoidKeyboard'>) {
+}: Omit<SheetLayoutProps, 'avoidKeyboard' | 'minimumCardHeight' | 'position'>) {
   const { height, progress } = useReanimatedKeyboardAnimation();
   const animatedStyle = useAnimatedStyle(() => ({
     height: Math.min(
@@ -373,6 +569,7 @@ function resolveSheetHeights(
   height: number | undefined,
   size: BottomSheetSize | undefined,
   sizes: BottomSheetSizes | undefined,
+  minimumHeight = 0,
 ) {
   const requestedCardHeights =
     height !== undefined
@@ -383,14 +580,16 @@ function resolveSheetHeights(
             Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
           );
   const cardHeights = requestedCardHeights
-    .map((requestedHeight) => Math.max(0, Math.min(requestedHeight, availableCardHeight)))
+    .map((requestedHeight) =>
+      Math.min(availableCardHeight, Math.max(minimumHeight, requestedHeight)),
+    )
     .sort((left, right) => left - right)
     .filter((height, index, heights) => index === 0 || height !== heights[index - 1]);
   const cardHeight = cardHeights.at(-1) ?? 0;
   const closedDetent = dismissible ? 0 : programmatic(0);
   const detents: Detent[] = [closedDetent, ...cardHeights];
 
-  return { cardHeight, detents };
+  return { cardHeight, minimumCardHeight: cardHeights[0] ?? 0, detents };
 }
 
 const styles = StyleSheet.create({

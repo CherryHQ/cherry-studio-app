@@ -8,6 +8,18 @@ import { cloudSnapshot } from './cloudFixtures';
 
 const now = Date.parse('2026-10-31T00:00:00Z');
 
+test('only an effective paid entitlement for the selected model grants Plan access', () => {
+  const state = cloudSnapshot();
+  const entitlement = state.account!.entitlements[0];
+  entitlement.is_free = true;
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('not_entitled');
+  const paid = { ...entitlement, is_free: false, model_ids: ['another-model'] };
+  state.account!.entitlements.push(paid);
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('not_entitled');
+  paid.model_ids.push('cloud-model');
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
+});
+
 test('all windows in a pool constrain credit, while another pool can independently admit a model', () => {
   const state = cloudSnapshot();
   const pool = state.account!.quota_pools[0];
@@ -66,4 +78,24 @@ test('the wire contract retains reserved money units and subscription-month date
   expect(CloudPlansSchema.parse(state.plans).entitlements).toEqual([]);
   delete state.account!.quota_pools[0].currency;
   expect(CloudAccountSchema.safeParse(state.account).success).toBe(false);
+});
+
+test('the plans contract keeps available paid plans when there is no current subscription', () => {
+  const plan = {
+    id: 'available-paid-plan',
+    display_name: 'Paid plan',
+    is_free: false,
+    subscription_price: {
+      product_name: 'Monthly plan',
+      currency: 'USD',
+      interval: 'month',
+      unit_amount: 1000,
+    },
+  };
+  const plans = CloudPlansSchema.parse({
+    measured_at: '2026-10-31T00:00:00Z',
+    available_plans: [plan],
+    entitlements: [],
+  });
+  expect(plans.available_plans).toEqual([plan]);
 });
