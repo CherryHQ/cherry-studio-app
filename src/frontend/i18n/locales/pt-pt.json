@@ -2603,11 +2603,10 @@
   "workspace.find": "Procurar ficheiros no espaço de trabalho",
   "workspace.list": "Listar espaço de trabalho",
   "workspace.loadMore": "Mostrar mais ficheiros",
-  "workspace.none": "Sem espaço de trabalho",
+  "workspace.none": "Nenhuma pasta selecionada",
   "workspace.open": "Abrir espaço de trabalho de ficheiros",
   "workspace.openCurrent": "Espaço de arquivos: {{name}}",
   "workspace.preview": "Pré-visualizar {{name}}",
   "workspace.runningHint": "A tarefa atual mantém o espaço de trabalho inicial. A mudança se aplica às próximas tarefas.",
-  "workspace.title": "Espaço de arquivos",
   "workspace.unavailable": "Este espaço de trabalho está no lixo. Restaure-o ou escolha outra pasta para guardar novos ficheiros."
 }

@@ -2582,11 +2582,10 @@
   "workspace.find": "Dateien im Arbeitsbereich suchen",
   "workspace.list": "Arbeitsbereich auflisten",
   "workspace.loadMore": "Weitere Dateien anzeigen",
-  "workspace.none": "Kein Arbeitsbereich",
+  "workspace.none": "Kein Ordner ausgewählt",
   "workspace.open": "Datei-Arbeitsbereich öffnen",
   "workspace.openCurrent": "Datei-Arbeitsbereich: {{name}}",
   "workspace.preview": "Vorschau von {{name}}",
   "workspace.runningHint": "Die aktuelle Aufgabe behält ihren ursprünglichen Arbeitsbereich. Der Wechsel gilt für nachfolgende Aufgaben.",
-  "workspace.title": "Datei-Arbeitsbereich",
   "workspace.unavailable": "Dieser Arbeitsbereich ist im Papierkorb. Stellen Sie ihn wieder her oder wählen Sie einen anderen Ordner, um neue Dateien zu speichern."
 }

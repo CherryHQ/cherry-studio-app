@@ -4,6 +4,7 @@ import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
   ModalBottomSheet,
+  type PositionChangeEventData,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
 import {
@@ -21,6 +22,7 @@ import {
 import {
   BackHandler,
   Keyboard,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -33,7 +35,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  createAnimatedComponent,
+  type SharedValue,
+  useAnimatedStyle,
+  useEvent,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
@@ -178,7 +186,7 @@ export function BottomSheet(props: BottomSheetProps) {
         (isOverlay ? OVERLAY_HANDLE_HEIGHT : headerHeight + 16) +
         (footer ? footerHeight : insets.bottom)
       : height;
-  const { cardHeight, detents } = useMemo(
+  const { cardHeight, minimumCardHeight, detents } = useMemo(
     () =>
       resolveSheetHeights(
         availableCardHeight,
@@ -190,6 +198,15 @@ export function BottomSheet(props: BottomSheetProps) {
       ),
     [availableCardHeight, dismissible, measuredHeight, size, sizes, isOverlay, parent?.height],
   );
+  const position = useSharedValue(0);
+  const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
+    (event) => {
+      'worklet';
+      position.set(event.position);
+    },
+    ['onPositionChange'],
+  );
+  const isResizable = !avoidKeyboard && detents.length > 2;
   const childPresentation = useMemo(
     () => (isOverlay ? { height: cardHeight, registerChild, returnFocusRef: headingRef } : null),
     [cardHeight, isOverlay, registerChild],
@@ -326,14 +343,18 @@ export function BottomSheet(props: BottomSheetProps) {
       detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
+      onPositionChange={isResizable ? handlePositionChange : undefined}
       onSettle={handleSettle}
       scrimColor={scrimColor}
+      wrapNativeView={createAnimatedComponent}
     >
       <SheetLayout
         availableCardHeight={availableCardHeight}
         avoidKeyboard={avoidKeyboard}
         bottomInset={bottomInset}
         cardHeight={cardHeight}
+        minimumCardHeight={minimumCardHeight}
+        position={position}
         style={[
           styles.layout,
           { width: '100%', paddingLeft: insets.left, paddingRight: insets.right },
@@ -364,7 +385,7 @@ export function BottomSheet(props: BottomSheetProps) {
           pointerEvents={!active || childCount > 0 ? 'none' : 'auto'}
           style={[
             styles.card,
-            avoidKeyboard
+            avoidKeyboard || isResizable
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
           ]}
@@ -477,17 +498,32 @@ type SheetLayoutProps = {
   avoidKeyboard: boolean;
   bottomInset: number;
   cardHeight: number;
+  minimumCardHeight: number;
+  position: SharedValue<number>;
   children: ReactNode;
   style: StyleProp<ViewStyle>;
 };
 
-function SheetLayout({ avoidKeyboard, cardHeight, children, style, ...props }: SheetLayoutProps) {
+function SheetLayout({
+  avoidKeyboard,
+  cardHeight,
+  minimumCardHeight,
+  position,
+  children,
+  style,
+  ...props
+}: SheetLayoutProps) {
+  // Native detents move the content without resizing it. Follow the visible height so the
+  // scroll viewport and footer stay inside the sheet, without adding a second animation.
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: Math.min(cardHeight, Math.max(minimumCardHeight, position.get())),
+  }));
   return avoidKeyboard ? (
     <KeyboardSheetLayout cardHeight={cardHeight} style={style} {...props}>
       {children}
     </KeyboardSheetLayout>
   ) : (
-    <View style={[style, { height: cardHeight }]}>{children}</View>
+    <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>
   );
 }
 
@@ -498,7 +534,7 @@ function KeyboardSheetLayout({
   cardHeight,
   children,
   style,
-}: Omit<SheetLayoutProps, 'avoidKeyboard'>) {
+}: Omit<SheetLayoutProps, 'avoidKeyboard' | 'minimumCardHeight' | 'position'>) {
   const { height, progress } = useReanimatedKeyboardAnimation();
   const animatedStyle = useAnimatedStyle(() => ({
     height: Math.min(
@@ -553,7 +589,7 @@ function resolveSheetHeights(
   const closedDetent = dismissible ? 0 : programmatic(0);
   const detents: Detent[] = [closedDetent, ...cardHeights];
 
-  return { cardHeight, detents };
+  return { cardHeight, minimumCardHeight: cardHeights[0] ?? 0, detents };
 }
 
 const styles = StyleSheet.create({

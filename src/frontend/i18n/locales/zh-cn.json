@@ -2561,11 +2561,10 @@
   "workspace.find": "查找工作区文件",
   "workspace.list": "列出工作区",
   "workspace.loadMore": "显示更多文件",
-  "workspace.none": "不使用工作区",
+  "workspace.none": "未选择文件夹",
   "workspace.open": "打开文件工作区",
   "workspace.openCurrent": "文件工作区：{{name}}",
   "workspace.preview": "预览 {{name}}",
   "workspace.runningHint": "当前任务继续使用开始时的工作区，切换对后续任务生效。",
-  "workspace.title": "文件工作区",
   "workspace.unavailable": "此工作区已在回收站中。请还原它或选择其他文件夹以保存新文件。"
 }

@@ -144,7 +144,7 @@ export function FileWorkspaceSheet({
       returnFocusRef={returnFocusRef}
       size="full"
       testID="file-workspace-sheet"
-      title={t('workspace.title')}
+      title={t('library.folders.title')}
     >
       {address.sessionId ? <WorkspaceTaskNotice sessionId={address.sessionId} /> : null}
       {unavailable ? (

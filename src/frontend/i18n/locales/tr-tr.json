@@ -2582,11 +2582,10 @@
   "workspace.find": "Çalışma alanı dosyalarını bul",
   "workspace.list": "Çalışma alanını listele",
   "workspace.loadMore": "Daha fazla dosya göster",
-  "workspace.none": "Çalışma alanı kullanma",
+  "workspace.none": "Klasör seçilmedi",
   "workspace.open": "Dosya çalışma alanını aç",
   "workspace.openCurrent": "Dosya çalışma alanı: {{name}}",
   "workspace.preview": "{{name}} dosyasını önizle",
   "workspace.runningHint": "Geçerli görev başladığı çalışma alanını kullanmaya devam eder. Değişiklik sonraki görevlere uygulanır.",
-  "workspace.title": "Dosya çalışma alanı",
   "workspace.unavailable": "Bu çalışma alanı çöp kutusunda. Yeni dosyaları kaydetmek için geri yükleyin veya başka bir klasör seçin."
 }

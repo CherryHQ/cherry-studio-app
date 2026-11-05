@@ -8,6 +8,7 @@ import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/ov
 
 let mockBottomSheetProps: Record<string, unknown> = {};
 let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
+const mockAnimatedStyleFactories: (() => object)[] = [];
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
@@ -36,10 +37,28 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
+  const { useState } = jest.requireActual('react');
   return {
     __esModule: true,
     default: { View },
-    useAnimatedStyle: (factory: () => object) => factory(),
+    createAnimatedComponent: (component: unknown) => component,
+    useAnimatedStyle: (factory: () => object) => {
+      mockAnimatedStyleFactories.push(factory);
+      return factory();
+    },
+    useEvent: (handler: (event: unknown) => void) => handler,
+    useSharedValue: (initial: number) => {
+      const [shared] = useState(() => {
+        let value = initial;
+        return {
+          get: () => value,
+          set: (next: number) => {
+            value = next;
+          },
+        };
+      });
+      return shared;
+    },
   };
 });
 
@@ -58,6 +77,7 @@ describe('BottomSheet', () => {
   beforeEach(() => {
     mockBottomSheetProps = {};
     mockHardwareBackPress = undefined;
+    mockAnimatedStyleFactories.length = 0;
     const handlers: (() => boolean | null | undefined)[] = [];
     backHandlerSpy = jest
       .spyOn(BackHandler, 'addEventListener')
@@ -411,6 +431,45 @@ describe('BottomSheet', () => {
 
     act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(2));
     expect(mockBottomSheetProps.index).toBe(2);
+  });
+
+  test('keeps the footer inside the visible layout while dragging between heights', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          footer={<Text>Create</Text>}
+          onClose={jest.fn()}
+          open
+          sizes={['large', 'full']}
+          testID="resizable-sheet"
+          title="Files"
+        >
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const [, minimum, maximum] = mockBottomSheetProps.detents as number[];
+    const layout = mockAnimatedStyleFactories.at(-1)!;
+    expect(layout()).toEqual({ height: minimum });
+    const card = renderer?.root
+      .findAllByProps({ testID: 'resizable-sheet' })
+      .find((node) => typeof node.type === 'string');
+    const cardStyle = StyleSheet.flatten(card?.props.style);
+    expect(cardStyle.flex).toBe(1);
+    expect(cardStyle.height).toBeUndefined();
+
+    const onPositionChange = mockBottomSheetProps.onPositionChange as (event: {
+      position: number;
+      index: number;
+    }) => void;
+    const middle = (minimum + maximum) / 2;
+    onPositionChange({ position: middle, index: 1.5 });
+    expect(layout()).toEqual({ height: middle });
+    onPositionChange({ position: maximum, index: 2 });
+    expect(layout()).toEqual({ height: maximum });
+    onPositionChange({ position: minimum / 2, index: 0.5 });
+    expect(layout()).toEqual({ height: minimum });
   });
 
   test('sizes an overlay to its content and safe-area space', () => {

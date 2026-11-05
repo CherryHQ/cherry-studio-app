@@ -2603,11 +2603,10 @@
   "workspace.find": "Rechercher des fichiers dans l’espace de travail",
   "workspace.list": "Lister l’espace de travail",
   "workspace.loadMore": "Afficher plus de fichiers",
-  "workspace.none": "Aucun espace de travail",
+  "workspace.none": "Aucun dossier sélectionné",
   "workspace.open": "Ouvrir l’espace de travail des fichiers",
   "workspace.openCurrent": "Espace de fichiers : {{name}}",
   "workspace.preview": "Aperçu de {{name}}",
   "workspace.runningHint": "La tâche en cours conserve son espace de travail initial. Le changement s’applique aux tâches suivantes.",
-  "workspace.title": "Espace de fichiers",
   "workspace.unavailable": "Cet espace de travail est dans la corbeille. Restaurez-le ou choisissez un autre dossier pour enregistrer de nouveaux fichiers."
 }

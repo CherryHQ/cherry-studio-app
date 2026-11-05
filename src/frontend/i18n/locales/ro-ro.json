@@ -2603,11 +2603,10 @@
   "workspace.find": "Găsiți fișiere în spațiul de lucru",
   "workspace.list": "Listați spațiul de lucru",
   "workspace.loadMore": "Afișează mai multe fișiere",
-  "workspace.none": "Fără spațiu de lucru",
+  "workspace.none": "Niciun folder selectat",
   "workspace.open": "Deschide spațiul de lucru pentru fișiere",
   "workspace.openCurrent": "Spațiu de fișiere: {{name}}",
   "workspace.preview": "Previzualizează {{name}}",
   "workspace.runningHint": "Sarcina curentă păstrează spațiul de lucru inițial. Schimbarea se aplică sarcinilor următoare.",
-  "workspace.title": "Spațiu de fișiere",
   "workspace.unavailable": "Acest spațiu de lucru este în coș. Restaurați-l sau alegeți alt folder pentru a salva fișiere noi."
 }

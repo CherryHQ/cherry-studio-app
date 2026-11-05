@@ -32,6 +32,11 @@ and is clamped to the available screen height. Product components choose semanti
 fixed height, but do not receive detents, geometry, close reasons, or types from the underlying UI
 library.
 
+For multiple heights, the native position event drives the content layout on the UI thread. The
+scroll viewport and fixed footer follow the visible height during dragging and snapping, rather
+than laying out below the screen at the largest height. Opening and closing retain the smallest
+open layout; keyboard avoidance keeps its separate keyboard-driven layout.
+
 ```tsx
 <BottomSheet
   footer={<Button onPress={createItem}>Create item</Button>}

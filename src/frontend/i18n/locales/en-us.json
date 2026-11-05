@@ -2582,11 +2582,10 @@
   "workspace.find": "Find workspace files",
   "workspace.list": "List workspace",
   "workspace.loadMore": "Show more files",
-  "workspace.none": "No workspace",
+  "workspace.none": "No folder selected",
   "workspace.open": "Open file workspace",
   "workspace.openCurrent": "File workspace: {{name}}",
   "workspace.preview": "Preview {{name}}",
   "workspace.runningHint": "The current task keeps the workspace it started with. Switching applies to subsequent tasks.",
-  "workspace.title": "File workspace",
   "workspace.unavailable": "This workspace is in the trash. Restore it or choose another folder to save new files."
 }

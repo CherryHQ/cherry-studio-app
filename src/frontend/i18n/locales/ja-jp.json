@@ -2561,11 +2561,10 @@
   "workspace.find": "ワークスペースのファイルを検索",
   "workspace.list": "ワークスペースを一覧表示",
   "workspace.loadMore": "さらにファイルを表示",
-  "workspace.none": "ワークスペースを使用しない",
+  "workspace.none": "フォルダー未選択",
   "workspace.open": "ファイルワークスペースを開く",
   "workspace.openCurrent": "ファイルワークスペース：{{name}}",
   "workspace.preview": "{{name}}をプレビュー",
   "workspace.runningHint": "実行中のタスクは開始時のワークスペースを使い続けます。切り替えは以降のタスクに適用されます。",
-  "workspace.title": "ファイルワークスペース",
   "workspace.unavailable": "このワークスペースはゴミ箱にあります。新しいファイルを保存するには、復元するか別のフォルダーを選んでください。"
 }
