@@ -9,7 +9,6 @@ import * as z from 'zod';
 import { Emitter } from '@/backend/core/lifecycle/event';
 import { isHttpError } from '@/backend/services/http';
 import {
-  type AccountEnvironment,
   AccountError,
   type AccountModule,
   type AccountSessionContext,
@@ -53,8 +52,6 @@ export interface AccountRuntimeOptions {
   portal: Portal | null;
   /** The SDK integration supplies app-owned context for this exact current or candidate session. */
   resolveSessionContext(session: AuthState): AccountSessionContext | null;
-  /** Enterprise API addresses selected by the normalized account environment. */
-  enterpriseAddresses?: Partial<Record<AccountEnvironment, string>>;
   /** The profile this runtime serves. */
   active: ActiveProfile;
   profiles: {
@@ -210,7 +207,7 @@ export class AccountRuntime implements AccountModule {
             return;
           }
           if (proposed.profile.product !== 'enterprise') throw new AccountError('rejected');
-          const address = this.enterpriseAddress(context.environment);
+          const address = this.enterpriseAddress(context);
           const api = this.options.createApi(address, {
             getProductToken: () => candidate.getProductToken(address),
           });
@@ -317,14 +314,16 @@ export class AccountRuntime implements AccountModule {
       return null;
     return {
       key: JSON.stringify([
-        context.environment,
         context.issuer,
         session.subject,
         session.profile.profileId,
+        context.cloudApiOrigin,
+        context.cloudWebUrl,
         this.communityRevision,
       ]),
-      environment: context.environment,
       profileId: session.profile.profileId,
+      apiOrigin: context.cloudApiOrigin,
+      webUrl: context.cloudWebUrl,
     };
   };
 
@@ -493,14 +492,14 @@ export class AccountRuntime implements AccountModule {
     )
       return false;
     try {
-      return address === this.enterpriseAddress(context.environment);
+      return address === this.enterpriseAddress(context);
     } catch {
       return false;
     }
   }
 
-  private enterpriseAddress(environment: AccountEnvironment): string {
-    const address = this.options.enterpriseAddresses?.[environment];
+  private enterpriseAddress(context: AccountSessionContext): string {
+    const address = context.enterpriseApiBaseUrl;
     if (!address) throw new AccountError('unavailable');
     return normalizeEnterpriseAddress(address);
   }

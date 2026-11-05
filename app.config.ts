@@ -129,10 +129,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         issuer: process.env.ACCOUNTS_PORTAL_ISSUER ?? '',
         clientId: process.env.ACCOUNTS_PORTAL_CLIENT_ID ?? '',
         scopes: (process.env.ACCOUNTS_PORTAL_SCOPES ?? '').split(/\s+/).filter(Boolean),
-        enterpriseAddresses: {
-          cn: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API_CN,
-          global: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API_GLOBAL,
-        },
+        // SDK 0.2.1 has one deployment and no session service metadata yet. These concrete
+        // addresses feed only its integration adapter until the SDK supplies them per session.
+        enterpriseApiBaseUrl: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API_CN,
+        cloudApiOrigin: process.env.CHERRY_CLOUD_API_ORIGIN_CN,
+        cloudWebUrl: process.env.CHERRY_CLOUD_WEB_URL_CN,
       },
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
       // Native APK installation capability is separately embedded by withAppUpdates.
