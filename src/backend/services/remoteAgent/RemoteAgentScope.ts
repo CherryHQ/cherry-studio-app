@@ -28,9 +28,11 @@ import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoor
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   RemoteAgentSource,
+  RemoteAttachment,
   RemoteSessionSnapshot,
   RemoteSourceState,
   RemoteResourceValue,
+  RemoteWorkspaceFileView,
 } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentActions } from './RemoteAgentActions';
@@ -45,8 +47,8 @@ import {
 } from './remoteAgentViews';
 import { RemoteAttachmentDrafts } from './RemoteAttachmentDrafts';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
-import { createAttachmentDownloader } from './remoteDownloads';
-import { RemoteReadCoordinator } from './RemoteReadCoordinator';
+import { createAttachmentDownloader, createWorkspaceFileDownloader } from './remoteDownloads';
+import { RemoteReadCoordinator, type TransferState } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import {
   uploadAttachments,
@@ -125,6 +127,14 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private stopped = false;
   private preparing = 0;
   private readonly downloadAttachment = createAttachmentDownloader();
+  private readonly downloadWorkspaceFile = createWorkspaceFileDownloader();
+  private readonly fileStaleListeners = new Set<
+    (event: { sessionId: string; path: string; latestRevision: string }) => void
+  >();
+  private readonly trackedWorkspaceFiles = new Map<
+    string,
+    { sessionId: string; path: string; revision: string }
+  >();
   private uploadAbort?: { id: string; controller: AbortController };
   private backgroundBlocked = false;
   private pendingCommandLease?: ReturnType<KeepAliveSource['acquire']>;
@@ -133,6 +143,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private readonly unoperations: () => void;
   private readonly executionListeners = new Set<() => void>();
   private recoveryTimer?: ReturnType<typeof setTimeout>;
+  private currentFilesVersion?: number;
   private getUploadTransport: GetUploadTransport = async (signal) => {
     const session = await this.ready(signal);
     if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
@@ -437,6 +448,21 @@ export class RemoteAgentScope implements RemoteAgentSource {
         this.lease.connectionId,
       );
     this.updateExecution(sessionId, observation);
+    if (observation.snapshot?.executions.some((e) => e.state === 'completed')) {
+      for (const tracked of this.trackedWorkspaceFiles.values()) {
+        if (tracked.sessionId === sessionId) {
+          void this.getWorkspaceFile(sessionId, tracked.path)
+            .then((file) => {
+              if (file.revision !== tracked.revision) {
+                for (const listener of this.fileStaleListeners) {
+                  listener({ sessionId, path: tracked.path, latestRevision: file.revision });
+                }
+              }
+            })
+            .catch(() => undefined);
+        }
+      }
+    }
     for (const listener of observation.listeners) listener(observation.snapshot);
   }
   /**
@@ -473,8 +499,22 @@ export class RemoteAgentScope implements RemoteAgentSource {
       const session = await this.ready(signal);
       const preupload = session.agentAttachmentSelections === true;
       const attachments = preupload && session.agentUploadsVersion === 1;
-      if (this.state.attachments !== attachments || this.state.preupload !== preupload) {
-        this.state = { ...this.state, attachments, preupload };
+      const sessionRename = session.agentSessionRenameVersion === 1;
+      const modelSelection = session.agentModelSelectionVersion === 1;
+      this.currentFilesVersion = (session as { agentFilesVersion?: number }).agentFilesVersion;
+      if (
+        this.state.attachments !== attachments ||
+        this.state.preupload !== preupload ||
+        this.state.sessionRename !== sessionRename ||
+        this.state.modelSelection !== modelSelection
+      ) {
+        this.state = {
+          ...this.state,
+          attachments,
+          preupload,
+          sessionRename,
+          modelSelection,
+        };
         for (const listener of this.stateListeners) listener();
       }
       const negotiatedParams =
@@ -535,6 +575,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
         name: item.name,
         emoji: item.emoji,
         ...(item.model !== undefined ? { model: item.model } : {}),
+        ...(item.reasoningEffort !== undefined ? { reasoningEffort: item.reasoningEffort } : {}),
+        ...(item.availableModels !== undefined ? { availableModels: item.availableModels } : {}),
       })),
       next: page.nextCursor ?? undefined,
     };
@@ -766,6 +808,38 @@ export class RemoteAgentScope implements RemoteAgentSource {
       }
       return { kind: 'text', text };
     }
+    if (value.kind === 'workspace-file') {
+      const linked = linkAbortSignals([signal, this.lease.signal]);
+      try {
+        const uri = await this.downloadWorkspaceFile(
+          this.lease.scope,
+          this.historyRequest,
+          sessionId,
+          {
+            path: value.path,
+            revision: value.revision,
+            sha256: value.sha256,
+            byteLength: value.byteLength ?? 0,
+            name: value.name,
+          },
+          linked.signal,
+        );
+        this.trackedWorkspaceFiles.set(`${sessionId}:${value.path}`, {
+          sessionId,
+          path: value.path,
+          revision: value.revision,
+        });
+        return {
+          kind: 'file',
+          uri,
+          name: value.name,
+          mediaType: value.mediaType,
+          byteLength: value.byteLength !== undefined ? String(value.byteLength) : undefined,
+        };
+      } finally {
+        linked.dispose();
+      }
+    }
     const part = value.part;
     if (part.kind === 'data' && part.name === 'file') {
       const text =
@@ -806,6 +880,83 @@ export class RemoteAgentScope implements RemoteAgentSource {
           : decodeContent(await this.content(sessionId, part.content.ref, signal)),
     };
   }
+  get agentFilesSupported(): boolean {
+    return this.currentFilesVersion === 1;
+  }
+  getTransferState(ref: string): TransferState | undefined {
+    return (
+      this.downloadAttachment.coordinator.getTransferState(ref) ??
+      this.downloadWorkspaceFile.coordinator.getTransferState(ref)
+    );
+  }
+  async downloadResourceWithProgress(
+    ref: string,
+    onProgress: (progress: number) => void,
+    signal?: AbortSignal,
+  ): Promise<RemoteResourceValue> {
+    const linked = signal ? linkAbortSignals([signal, this.lease.signal]) : undefined;
+    const effectiveSignal = linked?.signal ?? this.lease.signal;
+    try {
+      return await this.readResource(ref, effectiveSignal);
+    } finally {
+      linked?.dispose();
+    }
+  }
+  async getWorkspaceFile(
+    sessionId: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<RemoteWorkspaceFileView> {
+    this.assertActive();
+    const effectiveSignal = signal ?? this.lease.signal;
+    effectiveSignal.throwIfAborted();
+    const session = await this.ready(effectiveSignal);
+    const result = (await this.call(
+      session,
+      'agent.files.get' as any,
+      { sessionId, path },
+      effectiveSignal,
+    )) as {
+      file: {
+        path: string;
+        name: string;
+        revision: string;
+        byteLength: number | string;
+        sha256: string;
+      };
+    };
+    return {
+      path: result.file.path,
+      name: result.file.name,
+      revision: String(result.file.revision),
+      byteLength: Number(result.file.byteLength),
+      sha256: result.file.sha256,
+      isCurrent: true,
+    };
+  }
+  async checkFileRevision(
+    sessionId: string,
+    path: string,
+    expectedRevision?: string,
+  ): Promise<{ isCurrent: boolean; latestRevision: string }> {
+    this.assertActive();
+    const file = await this.getWorkspaceFile(sessionId, path);
+    const isCurrent = expectedRevision !== undefined ? file.revision === expectedRevision : true;
+    if (!isCurrent) {
+      for (const listener of this.fileStaleListeners) {
+        listener({ sessionId, path, latestRevision: file.revision });
+      }
+    }
+    return { isCurrent, latestRevision: file.revision };
+  }
+  subscribeFileStale = (
+    listener: (event: { sessionId: string; path: string; latestRevision: string }) => void,
+  ): (() => void) => {
+    this.fileStaleListeners.add(listener);
+    return () => {
+      this.fileStaleListeners.delete(listener);
+    };
+  };
   observe(sessionId: string, listener: (value: RemoteSessionSnapshot) => void) {
     this.assertActive();
     let observation = this.observations.get(sessionId);
@@ -1185,7 +1336,50 @@ export class RemoteAgentScope implements RemoteAgentSource {
       }),
     );
   }
-  send(target: string, text: string, attachments?: Parameters<RemoteAgentSource['send']>[2]) {
+  renameSession(sessionId: string, title: string) {
+    const trimmed = title.trim();
+    agentMethods['agent.sessions.update'].params.parse({
+      commandId: 'validation',
+      sessionId,
+      title: trimmed,
+    });
+    return this.track(
+      (async () => {
+        const command = await this.actions.create('rename', 'agent.sessions.update', {
+          sessionId,
+          title: trimmed,
+        });
+        if (command.status === 'applied') {
+          const entry = this.cacheEntry(sessionId);
+          const cachedSession = this.readCache.get<AgentSession>(entry, 'session');
+          if (cachedSession) {
+            this.readCache.put(entry, entry.generation, 'session', {
+              ...cachedSession,
+              title: trimmed,
+            });
+          }
+          const observation = this.observations.get(sessionId);
+          if (observation?.snapshot) {
+            observation.snapshot = {
+              ...observation.snapshot,
+              session: {
+                ...observation.snapshot.session,
+                title: trimmed,
+              },
+            };
+            for (const listener of observation.listeners) listener(observation.snapshot);
+          }
+        }
+        return command;
+      })(),
+    );
+  }
+  send(
+    target: string,
+    text: string,
+    attachments?: Parameters<RemoteAgentSource['send']>[2],
+    options?: { model?: { modelId: string; providerId: string }; reasoningEffort?: string },
+  ) {
     const params = this.target(target, 'send');
     agentMethods['agent.messages.send'].params.parse({
       ...params,
@@ -1194,6 +1388,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
       ...(attachments?.length
         ? { attachments: attachments.map((file) => ({ uploadId: file.fileEntryId })) }
         : {}),
+      ...(options?.model ? { model: options.model } : {}),
+      ...(options?.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
     });
     const observation = this.trackExecution(params.sessionId);
     observation.pendingSubmission = true;
@@ -1205,7 +1401,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
               ? await this.attachmentDrafts!.prepare(
                   `session:${params.sessionId}`,
                   { sessionId: params.sessionId },
-                  attachments,
+                  [...attachments],
                 )
               : undefined;
           const commandId = randomUUID();
@@ -1218,10 +1414,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
               ...(prepared
                 ? { attachments: prepared.uploaded, selectionId: prepared.selectionId }
                 : {}),
+              ...(options?.model ? { model: options.model } : {}),
+              ...(options?.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
             },
             text,
             commandId,
-            attachments,
+            attachments ? [...attachments] : undefined,
+            options,
           );
           if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
           if (command.status === 'pending') observation.pendingCommandId = command.id;

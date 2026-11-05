@@ -5,6 +5,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
+import {
+  clearRemoteAttachmentCache,
+  getRemoteAttachmentCacheSize,
+} from '@/backend/services/remoteAgent/remoteDownloads';
 import { formatStorageSize, useBackupErrorReporter } from '@/frontend/appShell/backup';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { useBackupState } from '@/frontend/hooks/useBackupState';
@@ -88,10 +92,19 @@ function StorageSection({
   const report = useBackupErrorReporter();
   const agent = useBackendModule('agent');
   const [size, setSize] = useState<number>();
+  const [remoteSize, setRemoteSize] = useState<number>();
 
-  const refresh = useCallback(() => agent.getWorkingStorageSize().then(setSize), [agent]);
+  const refresh = useCallback(() => {
+    agent
+      .getWorkingStorageSize()
+      .then(setSize)
+      .catch(() => undefined);
+    try {
+      setRemoteSize(getRemoteAttachmentCacheSize());
+    } catch {}
+  }, [agent]);
   useEffect(() => {
-    void refresh().catch(() => undefined);
+    refresh();
   }, [refresh]);
 
   const clear = async () => {
@@ -109,7 +122,7 @@ function StorageSection({
       });
     } catch (error) {
       report(error);
-      void refresh().catch(() => undefined);
+      void refresh();
     } finally {
       onClearingChange(false);
     }
@@ -121,6 +134,35 @@ function StorageSection({
       role: 'destructive',
       title: t('settings.data.runtimeCache.confirmTitle'),
       onConfirm: () => void clear(),
+    });
+
+  const clearRemote = async () => {
+    onClearingChange(true);
+    try {
+      const before = getRemoteAttachmentCacheSize();
+      const cleared = clearRemoteAttachmentCache();
+      const after = getRemoteAttachmentCacheSize();
+      setRemoteSize(after);
+      toast.show({
+        label: t('settings.data.remoteCache.cleared', {
+          size: formatStorageSize(cleared || Math.max(before - after, 0), t, i18n.language),
+        }),
+        variant: 'success',
+      });
+    } catch (error) {
+      report(error);
+      refresh();
+    } finally {
+      onClearingChange(false);
+    }
+  };
+  const confirmRemote = () =>
+    alert.confirm({
+      confirmLabel: t('settings.data.remoteCache.confirm'),
+      description: t('settings.data.remoteCache.confirmDescription'),
+      role: 'destructive',
+      title: t('settings.data.remoteCache.confirmTitle'),
+      onConfirm: () => void clearRemote(),
     });
 
   return (
@@ -135,6 +177,20 @@ function StorageSection({
           size === undefined ? undefined : (
             <Text className="text-muted-foreground">
               {formatStorageSize(size, t, i18n.language)}
+            </Text>
+          )
+        }
+      />
+      <Section.Item
+        label={t('settings.data.remoteCache.clear')}
+        onPress={confirmRemote}
+        showChevron={false}
+        disabled={disabled}
+        testID="settings-data-clear-remote-cache"
+        trailing={
+          remoteSize === undefined ? undefined : (
+            <Text className="text-muted-foreground">
+              {formatStorageSize(remoteSize, t, i18n.language)}
             </Text>
           )
         }

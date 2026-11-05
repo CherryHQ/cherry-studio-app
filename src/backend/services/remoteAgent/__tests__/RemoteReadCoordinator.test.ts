@@ -55,3 +55,40 @@ it('caps concurrent RPCs and removes a cancelled queued read without executing i
   await Promise.all(calls);
   expect(peak).toBe(2);
 });
+
+it('tracks active transfer state and notifies subscribers', () => {
+  const reads = new RemoteReadCoordinator();
+  const states: any[] = [];
+  const unsubscribe = reads.subscribeTransfer('transfer-1', (state) => states.push(state));
+  expect(states).toEqual([]);
+
+  reads.updateTransferState('transfer-1', {
+    state: 'downloading',
+    transferredBytes: 50,
+    totalBytes: 100,
+  });
+  expect(states).toHaveLength(1);
+  expect(states[0]).toMatchObject({
+    transferId: 'transfer-1',
+    state: 'downloading',
+    transferredBytes: 50,
+    totalBytes: 100,
+    progress: 0.5,
+  });
+  expect(reads.getTransferState('transfer-1')).toEqual(states[0]);
+
+  reads.updateTransferState('transfer-1', {
+    state: 'completed',
+    transferredBytes: 100,
+  });
+  expect(states).toHaveLength(2);
+  expect(states[1]).toMatchObject({
+    state: 'completed',
+    transferredBytes: 100,
+    progress: 1,
+  });
+
+  unsubscribe();
+  reads.updateTransferState('transfer-1', { state: 'failed' });
+  expect(states).toHaveLength(2);
+});

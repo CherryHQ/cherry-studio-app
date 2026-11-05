@@ -91,6 +91,59 @@ resolves the native plugin. The Android ARM64 development client was built and i
 2026-10-12, with application startup verified. This does not establish checksum correctness:
 empty/few-MiB/1 GiB comparisons, interruption/relaunch and iOS native acceptance remain pending.
 
+## Workspace file retrieval, resumable downloads, and deliverables (implementation, 2026-11-05)
+
+Implemented in the paired working trees; native-device acceptance remains pending. This section
+governs reading desktop Agent workspace files, resumable chunked downloads, deliverable cards, and
+local cache management.
+
+### Capability and workspace file endpoints
+
+`connection.hello.agentFilesVersion: 1` advertises support for remote workspace file access. Under
+an active Agent grant and session context, two methods are exposed:
+
+- `agent.files.get`: Resolves file metadata (`path`, `byteLength`, `revision`, `sha256`, `mediaType`,
+  `modifiedAt`) inside the session workspace.
+- `agent.files.read`: Streams file bytes in bounded chunks (up to 24 KiB) parameterized by `offset`,
+  `maxBytes`, and an optional `expectedRevision`. Desktops enforce `expectedRevision` checks: if the
+  file was modified concurrently during an active turn, the endpoint fails with `REVISION_EXPIRED`
+  to prevent reading torn or mutated states.
+
+### Resumable downloads and boundary alignment
+
+Attachment downloads (`agent.content.read`) and workspace file downloads (`agent.files.read`) share
+the streaming engine in `remoteDownloads.ts`:
+
+- Incomplete downloads retain a non-destructive `.part` file in the OS cache under
+  `RemoteAttachments/<cacheKey>/<filename>.part`.
+- On resumption after network failure, app suspension, or user cancellation, the existing `.part`
+  file's size is aligned downward to the nearest 24 KiB (`24_576` bytes) chunk boundary.
+- The preserved prefix is read back and incrementally hashed with Noble SHA-256 before new chunks
+  are requested. Any mismatch, corruption, or unexpected truncation resets the offset to 0 and
+  restarts cleanly.
+- Chunks are fetched across a sliding pipeline window (up to 8 concurrent chunks). Once all bytes
+  are received and the overall SHA-256 matches the expected digest, the `.part` file is atomically
+  renamed/moved to its final cached destination.
+
+### Deliverables and lazy download guard
+
+- **`report_artifacts` deliverable cards**: When an Agent calls `report_artifacts`, the UI renders
+  structured deliverable cards in `ConversationMessageContent.tsx`, displaying artifact filenames,
+  descriptions, and workspace paths.
+- **Lazy download guard (> 1 MiB)**: Image thumbnails up to 1 MiB (`1_048_576` bytes) may
+  automatically prefetch for preview. Non-image attachments and any file exceeding 1 MiB enforce a
+  strict lazy download guard: opening message history never triggers automatic downloads, requiring
+  an explicit user tap to initiate transfer.
+
+### Cache inspection and cleanup
+
+Completed downloads are isolated in `RemoteAttachments/` within the OS cache directory:
+
+- Settings -> Data provides cache inspection via `getRemoteAttachmentCacheSize()`.
+- Users can clear completed downloads on demand via `clearRemoteAttachmentCache()`. Active, in-flight
+  transfers are tracked in `activeTransfers` and protected from premature deletion during cache
+  purges.
+
 ## Binary transport baseline (2026-10-10)
 
 - A single upload protocol uses 1 MiB DATA blocks, two outstanding blocks and durable acknowledgements

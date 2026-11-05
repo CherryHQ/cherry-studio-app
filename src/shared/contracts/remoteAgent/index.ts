@@ -15,4 +15,7 @@ export type {
   RemoteSessionSnapshot,
   RemoteResourceValue,
   RemotePage,
+  RemoteAgentModelOption,
+  RemoteAgentView,
+  RemoteWorkspaceFileView,
 } from './views';

@@ -7,11 +7,15 @@ import type {
 } from '@cherrystudio/remote-protocol/agent';
 
 import type {
+  RemoteAgentModelOption,
+  RemoteAgentView,
   RemoteMessagePart,
   RemoteMessageView,
   RemoteSessionSnapshot,
   RemoteSessionView,
 } from '@/shared/contracts/remoteAgent';
+
+export type { RemoteAgentModelOption, RemoteAgentView };
 
 export const projectSession = (session: AgentSession): RemoteSessionView => ({
   id: session.sessionId,
@@ -22,9 +26,35 @@ export const projectSession = (session: AgentSession): RemoteSessionView => ({
   updatedAt: session.updatedAt,
   historyVersion: session.historyRevision,
 });
+
+export const projectAgent = (item: {
+  agentId: string;
+  name: string;
+  emoji?: string;
+  model?: RemoteAgentView['model'];
+  reasoningEffort?: string;
+  availableModels?: readonly RemoteAgentModelOption[];
+}): RemoteAgentView => ({
+  id: item.agentId,
+  name: item.name,
+  emoji: item.emoji,
+  ...(item.model !== undefined ? { model: item.model } : {}),
+  ...(item.reasoningEffort !== undefined ? { reasoningEffort: item.reasoningEffort } : {}),
+  ...(item.availableModels !== undefined ? { availableModels: item.availableModels } : {}),
+});
 export type RemoteResourceDescriptor =
   | { kind: 'part'; part: AgentPart }
-  | { kind: 'interaction'; id: string; revision: string; inputDigest: string };
+  | { kind: 'interaction'; id: string; revision: string; inputDigest: string }
+  | {
+      kind: 'workspace-file';
+      sessionId: string;
+      path: string;
+      revision: string;
+      sha256: string;
+      name: string;
+      byteLength?: number;
+      mediaType?: string;
+    };
 export type ResourceIssuer = (sessionId: string, value: RemoteResourceDescriptor) => string;
 export const commandTarget = (scope: string, kind: string, params: Record<string, string>) =>
   JSON.stringify({ scope, kind, params });
