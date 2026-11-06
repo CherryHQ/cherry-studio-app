@@ -287,6 +287,7 @@ export function MessagePartSummary({
 
 export function MessagePartDetail({
   children,
+  footer,
   headerAction,
   onClose,
   sizes,
@@ -301,6 +302,7 @@ export function MessagePartDetail({
     <BottomSheet
       {...heightProps}
       headerAction={headerAction}
+      footer={footer}
       onClose={onClose}
       open
       testID={testID}

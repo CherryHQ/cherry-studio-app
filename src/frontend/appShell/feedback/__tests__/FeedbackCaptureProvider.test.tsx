@@ -89,6 +89,36 @@ test('manual entry has no image', () => {
   expect(value.captureFailed).toBe(false);
 });
 
+test('retains the selected incident and check summary across diagnosis and feedback, then clears both on exit', async () => {
+  await act(async () =>
+    actions.openFeedback(
+      { feature: 'chat', messageId: 'failed-message' },
+      { destination: 'diagnosis' },
+    ),
+  );
+  expect(mockPush).toHaveBeenLastCalledWith('/settings/about/diagnosis');
+  mockPath = '/settings/about/diagnosis';
+  act(() => renderer.update(tree()));
+  expect(value.context?.messageId).toBe('failed-message');
+  expect(options().enabled).toBe(false);
+  const diagnosis = {
+    checkedAt: '2026-11-06T00:00:00Z',
+    checks: [{ id: 'endpoint' as const, status: 'pass' as const }],
+    aiCompleted: true,
+  };
+  await act(async () =>
+    actions.openFeedback({ feature: 'chat', messageId: 'failed-message' }, { diagnosis }),
+  );
+  mockPath = '/settings/about/feedback/new';
+  act(() => renderer.update(tree()));
+  expect(value.context?.messageId).toBe('failed-message');
+  expect(value.diagnosis).toEqual(diagnosis);
+  mockPath = '/home';
+  act(() => renderer.update(tree()));
+  expect(value.context).toBeUndefined();
+  expect(value.diagnosis).toBeUndefined();
+});
+
 test('keeps shake capture out of onboarding and the privacy disclosure', () => {
   mockConsentPending = true;
   act(() => renderer.update(tree()));

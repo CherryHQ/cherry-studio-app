@@ -49,7 +49,7 @@ export type RuntimeDescriptor = {
 };
 
 export interface AgentRuntime {
-  /** Persistent production sessions; short-lived open() remains for isolated model probes. */
+  /** Persistent production sessions; open() isolates checks with explicitly supplied read tools. */
   readonly conversations?: import('./durableTypes').DurableAgentRuntime;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;

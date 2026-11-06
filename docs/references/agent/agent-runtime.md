@@ -7,6 +7,9 @@ history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describe
 persistent contract, storage, tools, presentation, and backup. The baseline below explains the
 legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
 Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
+On-demand AI diagnosis uses that interface with explicitly supplied automatic read-only tools.
+The probe rejects write/approval capabilities, history, checkpoints and resume inputs; ordinary
+model health checks still pass an empty tool list. Neither path creates an application conversation.
 Translation and automatic naming use the separate `RuntimeTextGenerator` capability on the bound
 service: one text-only provider invocation sharing model resolution and OAuth, without the native
 loop or storage.

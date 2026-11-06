@@ -285,6 +285,7 @@ The native Storybook exposes these states under the dedicated top-level `Message
 page for visual debugging.
 `MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
 caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
+`MessagePart.Detail` also accepts the shared sheet's fixed `footer` slot for a caller-owned action.
 
 `MessagePart.Section` composes a quiet heading, an optional action, and content. Its `tone="danger"`
 marks the heading with an error indicator while keeping the content readable. `SectionBody` is the

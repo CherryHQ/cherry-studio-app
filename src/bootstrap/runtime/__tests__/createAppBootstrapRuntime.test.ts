@@ -55,6 +55,7 @@ const mockDisposeSkills = jest.fn(async () => {});
 const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
 const mockDisposeUuRemote = jest.fn(async () => {});
+const mockDisposeDiagnostics = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -66,6 +67,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   disposeVoice: mockDisposeVoice,
   disposeAppUpdate: mockDisposeAppUpdate,
   disposeUuRemote: mockDisposeUuRemote,
+  disposeDiagnostics: mockDisposeDiagnostics,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({

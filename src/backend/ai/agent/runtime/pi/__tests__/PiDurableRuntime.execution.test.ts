@@ -29,7 +29,160 @@ const wire: Model<Api> = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
 
+function isolatedDiagnosticRuntime(
+  stream: (context: TranscriptContext) => AssistantMessageEventStream,
+) {
+  return new PiModelProbeRuntime({
+    preflightModel: async () => ({
+      contextWindow: 32768,
+      maxInputTokens: 28672,
+      maxOutputTokens: 4096,
+      inputModalities: ['text'],
+      supportsTools: true,
+    }),
+    resolveModel: async () => ({
+      model: wire,
+      defaultThinkingLevel: 'off',
+      redactionValues: [],
+      supportsTools: true,
+      usageContext: {
+        providerId: reference.providerId,
+        providerName: null,
+        modelId: reference.modelId,
+        modelName: null,
+        pricingSnapshot: null,
+        trustProviderReportedCost: false,
+        reportedCostCurrency: null,
+        credentialReceipt: { attribution: 'unknown' },
+      },
+      streamFn: (_model, context) => stream(context),
+    }),
+  });
+}
+
 describe('Pi durable execution integration', () => {
+  test('an isolated diagnosis delivers read-tool evidence back to the same model loop', async () => {
+    const requests: TranscriptContext[] = [];
+    const runtime = isolatedDiagnosticRuntime((context) => {
+      requests.push(context);
+      const message: AssistantMessage =
+        requests.length === 1
+          ? {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'toolUse',
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'read-incident',
+                  name: 'diagnostic_configuration',
+                  arguments: {},
+                },
+              ],
+            }
+          : {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'stop',
+              content: [{ type: 'text', text: 'The service rejected authentication.' }],
+            };
+      const stream = new AssistantMessageEventStream();
+      stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+      return stream;
+    });
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    try {
+      for await (const event of session.execute({
+        sessionId: 'diagnostic-session',
+        turnId: 'diagnostic-turn',
+        model: reference,
+        instructions: 'Diagnose the incident.',
+        input: [{ type: 'text', text: 'Read incident evidence.' }],
+        history: [],
+        contextCheckpoint: null,
+        options: {},
+        tools: [
+          {
+            ref: { source: 'builtin', capabilityId: 'diagnostic_configuration' },
+            providerName: 'diagnostic_configuration',
+            displayName: 'Configuration',
+            description: 'Read incident configuration.',
+            inputSchema: { type: 'object', properties: {} },
+            effect: 'read',
+            approval: 'auto',
+            execute: async () => ({ value: { httpStatus: 401 }, artifacts: [] }),
+          },
+        ],
+      }))
+        events.push(event);
+      expect(events).toContainEqual({ type: 'completed' });
+      expect(requests).toHaveLength(2);
+      expect(JSON.stringify(requests[1]?.messages)).toContain('401');
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'part.replace',
+          part: expect.objectContaining({
+            type: 'tool',
+            state: 'output-available',
+            output: expect.objectContaining({ value: { httpStatus: 401 } }),
+          }),
+        }),
+      );
+    } finally {
+      await session.close();
+    }
+  });
+
+  test.each([
+    ['auto', 'write'],
+    ['ask', 'read'],
+    ['deny', 'read'],
+  ] as const)(
+    'isolated diagnosis rejects %s/%s capabilities before execution',
+    async (approval, effect) => {
+      let effects = 0;
+      let requests = 0;
+      const runtime = isolatedDiagnosticRuntime(() => {
+        requests++;
+        return new AssistantMessageEventStream();
+      });
+      const session = await runtime.open();
+      const events: RuntimeEvent[] = [];
+      try {
+        for await (const event of session.execute({
+          sessionId: 'blocked-session',
+          turnId: 'blocked-turn',
+          model: reference,
+          instructions: '',
+          input: [{ type: 'text', text: 'Run.' }],
+          history: [],
+          contextCheckpoint: null,
+          options: {},
+          tools: [
+            {
+              ref: { source: 'builtin', capabilityId: 'forbidden' },
+              providerName: 'forbidden',
+              displayName: 'Forbidden',
+              description: 'Not a diagnostic read.',
+              inputSchema: { type: 'object', properties: {} },
+              approval,
+              effect,
+              execute: async () => {
+                effects++;
+                return { value: {}, artifacts: [] };
+              },
+            },
+          ],
+        }))
+          events.push(event);
+        expect(events).toContainEqual(expect.objectContaining({ type: 'failed' }));
+        expect(effects).toBe(0);
+        expect(requests).toBe(0);
+      } finally {
+        await session.close();
+      }
+    },
+  );
+
   test('model probes deliver the answer and complete without storing a production conversation', async () => {
     const requests: TranscriptContext[] = [];
     const identities: unknown[] = [];

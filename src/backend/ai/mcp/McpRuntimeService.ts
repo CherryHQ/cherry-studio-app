@@ -4,7 +4,6 @@ import { AppState } from 'react-native';
 import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
-import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 import {
   AppStatePolicy,
   BaseService,
@@ -24,6 +23,7 @@ import {
   type PluginToolCatalog,
 } from '@/backend/services/builtInMcp';
 import { McpOAuthRuntime } from '@/backend/services/mcp';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type {
   McpConnectionConfig,
   McpModule,
@@ -459,6 +459,15 @@ export class McpRuntimeService extends BaseService implements McpModule {
     );
 
     return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
+  }
+
+  /** Diagnostic reads never create clients or trigger discovery. */
+  getCachedConnectionStates(
+    servers: readonly McpServer[],
+  ): Record<string, McpServerRuntimeSummary['state']> {
+    return Object.fromEntries(
+      servers.map((server) => [server.id, this.getRuntimeSummary(server).state]),
+    );
   }
 
   readonly subscribePromptCatalogs = (listener: () => void): (() => void) => {

@@ -2,3 +2,4 @@ export { default as AboutScreen } from './AboutScreen';
 export { FeedbackHistoryScreen } from './diagnostics/FeedbackHistoryScreen';
 export { FeedbackStatusScreen } from './diagnostics/FeedbackStatusScreen';
 export { FeedbackScreen } from './diagnostics/FeedbackScreen';
+export { DiagnosisScreen } from './diagnosis/DiagnosisScreen';

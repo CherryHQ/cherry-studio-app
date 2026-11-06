@@ -9,6 +9,35 @@ import {
 } from '../diagnostics';
 
 describe('diagnostic wire inputs', () => {
+  test('attached checks exclude free text, arbitrary facts and AI output', () => {
+    const diagnosis = {
+      checkedAt: '2026-11-06T00:00:00Z',
+      checks: [{ id: 'endpoint', status: 'pass', facts: { httpStatus: 401, latencyMs: 20 } }],
+      aiCompleted: true,
+    };
+    expect(
+      DiagnosticReportInputSchema.parse({ description: 'Connection failed', diagnosis }).diagnosis,
+    ).toEqual(diagnosis);
+    for (const unsafe of [
+      { ...diagnosis, cause: 'private AI output' },
+      {
+        ...diagnosis,
+        checks: [{ id: 'endpoint', status: 'pass', facts: { url: 'https://private.example' } }],
+      },
+      {
+        ...diagnosis,
+        checks: [{ id: 'endpoint', status: 'pass', facts: { httpStatus: 'sk-private' } }],
+      },
+      { ...diagnosis, checks: [{ id: 'endpoint', status: 'pass', facts: { latencyMs: -1 } }] },
+      { ...diagnosis, checks: Array.from({ length: 8 }, () => diagnosis.checks[0]) },
+    ])
+      expect(
+        DiagnosticReportInputSchema.safeParse({
+          description: 'Connection failed',
+          diagnosis: unsafe,
+        }).success,
+      ).toBe(false);
+  });
   test('status links accept only tracking UUIDs and receipt records are JSON-safe', () => {
     const reportId = '550e8400-e29b-41d4-a716-446655440000';
     expect(diagnosticStatusPageUrl(reportId)).toBe(

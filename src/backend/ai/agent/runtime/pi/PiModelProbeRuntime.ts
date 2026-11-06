@@ -16,14 +16,15 @@ import { cherryClientIdentity, createPiDurableModels } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import { piSubmissionMetadata } from './piDurableProjection';
 import { PiDurableRuntime } from './PiDurableRuntime';
+import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
 
-/** Provider health checks use the same upstream loop in isolated memory, never the production DB. */
+/** Isolated checks use the upstream loop in memory, with only explicitly supplied read tools. */
 export class PiModelProbeRuntime implements AgentRuntime {
   readonly descriptor = {
     id: 'pi-durable-probe',
     name: 'Pi Durable Model Probe',
-    capabilities: { reasoning: true, tools: false, approvals: false, attachments: false },
+    capabilities: { reasoning: true, tools: true, approvals: false, attachments: false },
   };
   constructor(private readonly dependencies: PiRuntimeDependencies) {}
   preflightModel(model: RuntimeExecutionRequest['model']) {
@@ -61,12 +62,20 @@ class PiModelProbeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest) {
     if (
-      request.tools.length ||
+      request.tools.some((tool) => tool.effect !== 'read' || tool.approval !== 'auto') ||
       request.history.length ||
       request.contextCheckpoint ||
       request.resume
     )
-      throw new Error('Model probes accept a fresh input without history or capabilities.');
+      throw new Error('Isolated checks accept fresh input and automatic read-only capabilities.');
+    const extension = createPiDurableToolExtension({
+      name: `cherry.probe:${request.sessionId}`,
+      tools: request.tools,
+      resolve: async (tool) => ({ tool, turnId: request.turnId }),
+      approve: async () => false,
+    });
+    const registry = createRegistry();
+    registry.install(extension);
     const bridge = createPiDurableModels(
       {
         ...this.dependencies,
@@ -84,7 +93,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
     if (!model) throw new Error('The probe model is unavailable.');
     this.runtime = await PiDurableRuntime.open(new MemoryStorage(), {
       models: bridge.models,
-      registry: createRegistry(),
+      registry,
       settings: { extensions: [], retry: { maxRetries: 0 }, compaction: { enabled: false } },
       identity: cherryClientIdentity(),
     });
@@ -96,6 +105,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
       agent: {
         model: { provider: request.model.providerId, modelId: request.model.modelId },
         instructions: request.instructions,
+        extensions: [extension],
       },
     });
     const previous = new Map<string, RuntimeOutputPart>();
@@ -137,7 +147,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
     const submission = await this.runtime.submit(
       request.sessionId,
       { type: 'input', requestId: request.turnId, content: prompt.content, whenBusy: 'reject' },
-      piSubmissionMetadata(input, []),
+      piSubmissionMetadata(input, request.tools),
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );
     if (this.controller.signal.aborted) await this.runtime.stop(request.sessionId);
