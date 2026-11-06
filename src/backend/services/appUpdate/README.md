@@ -56,14 +56,12 @@ claim that the app is current.
   missing regional listing is `noRelease`. This checks App Store publications, not new TestFlight
   builds. Store submission or TestFlight upload alone is never an availability signal.
 
-- **Domestic stores:** use the integrated HONOR/Xiaomi SDK or vivo device query. OPPO reuses
-  `checkGitcodeRelease`; its available result becomes a domestic store target with no APK URLs
-  and `versionCode: null`. GitCode describes the project release, while the store decides actual
-  installation availability. Vendor results compare native build numbers. Both paths preserve
-  errors and use the existing result states, query cache and update dialog. Installation/update
-  owner and device identity resolve the target automatically; checks and store actions reread it.
-  Native requests follow caller/module cancellation and time out after 15 seconds. See
-  [Domestic Android Store Updates](../../../../docs/guides/domestic-store-updates.md).
+- **Domestic stores:** native code resolves a single store when the module is created. HONOR,
+  Xiaomi and vivo use their client queries and compare native builds; OPPO reuses GitCode's
+  stable-release query. Results expose an explicit `notesSource` and a store action, without APK
+  URLs or native build fields. Store actions check the module's target before native navigation.
+  See [Domestic Android Store Updates](../../../../docs/guides/domestic-store-updates.md) for
+  publication semantics, query lifecycle and integration status.
 
 ## Release Notes
 

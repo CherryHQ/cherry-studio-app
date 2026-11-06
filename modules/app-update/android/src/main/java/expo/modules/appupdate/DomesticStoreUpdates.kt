@@ -115,7 +115,6 @@ internal class DomesticStoreUpdates(private val context: Context) {
             "versionCode" to intent.getStringExtra("versionCode")?.toLongOrNull(),
             "versionName" to intent.getStringExtra("versionName"),
             "notes" to null,
-            "grayApkId" to intent.getStringExtra("grayApkId")?.takeIf { it.isNotBlank() },
           ) else unavailable("queryFailed", code)
         }.getOrElse { unavailable("invalidResponse") }
         finish(id, result)

@@ -13,9 +13,21 @@ private val STORE_PACKAGES = mapOf(
   "vivo" to listOf("com.bbk.appstore"),
 )
 
+private val DEVICE_STORES = mapOf(
+  "honor" to "honor",
+  "xiaomi" to "xiaomi",
+  "redmi" to "xiaomi",
+  "poco" to "xiaomi",
+  "oppo" to "oppo",
+  "realme" to "oppo",
+  "oneplus" to "oppo",
+  "vivo" to "vivo",
+  "iqoo" to "vivo",
+)
+
 internal class DomesticStores(private val context: Context) {
   @Suppress("DEPRECATION")
-  fun info(): Map<String, Any?> {
+  fun resolve(): String? {
     val sources = runCatching {
       if (Build.VERSION.SDK_INT >= 30) {
         val info = context.packageManager.getInstallSourceInfo(context.packageName)
@@ -25,22 +37,17 @@ internal class DomesticStores(private val context: Context) {
         listOfNotNull(context.packageManager.getInstallerPackageName(context.packageName))
       }
     }.getOrDefault(emptyList())
-    val available = STORE_PACKAGES.keys.filter { availablePackage(it) != null }
-    return mapOf(
-      "preferred" to sources.firstNotNullOfOrNull { source ->
-        STORE_PACKAGES.entries.firstOrNull { it.key in available && source in it.value }?.key
-      },
-      "available" to available,
-      "brand" to Build.BRAND,
-      "manufacturer" to Build.MANUFACTURER,
-    )
+    return sources.firstNotNullOfOrNull { source ->
+      STORE_PACKAGES.entries.firstOrNull { source in it.value }?.key
+    } ?: listOf(Build.BRAND, Build.MANUFACTURER).firstNotNullOfOrNull { identity ->
+      DEVICE_STORES[identity.trim().lowercase()]
+    }
   }
 
-  fun open(store: String, grayApkId: String?) {
+  fun open(store: String) {
     require(STORE_PACKAGES.containsKey(store)) { "Unknown domestic store" }
-    require(grayApkId == null || (store == "vivo" && grayApkId.matches(Regex("[0-9]+")))) { "Invalid vivo update target" }
     val packageName = requireNotNull(availablePackage(store)) { "The requested store is unavailable" }
-    context.startActivity(intent(store, packageName, grayApkId))
+    context.startActivity(intent(store, packageName))
   }
 
   @Suppress("DEPRECATION")
@@ -49,11 +56,10 @@ internal class DomesticStores(private val context: Context) {
     activity?.activityInfo?.let { it.enabled && it.exported && it.applicationInfo.enabled } == true
   }
 
-  private fun intent(store: String, packageName: String, grayApkId: String? = null): Intent {
+  private fun intent(store: String, packageName: String): Intent {
     val uri = Uri.parse("market://details").buildUpon().appendQueryParameter("id", context.packageName)
     if (store == "vivo") {
       uri.appendQueryParameter("th_name", "self_update")
-      if (grayApkId != null) uri.appendQueryParameter("gray_apk_id", grayApkId)
     }
     return Intent(Intent.ACTION_VIEW, uri.build()).apply {
       setPackage(packageName)

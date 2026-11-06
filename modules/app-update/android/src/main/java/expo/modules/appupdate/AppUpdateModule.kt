@@ -36,13 +36,13 @@ class AppUpdateModule : Module() {
       domesticUpdates = null
       Handler(Looper.getMainLooper()).post { updates?.dispose() }
     }
-    Function("getDomesticStoreInfo") {
+    Function("getDomesticStore") {
       check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
-      DomesticStores(context).info()
+      DomesticStores(context).resolve()
     }
-    AsyncFunction("openDomesticStore") { store: String, grayApkId: String? ->
+    AsyncFunction("openDomesticStore") { store: String ->
       check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
-      DomesticStores(context).open(store, grayApkId)
+      DomesticStores(context).open(store)
     }.runOnQueue(Queues.MAIN)
     Function("isApkInstallationEnabled") { apkInstallationEnabled() }
     Function("canInstallPackages") {

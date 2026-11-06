@@ -58,12 +58,7 @@ test.each([
 );
 
 test('pins the same EAS CLI as the release workflows', () => {
-  for (const workflow of [
-    'android-release',
-    'google-play-release',
-    'domestic-stores-release',
-    'ios-release',
-  ])
+  for (const workflow of ['android-release', 'google-play-release', 'ios-release'])
     expect(readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')).toContain(
       `EAS_CLI_VERSION: ${EAS_CLI_VERSION}\n`,
     );

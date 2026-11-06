@@ -103,7 +103,10 @@ function AppUpdateDialogContent({
       </Text>
       {origin === 'coldStart' && (
         <ReleaseNotes
-          release={current}
+          markdown={
+            current.channel === 'apk' ||
+            (current.channel === 'domestic-stores' && current.notesSource === 'gitcode')
+          }
           fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
           loading={notes.isPending}
           notes={notes.data ?? null}
@@ -115,12 +118,12 @@ function AppUpdateDialogContent({
 }
 
 function ReleaseNotes({
-  release,
+  markdown,
   fontSizeStep,
   loading,
   notes,
 }: {
-  release: AppUpdateRelease;
+  markdown: boolean;
   fontSizeStep: TypographySizeStep;
   loading: boolean;
   notes: string | null;
@@ -137,8 +140,7 @@ function ReleaseNotes({
   return (
     <ScrollView className="max-h-80" nestedScrollEnabled showsVerticalScrollIndicator={false}>
       {/* GitCode and GitHub publish Markdown; store listings publish plain text with line breaks. */}
-      {release.channel === 'apk' ||
-      (release.channel === 'domestic-stores' && release.versionCode === null) ? (
+      {markdown ? (
         <MarkdownText
           fontSizeStep={fontSizeStep}
           markdown={notes}

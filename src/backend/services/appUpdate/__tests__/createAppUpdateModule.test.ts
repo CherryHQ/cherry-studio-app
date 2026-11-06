@@ -4,7 +4,6 @@ import { Linking, Platform } from 'react-native';
 
 import type { ApkUpdateRelease, DomesticAppStore } from '@/shared/contracts/appUpdate';
 
-import type { NativeAppUpdate } from '../../../../../modules/app-update';
 import { createAppUpdateModule } from '../createAppUpdateModule';
 import { runningUpdate } from '../runningUpdate';
 
@@ -24,14 +23,7 @@ const mockNative = {
   isApkInstallationEnabled: jest.fn(() => true),
   installApk: jest.fn(async () => 'opened'),
   checkPlayUpdate: jest.fn(async () => ({ available: true, versionCode: 20 })),
-  getDomesticStoreInfo: jest.fn(
-    (): ReturnType<NativeAppUpdate['getDomesticStoreInfo']> => ({
-      preferred: 'oppo',
-      available: ['oppo', 'xiaomi'],
-      brand: 'OPPO',
-      manufacturer: 'OPPO',
-    }),
-  ),
+  getDomesticStore: jest.fn((): DomesticAppStore | null => 'oppo'),
   openDomesticStore: jest.fn(async (_store: DomesticAppStore) => {}),
 };
 const mockGetNative = jest.fn(() => mockNative as typeof mockNative | null);
@@ -81,12 +73,7 @@ beforeEach(() => {
   mockGetNative.mockReturnValue(mockNative);
   mockNative.isApkInstallationEnabled.mockReturnValue(true);
   mockNative.checkPlayUpdate.mockResolvedValue({ available: true, versionCode: 20 });
-  mockNative.getDomesticStoreInfo.mockReturnValue({
-    preferred: 'oppo',
-    available: ['oppo', 'xiaomi'],
-    brand: 'OPPO',
-    manufacturer: 'OPPO',
-  });
+  mockNative.getDomesticStore.mockReturnValue('oppo');
   mockCheckNativeDomestic.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
   mockCheckApk.mockResolvedValue({ status: 'available', ...apk });
   mockDownload.getDownload.mockReturnValue({ status: 'idle' });
@@ -107,7 +94,7 @@ test('domestic distribution uses GitCode when no client query exists and only up
     currentVersion: '1.9.0',
     latestVersion: '1.10.0',
     notes: null,
-    versionCode: null,
+    notesSource: 'gitcode',
   });
   expect(result).not.toHaveProperty('downloadUrl');
   expect(result).not.toHaveProperty('checksumUrl');
@@ -120,7 +107,7 @@ test('domestic distribution uses GitCode when no client query exists and only up
   await expect(updates.requestInstallPermission()).rejects.toThrow('disabled');
   if (result.status !== 'available') throw new Error('Expected store release');
   await updates.openStore(result);
-  expect(mockNative.openDomesticStore).toHaveBeenCalledWith('oppo', null);
+  expect(mockNative.openDomesticStore).toHaveBeenCalledWith('oppo');
   expect(Linking.openURL).not.toHaveBeenCalled();
 });
 
@@ -141,115 +128,14 @@ test('a failed query does not claim an update or open the store', async () => {
   expect(mockNative.openDomesticStore).not.toHaveBeenCalled();
 });
 
-test('a discovered update cannot open a different store after its source changes', async () => {
+test('a store action must match the module’s resolved store', async () => {
   jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
   const updates = create();
   const result = await updates.check();
-  if (result.status !== 'available') throw new Error('Expected store release');
-  mockNative.getDomesticStoreInfo.mockReturnValue({
-    preferred: 'vivo',
-    available: ['vivo'],
-    brand: 'vivo',
-    manufacturer: 'vivo',
-  });
-  await expect(updates.openStore(result)).rejects.toThrow('unavailable');
+  if (result.status !== 'available' || result.channel !== 'domestic-stores')
+    throw new Error('Expected domestic store release');
+  await expect(updates.openStore({ ...result, store: 'vivo' })).rejects.toThrow('unavailable');
   expect(mockNative.openDomesticStore).not.toHaveBeenCalled();
-});
-
-test.each<{
-  preferred: DomesticAppStore | null;
-  brand: string;
-  manufacturer: string;
-  available: DomesticAppStore[];
-  expected: DomesticAppStore;
-}>([
-  {
-    preferred: 'xiaomi',
-    brand: 'OPPO',
-    manufacturer: 'OPPO',
-    available: ['oppo', 'xiaomi'],
-    expected: 'xiaomi',
-  },
-  {
-    preferred: null,
-    brand: ' HONOR ',
-    manufacturer: 'Huawei',
-    available: ['honor', 'xiaomi'],
-    expected: 'honor',
-  },
-  {
-    preferred: null,
-    brand: 'Redmi',
-    manufacturer: 'Xiaomi',
-    available: ['oppo', 'xiaomi'],
-    expected: 'xiaomi',
-  },
-  {
-    preferred: null,
-    brand: 'POCO',
-    manufacturer: 'Xiaomi',
-    available: ['oppo', 'xiaomi'],
-    expected: 'xiaomi',
-  },
-  {
-    preferred: null,
-    brand: 'realme',
-    manufacturer: 'OPPO',
-    available: ['oppo', 'xiaomi'],
-    expected: 'oppo',
-  },
-  {
-    preferred: null,
-    brand: 'OnePlus',
-    manufacturer: 'OnePlus',
-    available: ['oppo', 'xiaomi'],
-    expected: 'oppo',
-  },
-  {
-    preferred: null,
-    brand: 'iQOO',
-    manufacturer: 'vivo',
-    available: ['oppo', 'vivo'],
-    expected: 'vivo',
-  },
-  {
-    preferred: null,
-    brand: 'unknown',
-    manufacturer: 'vivo',
-    available: ['oppo', 'vivo'],
-    expected: 'vivo',
-  },
-  {
-    preferred: 'honor',
-    brand: 'OPPO',
-    manufacturer: 'OPPO',
-    available: ['oppo', 'xiaomi'],
-    expected: 'oppo',
-  },
-  {
-    preferred: null,
-    brand: 'unknown',
-    manufacturer: 'unknown',
-    available: ['xiaomi'],
-    expected: 'xiaomi',
-  },
-])('routes using the recorded source or device: %j', async ({ expected, ...info }) => {
-  jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
-  mockNative.getDomesticStoreInfo.mockReturnValue(info);
-  await create().check();
-  if (expected === 'oppo') {
-    expect(mockCheckApk).toHaveBeenCalled();
-    expect(mockCheckNativeDomestic).not.toHaveBeenCalled();
-  } else {
-    expect(mockCheckNativeDomestic).toHaveBeenCalledWith(
-      expected,
-      'com.example.app',
-      '1.9.0',
-      19,
-      expect.any(AbortSignal),
-    );
-    expect(mockCheckApk).not.toHaveBeenCalled();
-  }
 });
 
 test('checks the installed version, forwards cancellation, and never downloads on discovery', async () => {
@@ -415,12 +301,7 @@ test.each(['honor', 'xiaomi', 'vivo'] as const)(
   '%s uses its native query rather than GitCode',
   async (store) => {
     jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
-    mockNative.getDomesticStoreInfo.mockReturnValue({
-      preferred: store,
-      available: [store],
-      brand: store,
-      manufacturer: store,
-    });
+    mockNative.getDomesticStore.mockReturnValue(store);
     await expect(create().check()).resolves.toEqual({
       status: 'upToDate',
       currentVersion: '1.9.0',
@@ -436,30 +317,18 @@ test.each(['honor', 'xiaomi', 'vivo'] as const)(
   },
 );
 
-test('a changed installation source invalidates an in-flight observation', async () => {
+test('checks and actions retain the single store resolved when the module is created', async () => {
   jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
-  mockCheckApk.mockImplementationOnce(async () => {
-    mockNative.getDomesticStoreInfo.mockReturnValue({
-      preferred: 'vivo',
-      available: ['vivo'],
-      brand: 'vivo',
-      manufacturer: 'vivo',
-    });
-    return { status: 'upToDate', currentVersion: '1.9.0' };
-  });
   const updates = create();
-  await expect(updates.check()).resolves.toEqual({
-    status: 'unavailable',
-    reason: 'nativeUnavailable',
-  });
+  mockNative.getDomesticStore.mockReturnValue('vivo');
+  const result = await updates.check();
+  expect(result).toMatchObject({ status: 'available', store: 'oppo' });
   await updates.check();
-  expect(mockCheckNativeDomestic).toHaveBeenCalledWith(
-    'vivo',
-    'com.example.app',
-    '1.9.0',
-    19,
-    expect.any(AbortSignal),
-  );
+  if (result.status !== 'available') throw new Error('Expected store release');
+  await updates.openStore(result);
+  expect(mockNative.getDomesticStore).toHaveBeenCalledTimes(1);
+  expect(mockCheckNativeDomestic).not.toHaveBeenCalled();
+  expect(mockNative.openDomesticStore).toHaveBeenCalledWith('oppo');
 });
 
 test('disposing cancels an in-flight GitCode fallback query', async () => {

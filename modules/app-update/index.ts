@@ -10,7 +10,6 @@ export type NativeStoreUpdateResult =
       versionCode: number | null;
       versionName: string | null;
       notes: string | null;
-      grayApkId?: string | null;
     };
 
 export type NativeAppUpdate = {
@@ -18,18 +17,13 @@ export type NativeAppUpdate = {
   canInstallPackages(): boolean;
   installApk(): Promise<'opened' | 'permissionRequired' | 'invalidPackage'>;
   checkPlayUpdate(): Promise<{ available: boolean; versionCode: number }>;
-  getDomesticStoreInfo(): {
-    preferred: NativeDomesticStore | null;
-    available: NativeDomesticStore[];
-    brand: string;
-    manufacturer: string;
-  };
+  getDomesticStore(): NativeDomesticStore | null;
   checkDomesticStoreUpdate(
     id: string,
     store: Exclude<NativeDomesticStore, 'oppo'>,
   ): Promise<NativeStoreUpdateResult>;
   cancelDomesticStoreUpdate(id: string): Promise<void>;
-  openDomesticStore(store: NativeDomesticStore, grayApkId: string | null): Promise<void>;
+  openDomesticStore(store: NativeDomesticStore): Promise<void>;
 };
 
 export function getNativeAppUpdate(): NativeAppUpdate | null {

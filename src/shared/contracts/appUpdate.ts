@@ -16,9 +16,7 @@ export type AppUpdateRelease = {
       channel: 'domestic-stores';
       store: DomesticAppStore;
       latestVersion: string | null;
-      /** Null when GitCode supplies the version instead of a vendor query. */
-      versionCode: number | null;
-      grayApkId?: string;
+      notesSource: 'gitcode' | 'store';
     }
 );
 

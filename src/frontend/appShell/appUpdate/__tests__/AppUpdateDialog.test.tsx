@@ -30,7 +30,7 @@ const release: AppUpdateRelease = {
   id: 'honor:20',
   currentVersion: '1.0.0',
   latestVersion: '2.0.0',
-  versionCode: 20,
+  notesSource: 'store',
   notes: 'Cold-start-only notes',
 };
 const actions = {

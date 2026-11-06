@@ -260,7 +260,7 @@ test('domestic updates use the existing dialog and only open the store after con
     id: 'domestic-stores:oppo:apk:2.1.0',
     currentVersion: '1.0.0',
     latestVersion: '2.1.0',
-    versionCode: null,
+    notesSource: 'gitcode',
     notes: null,
   } as const;
   mockUpdate.check.mockResolvedValue({ status: 'available', ...release });

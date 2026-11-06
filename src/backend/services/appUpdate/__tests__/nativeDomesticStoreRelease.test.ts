@@ -11,10 +11,8 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: { withContext: () => ({ warn: jest.fn() }) },
 }));
 
-const read = (
-  signal = new AbortController().signal,
-  store: 'honor' | 'xiaomi' | 'vivo' = 'honor',
-) => checkNativeDomesticStoreRelease(store, 'com.example.app', '1.9.0', 19, signal);
+const read = (signal = new AbortController().signal) =>
+  checkNativeDomesticStoreRelease('honor', 'com.example.app', '1.9.0', 19, signal);
 const available = {
   status: 'available',
   versionCode: 20,
@@ -28,12 +26,14 @@ beforeEach(() => {
 });
 
 test('a higher native build is an update even with the same display version', async () => {
-  await expect(read()).resolves.toMatchObject({
+  await expect(read()).resolves.toEqual({
     status: 'available',
+    channel: 'domestic-stores',
     store: 'honor',
+    currentVersion: '1.9.0',
     latestVersion: '1.9.0',
-    versionCode: 20,
-    id: 'domestic-stores:com.example.app:honor:20:',
+    notesSource: 'store',
+    id: 'domestic-stores:com.example.app:honor:20',
     notes: 'Vendor notes',
   });
 });
@@ -55,16 +55,6 @@ test.each([null, 19, -1, 2.5])(
     await expect(read()).rejects.toThrow();
   },
 );
-
-test('vivo gray target identity survives discovery and cannot be attached to another store', async () => {
-  mockNative.checkDomesticStoreUpdate.mockResolvedValue({ ...available, grayApkId: '12345' });
-  await expect(read(undefined, 'vivo')).resolves.toMatchObject({
-    store: 'vivo',
-    grayApkId: '12345',
-    id: 'domestic-stores:com.example.app:vivo:20:12345',
-  });
-  await expect(read()).rejects.toThrow('Unexpected store update target');
-});
 
 test('aborting cancels the native request and rejects a late successful callback', async () => {
   const controller = new AbortController();

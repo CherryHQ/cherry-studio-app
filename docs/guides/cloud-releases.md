@@ -5,9 +5,9 @@ Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger
 [PR CI](../../.github/workflows/pr-ci.yml) on the tagged commit, then starts the
 [Android release](../../.github/workflows/android-release.yml) and
 [iOS TestFlight](../../.github/workflows/ios-release.yml) workflows in parallel. Stable tags such as
-`v0.1.0` also start the [Google Play AAB](../../.github/workflows/google-play-release.yml) and
-[Domestic Stores APK](../../.github/workflows/domestic-stores-release.yml) workflows;
-prerelease tags do not. Branch pushes do not publish.
+`v0.1.0` also start the [Google Play AAB](../../.github/workflows/google-play-release.yml) workflow
+and call the Android release workflow with `domestic: true` for the domestic APK. Prerelease tags
+do not build these store artifacts. Branch pushes do not publish.
 The tag's base version must match `expo.version` in `app.json`; update and commit the version before
 tagging. Public APK and iOS builds use the existing EAS `production` profile.
 Google Play builds use `production-google-play`, which inherits the production identity, environment, signing credentials,
@@ -66,7 +66,7 @@ production bundle identifier in `app.json`. Set up its submission API key with
 `eas credentials --platform ios` before the first unattended submission. See [local build configuration](./local-builds.md)
 for app identities and production environment requirements.
 
-All four build workflows and `scripts/publishUpdate.ts` (used by the OTA Update workflow) pin EAS CLI to
+All three build workflows and `scripts/publishUpdate.ts` (used by the OTA Update workflow) pin EAS CLI to
 `24.4.2`; update them together when upgrading it.
 
 Native releases now embed the EAS Update client. Channels are platform-specific:
@@ -226,8 +226,11 @@ existing release in the Console rather than uploading that version code again.
 
 ## Domestic Android Stores
 
-Stable tags build one `production-domestic-stores` APK after CI and save it as the
-`domestic-stores-release` Actions artifact for 30 days. It includes the standard
+Stable tags call the existing [Android release workflow](../../.github/workflows/android-release.yml)
+with `domestic: true`. Its domestic branch builds one `production-domestic-stores` APK after CI
+and saves it as the `domestic-stores-release` Actions artifact for 30 days. The default public APK
+call and GitHub publishing path remain independent; the domestic call never publishes to GitHub.
+The artifact includes the standard
 `cherry-studio-<version>-android.apk` filename, `SHA256SUMS`, and `release-manifest.json` with the EAS
 build ID, source commit, version/build, package identity, channel, and signing certificate digest.
 This is a separate artifact from the public APK; keep separate directories when downloading both.

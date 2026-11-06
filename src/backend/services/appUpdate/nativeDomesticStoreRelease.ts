@@ -19,7 +19,6 @@ const ResultSchema = z.discriminatedUnion('status', [
     versionCode: z.number().int().positive().max(2_100_000_000),
     versionName: z.string().trim().max(100).nullable(),
     notes: z.string().max(32_000).nullable(),
-    grayApkId: z.string().regex(/^\d+$/).max(100).nullish(),
   }),
 ]);
 
@@ -58,17 +57,15 @@ export async function checkNativeDomesticStoreRelease(
     }
     if (result.versionCode <= currentBuild)
       throw new Error('Store update target is not a newer build');
-    if (result.grayApkId && store !== 'vivo') throw new Error('Unexpected store update target');
     return {
       status: 'available',
       channel: 'domestic-stores',
       store,
-      id: `domestic-stores:${packageName}:${store}:${result.versionCode}:${result.grayApkId ?? ''}`,
+      id: `domestic-stores:${packageName}:${store}:${result.versionCode}`,
       currentVersion,
       latestVersion: result.versionName || null,
-      versionCode: result.versionCode,
+      notesSource: 'store',
       notes: result.notes,
-      ...(result.grayApkId ? { grayApkId: result.grayApkId } : {}),
     };
   } catch (error) {
     signal.throwIfAborted();

@@ -9,9 +9,9 @@ and installation. See [Cloud Releases](./cloud-releases.md).
 ## Checks And Store Actions
 
 Use the store's client query when one is integrated; otherwise reuse `checkGitcodeRelease`.
-The update action always opens the device's app store. Android's recorded installation/update
-source is preferred, with device brand/manufacturer and the sole available store as fallbacks.
-There is no store chooser or separate store-management interface.
+The update action always opens the device's app store. The native module resolves one store from
+Android's installation/update source, falling back to device brand/manufacturer. The update module
+reads this target once when created; there is no store list or runtime source-switching workflow.
 
 | Store | Version check |
 | --- | --- |
@@ -31,16 +31,17 @@ invalid responses never become up-to-date assertions or automatic navigation. An
 uses the existing update dialog with one generic **Go to app store** button. No public version
 manifest, collector, hosting, vendor credentials or extra environment variable is needed.
 
-The native action explicitly targets the resolved store package and rechecks that source before
-opening it. OPPO supports both `com.heytap.market` and `com.oppo.market`; vivo preserves an eligible
-gray target returned by its query. Opening a store does not claim installation success.
+The native action opens the resolved store's listing after checking that it can handle the intent.
+OPPO supports both `com.heytap.market` and `com.oppo.market`. Only full-release queries and updates
+are supported. Opening a store does not claim installation success.
 
 ## Shared Presentation And Lifecycle
 
 Domestic checks reuse the normal channel query cache and six-hour stale time. Cold-start checks
 wait for privacy consent and foreground activation. Only a confirmed cold-start prompt reads and
 displays release notes; manual checks and transfer reopen hide cached notes. GitCode-backed notes
-reuse the existing Chinese/English release-note reader. Vendor notes remain plain text.
+reuse the existing Chinese/English release-note reader. `notesSource` identifies GitCode or vendor
+notes explicitly; vendor build numbers stay inside backend comparison.
 
 Native queries have a 15-second deadline. Cancellation/disposal releases request waiters and vivo
 receivers. Xiaomi's process-global listener drains an abandoned request before accepting another,

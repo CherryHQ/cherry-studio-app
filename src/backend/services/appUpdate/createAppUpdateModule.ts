@@ -4,13 +4,8 @@ import { getLocales } from 'expo-localization';
 import { Linking, Platform } from 'react-native';
 
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
-import type {
-  AppUpdateModule,
-  AppUpdateResult,
-  DomesticAppStore,
-} from '@/shared/contracts/appUpdate';
+import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
-import type { NativeAppUpdate } from '../../../../modules/app-update';
 import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
@@ -31,13 +26,12 @@ export function createAppUpdateModule(dependencies: {
   );
   const download = createApkDownload();
   const lifetime = new AbortController();
-  const readStores = () =>
-    channel === 'domestic-stores' ? getNativeAppUpdate()?.getDomesticStoreInfo?.() : null;
-  let stopped = false;
+  const store =
+    channel === 'domestic-stores' ? (getNativeAppUpdate()?.getDomesticStore() ?? null) : null;
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
 
   function requireApk() {
-    if (stopped || channel !== 'apk')
+    if (lifetime.signal.aborted || channel !== 'apk')
       throw new Error('APK updates are disabled for this distribution');
     const native = getNativeAppUpdate();
     if (!native?.isApkInstallationEnabled())
@@ -50,7 +44,8 @@ export function createAppUpdateModule(dependencies: {
     isEnabled: channel !== null,
     async check(signal): Promise<AppUpdateResult> {
       signal?.throwIfAborted();
-      if (stopped || !channel) return { status: 'unavailable', reason: 'unsupported' };
+      if (lifetime.signal.aborted || !channel)
+        return { status: 'unavailable', reason: 'unsupported' };
       const currentVersion = Application.nativeApplicationVersion?.trim();
       if (!currentVersion) return { status: 'unavailable', reason: 'unknownVersion' };
       parseReleaseVersion(currentVersion);
@@ -65,7 +60,6 @@ export function createAppUpdateModule(dependencies: {
       }
       if (!Application.applicationId) return { status: 'unavailable', reason: 'unknownVersion' };
       if (channel === 'domestic-stores') {
-        const store = resolveDomesticStore(readStores());
         if (!store) return { status: 'unavailable', reason: 'nativeUnavailable' };
         const linked = linkAbortSignals(signal ? [lifetime.signal, signal] : [lifetime.signal]);
         try {
@@ -82,7 +76,7 @@ export function createAppUpdateModule(dependencies: {
                     currentVersion,
                     latestVersion: release.latestVersion,
                     notes: release.notes,
-                    versionCode: null,
+                    notesSource: 'gitcode',
                   }
                 : release;
           } else {
@@ -98,8 +92,6 @@ export function createAppUpdateModule(dependencies: {
             );
           }
           linked.signal.throwIfAborted();
-          if (resolveDomesticStore(readStores()) !== store)
-            return { status: 'unavailable', reason: 'nativeUnavailable' };
           return result;
         } finally {
           linked.dispose();
@@ -133,15 +125,15 @@ export function createAppUpdateModule(dependencies: {
       return checkAppStoreRelease(Application.applicationId, currentVersion, country, signal);
     },
     async openStore(release) {
-      if (stopped || release.channel === 'apk' || release.channel !== channel) {
+      if (lifetime.signal.aborted || release.channel === 'apk' || release.channel !== channel) {
         throw new Error('Invalid store update action');
       }
       if (release.channel === 'domestic-stores') {
         const native = getNativeAppUpdate();
-        if (!native || resolveDomesticStore(native.getDomesticStoreInfo?.()) !== release.store) {
+        if (!native || release.store !== store) {
           throw new Error('The requested domestic store is unavailable');
         }
-        await native.openDomesticStore(release.store, release.grayApkId ?? null);
+        await native.openDomesticStore(release.store);
         return;
       }
       if (channel === 'google-play') {
@@ -198,34 +190,9 @@ export function createAppUpdateModule(dependencies: {
       return dependencies.requestInstallPermission();
     },
     async dispose() {
-      stopped = true;
       lifetime.abort();
       await download.dispose();
       await installation?.catch(() => {});
     },
   };
-}
-
-const DEVICE_STORES: Partial<Record<string, DomesticAppStore>> = {
-  honor: 'honor',
-  xiaomi: 'xiaomi',
-  redmi: 'xiaomi',
-  poco: 'xiaomi',
-  oppo: 'oppo',
-  realme: 'oppo',
-  oneplus: 'oppo',
-  vivo: 'vivo',
-  iqoo: 'vivo',
-};
-
-function resolveDomesticStore(
-  info: ReturnType<NativeAppUpdate['getDomesticStoreInfo']> | null | undefined,
-): DomesticAppStore | null {
-  if (!info) return null;
-  if (info.preferred && info.available.includes(info.preferred)) return info.preferred;
-  for (const identity of [info.brand, info.manufacturer]) {
-    const candidate = DEVICE_STORES[identity.trim().toLowerCase()];
-    if (candidate && info.available.includes(candidate)) return candidate;
-  }
-  return info.available.length === 1 ? info.available[0]! : null;
 }

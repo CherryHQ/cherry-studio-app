@@ -26,7 +26,7 @@ const domestic: AppUpdateRelease = {
   currentVersion: apk.currentVersion,
   latestVersion: apk.latestVersion,
   notes: apk.notes,
-  versionCode: null,
+  notesSource: 'gitcode',
 };
 
 beforeEach(() => jest.clearAllMocks());
@@ -76,15 +76,17 @@ test.each([apk, domestic])(
   },
 );
 
-test('store releases use the notes their store published', async () => {
-  const store: AppUpdateRelease = {
+test.each<AppUpdateRelease>([
+  {
     channel: 'app-store',
     id: 'app-store:1:1.10.0',
     currentVersion: '1.9.0',
     notes: 'New in 1.10.0',
     latestVersion: '1.10.0',
     storeUrl: 'https://apps.apple.com/us/app/id1',
-  };
-  await expect(readReleaseNotes(store, 'en-US')).resolves.toBe('New in 1.10.0');
+  },
+  { ...domestic, store: 'honor', notesSource: 'store', notes: 'Vendor notes' },
+])('store release $id uses its own notes without a GitHub request', async (store) => {
+  await expect(readReleaseNotes(store, 'en-US')).resolves.toBe(store.notes);
   expect(mockRequest).not.toHaveBeenCalled();
 });
