@@ -7,6 +7,7 @@ import type {
   AgentTurnView,
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { AgentSessionChatClient, isAgentSessionBusy } from '../AgentSessionChatClient';
 
@@ -384,6 +385,7 @@ describe('AgentSessionChatClient', () => {
     await client.observe('session-1');
     await client.refresh('session-1');
     expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').pendingRetryMessageId).toBe('assistant-1');
     await expect(
       client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' }),
     ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
@@ -398,12 +400,13 @@ describe('AgentSessionChatClient', () => {
     rejectRetry(new Error('preflight failed'));
     await rejected;
     expect(client.getState('session-1').isSubmitting).toBe(false);
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
     expect(protocol.retryMessage).toHaveBeenCalledTimes(1);
     expect(protocol.submitMessage).not.toHaveBeenCalled();
     unsubscribe();
   });
 
-  test('keeps the original answer visible while a new branch is admitted, across a refresh', async () => {
+  test('keeps explicit model selection outside the retry overlay across a refresh', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
       unsubscribe: jest.fn(),
@@ -417,13 +420,48 @@ describe('AgentSessionChatClient', () => {
     );
     const client = new AgentSessionChatClient(protocol);
     const unsubscribe = client.subscribe('session-1', () => undefined);
-    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+    const retry = client.retryMessage({
+      sessionId: 'session-1',
+      messageId: 'assistant-1',
+      modelId: createUniqueModelId('provider', 'other'),
+    });
 
     expect(client.getState('session-1').isSubmitting).toBe(true);
     await client.refresh('session-1');
     expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
 
     admitRetry();
+    await retry;
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    unsubscribe();
+  });
+
+  test('hands the retry overlay to its reserved message before admission finishes', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const admission = deferred<void>();
+    protocol.retryMessage.mockImplementation(() => admission.promise);
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+    expect(client.getState('session-1').pendingRetryMessageId).toBe('assistant-1');
+    await waitForCall(protocol.retryMessage);
+    const replacement: AgentMessageView = {
+      ...assistantMessage(),
+      turnId: 'retry-turn',
+      status: 'pending',
+      parts: [],
+    };
+    publish({ type: 'message.created', message: replacement });
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').liveMessages).toEqual([replacement]);
+    admission.resolve();
     await retry;
     expect(client.getState('session-1').isSubmitting).toBe(false);
     unsubscribe();

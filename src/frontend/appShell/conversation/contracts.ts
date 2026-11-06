@@ -173,6 +173,8 @@ export type ConversationMessage = {
   };
 };
 export type ConversationSnapshot = {
+  /** A submission or answer retry is being prepared before its execution is reserved. */
+  isSubmitting?: boolean;
   agentId?: string;
   workspaceId?: string;
   workspaceKind?: 'registered' | 'system';
