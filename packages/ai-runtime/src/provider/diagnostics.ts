@@ -1,6 +1,7 @@
 export type ProviderRuntimeDiagnostic = {
   code:
     | 'model-list-failed'
+    | 'model-list-entries-skipped'
     | 'optional-model-list-failed'
     | 'vertex-auth-failed'
     | 'vertex-config-invalid'

@@ -1,4 +1,8 @@
-import { MODEL_CAPABILITY, REASONING_FORMAT_PROFILES } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  MODEL_CAPABILITY,
+  REASONING_FORMAT_PROFILES,
+} from '@cherrystudio/provider-registry';
 
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import {
@@ -99,4 +103,32 @@ describe('materializeRemoteModels', () => {
       presetModelId: 'deepseek-v3-2',
     });
   });
+
+  it.each(['poe', 'poe-copy', 'other-provider'])(
+    'preserves Poe discovery routes through enrichment for %s',
+    (providerId) => {
+      jest.mocked(providerRegistryService.lookupModel).mockReturnValue({
+        presetModel: { id: 'bot', name: 'Bot', metadata: {}, capabilities: [] },
+        reasoningProfile,
+        registryOverride: null,
+      });
+      jest.mocked(mergePresetModel).mockReturnValue({
+        capabilities: [],
+        name: 'Bot',
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      } as Model);
+      const result = materializeRemoteModels(
+        {
+          id: providerId,
+          ...(providerId === 'poe-copy' ? { presetProviderId: 'poe' } : {}),
+        } as Provider,
+        [{ modelId: 'bot', endpointTypes: [ENDPOINT_TYPE.ANTHROPIC_MESSAGES] }],
+      );
+      expect(result[0].endpointTypes).toEqual([
+        providerId === 'other-provider'
+          ? ENDPOINT_TYPE.OPENAI_RESPONSES
+          : ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      ]);
+    },
+  );
 });
