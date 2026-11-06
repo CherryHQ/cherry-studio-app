@@ -14,6 +14,7 @@ import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
 import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSetting';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { EnterToSendSetting } from './components/EnterToSendSetting';
+import { MultiModelCardsSetting } from './components/MultiModelCardsSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -80,6 +81,7 @@ export default function AppearanceSettingsScreen() {
             value={isWatermarkEnabled}
           />
           <EnterToSendSetting />
+          <MultiModelCardsSetting />
           <DocumentParserSetting />
           <AutoCollapseProcessSetting />
         </Section>
