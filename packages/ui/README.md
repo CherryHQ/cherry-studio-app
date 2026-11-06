@@ -648,6 +648,11 @@ continues to target the native field.
 It shares menu placement, surface, motion, focus restoration, and the system-modal overlay. Outside
 taps, system back, and viewport changes dismiss it without changing the underlying layout.
 
+`AnchoredInfoPopover` accepts a caller-owned `InfoPopoverAnchor` in window coordinates instead of
+wrapping a trigger. Native editor links and inline transcript text use it when they measure their
+own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
+Its keyboard-preserving overlay shares the existing menu surface and bounded text reader.
+
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the

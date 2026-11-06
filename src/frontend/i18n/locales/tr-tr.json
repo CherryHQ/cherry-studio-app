@@ -600,7 +600,6 @@
   "chat.quote.assistant": "Asistan",
   "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Alıntılanan mesajı aç",
-  "chat.quote.remove": "Alıntıyı kaldır",
   "chat.quote.retryable": "Alıntılanan mesaj açılamadı. Tekrar deneyin.",
   "chat.quote.unavailable": "Alıntılanan mesaj kullanılamıyor",
   "chat.reasoning.auto": "Otomatik",

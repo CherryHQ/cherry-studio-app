@@ -610,7 +610,6 @@
   "chat.quote.assistant": "Ассистент",
   "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Открыть цитируемое сообщение",
-  "chat.quote.remove": "Убрать цитату",
   "chat.quote.retryable": "Не удалось открыть цитируемое сообщение. Повторите попытку.",
   "chat.quote.unavailable": "Цитируемое сообщение недоступно",
   "chat.reasoning.auto": "Авто",

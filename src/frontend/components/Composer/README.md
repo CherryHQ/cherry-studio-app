@@ -61,6 +61,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   in `NSTextAttachment.fileType`, which UIKit invalidates when assigning an image.
   Skill artwork follows desktop's Lucide ToolCase. Only the editor's raster-only inline attachment
   API uses encoded PNG bytes; normal controls use the vector icon.
+  Quote references use paired quotation marks without an inline image. `onLinkPress` reports the
+  link URL and measured window-space bounds; the feature owns its text preview. Native editor
+  updates require the development client described in the development guide.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
   shrinks with them. Ready still images open the shared preview with optional image editing.
   Saving replaces the matching attachment in place; cancellation, failure and a removed/stale

@@ -600,7 +600,6 @@
   "chat.quote.assistant": "Βοηθός",
   "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Άνοιγμα μηνύματος σε παράθεση",
-  "chat.quote.remove": "Αφαίρεση παράθεσης",
   "chat.quote.retryable": "Δεν ήταν δυνατό το άνοιγμα του μηνύματος σε παράθεση. Δοκιμάστε ξανά.",
   "chat.quote.unavailable": "Το μήνυμα σε παράθεση δεν είναι διαθέσιμο",
   "chat.reasoning.auto": "Αυτόματ",

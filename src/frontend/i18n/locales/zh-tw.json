@@ -595,7 +595,6 @@
   "chat.quote.assistant": "助理",
   "chat.quote.line": "{{author}}：{{text}}",
   "chat.quote.open": "開啟引用訊息",
-  "chat.quote.remove": "移除引用",
   "chat.quote.retryable": "無法開啟引用訊息，請重試。",
   "chat.quote.unavailable": "引用訊息無法使用",
   "chat.reasoning.auto": "自動",

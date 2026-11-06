@@ -595,7 +595,6 @@
   "chat.quote.assistant": "アシスタント",
   "chat.quote.line": "{{author}}：{{text}}",
   "chat.quote.open": "引用元のメッセージを開く",
-  "chat.quote.remove": "引用を削除",
   "chat.quote.retryable": "引用元のメッセージを開けませんでした。もう一度お試しください。",
   "chat.quote.unavailable": "引用元のメッセージは利用できません",
   "chat.reasoning.auto": "自動",

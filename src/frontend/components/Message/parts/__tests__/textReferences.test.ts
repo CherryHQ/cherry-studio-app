@@ -11,6 +11,29 @@ const selection = {
 };
 
 describe('message inline references', () => {
+  test('decorates each quote at its own recorded range and leaves a repeated ordinary excerpt alone', () => {
+    const text = '“First” reading “Second” swimming “First”';
+    const quotes = [
+      {
+        id: 'one',
+        sourceMessageId: '00000000-0000-7000-8000-000000000001',
+        text: 'Full first snapshot',
+        reference: { label: '“First”', offset: 0 },
+      },
+      {
+        id: 'two',
+        sourceMessageId: '00000000-0000-7000-8000-000000000002',
+        text: 'Full second snapshot',
+        reference: { label: '“Second”', offset: text.indexOf('“Second”') },
+      },
+    ];
+    expect(splitTextReferences(text, [], quotes)).toEqual([
+      { text: '“First”', reference: { type: 'quote', quote: quotes[0], ...quotes[0].reference } },
+      { text: ' reading ' },
+      { text: '“Second”', reference: { type: 'quote', quote: quotes[1], ...quotes[1].reference } },
+      { text: ' swimming “First”' },
+    ]);
+  });
   test('preserves arbitrary prose and only decorates the recorded plugin occurrence', () => {
     expect(splitTextReferences('📄 用 飞书，**飞书**', [plugin])).toEqual([
       { text: '📄 用 ' },
