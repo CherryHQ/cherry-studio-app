@@ -11,7 +11,7 @@ diff --git a/android/consumer-rules.pro b/android/consumer-rules.pro
  
  # Reflection: Video container loaded via Class.forName when enableVideo=true.
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b3b1c700b 100644
+index 06fa054e9..65a7504ec 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
 +++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
 @@ -1151,6 +1151,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
@@ -74,7 +74,15 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
-@@ -5264,6 +5282,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
+@@ -4106,6 +4124,7 @@ class EnrichedMarkdownTextInputProps final : public ViewProps {
+   EnrichedMarkdownTextInputMarkdownShortcutsStruct markdownShortcuts{};
+   std::string autoCapitalize{};
+   bool multiline{false};
++  bool submitOnReturn{false};
+   SharedColor cursorColor{};
+   SharedColor selectionColor{};
+   EnrichedMarkdownTextInputMarkdownStyleStruct markdownStyle{};
+@@ -5264,6 +5283,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
  #endif
  
  struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
@@ -82,7 +90,7 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
    Float fontSize{0.0};
    std::string fontFamily{};
    std::string fontWeight{};
-@@ -5284,6 +5303,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+@@ -5284,6 +5304,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
  
    folly::dynamic toDynamic() const {
      folly::dynamic result = folly::dynamic::object();
@@ -90,7 +98,7 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
      result["fontSize"] = fontSize;
      result["fontFamily"] = fontFamily;
      result["fontWeight"] = fontWeight;
-@@ -5305,6 +5325,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+@@ -5305,6 +5326,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
  static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownTextMarkdownStyleCodeBlockStruct &result) {
    auto map = (std::unordered_map<std::string, RawValue>)value;
  
@@ -102,10 +110,62 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
    if (tmp_fontSize != map.end()) {
      fromRawValue(context, tmp_fontSize->second, result.fontSize);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-index 561cf6623a2270ffe3942a85ee42a031cb938bd3..eb7e0e2af0b9320f845785eca466e604d099961a 100644
+index 561cf6623..6c9dbb312 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-@@ -295,7 +295,19 @@ class EnrichedMarkdownTextInputView(
+@@ -14,6 +14,7 @@ import android.view.Gravity
+ import android.view.KeyEvent
+ import android.view.MotionEvent
+ import android.view.View.OnFocusChangeListener
++import android.view.inputmethod.BaseInputConnection
+ import android.view.inputmethod.EditorInfo
+ import android.view.inputmethod.InputConnection
+ import android.view.inputmethod.InputMethodManager
+@@ -76,6 +77,8 @@ class EnrichedMarkdownTextInputView(
+   private var preEditSelectionStart = 0
+   private var preEditSelectionEnd = 0
+ 
++  private var submitOnReturn = false
++
+   var emitMarkdown = false
+   var autoFocusRequested = false
+   var stateWrapper: StateWrapper? = null
+@@ -151,6 +154,15 @@ class EnrichedMarkdownTextInputView(
+   init {
+     setupDetectorPipeline()
+     prepareComponent()
++    setOnEditorActionListener { _, actionId, event ->
++      if (!submitOnReturn || actionId != EditorInfo.IME_ACTION_SEND || event != null) {
++        false
++      } else {
++        // Candidate confirmation must never submit. The IME owns committing it.
++        if (BaseInputConnection.getComposingSpanStart(text) < 0) eventEmitter.emitSubmit()
++        true
++      }
++    }
+     isComponentReady = true
+   }
+ 
+@@ -210,8 +222,18 @@ class EnrichedMarkdownTextInputView(
+     inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
+   }
+ 
++  fun setSubmitOnReturnFromProps(value: Boolean) {
++    if (submitOnReturn == value) return
++    submitOnReturn = value
++    if (hasFocus()) inputMethodManager?.restartInput(this)
++  }
++
+   override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+     val base = super.onCreateInputConnection(outAttrs) ?: return null
++    if (submitOnReturn) {
++      outAttrs.imeOptions = (outAttrs.imeOptions and
++        (EditorInfo.IME_MASK_ACTION or EditorInfo.IME_FLAG_NO_ENTER_ACTION).inv()) or EditorInfo.IME_ACTION_SEND
++    }
+     return InputConnectionWrapper(base, this)
+   }
+ 
+@@ -295,7 +317,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -126,7 +186,7 @@ index 561cf6623a2270ffe3942a85ee42a031cb938bd3..eb7e0e2af0b9320f845785eca466e604
    }
  
    override fun performClick(): Boolean = super.performClick()
-@@ -315,7 +327,10 @@ class EnrichedMarkdownTextInputView(
+@@ -315,7 +349,10 @@ class EnrichedMarkdownTextInputView(
        super.performLongClick()
      } catch (e: NullPointerException) {
        val top = e.stackTrace.firstOrNull()
@@ -138,7 +198,7 @@ index 561cf6623a2270ffe3942a85ee42a031cb938bd3..eb7e0e2af0b9320f845785eca466e604
          throw e
        }
        Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
-@@ -336,6 +351,32 @@ class EnrichedMarkdownTextInputView(
+@@ -336,6 +373,32 @@ class EnrichedMarkdownTextInputView(
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -171,7 +231,7 @@ index 561cf6623a2270ffe3942a85ee42a031cb938bd3..eb7e0e2af0b9320f845785eca466e604
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -498,6 +539,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +561,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()
@@ -589,7 +649,7 @@ index 1100ee40de4f7ba9d9e8fe48c4d468a4d875d3d9..577f1a218d27c876eddea46a465d8b95
          contentDescription = description
          if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b3b1c700b 100644
+index 06fa054e9..65a7504ec 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 +++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 @@ -1151,6 +1151,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownMarkdownStyleCodeBl
@@ -652,7 +712,15 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
-@@ -5264,6 +5282,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
+@@ -4106,6 +4124,7 @@ class EnrichedMarkdownTextInputProps final : public ViewProps {
+   EnrichedMarkdownTextInputMarkdownShortcutsStruct markdownShortcuts{};
+   std::string autoCapitalize{};
+   bool multiline{false};
++  bool submitOnReturn{false};
+   SharedColor cursorColor{};
+   SharedColor selectionColor{};
+   EnrichedMarkdownTextInputMarkdownStyleStruct markdownStyle{};
+@@ -5264,6 +5283,7 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextMarkdownStyleCo
  #endif
  
  struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
@@ -660,7 +728,7 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
    Float fontSize{0.0};
    std::string fontFamily{};
    std::string fontWeight{};
-@@ -5284,6 +5303,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+@@ -5284,6 +5304,7 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
  
    folly::dynamic toDynamic() const {
      folly::dynamic result = folly::dynamic::object();
@@ -668,7 +736,7 @@ index 06fa054e92f77befdb84baf13dde03f32643b3d7..f587b6f296f366277c606ec495800b8b
      result["fontSize"] = fontSize;
      result["fontFamily"] = fontFamily;
      result["fontWeight"] = fontWeight;
-@@ -5305,6 +5325,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
+@@ -5305,6 +5326,10 @@ struct EnrichedMarkdownTextMarkdownStyleCodeBlockStruct {
  static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedMarkdownTextMarkdownStyleCodeBlockStruct &result) {
    auto map = (std::unordered_map<std::string, RawValue>)value;
  
@@ -763,7 +831,7 @@ index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcd
  @property (nonatomic, assign) BOOL underline;
  @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
 diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
-index 7e72cff2624c636d78192c02a7f5db79d79f37b6..5772cd2e2c29668cdbd2a07a01741a20e27e79f7 100644
+index 7e72cff26..3c7dc3b61 100644
 --- a/ios/input/EnrichedMarkdownTextInput.mm
 +++ b/ios/input/EnrichedMarkdownTextInput.mm
 @@ -13,6 +13,7 @@
@@ -839,7 +907,21 @@ index 7e72cff2624c636d78192c02a7f5db79d79f37b6..5772cd2e2c29668cdbd2a07a01741a20
  }
  
  #pragma mark - Props
-@@ -515,10 +497,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -434,6 +416,13 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     ENRMApplySelectionColor(_textView, newViewProps.selectionColor);
+   }
+ 
++#if !TARGET_OS_OSX
++  if (newViewProps.submitOnReturn != oldViewProps.submitOnReturn) {
++    _textView.returnKeyType = newViewProps.submitOnReturn ? UIReturnKeySend : UIReturnKeyDefault;
++    if (_textView.isFirstResponder) [_textView reloadInputViews];
++  }
++#endif
++
+   _inputEventEmitter.emitMarkdown = newViewProps.isOnChangeMarkdownSet;
+ 
+   {
+@@ -515,10 +504,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      writingDirectionChanged = YES;
    }
  
@@ -852,7 +934,7 @@ index 7e72cff2624c636d78192c02a7f5db79d79f37b6..5772cd2e2c29668cdbd2a07a01741a20
      }
    }
  
-@@ -530,12 +514,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -530,12 +521,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      if (_formattingStore.allRanges.count > 0) {
        [self applyFormatting];
      }
@@ -869,7 +951,7 @@ index 7e72cff2624c636d78192c02a7f5db79d79f37b6..5772cd2e2c29668cdbd2a07a01741a20
    [super updateProps:props oldProps:oldProps];
  }
  
-@@ -1682,6 +1668,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
+@@ -1682,6 +1675,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
  - (void)handleTextChanged
  {
    if (_editSession.isComposing) {
@@ -877,6 +959,21 @@ index 7e72cff2624c636d78192c02a7f5db79d79f37b6..5772cd2e2c29668cdbd2a07a01741a20
      return;
    }
  
+@@ -1833,6 +1827,14 @@ - (void)manageSelectionBasedChanges
+   }
+ }
+ 
++- (BOOL)submitFromKeyboard
++{
++  const auto &viewProps = static_cast<const EnrichedMarkdownTextInputProps &>(*_props);
++  if (!viewProps.submitOnReturn || _editSession.isComposing) return NO;
++  [_inputEventEmitter emitOnSubmit];
++  return YES;
++}
++
+ - (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
+ {
+   [_inputEventEmitter emitOnKeyPress:text];
 diff --git a/ios/input/InputStylePropsUtils.h b/ios/input/InputStylePropsUtils.h
 index 1d28946d1ec4e46fc0d502d35adec208645674ed..740f65a1046fb98308442b7bd1673d89d46fb5d2 100644
 --- a/ios/input/InputStylePropsUtils.h
@@ -1508,7 +1605,7 @@ index 7a39908bd40067a817051d4f0a1c9e7f23e9b4eb..28d4e9420158ba750d3a39371aa38677
    CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
    CGFloat containerWidth = self.bounds.size.width;
 diff --git a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
-index c2fec26187cbec03b8eeb9a1fddac3b438b0ae62..dc5bcf560ac1c267ed335328347285d53ff0b022 100644
+index c2fec2618..c648980d5 100644
 --- a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 +++ b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 @@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1520,6 +1617,22 @@ index c2fec26187cbec03b8eeb9a1fddac3b438b0ae62..dc5bcf560ac1c267ed335328347285d5
        color: ColorValue;
        underline: boolean;
        backgroundColor: ColorValue;
+@@ -230,6 +232,7 @@ export interface NativeProps extends ViewProps {
+    * @default true
+    */
+   multiline?: boolean;
++  submitOnReturn?: boolean;
+   /**
+    * Color of the cursor.
+    */
+@@ -303,6 +306,7 @@ export interface NativeProps extends ViewProps {
+   onChangeMarkdown?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
+   onChangeSelection?: CodegenTypes.DirectEventHandler<OnChangeSelectionEvent>;
+   onInputKeyPress?: CodegenTypes.DirectEventHandler<OnKeyPressEvent>;
++  onSubmit?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
+   onChangeState?: CodegenTypes.DirectEventHandler<OnChangeStateEvent>;
+   onInputFocus?: CodegenTypes.DirectEventHandler<TargetedEvent>;
+   onInputBlur?: CodegenTypes.DirectEventHandler<TargetedEvent>;
 diff --git a/lib/module/normalizeMarkdownTextInputStyle.js b/lib/module/normalizeMarkdownTextInputStyle.js
 index 90562c8e94c588b1d3384e9fbc003603fe5b1fd5..f630f772ea272a0595e3f6d1d4ea92160774285c 100644
 --- a/lib/module/normalizeMarkdownTextInputStyle.js
@@ -1534,7 +1647,7 @@ index 90562c8e94c588b1d3384e9fbc003603fe5b1fd5..f630f772ea272a0595e3f6d1d4ea9216
        underline: override.underline ?? linkBase.underline,
        backgroundColor: normalizeColor(override.backgroundColor) ?? defaultInternal.link.backgroundColor
 diff --git a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
-index 631fb19b499bc8505c264a4c0360524e5b47697f..d5e55e0fa627a761e21b97b4fd5a4a9a36eb30b3 100644
+index 631fb19b4..de3ff5cd3 100644
 --- a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
 +++ b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
 @@ -3,6 +3,10 @@ export type { OnKeyPressEvent, OnLinkDetected, OnStartMentionEvent, OnChangeMent
@@ -1548,8 +1661,27 @@ index 631fb19b499bc8505c264a4c0360524e5b47697f..d5e55e0fa627a761e21b97b4fd5a4a9a
      color?: string;
      underline?: boolean;
      backgroundColor?: string;
+@@ -196,6 +200,9 @@ export interface EnrichedMarkdownTextInputProps extends Omit<ViewProps, 'style'
+     markdownShortcuts?: boolean | MarkdownShortcutsConfig;
+     autoCapitalize?: string;
+     multiline?: boolean;
++    /** Soft keyboard Send action; composition and explicit inserts remain edits. */
++    submitOnReturn?: boolean;
++    onSubmit?: (markdown: string) => void;
+     cursorColor?: ColorValue;
+     selectionColor?: ColorValue;
+     markdownStyle?: MarkdownTextInputStyle;
+@@ -252,6 +259,6 @@ export interface EnrichedMarkdownTextInputProps extends Omit<ViewProps, 'style'
+      */
+     writingDirection?: 'auto' | 'ltr' | 'rtl' | 'first-strong';
+ }
+-export declare const EnrichedMarkdownTextInput: ({ ref, markdownStyle, style, defaultValue, placeholder, placeholderTextColor, editable, autoFocus, scrollEnabled, markdownShortcuts, autoCapitalize, multiline, cursorColor, selectionColor, onChangeText, onChangeMarkdown, onChangeSelection, onChangeState, onKeyPress, onCaretRectChange, onLinkDetected, mentionIndicators, onStartMention, onChangeMention, onEndMention, onFocus, onBlur, onPress, onPressIn, onPressOut, hitSlop, rejectResponderTermination, contextMenuItems, selectionMenuConfig, formatMenuConfig, linkRegex: _linkRegex, writingDirection, ...rest }: EnrichedMarkdownTextInputProps) => import("react/jsx-runtime").JSX.Element;
++export declare const EnrichedMarkdownTextInput: ({ ref, markdownStyle, style, defaultValue, placeholder, placeholderTextColor, editable, autoFocus, scrollEnabled, markdownShortcuts, autoCapitalize, multiline, submitOnReturn, onSubmit, cursorColor, selectionColor, onChangeText, onChangeMarkdown, onChangeSelection, onChangeState, onKeyPress, onCaretRectChange, onLinkDetected, mentionIndicators, onStartMention, onChangeMention, onEndMention, onFocus, onBlur, onPress, onPressIn, onPressOut, hitSlop, rejectResponderTermination, contextMenuItems, selectionMenuConfig, formatMenuConfig, linkRegex: _linkRegex, writingDirection, ...rest }: EnrichedMarkdownTextInputProps) => import("react/jsx-runtime").JSX.Element;
+ export default EnrichedMarkdownTextInput;
+ //# sourceMappingURL=EnrichedMarkdownTextInput.d.ts.map
+\ No newline at end of file
 diff --git a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
-index 6f9148cf8c95a6a3dcc74971a84c7bbe9f5ce16d..cfb8fb46d57a15b1c163f100ceed65882493eedb 100644
+index 6f9148cf8..cdb09ef9e 100644
 --- a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
 +++ b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
 @@ -19,6 +19,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1561,6 +1693,22 @@ index 6f9148cf8c95a6a3dcc74971a84c7bbe9f5ce16d..cfb8fb46d57a15b1c163f100ceed6588
          color: ColorValue;
          underline: boolean;
          backgroundColor: ColorValue;
+@@ -235,6 +237,7 @@ export interface NativeProps extends ViewProps {
+      * @default true
+      */
+     multiline?: boolean;
++    submitOnReturn?: boolean;
+     /**
+      * Color of the cursor.
+      */
+@@ -297,6 +300,7 @@ export interface NativeProps extends ViewProps {
+     onChangeMarkdown?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
+     onChangeSelection?: CodegenTypes.DirectEventHandler<OnChangeSelectionEvent>;
+     onInputKeyPress?: CodegenTypes.DirectEventHandler<OnKeyPressEvent>;
++    onSubmit?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
+     onChangeState?: CodegenTypes.DirectEventHandler<OnChangeStateEvent>;
+     onInputFocus?: CodegenTypes.DirectEventHandler<TargetedEvent>;
+     onInputBlur?: CodegenTypes.DirectEventHandler<TargetedEvent>;
 diff --git a/lib/typescript/src/linkVariantUtils.d.ts b/lib/typescript/src/linkVariantUtils.d.ts
 index 17139662039594be8780398f8dd5de4e774478f9..6c2da03e81d1463ad9422995f8919ec42c2c1016 100644
 --- a/lib/typescript/src/linkVariantUtils.d.ts
@@ -1587,7 +1735,7 @@ index a306bfd89955bdff4c997cfa84bdacdba84567c8..61cb620034a9ca54708d3a54ed9f5c3b
      underline: boolean;
      backgroundColor: ColorValue;
 diff --git a/src/EnrichedMarkdownTextInput.tsx b/src/EnrichedMarkdownTextInput.tsx
-index 4100c709093f7fb002f08869ccb1d4306a975bd1..2d73ab11f17354a034ed3ab8185a16f1f820e809 100644
+index 4100c7090..7dcad1473 100644
 --- a/src/EnrichedMarkdownTextInput.tsx
 +++ b/src/EnrichedMarkdownTextInput.tsx
 @@ -53,6 +53,10 @@ import type { RefObject } from 'react';
@@ -1601,8 +1749,36 @@ index 4100c709093f7fb002f08869ccb1d4306a975bd1..2d73ab11f17354a034ed3ab8185a16f1
    color?: string;
    underline?: boolean;
    backgroundColor?: string;
+@@ -244,6 +248,9 @@ export interface EnrichedMarkdownTextInputProps
+   markdownShortcuts?: boolean | MarkdownShortcutsConfig;
+   autoCapitalize?: string;
+   multiline?: boolean;
++  /** Soft keyboard Send action; composition and explicit inserts remain edits. */
++  submitOnReturn?: boolean;
++  onSubmit?: (markdown: string) => void;
+   cursorColor?: ColorValue;
+   selectionColor?: ColorValue;
+   markdownStyle?: MarkdownTextInputStyle;
+@@ -325,6 +332,8 @@ export const EnrichedMarkdownTextInput = ({
+   markdownShortcuts,
+   autoCapitalize = 'sentences',
+   multiline = true,
++  submitOnReturn = false,
++  onSubmit,
+   cursorColor,
+   selectionColor,
+   onChangeText,
+@@ -739,6 +748,8 @@ export const EnrichedMarkdownTextInput = ({
+       markdownShortcuts={normalizedMarkdownShortcuts}
+       autoCapitalize={autoCapitalize}
+       multiline={multiline}
++      submitOnReturn={submitOnReturn && onSubmit !== undefined}
++      onSubmit={onSubmit ? (event) => onSubmit(event.nativeEvent.value) : undefined}
+       cursorColor={cursorColor}
+       selectionColor={selectionColor}
+       isOnChangeMarkdownSet={onChangeMarkdown !== undefined}
 diff --git a/src/EnrichedMarkdownTextInputNativeComponent.ts b/src/EnrichedMarkdownTextInputNativeComponent.ts
-index c2fec26187cbec03b8eeb9a1fddac3b438b0ae62..dc5bcf560ac1c267ed335328347285d53ff0b022 100644
+index c2fec2618..c648980d5 100644
 --- a/src/EnrichedMarkdownTextInputNativeComponent.ts
 +++ b/src/EnrichedMarkdownTextInputNativeComponent.ts
 @@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1614,6 +1790,22 @@ index c2fec26187cbec03b8eeb9a1fddac3b438b0ae62..dc5bcf560ac1c267ed335328347285d5
        color: ColorValue;
        underline: boolean;
        backgroundColor: ColorValue;
+@@ -230,6 +232,7 @@ export interface NativeProps extends ViewProps {
+    * @default true
+    */
+   multiline?: boolean;
++  submitOnReturn?: boolean;
+   /**
+    * Color of the cursor.
+    */
+@@ -303,6 +306,7 @@ export interface NativeProps extends ViewProps {
+   onChangeMarkdown?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
+   onChangeSelection?: CodegenTypes.DirectEventHandler<OnChangeSelectionEvent>;
+   onInputKeyPress?: CodegenTypes.DirectEventHandler<OnKeyPressEvent>;
++  onSubmit?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
+   onChangeState?: CodegenTypes.DirectEventHandler<OnChangeStateEvent>;
+   onInputFocus?: CodegenTypes.DirectEventHandler<TargetedEvent>;
+   onInputBlur?: CodegenTypes.DirectEventHandler<TargetedEvent>;
 diff --git a/src/linkVariantUtils.ts b/src/linkVariantUtils.ts
 index fe705dbe7dbbf4b7144d7c90b3e9d3ee0690b119..74655b0f862ba5bace1ebc86890dd428911f0aca 100644
 --- a/src/linkVariantUtils.ts
@@ -1954,10 +2146,10 @@ index c937222bc213002b629c14093aecc80082cdb51b..1d41a58868d7cd8728e18c974ae49e2d
      updateAccessibilityLabel()
  
 diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
-index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b0319ab4dee 100644
+index a5391c7e8..b46ac2cb6 100644
 --- a/ios/input/ENRMInputTextView.mm
 +++ b/ios/input/ENRMInputTextView.mm
-@@ -11,8 +11,60 @@
+@@ -11,8 +11,71 @@
  
  #if !TARGET_OS_OSX
  
@@ -2007,6 +2199,17 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b03
 +  BOOL _pasteLoading;
 +}
 +
++- (void)insertText:(NSString *)text
++{
++  // Marked text is still an IME candidate, not a submission. Clipboard and command
++  // inserts bypass this keyboard method and retain their normal undo/selection path.
++  if ([text isEqualToString:@"\n"] && self.markedTextRange == nil &&
++      [self.markdownTextInput submitFromKeyboard]) {
++    return;
++  }
++  [super insertText:text];
++}
++
 +- (BOOL)resignFirstResponder
 +{
 +  BOOL resigned = [super resignFirstResponder];
@@ -2018,7 +2221,7 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b03
  }
  
  - (void)copy:(id)sender
-@@ -40,29 +92,26 @@ - (void)cut:(id)sender
+@@ -40,29 +103,26 @@ - (void)cut:(id)sender
  
  - (void)paste:(id)sender
  {
@@ -2068,6 +2271,26 @@ index a5391c7e8a6b1c063a6159ced46161ec58bf01aa..4c47a5dbf04902c9851134a1718a0b03
  }
  
  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender
+@@ -103,11 +163,19 @@ - (void)deleteBackward
+ - (NSArray<UIKeyCommand *> *)keyCommands
+ {
+   return @[
++    // UIKeyCommand is hardware-only. Keep external Return as an editing action.
++    [UIKeyCommand keyCommandWithInput:@"\r" modifierFlags:0 action:@selector(enrmHardwareReturn:)],
++    [UIKeyCommand keyCommandWithInput:@"\r" modifierFlags:UIKeyModifierShift action:@selector(enrmHardwareReturn:)],
+     [UIKeyCommand keyCommandWithInput:@"\t" modifierFlags:0 action:@selector(enrmIndentList:)],
+     [UIKeyCommand keyCommandWithInput:@"\t" modifierFlags:UIKeyModifierShift action:@selector(enrmOutdentList:)],
+   ];
+ }
+ 
++- (void)enrmHardwareReturn:(UIKeyCommand *)command
++{
++  [super insertText:@"\n"];
++}
++
+ - (void)enrmIndentList:(UIKeyCommand *)command
+ {
+   [self.markdownTextInput indentList];
 diff --git a/ios/input/ENRMInputFormatter.h b/ios/input/ENRMInputFormatter.h
 index f7166a42af2ae4c07f7f3e192c5b7e91c3a5c22d..86353ab2ba682c42a35c776e67be45b81215c1a2 100644
 --- a/ios/input/ENRMInputFormatter.h
@@ -2661,3 +2884,400 @@ diff --git a/vendor-grammars.mjs b/vendor-grammars.mjs
 +
    log('done.');
  }
+diff --git a/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerDelegate.java b/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerDelegate.java
+index 2f3cc4719..413d36508 100644
+--- a/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerDelegate.java
++++ b/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerDelegate.java
+@@ -50,6 +50,9 @@ public class EnrichedMarkdownTextInputManagerDelegate<T extends View, U extends
+       case "autoCapitalize":
+         mViewManager.setAutoCapitalize(view, value == null ? null : (String) value);
+         break;
++      case "submitOnReturn":
++        mViewManager.setSubmitOnReturn(view, value != null && (boolean) value);
++        break;
+       case "multiline":
+         mViewManager.setMultiline(view, value == null ? false : (boolean) value);
+         break;
+diff --git a/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerInterface.java b/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerInterface.java
+index 90aad4a6c..79e8da8b5 100644
+--- a/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerInterface.java
++++ b/android/generated/java/com/facebook/react/viewmanagers/EnrichedMarkdownTextInputManagerInterface.java
+@@ -25,6 +25,7 @@ public interface EnrichedMarkdownTextInputManagerInterface<T extends View> exten
+   void setMarkdownShortcuts(T view, @Nullable ReadableMap value);
+   void setAutoCapitalize(T view, @Nullable String value);
+   void setMultiline(T view, boolean value);
++  void setSubmitOnReturn(T view, boolean value);
+   void setCursorColor(T view, @Nullable Integer value);
+   void setSelectionColor(T view, @Nullable Integer value);
+   void setMarkdownStyle(T view, @Nullable ReadableMap value);
+diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp
+index 1b1b96234..3132b75e7 100644
+--- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp
++++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp
+@@ -118,16 +118,25 @@ void EnrichedMarkdownTextInputEventEmitter::onChangeSelection(OnChangeSelection
+     auto payload = jsi::Object(runtime);
+     payload.setProperty(runtime, "start", event.start);
+ payload.setProperty(runtime, "end", event.end);
+     return payload;
+   });
+ }
+ 
+ 
++void EnrichedMarkdownTextInputEventEmitter::onSubmit(OnSubmit event) const {
++  dispatchEvent("submit", [event=std::move(event)](jsi::Runtime &runtime) {
++    auto payload = jsi::Object(runtime);
++    payload.setProperty(runtime, "value", event.value);
++    return payload;
++  });
++}
++
++
+ void EnrichedMarkdownTextInputEventEmitter::onInputKeyPress(OnInputKeyPress event) const {
+   dispatchEvent("inputKeyPress", [event=std::move(event)](jsi::Runtime &runtime) {
+     auto payload = jsi::Object(runtime);
+     payload.setProperty(runtime, "key", event.key);
+     return payload;
+   });
+ }
+ 
+diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h
+index 3fda20ba6..b41a9924a 100644
+--- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h
++++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h
+@@ -146,6 +146,10 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+     OnChangeStateOrderedList orderedList;
+     };
+ 
++  struct OnSubmit {
++      std::string value;
++    };
++
+   struct OnInputFocus {
+       int target;
+     };
+@@ -260,6 +264,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+ 
+   void onInputKeyPress(OnInputKeyPress value) const;
+ 
++  void onSubmit(OnSubmit value) const;
++
+   void onChangeState(OnChangeState value) const;
+ 
+   void onInputFocus(OnInputFocus value) const;
+diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp
+index 2d1077e5b..cf26a1de4 100644
+--- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp
++++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp
+@@ -187,6 +187,7 @@ EnrichedMarkdownTextInputProps::EnrichedMarkdownTextInputProps(
+     markdownShortcuts(convertRawProp(context, rawProps, "markdownShortcuts", sourceProps.markdownShortcuts, {})),
+     autoCapitalize(convertRawProp(context, rawProps, "autoCapitalize", sourceProps.autoCapitalize, {})),
+     multiline(convertRawProp(context, rawProps, "multiline", sourceProps.multiline, {false})),
++    submitOnReturn(convertRawProp(context, rawProps, "submitOnReturn", sourceProps.submitOnReturn, {false})),
+     cursorColor(convertRawProp(context, rawProps, "cursorColor", sourceProps.cursorColor, {})),
+     selectionColor(convertRawProp(context, rawProps, "selectionColor", sourceProps.selectionColor, {})),
+     markdownStyle(convertRawProp(context, rawProps, "markdownStyle", sourceProps.markdownStyle, {})),
+@@ -251,6 +252,10 @@ folly::dynamic EnrichedMarkdownTextInputProps::getDiffProps(
+     result["autoCapitalize"] = autoCapitalize;
+   }
+     
++  if (submitOnReturn != oldProps->submitOnReturn) {
++    result["submitOnReturn"] = submitOnReturn;
++  }
++
+   if (multiline != oldProps->multiline) {
+     result["multiline"] = multiline;
+   }
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt
+index 512f5fcbe..373c308f6 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt
+@@ -27,6 +27,7 @@ import com.swmansion.enriched.markdown.input.events.OnEndMentionEvent
+ import com.swmansion.enriched.markdown.input.events.OnInputBlurEvent
+ import com.swmansion.enriched.markdown.input.events.OnInputFocusEvent
+ import com.swmansion.enriched.markdown.input.events.OnInputKeyPressEvent
++import com.swmansion.enriched.markdown.input.events.OnSubmitEvent
+ import com.swmansion.enriched.markdown.input.events.OnLinkDetectedEvent
+ import com.swmansion.enriched.markdown.input.events.OnRequestCaretRectResultEvent
+ import com.swmansion.enriched.markdown.input.events.OnRequestMarkdownResultEvent
+@@ -94,6 +95,7 @@ class EnrichedMarkdownTextInputManager :
+       OnChangeSelectionEvent.EVENT_NAME,
+       OnChangeStateEvent.EVENT_NAME,
+       OnInputKeyPressEvent.EVENT_NAME,
++      OnSubmitEvent.EVENT_NAME,
+       OnRequestMarkdownResultEvent.EVENT_NAME,
+       OnRequestCaretRectResultEvent.EVENT_NAME,
+       OnCaretRectChangeEvent.EVENT_NAME,
+@@ -185,6 +187,11 @@ class EnrichedMarkdownTextInputManager :
+     view?.setAutoCapitalize(value)
+   }
+ 
++  @ReactProp(name = "submitOnReturn", defaultBoolean = false)
++  override fun setSubmitOnReturn(view: EnrichedMarkdownTextInputView?, value: Boolean) {
++    view?.setSubmitOnReturnFromProps(value)
++  }
++
+   @ReactProp(name = "multiline", defaultBoolean = true)
+   override fun setMultiline(
+     view: EnrichedMarkdownTextInputView?,
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnSubmitEvent.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnSubmitEvent.kt
+new file mode 100644
+index 000000000..05e8ee766
+--- /dev/null
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnSubmitEvent.kt
+@@ -0,0 +1,24 @@
++package com.swmansion.enriched.markdown.input.events
++
++import com.facebook.react.bridge.Arguments
++import com.facebook.react.bridge.WritableMap
++import com.facebook.react.uimanager.events.Event
++
++class OnSubmitEvent(
++  surfaceId: Int,
++  viewId: Int,
++  private val markdown: String,
++) : Event<OnSubmitEvent>(surfaceId, viewId) {
++  override fun canCoalesce(): Boolean = false
++
++  override fun getEventName(): String = EVENT_NAME
++
++  override fun getEventData(): WritableMap =
++    Arguments.createMap().apply {
++      putString("value", markdown)
++    }
++
++  companion object {
++    const val EVENT_NAME = "onSubmit"
++  }
++}
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt
+index 7a5f41055..b658d12e9 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt
+@@ -15,6 +15,7 @@ import com.swmansion.enriched.markdown.input.events.OnEndMentionEvent
+ import com.swmansion.enriched.markdown.input.events.OnInputBlurEvent
+ import com.swmansion.enriched.markdown.input.events.OnInputFocusEvent
+ import com.swmansion.enriched.markdown.input.events.OnInputKeyPressEvent
++import com.swmansion.enriched.markdown.input.events.OnSubmitEvent
+ import com.swmansion.enriched.markdown.input.events.OnLinkDetectedEvent
+ import com.swmansion.enriched.markdown.input.events.OnRequestCaretRectResultEvent
+ import com.swmansion.enriched.markdown.input.events.OnRequestMarkdownResultEvent
+@@ -41,6 +42,10 @@ class InputEventEmitter(
+     dispatch(OnChangeTextEvent(surfaceId(), view.id, plainText))
+   }
+ 
++  fun emitSubmit() {
++    dispatch(OnSubmitEvent(surfaceId(), view.id, serializeToMarkdown()))
++  }
++
+   fun emitChangeMarkdown() {
+     dispatch(OnChangeMarkdownEvent(surfaceId(), view.id, serializeToMarkdown()))
+   }
+diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp
+index 1b1b96234..3132b75e7 100644
+--- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp
++++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp
+@@ -118,16 +118,25 @@ void EnrichedMarkdownTextInputEventEmitter::onChangeSelection(OnChangeSelection
+     auto payload = jsi::Object(runtime);
+     payload.setProperty(runtime, "start", event.start);
+ payload.setProperty(runtime, "end", event.end);
+     return payload;
+   });
+ }
+ 
+ 
++void EnrichedMarkdownTextInputEventEmitter::onSubmit(OnSubmit event) const {
++  dispatchEvent("submit", [event=std::move(event)](jsi::Runtime &runtime) {
++    auto payload = jsi::Object(runtime);
++    payload.setProperty(runtime, "value", event.value);
++    return payload;
++  });
++}
++
++
+ void EnrichedMarkdownTextInputEventEmitter::onInputKeyPress(OnInputKeyPress event) const {
+   dispatchEvent("inputKeyPress", [event=std::move(event)](jsi::Runtime &runtime) {
+     auto payload = jsi::Object(runtime);
+     payload.setProperty(runtime, "key", event.key);
+     return payload;
+   });
+ }
+ 
+diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h
+index 3fda20ba6..b41a9924a 100644
+--- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h
++++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h
+@@ -146,6 +146,10 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+     OnChangeStateOrderedList orderedList;
+     };
+ 
++  struct OnSubmit {
++      std::string value;
++    };
++
+   struct OnInputFocus {
+       int target;
+     };
+@@ -260,6 +264,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+ 
+   void onInputKeyPress(OnInputKeyPress value) const;
+ 
++  void onSubmit(OnSubmit value) const;
++
+   void onChangeState(OnChangeState value) const;
+ 
+   void onInputFocus(OnInputFocus value) const;
+diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp
+index 2d1077e5b..cf26a1de4 100644
+--- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp
++++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp
+@@ -187,6 +187,7 @@ EnrichedMarkdownTextInputProps::EnrichedMarkdownTextInputProps(
+     markdownShortcuts(convertRawProp(context, rawProps, "markdownShortcuts", sourceProps.markdownShortcuts, {})),
+     autoCapitalize(convertRawProp(context, rawProps, "autoCapitalize", sourceProps.autoCapitalize, {})),
+     multiline(convertRawProp(context, rawProps, "multiline", sourceProps.multiline, {false})),
++    submitOnReturn(convertRawProp(context, rawProps, "submitOnReturn", sourceProps.submitOnReturn, {false})),
+     cursorColor(convertRawProp(context, rawProps, "cursorColor", sourceProps.cursorColor, {})),
+     selectionColor(convertRawProp(context, rawProps, "selectionColor", sourceProps.selectionColor, {})),
+     markdownStyle(convertRawProp(context, rawProps, "markdownStyle", sourceProps.markdownStyle, {})),
+@@ -251,6 +252,10 @@ folly::dynamic EnrichedMarkdownTextInputProps::getDiffProps(
+     result["autoCapitalize"] = autoCapitalize;
+   }
+     
++  if (submitOnReturn != oldProps->submitOnReturn) {
++    result["submitOnReturn"] = submitOnReturn;
++  }
++
+   if (multiline != oldProps->multiline) {
+     result["multiline"] = multiline;
+   }
+diff --git a/ios/input/ENRMInputEventEmitter.h b/ios/input/ENRMInputEventEmitter.h
+index 23a598cc1..fa1a96d26 100644
+--- a/ios/input/ENRMInputEventEmitter.h
++++ b/ios/input/ENRMInputEventEmitter.h
+@@ -31,6 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
+ 
+ - (void)emitOnChangeText;
+ - (void)emitOnKeyPress:(NSString *)text;
++- (void)emitOnSubmit;
+ - (void)emitOnChangeMarkdown;
+ - (void)emitOnChangeSelection;
+ - (void)emitOnChangeState;
+diff --git a/ios/input/ENRMInputEventEmitter.mm b/ios/input/ENRMInputEventEmitter.mm
+index ff3d4c242..05b6cb9ee 100644
+--- a/ios/input/ENRMInputEventEmitter.mm
++++ b/ios/input/ENRMInputEventEmitter.mm
+@@ -107,6 +107,13 @@ - (void)emitOnKeyPress:(NSString *)text
+   emitter->onInputKeyPress({.key = std::string([key UTF8String] ?: "")});
+ }
+ 
++- (void)emitOnSubmit
++{
++  ENRM_GUARD_EMITTER(emitter);
++  NSString *markdown = [_dataSource currentMarkdown];
++  emitter->onSubmit({.value = std::string([markdown UTF8String] ?: "")});
++}
++
+ - (void)emitOnChangeMarkdown
+ {
+   ENRM_GUARD_EMITTER(emitter);
+diff --git a/ios/input/EnrichedMarkdownTextInput.h b/ios/input/EnrichedMarkdownTextInput.h
+index 231d841f6..c569deaa2 100644
+--- a/ios/input/EnrichedMarkdownTextInput.h
++++ b/ios/input/EnrichedMarkdownTextInput.h
+@@ -13,6 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
+ - (CGSize)measureSize:(CGFloat)maxWidth;
+ - (nullable NSString *)markdownForSelectedRange;
+ - (void)copyToClipboard;
++#if !TARGET_OS_OSX
++- (BOOL)submitFromKeyboard;
++#endif
+ - (void)pasteMarkdown:(NSString *)markdown;
+ - (void)replaceSelectedTextWith:(NSString *)text formattingRanges:(NSArray *)ranges;
+ - (void)scheduleRelayoutIfNeeded;
+diff --git a/lib/module/EnrichedMarkdownTextInput.js b/lib/module/EnrichedMarkdownTextInput.js
+index 5b348e8fa..328146fec 100644
+--- a/lib/module/EnrichedMarkdownTextInput.js
++++ b/lib/module/EnrichedMarkdownTextInput.js
+@@ -46,6 +46,8 @@ export const EnrichedMarkdownTextInput = ({
+   markdownShortcuts,
+   autoCapitalize = 'sentences',
+   multiline = true,
++  submitOnReturn = false,
++  onSubmit,
+   cursorColor,
+   selectionColor,
+   onChangeText,
+@@ -398,6 +400,8 @@ export const EnrichedMarkdownTextInput = ({
+     markdownShortcuts: normalizedMarkdownShortcuts,
+     autoCapitalize: autoCapitalize,
+     multiline: multiline,
++    submitOnReturn: submitOnReturn && onSubmit !== undefined,
++    onSubmit: onSubmit ? event => onSubmit(event.nativeEvent.value) : undefined,
+     cursorColor: cursorColor,
+     selectionColor: selectionColor,
+     isOnChangeMarkdownSet: onChangeMarkdown !== undefined,
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
+index 1ebda75c2..91ee489c1 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
+@@ -64,7 +64,7 @@ class InputContextMenu(
+           menu.removeGroup(FORMAT_MENU_GROUP_ID)
+           menu.removeGroup(CUSTOM_MENU_GROUP_ID)
+ 
+-          if (selectionMenuConfig.format) {
++          if (selectionMenuConfig.format && view.selectionStart < view.selectionEnd) {
+             val formatSubMenu =
+               menu.addSubMenu(FORMAT_MENU_GROUP_ID, MENU_FORMAT_ID, 100, selectionMenuConfig.formatLabel)
+             FORMAT_ITEMS.forEachIndexed { index, (styleType, labelOf) ->
+@@ -78,12 +78,12 @@ class InputContextMenu(
+             if (selectionMenuConfig.copyAsMarkdown) {
+               menu.add(FORMAT_MENU_GROUP_ID, MENU_COPY_MARKDOWN_ID, 101, selectionMenuConfig.copyAsMarkdownLabel)
+             }
++          }
+ 
+-            customItemTexts.forEachIndexed { index, text ->
+-              menu
+-                .add(CUSTOM_MENU_GROUP_ID, MENU_CUSTOM_BASE + index, index, text)
+-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+-            }
++          customItemTexts.forEachIndexed { index, text ->
++            menu
++              .add(CUSTOM_MENU_GROUP_ID, MENU_CUSTOM_BASE + index, index, text)
++              .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+           }
+ 
+           return true
+@@ -125,6 +125,7 @@ class InputContextMenu(
+ 
+         override fun onDestroyActionMode(mode: ActionMode) {}
+       }
++    view.customInsertionActionModeCallback = view.customSelectionActionModeCallback
+   }
+ 
+   private fun isFormatItemVisible(styleType: StyleType): Boolean =
+diff --git a/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm b/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm
+index e86bf44e4..e873c662d 100644
+--- a/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm
++++ b/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm
+@@ -19,7 +19,7 @@ - (UIMenu *)textView:(UITextView *)textView
+     editMenuForTextInRange:(NSRange)range
+           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
+ {
+-  if (range.length == 0) {
++  if (range.length == 0 && [self contextMenuItemTexts].count == 0) {
+     return nil;
+   }
+ 
+@@ -94,11 +94,11 @@ - (UIMenu *)textView:(UITextView *)textView
+       break;
+     }
+   }
+-  if (menuConfig.format) {
++  if (menuConfig.format && range.length > 0) {
+     [systemActions insertObject:formatMenu atIndex:insertIndex];
+     insertIndex++;
+   }
+-  if (menuConfig.copyAsMarkdown) {
++  if (menuConfig.copyAsMarkdown && range.length > 0) {
+     [systemActions insertObject:copyMarkdownAction atIndex:insertIndex];
+   }
+   [allActions addObjectsFromArray:systemActions];

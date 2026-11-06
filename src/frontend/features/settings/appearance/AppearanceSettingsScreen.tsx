@@ -13,6 +13,7 @@ import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
 import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSetting';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
+import { EnterToSendSetting } from './components/EnterToSendSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -78,6 +79,7 @@ export default function AppearanceSettingsScreen() {
             testID="settings-export-watermark"
             value={isWatermarkEnabled}
           />
+          <EnterToSendSetting />
           <DocumentParserSetting />
           <AutoCollapseProcessSetting />
         </Section>

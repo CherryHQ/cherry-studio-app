@@ -44,6 +44,10 @@ describe('iOS asynchronous editor paste patch', () => {
 
   // Pasting during IME composition worked before the asynchronous load and must keep working.
   test('does not skip paste while text is being composed', () => {
-    expect(additions).not.toContain('markedTextRange');
+    const paste = inputPatch
+      ?.split('- (void)paste:(id)sender')[1]
+      ?.split('- (BOOL)canPerformAction:')[0];
+    expect(paste).toBeDefined();
+    expect(paste).not.toContain('markedTextRange');
   });
 });
