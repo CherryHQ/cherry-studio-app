@@ -81,6 +81,8 @@ source text, not behavior.
 link-press event delivery. Quote taps use platform tap recognition and retain ordinary text editing.
 The app converts local editor text bounds into window coordinates for an anchored text popover;
 sent-message references use the native press position because nested `Text` has no layout box.
+Android input links use a native selection path clipped to the tapped line so soft-wrap boundaries
+do not borrow the next line's caret position when calculating hit bounds.
 The native serializers escape brackets and backslashes only inside link labels, preserving quote
 snapshots containing those characters. `enrichedMarkdownAtomicLinks.test.ts` guards patch delivery;
 the quote parser regression uses the native serialized format directly.

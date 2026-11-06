@@ -2,7 +2,7 @@ import type { MessageQuote } from '@/shared/contracts/agent';
 
 import { isMentionEscaped, readMentionLabel } from '../components/ChatInput/utils/mentionLabels';
 
-const QUOTE_MENTION_PATTERN = /\[((?:\\.|[^\]\\\n])+)\]\(quote:\/\/([^\s)]+)\)/g;
+const QUOTE_MENTION_PATTERN = /\[((?:\\.|[^[\]\\\n])+)\]\(quote:\/\/([^\s)]+)\)/g;
 
 export function createQuoteMentionLabel(text: string): string {
   const characters = Array.from(text.replace(/\s+/g, ' ').trim());

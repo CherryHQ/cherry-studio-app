@@ -112,7 +112,14 @@ index 06fa054e9..65a7504ec 100644
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-@@ -10,10 +10,12 @@ import android.text.Editable
+@@ -5,15 +5,19 @@ import android.content.Context
+ import android.graphics.BlendMode
+ import android.graphics.BlendModeColorFilter
+ import android.graphics.Color
++import android.graphics.Path
++import android.graphics.RectF
+ import android.os.Build
+ import android.text.Editable
  import android.text.InputType
  import android.util.Log
  import android.util.TypedValue
@@ -125,7 +132,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
  import android.view.inputmethod.EditorInfo
  import android.view.inputmethod.InputConnection
  import android.view.inputmethod.InputMethodManager
-@@ -76,6 +78,8 @@ class EnrichedMarkdownTextInputView(
+@@ -76,6 +80,8 @@ class EnrichedMarkdownTextInputView(
    private var preEditSelectionStart = 0
    private var preEditSelectionEnd = 0
  
@@ -134,7 +141,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    var emitMarkdown = false
    var autoFocusRequested = false
    var stateWrapper: StateWrapper? = null
-@@ -126,6 +130,37 @@ class EnrichedMarkdownTextInputView(
+@@ -126,6 +132,41 @@ class EnrichedMarkdownTextInputView(
  
    private var textWatcher: MarkdownTextWatcher? = null
    private var inputMethodManager: InputMethodManager? = null
@@ -155,24 +162,28 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
 +      val start = maxOf(link.start, textLayout.getLineStart(line))
 +      val end = minOf(link.end, textLayout.getLineVisibleEnd(line))
 +      if (start >= end) return false
-+      val startX = textLayout.getPrimaryHorizontal(start)
-+      val endX = textLayout.getPrimaryHorizontal(end)
-+      val left = minOf(startX, endX)
-+      val right = maxOf(startX, endX)
-+      if (x < left || x > right) return false
++      // A soft-wrap end offset belongs to the next line. Use this line's selection geometry.
++      val bounds = RectF(textLayout.getLineLeft(line), textLayout.getLineTop(line).toFloat(),
++        textLayout.getLineRight(line), textLayout.getLineBottom(line).toFloat())
++      val selectionPath = Path()
++      textLayout.getSelectionPath(start, end, selectionPath)
++      val linePath = Path().apply { addRect(bounds, Path.Direction.CW) }
++      selectionPath.op(linePath, Path.Op.INTERSECT)
++      selectionPath.computeBounds(bounds, true)
++      if (!bounds.contains(x, y)) return false
 +      val density = resources.displayMetrics.density
 +      eventEmitter.emitLinkPress(url,
-+        (left + totalPaddingLeft - scrollX) / density,
-+        (textLayout.getLineTop(line) + totalPaddingTop - scrollY) / density,
-+        (right - left) / density,
-+        (textLayout.getLineBottom(line) - textLayout.getLineTop(line)) / density)
++        (bounds.left + totalPaddingLeft - scrollX) / density,
++        (bounds.top + totalPaddingTop - scrollY) / density,
++        bounds.width() / density,
++        bounds.height() / density)
 +      return false
 +    }
 +  })
    private var detectScrollMovement = false
    var scrollEnabled: Boolean = true
  
-@@ -151,6 +186,15 @@ class EnrichedMarkdownTextInputView(
+@@ -151,6 +192,15 @@ class EnrichedMarkdownTextInputView(
    init {
      setupDetectorPipeline()
      prepareComponent()
@@ -188,7 +199,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      isComponentReady = true
    }
  
-@@ -210,8 +254,18 @@ class EnrichedMarkdownTextInputView(
+@@ -210,8 +260,18 @@ class EnrichedMarkdownTextInputView(
      inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
    }
  
@@ -207,7 +218,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      return InputConnectionWrapper(base, this)
    }
  
-@@ -278,6 +332,7 @@ class EnrichedMarkdownTextInputView(
+@@ -278,6 +338,7 @@ class EnrichedMarkdownTextInputView(
    override fun isLayoutRequested(): Boolean = false
  
    override fun onTouchEvent(ev: MotionEvent): Boolean {
@@ -215,7 +226,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      when (ev.action) {
        MotionEvent.ACTION_DOWN -> {
          detectScrollMovement = true
-@@ -295,7 +350,19 @@ class EnrichedMarkdownTextInputView(
+@@ -295,7 +356,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -236,7 +247,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    }
  
    override fun performClick(): Boolean = super.performClick()
-@@ -315,7 +382,10 @@ class EnrichedMarkdownTextInputView(
+@@ -315,7 +388,10 @@ class EnrichedMarkdownTextInputView(
        super.performLongClick()
      } catch (e: NullPointerException) {
        val top = e.stackTrace.firstOrNull()
@@ -248,7 +259,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
          throw e
        }
        Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
-@@ -336,6 +406,32 @@ class EnrichedMarkdownTextInputView(
+@@ -336,6 +412,32 @@ class EnrichedMarkdownTextInputView(
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -281,7 +292,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -498,6 +594,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +600,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()

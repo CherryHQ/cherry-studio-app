@@ -49,6 +49,18 @@ test('shifts subsequent reference offsets past removed syntax and escaped labels
   expect(parsed.shift(0)).toBe(0);
 });
 
+test.each(['解释 [参数：', '解释 [[参数：', '解释 [a] 和 [参数：'])(
+  'keeps ordinary opening brackets outside quote ranges: %s',
+  (prefix) => {
+    const draft = `${prefix}${createQuoteMention(first)} follow-up`;
+    const parsed = readQuoteMentions(draft, [first]);
+    const label = createQuoteMentionLabel(first.text);
+    expect(parsed.text).toBe(`${prefix}${label} follow-up`);
+    expect(parsed.quotes).toEqual([{ ...first, reference: { label, offset: prefix.length } }]);
+    expect(restoreQuoteMentions(parsed.text, parsed.quotes)).toBe(draft);
+  },
+);
+
 test('reads native serialized link labels with brackets and literal backslashes', () => {
   const quote: MessageQuote = {
     ...first,

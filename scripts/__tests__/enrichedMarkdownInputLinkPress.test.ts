@@ -48,3 +48,13 @@ test('the lockfile registers the exact native patch', () => {
     `react-native-enriched-markdown@1.1.1: ${digest}`,
   );
 });
+
+test('delivers line-clipped selection bounds for wrapped input links', () => {
+  const android = read(
+    'android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt',
+  );
+  expect(android).toContain('textLayout.getSelectionPath(start, end, selectionPath)');
+  expect(android).toContain('selectionPath.op(linePath, Path.Op.INTERSECT)');
+  expect(android).toContain('selectionPath.computeBounds(bounds, true)');
+  expect(android).not.toContain('textLayout.getPrimaryHorizontal(end)');
+});
