@@ -595,7 +595,6 @@
   "chat.quote.assistant": "Trợ lý",
   "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Mở tin nhắn được trích dẫn",
-  "chat.quote.remove": "Xóa trích dẫn",
   "chat.quote.retryable": "Không thể mở tin nhắn được trích dẫn. Hãy thử lại.",
   "chat.quote.unavailable": "Tin nhắn được trích dẫn không khả dụng",
   "chat.reasoning.auto": "Tự động",

@@ -600,7 +600,6 @@
   "chat.quote.assistant": "Assistant",
   "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Open quoted message",
-  "chat.quote.remove": "Remove quote",
   "chat.quote.retryable": "Could not open quoted message. Try again.",
   "chat.quote.unavailable": "Quoted message unavailable",
   "chat.reasoning.auto": "Auto",

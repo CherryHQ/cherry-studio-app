@@ -605,7 +605,6 @@
   "chat.quote.assistant": "Asistent",
   "chat.quote.line": "{{author}}: {{text}}",
   "chat.quote.open": "Deschide mesajul citat",
-  "chat.quote.remove": "Elimină citatul",
   "chat.quote.retryable": "Mesajul citat nu a putut fi deschis. Încearcă din nou.",
   "chat.quote.unavailable": "Mesajul citat nu este disponibil",
   "chat.reasoning.auto": "Auto",

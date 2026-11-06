@@ -605,7 +605,6 @@
   "chat.quote.assistant": "Assistant",
   "chat.quote.line": "{{author}} : {{text}}",
   "chat.quote.open": "Ouvrir le message cité",
-  "chat.quote.remove": "Retirer la citation",
   "chat.quote.retryable": "Impossible d’ouvrir le message cité. Réessayez.",
   "chat.quote.unavailable": "Message cité indisponible",
   "chat.reasoning.auto": "Automatique",

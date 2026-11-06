@@ -110,10 +110,14 @@ index 06fa054e9..65a7504ec 100644
    if (tmp_fontSize != map.end()) {
      fromRawValue(context, tmp_fontSize->second, result.fontSize);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-index 561cf6623..6c9dbb312 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-@@ -14,6 +14,7 @@ import android.view.Gravity
+@@ -10,10 +10,12 @@ import android.text.Editable
+ import android.text.InputType
+ import android.util.Log
+ import android.util.TypedValue
++import android.view.GestureDetector
+ import android.view.Gravity
  import android.view.KeyEvent
  import android.view.MotionEvent
  import android.view.View.OnFocusChangeListener
@@ -121,7 +125,7 @@ index 561cf6623..6c9dbb312 100644
  import android.view.inputmethod.EditorInfo
  import android.view.inputmethod.InputConnection
  import android.view.inputmethod.InputMethodManager
-@@ -76,6 +77,8 @@ class EnrichedMarkdownTextInputView(
+@@ -76,6 +78,8 @@ class EnrichedMarkdownTextInputView(
    private var preEditSelectionStart = 0
    private var preEditSelectionEnd = 0
  
@@ -130,7 +134,45 @@ index 561cf6623..6c9dbb312 100644
    var emitMarkdown = false
    var autoFocusRequested = false
    var stateWrapper: StateWrapper? = null
-@@ -151,6 +154,15 @@ class EnrichedMarkdownTextInputView(
+@@ -126,6 +130,37 @@ class EnrichedMarkdownTextInputView(
+ 
+   private var textWatcher: MarkdownTextWatcher? = null
+   private var inputMethodManager: InputMethodManager? = null
++  private val linkTapDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
++    override fun onDown(event: MotionEvent): Boolean = true
++
++    override fun onSingleTapUp(event: MotionEvent): Boolean {
++      val textLayout = layout ?: return false
++      val x = event.x - totalPaddingLeft + scrollX
++      val y = event.y - totalPaddingTop + scrollY
++      if (y < 0 || y >= textLayout.height) return false
++      val line = textLayout.getLineForVertical(y.toInt())
++      val offset = textLayout.getOffsetForHorizontal(line, x)
++      val link = formattingStore.rangeOfType(StyleType.LINK, offset)
++        ?: formattingStore.rangeOfType(StyleType.LINK, (offset - 1).coerceAtLeast(0))
++        ?: return false
++      val url = link.url ?: return false
++      val start = maxOf(link.start, textLayout.getLineStart(line))
++      val end = minOf(link.end, textLayout.getLineVisibleEnd(line))
++      if (start >= end) return false
++      val startX = textLayout.getPrimaryHorizontal(start)
++      val endX = textLayout.getPrimaryHorizontal(end)
++      val left = minOf(startX, endX)
++      val right = maxOf(startX, endX)
++      if (x < left || x > right) return false
++      val density = resources.displayMetrics.density
++      eventEmitter.emitLinkPress(url,
++        (left + totalPaddingLeft - scrollX) / density,
++        (textLayout.getLineTop(line) + totalPaddingTop - scrollY) / density,
++        (right - left) / density,
++        (textLayout.getLineBottom(line) - textLayout.getLineTop(line)) / density)
++      return false
++    }
++  })
+   private var detectScrollMovement = false
+   var scrollEnabled: Boolean = true
+ 
+@@ -151,6 +186,15 @@ class EnrichedMarkdownTextInputView(
    init {
      setupDetectorPipeline()
      prepareComponent()
@@ -146,7 +188,7 @@ index 561cf6623..6c9dbb312 100644
      isComponentReady = true
    }
  
-@@ -210,8 +222,18 @@ class EnrichedMarkdownTextInputView(
+@@ -210,8 +254,18 @@ class EnrichedMarkdownTextInputView(
      inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
    }
  
@@ -165,7 +207,15 @@ index 561cf6623..6c9dbb312 100644
      return InputConnectionWrapper(base, this)
    }
  
-@@ -295,7 +317,19 @@ class EnrichedMarkdownTextInputView(
+@@ -278,6 +332,7 @@ class EnrichedMarkdownTextInputView(
+   override fun isLayoutRequested(): Boolean = false
+ 
+   override fun onTouchEvent(ev: MotionEvent): Boolean {
++    linkTapDetector.onTouchEvent(ev)
+     when (ev.action) {
+       MotionEvent.ACTION_DOWN -> {
+         detectScrollMovement = true
+@@ -295,7 +350,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -186,7 +236,7 @@ index 561cf6623..6c9dbb312 100644
    }
  
    override fun performClick(): Boolean = super.performClick()
-@@ -315,7 +349,10 @@ class EnrichedMarkdownTextInputView(
+@@ -315,7 +382,10 @@ class EnrichedMarkdownTextInputView(
        super.performLongClick()
      } catch (e: NullPointerException) {
        val top = e.stackTrace.firstOrNull()
@@ -198,7 +248,7 @@ index 561cf6623..6c9dbb312 100644
          throw e
        }
        Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
-@@ -336,6 +373,32 @@ class EnrichedMarkdownTextInputView(
+@@ -336,6 +406,32 @@ class EnrichedMarkdownTextInputView(
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -231,7 +281,7 @@ index 561cf6623..6c9dbb312 100644
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -498,6 +561,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +594,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()
@@ -831,7 +881,6 @@ index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcd
  @property (nonatomic, assign) BOOL underline;
  @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
 diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
-index 7e72cff26..3c7dc3b61 100644
 --- a/ios/input/EnrichedMarkdownTextInput.mm
 +++ b/ios/input/EnrichedMarkdownTextInput.mm
 @@ -13,6 +13,7 @@
@@ -842,7 +891,7 @@ index 7e72cff26..3c7dc3b61 100644
  #import "ENRMInputLinkPrompt.h"
  #import "ENRMInputListMarkerDrawer.h"
  #import "ENRMInputParser.h"
-@@ -42,7 +43,7 @@
+@@ -42,14 +43,14 @@
  #import <ReactNativeEnrichedMarkdown/RCTComponentViewHelpers.h>
  
  #import "EnrichedMarkdownTextInputShadowNode.h"
@@ -851,7 +900,68 @@ index 7e72cff26..3c7dc3b61 100644
  #import "RCTFabricComponentsPlugins.h"
  #import <React/RCTConversions.h>
  
-@@ -316,7 +317,11 @@ - (void)updateState:(const facebook::react::State::Shared &)state
+ using namespace facebook::react;
+ 
+ #if !TARGET_OS_OSX
+-@interface EnrichedMarkdownTextInput () <RCTEnrichedMarkdownTextInputViewProtocol, UITextViewDelegate,
++@interface EnrichedMarkdownTextInput () <RCTEnrichedMarkdownTextInputViewProtocol, UITextViewDelegate, UIGestureRecognizerDelegate,
+                                          ENRMEditPipelineHost, ENRMInputEventEmitterDataSource,
+                                          ENRMInputTypingAttributesDataSource>
+ #else
+@@ -242,6 +243,11 @@ - (void)setupTextView
+ 
+ #if !TARGET_OS_OSX
+   self.contentView = _textView;
++  UITapGestureRecognizer *linkTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleLinkTap:)];
++  linkTap.cancelsTouchesInView = NO;
++  linkTap.delegate = self;
++  [linkTap requireGestureRecognizerToFail:_textView.panGestureRecognizer];
++  [_textView addGestureRecognizer:linkTap];
+ #else
+   _textView.selectable = YES;
+ 
+@@ -272,6 +278,40 @@ - (void)setupTextView
+   [self resetBaseTypingAttributes];
+ }
+ 
++#if !TARGET_OS_OSX
++- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch
++{
++  return !_textView.isDragging && !_textView.isDecelerating;
++}
++
++- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer
++    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other
++{
++  return [other isKindOfClass:[UITapGestureRecognizer class]];
++}
++
++- (void)handleLinkTap:(UITapGestureRecognizer *)recognizer
++{
++  if (recognizer.state != UIGestureRecognizerStateEnded || _textView.textStorage.length == 0) return;
++  CGPoint point = [recognizer locationInView:_textView];
++  point.x -= _textView.textContainerInset.left;
++  point.y -= _textView.textContainerInset.top;
++  CGFloat fraction = 0;
++  NSUInteger glyph = [_layoutManager glyphIndexForPoint:point inTextContainer:_textView.textContainer fractionOfDistanceThroughGlyph:&fraction];
++  if (glyph >= _layoutManager.numberOfGlyphs) return;
++  CGRect glyphRect = [_layoutManager boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:_textView.textContainer];
++  if (!CGRectContainsPoint(glyphRect, point)) return;
++  NSUInteger character = [_layoutManager characterIndexForGlyphAtIndex:glyph];
++  ENRMFormattingRange *link = [_formattingStore rangeOfType:ENRMInputStyleTypeLink containingPosition:character];
++  if (link.url.length == 0) return;
++  NSRange glyphRange = [_layoutManager glyphRangeForCharacterRange:link.range actualCharacterRange:NULL];
++  CGRect rect = [_layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:_textView.textContainer];
++  rect.origin.x += _textView.textContainerInset.left;
++  rect.origin.y += _textView.textContainerInset.top;
++  [_inputEventEmitter emitOnLinkPress:link.url rect:[_textView convertRect:rect toView:self]];
++}
++#endif
++
+ #if !TARGET_OS_OSX
+ #pragma mark - Accessibility
+ 
+@@ -316,7 +356,11 @@ - (void)updateState:(const facebook::react::State::Shared &)state
  
  - (void)requestHeightUpdate
  {
@@ -864,7 +974,7 @@ index 7e72cff26..3c7dc3b61 100644
  }
  
  /// Yoga-resolved direction inherited from any ancestor `direction` style.
-@@ -338,6 +343,7 @@ - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+@@ -338,6 +382,7 @@ - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
      _resolvedLayoutDirection = resolved;
      if (_writingDirectionMode == ENRMWritingDirectionModeFirstStrong && _textView.textStorage.length > 0) {
        [self applyFormatting];
@@ -872,7 +982,7 @@ index 7e72cff26..3c7dc3b61 100644
      }
    }
  }
-@@ -346,32 +352,8 @@ - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+@@ -346,32 +391,8 @@ - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
  
  - (CGSize)measureSize:(CGFloat)maxWidth
  {
@@ -907,7 +1017,7 @@ index 7e72cff26..3c7dc3b61 100644
  }
  
  #pragma mark - Props
-@@ -434,6 +416,13 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -434,6 +455,13 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      ENRMApplySelectionColor(_textView, newViewProps.selectionColor);
    }
  
@@ -921,7 +1031,7 @@ index 7e72cff26..3c7dc3b61 100644
    _inputEventEmitter.emitMarkdown = newViewProps.isOnChangeMarkdownSet;
  
    {
-@@ -515,10 +504,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -515,10 +543,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      writingDirectionChanged = YES;
    }
  
@@ -934,7 +1044,7 @@ index 7e72cff26..3c7dc3b61 100644
      }
    }
  
-@@ -530,12 +521,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -530,12 +560,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      if (_formattingStore.allRanges.count > 0) {
        [self applyFormatting];
      }
@@ -951,7 +1061,7 @@ index 7e72cff26..3c7dc3b61 100644
    [super updateProps:props oldProps:oldProps];
  }
  
-@@ -1682,6 +1675,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
+@@ -1682,6 +1714,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
  - (void)handleTextChanged
  {
    if (_editSession.isComposing) {
@@ -959,7 +1069,7 @@ index 7e72cff26..3c7dc3b61 100644
      return;
    }
  
-@@ -1833,6 +1827,14 @@ - (void)manageSelectionBasedChanges
+@@ -1833,6 +1866,14 @@ - (void)manageSelectionBasedChanges
    }
  }
  
@@ -1605,7 +1715,6 @@ index 7a39908bd40067a817051d4f0a1c9e7f23e9b4eb..28d4e9420158ba750d3a39371aa38677
    CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
    CGFloat containerWidth = self.bounds.size.width;
 diff --git a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
-index c2fec2618..c648980d5 100644
 --- a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 +++ b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 @@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1617,7 +1726,22 @@ index c2fec2618..c648980d5 100644
        color: ColorValue;
        underline: boolean;
        backgroundColor: ColorValue;
-@@ -230,6 +232,7 @@ export interface NativeProps extends ViewProps {
+@@ -116,6 +118,14 @@ export interface LinkNativeRegex {
+   isDefault: boolean;
+ }
+ 
++export interface OnInputLinkPress {
++  url: string;
++  x: CodegenTypes.Double;
++  y: CodegenTypes.Double;
++  width: CodegenTypes.Double;
++  height: CodegenTypes.Double;
++}
++
+ export interface OnLinkDetected {
+   text: string;
+   url: string;
+@@ -230,6 +240,7 @@ export interface NativeProps extends ViewProps {
     * @default true
     */
    multiline?: boolean;
@@ -1625,7 +1749,7 @@ index c2fec2618..c648980d5 100644
    /**
     * Color of the cursor.
     */
-@@ -303,6 +306,7 @@ export interface NativeProps extends ViewProps {
+@@ -303,6 +314,7 @@ export interface NativeProps extends ViewProps {
    onChangeMarkdown?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
    onChangeSelection?: CodegenTypes.DirectEventHandler<OnChangeSelectionEvent>;
    onInputKeyPress?: CodegenTypes.DirectEventHandler<OnKeyPressEvent>;
@@ -1633,6 +1757,14 @@ index c2fec2618..c648980d5 100644
    onChangeState?: CodegenTypes.DirectEventHandler<OnChangeStateEvent>;
    onInputFocus?: CodegenTypes.DirectEventHandler<TargetedEvent>;
    onInputBlur?: CodegenTypes.DirectEventHandler<TargetedEvent>;
+@@ -310,6 +322,7 @@ export interface NativeProps extends ViewProps {
+   onRequestCaretRectResult?: CodegenTypes.DirectEventHandler<OnRequestCaretRectResultEvent>;
+   onCaretRectChange?: CodegenTypes.DirectEventHandler<OnCaretRectChangeEvent>;
+   onContextMenuItemPress?: CodegenTypes.DirectEventHandler<OnContextMenuItemPressEvent>;
++  onLinkPress?: CodegenTypes.DirectEventHandler<OnInputLinkPress>;
+   onLinkDetected?: CodegenTypes.DirectEventHandler<OnLinkDetected>;
+   onStartMention?: CodegenTypes.DirectEventHandler<OnStartMentionEvent>;
+   onChangeMention?: CodegenTypes.DirectEventHandler<OnChangeMentionEvent>;
 diff --git a/lib/module/normalizeMarkdownTextInputStyle.js b/lib/module/normalizeMarkdownTextInputStyle.js
 index 90562c8e94c588b1d3384e9fbc003603fe5b1fd5..f630f772ea272a0595e3f6d1d4ea92160774285c 100644
 --- a/lib/module/normalizeMarkdownTextInputStyle.js
@@ -1647,7 +1779,6 @@ index 90562c8e94c588b1d3384e9fbc003603fe5b1fd5..f630f772ea272a0595e3f6d1d4ea9216
        underline: override.underline ?? linkBase.underline,
        backgroundColor: normalizeColor(override.backgroundColor) ?? defaultInternal.link.backgroundColor
 diff --git a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
-index 631fb19b4..de3ff5cd3 100644
 --- a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
 +++ b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
 @@ -3,6 +3,10 @@ export type { OnKeyPressEvent, OnLinkDetected, OnStartMentionEvent, OnChangeMent
@@ -1671,7 +1802,15 @@ index 631fb19b4..de3ff5cd3 100644
      cursorColor?: ColorValue;
      selectionColor?: ColorValue;
      markdownStyle?: MarkdownTextInputStyle;
-@@ -252,6 +259,6 @@ export interface EnrichedMarkdownTextInputProps extends Omit<ViewProps, 'style'
+@@ -209,6 +216,7 @@ export interface EnrichedMarkdownTextInputProps extends Omit<ViewProps, 'style'
+     onChangeState?: (state: StyleState) => void;
+     onKeyPress?: (e: NativeSyntheticEvent<OnKeyPressEvent>) => void;
+     onCaretRectChange?: (rect: CaretRect) => void;
++    onLinkPress?: (event: { url: string; x: number; y: number; width: number; height: number }) => void;
+     onLinkDetected?: (event: OnLinkDetected) => void;
+     mentionIndicators?: string[];
+     onStartMention?: (event: OnStartMentionEvent) => void;
+@@ -252,6 +260,6 @@ export interface EnrichedMarkdownTextInputProps extends Omit<ViewProps, 'style'
       */
      writingDirection?: 'auto' | 'ltr' | 'rtl' | 'first-strong';
  }
@@ -1681,7 +1820,6 @@ index 631fb19b4..de3ff5cd3 100644
  //# sourceMappingURL=EnrichedMarkdownTextInput.d.ts.map
 \ No newline at end of file
 diff --git a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
-index 6f9148cf8..cdb09ef9e 100644
 --- a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
 +++ b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
 @@ -19,6 +19,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1693,7 +1831,21 @@ index 6f9148cf8..cdb09ef9e 100644
          color: ColorValue;
          underline: boolean;
          backgroundColor: ColorValue;
-@@ -235,6 +237,7 @@ export interface NativeProps extends ViewProps {
+@@ -109,6 +111,13 @@ export interface LinkNativeRegex {
+     isDisabled: boolean;
+     isDefault: boolean;
+ }
++export interface OnInputLinkPress {
++    url: string;
++    x: CodegenTypes.Double;
++    y: CodegenTypes.Double;
++    width: CodegenTypes.Double;
++    height: CodegenTypes.Double;
++}
+ export interface OnLinkDetected {
+     text: string;
+     url: string;
+@@ -235,6 +244,7 @@ export interface NativeProps extends ViewProps {
       * @default true
       */
      multiline?: boolean;
@@ -1701,7 +1853,7 @@ index 6f9148cf8..cdb09ef9e 100644
      /**
       * Color of the cursor.
       */
-@@ -297,6 +300,7 @@ export interface NativeProps extends ViewProps {
+@@ -297,6 +307,7 @@ export interface NativeProps extends ViewProps {
      onChangeMarkdown?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
      onChangeSelection?: CodegenTypes.DirectEventHandler<OnChangeSelectionEvent>;
      onInputKeyPress?: CodegenTypes.DirectEventHandler<OnKeyPressEvent>;
@@ -1709,6 +1861,14 @@ index 6f9148cf8..cdb09ef9e 100644
      onChangeState?: CodegenTypes.DirectEventHandler<OnChangeStateEvent>;
      onInputFocus?: CodegenTypes.DirectEventHandler<TargetedEvent>;
      onInputBlur?: CodegenTypes.DirectEventHandler<TargetedEvent>;
+@@ -304,6 +315,7 @@ export interface NativeProps extends ViewProps {
+     onRequestCaretRectResult?: CodegenTypes.DirectEventHandler<OnRequestCaretRectResultEvent>;
+     onCaretRectChange?: CodegenTypes.DirectEventHandler<OnCaretRectChangeEvent>;
+     onContextMenuItemPress?: CodegenTypes.DirectEventHandler<OnContextMenuItemPressEvent>;
++    onLinkPress?: CodegenTypes.DirectEventHandler<OnInputLinkPress>;
+     onLinkDetected?: CodegenTypes.DirectEventHandler<OnLinkDetected>;
+     onStartMention?: CodegenTypes.DirectEventHandler<OnStartMentionEvent>;
+     onChangeMention?: CodegenTypes.DirectEventHandler<OnChangeMentionEvent>;
 diff --git a/lib/typescript/src/linkVariantUtils.d.ts b/lib/typescript/src/linkVariantUtils.d.ts
 index 17139662039594be8780398f8dd5de4e774478f9..6c2da03e81d1463ad9422995f8919ec42c2c1016 100644
 --- a/lib/typescript/src/linkVariantUtils.d.ts
@@ -1735,7 +1895,6 @@ index a306bfd89955bdff4c997cfa84bdacdba84567c8..61cb620034a9ca54708d3a54ed9f5c3b
      underline: boolean;
      backgroundColor: ColorValue;
 diff --git a/src/EnrichedMarkdownTextInput.tsx b/src/EnrichedMarkdownTextInput.tsx
-index 4100c7090..7dcad1473 100644
 --- a/src/EnrichedMarkdownTextInput.tsx
 +++ b/src/EnrichedMarkdownTextInput.tsx
 @@ -53,6 +53,10 @@ import type { RefObject } from 'react';
@@ -1759,7 +1918,15 @@ index 4100c7090..7dcad1473 100644
    cursorColor?: ColorValue;
    selectionColor?: ColorValue;
    markdownStyle?: MarkdownTextInputStyle;
-@@ -325,6 +332,8 @@ export const EnrichedMarkdownTextInput = ({
+@@ -254,6 +261,7 @@ export interface EnrichedMarkdownTextInputProps
+   onChangeState?: (state: StyleState) => void;
+   onKeyPress?: (e: NativeSyntheticEvent<OnKeyPressEvent>) => void;
+   onCaretRectChange?: (rect: CaretRect) => void;
++  onLinkPress?: (event: { url: string; x: number; y: number; width: number; height: number }) => void;
+   onLinkDetected?: (event: OnLinkDetected) => void;
+   mentionIndicators?: string[];
+   onStartMention?: (event: OnStartMentionEvent) => void;
+@@ -325,6 +333,8 @@ export const EnrichedMarkdownTextInput = ({
    markdownShortcuts,
    autoCapitalize = 'sentences',
    multiline = true,
@@ -1768,7 +1935,27 @@ index 4100c7090..7dcad1473 100644
    cursorColor,
    selectionColor,
    onChangeText,
-@@ -739,6 +748,8 @@ export const EnrichedMarkdownTextInput = ({
+@@ -334,6 +344,7 @@ export const EnrichedMarkdownTextInput = ({
+   onKeyPress,
+   onCaretRectChange,
+   onLinkDetected,
++  onLinkPress,
+   mentionIndicators,
+   onStartMention,
+   onChangeMention,
+@@ -483,6 +494,11 @@ export const EnrichedMarkdownTextInput = ({
+     [_linkRegex]
+   );
+ 
++  const handleLinkPress = useCallback(
++    (event: NativeSyntheticEvent<{ url: string; x: number; y: number; width: number; height: number }>) => onLinkPress?.(event.nativeEvent),
++    [onLinkPress]
++  );
++
+   const handleLinkDetected = useCallback(
+     (e: NativeSyntheticEvent<OnLinkDetected>) => {
+       const { text, url, start, end } = e.nativeEvent;
+@@ -739,6 +755,8 @@ export const EnrichedMarkdownTextInput = ({
        markdownShortcuts={normalizedMarkdownShortcuts}
        autoCapitalize={autoCapitalize}
        multiline={multiline}
@@ -1777,8 +1964,15 @@ index 4100c7090..7dcad1473 100644
        cursorColor={cursorColor}
        selectionColor={selectionColor}
        isOnChangeMarkdownSet={onChangeMarkdown !== undefined}
+@@ -749,6 +767,7 @@ export const EnrichedMarkdownTextInput = ({
+       }
+       onChangeState={handleChangeState as NativeProps['onChangeState']}
+       onInputKeyPress={onKeyPress as NativeProps['onInputKeyPress']}
++      onLinkPress={handleLinkPress as NativeProps['onLinkPress']}
+       onLinkDetected={handleLinkDetected as NativeProps['onLinkDetected']}
+       onInputFocus={handleFocus as NativeProps['onInputFocus']}
+       onInputBlur={handleBlur as NativeProps['onInputBlur']}
 diff --git a/src/EnrichedMarkdownTextInputNativeComponent.ts b/src/EnrichedMarkdownTextInputNativeComponent.ts
-index c2fec2618..c648980d5 100644
 --- a/src/EnrichedMarkdownTextInputNativeComponent.ts
 +++ b/src/EnrichedMarkdownTextInputNativeComponent.ts
 @@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
@@ -1790,7 +1984,22 @@ index c2fec2618..c648980d5 100644
        color: ColorValue;
        underline: boolean;
        backgroundColor: ColorValue;
-@@ -230,6 +232,7 @@ export interface NativeProps extends ViewProps {
+@@ -116,6 +118,14 @@ export interface LinkNativeRegex {
+   isDefault: boolean;
+ }
+ 
++export interface OnInputLinkPress {
++  url: string;
++  x: CodegenTypes.Double;
++  y: CodegenTypes.Double;
++  width: CodegenTypes.Double;
++  height: CodegenTypes.Double;
++}
++
+ export interface OnLinkDetected {
+   text: string;
+   url: string;
+@@ -230,6 +240,7 @@ export interface NativeProps extends ViewProps {
     * @default true
     */
    multiline?: boolean;
@@ -1798,7 +2007,7 @@ index c2fec2618..c648980d5 100644
    /**
     * Color of the cursor.
     */
-@@ -303,6 +306,7 @@ export interface NativeProps extends ViewProps {
+@@ -303,6 +314,7 @@ export interface NativeProps extends ViewProps {
    onChangeMarkdown?: CodegenTypes.DirectEventHandler<OnChangeMarkdownEvent>;
    onChangeSelection?: CodegenTypes.DirectEventHandler<OnChangeSelectionEvent>;
    onInputKeyPress?: CodegenTypes.DirectEventHandler<OnKeyPressEvent>;
@@ -1806,6 +2015,14 @@ index c2fec2618..c648980d5 100644
    onChangeState?: CodegenTypes.DirectEventHandler<OnChangeStateEvent>;
    onInputFocus?: CodegenTypes.DirectEventHandler<TargetedEvent>;
    onInputBlur?: CodegenTypes.DirectEventHandler<TargetedEvent>;
+@@ -310,6 +322,7 @@ export interface NativeProps extends ViewProps {
+   onRequestCaretRectResult?: CodegenTypes.DirectEventHandler<OnRequestCaretRectResultEvent>;
+   onCaretRectChange?: CodegenTypes.DirectEventHandler<OnCaretRectChangeEvent>;
+   onContextMenuItemPress?: CodegenTypes.DirectEventHandler<OnContextMenuItemPressEvent>;
++  onLinkPress?: CodegenTypes.DirectEventHandler<OnInputLinkPress>;
+   onLinkDetected?: CodegenTypes.DirectEventHandler<OnLinkDetected>;
+   onStartMention?: CodegenTypes.DirectEventHandler<OnStartMentionEvent>;
+   onChangeMention?: CodegenTypes.DirectEventHandler<OnChangeMentionEvent>;
 diff --git a/src/linkVariantUtils.ts b/src/linkVariantUtils.ts
 index fe705dbe7dbbf4b7144d7c90b3e9d3ee0690b119..74655b0f862ba5bace1ebc86890dd428911f0aca 100644
 --- a/src/linkVariantUtils.ts
@@ -2911,15 +3128,9 @@ index 90aad4a6c..79e8da8b5 100644
    void setSelectionColor(T view, @Nullable Integer value);
    void setMarkdownStyle(T view, @Nullable ReadableMap value);
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp
-index 1b1b96234..3132b75e7 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp
 +++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.cpp
-@@ -118,16 +118,25 @@ void EnrichedMarkdownTextInputEventEmitter::onChangeSelection(OnChangeSelection
-     auto payload = jsi::Object(runtime);
-     payload.setProperty(runtime, "start", event.start);
- payload.setProperty(runtime, "end", event.end);
-     return payload;
-   });
+@@ -123,6 +123,15 @@ payload.setProperty(runtime, "end", event.end);
  }
  
  
@@ -2935,13 +3146,27 @@ index 1b1b96234..3132b75e7 100644
  void EnrichedMarkdownTextInputEventEmitter::onInputKeyPress(OnInputKeyPress event) const {
    dispatchEvent("inputKeyPress", [event=std::move(event)](jsi::Runtime &runtime) {
      auto payload = jsi::Object(runtime);
-     payload.setProperty(runtime, "key", event.key);
-     return payload;
-   });
+@@ -305,6 +314,19 @@ payload.setProperty(runtime, "selectionEnd", event.selectionEnd);
  }
  
+ 
++void EnrichedMarkdownTextInputEventEmitter::onLinkPress(OnLinkPress event) const {
++  dispatchEvent("linkPress", [event=std::move(event)](jsi::Runtime &runtime) {
++    auto payload = jsi::Object(runtime);
++    payload.setProperty(runtime, "url", event.url);
++    payload.setProperty(runtime, "x", event.x);
++    payload.setProperty(runtime, "y", event.y);
++    payload.setProperty(runtime, "width", event.width);
++    payload.setProperty(runtime, "height", event.height);
++    return payload;
++  });
++}
++
++
+ void EnrichedMarkdownTextInputEventEmitter::onLinkDetected(OnLinkDetected event) const {
+   dispatchEvent("linkDetected", [event=std::move(event)](jsi::Runtime &runtime) {
+     auto payload = jsi::Object(runtime);
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h
-index 3fda20ba6..b41a9924a 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h
 +++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/EventEmitters.h
 @@ -146,6 +146,10 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
@@ -2955,7 +3180,22 @@ index 3fda20ba6..b41a9924a 100644
    struct OnInputFocus {
        int target;
      };
-@@ -260,6 +264,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+@@ -233,6 +237,14 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+     OnContextMenuItemPressStyleState styleState;
+     };
+ 
++  struct OnLinkPress {
++    std::string url;
++    double x;
++    double y;
++    double width;
++    double height;
++  };
++
+   struct OnLinkDetected {
+       std::string text;
+     std::string url;
+@@ -260,6 +272,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
  
    void onInputKeyPress(OnInputKeyPress value) const;
  
@@ -2964,6 +3204,15 @@ index 3fda20ba6..b41a9924a 100644
    void onChangeState(OnChangeState value) const;
  
    void onInputFocus(OnInputFocus value) const;
+@@ -274,6 +288,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+ 
+   void onContextMenuItemPress(OnContextMenuItemPress value) const;
+ 
++  void onLinkPress(OnLinkPress value) const;
++
+   void onLinkDetected(OnLinkDetected value) const;
+ 
+   void onStartMention(OnStartMention value) const;
 diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp
 index 2d1077e5b..cf26a1de4 100644
 --- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.cpp
@@ -2988,18 +3237,19 @@ index 2d1077e5b..cf26a1de4 100644
      result["multiline"] = multiline;
    }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt
-index 512f5fcbe..373c308f6 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputManager.kt
-@@ -27,6 +27,7 @@ import com.swmansion.enriched.markdown.input.events.OnEndMentionEvent
+@@ -27,7 +27,9 @@ import com.swmansion.enriched.markdown.input.events.OnEndMentionEvent
  import com.swmansion.enriched.markdown.input.events.OnInputBlurEvent
  import com.swmansion.enriched.markdown.input.events.OnInputFocusEvent
  import com.swmansion.enriched.markdown.input.events.OnInputKeyPressEvent
 +import com.swmansion.enriched.markdown.input.events.OnSubmitEvent
  import com.swmansion.enriched.markdown.input.events.OnLinkDetectedEvent
++import com.swmansion.enriched.markdown.input.events.OnLinkPressEvent
  import com.swmansion.enriched.markdown.input.events.OnRequestCaretRectResultEvent
  import com.swmansion.enriched.markdown.input.events.OnRequestMarkdownResultEvent
-@@ -94,6 +95,7 @@ class EnrichedMarkdownTextInputManager :
+ import com.swmansion.enriched.markdown.input.events.OnStartMentionEvent
+@@ -94,6 +96,7 @@ class EnrichedMarkdownTextInputManager :
        OnChangeSelectionEvent.EVENT_NAME,
        OnChangeStateEvent.EVENT_NAME,
        OnInputKeyPressEvent.EVENT_NAME,
@@ -3007,7 +3257,15 @@ index 512f5fcbe..373c308f6 100644
        OnRequestMarkdownResultEvent.EVENT_NAME,
        OnRequestCaretRectResultEvent.EVENT_NAME,
        OnCaretRectChangeEvent.EVENT_NAME,
-@@ -185,6 +187,11 @@ class EnrichedMarkdownTextInputManager :
+@@ -101,6 +104,7 @@ class EnrichedMarkdownTextInputManager :
+       OnInputBlurEvent.EVENT_NAME,
+       OnContextMenuItemPressEvent.EVENT_NAME,
+       OnLinkDetectedEvent.EVENT_NAME,
++      OnLinkPressEvent.EVENT_NAME,
+       OnStartMentionEvent.EVENT_NAME,
+       OnChangeMentionEvent.EVENT_NAME,
+       OnEndMentionEvent.EVENT_NAME,
+@@ -185,6 +189,11 @@ class EnrichedMarkdownTextInputManager :
      view?.setAutoCapitalize(value)
    }
  
@@ -3050,18 +3308,30 @@ index 000000000..05e8ee766
 +  }
 +}
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt
-index 7a5f41055..b658d12e9 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputEventEmitter.kt
-@@ -15,6 +15,7 @@ import com.swmansion.enriched.markdown.input.events.OnEndMentionEvent
+@@ -15,7 +15,9 @@ import com.swmansion.enriched.markdown.input.events.OnEndMentionEvent
  import com.swmansion.enriched.markdown.input.events.OnInputBlurEvent
  import com.swmansion.enriched.markdown.input.events.OnInputFocusEvent
  import com.swmansion.enriched.markdown.input.events.OnInputKeyPressEvent
 +import com.swmansion.enriched.markdown.input.events.OnSubmitEvent
  import com.swmansion.enriched.markdown.input.events.OnLinkDetectedEvent
++import com.swmansion.enriched.markdown.input.events.OnLinkPressEvent
  import com.swmansion.enriched.markdown.input.events.OnRequestCaretRectResultEvent
  import com.swmansion.enriched.markdown.input.events.OnRequestMarkdownResultEvent
-@@ -41,6 +42,10 @@ class InputEventEmitter(
+ import com.swmansion.enriched.markdown.input.events.OnStartMentionEvent
+@@ -33,6 +35,10 @@ class InputEventEmitter(
+   private var prevOrderedList: Pair<Boolean, Int> = false to 0
+   private var prevCaretRect: CaretRect? = null
+ 
++  fun emitLinkPress(url: String, x: Float, y: Float, width: Float, height: Float) {
++    dispatch(OnLinkPressEvent(surfaceId(), view.id, url, x, y, width, height))
++  }
++
+   fun emitChangeText() {
+     // The empty-list-line ZWSP anchor is an internal editing detail — never leak
+     // it to JS. Both output paths (plain text here, markdown) funnel through the
+@@ -41,6 +47,10 @@ class InputEventEmitter(
      dispatch(OnChangeTextEvent(surfaceId(), view.id, plainText))
    }
  
@@ -3073,15 +3343,9 @@ index 7a5f41055..b658d12e9 100644
      dispatch(OnChangeMarkdownEvent(surfaceId(), view.id, serializeToMarkdown()))
    }
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp
-index 1b1b96234..3132b75e7 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp
 +++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.cpp
-@@ -118,16 +118,25 @@ void EnrichedMarkdownTextInputEventEmitter::onChangeSelection(OnChangeSelection
-     auto payload = jsi::Object(runtime);
-     payload.setProperty(runtime, "start", event.start);
- payload.setProperty(runtime, "end", event.end);
-     return payload;
-   });
+@@ -123,6 +123,15 @@ payload.setProperty(runtime, "end", event.end);
  }
  
  
@@ -3097,13 +3361,27 @@ index 1b1b96234..3132b75e7 100644
  void EnrichedMarkdownTextInputEventEmitter::onInputKeyPress(OnInputKeyPress event) const {
    dispatchEvent("inputKeyPress", [event=std::move(event)](jsi::Runtime &runtime) {
      auto payload = jsi::Object(runtime);
-     payload.setProperty(runtime, "key", event.key);
-     return payload;
-   });
+@@ -305,6 +314,19 @@ payload.setProperty(runtime, "selectionEnd", event.selectionEnd);
  }
  
+ 
++void EnrichedMarkdownTextInputEventEmitter::onLinkPress(OnLinkPress event) const {
++  dispatchEvent("linkPress", [event=std::move(event)](jsi::Runtime &runtime) {
++    auto payload = jsi::Object(runtime);
++    payload.setProperty(runtime, "url", event.url);
++    payload.setProperty(runtime, "x", event.x);
++    payload.setProperty(runtime, "y", event.y);
++    payload.setProperty(runtime, "width", event.width);
++    payload.setProperty(runtime, "height", event.height);
++    return payload;
++  });
++}
++
++
+ void EnrichedMarkdownTextInputEventEmitter::onLinkDetected(OnLinkDetected event) const {
+   dispatchEvent("linkDetected", [event=std::move(event)](jsi::Runtime &runtime) {
+     auto payload = jsi::Object(runtime);
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h
-index 3fda20ba6..b41a9924a 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h
 +++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/EventEmitters.h
 @@ -146,6 +146,10 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
@@ -3117,7 +3395,22 @@ index 3fda20ba6..b41a9924a 100644
    struct OnInputFocus {
        int target;
      };
-@@ -260,6 +264,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+@@ -233,6 +237,14 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+     OnContextMenuItemPressStyleState styleState;
+     };
+ 
++  struct OnLinkPress {
++    std::string url;
++    double x;
++    double y;
++    double width;
++    double height;
++  };
++
+   struct OnLinkDetected {
+       std::string text;
+     std::string url;
+@@ -260,6 +272,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
  
    void onInputKeyPress(OnInputKeyPress value) const;
  
@@ -3126,6 +3419,15 @@ index 3fda20ba6..b41a9924a 100644
    void onChangeState(OnChangeState value) const;
  
    void onInputFocus(OnInputFocus value) const;
+@@ -274,6 +288,8 @@ class EnrichedMarkdownTextInputEventEmitter : public ViewEventEmitter {
+ 
+   void onContextMenuItemPress(OnContextMenuItemPress value) const;
+ 
++  void onLinkPress(OnLinkPress value) const;
++
+   void onLinkDetected(OnLinkDetected value) const;
+ 
+   void onStartMention(OnStartMention value) const;
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp
 index 2d1077e5b..cf26a1de4 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.cpp
@@ -3150,7 +3452,6 @@ index 2d1077e5b..cf26a1de4 100644
      result["multiline"] = multiline;
    }
 diff --git a/ios/input/ENRMInputEventEmitter.h b/ios/input/ENRMInputEventEmitter.h
-index 23a598cc1..fa1a96d26 100644
 --- a/ios/input/ENRMInputEventEmitter.h
 +++ b/ios/input/ENRMInputEventEmitter.h
 @@ -31,6 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
@@ -3161,8 +3462,15 @@ index 23a598cc1..fa1a96d26 100644
  - (void)emitOnChangeMarkdown;
  - (void)emitOnChangeSelection;
  - (void)emitOnChangeState;
+@@ -40,6 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
+ - (void)emitContextMenuItemPress:(NSString *)itemText;
+ - (void)emitOnFocus;
+ - (void)emitOnBlur;
++- (void)emitOnLinkPress:(NSString *)url rect:(CGRect)rect;
+ - (void)emitOnLinkDetectedWithText:(NSString *)text url:(NSString *)url range:(NSRange)range;
+ - (void)emitOnStartMention:(NSString *)indicator;
+ - (void)emitOnChangeMentionWithIndicator:(NSString *)indicator text:(NSString *)text;
 diff --git a/ios/input/ENRMInputEventEmitter.mm b/ios/input/ENRMInputEventEmitter.mm
-index ff3d4c242..05b6cb9ee 100644
 --- a/ios/input/ENRMInputEventEmitter.mm
 +++ b/ios/input/ENRMInputEventEmitter.mm
 @@ -107,6 +107,13 @@ - (void)emitOnKeyPress:(NSString *)text
@@ -3177,6 +3485,21 @@ index ff3d4c242..05b6cb9ee 100644
 +}
 +
  - (void)emitOnChangeMarkdown
+ {
+   ENRM_GUARD_EMITTER(emitter);
+@@ -136,6 +143,14 @@ - (void)emitOnBlur
+   emitter->onInputBlur({});
+ }
+ 
++- (void)emitOnLinkPress:(NSString *)url rect:(CGRect)rect
++{
++  ENRM_GUARD_EMITTER(emitter);
++  emitter->onLinkPress({.url = std::string([url UTF8String] ?: ""),
++                        .x = rect.origin.x, .y = rect.origin.y,
++                        .width = rect.size.width, .height = rect.size.height});
++}
++
+ - (void)emitOnLinkDetectedWithText:(NSString *)text url:(NSString *)url range:(NSRange)range
  {
    ENRM_GUARD_EMITTER(emitter);
 diff --git a/ios/input/EnrichedMarkdownTextInput.h b/ios/input/EnrichedMarkdownTextInput.h
@@ -3194,7 +3517,6 @@ index 231d841f6..c569deaa2 100644
  - (void)replaceSelectedTextWith:(NSString *)text formattingRanges:(NSArray *)ranges;
  - (void)scheduleRelayoutIfNeeded;
 diff --git a/lib/module/EnrichedMarkdownTextInput.js b/lib/module/EnrichedMarkdownTextInput.js
-index 5b348e8fa..328146fec 100644
 --- a/lib/module/EnrichedMarkdownTextInput.js
 +++ b/lib/module/EnrichedMarkdownTextInput.js
 @@ -46,6 +46,8 @@ export const EnrichedMarkdownTextInput = ({
@@ -3206,7 +3528,23 @@ index 5b348e8fa..328146fec 100644
    cursorColor,
    selectionColor,
    onChangeText,
-@@ -398,6 +400,8 @@ export const EnrichedMarkdownTextInput = ({
+@@ -55,6 +57,7 @@ export const EnrichedMarkdownTextInput = ({
+   onKeyPress,
+   onCaretRectChange,
+   onLinkDetected,
++  onLinkPress,
+   mentionIndicators,
+   onStartMention,
+   onChangeMention,
+@@ -163,6 +166,7 @@ export const EnrichedMarkdownTextInput = ({
+   }, [formatMenuConfig]);
+   const normalizedMarkdownShortcuts = useMemo(() => normalizeMarkdownShortcuts(markdownShortcuts), [markdownShortcuts]);
+   const linkRegex = useMemo(() => toNativeRegexConfig(_linkRegex), [_linkRegex]);
++  const handleLinkPress = useCallback(event => onLinkPress?.(event.nativeEvent), [onLinkPress]);
+   const handleLinkDetected = useCallback(e => {
+     const {
+       text,
+@@ -398,6 +402,8 @@ export const EnrichedMarkdownTextInput = ({
      markdownShortcuts: normalizedMarkdownShortcuts,
      autoCapitalize: autoCapitalize,
      multiline: multiline,
@@ -3215,6 +3553,14 @@ index 5b348e8fa..328146fec 100644
      cursorColor: cursorColor,
      selectionColor: selectionColor,
      isOnChangeMarkdownSet: onChangeMarkdown !== undefined,
+@@ -406,6 +412,7 @@ export const EnrichedMarkdownTextInput = ({
+     onChangeSelection: handleChangeSelection,
+     onChangeState: handleChangeState,
+     onInputKeyPress: onKeyPress,
++    onLinkPress: handleLinkPress,
+     onLinkDetected: handleLinkDetected,
+     onInputFocus: handleFocus,
+     onInputBlur: handleBlur,
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
 index 1ebda75c2..91ee489c1 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
@@ -3281,3 +3627,34 @@ index e86bf44e4..e873c662d 100644
      [systemActions insertObject:copyMarkdownAction atIndex:insertIndex];
    }
    [allActions addObjectsFromArray:systemActions];
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnLinkPressEvent.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnLinkPressEvent.kt
+new file mode 100644
+--- /dev/null
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnLinkPressEvent.kt
+@@ -0,0 +1,26 @@
++package com.swmansion.enriched.markdown.input.events
++
++import com.facebook.react.bridge.Arguments
++import com.facebook.react.bridge.WritableMap
++import com.facebook.react.uimanager.events.Event
++
++class OnLinkPressEvent(
++  surfaceId: Int,
++  viewId: Int,
++  private val url: String,
++  private val x: Float,
++  private val y: Float,
++  private val width: Float,
++  private val height: Float,
++) : Event<OnLinkPressEvent>(surfaceId, viewId) {
++  override fun getEventName(): String = EVENT_NAME
++  override fun canCoalesce(): Boolean = false
++  override fun getEventData(): WritableMap = Arguments.createMap().apply {
++    putString("url", url)
++    putDouble("x", x.toDouble())
++    putDouble("y", y.toDouble())
++    putDouble("width", width.toDouble())
++    putDouble("height", height.toDouble())
++  }
++  companion object { const val EVENT_NAME = "onLinkPress" }
++}

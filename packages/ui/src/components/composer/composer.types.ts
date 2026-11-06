@@ -95,6 +95,14 @@ export type ComposerCollapsibleProps = {
  */
 export type ComposerInputHandle = EnrichedMarkdownTextInputInstance;
 
+export type ComposerInputLinkPress = {
+  url: string;
+  pageX: number;
+  pageY: number;
+  width: number;
+  height: number;
+};
+
 export type ComposerInputProps = {
   autoFocus?: boolean;
   /** Native edit-menu action available while the soft keyboard Return submits. */
@@ -110,6 +118,7 @@ export type ComposerInputProps = {
   onBlur?: () => void;
   onFocus?: () => void;
   onLayout?: (event: LayoutChangeEvent) => void;
+  onLinkPress?: (event: ComposerInputLinkPress) => void;
   /**
    * Every paste, not just the ones the composer could use — text arrives here
    * too, already handled by the field. Callers filter for what they want.

@@ -733,7 +733,8 @@ describe('SqliteAgentSessionStore conformance', () => {
     const fields = {
       quotes: [
         { id: 'q', sourceMessageId: first.assistantMessage.id, text: 'Original answer' },
-      ] as [{ id: string; sourceMessageId: string; text: string }],
+        { id: 'q2', sourceMessageId: first.assistantMessage.id, text: 'Another selection' },
+      ] as { id: string; sourceMessageId: string; text: string }[],
       quoteAuthor: { role: 'assistant' as const },
     };
     const second = await store.reserveSubmission({
@@ -758,7 +759,7 @@ describe('SqliteAgentSessionStore conformance', () => {
     if (fork.status !== 'forked') throw new Error(fork.status);
     const copy = await store.listMessages(fork.session.id);
     expect(copy[2].parts[0]).toMatchObject({
-      quotes: [{ ...fields.quotes[0], sourceMessageId: copy[1].id }],
+      quotes: fields.quotes.map((quote) => ({ ...quote, sourceMessageId: copy[1].id })),
       quoteAuthor: fields.quoteAuthor,
     });
     expect(await store.getMessage(fork.session.id, first.assistantMessage.id)).toBeNull();

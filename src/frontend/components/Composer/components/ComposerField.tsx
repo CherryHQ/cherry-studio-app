@@ -28,6 +28,7 @@ type ComposerFieldProps = Pick<
   | 'onBlur'
   | 'onFocus'
   | 'onLayout'
+  | 'onLinkPress'
   | 'onReturnSubmit'
   | 'placeholder'
   | 'style'
@@ -40,6 +41,7 @@ export function ComposerField({
   onBlur,
   onFocus,
   onLayout,
+  onLinkPress,
   onReturnSubmit,
   placeholder,
   style,
@@ -77,6 +79,7 @@ export function ComposerField({
         // Menus and the sidebar use the same ToolCase shape as a Lucide SVG.
         '^skill://': { ...mentionStyle, icon: skillInlineIcon['tool-case'], iconTint: true },
         '^selection://': { ...mentionStyle, icon: pluginInlineIcons['file-text'], iconTint: true },
+        '^quote://': mentionStyle,
       },
     };
   }, [linkColor, theme]);
@@ -105,6 +108,7 @@ export function ComposerField({
       onBlur={onBlur}
       onFocus={handleFocus}
       onLayout={handleLayout}
+      onLinkPress={onLinkPress}
       onPaste={handlePaste}
       onReturnSubmit={onReturnSubmit}
       placeholder={placeholder ?? t('chat.inputPlaceholder')}

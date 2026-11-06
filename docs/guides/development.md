@@ -43,7 +43,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 83
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 84
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -67,6 +67,7 @@ block leaves when upstream ships an equivalent.
 | Native soft-keyboard submit and Send label (TS/JS, generated props/events, iOS and Android) | Product feature | #1573, #1591 | Not upstream | Upstream supplies a submit event that preserves IME composition and explicit newlines |
 | Native input custom edit actions at the caret and selection | Product feature | #1573, #1591 | 1.1.1 limits custom actions to nonempty selections | Upstream exposes custom actions in both insertion and selection menus |
 | Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
+| Input link presses with local text-range bounds (native recognizers, emitters, JS and codegen declarations) | Product feature | Inline message quotes | Not upstream in 1.1.1 | Upstream exposes input link taps and their bounds |
 | Code block 192 pt viewport, header and divider (gesture arbitration part is a fix) | Product customization | #606 | Not upstream | Never, unless the design changes |
 | Standalone code block external controls (style, generated props, layout/cache, menus and accessibility) | Product customization | CherryUI `CodeBlock` | Not upstream | Upstream supports caller-owned code-block controls without changing scrolling |
 | Table scrollbar that does not fade | Product customization | #606 | Not upstream | Never, unless the design changes |
@@ -74,6 +75,13 @@ block leaves when upstream ships an equivalent.
 
 `scripts/__tests__/enrichedMarkdown*.test.ts` and `patchReapplication.test.ts` guard the installed
 source text, not behavior.
+
+`enrichedMarkdownInputLinkPress.test.ts` guards both published editor entry points and the native
+link-press event delivery. Quote taps use platform tap recognition and retain ordinary text editing.
+The app converts local text bounds into window coordinates for an anchored text popover.
+This patch requires a new development client. Device acceptance must cover taps at both ends of
+short and wrapped quotes, keyboard open/closed, scrolling and cancelled taps, long-press selection,
+atomic deletion, undo, and draft restoration on iOS and Android.
 
 The iOS input publishes immutable text and layout attributes in Fabric state. Its layout node
 measures the snapshot at the current width without calling the live view; before the first native
