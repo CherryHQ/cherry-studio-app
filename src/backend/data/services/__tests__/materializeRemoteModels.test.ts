@@ -114,9 +114,15 @@ describe('materializeRemoteModels', () => {
       });
       jest.mocked(mergePresetModel).mockReturnValue({
         capabilities: [],
-        name: 'Bot',
         endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
-      } as Model);
+        id: `${providerId}::bot`,
+        isEnabled: true,
+        isHidden: false,
+        modelId: 'bot',
+        name: 'Bot',
+        providerId,
+        supportsStreaming: true,
+      });
       const result = materializeRemoteModels(
         {
           id: providerId,
