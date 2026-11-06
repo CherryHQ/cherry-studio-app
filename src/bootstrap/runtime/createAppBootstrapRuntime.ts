@@ -174,6 +174,7 @@ export function createAppBootstrapRuntime(
     disposeUuRemote,
     disposeSkills,
     disposeVoice,
+    disposeDiagnostics,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
@@ -255,7 +256,7 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Drain system-entry consumers, Skill writes, and voice activity before the host's resources.
+      // Drain callers, diagnostic sessions, Skill writes, and voice activity before host resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
@@ -265,6 +266,7 @@ export function createAppBootstrapRuntime(
           disposeVoice(),
           disposeAppUpdate(),
           disposeUuRemote(),
+          disposeDiagnostics(),
         ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host

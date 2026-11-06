@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 import { AiFailureReasonSchema } from './aiFailure';
+import { DiagnosticFeedbackSummarySchema, type DiagnosticSession } from './diagnosticSession';
 
 export const DIAGNOSTIC_SOURCE_LIMIT_BYTES = 50 * 1024 * 1024;
 export const DIAGNOSTIC_DESCRIPTION_MAX_BYTES = 4096;
@@ -130,6 +131,7 @@ export const DiagnosticReportInputSchema = z
     description: z.string().trim().min(1),
     feedback: DiagnosticFeedbackSchema.optional(),
     context: DiagnosticFeedbackContextSchema.optional(),
+    diagnosis: DiagnosticFeedbackSummarySchema.optional(),
   })
   .refine(
     (input) =>
@@ -168,6 +170,7 @@ export class DiagnosticError extends Error {
 }
 
 export interface DiagnosticsModule {
+  createSession(context?: DiagnosticFeedbackContext): DiagnosticSession;
   uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult>;
   getReportStatus(reportId: string, signal?: AbortSignal): Promise<DiagnosticReportStatusResult>;
 }

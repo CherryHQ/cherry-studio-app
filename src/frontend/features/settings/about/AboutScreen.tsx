@@ -1,3 +1,4 @@
+import ActivityIcon from '@cherrystudio/app-icons/icons/activity';
 import GithubIcon from '@cherrystudio/app-icons/icons/github';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import HistoryIcon from '@cherrystudio/app-icons/icons/history';
@@ -95,6 +96,12 @@ export default function AboutSettingsScreen() {
         </View>
 
         <Section>
+          <Section.Item
+            label={t('diagnosis.systemTitle')}
+            leading={<ActivityIcon className="size-4 text-foreground" />}
+            onPress={() => router.push('/settings/about/diagnosis')}
+            testID="system-diagnosis-entry"
+          />
           {isEnabled ? (
             <Section.Item
               accessibilityHint={hasAvailableUpdate ? t('appUpdate.confirmTitle') : undefined}
