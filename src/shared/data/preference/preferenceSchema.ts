@@ -56,7 +56,6 @@ export interface PreferenceSchema {
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
   'chat.completion_notifications.enabled': boolean;
-  'chat.input.enter_to_send': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
@@ -65,6 +64,7 @@ export interface PreferenceSchema {
   'chat.web_search.max_results': number;
   'chat.web_search.model_tools_preferred': boolean;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
+  'chat.input.enter_to_send': boolean;
 
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
@@ -115,7 +115,6 @@ export const PreferenceDefaults = {
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
-  'chat.input.enter_to_send': false,
   'agent.default_model_id': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'cutoff',
@@ -124,6 +123,7 @@ export const PreferenceDefaults = {
   'chat.web_search.max_results': 5,
   'chat.web_search.model_tools_preferred': true,
   'chat.web_search.provider_overrides': {},
+  'chat.input.enter_to_send': false,
 
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
