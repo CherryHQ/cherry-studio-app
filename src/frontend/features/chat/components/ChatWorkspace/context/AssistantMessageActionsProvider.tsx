@@ -123,13 +123,15 @@ export function AssistantMessageActionsProvider({
     () => new Set(editableKey ? editableKey.split('\n') : []),
     [editableKey],
   );
-  const isBusy = snapshot.executions.some(
-    (execution) =>
-      execution.state === 'running' ||
-      execution.state === 'awaiting-approval' ||
-      execution.state === 'awaiting-input' ||
-      execution.state === 'finalizing',
-  );
+  const isBusy =
+    Boolean(snapshot.isSubmitting) ||
+    snapshot.executions.some(
+      (execution) =>
+        execution.state === 'running' ||
+        execution.state === 'awaiting-approval' ||
+        execution.state === 'awaiting-input' ||
+        execution.state === 'finalizing',
+    );
   // Rows receive these handlers through context. The transcript and snapshot
   // change on every streamed update, so the handlers read them when invoked;
   // only whether an action exists or is enabled reaches rows as rendered state.

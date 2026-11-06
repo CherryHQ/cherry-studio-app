@@ -156,6 +156,25 @@ describe('ChatProvider Draft handoff', () => {
     jest.restoreAllMocks();
   });
 
+  it('keeps retry preparation busy and stoppable before an execution is reserved', async () => {
+    mockChatState.isSubmitting = true;
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
+    await act(async () => {
+      await currentControls().cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
+    act(() => {
+      mockChatState.isSubmitting = false;
+      for (const listener of mockChatListeners) listener();
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+  });
+
   it('allows a drafted follow-up while retaining the active stop control', () => {
     mockChatState.activeTurn = {
       id: 'active-turn',
