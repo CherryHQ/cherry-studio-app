@@ -4,12 +4,14 @@ import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
   ModalBottomSheet,
+  type PositionChangeEventData,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   Keyboard,
+  type NativeSyntheticEvent,
   Pressable,
   type StyleProp,
   StyleSheet,
@@ -19,7 +21,12 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  createAnimatedComponent,
+  useAnimatedStyle,
+  useEvent,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
@@ -121,13 +128,26 @@ export function BottomSheet(props: BottomSheetProps) {
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
   const { height, size, sizes } = props;
-  const { cardHeight, detents } = useMemo(
+  const { cardHeight, minCardHeight, detents } = useMemo(
     () => resolveSheetHeights(availableCardHeight, dismissible, height, size, sizes),
     [availableCardHeight, dismissible, height, size, sizes],
   );
+  const isResizable = !avoidKeyboard && detents.length > 2;
+  const position = useSharedValue(0);
+  const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
+    (event) => {
+      'worklet';
+      position.value = event.position;
+    },
+    ['onPositionChange'],
+  );
+  const visibleCardStyle = useAnimatedStyle(() => ({
+    // Closing slides the smallest card out; expanding keeps its footer in view.
+    height: Math.max(minCardHeight, Math.min(cardHeight, position.value)),
+  }));
   const hasFooter = footer != null;
   // A handle promises a drag; a sheet that can neither close nor resize offers none.
-  const isDraggable = dismissible || (!avoidKeyboard && detents.length > 2);
+  const isDraggable = dismissible || isResizable;
   const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
@@ -194,12 +214,16 @@ export function BottomSheet(props: BottomSheetProps) {
 
   return (
     <ModalBottomSheet
+      // UIKit menus need the presenting controller retained by the provider's view hierarchy.
+      nativeOverlay={false}
       // A keyboard-avoiding card animates its own height, which the content detent follows.
       animateContentHeight={!avoidKeyboard}
       detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
       onSettle={handleSettle}
+      onPositionChange={isResizable ? handlePositionChange : undefined}
+      wrapNativeView={createAnimatedComponent}
       scrimColor={scrimColor}
     >
       <SheetLayout
@@ -222,7 +246,7 @@ export function BottomSheet(props: BottomSheetProps) {
           onPress={requestClose}
           style={StyleSheet.absoluteFill}
         />
-        <View
+        <Animated.View
           accessibilityElementsHidden={!open}
           accessibilityViewIsModal
           className="overflow-hidden border-continuous bg-background dark:border dark:border-border dark:bg-popover"
@@ -233,6 +257,7 @@ export function BottomSheet(props: BottomSheetProps) {
             avoidKeyboard
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
+            isResizable ? visibleCardStyle : undefined,
           ]}
           testID={testID}
         >
@@ -306,7 +331,7 @@ export function BottomSheet(props: BottomSheetProps) {
             </View>
           ) : null}
           {avoidKeyboard ? <KeyboardSpacer bottomInset={bottomInset} /> : null}
-        </View>
+        </Animated.View>
       </SheetLayout>
     </ModalBottomSheet>
   );
@@ -390,7 +415,7 @@ function resolveSheetHeights(
   const closedDetent = dismissible ? 0 : programmatic(0);
   const detents: Detent[] = [closedDetent, ...cardHeights];
 
-  return { cardHeight, detents };
+  return { cardHeight, minCardHeight: cardHeights[0] ?? 0, detents };
 }
 
 const styles = StyleSheet.create({

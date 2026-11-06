@@ -5,12 +5,13 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
-import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
+import { useSaveImageToPhotos } from '@/frontend/appShell/fileExport';
 import {
   HeaderChrome,
   type HeaderToolbarAction,
   useRouteHeaderLeadingAction,
 } from '@/frontend/appShell/header';
+import { useShareFile, useShareFiles } from '@/frontend/appShell/sharing';
 import { useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import type { FileEntryId } from '@/shared/data/types/file';
 
@@ -28,6 +29,8 @@ export function PaintingFocusChrome({
   onDelete,
   onOpenOverview,
   onShowInfo,
+  groupFileEntryIds,
+  onSelectImages,
 }: {
   boardTitle: string;
   image: PaintingBoardImage | undefined;
@@ -35,31 +38,55 @@ export function PaintingFocusChrome({
   onDelete?: () => void;
   onOpenOverview?: () => void;
   onShowInfo?: () => void;
+  groupFileEntryIds?: readonly string[];
+  onSelectImages?: () => void;
 }) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
   const file = useResolvedFile(image?.fileEntryId as FileEntryId | undefined);
   const { isSharing, share } = useShareFile(file.data);
-  const save = useSaveImageToPhotos({
-    provenance: file.data?.entry.provenance,
-    uri: image?.uri ?? '',
-  });
+  const { share: shareGroup, isSharing: isSharingGroup } = useShareFiles();
+  const save = useSaveImageToPhotos(
+    {
+      provenance: file.data?.entry.provenance,
+      uri: image?.uri ?? '',
+    },
+    { watermark: 'none' },
+  );
 
   const menuItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [];
     if (image) {
       items.push({
         id: 'save',
+        group: 'sharing',
         label: t('painting.focus.save'),
         onPress: () => void save(),
       });
       items.push({
         disabled: !file.data || isSharing,
         id: 'share',
+        group: 'sharing',
         label: t('painting.focus.share'),
         onPress: () => void share(),
       });
+      if (groupFileEntryIds && groupFileEntryIds.length > 1)
+        items.push({
+          id: 'share-group',
+          group: 'sharing',
+          label: t('sharing.imageGroup'),
+          disabled: isSharing || isSharingGroup,
+          onPress: () => void shareGroup(groupFileEntryIds),
+        });
     }
+    if (onSelectImages)
+      items.push({
+        id: 'select-images',
+        group: 'sharing',
+        label: t('sharing.selectImages'),
+        disabled: isSharing || isSharingGroup,
+        onPress: onSelectImages,
+      });
     if (onShowInfo) {
       items.push({
         id: 'info',
@@ -67,6 +94,7 @@ export function PaintingFocusChrome({
         onPress: onShowInfo,
       });
     }
+
     if (onDelete) {
       items.push({
         destructive: true,
@@ -76,7 +104,20 @@ export function PaintingFocusChrome({
       });
     }
     return items;
-  }, [file.data, image, isSharing, onDelete, onShowInfo, save, share, t]);
+  }, [
+    file.data,
+    shareGroup,
+    isSharingGroup,
+    groupFileEntryIds,
+    image,
+    isSharing,
+    onDelete,
+    onSelectImages,
+    onShowInfo,
+    save,
+    share,
+    t,
+  ]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
     const actions: HeaderToolbarAction[] = [];

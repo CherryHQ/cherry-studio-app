@@ -9,8 +9,9 @@ Application entry points accept `FileExportOptions`: `{ watermark?: 'cherry' | '
 Omitted styles follow the global Share watermark setting (`file.export.watermark_enabled`), which
 defaults to enabled and lives under Settings > General. `useExportWatermarkStyle` resolves this
 preference; explicit `cherry` or `none` options override it for that request.
-`useDocumentExport().open` freezes the resolved style for
-every offered format. `useHtmlConversion(options)` also uses it for PNG and PPTX. PPTX applies the
+`appShell/sharing` freezes the resolved style for converted formats and offers a request-local
+watermark menu. Original file and image delivery always keeps the original bytes. HTML conversion
+uses the selected style for PNG and PPTX. PPTX applies the
 footer only to the final captured slide, without adding a slide.
 
 `useExportWatermark` resolves the selected style into an `ExportWatermark` once per operation.
@@ -60,7 +61,8 @@ PNG delivery. All files are prepared and copied before one chooser opens: single
 Expo Sharing, while multiple files use React Native Share. Completed document pages are copied
 without re-encoding, and a failed copy never opens a partial share sheet.
 
-`useShareFile` owns ordinary-file busy state, unmount cancellation and localized feedback.
+`useShareFile` and `useShareFiles` in `appShell/sharing` own source preparation, panel admission,
+busy state and localized feedback. The low-level functions here only perform delivery.
 `useSaveImageToPhotos` owns add-only permission guidance and releases its prepared image after
 Photos copies it. System opening reuses `prepareFileExport`.
 
@@ -70,3 +72,8 @@ the same file again reuses its copy instead of adding another. A preparation fai
 original. Sheet dismissal does not establish recipient delivery.
 
 Native rendering, Photos saving and recipient delivery still require device acceptance.
+
+`prepareSharedFile` also accepts an already-finalized temporary ExportFile. It makes the same stable
+OS-cache copy without applying another watermark or creating a managed entry. Document image saving
+uses that copy before Photos starts, so the source request can be disposed safely. Raw temporary
+paths use SHA-256 identities; managed files keep their entry/revision cache keys.

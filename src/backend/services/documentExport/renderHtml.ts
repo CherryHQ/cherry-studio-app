@@ -15,6 +15,7 @@ import { validateExportSignature } from '@/shared/utils/exportSignature';
 
 import { DEFAULT_CONTENT_LABELS, exportFileType } from './contentPresentation';
 import { escapeHtml, safeExportUrl } from './normalizeDocument';
+import { prepareImageCard } from './prepareImageCard';
 import { renderHtmlStyles } from './renderHtmlStyles';
 import { configureExportTables } from './renderTables';
 import {
@@ -50,8 +51,12 @@ export function renderMarkdownPreview(
   ).render(new Map(), []).html;
 }
 
+export function renderDocumentPreview(document: ExportDocument, presentation: ExportPresentation) {
+  return createHtmlRenderer(document, presentation, 'links').render(new Map(), []).html;
+}
+
 function createHtmlRenderer(
-  document: ExportDocument,
+  inputDocument: ExportDocument,
   inputPresentation: ExportPresentation,
   imagePresentation: 'embedded' | 'links',
 ) {
@@ -68,6 +73,10 @@ function createHtmlRenderer(
       Object.entries(inputPresentation.typography).map(([key, value]) => [key, { ...value }]),
     ) as ExportPresentation['typography'],
   };
+  const card = presentation.imageFrame?.excerptLabel
+    ? prepareImageCard(inputDocument, presentation)
+    : undefined;
+  const document = card?.document ?? inputDocument;
   const labels = document.labels ?? DEFAULT_CONTENT_LABELS;
   const isImage = Boolean(presentation.imageFrame);
   const sources = new Map<string, NonNullable<ExportDocument['assets']>[string]>();
@@ -250,9 +259,12 @@ function createHtmlRenderer(
       document.title && !isConversation
         ? `<h1 class="document-title">${escapeHtml(document.title)}</h1>`
         : '';
-    const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}>${title}${body}</article>`;
+    const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}${card ? ` data-share-card-max-height="${card.maxHeight}" style="max-height:${card.maxHeight}px;overflow:hidden"` : ''}>${title}${body}</article>`;
+    const excerpt = card
+      ? `<p class="share-excerpt"${card.isExcerpt ? '' : ' hidden'}>${escapeHtml(presentation.imageFrame!.excerptLabel!)}</p>`
+      : '';
     const footer = signature ? renderSignature(signature) : '';
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}">${content}${footer}</main></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}">${content}${excerpt}${footer}</main></body></html>`;
     return { html, issues };
   }
 }
@@ -288,7 +300,13 @@ function validatePresentation(value: ExportPresentation) {
       );
     }) ||
     colors.some((color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color)) ||
-    (frame && (typeof frame.label !== 'string' || frame.label.length > 256))
+    (frame &&
+      (typeof frame.label !== 'string' ||
+        frame.label.length > 256 ||
+        (frame.excerptLabel !== undefined &&
+          (typeof frame.excerptLabel !== 'string' ||
+            !frame.excerptLabel.trim() ||
+            frame.excerptLabel.length > 256))))
   )
     throw new DocumentExportError('invalid-input');
 }

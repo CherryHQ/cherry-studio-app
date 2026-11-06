@@ -1,7 +1,5 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
-import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import {
   ContentState,
   ImageEditor,
@@ -16,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
+import { useSaveImageToPhotos } from '@/frontend/appShell/fileExport';
 import { usePaneChrome } from '@/frontend/appShell/layout';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { queryKeys } from '@/frontend/data';
@@ -41,8 +39,10 @@ export function FileImageViewer({
   // A pane is not a stack screen: it has no screen options to set, and sits below the status bar.
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
-  const { isSharing, share } = useShareFile(file);
-  const saveToPhotos = useSaveImageToPhotos({ uri: file.uri, provenance: file.entry.provenance });
+  const saveToPhotos = useSaveImageToPhotos(
+    { uri: file.uri, provenance: file.entry.provenance },
+    { watermark: 'none' },
+  );
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);
@@ -65,15 +65,9 @@ export function FileImageViewer({
   });
   const dimensions = dimensionsQuery.data;
 
-  const toolbar = (
-    <ImagePreviewToolbar>
-      <ImagePreviewToolbar.Action
-        disabled={isSharing}
-        icon={<ShareIcon className="size-5 text-foreground" />}
-        label={t('fileViewer.share')}
-        onPress={() => void share()}
-      />
-      {editing.canEdit && (isDocument || stillImageUri === file.uri) ? (
+  const toolbar =
+    editing.canEdit && (isDocument || stillImageUri === file.uri) ? (
+      <ImagePreviewToolbar>
         <ImagePreviewToolbar.Action
           icon={<PencilIcon className="size-5 text-foreground" />}
           label={t('common.edit')}
@@ -82,14 +76,8 @@ export function FileImageViewer({
             editing.start();
           }}
         />
-      ) : null}
-      <ImagePreviewToolbar.Action
-        icon={<DownloadIcon className="size-5 text-foreground" />}
-        label={t('common.save')}
-        onPress={() => void saveToPhotos()}
-      />
-    </ImagePreviewToolbar>
-  );
+      </ImagePreviewToolbar>
+    ) : undefined;
 
   if (editing.isEditing) {
     return (
@@ -154,7 +142,17 @@ export function FileImageViewer({
       {isInPane ? null : (
         <Stack.Screen options={{ gestureEnabled: !isZoomed, headerShown: true }} />
       )}
-      <FileViewerHeader file={file} />
+      <FileViewerHeader
+        file={file}
+        items={[
+          {
+            id: 'save',
+            group: 'sharing',
+            label: t('sharing.saveToPhotos'),
+            onPress: () => void saveToPhotos(),
+          },
+        ]}
+      />
       <View
         className="flex-1 bg-background px-safe pb-safe"
         onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}

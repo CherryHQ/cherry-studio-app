@@ -16,6 +16,11 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
 import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
+import {
+  ChatShareMessageSelection,
+  ChatShareSelectionSpacer,
+} from '../../../share/ChatShareControls';
+import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
@@ -144,6 +149,7 @@ function AssistantChatMessage({
   renderUsage: ((message: MessageListItem) => ReactNode) | undefined;
 }) {
   const { selectBranch } = useAssistantMessageActions();
+  const isSelecting = useIsChatShareSelecting();
   const isGrouped = Boolean(message.branch && selectBranch);
   const header = <AssistantMessageHeader message={message} presentation={presentation} />;
   const extras = (
@@ -167,7 +173,9 @@ function AssistantChatMessage({
       {header}
       {isGrouped ? (
         <>
-          <MessageAnswerCards message={message} />
+          <View pointerEvents={isSelecting ? 'none' : 'auto'}>
+            <MessageAnswerCards message={message} />
+          </View>
           <View className="w-full gap-2">{extras}</View>
         </>
       ) : (
@@ -241,13 +249,19 @@ export const ChatMessage = memo(function ChatMessage({
           {createdAt}
         </Text>
       ) : null}
-      {isMessageActionsEnabled ? (
-        <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
-          {content}
-        </ChatMessageContextMenu>
-      ) : (
-        content
-      )}
+      <View className="relative w-full">
+        <ChatShareSelectionSpacer
+          hasAttachments={message.role === 'user' && Boolean(attachments)}
+        />
+        {isMessageActionsEnabled ? (
+          <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
+            {content}
+          </ChatMessageContextMenu>
+        ) : (
+          content
+        )}
+        <ChatShareMessageSelection message={message} />
+      </View>
     </View>
   );
 });
@@ -262,6 +276,7 @@ function ChatMessageContextMenu({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
+  const isSelecting = useIsChatShareSelecting();
   const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
   // These existing actions and the text projection accept either message role.
   const text =
@@ -270,7 +285,7 @@ function ChatMessageContextMenu({
   // selection and lands on whatever the finger happens to reach, which is not
   // a gesture that should be able to remove a turn.
   const items: readonly MenuItem[] =
-    message.status === 'pending'
+    message.status === 'pending' || isSelecting
       ? []
       : [
           {

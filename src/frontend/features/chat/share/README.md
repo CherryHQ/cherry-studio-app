@@ -1,86 +1,29 @@
 # Chat Sharing
 
-The assistant toolbar and user/assistant message context menus open `/chat-share` with the session
-and clicked message IDs. The separate page initially selects that message and loads a paginated
-history window around it. User and assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
-attachment-name fallback. Pending/streaming messages cannot be selected. Whole-row presses select;
-scrolling retains ordinary native press cancellation. Excerpts do not render Markdown, media,
-tools or reasoning. The exported document still contains the complete selected messages.
+The message Share action enters selection in the existing local or desktop transcript. Circular
+controls occupy the avatar or empty header space without narrowing Markdown. Selection uses keyed
+boolean subscriptions; only its marker and count update when a message is toggled. The composer
+stays mounted with its draft and measurement, while selection owns the bottom controls. Cancel or
+Android Back exits selection. Branch changes and message mutations are disabled during selection.
 
-Local message sharing also captures the current text and language of each expanded translation at
-entry. The selection route carries only an opaque token into a single in-memory handoff; translated
-text never enters the URL or saved navigation state. Only selected messages receive their captured
-translation, appended beneath the original with a language label. Folded translations stay excluded
-even when saved in the database. Captured text may include a visible translation still being generated;
-sharing does not translate again or wait for completion. Preparing the export validates its source hash
-against the fresh message snapshot, so an edited/retried original cannot receive an outdated translation.
-The thinking-content switch does not affect translation inclusion. Remote sharing has no translation
-handoff. Selection and format changes keep the captured translation unchanged.
+Confirmation reads a fixed source snapshot in chronological order and opens the common `/share`
+panel. Local data uses one selected-ID SQLite read; desktop data uses the opened remote Session's
+revision-checked selection API. Missing, partial and unfinished messages reject the whole request.
+The 128-message selection limit remains. Questions are never added implicitly.
 
-The original chat page stays mounted with its unchanged message widths, measured heights, scroll
-position and composer draft. It no longer subscribes to sharing selection. The selector's rows are
-safe to recycle: each reads its own selected boolean by message ID, while only the bottom controls
-subscribe to the count. Individual toggles leave unrelated rows and action consumers stable.
-These are source-level guarantees; device rendering/scroll performance is not yet measured.
+Only selected user text, final assistant answers, static pictures, attachment information, citations
+and matching expanded translations enter the document. Thinking, intermediate prose, tool names,
+steps, duration, usage and diagnostic payloads never enter any format. There is no process option
+or alternate document. Native source citations remain references, not tool execution records.
 
-`ChatShareSelectionProvider` owns IDs for one route identity. Cancel/native Back closes this page;
-closing the export preview retains the existing selection, while a closed system share sheet
-dismisses both pages to the chat. At most 128 messages can be selected; an empty selection cannot
-be confirmed. Leaving the page cancels pending export reads.
+Visible local translations are captured in the in-memory selection state at entry. Their source
+hash is validated against the fresh snapshot before export. Folded or stale translations stay out;
+sharing never translates again. Text and callbacks do not enter route params. Replaced remote
+Sessions invalidate selection instead of reusing another connection's state.
 
-Confirmation calls the share target's `prepareSelection`. The local route reads messages, session
-title and assistant name in one SQLite snapshot through the Data API; the desktop route calls the
-opened remote Session, which reads and revalidates a fixed history revision. Both return chronological order, regardless of click order. It does not implicitly include questions
-or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
-and failed reads reject the export instead of silently sharing a partial selection.
-
-Any nonempty selection defaults to ordered PNG pages containing all selected messages in chronological
-order. Short selections produce one page; the layout menu also offers a single long image. Image, HTML and Markdown remain available regardless of the selected message count, including
-when thinking content is toggled. There is no image-size gate before conversion.
-
-The source adapter supplies two immutable document snapshots when thinking content exists: omitted
-by default, and included when the preview switch is enabled. Thinking covers the visible reasoning,
-intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
-the document. The export page receives only a source-owned label and documents; it has no chat reads.
-
-The adapter preserves plain user text and supplies source-owned role hints. Managed images retain
-their transcript position relative to the answer. Sharing and the message list reuse the same
-standalone-image-reference filter: an invented preview URL ending in an image ID already owned by
-that message is omitted, while unrelated images and code examples stay intact. Non-image files
-collect after the answer. Images and HTML use
-the message-list hierarchy: attachments above right-aligned user bubbles and full-width answers
-under the message-list author row (a round 🍒 avatar, the assistant name and, for local chats, each
-answer's own model name). They omit article titles and message numbering. Markdown retains the
-conversation title and ordinary role headings, with the model after answer headings. All preserve
-chronological order.
-The export renderers own code, resource, source-list and table presentation and their format-specific
-fallbacks. Images and HTML show the opening code inside fixed 192-point panels; HTML retains full
-code with internal scrolling, and Markdown keeps the complete authored source. Images and HTML show
-one compact source-count row with a single Globe icon and the same localized count as the chat,
-plus quiet superscript citations, without individual source cards.
-Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
-Cherry brand/download footer with its QR area; Markdown uses the matching brand and download link.
-
-Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
-`chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the
-same approval-wait-aware calculation as the message list. HTML starts collapsed; image capture
-expands included process/reasoning content. Markdown uses portable nested blockquotes and its
-preview renders the prepared file through the shared export HTML renderer. Local/generated pictures
-are embedded as Base64 PNG/JPEG data URLs and display without captions; remote image links become
-compact name/domain entries in the preview and remain intact in the Markdown file.
-
-Rendering, temporary files, permanent storage and system delivery remain in the application export
-capability. Opening the preview renders the selection's default format without thinking content;
-changing the format or switch renders the selected snapshot as needed. Image output uses a fixed-width layout at
-3x density and sequential page capture, without source-image byte, pixel or count caps. Device resources determine practical
-capacity. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
-
-Local and desktop routes share the selection controls, the history window shape and export
-preparation; the local route uses the Session-keyed local history window and the desktop route the
-remote revisioned window. The desktop route binds the selection to its source scope, so a replaced
-pairing cannot reuse the previous selection. The preparation validates the entire selected set.
-Remote resources never become local file IDs; file metadata exports as named attachments. Partial
-messages cannot be selected as complete export content.
-
-Local documents keep their existing managed-file references and the document renderer resolves
-them; the underlying bytes are not pinned for the duration of the export.
+All nonempty selections support Image, HTML and Markdown. Image uses one bounded card with an
+explicit excerpt notice for long selections; HTML/Markdown retain the full content. Rendering,
+temporary files, explicit persistence and
+system delivery belong to the shared sharing and document-export owners. Closing the panel returns
+to the original transcript; changing the range starts again there. Native rendering and scroll
+performance still require authorized device acceptance.

@@ -3,6 +3,12 @@
 `BottomSheet` is Cherry Studio's only mobile sheet shell. It uses the same regulated card heights,
 bottom-attached surface, rounded top corners, drag handle, scrim, safe-area
 handling, gestures, Android back behavior, and accessibility behavior on iOS and Android.
+`BottomSheetProvider` supplies the sheet's portal host. Mount it at the app root; native modal
+routes that present sheets also mount a local provider inside their route (as `/share` and
+`/drawings/templates` do).
+This keeps controls above the modal's touch surface while retaining the page controller that UIKit
+menus need for presentation. Sheets stay in the provider's view hierarchy rather than a detached
+window overlay.
 
 Dark mode uses an opaque `popover` base with a neutral `secondary` overlay and a fine border to
 separate the sheet from the page. The header, body, and fixed footer share this fill.
@@ -31,6 +37,10 @@ users can drag upward for a larger preview. `height` accepts a fixed React Nativ
 and is clamped to the available screen height. Product components choose semantic tokens, or use a
 fixed height, but do not receive detents, geometry, close reasons, or types from the underlying UI
 library.
+
+Expandable cards follow the native sheet's visible height on the UI thread, keeping their fixed
+footer on screen at every open height. Closing slides out the smallest card without collapsing its
+content. Single-height and keyboard-avoiding cards retain their own height rules.
 
 ```tsx
 <BottomSheet

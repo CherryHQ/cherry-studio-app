@@ -67,6 +67,8 @@ export type ExportImageLayout = 'pages' | 'single';
 export type ExportImageFrame = {
   background: string;
   label: string;
+  /** Enables a bounded message card; complete HTML/Markdown never use this treatment. */
+  excerptLabel?: string;
 };
 export type ExportPresentation = {
   width: number;
@@ -144,6 +146,12 @@ export type HtmlConversionContext = {
     total: number;
   }) => void;
 };
+export type HtmlConversionArtifact = {
+  readonly file: ExportFile;
+  readonly pages: readonly ExportImagePage[];
+  save(signal?: AbortSignal): Promise<ResolvedFile>;
+  dispose(): Promise<void>;
+};
 export const HTML_CONVERSION_MAX_PAGES = 64;
 export const HTML_CONVERSION_MAX_PIXELS = 16_000_000;
 export const HTML_CONVERSION_MAX_EDGE = 8192;
@@ -186,6 +194,8 @@ export interface DocumentExportSession {
   readonly document: ExportDocument;
   /** Lightweight fallback Markdown without embedded assets or signatures; no files or resource reads. */
   readonly markdown: string;
+  /** Immediate structured card without resource reads; delivery resolves the retained images. */
+  previewDocument(presentation: ExportPresentation): string;
   /** Styled view of prepared Markdown: embedded pictures display, remote links need no network read. */
   previewMarkdown(text: string, presentation: ExportPresentation): string;
   render(
@@ -202,6 +212,9 @@ export interface DocumentExportSession {
 
 export interface DocumentExportModule {
   createSession(input: DocumentExportInput): DocumentExportSession;
-  /** Explicit conversion creates a managed file, with temporary output owned by the runtime. */
-  convertHtml(input: HtmlConversionInput, context?: HtmlConversionContext): Promise<ResolvedFile>;
+  /** Conversion remains temporary until the caller explicitly saves the prepared result. */
+  convertHtml(
+    input: HtmlConversionInput,
+    context?: HtmlConversionContext,
+  ): Promise<HtmlConversionArtifact>;
 }
