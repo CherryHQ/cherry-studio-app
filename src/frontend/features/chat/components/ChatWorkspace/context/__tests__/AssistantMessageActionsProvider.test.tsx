@@ -125,7 +125,7 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
             },
           },
           actions: {
-            edit: {
+            editUser: {
               availability: { state: 'enabled' },
               execute: async ({ text }) => {
                 await mockEditMessage({ messageId: 'user-1', text });
@@ -372,7 +372,9 @@ describe('AssistantMessageActionsProvider', () => {
   test('deletes a turn only after the destructive confirmation is accepted', async () => {
     renderProvider();
 
-    act(() => probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1' }));
+    act(() =>
+      probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1', messageId: 'assistant-1' }),
+    );
 
     // Nothing has happened yet: the alert is the gate, not a notification.
     expect(mockDeleteTurn).not.toHaveBeenCalled();
@@ -398,7 +400,9 @@ describe('AssistantMessageActionsProvider', () => {
     mockDeleteTurn.mockRejectedValueOnce(error);
     renderProvider();
 
-    act(() => probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1' }));
+    act(() =>
+      probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1', messageId: 'assistant-1' }),
+    );
     await act(async () => {
       mockAlertConfirm.mock.lastCall![0].onConfirm();
       await Promise.resolve();

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { Fragment, type ReactElement, type ReactNode, useMemo, useState } from 'react';
+import { Platform, View } from 'react-native';
 import {
   EnrichedMarkdownText,
   type LinkPressEvent,
@@ -9,6 +9,7 @@ import { StreamdownText } from 'react-native-streamdown';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { normalizeLatexDelimiters } from '../../../markdown';
+import { splitMermaidBlocks } from '../../../markdown/split-mermaid-blocks';
 import { resolveTypographyScale, type TypographySizeStep } from '../../../utils/typography-scale';
 import { resolveSyntaxColors } from '../utils/syntax-colors';
 
@@ -38,6 +39,12 @@ export type MarkdownSelectionMenuLabels = {
   copyAsMarkdown: string;
 };
 
+/** One app action shown beside Copy in the native menu of selected text. */
+export type MarkdownSelectionAction = {
+  label: string;
+  onPress: (selectedText: string) => void;
+};
+
 export type MarkdownTextProps = {
   /**
    * URL prefix of inline citation markers. Citations annotate the answer rather
@@ -49,7 +56,13 @@ export type MarkdownTextProps = {
   isStreaming?: boolean;
   markdown: string;
   onLinkPress: (url: string) => void;
+  /**
+   * Presents a complete top-level Mermaid fence. `fallback` is the fence as an ordinary code
+   * block, for diagrams the caller cannot present. Without it, Mermaid stays a code block.
+   */
+  renderMermaid?: (diagram: { source: string; fallback: ReactElement }) => ReactNode;
   selectable?: boolean;
+  selectionAction?: MarkdownSelectionAction;
   selectionMenuLabels?: MarkdownSelectionMenuLabels;
 };
 
@@ -126,15 +139,23 @@ function createMarkdownTypographyStyle(
   };
 }
 
-export function MarkdownText({
+export function MarkdownText(props: MarkdownTextProps) {
+  return <MarkdownContent {...props} />;
+}
+
+/** Private shared renderer. Standalone CodeBlock owns its header and exact-source copy. */
+export function MarkdownContent({
   citationLinkPrefix,
+  externalCodeBlockControls = false,
   fontSizeStep,
   isStreaming = false,
   markdown,
   onLinkPress,
+  renderMermaid,
   selectable = true,
+  selectionAction,
   selectionMenuLabels,
-}: MarkdownTextProps) {
+}: MarkdownTextProps & { externalCodeBlockControls?: boolean }) {
   const { theme } = useUniwind();
   const [
     foregroundValue,
@@ -181,6 +202,16 @@ export function MarkdownText({
       },
     [selectionMenuLabels],
   );
+  const contextMenuItems = useMemo(
+    () =>
+      selectionAction && [
+        {
+          text: selectionAction.label,
+          onPress: ({ text }: { text: string }) => selectionAction.onPress(text),
+        },
+      ],
+    [selectionAction],
+  );
   const markdownStyle = useMemo<MarkdownStyle>(() => {
     const typography = createMarkdownTypographyStyle(fontSizeStep, monoFontFamily);
 
@@ -213,6 +244,7 @@ export function MarkdownText({
       },
       codeBlock: {
         ...typography.codeBlock,
+        externalControls: externalCodeBlockControls,
         backgroundColor: codeBlock,
         borderColor: border,
         color: foreground,
@@ -262,6 +294,7 @@ export function MarkdownText({
     border,
     citationLinkPrefix,
     codeBlock,
+    externalCodeBlockControls,
     fontSizeStep,
     foreground,
     foregroundTertiary,
@@ -280,11 +313,18 @@ export function MarkdownText({
     [isStreaming, markdown],
   );
 
-  return (
+  const parts = useMemo(
+    () => (renderMermaid ? splitMermaidBlocks(normalizedMarkdown, isStreaming) : undefined),
+    [isStreaming, normalizedMarkdown, renderMermaid],
+  );
+
+  const renderMarkdown = (markdown: string, key: string, isTail: boolean) => (
     <MarkdownRenderer
+      key={key}
       allowTrailingMargin={false}
+      contextMenuItems={contextMenuItems}
       flavor="github"
-      markdown={normalizedMarkdown}
+      markdown={markdown}
       markdownStyle={markdownStyle}
       md4cFlags={{ latexMath: true, superscript: true, underline: false }}
       onLinkPress={handleLinkPress}
@@ -293,8 +333,27 @@ export function MarkdownText({
       selectionColor={Platform.OS === 'ios' ? mutedForeground : secondary}
       selectionHandleColor={mutedForeground}
       selectionMenuConfig={selectionMenuConfig}
-      streamingAnimation={isStreaming}
+      streamingAnimation={isStreaming && isTail}
     />
+  );
+
+  if (!parts || !renderMermaid) return renderMarkdown(normalizedMarkdown, '0', true);
+
+  // The wrapper stays mounted while fences complete, so streamed segments keep their native views.
+  // Each segment drops its trailing margin; the gap restores the code block's 12-point rhythm.
+  return (
+    <View className="gap-3">
+      {parts.map((part, index) => {
+        const content = renderMarkdown(part.markdown, part.key, index === parts.length - 1);
+        return part.kind === 'mermaid' ? (
+          <Fragment key={part.key}>
+            {renderMermaid({ source: part.source, fallback: content })}
+          </Fragment>
+        ) : (
+          content
+        );
+      })}
+    </View>
   );
 }
 

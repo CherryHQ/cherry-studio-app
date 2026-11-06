@@ -94,6 +94,8 @@
     }
   },
   "peerDependencies": {
+    "dayjs": "*",
+    "react-native-ui-datepicker": "*",
     "@expo/ui": "*",
     "@legendapp/list": "*",
     "@magrinj/expo-quick-look": "*",
@@ -110,6 +112,7 @@
     "expo-paste-input": "*",
     "expo-widgets": "*",
     "heroui-native": "*",
+    "markdown-it": "*",
     "@cherrystudio/app-icons": "workspace:*",
     "react": "*",
     "react-native": "*",

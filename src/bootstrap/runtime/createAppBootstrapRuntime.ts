@@ -36,7 +36,7 @@ import type {
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
-import { resetPdfTextCacheForRestore } from '@/backend/services/file/pdfTextCache';
+import { resetFileTextCacheForRestore } from '@/backend/services/file/fileTextCache';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
@@ -171,10 +171,13 @@ export function createAppBootstrapRuntime(
     dataApiDependencies,
     disposeSystemEntry,
     disposeAppUpdate,
+    disposeUuRemote,
     disposeSkills,
+    disposeVoice,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
+    agentHostDependencies: host.container.get('AgentHostDependencies'),
     resourceScopes: host.container.get('ResourceScopeCoordinator'),
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
@@ -222,6 +225,7 @@ export function createAppBootstrapRuntime(
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
       desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
+      desktopConnectionNameChanged: (id) => desktopConnectionManager.refreshName(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
@@ -251,11 +255,17 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Drain system-entry consumers before the host's resources.
+      // Drain system-entry consumers, Skill writes, and voice activity before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await Promise.all([disposeSystemEntry(), disposeSkills(), disposeAppUpdate()]);
+        await Promise.all([
+          disposeSystemEntry(),
+          disposeSkills(),
+          disposeVoice(),
+          disposeAppUpdate(),
+          disposeUuRemote(),
+        ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -286,7 +296,7 @@ export function createAppBootstrapRuntime(
           cache.resetForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
-          resetPdfTextCacheForRestore();
+          resetFileTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
         await initializeAppRuntime(services);

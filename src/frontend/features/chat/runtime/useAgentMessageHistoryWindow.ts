@@ -31,6 +31,8 @@ export type AgentMessageHistoryWindow = {
 export type MessageNavigation = {
   messageId?: string;
   messageRequestId?: string;
+  aroundMode?: 'exact';
+  preparedPage?: AgentSessionMessagePage;
 };
 
 function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMessageView[] {
@@ -67,8 +69,13 @@ export function useAgentMessageHistoryWindow(
   } = {},
 ): AgentMessageHistoryWindow {
   const apiClient = useApiClient();
-  const { messageId, messageRequestId } = navigation;
-  const navigationKey = JSON.stringify([sessionId, messageId, messageRequestId]);
+  const { messageId, messageRequestId, aroundMode } = navigation;
+  const navigationKey = JSON.stringify([
+    sessionId,
+    messageId,
+    messageRequestId,
+    ...(aroundMode ? [aroundMode] : []),
+  ]);
   const [latestNavigationKey, setLatestNavigationKey] = useState<string>();
   const isReturningToLatest = latestNavigationKey === navigationKey;
   const aroundMessageId = isReturningToLatest ? undefined : messageId;
@@ -76,7 +83,15 @@ export function useAgentMessageHistoryWindow(
   const dataKey = messageId
     ? `${navigationKey}:${isAroundMessage ? 'message' : 'latest'}`
     : (sessionId ?? '');
-  const initialPageParam: ListAgentSessionMessagesQueryParams = { aroundMessageId };
+  const preparedPage =
+    navigation.preparedPage &&
+    (!aroundMode || navigation.preparedPage.items.some((item) => item.id === aroundMessageId))
+      ? navigation.preparedPage
+      : undefined;
+  const initialPageParam: ListAgentSessionMessagesQueryParams = {
+    aroundMessageId,
+    ...(aroundMessageId && aroundMode ? { aroundMode } : {}),
+  };
   // Preparing changes the transcript, which refetches this window; preparing again on that
   // refetch would loop and undo the reader's later choices.
   const preparedNavigationKey = useRef<string>(undefined);
@@ -91,10 +106,18 @@ export function useAgentMessageHistoryWindow(
     ): ListAgentSessionMessagesQueryParams | undefined =>
       page.previousCursor ? { cursor: page.previousCursor, direction: 'newer' } : undefined,
     initialPageParam,
+    ...(preparedPage && aroundMessageId
+      ? { initialData: { pages: [preparedPage], pageParams: [initialPageParam] } }
+      : {}),
     queryFn: async ({ pageParam, signal }) => {
-      if (pageParam.aroundMessageId && preparedNavigationKey.current !== navigationKey) {
-        preparedNavigationKey.current = navigationKey;
+      if (
+        pageParam.aroundMessageId &&
+        !preparedPage &&
+        preparedNavigationKey.current !== navigationKey
+      ) {
         await prepareAround?.(pageParam.aroundMessageId);
+        signal.throwIfAborted();
+        preparedNavigationKey.current = navigationKey;
       }
       const page = await apiClient.get(
         `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
@@ -104,12 +127,18 @@ export function useAgentMessageHistoryWindow(
         },
       );
       if (signal.aborted) throw new Error('Message history request cancelled');
+      if (
+        pageParam.aroundMode === 'exact' &&
+        !page.items.some((item) => item.id === pageParam.aroundMessageId)
+      )
+        throw new Error('Exact message window does not contain its target.');
       return page;
     },
     queryKey: [
       ...queryKeys.agentSessions.messages(sessionId ?? '__missing_session__'),
       {
         aroundMessageId,
+        aroundMode,
         ...(aroundMessageId ? { messageRequestId } : {}),
         limit: messageWindowPolicy.initialFetchCount,
         settledOnly,

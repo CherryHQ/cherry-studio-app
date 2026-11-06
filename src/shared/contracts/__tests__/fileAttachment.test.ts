@@ -10,6 +10,37 @@ const filePart = {
 };
 
 describe('persisted attachment feedback', () => {
+  test('roundtrips image OCR delivery facts and failure reasons without allowing recognized text in reports', () => {
+    const report = {
+      mode: 'image-text',
+      parser: 'native-image-ocr',
+      sourceTruncated: false,
+      requestTruncated: false,
+      includedCharacters: 8,
+    };
+    const image = {
+      ...filePart,
+      mediaType: 'image/png',
+      filename: 'receipt.png',
+      attachmentReport: report,
+    };
+    expect(AgentMessagePartSchema.parse(JSON.parse(JSON.stringify(image)))).toEqual(image);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...image,
+        attachmentReport: { ...report, text: 'private OCR text' },
+      }).success,
+    ).toBe(false);
+    for (const code of ['image-ocr-empty', 'image-ocr-failed', 'image-ocr-unsupported']) {
+      const error = {
+        code: 'ATTACHMENT_INVALID',
+        message: 'diagnostic',
+        retryable: false,
+        attachmentIssue: { code },
+      };
+      expect(AgentErrorViewSchema.parse(JSON.parse(JSON.stringify(error)))).toEqual(error);
+    }
+  });
   test('roundtrips OCR failure metadata without persisting page images or recognized text', () => {
     const error = {
       code: 'ATTACHMENT_INVALID',
@@ -56,6 +87,21 @@ describe('persisted attachment feedback', () => {
       AgentErrorViewSchema.safeParse({
         ...error,
         attachmentIssue: { code: 'arbitrary-provider-message' },
+      }).success,
+    ).toBe(false);
+  });
+
+  test('persists audio reference delivery without persisting audio or transcript bodies', () => {
+    const part = {
+      ...filePart,
+      mediaType: 'audio/mp4',
+      attachmentReport: { mode: 'audio', sourceTruncated: false, requestTruncated: false },
+    };
+    expect(AgentMessagePartSchema.parse(JSON.parse(JSON.stringify(part)))).toEqual(part);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...part,
+        attachmentReport: { ...part.attachmentReport, audio: 'base64-data' },
       }).success,
     ).toBe(false);
   });

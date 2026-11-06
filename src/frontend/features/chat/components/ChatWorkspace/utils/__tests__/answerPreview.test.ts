@@ -23,6 +23,18 @@ describe('answerPreview', () => {
     expect(preview.length).toBe(ANSWER_PREVIEW_LENGTH + 1);
   });
 
+  test.each(['', '尾'])(
+    'keeps mixed Unicode and whitespace at the exact preview boundary (%s)',
+    (tail) => {
+      const opening = ` \t\n\u00a0${'中'.repeat(ANSWER_PREVIEW_LENGTH - 5)}😀`;
+      expect(answerPreview([{ state: 'streaming', text: opening + tail, type: 'text' }])).toEqual({
+        isTruncated: tail.length > 0,
+        length: ANSWER_PREVIEW_LENGTH - 4 + tail.length,
+        text: opening,
+      });
+    },
+  );
+
   test('shows citation markers the way the full answer does', () => {
     expect(
       answerPreview([

@@ -36,15 +36,17 @@ describe('agent system prompt Skills section', () => {
       tools: createSkillTools(EMPTY_SKILL_SCOPE),
       skills: EMPTY_TURN_SKILL_PLAN,
     });
-    expect(prompt).toContain('this Agent has no enabled, bound and readable Skill packages');
-    expect(prompt).toContain('not the total installed in the app');
-    expect(prompt).toContain('`list_local_skills` with `include_manual: true`');
+    expect(prompt).toContain('This Agent has no enabled, bound and readable Skill packages');
+    expect(prompt).toContain("not the app's installed total");
+    expect(prompt).toContain(
+      '`list_local_skills` with `include_manual: true` and report its `total`',
+    );
     expect(prompt).not.toContain('### Available Skills');
     expect(prompt).not.toContain('nextCursor');
     expect(prompt).toContain('are offered directly; do not search for them');
   });
 
-  it('gives an authoritative count and pagination rules for a complete inventory', () => {
+  it('routes inventory questions to the authoritative tool count', () => {
     const entries = Array.from({ length: 45 }, (_, index) => entry(`skill-${index}`));
     const prompt = buildAgentSystemPrompt({
       ...base,
@@ -52,11 +54,11 @@ describe('agent system prompt Skills section', () => {
     });
     expect(prompt).toContain('45 automatically discoverable Skills');
     expect(prompt).toContain('45 enabled, bound and readable Skill packages');
-    expect(prompt).toContain('`list_local_skills`');
-    expect(prompt).toContain('include_manual: true');
-    expect(prompt).toContain('`total` for the count');
+    expect(prompt).toContain(
+      '`list_local_skills` with `include_manual: true` and report its `total`',
+    );
+    expect(prompt).toContain('(40 of 45)');
     expect(prompt).toContain('until `nextCursor` is null');
-    expect(prompt).toContain('installation during this turn can change it');
   });
 
   it('preserves routing conditions at the end of long descriptions without loading bodies', () => {
@@ -72,7 +74,6 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain(
       'by meaning, including across languages; shared keywords are not required',
     );
-    expect(prompt).toContain('When the catalog below is complete, use it directly');
     expect(prompt).not.toContain('cursor: "');
     expect(prompt).not.toContain('<skill_instructions>');
   });
@@ -127,12 +128,10 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('### Selected Skills');
     expect(prompt).toContain('- manual (skill_id: manual)');
     expect(prompt).not.toContain('Follow the manual.');
-    expect(prompt).toContain('read the needed references or templates with `read_skill_file`');
-    expect(prompt).toContain('repeat `load_skill` to recover a missing instruction body');
-    expect(prompt).not.toContain('without another loading call, file lookup');
+    expect(prompt).toContain('`list_skill_files` and `read_skill_file`');
     expect(prompt).toContain('built-in tools exposed directly to you');
     expect(prompt).toContain('no tool call or SKILL.md file lookup is needed');
-    expect(prompt).toContain('does not require you to use every enabled Skill');
+    expect(prompt).toContain('you need not use every one');
     expect(prompt.indexOf('## Skills')).toBeLessThan(
       prompt.indexOf('## Agent Instructions') === -1
         ? Infinity

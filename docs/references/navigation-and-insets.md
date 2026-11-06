@@ -106,9 +106,13 @@ iPad mini and an iPhone Duo's inner display are compact upright and wide on thei
 Compact windows keep the overlay drawer. It leaves at least 64 points of chat visible and is capped
 at 400 points. A wide window has one structure: a left column beside one content region. The
 left column is the 280-point sidebar, or in its place the file pane or conversation search, at the
-file pane width. The content region holds the chat or one first-level destination. The chat header
-drops its sidebar and new-chat buttons, which the sidebar provides. First-level destinations lead
-with nothing (`RouteHeaderProvider rootAction="none"`), and the sidebar marks the open one: a
+file pane width. The content region holds the chat or one first-level destination. The chat and
+first-level destinations lead with the sidebar button (`RouteHeaderProvider rootAction="drawer"`),
+which hides or shows the column; the choice persists across launches, rotation, and resizing, and
+only a wide window reads it. While an iPhone Duo is partly folded the column fills the leading side
+of the fold and has no button, since hiding it would leave the chat across the fold. The chat header
+keeps New chat at every width. Swiping does not hide or show the column; the overlay
+gesture belongs to compact windows. The sidebar marks the open destination: a
 destination opened from the chat pushes above it without animation, and another destination takes
 its place, so moving between sidebar entries builds no back history. Pages beneath a destination
 still push and lead with back. Opening a conversation or a new chat, or Files, first pops the
@@ -321,9 +325,10 @@ enabled.
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
 - Only the chat route exposes the sidebar button and full-width drawer gesture; every other route
-  exposes back and returns to chat. In wide windows the permanent sidebar replaces both, first-level
-  destinations lead with nothing, and resizing across the threshold keeps the chat, its draft, its
-  scroll position, and any open destination.
+  exposes back and returns to chat. In wide windows the sidebar column replaces the gesture, the chat
+  and first-level destinations lead with the button that hides or shows the column, and hiding,
+  showing, or resizing across the threshold keeps the chat, its draft, its scroll position, and any
+  open destination.
 - In wide windows, Files and file previews open beside the chat without changing its
   route, draft, or scroll position; closing and reopening the pane keeps the list's place.
   Expanding a preview and returning to chat keeps the same draft and scroll position, and Add to

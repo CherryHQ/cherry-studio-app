@@ -1,5 +1,3 @@
-import * as z from 'zod';
-
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import {
   OfficeGenerationError,
@@ -17,6 +15,7 @@ import {
 
 import type { RuntimeTool } from '../runtime';
 import {
+  createOfficeTiming,
   mebibytes,
   normalizeOfficeFilename,
   officeFailure as invalid,
@@ -25,7 +24,7 @@ import {
   type OfficeFiles,
 } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
-import { toRuntimeInputSchema } from './runtimeToolSchema';
+import { toRuntimeInputSchema, toolValidationError } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 const definitions = [
@@ -35,7 +34,7 @@ const definitions = [
     operation: 'inspect',
     schema: officeInspectSchema,
     description:
-      'List Word body paragraphs, Excel sheet names, or PowerPoint slides and shape ids. Use kind "images" to list DrawingML pictures in the Word body (including tables), worksheets or slides, with anchors, names, alt text and replacement eligibility. Image indexes are zero-based; PowerPoint uses slide and shape ids. Headers, footers, masters, backgrounds and legacy VML images are not listed. Paginated; returns source_sha256 for edits. Text excerpts may be shortened; use read_office_content for exact text.',
+      'List Word body paragraphs, Excel sheet names, or PowerPoint slides and shape ids. Use kind "structure" for Word tables/headers/footers/notes/comments/changes/fields; Excel sheet statistics, error cells and missing formula caches; or PowerPoint shapes with resolved boxes, explicit run fonts and overlap/off-slide findings. PPT boxes include group transforms and layout/master placeholder inheritance; text overflow still needs rendering. Formula values are saved caches, never recalculated. finding_offset pages up to 100 Excel/PPT findings within the selected sheets/slides. Use kind "images" to list supported DrawingML pictures with anchors, names, alt text and replacement eligibility; headers/footers/masters/backgrounds and legacy VML images are not listed. Image indexes are zero-based; PowerPoint uses slide and shape ids. Use kind "check" to check package XML, content types, relationships, ids and comment references. Optional against_file_entry_id compares an untouched original and reports only new findings. Findings are successful inspection results; errors and warnings count all findings before pagination. Paginated; returns source_sha256 for edits. Text excerpts may be shortened; use read_office_content for exact text.',
   },
   {
     name: 'read_office_content',
@@ -72,25 +71,35 @@ export function createOfficeEditTools(
       outputSchema: officeToolOutputSchemas[definition.name],
       approval: 'auto',
       deferred: true,
-      async execute({ input, signal }) {
+      async execute({ input, signal, toolCallId }) {
         signal.throwIfAborted();
         if (new TextEncoder().encode(JSON.stringify(input)).length > OFFICE_MAX_INPUT_BYTES)
           return invalid('Office input exceeds 128 KiB.');
         const parsed = definition.schema.safeParse(input);
-        if (!parsed.success) return invalid(z.prettifyError(parsed.error));
+        if (!parsed.success) return invalid(toolValidationError(parsed.error));
+        const againstId =
+          'against_file_entry_id' in parsed.data ? parsed.data.against_file_entry_id : undefined;
+        if (againstId && (!('kind' in parsed.data) || parsed.data.kind !== 'check'))
+          return invalid('against_file_entry_id is only supported for kind check.');
         const sourceId = await access.resolveRead(parsed.data);
         const imageIds =
           'images' in parsed.data
             ? [...new Set(parsed.data.images?.map((image) => image.file_entry_id) ?? [])]
             : [];
-        // Authorize every replacement before reading any source or image bytes.
-        for (const id of imageIds) {
+        // Authorize every input before reading any source, comparison or image bytes.
+        for (const id of [...imageIds, ...(againstId ? [againstId] : [])]) {
           signal.throwIfAborted();
           await access.resolveRead({ file_entry_id: id });
         }
-        const operation = await startOfficeOperation(files, signal);
+        const timing = createOfficeTiming(toolCallId, definition.name);
+        timing.stage('operation_queue');
+        const operation = await startOfficeOperation(files, signal).catch((error) => {
+          timing.finish(signal.aborted ? 'cancelled' : 'failed');
+          throw error;
+        });
         try {
-          const facts = await files.resolveAvailable([sourceId]);
+          timing.stage('read_inputs');
+          const facts = await files.resolveAvailable([sourceId, ...(againstId ? [againstId] : [])]);
           signal.throwIfAborted();
           const fact = facts.get(sourceId);
           const uri = fact && files.localUri(fact);
@@ -104,11 +113,23 @@ export function createOfficeEditTools(
             (format) => OFFICE_MEDIA_TYPES[format] === fact.mediaType,
           );
           if (!format) return invalid('Only DOCX, XLSX and PPTX files are supported.');
+          let against: { uri: string; size: number } | undefined;
+          if (againstId) {
+            const original = facts.get(againstId);
+            const originalUri = original && files.localUri(original);
+            const originalSize = originalUri && files.size(originalUri);
+            if (!originalUri || !originalSize || original?.mediaType !== fact.mediaType)
+              return invalid('The comparison must be an available Office file of the same format.');
+            if (originalSize > OFFICE_MAX_FILE_BYTES)
+              return invalid('The comparison file exceeds the 64 MiB Office limit.');
+            against = { uri: originalUri, size: originalSize };
+          }
           if (
             ('format' in definition && definition.format !== format) ||
             ('anchor' in parsed.data && parsed.data.anchor.format !== format)
           )
             return invalid('Operation format does not match the source file.');
+          timing.stage('hash_input');
           const digest = await files.hash(uri, signal);
           signal.throwIfAborted();
           if ('source_sha256' in parsed.data && parsed.data.source_sha256 !== digest)
@@ -123,17 +144,21 @@ export function createOfficeEditTools(
             ...parsed.data,
             operation: definition.operation,
             format,
+            ...(against ? { against: true } : {}),
           } as OfficeTransformRequest;
+          timing.stage('prepare_images');
           const images = await prepareOfficeImages(imageIds, files, operation, signal);
           const output = definition.operation === 'edit' ? operation.output(format) : undefined;
           const result = await transformOfficeFile({
             source: { uri, size },
+            against,
             request,
             images,
             output,
             sandbox,
             signal,
             onSettled: operation.job(),
+            onStage: timing.stage,
           });
           signal.throwIfAborted();
           if ('content' in result)
@@ -144,10 +169,12 @@ export function createOfficeEditTools(
                 file_entry_id: sourceId,
                 source_sha256: digest,
                 format,
+                ...(againstId ? { against_file_entry_id: againstId } : {}),
               },
               artifacts: [],
             };
           const sha256 = await files.hash(output!, signal);
+          timing.stage('publish_file');
           const entry = await files.createFileEntry(
             {
               uri: output!,
@@ -191,6 +218,7 @@ export function createOfficeEditTools(
           if (error instanceof OfficeGenerationError) return invalid(error.message);
           throw error;
         } finally {
+          timing.finish(signal.aborted ? 'cancelled' : 'ended');
           operation.finish();
         }
       },

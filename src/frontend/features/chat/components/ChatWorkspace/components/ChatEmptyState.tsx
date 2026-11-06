@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { ChatComposerClearance } from './ChatComposerClearance';
+
 type ChatEmptyStateProps = {
   contentBottomInset: number;
 };
@@ -10,9 +12,9 @@ export function ChatEmptyState({ contentBottomInset }: ChatEmptyStateProps) {
   const { t } = useTranslation();
 
   return (
-    <View
+    <ChatComposerClearance
       className="flex-1 items-center justify-center px-8"
-      style={{ paddingBottom: contentBottomInset }}
+      contentBottomInset={contentBottomInset}
     >
       <View className="items-center gap-2">
         <Text className="text-center font-semibold text-foreground text-lg">
@@ -22,6 +24,6 @@ export function ChatEmptyState({ contentBottomInset }: ChatEmptyStateProps) {
           {t('chat.newSession.description')}
         </Text>
       </View>
-    </View>
+    </ChatComposerClearance>
   );
 }

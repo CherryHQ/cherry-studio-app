@@ -39,7 +39,7 @@ export function useLocalConversation(input: {
   const { client, onSessionChanged } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const window = useAgentMessageHistoryWindow(sessionId, navigation, {
-    settledOnly: true,
+    settledOnly: navigation?.aroundMode !== 'exact',
     // A search result may sit on another branch; show that branch before reading around it.
     prepareAround: sessionId
       ? async (messageId) => {

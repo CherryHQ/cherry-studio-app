@@ -44,7 +44,7 @@ import {
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
-import { fitPiCodemodeOutput } from './piCodemodeOutput';
+import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -61,6 +61,7 @@ import {
 import { hasRunnablePiTasks, PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import { createPiReplyEdits } from './piReplyEditing';
 import { PiToolBudget } from './piToolBudget';
 import {
   PI_WEB_FAILURE_GROUP,
@@ -179,19 +180,20 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         settings: () => ({
           followUpMode: 'one-at-a-time',
           afterFailedRun: 'continue',
+          progress: { persistWithinMs: 0 },
           compaction: { modelOverrides: this.models.compactionOverrides },
         }),
         identity: cherryClientIdentity(),
-        onReport: (error, info) => {
+        onReport: (report) => {
           logger.warn('Pi durable runtime reported a failure', {
-            error,
-            operation: `pi.${info.type}`,
-            ...('task' in info && info.task
-              ? { taskId: Number(info.task.id), taskKind: info.task.kind }
+            error: report.error,
+            operation: `pi.${report.kind}`,
+            ...('task' in report && report.task
+              ? { taskId: Number(report.task.id), taskKind: report.task.kind }
               : {}),
-            ...('reason' in info ? { reasonCode: info.reason } : {}),
-            ...('extension' in info ? { extension: info.extension } : {}),
-            ...('callback' in info ? { callback: info.callback } : {}),
+            ...('reason' in report ? { reasonCode: report.reason } : {}),
+            ...('extension' in report ? { extension: report.extension } : {}),
+            ...('callback' in report ? { callback: report.callback } : {}),
           });
         },
       });
@@ -199,7 +201,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       const opened = this.runtime;
       void opened.closed
         .then((end) => {
-          if (end.reason !== 'failed' || this.runtime !== opened) return;
+          if (end.kind !== 'failed' || this.runtime !== opened) return;
           logger.error('Pi storage session closed after a failure', { error: end.error });
           ports.onFailure?.({
             code: 'runtime_storage_failed',
@@ -264,7 +266,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async watchWork(listener: (active: boolean) => void) {
     const watch = await this.requireRuntime().watchWork();
     const active = hasRunnablePiTasks(watch.value);
-    watch.start(async (value) => listener(hasRunnablePiTasks(value)));
+    watch.start(async (call) => {
+      if (call.kind === 'value') listener(hasRunnablePiTasks(call.value));
+    });
     let observing = true;
     void watch.closed.then(() => {
       if (observing) listener(false);
@@ -577,12 +581,24 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return { turns, ...(nextCursor ? { nextCursor } : {}) };
   }
 
-  async message(lane: RuntimeLane, messageId: string) {
+  async message(lane: RuntimeLane, messageId: string, options?: { fullReasoning?: boolean }) {
     const runtime = this.requireRuntime();
+    if (options?.fullReasoning) {
+      for (const observer of this.observers) {
+        const turn = observer.readReasoningTurn(lane, messageId);
+        if (turn) return { turn, role: 'assistant' as const };
+      }
+    }
     const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
     if (!selected) return undefined;
-    const turn = await this.project(lane, selected.record, selected.metadata);
+    const turn = await this.project(lane, selected.record, selected.metadata, options);
     if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
+    // Forking would drop that edit; Cherry rebuilds the edited history instead.
+    if (
+      turn.answerBoundary &&
+      (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
+    )
+      return { turn: { ...turn, answerBoundary: null }, role: selected.role };
     return { turn, role: selected.role };
   }
 
@@ -600,13 +616,53 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!conversation) throw new Error('The working copy is missing.');
     const view = await conversation.context(
       BACKGROUND_CONTEXT,
-      options.currentContext ? {} : { at: record.answer },
+      options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
     );
     const contextCheckpoint =
       view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
         ? createPiContextCheckpoint(stored.turnId, view.messages)
         : null;
     return { contextCheckpoint };
+  }
+
+  async editReply(lane: RuntimeLane, input: Parameters<DurableAgentRuntime['editReply']>[1]) {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    const selected = await runtime.submissionForMessage(key, input.messageId);
+    const conversation = await runtime.conversation(key);
+    if (!conversation || selected?.role !== 'assistant' || selected.record.status !== 'done')
+      return undefined;
+    const latest = (await this.history(lane, { limit: 1 })).turns[0];
+    if (latest?.status !== 'completed' || !input.parts.length) return undefined;
+    // A background summary prepared with the old answer must not land after the edit.
+    await runtime.stop(key);
+    const [tail] = (await runtime.history(key, 1)).entries;
+    const view = await conversation.context(BACKGROUND_CONTEXT);
+    const edits = createPiReplyEdits(
+      view,
+      await runtime.turnEntries(key, selected.record),
+      input.parts,
+    );
+    if (!tail || !edits) return undefined;
+    const record = await runtime.inputRecord(key, latest.identity.requestId);
+    await this.rebinding(lane, () =>
+      runtime.editReply(key, {
+        latest: record ?? undefined,
+        revision: input.revision,
+        tail: tail.id,
+        edits,
+      }),
+    );
+    const updated = await conversation.context(BACKGROUND_CONTEXT);
+    const checkpoint =
+      updated.head && (CompactionEntry.is(updated.head) || ResetEntry.is(updated.head))
+        ? createPiContextCheckpoint(latest.identity.turnId, updated.messages)
+        : null;
+    return {
+      contextCheckpoint: checkpoint
+        ? { assistantMessageId: latest.assistantMessageId, checkpoint }
+        : null,
+    };
   }
 
   async abort(lane: RuntimeLane) {
@@ -644,6 +700,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     lane: RuntimeLane,
     record: SubmissionRecord,
     metadata: JsonObject | undefined,
+    options?: { fullReasoning?: boolean },
   ) {
     const runtime = this.requireRuntime();
     const conversation = await runtime.conversation(laneKey(lane));
@@ -655,6 +712,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       metadata,
       entries: await runtime.turnEntries(laneKey(lane), record),
       active,
+      fullReasoning: options?.fullReasoning,
       inherited: record.conversationId !== conversation.id,
     });
   }
@@ -691,22 +749,25 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               models: false,
               // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
               inlineBudget: 0,
+              maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [
                 { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
               ],
-              writeOutput: async (name, data, api, context) => {
-                const writer = this.requirePorts().writeToolOutput;
-                if (!writer) return { error: 'Managed output storage is unavailable.' };
+              writeOutput: async (name, data, api, context, storeWrites) => {
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(lane, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
+                // Text overflow is an intermediate, not a generated user document. Images remain deliverables.
+                if (typeof data === 'string')
+                  return retainPiCodemodeOutput(name, data, api, context, storeWrites);
+                const writer = this.requirePorts().writeToolOutput;
+                if (!writer) return { error: 'Managed output storage is unavailable.' };
                 try {
                   const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
                   const artifact =
-                    previous?.outputs[name] ??
-                    (await writer(identity, { name, data: fitPiCodemodeOutput(data) }, signal));
+                    previous?.outputs[name] ?? (await writer(identity, { name, data }, signal));
                   await api.commit(async (tx) => {
                     (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = artifact;
                   }, context);
@@ -880,7 +941,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   private async taskIdentity(
     lane: RuntimeLane,
-    api: HookApi,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
     context: Context,
   ): Promise<RuntimeExecutionIdentity> {
     const inputs = await this.requireRuntime().inputsForTask(api, context);

@@ -26,15 +26,21 @@ export function answerPreview(parts: readonly CherryMessagePart[] | undefined): 
       : [],
   );
   const text = texts.map((resolved) => resolved.markdown).join('\n\n');
-  const characters = Array.from(text);
+  // Count and cut without materializing the answer as character arrays; the cut scans only the preview.
+  let length = 0;
+  for (const resolved of texts)
+    for (const character of resolved.plainText) if (!/\s/.test(character)) length += 1;
+
+  let end = 0;
+  let characters = 0;
+  for (const character of text) {
+    if (characters === ANSWER_PREVIEW_LENGTH) break;
+    end += character.length;
+    characters += 1;
+  }
   return {
-    isTruncated: characters.length > ANSWER_PREVIEW_LENGTH,
-    length: Array.from(texts.map((resolved) => resolved.plainText).join('')).filter(
-      (character) => !/\s/.test(character),
-    ).length,
-    text:
-      characters.length > ANSWER_PREVIEW_LENGTH
-        ? characters.slice(0, ANSWER_PREVIEW_LENGTH).join('')
-        : text,
+    isTruncated: end < text.length,
+    length,
+    text: text.slice(0, end),
   };
 }

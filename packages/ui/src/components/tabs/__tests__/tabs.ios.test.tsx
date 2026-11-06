@@ -6,6 +6,14 @@ import { duration } from '../../../motion';
 import { Tabs } from '../tabs.ios';
 import type { TabsItemState } from '../tabs.types';
 
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
 jest.mock('expo-glass-effect', () => ({
   GlassView: ({ children, ...props }: { children?: ReactNode }) => {
     const React = jest.requireActual('react');

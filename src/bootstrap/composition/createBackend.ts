@@ -1,5 +1,7 @@
+import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
+import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import {
@@ -75,6 +77,8 @@ import {
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
+import { createUuRemoteModule } from '@/backend/services/uuRemote';
+import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -82,6 +86,7 @@ import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
   backend: Backend;
@@ -89,7 +94,9 @@ export type BackendComposition = {
   hasPendingSkillStorageWork(): boolean;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
+  disposeVoice(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
+  disposeUuRemote(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -103,6 +110,7 @@ export type BackendComposition = {
 export function createBackend(
   services: BackendServices,
   infrastructure: {
+    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice'>;
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
@@ -324,13 +332,43 @@ export function createBackend(
   });
 
   services.agent.configureSkills(skills);
+  const appLanguage = (preference: string | null) =>
+    resolveAppLanguage(
+      preference,
+      getLocales().map((locale) => locale.languageTag),
+    );
+  const voice = createVoice({
+    preference: services.preference,
+    permissions: services.devicePermissions,
+    language: () => appLanguage(services.preference.readCached('app.language')),
+    transcriptionLanguage: () =>
+      appLanguage(
+        services.preference.readCached('feature.voice.transcription_language') ??
+          services.preference.readCached('app.language'),
+      ),
+    dictationLanguage: () =>
+      appLanguage(
+        services.preference.readCached('feature.voice.dictation_language') ??
+          services.preference.readCached('app.language'),
+      ),
+  });
+
+  infrastructure.agentHostDependencies.configureVoice(voice.module);
 
   const appUpdate = createAppUpdateModule({
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
   });
+  const uuRemote = createUuRemoteModule({
+    connectionExists: async (id) => {
+      const connection = await desktopStore.getById(id).catch(() => null);
+      return connection !== null;
+    },
+  });
 
   return {
+    disposeVoice: voice.dispose,
     disposeAppUpdate: appUpdate.dispose,
+    disposeUuRemote: uuRemote.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -354,10 +392,11 @@ export function createBackend(
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
+      uuRemote: uuRemote.module,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
       file: {
-        observePdfOcr: services.fileContent.observePdfOcr,
+        observeFileOcr: services.fileContent.observeFileOcr,
         createInternalEntry: services.fileContent.createInternalEntry,
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,
         editImage: services.fileContent.editImage,
@@ -401,6 +440,7 @@ export function createBackend(
         models: services.model,
       }),
       webSearch: services.webSearch,
+      voice: voice.module,
     },
     dataApiDependencies: {
       agentAvatars,

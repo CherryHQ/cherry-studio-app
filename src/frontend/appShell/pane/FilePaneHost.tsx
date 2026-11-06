@@ -27,7 +27,7 @@ type FilePaneContent = {
  */
 export function FilePaneHost({ children, ...content }: FilePaneContent & { children: ReactNode }) {
   const pane = useFilePane();
-  const { chatTop, insets, isLayoutCurrent, measure, split } = usePaneSplit();
+  const { chatTop, insets, isLayoutCurrent, split } = usePaneSplit();
   const isTypingInChat = useIsTypingBelow(chatTop);
   // An expanded preview covers the chat; only assistive technologies need to be told.
   const isChatCovered = Boolean(
@@ -39,7 +39,7 @@ export function FilePaneHost({ children, ...content }: FilePaneContent & { child
   );
 
   return (
-    <View className={split.direction === 'row' ? 'flex-1 flex-row' : 'flex-1'} onLayout={measure}>
+    <View className={split.direction === 'row' ? 'flex-1 flex-row' : 'flex-1'}>
       <FoldRegionReporter />
       {pane ? (
         <FilePaneColumn

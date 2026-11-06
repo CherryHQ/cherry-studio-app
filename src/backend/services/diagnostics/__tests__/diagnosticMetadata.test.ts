@@ -1,4 +1,5 @@
 import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { PluginError } from '@/shared/contracts/plugins';
 import { createLogRecord } from '@/shared/core/logger/LoggerService';
 import type { TraceSpanRecord } from '@/shared/data/types/trace';
@@ -22,6 +23,27 @@ const trace: TraceSpanRecord = {
   endedAt: 200,
   durationMs: 100,
 };
+
+test('retains admission rejection codes through log persistence and export without private text', () => {
+  const error = new AgentProtocolError({
+    code: 'SESSION_BUSY',
+    message: 'private session details',
+    retryable: true,
+  });
+  const raw = createLogRecord('error', 'Agent operation failed', 'DurableAgentHost', {}, [
+    { operation: 'ai.admission', error },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  expect(persisted?.facts).toEqual({
+    operation: 'ai.admission',
+    'error.type': 'AgentProtocolError',
+    'error.code': 'SESSION_BUSY',
+    'error.retryable': true,
+  });
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported).toEqual(persisted);
+  expect(JSON.stringify(exported)).not.toMatch(/private|stack|view/);
+});
 
 test('retains useful error facts without free text, credentials, payloads or stack traces', () => {
   const error = Object.assign(
@@ -108,6 +130,43 @@ test('retains startup timings through file export while rejecting other info log
     },
   });
   expect(JSON.stringify(value)).not.toMatch(/private|stack|path|language/);
+  expect(projectDiagnosticLog({ ...raw, message: 'arbitrary info' })).toBeUndefined();
+  expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
+});
+
+test('retains Office stage timings through file export without document contents or unrelated info logs', () => {
+  const raw = createLogRecord('info', 'Office stage', 'Office', {}, [
+    {
+      operation: 'office.sandbox_execution',
+      toolCallId: 'call-1',
+      capabilityId: 'run_office_script',
+      outcome: 'ended',
+      durationMs: 125,
+      path: '/private/report.xlsx',
+      arguments: { code: 'private document script' },
+      document: 'private document contents',
+    },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  const exported = projectDiagnosticLine(
+    { tooLarge: false, data: new TextEncoder().encode(JSON.stringify(persisted)) },
+    'logs',
+    { fromMs: 0, toMs: Date.now() + 1000 },
+  );
+  if (!exported || exported === 'malformed') throw new Error('Expected Office metadata');
+  expect(JSON.parse(new TextDecoder().decode(exported.data))).toMatchObject({
+    level: 'info',
+    module: 'Office',
+    message: 'Office stage',
+    facts: {
+      operation: 'office.sandbox_execution',
+      toolCallId: 'call-1',
+      capabilityId: 'run_office_script',
+      outcome: 'ended',
+      durationMs: 125,
+    },
+  });
+  expect(new TextDecoder().decode(exported.data)).not.toMatch(/private|arguments|document/);
   expect(projectDiagnosticLog({ ...raw, message: 'arbitrary info' })).toBeUndefined();
   expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
 });

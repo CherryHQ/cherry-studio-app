@@ -1,3 +1,4 @@
+import type { AgentReplyPartEdit } from '@/shared/contracts/agent';
 import { MAX_PARALLEL_ANSWERS } from '@/shared/contracts/agent/inputs';
 
 import type { TraceSpan } from '../../observability';
@@ -30,6 +31,7 @@ export type RuntimeSqlValue = null | number | bigint | string | Uint8Array;
 export interface RuntimeSqlExecutor {
   exec(sql: string): Promise<void>;
   run(sql: string, ...params: RuntimeSqlValue[]): Promise<void>;
+  runCounted(sql: string, ...params: RuntimeSqlValue[]): Promise<number>;
   get<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row | undefined>;
   all<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row[]>;
 }
@@ -268,6 +270,24 @@ export interface DurableAgentRuntime {
     signal?: AbortSignal,
   ): Promise<void>;
   configure(lane: RuntimeLane, configuration: RuntimeConversationConfiguration): Promise<void>;
+  /**
+   * Replaces answer text parts anywhere in this copy's history without replaying tools or changing
+   * provider affinity. Undefined means this copy cannot represent the edit and Cherry must rebuild
+   * it. On success, atomically advances the binding to revision + 1 before Cherry commits the same
+   * history revision. A compacted copy returns its refreshed context for its newest answer.
+   */
+  editReply(
+    lane: RuntimeLane,
+    input: { messageId: string; revision: number; parts: readonly AgentReplyPartEdit[] },
+  ): Promise<
+    | {
+        contextCheckpoint: {
+          assistantMessageId: string;
+          checkpoint: RuntimeContextCheckpoint;
+        } | null;
+      }
+    | undefined
+  >;
   submit(lane: RuntimeLane, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
   observe(
     lane: RuntimeLane,
@@ -286,6 +306,7 @@ export interface DurableAgentRuntime {
   message(
     lane: RuntimeLane,
     messageId: string,
+    options?: { fullReasoning?: boolean },
   ): Promise<{ turn: RuntimeDurableTurn; role: 'user' | 'assistant' } | undefined>;
   exportTurn(
     lane: RuntimeLane,

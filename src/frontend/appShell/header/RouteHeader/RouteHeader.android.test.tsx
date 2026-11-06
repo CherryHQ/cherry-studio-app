@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PaneChromeProvider } from '@/frontend/appShell/layout';
+import { type SidebarToggle, SidebarToggleContext } from '@/frontend/appShell/sidebar/toggle';
 
 import { RouteHeader } from './RouteHeader';
 import { RouteHeaderProvider } from './RouteHeaderProvider';
@@ -73,6 +74,40 @@ describe('RouteHeader.android', () => {
     await renderRouteHeader(<RouteHeader title="Viewer" />, 'close');
 
     expect(getLeadingAction().accessibilityLabel).toBe('common.close');
+  });
+
+  it('hides and shows a wide column from the same sidebar button', async () => {
+    const setCollapsed = jest.fn();
+
+    await renderRouteHeader(<RouteHeader title="Agents" />, 'drawer', {
+      action: 'hide',
+      setCollapsed,
+    });
+    expect(getLeadingAction().accessibilityLabel).toBe('navigation.hideMenu');
+    getLeadingAction().onPress();
+    expect(setCollapsed).toHaveBeenLastCalledWith(true);
+
+    await renderRouteHeader(<RouteHeader title="Agents" />, 'drawer', {
+      action: 'show',
+      setCollapsed,
+    });
+    expect(getLeadingAction().accessibilityLabel).toBe('navigation.showMenu');
+    getLeadingAction().onPress();
+    expect(setCollapsed).toHaveBeenLastCalledWith(false);
+  });
+
+  it('leads with nothing where the column has no button, and keeps an intercepted back', async () => {
+    await renderRouteHeader(<RouteHeader title="Agents" />, 'drawer', null);
+
+    const headerLeft = getOptions().headerLeft as () => ReactElement<{ actions: unknown[] }>;
+    expect(headerLeft().props.actions).toEqual([]);
+
+    const onBack = jest.fn();
+    await renderRouteHeader(<RouteHeader onBack={onBack} title="Agents" />, 'drawer');
+
+    expect(getLeadingAction().accessibilityLabel).toBe('navigation.back');
+    getLeadingAction().onPress();
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('clears custom title and right actions when later states omit them', async () => {
@@ -220,9 +255,14 @@ describe('RouteHeader.android', () => {
   async function renderRouteHeader(
     element: ReactElement,
     rootAction: 'back' | 'close' | 'drawer' = 'back',
+    sidebar: SidebarToggle | null = { action: 'open', setCollapsed: jest.fn() },
   ) {
     await act(async () => {
-      const tree = <RouteHeaderProvider rootAction={rootAction}>{element}</RouteHeaderProvider>;
+      const tree = (
+        <SidebarToggleContext value={sidebar ?? undefined}>
+          <RouteHeaderProvider rootAction={rootAction}>{element}</RouteHeaderProvider>
+        </SidebarToggleContext>
+      );
 
       if (renderer) {
         renderer.update(tree);

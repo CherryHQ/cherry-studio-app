@@ -118,9 +118,8 @@ function FileViewer({
           file={file}
           imageEditRequestId={imageEditRequestId}
           key={`${file.entry.updatedAt}:${file.uri}`}
-          sourceChat={sourceChat}
         />
-      ) : kind === 'document' ? (
+      ) : kind === 'document' || kind === 'audio' ? (
         <FileDocumentViewer file={file} sourceChat={sourceChat} key={file.entry.id} />
       ) : (
         <FileTextViewer

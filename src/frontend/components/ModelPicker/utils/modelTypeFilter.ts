@@ -1,13 +1,8 @@
 import type { Model } from '@/shared/data/types/model';
-import {
-  isImageGenerationModel,
-  isSpeechToTextModel,
-  isTextGenerationModel,
-  isTextToSpeechModel,
-} from '@/shared/utils/modelPurpose';
+import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 /** Product-selectable model families currently shipped on mobile. */
-export const MODEL_TYPE_FILTERS = ['all', 'text', 'image', 'speech', 'transcription'] as const;
+export const MODEL_TYPE_FILTERS = ['all', 'text', 'image'] as const;
 
 export type ModelTypeFilter = (typeof MODEL_TYPE_FILTERS)[number];
 
@@ -17,10 +12,6 @@ export function matchesModelTypeFilter(model: Model, filter: ModelTypeFilter): b
       return isTextGenerationModel(model);
     case 'image':
       return isImageGenerationModel(model);
-    case 'speech':
-      return isTextToSpeechModel(model);
-    case 'transcription':
-      return isSpeechToTextModel(model);
     default:
       return true;
   }

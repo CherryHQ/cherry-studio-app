@@ -46,6 +46,7 @@ export function MessageList({
   onLoadNewer,
   onReturnToLatest,
   onReady,
+  onTargetRestored,
   renderMessage,
 }: MessageListProps) {
   const { t } = useTranslation();
@@ -73,6 +74,7 @@ export function MessageList({
     listRef,
     messages,
     onReady,
+    onTargetRestored,
     onReturnToLatest,
   });
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
@@ -115,7 +117,7 @@ export function MessageList({
       const viewport = viewportHeight.get();
       // Match the keyboard adapter's capped inset, including short conversations
       // that become scrollable only once the keyboard covers part of the list.
-      const inset = Math.min(viewport, keyboardLift.get());
+      const inset = Math.min(viewport, (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get());
       return {
         dataKey,
         isAtBottom:
@@ -142,7 +144,7 @@ export function MessageList({
       if (content.dataKey !== dataKey || viewport <= 0) {
         return { dataKey, isInView: true };
       }
-      const inset = Math.min(viewport, keyboardLift.get());
+      const inset = Math.min(viewport, (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get());
       return {
         dataKey,
         isInView: isMessageListLiveTailInView(
@@ -209,11 +211,15 @@ export function MessageList({
           >
             {(scrollHandlers) => (
               <KeyboardAwareLegendList
+                // Give each window its own list: LegendList calls set$('readyToRender') during render on dataKey changes,
+                // triggering React's "Cannot update a component while rendering a different component" warning.
+                key={dataKey ?? 'live'}
                 ref={listRef}
                 {...scrollHandlers}
                 applyWorkaroundForContentInsetHitTestBug
                 contentContainerStyle={contentContainerStyle}
                 contentInsetAdjustmentBehavior="never"
+                contentInsetEndAdjustment={bottomAccessoryHeight}
                 data={messages}
                 {...(dataKey ? { dataKey } : {})}
                 drawDistance={80}

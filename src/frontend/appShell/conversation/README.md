@@ -34,6 +34,21 @@ page (`features/chat/runtime`), which projects its own client state into the sha
 Local execution settles in-process, so the shared contract never needs pending or interrupted
 outcomes, revisioned history windows or deferred content from this source.
 
+The local Session catalog lists root conversations first. Its optional `listSessionChildren`
+capability reads a single parent's direct children in stable creation order, only while that node
+is expanded. Summaries retain `forkedFromSessionId`, `createdAt` and `hasChildren`; relationship
+geometry and disclosure state belong to the sidebar. `readSessionPath` returns root-first metadata
+through the selected Session in one read, so a deep selection can be located without serial parent
+requests. Child cursors are scoped to their parent, and both child and path queries refresh with
+Session metadata changes. Sources without those capabilities retain their existing list behavior.
+
+Collapsed family previews and Agent previews share a status-only subscription. Only Sessions with
+a status in the current Host generation need a metadata path read; groups never expand their
+child pages or open transcripts to compute a hint. The last group reader cancels unfinished path
+reads and releases status/read-mark subscriptions. Metadata changes invalidate paths, and read
+marks clear completed hints. Required approval, required reply, progress, failure and unread
+completion are prioritized in that order when several Sessions have different states.
+
 ## Remote
 
 `remote/` is the desktop-owned contract and its consumers. `remoteContracts.ts` adds what the

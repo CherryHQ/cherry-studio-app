@@ -10,6 +10,8 @@ import type { MessageTranslations } from '@/shared/data/types/messageTranslation
 import type { Model } from '@/shared/data/types/model';
 
 export type MessageListItem = Readonly<{
+  /** Local Agent origin for on-demand reasoning reads; remote parts already own their text. */
+  agentSessionId?: string;
   /** Timeline position; synthetic rows inherit the adjacent persisted timestamp. */
   createdAt?: string;
   data: Readonly<{
@@ -60,6 +62,7 @@ export type MessageListItem = Readonly<{
 }>;
 
 export type MessageListProps = {
+  /** Floating content reserved through the keyboard adapter without resizing the viewport. */
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
@@ -79,6 +82,7 @@ export type MessageListProps = {
   onLoadNewer?: () => Promise<void>;
   onReturnToLatest?: () => void;
   onReady?: () => void;
+  onTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
   renderMessage: MessageRenderer;
 };
 

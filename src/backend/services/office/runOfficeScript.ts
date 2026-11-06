@@ -25,6 +25,7 @@ export function createOfficeScriptCode(
   format: OfficeFormat,
   script: string,
   inputs: Readonly<Record<string, Pick<OfficeScriptInput, 'name' | 'mediaType' | 'size'>>>,
+  againstId?: string,
 ): string {
   const described = Object.fromEntries(
     Object.entries(inputs).map(([id, input], index) => [
@@ -53,11 +54,16 @@ const inputs = (() => {
     },
   });
 })();
+// Keep the comparison snapshot outside the script's mutable inputs and byte views.
+const publishOfficeOutput = (() => {
+  const original = ${againstId ? `readInput(${described[againstId].index}).slice()` : 'undefined'};
+  return output => saveOffice(output, '${format}', original);
+})();
 const output = await (async () => {
 ${script}
 })();
 if (output === undefined || output === null) return null;
-return saveOffice(output, '${format}', true);
+return publishOfficeOutput(output);
 `;
 }
 
@@ -66,28 +72,36 @@ export async function runOfficeScript(input: {
   format: OfficeFormat;
   script: string;
   inputs: Readonly<Record<string, OfficeScriptInput>>;
+  againstId?: string;
   output: string;
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
+  onStage?: (
+    stage: 'prepare_script' | 'sandbox_queue' | 'sandbox_execution' | 'decode_result',
+  ) => void;
 }): Promise<{ size: number | null; logs: string }> {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
-    const code = createOfficeScriptCode(input.format, input.script, input.inputs);
+    input.onStage?.('prepare_script');
+    const code = createOfficeScriptCode(input.format, input.script, input.inputs, input.againstId);
     const files = Object.values(input.inputs);
+    input.onStage?.('sandbox_queue');
     submitted = true;
     const outcome = await input.sandbox.run({
       code,
       files: { inputs: files.map((file) => file.uri), output: input.output },
       signal: input.signal,
       onSettled: input.onSettled,
+      onStarted: () => input.onStage?.('sandbox_execution'),
       limits: {
         ...officeLimits(files.reduce((total, file) => total + file.size, 0)),
         maxLogBytes: 16 * 1024,
       },
     });
     input.signal.throwIfAborted();
+    input.onStage?.('decode_result');
     if (outcome.status === 'error') {
       // The model fixes its own script, so it needs the engine's message and its console output.
       const logs = outcome.logs ? `\nConsole:\n${outcome.logs}` : '';

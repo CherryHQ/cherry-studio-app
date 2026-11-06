@@ -76,6 +76,31 @@ jest.mock('expo-media-library', () => {
   };
 });
 
+// Voice native libraries resolve their modules at import time. Voice engine suites replace them
+// with explicit fakes; unrelated suites only import them through backend composition.
+jest.mock('expo-audio', () => ({
+  setAudioModeAsync: jest.fn(),
+}));
+jest.mock('expo-speech', () => ({
+  getAvailableVoicesAsync: jest.fn(async () => []),
+  maxSpeechInputLength: 4000,
+  speak: jest.fn(),
+  stop: jest.fn(async () => undefined),
+}));
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: {
+    abort: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    getPermissionsAsync: jest.fn(),
+    getDefaultRecognitionService: jest.fn(() => ({ packageName: '' })),
+    getSpeechRecognitionServices: jest.fn(() => []),
+    isRecognitionAvailable: jest.fn(() => false),
+    requestPermissionsAsync: jest.fn(),
+    start: jest.fn(),
+    stop: jest.fn(),
+  },
+}));
+
 // The library resolves its native module at import time. Its own jest entry is
 // the sanctioned stand-in and keeps the hooks/event emitters callable, which the
 // chat list needs the moment it imports KeyboardEvents.
@@ -88,6 +113,13 @@ jest.mock('react-native-keyboard-controller', () =>
 // shipped entry renders a real `TextInput` and turns every imperative method
 // into a spy, which is what lets mention insertion be asserted at all.
 jest.mock('react-native-enriched-markdown', () => require('react-native-enriched-markdown/jest'));
+
+// Its module registers a TurboModule at import time. Markdown reaches it through Mermaid diagrams,
+// so every Markdown consumer would otherwise fail to load; an inert element keeps props inspectable.
+jest.mock('react-native-webview', () => {
+  const { createElement } = jest.requireActual('react');
+  return { WebView: (props: object) => createElement('WebView', props) };
+});
 
 // Minimal Skia surface for components that render under test (AnimatedText):
 // declarative elements become inert nodes and matchFont hands back fixed
@@ -185,6 +217,7 @@ jest.mock('react-native-gesture-handler', () => {
 
   return {
     Gesture: new Proxy({}, { get: () => () => createChainableGesture() }),
+    useLongPressGesture: (config: unknown) => config,
     GestureDetector: ({ children }: { children?: unknown }) => children,
     GestureHandlerRootView: ({ children, ...props }: { children?: unknown }) =>
       react.createElement(View, props, children),

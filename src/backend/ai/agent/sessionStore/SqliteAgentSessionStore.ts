@@ -23,6 +23,7 @@ import {
   agentMessageViewSqlColumns,
   fromAgentMessageViewSqlRow,
   toAgentMessageView,
+  toReadableAgentMessageViews,
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
@@ -33,6 +34,7 @@ import {
   type AgentSessionView,
 } from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
+import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -41,6 +43,8 @@ import type {
   AgentSessionStore,
   DeleteTurnInput,
   DeleteTurnResult,
+  EditMessageInput,
+  EditMessageResult,
   FinalizeAssistantMessageInput,
   ForkedMessageCopy,
   ForkSessionInput,
@@ -364,11 +368,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
             anchor.role === 'assistant'
               ? (anchor.stats?.runtimeTiming?.completedAt ?? anchor.createdAt)
               : anchor.createdAt,
-          // Falls back to the source's name. Auto-naming will not rewrite
-          // either form later, because neither is empty nor matches the
-          // first-user-message name the naming policy expects to overwrite.
+          // Keep the source title until the fork admits its own first input.
           name: input.name ?? source.name,
-          isNameManuallyEdited: source.isNameManuallyEdited,
+          isNameManuallyEdited: false,
         })
         .returning();
 
@@ -407,8 +409,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // Ids are generated here in transcript order, so they stay monotonic
       // across the chunked multi-row inserts below. The copy is one straight
       // branch: each row's parent is the previous copied row.
+      const copiedIds = new Map(copied.map((row) => [row.id, createOrderedUuid()]));
       const copiedRows = copied.map((row) => {
-        const copiedMessageId = createOrderedUuid();
+        const copiedMessageId = copiedIds.get(row.id)!;
         const copiedParentId = parentId;
         parentId = copiedMessageId;
         const copiedTurnId = reissueTurnId(forkedTurnIds, row.turnId);
@@ -426,7 +429,24 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // holds because createdAt is the major sort key and the reissued ids
           // break ties in the same direction as the source.
           createdAt: row.createdAt,
-          data: row.data,
+          data: {
+            ...row.data,
+            parts: row.data.parts.map((part) =>
+              part.type === 'text' && part.quotes
+                ? {
+                    ...part,
+                    quotes: [
+                      {
+                        ...part.quotes[0],
+                        sourceMessageId:
+                          copiedIds.get(part.quotes[0].sourceMessageId) ??
+                          part.quotes[0].sourceMessageId,
+                      },
+                    ] as [(typeof part.quotes)[0]],
+                  }
+                : part,
+            ),
+          },
           error: row.error,
           id: copiedMessageId,
           parentId: copiedParentId,
@@ -488,10 +508,110 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async editMessage(input: EditMessageInput): Promise<EditMessageResult> {
+    const result = await this.dbService.withWriteTx(async (tx): Promise<EditMessageResult> => {
+      const [session] = await tx
+        .select()
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .limit(1);
+      if (!session) return { status: 'session-not-found' };
+      const [source] = await tx
+        .select(agentMessageViewColumns)
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.id, input.messageId),
+          ),
+        )
+        .limit(1);
+      if (!source) return { status: 'message-not-found' };
+      const [unsettled] = await tx
+        .select({ id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+          ),
+        )
+        .limit(1);
+      const parts = applyReplyEdits(source.data.parts, input.parts);
+      if (
+        session.runtimeRevision !== input.expectedRevision ||
+        source.role !== 'assistant' ||
+        source.status !== 'success' ||
+        !source.turnId ||
+        unsettled ||
+        !parts
+      )
+        return { status: 'conflict' };
+
+      const [firstRow] = await tx
+        .select({ createdAt: agentSessionMessageTable.createdAt, id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, source.turnId),
+          ),
+        )
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id)
+        .limit(1);
+      // Later checkpoints may retain the old answer verbatim. Rebuilding falls back to an earlier
+      // one and replays the edited transcript, unless a copy refreshes its newest answer below.
+      await clearCheckpointsFrom(tx, input.sessionId, firstRow!);
+      const data = { ...source.data, parts };
+      delete data.translations;
+      const [row] = await tx
+        .update(agentSessionMessageTable)
+        .set({
+          data,
+          searchableText: toSearchableText(parts),
+          stats: source.stats ? { ...source.stats, contextTokens: undefined } : null,
+        })
+        .where(eq(agentSessionMessageTable.id, source.id))
+        .returning(agentMessageViewColumns);
+      for (const { assistantMessageId, checkpoint } of input.contextCheckpoints)
+        await tx
+          .update(agentSessionMessageTable)
+          .set({ contextCheckpoint: checkpoint })
+          .where(
+            and(
+              eq(agentSessionMessageTable.sessionId, input.sessionId),
+              eq(agentSessionMessageTable.id, assistantMessageId),
+              eq(agentSessionMessageTable.turnId, checkpoint.anchorTurnId),
+              eq(agentSessionMessageTable.status, 'success'),
+            ),
+          );
+
+      await tx
+        .update(agentSessionTable)
+        .set({
+          runtimeRevision: input.expectedRevision + 1,
+          lastActivityAt: Date.now(),
+        })
+        .where(eq(agentSessionTable.id, session.id));
+      return { status: 'edited', message: toAgentMessageView(row) };
+    });
+    if (result.status === 'edited')
+      publishDataApiChanges([
+        '/agent-sessions',
+        `/agent-sessions/${input.sessionId}`,
+        `/agent-sessions/${input.sessionId}/messages`,
+      ]);
+    return result;
+  }
+
   async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
     const result = await this.dbService.withWriteTx(async (tx): Promise<DeleteTurnResult> => {
       const [session] = await tx
-        .select({ id: agentSessionTable.id })
+        .select({
+          id: agentSessionTable.id,
+          activeNodeId: agentSessionTable.activeNodeId,
+          forkBoundaryMessageId: agentSessionTable.forkBoundaryMessageId,
+        })
         .from(agentSessionTable)
         .where(eq(agentSessionTable.id, input.sessionId))
         .limit(1);
@@ -499,7 +619,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         return { status: 'session-not-found' };
       }
 
-      const turnRows = await tx
+      let turnRows = await tx
         .select({
           createdAt: agentSessionMessageTable.createdAt,
           id: agentSessionMessageTable.id,
@@ -518,6 +638,32 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (turnRows.length === 0) {
         return { status: 'turn-not-found' };
       }
+      const answer = input.messageId
+        ? turnRows.find((row) => row.id === input.messageId && row.role === 'assistant')
+        : undefined;
+      if (input.messageId && !answer) return { status: 'turn-not-found' };
+      const branchDeleted = Boolean(
+        answer &&
+        turnRows.some(
+          (row) =>
+            row.role === 'assistant' && row.id !== answer.id && row.parentId === answer.parentId,
+        ),
+      );
+      if (branchDeleted) {
+        turnRows = await tx.all<(typeof turnRows)[number]>(sql`
+          WITH RECURSIVE branch(id) AS (
+            SELECT id FROM agent_session_message
+            WHERE session_id = ${input.sessionId} AND id = ${answer!.id}
+            UNION ALL
+            SELECT child.id FROM agent_session_message AS child
+            JOIN branch ON child.parent_id = branch.id
+            WHERE child.session_id = ${input.sessionId}
+          )
+          SELECT id, parent_id AS "parentId", role, status, created_at AS "createdAt"
+          FROM agent_session_message WHERE id IN (SELECT id FROM branch)
+          ORDER BY created_at, id
+        `);
+      }
       if (
         turnRows.some((row) =>
           (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(row.status),
@@ -526,46 +672,56 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         return { status: 'turn-unsettled' };
       }
 
-      // Checkpoint summaries cover everything up to their anchor turn, and the
-      // store cannot read inside the opaque payload. Any checkpoint whose
-      // anchor does not sit strictly before this turn may therefore have
-      // absorbed it, so it is dropped rather than replayed. An anchor that no
-      // longer resolves fails the same test and is cleared with them.
-      const [firstRow] = turnRows;
-      await tx
-        .update(agentSessionMessageTable)
-        .set({ contextCheckpoint: null })
-        .where(
-          and(
-            eq(agentSessionMessageTable.sessionId, input.sessionId),
-            isNotNull(agentSessionMessageTable.contextCheckpoint),
-            sql`NOT EXISTS (
-              SELECT 1 FROM agent_session_message AS anchor
-              WHERE anchor.session_id = ${input.sessionId}
-                AND anchor.turn_id = json_extract(${agentSessionMessageTable.contextCheckpoint}, '$.anchorTurnId')
-                AND (anchor.created_at < ${firstRow.createdAt}
-                  OR (anchor.created_at = ${firstRow.createdAt} AND anchor.id < ${firstRow.id})))`,
-          ),
-        );
+      await clearCheckpointsFrom(tx, input.sessionId, turnRows[0]!);
 
       const deletedMessageIds = turnRows.map((row) => row.id);
+      const deletedIds = new Set(deletedMessageIds);
       await tx
         .update(agentSessionTable)
-        .set({ runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1` })
+        .set({
+          runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+          ...(session.forkBoundaryMessageId && deletedIds.has(session.forkBoundaryMessageId)
+            ? { forkBoundaryMessageId: null }
+            : {}),
+        })
         .where(eq(agentSessionTable.id, input.sessionId));
-      // The boundary column is application-owned, so the delete below would
-      // otherwise leave this Session pointing at a row that no longer exists.
-      await tx
-        .update(agentSessionTable)
-        .set({ forkBoundaryMessageId: null })
-        .where(
-          and(
-            eq(agentSessionTable.id, input.sessionId),
-            inArray(agentSessionTable.forkBoundaryMessageId, deletedMessageIds),
-          ),
-        );
-
-      await removeTurnRows(tx, input.sessionId, turnRows);
+      if (branchDeleted) {
+        // Break every edge before deleting: deep histories must not depend on SQLite's
+        // trigger depth, and each batch stays below its historical parameter limit.
+        const batchSize = 200;
+        for (let offset = 0; offset < deletedMessageIds.length; offset += batchSize) {
+          await tx
+            .update(agentSessionMessageTable)
+            .set({ parentId: null })
+            .where(
+              inArray(
+                agentSessionMessageTable.id,
+                deletedMessageIds.slice(offset, offset + batchSize),
+              ),
+            );
+        }
+        for (let offset = 0; offset < deletedMessageIds.length; offset += batchSize) {
+          await tx
+            .delete(agentSessionMessageTable)
+            .where(
+              inArray(
+                agentSessionMessageTable.id,
+                deletedMessageIds.slice(offset, offset + batchSize),
+              ),
+            );
+        }
+        if (session.activeNodeId && deletedIds.has(session.activeNodeId)) {
+          const [leaf] = await tx.all<{ id: string }>(
+            newestLeafIdSql(input.sessionId, answer!.parentId!),
+          );
+          await tx
+            .update(agentSessionTable)
+            .set({ activeNodeId: leaf?.id ?? null })
+            .where(eq(agentSessionTable.id, input.sessionId));
+        }
+      } else {
+        await removeTurnRows(tx, input.sessionId, turnRows);
+      }
 
       // Deleting the newest turn must give the Session back its previous
       // activity time; list ordering is recency, and a deleted turn is no
@@ -592,7 +748,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           .where(eq(agentSessionTable.id, input.sessionId));
       }
 
-      return { deletedMessageIds, status: 'deleted' };
+      return {
+        deletedMessageIds,
+        status: 'deleted',
+        ...(branchDeleted ? { branchDeleted: true as const } : {}),
+      };
     });
     if (result.status === 'deleted') {
       publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.sessionId}`]);
@@ -717,7 +877,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return rows.map(toAgentMessageView);
   }
 
-  async getMessage(sessionId: string, messageId: string): Promise<AgentMessageView | null> {
+  async getMessage(
+    sessionId: string,
+    messageId: string,
+    options?: { tolerateInvalidParts?: boolean },
+  ): Promise<AgentMessageView | null> {
     const [row] = await this.dbService
       .getDb()
       .select(agentMessageViewColumns)
@@ -729,7 +893,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         ),
       )
       .limit(1);
-    return row ? toAgentMessageView(row) : null;
+    if (!row) return null;
+    return options?.tolerateInvalidParts
+      ? (toReadableAgentMessageViews([row])[0] ?? null)
+      : toAgentMessageView(row);
   }
 
   async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
@@ -1039,6 +1206,34 @@ function reissueTurnId(reissued: Map<string, string>, turnId: string | null): st
   const next = createOrderedUuid();
   reissued.set(turnId, next);
   return next;
+}
+
+/**
+ * Checkpoint summaries cover everything up to their anchor turn, and the store cannot read inside
+ * the opaque payload. Any checkpoint whose anchor does not sit strictly before the turn starting at
+ * `firstRow` may have absorbed it, so it is dropped rather than replayed. An anchor that no longer
+ * resolves fails the same test and is cleared with them.
+ */
+async function clearCheckpointsFrom(
+  tx: Database,
+  sessionId: string,
+  firstRow: { createdAt: number; id: string },
+) {
+  await tx
+    .update(agentSessionMessageTable)
+    .set({ contextCheckpoint: null })
+    .where(
+      and(
+        eq(agentSessionMessageTable.sessionId, sessionId),
+        isNotNull(agentSessionMessageTable.contextCheckpoint),
+        sql`NOT EXISTS (
+          SELECT 1 FROM agent_session_message AS anchor
+          WHERE anchor.session_id = ${sessionId}
+            AND anchor.turn_id = json_extract(${agentSessionMessageTable.contextCheckpoint}, '$.anchorTurnId')
+            AND (anchor.created_at < ${firstRow.createdAt}
+              OR (anchor.created_at = ${firstRow.createdAt} AND anchor.id < ${firstRow.id})))`,
+      ),
+    );
 }
 
 async function insertSubmission(

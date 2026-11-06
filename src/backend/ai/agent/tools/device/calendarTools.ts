@@ -152,7 +152,7 @@ export function createCalendarTools(deps: DeviceToolDependencies) {
       permissionScopes: ['calendar.read', 'calendar.write'],
       run: (input) => deleteCalendarEvent(input.id),
     }),
-  ];
+  ].map((tool) => ({ ...tool, deferred: true }));
 }
 
 /**

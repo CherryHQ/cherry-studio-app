@@ -44,6 +44,7 @@ export function createFileLibraryTools(
   parser: DocumentParserMode,
   /** The folder's display name, so the model knows which library folder is its workspace. */
   workspaceName?: string,
+  acceptsImages = true,
 ): RuntimeTool[] {
   const libraryReadSchema = readFileInputSchema
     .omit({ path: true })
@@ -89,7 +90,13 @@ export function createFileLibraryTools(
       async execute(call) {
         const parsed = libraryReadSchema.parse(call.input);
         const id = FileEntryIdSchema.parse(parsed.file_entry_id);
-        const reader = createReadFileTool(files, { fileEntryIds: new Set([id]) }, parser);
+        const reader = createReadFileTool(
+          files,
+          { fileEntryIds: new Set([id]) },
+          parser,
+          undefined,
+          acceptsImages,
+        );
         const result = await reader.execute({ ...call, input: parsed });
         if (
           typeof result.value === 'object' &&

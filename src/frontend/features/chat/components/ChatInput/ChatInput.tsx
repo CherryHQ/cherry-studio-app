@@ -35,8 +35,12 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
+import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
+import { attachMessageQuote } from '../../quotes/messageQuoteInput';
+import { DraftMessageQuotePreview } from '../../quotes/MessageQuotePreview';
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
+import { AudioAttachmentNotice } from './components/AudioAttachmentNotice';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
@@ -85,6 +89,21 @@ export function ChatInput({
   sessionId,
   selectionHandoff,
 }: ChatInputProps) {
+  const quoteActions = useChatQuoteActions();
+  const imageAttempt = useRef<ReturnType<NonNullable<typeof quoteActions>['capture']> | undefined>(
+    undefined,
+  );
+  const prepareImagePrompt = useCallback(
+    (text: string) => {
+      imageAttempt.current = quoteActions?.capture();
+      return text;
+    },
+    [quoteActions],
+  );
+  const finishImageAttempt = useCallback(() => {
+    imageAttempt.current?.finish(false);
+    imageAttempt.current = undefined;
+  }, []);
   useChatSelectionHandoff(selectionHandoff);
   const { draft } = useComposerState();
   const { setDraft } = useComposerActions();
@@ -149,12 +168,24 @@ export function ChatInput({
     [providerSetupReturnTo, selectModel, selectedModelId],
   );
   const generateImage = useCallback(
-    (input: PaintingInputSubmission) =>
-      sendMessage({
-        parts: toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
-        modelId: input.modelId,
-        imageGeneration: { mode: input.mode, paramValues: input.paramValues },
-      }),
+    async (input: PaintingInputSubmission) => {
+      const attempt = imageAttempt.current;
+      try {
+        const result = await sendMessage({
+          parts: attachMessageQuote(
+            toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
+            attempt?.fields ?? {},
+          ),
+          modelId: input.modelId,
+          imageGeneration: { mode: input.mode, paramValues: input.paramValues },
+        });
+        attempt?.finish(true);
+        return result;
+      } finally {
+        attempt?.finish(false);
+        imageAttempt.current = undefined;
+      }
+    },
     [sendMessage],
   );
   const cancelGeneration = useCallback(() => {
@@ -171,11 +202,14 @@ export function ChatInput({
         isImageGenerationModel(selectedModelItem.model) &&
         !skillAction ? (
           <PaintingInput
+            accessory={<DraftMessageQuotePreview />}
             canSend={canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             modelSelection={modelSelection}
             onCancel={cancelGeneration}
             onGenerate={generateImage}
+            preparePrompt={prepareImagePrompt}
+            onSubmissionSettled={finishImageAttempt}
             status={isBusy ? 'generating' : 'idle'}
           />
         ) : (
@@ -237,6 +271,7 @@ function TextChatInput({
   selectModel: (modelId: UniqueModelId) => void;
   setReplyModels: (models: readonly UniqueModelId[] | null) => void;
 }) {
+  const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
   const { cancelEdit, commitEdit, editing } = useChatEditDraft();
@@ -294,7 +329,6 @@ function TextChatInput({
   }, [closeModelPicker, openProviderSetup]);
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
-      setOpenPicker(null);
       if (editing) {
         await editMessage(
           buildEditUserMessageInput({
@@ -312,68 +346,79 @@ function TextChatInput({
         commitEdit();
         return;
       }
-      const plugins =
-        mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
-      // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
-      const {
-        skills,
-        skillAction,
-        skillReferences,
-        pluginReferences,
-        text: prompt,
-      } = mode === 'standard'
-        ? readSkillMentions(plugins.text, plugins.pluginReferences)
-        : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
-      // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
-      const selections = readSelectionMentions(prompt);
-      const shifted = <T extends { offset: number }>(references: T[]) =>
-        references.map((reference) => ({
-          ...reference,
-          offset: selections.shift(reference.offset),
-        }));
-      const parts = toAgentInputParts(
-        { attachments, text: selections.text },
-        shifted(pluginReferences),
-        shifted(skillReferences),
-        selections.selectionReferences,
-      );
-      const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
-      for (const context of appContexts)
-        parts.push({ type: 'text', text: toMcpAppContextText(context) });
-      const modelId = replyModels?.[0] ?? selectedModelId;
-      const result = await sendMessage({
-        parts,
-        ...(skillAction ? { skillAction } : {}),
-        ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
-        ...(modelId ? { modelId } : {}),
-        ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
-        ...(reasoningEfforts.length > 0
-          ? {
-              reasoningEffort: getChatInputReasoningEffortSnapshot(
-                reasoningEffort,
-                isReasoningEffortSelected,
-                reasoningEfforts,
-              ),
-            }
-          : {}),
-      });
-      mcpApps?.consumed(appContexts);
-      return result;
+      const attempt = quoteActions?.capture();
+      try {
+        setOpenPicker(null);
+        const plugins =
+          mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
+        // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
+        const {
+          skills,
+          skillAction,
+          skillReferences,
+          pluginReferences,
+          text: prompt,
+        } = mode === 'standard'
+          ? readSkillMentions(plugins.text, plugins.pluginReferences)
+          : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+        // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
+        const selections = readSelectionMentions(prompt);
+        const shifted = <T extends { offset: number }>(references: T[]) =>
+          references.map((reference) => ({
+            ...reference,
+            offset: selections.shift(reference.offset),
+          }));
+        const parts = attachMessageQuote(
+          toAgentInputParts(
+            { attachments, text: selections.text },
+            shifted(pluginReferences),
+            shifted(skillReferences),
+            selections.selectionReferences,
+          ),
+          attempt?.fields ?? {},
+        );
+        const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
+        for (const context of appContexts)
+          parts.push({ type: 'text', text: toMcpAppContextText(context) });
+        const modelId = replyModels?.[0] ?? selectedModelId;
+        const result = await sendMessage({
+          parts,
+          ...(skillAction ? { skillAction } : {}),
+          ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
+          ...(modelId ? { modelId } : {}),
+          ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
+          ...(reasoningEfforts.length > 0
+            ? {
+                reasoningEffort: getChatInputReasoningEffortSnapshot(
+                  reasoningEffort,
+                  isReasoningEffortSelected,
+                  reasoningEfforts,
+                ),
+              }
+            : {}),
+        });
+        mcpApps?.consumed(appContexts);
+        attempt?.finish(true);
+        return result;
+      } finally {
+        attempt?.finish(false);
+      }
     },
     [
       editMessage,
       editing,
       commitEdit,
+      quoteActions,
+      reasoningSelection,
+      sessionId,
       isReasoningEffortSelected,
       mcpApps,
       mode,
       reasoningEffort,
       reasoningEfforts,
       replyModels,
-      reasoningSelection,
       selectedModelId,
       sendMessage,
-      sessionId,
     ],
   );
   const getSendErrorLabel = useCallback(
@@ -456,7 +501,9 @@ function TextChatInput({
                           pointerEvents={isPickerVisible ? 'none' : 'auto'}
                           style={isPickerVisible ? foldedAttachmentsStyle : undefined}
                         >
+                          <DraftMessageQuotePreview />
                           <ComposerAttachments />
+                          <AudioAttachmentNotice />
                           {mode === 'standard' ? <McpAppContextNotice /> : null}
                         </View>
                       </ChatInputAccessories>
@@ -503,6 +550,7 @@ function TextChatInput({
                           />
                         }
                         trailingAction={effortGauge}
+                        dictation
                       />
                     </ChatInputComposer>
                   </>

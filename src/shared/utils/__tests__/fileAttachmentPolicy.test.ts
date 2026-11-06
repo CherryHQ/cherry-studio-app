@@ -22,6 +22,7 @@ const MODEL: FileAttachmentTarget = {
 
 describe('attachment source byte limits', () => {
   test.each([
+    ['recording.mp3', 'audio/mpeg', 100 * 1024 * 1024],
     ['notes.txt', 'text/plain', 5 * 1024 * 1024],
     ['report.pdf', 'application/pdf', 50 * 1024 * 1024],
     [
@@ -107,3 +108,14 @@ function findImageAttachmentLimit(files: readonly ManagedFileFact[], target: Fil
     throw error;
   }
 }
+
+test('audio references are admitted for text chat but never painting input', () => {
+  const file = { ...imageFact(0, 100), mediaType: 'audio/mp4', name: 'meeting.m4a' };
+  expect(fileAttachmentMode(file)).toBe('audio');
+  expect(() =>
+    validateFileAttachments([file], { purpose: 'chat', acceptsImages: false }),
+  ).not.toThrow();
+  expect(() =>
+    validateFileAttachments([file], { purpose: 'painting', acceptsImages: true }),
+  ).toThrow(FileAttachmentError);
+});

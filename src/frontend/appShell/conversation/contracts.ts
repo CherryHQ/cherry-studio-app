@@ -161,11 +161,13 @@ export type ConversationMessage = {
   }[];
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
+    /** Opens the reply editor, which commits its own optimistic edit through the Agent protocol. */
+    edit?: { availability: Availability };
     retry?: ConversationAction<void, ConversationRef | void>;
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
     /** Sends the edited text as a sibling question of this message; the original stays. */
-    edit?: ConversationAction<{ text: string }, void>;
+    editUser?: ConversationAction<{ text: string }, void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
     /** Shows the branch containing another alternative at this message's branch point. */
@@ -226,6 +228,9 @@ export type ConversationSummary = {
   agentId?: string;
   title: string;
   updatedAt?: string;
+  createdAt?: string;
+  forkedFromSessionId?: string | null;
+  hasChildren?: boolean;
 };
 export type ConversationListStatus =
   | 'running'
@@ -244,7 +249,17 @@ export interface ConversationCatalog {
   readonly cacheScope?: QueryScope;
   subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
   readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
-  previewSession?(ref: ConversationRef): ConversationPreview;
+  previewSession?(
+    ref: ConversationRef,
+    options?: { includeDescendants?: boolean },
+  ): ConversationPreview;
+  previewAgent?(ref: AgentRef): Readable<ConversationListStatus | undefined>;
+  listSessionChildren?(
+    parent: ConversationRef,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<ConversationSummary>>;
+  readSessionPath?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary[]>;
   listAgents(
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,

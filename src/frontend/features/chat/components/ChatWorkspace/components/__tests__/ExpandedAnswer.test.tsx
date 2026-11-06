@@ -99,11 +99,20 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 
 jest.mock('@/frontend/components/Avatar', () => ({ ModelAvatar: () => null }));
 
+const mockQuoteSelection = jest.fn();
 jest.mock('@/frontend/components/Message', () => {
   const { createElement } = jest.requireActual('react');
   return {
     AssistantMessage: ({ children, message }: { children: ReactNode; message: MessageListItem }) =>
       createElement('AssistantMessage', { message }, children),
+    MessageSelectionActionProvider: ({
+      action,
+      children,
+    }: {
+      action: unknown;
+      children: ReactNode;
+    }) => createElement('SelectionActionProvider', { action }, children),
+    useMessageSelectionAction: () => ({ label: 'Quote', onPress: mockQuoteSelection }),
   };
 });
 
@@ -209,6 +218,14 @@ describe('ExpandedAnswerProvider', () => {
     act(() => pager().props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 402 } } }));
     expect(mockSelectBranch).not.toHaveBeenCalled();
     expect(title()).toBe('name:a1');
+  });
+
+  test('quoting selected text closes the layer so the composer receives it', async () => {
+    await open('a1');
+    const provider = renderer!.root.findByType('SelectionActionProvider' as never);
+    act(() => provider.props.action.onPress({ messageId: 'a1', text: 'Passage' }));
+    expect(mockQuoteSelection).toHaveBeenCalledWith({ messageId: 'a1', text: 'Passage' });
+    expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 
   test('closing shrinks the layer away', async () => {

@@ -66,10 +66,16 @@ export const AgentEventSchema = z.union([
     delta: AgentMessageDeltaSchema,
   }),
   z.strictObject({ type: z.literal('message.finalized'), message: AgentMessageViewSchema }),
+  z.strictObject({ type: z.literal('message.edited'), message: AgentMessageViewSchema }),
   /** One settled turn left the transcript; its rows are gone, not superseded. */
   z.strictObject({
     type: z.literal('turn.deleted'),
     turnId: z.string().min(1),
+    messageIds: z.array(z.string().min(1)).min(1),
+  }),
+  /** One answer branch was removed; other answers can still share its turn. */
+  z.strictObject({
+    type: z.literal('messages.deleted'),
     messageIds: z.array(z.string().min(1)).min(1),
   }),
   z.strictObject({ type: z.literal('approval.requested'), approval: AgentApprovalViewSchema }),

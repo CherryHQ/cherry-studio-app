@@ -57,6 +57,12 @@ const TRANSPORTS: Record<string, TransportRegistration> = {
     supportsDescriptor: isDashScopeImageDescriptorSupported,
     build: (settings) => buildDashScopeTransport(settings as DashScopeProviderSettings),
   },
+  // QwenCloud uses the same native image protocol with a regional/custom origin.
+  qwencloud: {
+    supports: () => true,
+    supportsDescriptor: isDashScopeImageDescriptorSupported,
+    build: (settings) => buildDashScopeTransport(settings as DashScopeProviderSettings),
+  },
   [MODELSCOPE_PROVIDER_NAME]: {
     supports: () => true,
     build: (settings) => buildModelscopeTransport(settings as ModelscopeProviderSettings),

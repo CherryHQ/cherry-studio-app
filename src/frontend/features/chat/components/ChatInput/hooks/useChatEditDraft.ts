@@ -18,7 +18,9 @@ export function useChatEditDraft() {
   const { attachments, draft } = useComposerState();
   const { addAttachments, clearAttachments, setDraft } = useComposerActions();
   const { editing, endEdit } = useChatEditing();
-  const stash = useRef<{ draft: string; attachments: readonly ComposerAttachmentDraft[] }>();
+  const stash = useRef<
+    { draft: string; attachments: readonly ComposerAttachmentDraft[] } | undefined
+  >(undefined);
   const draftRef = useRef(draft);
   const attachmentsRef = useRef(attachments);
   useLayoutEffect(() => {

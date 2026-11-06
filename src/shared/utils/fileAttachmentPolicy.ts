@@ -4,6 +4,7 @@ import {
   type FileAttachmentTarget,
 } from '@/shared/contracts/fileAttachment';
 
+import { isAudioMediaType, MAX_AUDIO_FILE_BYTES } from './audioFileTypes';
 import { documentFileTypeFromMediaType } from './documentFileTypes';
 import { isAiSupportedImageMediaType } from './imageFileTypes';
 import { isSupportedTextAttachment } from './textFileTypes';
@@ -25,6 +26,7 @@ export const MIN_TEXT_CONTEXT_TOKEN_RESERVE = 1_024;
 export function fileAttachmentMode(file: Pick<FileAttachmentFact, 'mediaType' | 'name'>) {
   if (isAiSupportedImageMediaType(file.mediaType)) return 'image';
   if (documentFileTypeFromMediaType(file.mediaType)) return 'document';
+  if (isAudioMediaType(file.mediaType)) return 'audio';
   if (isSupportedTextAttachment(file)) return 'text';
   return undefined;
 }
@@ -52,17 +54,19 @@ export function validateFileAttachments(
       throw new FileAttachmentError({ ...issue, code: 'unsupported-type' });
     }
     if (mode === 'image') {
-      if (!target.acceptsImages) {
+      if (!target.acceptsImages && target.purpose === 'painting') {
         throw new FileAttachmentError({ ...issue, code: 'model-unsupported' });
       }
-      images.push(file);
+      if (target.acceptsImages) images.push(file);
     }
     const limit =
       mode === 'image'
         ? MAX_IMAGE_ATTACHMENT_BYTES
-        : mode === 'document'
-          ? documentAttachmentByteLimit(file.mediaType)
-          : MAX_TEXT_ATTACHMENT_BYTES;
+        : mode === 'audio'
+          ? MAX_AUDIO_FILE_BYTES
+          : mode === 'document'
+            ? documentAttachmentByteLimit(file.mediaType)
+            : MAX_TEXT_ATTACHMENT_BYTES;
     if (file.size > limit) throw new FileAttachmentError({ ...issue, code: 'file-bytes', limit });
   }
   // Painting models declare how many references they accept; chat images are unbounded.

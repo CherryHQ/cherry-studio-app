@@ -14,8 +14,8 @@ import { FakeRuntime, type RuntimeModel, type RuntimeTool } from '../../runtime'
 import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
+  StoredSkillActivation,
 } from '../../sessionStore/AgentSessionStore';
-import type { StoredSkillActivation } from '../../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
@@ -56,7 +56,6 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['health'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -148,7 +147,7 @@ describe('turn preparation', () => {
         throw new Error('Skills unavailable');
       });
       harness.dependencies.skills = { resolve: resolveSkills };
-      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
       harness.getSystemTools.mockRejectedValue(new Error('Tools unavailable'));
       harness.resolveRuntimeTools.mockRejectedValue(new Error('Plugin connection unavailable'));
       harness.preflightModel.mockResolvedValue({
@@ -197,7 +196,7 @@ describe('turn preparation', () => {
     expect(harness.resolveRuntimeTools).not.toHaveBeenCalled();
   });
 
-  test('minimal mode accepts direct images and still rejects a model without vision', async () => {
+  test('minimal mode accepts direct images and sends OCR text to a model without vision', async () => {
     const harness = createHarness();
     harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
     harness.files.resolveAvailable = async () =>
@@ -222,9 +221,17 @@ describe('turn preparation', () => {
       maxOutputTokens: 8_000,
       supportsTools: false,
     });
-    await expect(
-      prepareTurn(harness.dependencies, input, new AbortController().signal),
-    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    harness.files.readImageText = jest.fn(async () => ({ text: 'Total: 42', truncated: false }));
+    const ocr = await prepareTurn(harness.dependencies, input, new AbortController().signal);
+    expect(ocr.userParts).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        attachmentReport: expect.objectContaining({
+          mode: 'image-text',
+          parser: 'native-image-ocr',
+        }),
+      }),
+    ]);
   });
 
   test('minimal mode rejects documents before parsing or tool discovery', async () => {
@@ -504,8 +511,8 @@ describe('turn preparation', () => {
       workspaceFolderId: null,
       agentId: AGENT.id,
       askUser: harness.askUser,
-      disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
+      acceptsImages: true,
       resources: plan.resources,
       documentParserMode: 'anydoc',
       resolveUsageAttribution: plan.usageAttribution.resolve,
@@ -701,7 +708,7 @@ describe('turn preparation', () => {
     expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
   });
 
-  test('freezes the web policy only for an Agent that may use the web', async () => {
+  test('freezes the web policy independently of Agent mode', async () => {
     const harness = createHarness();
     const policy = {
       modelToolsPreferred: true,
@@ -713,10 +720,10 @@ describe('turn preparation', () => {
       (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal)).webTools;
 
     expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
     expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, disabledCapabilities: ['web'] });
-    expect(await prepare()).toBeUndefined();
+    harness.getAgent.mockResolvedValue({ ...AGENT });
+    expect(await prepare()).toEqual(policy);
   });
 
   test('stops at session admission when the session does not exist', async () => {
@@ -1005,6 +1012,7 @@ function createHarness() {
     resolveAvailable,
     readAsBytes,
     readDocumentText: jest.fn(async () => undefined),
+    readImageText: jest.fn(async () => undefined),
     readAsDataUrl: jest.fn(async () => undefined),
   };
   const systemTool = tool('system_tool', 'ask');

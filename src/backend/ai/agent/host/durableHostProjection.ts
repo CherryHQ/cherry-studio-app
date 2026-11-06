@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AgentInferenceSnapshotV1Schema,
   AgentMessagePartSchema,
+  AgentUserPartsSchema,
   AgentMessageViewSchema,
   AgentTurnViewSchema,
   readAgentInferenceSnapshot,
@@ -16,7 +17,7 @@ import { toAgentErrorView, toAgentMessagePart } from './runtimeProjection';
 
 /** Display identities accompany execution; terminal content and replay settle into Cherry. */
 export const DurableTurnMetadataSchema = z.object({
-  userParts: z.array(AgentMessagePartSchema),
+  userParts: AgentUserPartsSchema,
   retainedParts: z.array(AgentMessagePartSchema).optional(),
   inferenceSnapshot: AgentInferenceSnapshotV1Schema,
   // Released turns predating workspace support remain unbound on recovery.

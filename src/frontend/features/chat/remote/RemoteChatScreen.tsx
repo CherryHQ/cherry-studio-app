@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View, type ViewInstance } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
@@ -98,6 +99,7 @@ function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInst
   const { startRemoteChat } = useChatSource();
   return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
 }
+
 const HeaderContext = createContext<{
   agent?: AgentSummary;
   selectAgent(agentId: string): void;
@@ -145,7 +147,11 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
-  const [composerHeight, setComposerHeight] = useState(0);
+  const composerHeight = useSharedValue(0);
+  const setComposerHeight = useCallback(
+    (height: number) => composerHeight.set(height),
+    [composerHeight],
+  );
   const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
     useRemoteChatNavigation(target, source);
   const opened = useConversation(
@@ -196,6 +202,7 @@ function RemoteChatSession() {
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
   return (
+    // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider
@@ -228,7 +235,11 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
+          <ComposerDock
+            backgroundClassName="bg-chat-background"
+            layoutMode="expandable-overlay"
+            onHeightChange={setComposerHeight}
+          >
             <View>
               <ConversationStatus
                 availability={availability}

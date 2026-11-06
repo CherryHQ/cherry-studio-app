@@ -97,6 +97,8 @@ export type ComposerInputHandle = EnrichedMarkdownTextInputInstance;
 
 export type ComposerInputProps = {
   autoFocus?: boolean;
+  /** Native edit-menu action available while the soft keyboard Return submits. */
+  insertNewlineLabel?: string;
   /** Fills a bounded editing viewport while retaining native content measurement. */
   layout?: 'content' | 'fill';
   /**
@@ -113,6 +115,9 @@ export type ComposerInputProps = {
    * too, already handled by the field. Callers filter for what they want.
    */
   onPaste?: (payload: PasteEventPayload) => void;
+  /** Use native soft-keyboard submission; composition, paste and insertText remain edits. */
+  submitOnReturn?: boolean;
+  onReturnSubmit?: (markdown: string) => void;
   placeholder?: string;
   /**
    * A ref object, not a callback ref — the underlying input only accepts the

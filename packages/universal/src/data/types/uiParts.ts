@@ -95,10 +95,14 @@ export type CherryDataPartTypes = {
 export interface CherryTextMeta {
   /** Content references (citations, mentions). */
   references?: unknown[];
+  quotes?: [{ id: string; sourceMessageId: string; text: string }];
+  quoteAuthor?: { role: 'assistant'; name?: string };
 }
 
 /** Cherry metadata on a ReasoningUIPart. */
 export interface CherryReasoningMeta {
+  /** Local status-only list parts retain content availability for the full-text detail reader. */
+  hasText?: boolean;
   /** Thinking duration in ms. */
   thinkingMs?: number;
   /** Thinking start timestamp in epoch ms. */
@@ -162,9 +166,14 @@ export type CherryMetaForPartType<T extends string> = T extends 'text'
 
 export const CherryTextMetaSchema: z.ZodType<CherryTextMeta> = z.object({
   references: z.array(z.unknown()).optional(),
+  quotes: z
+    .tuple([z.object({ id: z.string().min(1), sourceMessageId: z.uuid(), text: z.string() })])
+    .optional(),
+  quoteAuthor: z.object({ role: z.literal('assistant'), name: z.string().optional() }).optional(),
 });
 
 export const CherryReasoningMetaSchema: z.ZodType<CherryReasoningMeta> = z.object({
+  hasText: z.boolean().optional(),
   thinkingMs: z.number().optional(),
   startedAt: z.number().optional(),
 });

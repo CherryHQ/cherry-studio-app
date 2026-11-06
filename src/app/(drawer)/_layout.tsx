@@ -10,7 +10,12 @@ import {
 } from '@/frontend/appShell/layout';
 import { ChatSourceProvider, useChatSource } from '@/frontend/appShell/navigation/chat';
 import { FilePaneProvider } from '@/frontend/appShell/pane';
-import { Sidebar, SidebarColumnProvider, useSidebarColumn } from '@/frontend/appShell/sidebar';
+import {
+  Sidebar,
+  SidebarColumnProvider,
+  SidebarToggleProvider,
+  useSidebarColumn,
+} from '@/frontend/appShell/sidebar';
 import { AppSearchPanel } from '@/frontend/features/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
@@ -40,7 +45,9 @@ export default function DrawerLayout() {
           <SidebarColumnProvider>
             <ChatDockLayoutProvider>
               <WindowFoldRegion>
-                <SidebarDrawer />
+                <SidebarToggleProvider>
+                  <SidebarDrawer />
+                </SidebarToggleProvider>
               </WindowFoldRegion>
             </ChatDockLayoutProvider>
           </SidebarColumnProvider>
@@ -81,7 +88,7 @@ function SidebarDrawer() {
         },
         // The content region is stable context. In compact windows the sidebar is a temporary
         // surface sliding over it; wide windows keep it beside every page until the file pane
-        // takes its column. Switching keeps the same content tree mounted.
+        // takes its column or the user hides it. Switching keeps the same content tree mounted.
         drawerType: isPermanent ? 'permanent' : 'front',
         headerShown: false,
         // Dim the exposed scene while preserving the drawer's native progress

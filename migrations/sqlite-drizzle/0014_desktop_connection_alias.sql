@@ -1,0 +1,1 @@
+ALTER TABLE `desktop_connection` ADD `alias` text;

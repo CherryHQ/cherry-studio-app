@@ -45,21 +45,21 @@ the selected branch into a new Session ([Agent Protocol](./agent-protocol.md#bra
 Out of scope: broader Pi provider coverage. Mobile Skill persistence and
 loading are documented in [Agent Skills](./agent-skills.md).
 The Host projects Agent-specific MCP bindings into each Runtime snapshot.
-System capability enablement persists on the Agent row as a capability-group deny-list
-(`disabled_capabilities`, JSON group ids, unknown ids dropped on read); everything else about a
-capability resolves per turn and needs no Session persistence.
+Built-in tool availability resolves per turn and needs no per-Agent switches or Session persistence.
+The retired `disabled_capabilities` JSON column remains for storage compatibility; current Data API
+reads project it as an empty array, and create/update inputs no longer accept it.
 
 The Agent's `mode` is either `standard` (the creation and migration default) or
 `minimal`. Minimal mode supports text chat, direct images and provider-native web tools: the Host
 skips application tools, Skills, MCP discovery and plugin guides, rejects new document attachments
 and image generation,
-and uses a compact application prompt. Capability, approval and MCP binding preferences stay
+and uses a compact application prompt. Approval, Skill and MCP binding preferences stay
 stored when modes change, so switching back to standard restores them. Mode changes apply to
 subsequent turns; existing transcript content remains part of the conversation history.
 Provider-native web search and page reading follow the shared web policy in either mode. They
-remain available when the web capability is enabled and the selected provider endpoint supports
-them. Minimal mode never falls back to application-owned external web services. Mode selection
-does not grant web access or change the stored web capability preference.
+remain available when the shared web policy and selected provider endpoint support them. Minimal
+mode never falls back to application-owned external web services. Mode selection does not bypass
+the shared web policy.
 
 ## Current limitations
 
@@ -178,8 +178,8 @@ unavailability without deleting or retargeting the row. Runtime projection is de
 The Agent row's separate `toolApprovalMode` may promote the resulting per-turn `ask` policy to
 `auto`; it does not rewrite bindings or make an unavailable tool executable.
 
-The physical table and typed Data API accept only MCP bindings. Built-in capability enablement
-lives on the Agent row's group-level deny-list, never in this per-tool relation.
+The physical table and typed Data API accept only MCP bindings. Built-in tool availability is
+resolved from system and service gates rather than stored in this per-tool relation.
 
 Skill installations and Agent bindings live in Cherry; the Host resolves their instructions and
 resource scope. Pi reads neither tool nor Skill persistence directly.

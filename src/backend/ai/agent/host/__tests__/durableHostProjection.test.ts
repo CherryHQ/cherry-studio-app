@@ -220,3 +220,23 @@ describe('durable message timing', () => {
     expect(projectDurableHostTurn(turn({ status: 'queued' })).assistant?.stats).toBeNull();
   });
 });
+
+test('durable userParts retain the snapshot and reject ambiguous carriers before recovery', () => {
+  const metadata = turn({}).metadata as Record<string, unknown>;
+  const quoted = {
+    id: 'p',
+    type: 'text',
+    text: 'Request',
+    state: 'done',
+    quotes: [
+      { id: 'q', sourceMessageId: '00000000-0000-7000-8000-000000000001', text: 'Snapshot' },
+    ],
+    quoteAuthor: { role: 'assistant' },
+  };
+  expect(DurableTurnMetadataSchema.parse({ ...metadata, userParts: [quoted] }).userParts).toEqual([
+    quoted,
+  ]);
+  expect(
+    DurableTurnMetadataSchema.safeParse({ ...metadata, userParts: [quoted, quoted] }).success,
+  ).toBe(false);
+});

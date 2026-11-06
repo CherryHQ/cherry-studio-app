@@ -17,6 +17,8 @@ import { splitTextReferences } from './textReferences';
 
 type TextPartProps = {
   isStreaming: boolean;
+  /** Offers the host's selection action on this text; absent outside a message body. */
+  messageId?: string;
   part: Extract<CherryMessagePart, { type: 'text' }>;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
@@ -89,6 +91,7 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
 
 export function TextPart({
   isStreaming,
+  messageId,
   part,
   renderMode = 'markdown',
   resolvedText,
@@ -103,7 +106,11 @@ export function TextPart({
           references={readCherryMeta(part)?.references}
         />
       ) : (
-        <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
+        <PartMarkdown
+          isStreaming={isStreaming}
+          markdown={resolvedText?.markdown ?? part.text}
+          messageId={messageId}
+        />
       )}
     </ContextMenuExclusion>
   );

@@ -5,11 +5,11 @@ import {
 
 import { DocumentTextError, readDocumentUriText } from '../documentText';
 import { readFileUriBytes } from '../fileStorage';
-import { readPdfText } from '../pdfText';
+import { readPdfText } from '../fileTextExtraction';
 
 const mockFile = { size: 64, exists: true };
 jest.mock('expo-file-system', () => ({ File: jest.fn(() => mockFile) }));
-jest.mock('../pdfText', () => ({ readPdfText: jest.fn() }));
+jest.mock('../fileTextExtraction', () => ({ readPdfText: jest.fn() }));
 jest.mock('../fileStorage', () => ({ readFileUriBytes: jest.fn() }));
 const URI = 'file:///managed/document.pdf';
 const extracted = {

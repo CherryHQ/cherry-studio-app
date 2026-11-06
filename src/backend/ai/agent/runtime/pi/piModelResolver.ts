@@ -9,6 +9,7 @@ import {
 } from '@cherrystudio/ai-runtime/utils';
 import {
   MODEL_CAPABILITY,
+  normalizeModelId,
   supportsServerToolFunctionMixing,
 } from '@cherrystudio/provider-registry';
 import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
@@ -487,7 +488,9 @@ function resolveNativeWebTools({
       ));
   return {
     search: serverTools.includes('web-search') && !minimalReasoning,
-    fetch: serverTools.includes('url-context') && (dialect === 'google' || dialect === 'anthropic'),
+    fetch:
+      serverTools.includes('url-context') &&
+      (dialect === 'google' || dialect === 'anthropic' || dialect === 'qwen-anthropic'),
     // Gemini before 3 rejects functions beside its native tools.
     functionToolMixing:
       dialect !== 'google' || supportsServerToolFunctionMixing(connection.wireModelId),
@@ -503,22 +506,44 @@ function resolveWebDialect(
 ): PiWebDialect | undefined {
   if (provider.authType === 'iam-gcp') return undefined;
   const preset = provider.presetProviderId ?? provider.id;
+  const qwenFamily = preset === 'dashscope' || preset === 'qwencloud';
+  const normalizedModelId = normalizeModelId(wireModelId);
+  if (qwenFamily && api === 'anthropic-messages') {
+    // Catalog normalization also matches undated aliases; these tools require the named SKUs.
+    if (normalizedModelId === 'deepseek-v4-1-flash' && wireModelId !== 'deepseek-v4.1-flash-1017')
+      return undefined;
+    if (normalizedModelId === 'deepseek-v4-flash' && wireModelId !== 'deepseek-v4-flash-0731')
+      return undefined;
+  }
+  const dashscopeHostedSearch = ['glm-5.2', 'kimi-k3', 'kimi/kimi-k3'].includes(wireModelId);
   switch (api) {
     case 'openai-responses':
       if (preset === 'grok') return 'xai';
       if (preset === 'poe') return 'openai-preview';
-      // Bailian serves the Responses tool for its Qwen3 line only.
-      if (preset === 'dashscope' && !/^qwen3[.-]/.test(wireModelId)) return undefined;
+      // Mainland Qwen and the documented hosted SKUs serve Responses search.
+      if (preset === 'dashscope' && !/^qwen3[.-]/.test(wireModelId) && !dashscopeHostedSearch)
+        return undefined;
+      if (
+        preset === 'qwencloud' &&
+        !/^(?:deepseek-v4-(?:pro(?:-0813)?|flash(?:-0731)?)|deepseek-v4[.-]1-flash(?:-1017)?|glm-5[.-]2|kimi-k3)$/.test(
+          wireModelId,
+        )
+      )
+        return undefined;
       return 'openai-responses';
     case 'azure-openai-responses':
       return 'openai-preview';
     case 'anthropic-messages':
-      return 'anthropic';
+      return qwenFamily ? 'qwen-anthropic' : 'anthropic';
     case 'google-generative-ai':
       return 'google';
     case 'openai-completions':
+      // Hosted GLM/Kimi search uses Responses or Anthropic, never enable_search.
+      if (preset === 'dashscope' && ['glm-5-2', 'kimi-k3'].includes(normalizedModelId))
+        return undefined;
       return preset === 'zhipu' ||
         preset === 'dashscope' ||
+        preset === 'qwencloud' ||
         preset === 'openrouter' ||
         preset === 'perplexity'
         ? preset

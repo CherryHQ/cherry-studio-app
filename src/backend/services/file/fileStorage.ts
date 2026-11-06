@@ -18,12 +18,13 @@ import {
   SafeNameSchema,
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
+import { resolveAudioImportMediaType } from '@/shared/utils/audioFileTypes';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
 import { deleteFilePreview } from './filePreviewCache';
-import { deletePdfTextCache } from './pdfTextCache';
+import { deleteFileTextCache } from './fileTextCache';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
@@ -130,6 +131,7 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
       filename,
       resolveDocumentImportMediaType(filename, resolveMediaType(input.mediaType, source.type)),
     );
+    mediaType = resolveAudioImportMediaType(filename, mediaType);
     write = (destination) => source.copy(destination);
   } else if (input.source === 'base64') {
     mediaType = resolveMediaType(input.mediaType);
@@ -229,7 +231,7 @@ export async function discardInternalEntries(
     try {
       deleteInternalFile(entry);
       deleteFilePreview(entry);
-      deletePdfTextCache(entry);
+      deleteFileTextCache(entry);
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
@@ -320,7 +322,7 @@ export function deleteInternalEntryFiles(entry: FileEntry): void {
   try {
     deleteInternalFile(entry);
     deleteFilePreview(entry);
-    deletePdfTextCache(entry);
+    deleteFileTextCache(entry);
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
   }

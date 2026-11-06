@@ -85,7 +85,7 @@ const updateItemSchema = z
 const deleteItemSchema = z.object({ id: entityId }).strict();
 
 export function createReminderTools(deps: DeviceToolDependencies) {
-  return [
+  const tools = [
     createDeviceRuntimeTool({
       capabilityId: REMINDER_TOOL_IDS.listCollections,
       deps,
@@ -149,6 +149,7 @@ export function createReminderTools(deps: DeviceToolDependencies) {
       run: (input) => deleteReminderItem(input.id),
     }),
   ];
+  return tools.map((tool) => ({ ...tool, deferred: true }));
 }
 
 function toReminderUpdate(

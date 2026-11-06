@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { usePdfOcrActive } from '@/frontend/hooks/file';
+import { useFileOcrActive } from '@/frontend/hooks/file';
 import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
@@ -14,6 +14,7 @@ import { MessagePartRenderer } from './MessagePartRenderer';
 import { omitGeneratedImageReferences } from './omitGeneratedImageReferences';
 import { partitionMessageParts } from './partitionMessageParts';
 import { ProcessGroupPart } from './ProcessGroupPart';
+import { ReasoningDetailProvider } from './ReasoningPart';
 import { SourceGroup } from './SourceGroup';
 
 type MessagePartsProps = {
@@ -42,6 +43,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   const citations = useMemo(() => resolveMessageCitations(parts), [parts]);
 
   const { boundaries, body, files, process } = partitionMessageParts(parts);
+  const processItems = process.map(({ index, part }) => ({
+    index,
+    key: getMessagePartKey(message, part, index),
+    part,
+  }));
   const isSettled = message.status !== 'pending';
   const isStreaming = !isSettled;
   const hasContent = boundaries.length > 0 || body.length > 0 || process.length > 0;
@@ -58,7 +64,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
     : undefined;
 
   return (
-    <>
+    <ReasoningDetailProvider items={processItems} key={message.id} message={message}>
       {hasContent || (isSettled && parts.length > 0) ? (
         <View className="gap-4">
           {boundaries.map(({ index, part }) => (
@@ -73,11 +79,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
               <ProcessGroupPart
                 key={message.id}
                 citationText={citations.textByPartIndex}
-                items={process.map(({ index, part }) => ({
-                  index,
-                  key: getMessagePartKey(message, part, index),
-                  part,
-                }))}
+                items={processItems}
                 message={message}
                 messageParts={parts}
                 renderMode={renderMode}
@@ -135,18 +137,18 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
           <Text className="text-muted-foreground text-sm">{t('chat.message.stopped')}</Text>
         </MessagePart.Status>
       ) : null}
-    </>
+    </ReasoningDetailProvider>
   );
 }
 
 /** Names local attachment work, such as scan recognition, that delays the first token. */
 function PendingInputReply({ fileEntryIds }: { fileEntryIds: readonly string[] }) {
   const { t } = useTranslation();
-  const recognizing = usePdfOcrActive(fileEntryIds);
+  const recognizing = useFileOcrActive(fileEntryIds);
   return (
     <MessagePart.Pending
       accessibilityLabel={t('chat.message.waitingForResponse')}
-      reason={recognizing ? t('chat.message.recognizingScan') : undefined}
+      reason={recognizing ? t('chat.message.recognizingText') : undefined}
     />
   );
 }

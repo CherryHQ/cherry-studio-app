@@ -6,6 +6,15 @@ import type { MessageListItem } from '../../types';
 import { ProcessGroupPart } from '../ProcessGroupPart';
 import type { ToolMessagePart } from '../tools/toolPartState';
 
+let mockAutoCollapseProcess = true;
+
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: (key: string) => {
+    if (key !== 'chat.process.auto_collapse') throw new Error(`Unexpected preference: ${key}`);
+    return [mockAutoCollapseProcess, jest.fn()];
+  },
+}));
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
 
@@ -19,7 +28,10 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('@/frontend/hooks/file', () => ({ usePdfOcrState: () => undefined }));
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileOcrState: () => undefined,
+  useAudioTranscriptionActivity: () => undefined,
+}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -47,44 +59,90 @@ jest.mock('../../list/MessageListDisclosureContext', () => ({
 describe('ProcessGroupPart', () => {
   let renderer: ReactTestRenderer | undefined;
 
+  beforeEach(() => {
+    mockAutoCollapseProcess = true;
+  });
+
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
   });
 
-  test('retains an opened run as calls arrive and the message completes', () => {
-    const call = (id: string): ToolMessagePart => ({
-      type: 'dynamic-tool',
-      toolName: 'read_file',
-      toolCallId: id,
-      input: {},
-      output: 'file',
-      state: 'output-available',
-    });
-    const draw = (parts: ToolMessagePart[], status: MessageListItem['status']) => (
-      <ProcessGroupPart
-        citationText={new Map()}
-        items={parts.map((part, index) => ({ part, index, key: part.toolCallId }))}
-        message={{ id: 'reply', role: 'assistant', status, data: { parts } }}
-        messageParts={parts}
-        renderMode="markdown"
-      />
-    );
-    act(() => {
-      renderer = create(draw([call('first')], 'pending'));
-    });
-    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
-    act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(true));
-    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
+  test.each([
+    { status: 'success', autoCollapse: true, isProcessOpen: false },
+    { status: 'success', autoCollapse: false, isProcessOpen: true },
+    { status: 'paused', autoCollapse: true, isProcessOpen: true },
+    { status: 'error', autoCollapse: true, isProcessOpen: true },
+  ] as const)(
+    'retains opened tool state on $status and starts the process open=$isProcessOpen with auto-collapse=$autoCollapse',
+    ({ status, autoCollapse, isProcessOpen }) => {
+      mockAutoCollapseProcess = autoCollapse;
+      const call = (id: string): ToolMessagePart => ({
+        type: 'dynamic-tool',
+        toolName: 'read_file',
+        toolCallId: id,
+        input: {},
+        output: 'file',
+        state: 'output-available',
+      });
+      const draw = (parts: ToolMessagePart[], status: MessageListItem['status']) => (
+        <ProcessGroupPart
+          citationText={new Map()}
+          items={parts.map((part, index) => ({ part, index, key: part.toolCallId }))}
+          message={{ id: 'reply', role: 'assistant', status, data: { parts } }}
+          messageParts={parts}
+          renderMode="markdown"
+        />
+      );
+      act(() => {
+        renderer = create(draw([call('first')], 'pending'));
+      });
+      expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
+      act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(true));
+      expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
 
-    act(() => renderer!.update(draw([call('first'), call('second')], 'pending')));
-    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(2);
-    act(() => renderer!.update(draw([call('first'), call('second')], 'success')));
-    expect(renderer!.root.findByType('MessagePartProcess').props.defaultExpanded).toBe(true);
-    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(2);
-    act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(false));
-    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
-  });
+      act(() => renderer!.update(draw([call('first'), call('second')], 'pending')));
+      expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(2);
+      expect(renderer!.root.findAllByType('MessagePartProcess')).toHaveLength(0);
+      act(() => renderer!.update(draw([call('first'), call('second')], status)));
+      expect(renderer!.root.findByType('MessagePartProcess').props.defaultExpanded).toBe(
+        isProcessOpen,
+      );
+      expect(renderer!.root.findByType('MessagePartToolGroup').props.expanded).toBe(true);
+      expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(2);
+      act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(false));
+      expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
+    },
+  );
+
+  test.each([true, false])(
+    'waits for the entire reply to finish before applying process auto-collapse=%s to a tool-free reply',
+    (autoCollapse) => {
+      mockAutoCollapseProcess = autoCollapse;
+      const reasoning = { state: 'done', text: 'Reasoning', type: 'reasoning' } as const;
+      const parts = [reasoning, { state: 'streaming', text: 'Answer', type: 'text' }] as const;
+      const draw = (status: MessageListItem['status']) => (
+        <ProcessGroupPart
+          citationText={new Map()}
+          items={[{ index: 0, key: 'reasoning', part: reasoning }]}
+          message={{ id: 'reply', role: 'assistant', status, data: { parts: [...parts] } }}
+          messageParts={parts}
+          renderMode="markdown"
+        />
+      );
+      act(() => {
+        renderer = create(draw('pending'));
+      });
+      expect(renderer!.root.findAllByType('MessagePartProcess')).toHaveLength(0);
+      expect(renderer!.root.findByType('MessagePartRenderer').props.part).toBe(reasoning);
+
+      act(() => renderer!.update(draw('success')));
+
+      expect(renderer!.root.findByType('MessagePartProcess').props.defaultExpanded).toBe(
+        !autoCollapse,
+      );
+    },
+  );
 
   test('keeps remote-style narration between calls inside one genuinely collapsed group', () => {
     const parts: CherryMessagePart[] = [

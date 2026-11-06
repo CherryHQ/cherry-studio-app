@@ -22,6 +22,10 @@ const input: PaintingInputSubmission = {
   prompt: '',
 };
 
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual('@/frontend/components/Composer/components/__tests__/_sharedValueMock'),
+);
+
 jest.mock('@/frontend/components/Composer', () => {
   const context = jest.requireActual('@/frontend/components/Composer/context/ComposerProvider');
   return {

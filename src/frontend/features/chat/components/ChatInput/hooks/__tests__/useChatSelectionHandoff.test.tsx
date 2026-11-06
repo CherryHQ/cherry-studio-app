@@ -30,6 +30,10 @@ const mockPrepareWorkspaceAttachment = jest.fn();
 const mockToastShow = jest.fn();
 const mockFileModule = { prepareWorkspaceAttachment: mockPrepareWorkspaceAttachment };
 
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual('@/frontend/components/Composer/components/__tests__/_sharedValueMock'),
+);
+
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => {
     const { useEffect } = jest.requireActual<typeof import('react')>('react');

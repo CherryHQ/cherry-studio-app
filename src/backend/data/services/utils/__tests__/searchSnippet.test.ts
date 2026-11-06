@@ -1,4 +1,6 @@
-import { buildSearchSnippet, stripMarkdownFormatting, toSearchableText } from '../searchSnippet';
+import { stripMarkdownFormatting } from '@/shared/utils/markdownFormatting';
+
+import { buildSearchSnippet, toSearchableText } from '../searchSnippet';
 
 describe('searchable message text', () => {
   test.each([
@@ -38,4 +40,25 @@ describe('searchable message text', () => {
     ]);
     expect(buildSearchSnippet(text, ['<view>'], 'substring')).toBe('<View>hello</View>');
   });
+});
+
+test('quote-only terms never enter the replying row search text', () => {
+  expect(
+    toSearchableText([
+      {
+        id: 'p',
+        type: 'text',
+        state: 'done',
+        text: 'My request',
+        quotes: [
+          {
+            id: 'q',
+            sourceMessageId: '00000000-0000-7000-8000-000000000001',
+            text: 'quoteOnlyNeedle',
+          },
+        ],
+        quoteAuthor: { role: 'assistant' },
+      },
+    ]),
+  ).toBe('My request');
 });

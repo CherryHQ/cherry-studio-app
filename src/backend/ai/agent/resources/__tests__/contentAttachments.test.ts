@@ -37,6 +37,7 @@ describe('managed document projection', () => {
       ]),
       currentFileEntryIds: [FIRST_ID, SECOND_ID],
       readBytes: async () => new Uint8Array([1]),
+      readImageText: async () => undefined,
       signal: new AbortController().signal,
       documentParserMode: 'anydoc' as const,
       target: TARGET,
@@ -199,6 +200,7 @@ describe('managed text attachments', () => {
       readBytes: async () => {
         throw new Error('missing');
       },
+      readImageText: async () => undefined,
       signal: new AbortController().signal,
       target: TARGET,
     });
@@ -218,6 +220,7 @@ describe('managed text attachments', () => {
       historicalFileEntryIds: [FIRST_ID],
       limits: { maxBytesPerFile: 64, maxCharactersPerFile: 10, maxTotalCharacters: 9 },
       readBytes: async () => utf8('uvwxyz'),
+      readImageText: async () => undefined,
       readDocumentText: async () => ({ text: 'abc', truncated: true }),
       signal: new AbortController().signal,
       target: TARGET,
@@ -247,6 +250,7 @@ describe('managed text attachments', () => {
         currentFileEntryIds: [FIRST_ID],
         historicalFileEntryIds: [],
         readBytes: async () => undefined,
+        readImageText: async () => undefined,
         readDocumentText: async () => {
           throw new DocumentTextError(failure);
         },
@@ -275,6 +279,7 @@ describe('managed text attachments', () => {
         currentFileEntryIds: [FIRST_ID],
         historicalFileEntryIds: [],
         readBytes: async () => undefined,
+        readImageText: async () => undefined,
         readDocumentText,
         signal: new AbortController().signal,
         target: TARGET,
@@ -297,6 +302,7 @@ async function resolve(
     historicalFileEntryIds,
     ...(limits ? { limits } : {}),
     readBytes: async (file) => bytes.get(file.fileEntryId),
+    readImageText: async () => undefined,
     signal: new AbortController().signal,
     target: TARGET,
   });
@@ -314,3 +320,26 @@ function fact(
 function utf8(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
+
+test('audio stays a managed reference without reading or exposing the recording bytes', async () => {
+  const file = fact(FIRST_ID, 'meeting.m4a', 'audio/mp4');
+  const readBytes = jest.fn();
+  const readImageText = jest.fn();
+  const result = await resolveManagedContentAttachments({
+    availableFiles: new Map([[FIRST_ID, file]]),
+    currentFileEntryIds: [FIRST_ID],
+    readBytes,
+    readImageText,
+    signal: new AbortController().signal,
+    target: { purpose: 'chat', acceptsImages: false },
+  });
+  expect(readBytes).not.toHaveBeenCalled();
+  expect(readImageText).not.toHaveBeenCalled();
+  expect(result.get(FIRST_ID)).toMatchObject({
+    type: 'text-attachment',
+    fileEntryId: FIRST_ID,
+    mediaType: 'audio/mp4',
+    text: expect.stringContaining('transcribe_audio'),
+    attachmentReport: { mode: 'audio' },
+  });
+});

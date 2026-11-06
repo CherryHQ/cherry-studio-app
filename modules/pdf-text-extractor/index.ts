@@ -34,6 +34,24 @@ export async function extractPdfText(
   options?: ExtractOptions,
   control: ExtractionControl = {},
 ): Promise<ExtractResult> {
+  return extractText('extractText', filePath, options, control);
+}
+
+/** Recognizes the first frame locally, sharing native cancellation and scheduling with PDFs. */
+export async function extractImageText(
+  filePath: string,
+  options?: Pick<ExtractOptions, 'language'>,
+  control: ExtractionControl = {},
+): Promise<ExtractResult> {
+  return extractText('extractImageText', filePath, options, control);
+}
+
+async function extractText(
+  method: 'extractText' | 'extractImageText',
+  filePath: string,
+  options: ExtractOptions | undefined,
+  control: ExtractionControl,
+): Promise<ExtractResult> {
   const { signal, onProgress } = control;
   signal?.throwIfAborted();
   const native = getNativeModule();
@@ -51,7 +69,7 @@ export async function extractPdfText(
     signal?.addEventListener('abort', cancel, { once: true });
     if (signal?.aborted) cancel();
     // Always dispatch a reserved request, including a cancelled one, so native cleanup runs.
-    const result = await native.extractText(filePath, options ?? {}, requestId);
+    const result = await native[method](filePath, options ?? {}, requestId);
     signal?.throwIfAborted();
     return result;
   } catch (error) {

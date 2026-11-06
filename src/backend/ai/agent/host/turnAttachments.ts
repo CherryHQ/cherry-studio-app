@@ -152,9 +152,9 @@ export async function resolveManagedInput(
 
 /**
  * Request-level attachment gate: runtime capability, media admissibility, and
- * image limits — all before any network call. Historical images may be
- * omitted after a model switch, but a newly attached image must be rejected
- * when the selected model cannot consume it.
+ * image limits — all before any network call. A text-only model receives OCR
+ * text for images instead; a current image without readable text fails later,
+ * during content preparation, while a historical one is omitted.
  */
 export function assertAttachmentRequestSupported(
   runtime: Pick<AgentRuntime, 'descriptor'>,
@@ -208,7 +208,7 @@ function failAttachment(error: FileAttachmentError): never {
   fail(
     code === 'unavailable'
       ? 'ATTACHMENT_UNAVAILABLE'
-      : code === 'document-empty'
+      : code === 'document-empty' || code === 'image-ocr-empty'
         ? 'ATTACHMENT_NO_TEXT'
         : ['model-unsupported', 'runtime-unsupported', 'count', 'context'].includes(code)
           ? 'CAPABILITY_UNSUPPORTED'
@@ -250,6 +250,7 @@ export async function resolveRuntimeContentAttachments(
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
       readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+      readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       signal,
       documentParserMode,
       target: {
@@ -293,6 +294,7 @@ export async function materializeRuntimeAttachments(input: {
   }
 
   const omitImage = (fileEntryId: string, mediaType: string) => {
+    if (attachments.has(fileEntryId)) return;
     const text = unsupportedMediaNote(mediaType, NO_IMAGE_MEDIA_CAPABILITIES, {
       fileEntryId,
       name: resources.availableFiles.get(fileEntryId)?.name,
@@ -328,7 +330,9 @@ async function resolveRuntimeImages(
       signal.throwIfAborted();
       if (!uri || !uri.startsWith(`data:${fact.mediaType};base64,`)) {
         if (resources.inputFiles.has(fact.fileEntryId)) {
-          throw new Error('A current managed image became unavailable.');
+          fail('ATTACHMENT_UNAVAILABLE', 'A current managed image became unavailable.', {
+            code: 'unavailable',
+          });
         }
         continue;
       }
@@ -344,7 +348,9 @@ async function resolveRuntimeImages(
         throw signal.reason ?? new Error('Managed image resolution was aborted.');
       }
       if (resources.inputFiles.has(fact.fileEntryId)) {
-        throw new Error('A current managed image could not be read.');
+        fail('ATTACHMENT_UNAVAILABLE', 'A current managed image could not be read.', {
+          code: 'unavailable',
+        });
       }
     }
   }

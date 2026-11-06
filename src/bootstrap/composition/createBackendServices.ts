@@ -6,7 +6,7 @@ import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
-import { configurePdfOcrLanguage } from '@/backend/services/file/pdfText';
+import { configureFileOcrLanguage } from '@/backend/services/file/fileTextExtraction';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -42,7 +42,7 @@ export function createBackendServices({
   webSearch,
 }: BackendInfrastructure) {
   const data = createDataServices({ cache, preference });
-  configurePdfOcrLanguage(() =>
+  configureFileOcrLanguage(() =>
     resolveAppLanguage(
       preference.readCached('app.language'),
       getLocales().map((locale) => locale.languageTag),

@@ -5,11 +5,6 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.icu.util.ULocale
 import android.os.ParcelFileDescriptor
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import expo.modules.kotlin.exception.CodedException
 import java.io.Closeable
 import java.io.File
@@ -38,7 +33,7 @@ internal data class PdfPageRecognition(val text: String, val unrecognized: Boole
 /** One document owns the renderer and recognizer; only one bounded bitmap is alive at a time. */
 internal class PdfPageOcr(file: File) : Closeable {
     private val renderer: PdfRenderer
-    private var recognizer: TextRecognizer? = null
+    private var recognizer: ImageTextRecognizer? = null
 
     init {
         val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
@@ -77,13 +72,8 @@ internal class PdfPageOcr(file: File) : Closeable {
         try {
             checkCancelled()
             if (!hasVisibleContent(bitmap)) return PdfPageRecognition("")
-            val reader = recognizer ?: TextRecognition.getClient(
-                ChineseTextRecognizerOptions.Builder().build()
-            ).also { recognizer = it }
-            // ML Kit does not cancel an in-flight recognition task. Keep its bitmap alive until
-            // completion, then honor cancellation before processing another page.
-            val text = Tasks.await(reader.process(InputImage.fromBitmap(bitmap, 0))).text.trim()
-            checkCancelled()
+            val reader = recognizer ?: ImageTextRecognizer().also { recognizer = it }
+            val text = reader.read(bitmap, checkCancelled)
             // A successful OCR call with no text may be a photograph, cover or scan noise.
             return if (hasUsablePdfText(text)) PdfPageRecognition(text)
                 else PdfPageRecognition("", unrecognized = true)

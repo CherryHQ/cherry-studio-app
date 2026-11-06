@@ -15,6 +15,7 @@ const mockClient = {
   respondApproval: jest.fn(),
   respondQuestion: jest.fn(),
   retryMessage: jest.fn(),
+  editMessage: jest.fn(),
   forkSession: jest.fn(),
   deleteTurn: jest.fn(),
 };

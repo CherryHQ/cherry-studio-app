@@ -41,6 +41,7 @@ export function PaintingOverviewChrome({
           },
         ],
         key: 'more',
+        nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
         type: 'menu',
       },
     ],

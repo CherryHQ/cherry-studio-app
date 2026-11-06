@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from 'expo';
 
-import { extractPdfText } from '../../index';
+import { extractImageText, extractPdfText } from '../../index';
 import type { ExtractionProgress, ExtractResult } from '../PdfTextExtractor.types';
 
 jest.mock('expo', () => {
@@ -8,6 +8,7 @@ jest.mock('expo', () => {
     createRequest: jest.fn(),
     cancelRequest: jest.fn(),
     extractText: jest.fn(),
+    extractImageText: jest.fn(),
     addListener: jest.fn(),
   };
   return { requireOptionalNativeModule: jest.fn(() => native) };
@@ -18,6 +19,7 @@ const native = jest.mocked(requireOptionalNativeModule).mock.results[0].value as
   createRequest: jest.Mock;
   cancelRequest: jest.Mock;
   extractText: jest.Mock;
+  extractImageText: jest.Mock;
   addListener: jest.Mock;
 };
 const result: ExtractResult = {
@@ -34,6 +36,33 @@ const result: ExtractResult = {
 beforeEach(() => {
   jest.clearAllMocks();
   native.createRequest.mockReturnValue('request');
+});
+
+test('image recognition uses the image bridge and discards a result returned after cancellation', async () => {
+  let finish!: (value: ExtractResult) => void;
+  native.extractImageText.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const controller = new AbortController();
+  const extraction = extractImageText(
+    '/receipt.png',
+    { language: 'zh-CN' },
+    { signal: controller.signal },
+  );
+  const rejected = expect(extraction).rejects.toThrow('stopped');
+  expect(native.extractImageText).toHaveBeenCalledWith(
+    '/receipt.png',
+    { language: 'zh-CN' },
+    'request',
+  );
+  expect(native.extractText).not.toHaveBeenCalled();
+  controller.abort(new Error('stopped'));
+  expect(native.cancelRequest).toHaveBeenCalledWith('request');
+  finish(result);
+  await rejected;
 });
 
 test('an already cancelled request never reserves native work', async () => {

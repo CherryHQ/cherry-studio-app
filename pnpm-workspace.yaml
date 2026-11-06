@@ -13,10 +13,20 @@ minimumReleaseAge: 1440
 # First-party Cherry packages ship in lockstep with Desktop and are adopted on release.
 minimumReleaseAgeExclude:
   - '@cherrystudio/*'
+  # Explicit Pi upgrade: keep the release-age exception limited to this version.
+  - '@earendil-works/chord@1.5.0'
+  - '@earendil-works/pi-ai@1.5.0'
+  - '@earendil-works/pi-codemode@1.5.0'
+  - '@earendil-works/pi-durable@1.5.0'
+  - '@earendil-works/pi-schema@1.5.0'
+  - '@earendil-works/pi-telemetry@1.5.0'
 trustPolicy: no-downgrade
 
 # 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
 trustPolicyExclude:
+  # EAS tooling's legacy 4.x XML parser: published src matches upstream tag v4.5.7
+  # (49a12f10e9a44da765f045ca0c60e8d9e5be5aa0); this branch has no npm provenance.
+  - fast-xml-parser@4.5.7
   - eslint-import-resolver-typescript@3.10.1
   - react-native-chart-kit@7.0.2
   - semver@6.3.1
@@ -24,6 +34,8 @@ trustPolicyExclude:
   - ua-parser-js@0.7.41||1.0.41
 
 overrides:
+  # Sherpa's packaging plugin uses the app's Expo SDK rather than installing SDK 56 tooling.
+  '@siteed/sherpa-onnx.rn>@expo/config-plugins': 58.0.11
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
   '@storybook/react-native-ui': 10.5.1
@@ -40,9 +52,13 @@ overrides:
   '@ai-sdk/xai': 3.0.126
   ai: 6.0.185
   expo-app-metrics: 58.0.14
+  # The private-storage patch must follow the Expo 58.0.22 native baseline.
+  expo-modules-core: 58.0.29
   react-native-svg: 15.16.0
 
 allowBuilds:
+  # Downloads published Sherpa native libraries; does not compile unless explicitly requested.
+  '@siteed/sherpa-onnx.rn': true
   esbuild: true
   msgpackr-extract: true
   sharp: true
@@ -61,12 +77,17 @@ allowBuilds:
   '@parcel/watcher': false
   '@google/genai': false
   protobufjs: false
+  # EAS CLI optional tracing; local builds do not need its native addon.
+  dtrace-provider: false
 
 patchedDependencies:
+  '@shopify/react-native-skia@2.14.0': patches/@shopify__react-native-skia@2.14.0.patch
+  '@noble/hashes@1.8.0': patches/@noble__hashes@1.8.0.patch
+  multiformats@14.0.5: patches/multiformats@14.0.5.patch
   '@anthropic-ai/vertex-sdk@0.22.0': patches/@anthropic-ai__vertex-sdk@0.22.0.patch
-  '@earendil-works/pi-durable@1.4.0': patches/@earendil-works__pi-durable@1.4.0.patch
-  '@earendil-works/pi-codemode@1.4.0': patches/@earendil-works__pi-codemode@1.4.0.patch
-  '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
+  '@earendil-works/pi-durable@1.5.0': patches/@earendil-works__pi-durable@1.5.0.patch
+  '@earendil-works/pi-codemode@1.5.0': patches/@earendil-works__pi-codemode@1.5.0.patch
+  '@earendil-works/pi-ai@1.5.0': patches/@earendil-works__pi-ai@1.5.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.87.1: patches/metro@0.87.1.patch
   metro-runtime@0.87.1: patches/metro-runtime@0.87.1.patch
@@ -77,24 +98,26 @@ patchedDependencies:
   '@ai-sdk/openai-compatible@2.0.72': patches/@ai-sdk__openai-compatible@2.0.72.patch
   '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
   ai@6.0.185: patches/ai@6.0.185.patch
-  react-native-keyboard-controller@1.22.7: patches/react-native-keyboard-controller@1.22.7.patch
-  expo-router@58.0.26: patches/expo-router@58.0.26.patch
-  react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
+  react-native-keyboard-controller@1.22.9: patches/react-native-keyboard-controller@1.22.9.patch
+  expo-router@58.0.29: patches/expo-router@58.0.29.patch
+  react-native-enriched-markdown@1.1.1: patches/react-native-enriched-markdown@1.1.1.patch
   react-native-drawer-layout@4.2.12: patches/react-native-drawer-layout@4.2.12.patch
   expo-calendar@58.0.6: patches/expo-calendar@58.0.6.patch
+  expo-modules-core@58.0.29: patches/expo-modules-core@58.0.29.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
   expo-app-metrics@58.0.14: patches/expo-app-metrics@58.0.14.patch
-  react-native-screens@4.30.0: patches/react-native-screens@4.30.0.patch
-  react-native@0.88.0: patches/react-native@0.88.0.patch
-  expo-widgets@58.0.23: patches/expo-widgets@58.0.23.patch
+  react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
+  react-native@0.88.1: patches/react-native@0.88.1.patch
+  expo-widgets@58.0.26: patches/expo-widgets@58.0.26.patch
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
-  expo-observe@58.0.16: patches/expo-observe@58.0.16.patch
+  expo-observe@58.0.17: patches/expo-observe@58.0.17.patch
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
-  '@earendil-works/chord@1.4.0': patches/@earendil-works__chord@1.4.0.patch
+  '@earendil-works/chord@1.5.0': patches/@earendil-works__chord@1.5.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
   '@google/genai@2.21.0': patches/@google__genai@2.21.0.patch
   '@react-native-masked-view/masked-view@0.3.2': patches/@react-native-masked-view__masked-view@0.3.2.patch
   nitrogen@0.36.4: patches/nitrogen@0.36.4.patch
+  react-native-gesture-handler@3.3.0: patches/react-native-gesture-handler@3.3.0.patch

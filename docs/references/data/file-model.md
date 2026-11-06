@@ -187,8 +187,15 @@ A persisted Agent file part stores `fileEntryId` plus Host-validated display met
 and media type — never an absolute sandbox path, which iOS invalidates on container relocation. The
 Host verifies the live entry and managed blob before reserving a current submission. If the entry or
 its bytes later disappear, the part remains in history and renders unavailable. For images, the Host
-accepts only the shared AI image whitelist, validates the selected model and Pi endpoint before
-reservation, and converts managed bytes to a bounded temporary Data URL for the active request. For
+accepts only the shared AI image whitelist and validates source limits before reservation. Vision
+models receive bounded temporary Data URLs; text-only models receive local OCR text through the same
+untrusted-text envelope as document extraction. The envelope states that only first-frame OCR text
+was read, with no image pixels or complete visual interpretation. Current-image OCR failures,
+empty text and unsupported app-language scripts stop submission with `image-ocr-failed`,
+`image-ocr-empty` and `image-ocr-unsupported`. Original attachments remain visible, with an
+`image-text` report and a localized text-only delivery notice. Historical images use the same OCR
+path when switching to a text-only model; unavailable historical content keeps the explicit omission
+notice. Painting references still require a model that accepts image input. For
 text, the Host accepts an explicit text/source allowlist, validates bounded managed bytes as strict
 UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as untrusted user
 content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
@@ -212,20 +219,25 @@ same way without recognition, and a document left with no text fails as `documen
 Rendering/recognition-engine failures still reject partial text as `document-ocr-failed`; corrupt
 native extraction fails as `document-invalid`. Android collects native page text and image facts in one PDFBox traversal.
 
-The PDF reader coalesces concurrent reads and persists successful results in the disposable
+The PDF/image reader coalesces concurrent reads and persists successful results in the disposable
 `Paths.cache/PdfText` directory (64 MiB total, 8 MiB per entry). Keys contain the managed filename,
-size, modification time, extraction-policy version, page ceiling and app language, never absolute
+size, modification time, extraction-policy version, source kind, page ceiling and app language, never absolute
 sandbox paths.
 Later turns and tools reuse these results after normal file authorization/availability checks.
 Hard deletion removes the entry's derived text; restore clears the cache. Eviction, cache purging
 and policy changes may require extraction again. No derived text enters the library or database.
 Each consumer's cancellation is independent; the last consumer cancels native work. Android
 finishes the current ML Kit call before releasing its bitmap and the extraction slot.
-`FileModule.observePdfOcr` aggregates extraction states by file entry, preferring active recognition
+`FileModule.observeFileOcr` aggregates extraction states by file entry, preferring active recognition
 over queued reads. Each extraction clears only its own state. Queued files, including text PDFs,
 show a neutral processing wait until extraction starts. Actual OCR draws the transcript tile's
 progress stroke and page count, names the pending reply's wait, and adds the page count to a running
 `read_file` row, which observes its call ID linked to the resolved entry (reads by path included).
+Standalone images show recognition without a PDF page count. They share the PDF recognizer, native
+queue, decoded pixel bounds, cancellation and disk cache. Camera orientation is applied before
+recognition; transparent backgrounds become white and animated images use the first frame only.
+Empty or unsupported standalone-image results are not cached. `read_file` and `library_read_file`
+return paged OCR text for text-only models and pixels for vision models.
 Cache hits report nothing. The originating send/tool operation owns cancellation.
 The original PDF is never modified and derived page images
 are not stored. A new native development client is required.
@@ -270,7 +282,7 @@ source or request truncation, naming the file when there are several. Reports st
 deferred IR delivery, and image omission reasons; older messages without those facts remain
 unspecified rather than inferred from today's preference.
 
-Image attachments are sent to providers as inlined base64 data URLs; documents send text or raw
+Image attachments reach vision providers as inlined base64 data URLs and text-only models as OCR text; documents send text or raw
 JSON and also work with text-only models, with embedded pixels explicitly marked unsent. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
 not to `file_entry`.

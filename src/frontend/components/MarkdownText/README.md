@@ -8,6 +8,10 @@ Message citations use an internal `cite:` link prefix. CherryUI recognizes that 
 quiet gray superscript treatment, while this adapter decodes it back to the original HTTP URL
 before opening it. Ordinary body links keep the standard link treatment.
 
+Complete top-level Mermaid fences become a [Mermaid diagram block](../MermaidDiagram/README.md)
+through CherryUI's `renderMermaid` slot. Fences inside quotes, lists, or longer code examples and
+fences still streaming stay ordinary code blocks, as does any diagram that cannot be rendered.
+
 ## Code blocks
 
 Syntax highlighting is native (tree-sitter, compiled into the binary) and math is rendered by

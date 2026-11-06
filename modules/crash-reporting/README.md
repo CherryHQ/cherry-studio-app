@@ -21,7 +21,11 @@ implement its own crash recorder or upload protocol.
   transport on both platforms; the native `beforeSend` filters below only see native events. The
   Android transport gate still applies to them; on iOS, stopping the SDK on revocation drops them.
 - A process-wide owner survives Expo module recreation during JS reloads. A running grant is
-  revoked if a reload changes the disclosure version or removes the production/DSN gate.
+  revoked if a reload changes the disclosure version. An invalid runtime production/DSN gate
+  stops the SDK in the current process without replacing the saved choice or deleting reports
+  captured under that grant. This is a defensive fallback for configuration errors, not a normal
+  runtime configuration lifecycle. A later valid configuration or native startup can use the saved
+  grant; explicit opt-outs remain disabled. There is no persisted configuration-error pause.
   Every native `configure` call also checks the immutable binary flag and native debug status,
   so JS configuration cannot turn on reporting in a development or preview package.
 - `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
@@ -34,11 +38,12 @@ implement its own crash recorder or upload protocol.
 - The SDK cache lives in one app-owned directory. Startup without a current grant deletes it along
   with pre-consent legacy Sentry caches, so nothing written while revoked can be replayed later.
 - Android persists when the grant began and rejects older events. This prevents Android's system
-  ANR history from backfilling an interval when reporting was disabled.
+  ANR history from backfilling an interval when the user had disabled reporting. A configuration
+  error does not revoke consent, reset that time, or delete Sentry's ANR deduplication state.
 - Android combines consent with Sentry's connection-status provider at the transport gate. Requests
   already handed to the network can finish; already transmitted data cannot be withdrawn.
 
-Sentry React Native 8.28.0 uses Cocoa 9.29.0 and Android 8.57.0. Cocoa ships only as a prebuilt
+Sentry React Native 8.33.0 uses Cocoa 9.32.0 and Android 8.62.0. Cocoa ships only as a prebuilt
 xcframework that RNSentry downloads; the podspec reads RNSentry's Cocoa version and reuses that
 xcframework's search paths, so iOS follows Sentry upgrades automatically. The Gradle dependency pins
 the Android version. Recheck the native APIs and update the Android pin when upgrading Sentry.
@@ -74,8 +79,7 @@ Run builds and device checks only with explicit task authorization.
 When authorized, cover both iOS and Android:
 
 1. Fresh install: the switch defaults to on. Existing `20260915` grants and saved opt-outs survive
-   upgrades and relaunches. Stale grants,
-   absent DSN, and non-production profiles send no Sentry requests.
+   upgrades and relaunches. Stale grants and non-production profiles send no Sentry requests.
 2. Grant, then relaunch: a JS error and a real native crash retain usable source/symbol information.
 3. Offline crash, revoke before delivery, re-grant and relaunch: revoked reports are never sent.
 4. Revoke while a send is queued, including a subsequent JS reload: no new sends; document requests
@@ -85,6 +89,10 @@ When authorized, cover both iOS and Android:
    URLs, paths, and attachments. Inspect NDK dumps separately; do not infer their contents from JS
    or Java event filtering.
 7. Consent write failure: show an error and keep the current process paused.
+8. Supply invalid runtime configuration through an isolated native fixture: capture stops but the
+   saved choice and previously consented reports remain. Valid configuration can resume the grant;
+   a cold start uses the embedded configuration and consent before JS. A saved opt-out must stay
+   off, and changing the disclosure version must still revoke the old grant.
 
 Official references: [native initialization](https://docs.sentry.io/platforms/react-native/manual-setup/native-init/),
 [native filtering limitation](https://sentry.zendesk.com/hc/en-us/articles/26323481356443-How-to-filter-native-events-in-React-Native-SDK),

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { usePreference } from '@/frontend/data/hooks';
 import type { ResolvedCitationText } from '@/frontend/utils/messageCitations';
 import { getMessageProcessDurationMs } from '@/frontend/utils/messageProcessDuration';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -29,6 +30,23 @@ type ProcessGroupPartProps = {
   renderMode: MessagePartRenderMode;
 };
 
+/** The process disclosure's title: its persisted duration, or a plain label before one exists. */
+export function useMessageProcessTitle(
+  stats: MessageListItem['stats'],
+  parts: readonly CherryMessagePart[],
+) {
+  const { t } = useTranslation();
+  const reasoningDurations = parts.flatMap((part) => {
+    if (part.type !== 'reasoning') return [];
+    const thinkingMs = readCherryMeta(part)?.thinkingMs;
+    return thinkingMs === undefined ? [] : [thinkingMs];
+  });
+  const durationMs = getMessageProcessDurationMs(stats, reasoningDurations);
+  return durationMs === undefined
+    ? t('chat.process.title')
+    : t('chat.process.duration', { seconds: Math.max(1, Math.round(durationMs / 1000)) });
+}
+
 export function ProcessGroupPart({
   citationText,
   items,
@@ -36,29 +54,24 @@ export function ProcessGroupPart({
   messageParts,
   renderMode,
 }: ProcessGroupPartProps) {
-  const { t } = useTranslation();
+  const [isAutoCollapseEnabled] = usePreference('chat.process.auto_collapse');
   const handleDisclosureToggle = useMessageListDisclosureToggle();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const isStreaming = message.status === 'pending';
   const groups = groupMessageProcessItems(items);
   const latestActivityPart = findLatestActivityPart(messageParts);
-  const reasoningDurations = items.flatMap(({ part }) => {
-    if (part.type !== 'reasoning') return [];
-    const thinkingMs = readCherryMeta(part)?.thinkingMs;
-    return thinkingMs === undefined ? [] : [thinkingMs];
-  });
-  const persistedDurationMs = getMessageProcessDurationMs(message.stats, reasoningDurations);
-  const seconds = Math.max(1, Math.round((persistedDurationMs ?? 0) / 1000));
-  const title =
-    persistedDurationMs === undefined
-      ? t('chat.process.title')
-      : t('chat.process.duration', { seconds });
+  const title = useMessageProcessTitle(
+    message.stats,
+    items.map(({ part }) => part),
+  );
 
   const renderItem = ({ index, key, part }: ProcessGroupItem) => (
     <MessagePartRenderer
       isStreaming={isStreaming && (part.type !== 'reasoning' || part === latestActivityPart)}
       key={key}
       messageId={message.id}
+      sessionId={message.agentSessionId}
+      partId={key}
       messageParts={messageParts}
       part={part}
       renderMode={renderMode}
@@ -79,6 +92,10 @@ export function ProcessGroupPart({
         expanded={expandedGroups[key] ?? false}
         isStreaming={isStreaming}
         isThinking={isThinking}
+        startedAt={
+          message.stats?.runtimeTiming?.startedAt ??
+          (message.createdAt ? Date.parse(message.createdAt) : undefined)
+        }
         onExpandedChange={(expanded) =>
           setExpandedGroups((current) => ({ ...current, [key]: expanded }))
         }
@@ -93,7 +110,11 @@ export function ProcessGroupPart({
 
   return (
     <MessagePart.Process
-      defaultExpanded={Object.values(expandedGroups).some(Boolean)}
+      defaultExpanded={
+        message.status === 'success'
+          ? !isAutoCollapseEnabled
+          : Object.values(expandedGroups).some(Boolean)
+      }
       onDisclosureToggle={handleDisclosureToggle}
       state="complete"
       title={title}

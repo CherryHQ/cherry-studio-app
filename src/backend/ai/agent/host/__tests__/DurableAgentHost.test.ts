@@ -118,6 +118,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     watchWork: async () => ({ active: false, unsubscribe: async () => {} }),
     configuration: async () => configuration,
     configure: async () => {},
+    editReply: jest.fn(async () => undefined),
     resourceFileEntryIds: async () => [],
     ensureConversation: async (seed) => {
       copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
@@ -203,7 +204,6 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
               model: configuration.model,
               options: {},
               toolApprovalMode: 'default',
-              disabledCapabilities: [],
             }
           : null,
     },
@@ -213,6 +213,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       resolveAvailable: async () => new Map(),
       readAsBytes: async () => undefined,
       readDocumentText: async () => undefined,
+      readImageText: async () => undefined,
       readAsDataUrl: async () => undefined,
     },
     inferenceModel: async (model) => ({
@@ -303,6 +304,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   return {
     host,
     store,
+    raw: harness.raw,
     seedFolder: harness.seedFolder,
     conversations,
     sessionId,
@@ -323,6 +325,255 @@ async function settle() {
 }
 
 describe('durable tool diagnostics', () => {
+  test('reads valid saved reasoning around an unsupported part without relaxing execution reads', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    try {
+      f.copies.clear();
+      const text = 'Full saved reasoning.\n'.repeat(500);
+      const data = JSON.stringify({
+        parts: [
+          { id: 'first', type: 'reasoning', text, state: 'done' },
+          { id: 'future', type: 'future' },
+          { id: 'later', type: 'reasoning', text: 'A separate phase.', state: 'done' },
+        ],
+      });
+      f.raw
+        .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+        .run(data, turn.assistantMessageId);
+
+      for (const [partId, expected] of [
+        ['first', text],
+        ['later', 'A separate phase.'],
+      ] as const) {
+        await expect(
+          f.host.readReasoning({
+            sessionId: f.sessionId,
+            messageId: turn.assistantMessageId,
+            partId,
+          }),
+        ).resolves.toEqual({ text: expected, state: 'done' });
+      }
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'future',
+        }),
+      ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+      await expect(f.store.getMessage(f.sessionId, turn.assistantMessageId)).rejects.toThrow();
+      expect(
+        f.raw
+          .prepare('SELECT data FROM agent_session_message WHERE id = ?')
+          .get(turn.assistantMessageId),
+      ).toEqual({ data });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('reads a full saved reasoning phase without including the next phase or answer', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    const text = 'Earlier reasoning.\n'.repeat(500);
+    turn.parts = [
+      { id: 'first', type: 'reasoning', text, state: 'done' },
+      { id: 'summary', type: 'reasoning', text: 'A continuation.', state: 'done' },
+      { id: 'answer', type: 'text', text: 'Answer', state: 'done' },
+      { id: 'later', type: 'reasoning', text: 'Another phase.', state: 'done' },
+    ];
+    await f.host.initialize();
+    try {
+      f.copies.clear();
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'first',
+        }),
+      ).resolves.toEqual({ text: `${text}\n\nA continuation.`, state: 'done' });
+      for (const { messageId, partId } of [
+        { messageId: turn.userMessageId, partId: 'question' },
+        { messageId: turn.assistantMessageId, partId: 'answer' },
+      ])
+        await expect(
+          f.host.readReasoning({ sessionId: f.sessionId, messageId, partId }),
+        ).rejects.toMatchObject({
+          view: { code: 'MESSAGE_NOT_FOUND' },
+        });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('reads full live reasoning without expanding the normal observation payload', async () => {
+    const f = fixture();
+    const turn = await f.reserve('running');
+    const text = 'Full live thinking.\n'.repeat(500);
+    turn.parts = [{ id: 'phase', type: 'reasoning', text, state: 'streaming' }];
+    const read = jest.spyOn(f.conversations, 'message');
+    await f.host.initialize();
+    const observation = await f.host.observeSession(f.sessionId, () => {});
+    try {
+      expect(observation.snapshot.streamingMessage?.parts[0]).toMatchObject({
+        text: '',
+        hasText: true,
+      });
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'phase',
+        }),
+      ).resolves.toEqual({ text, state: 'streaming' });
+      expect(read).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: f.sessionId }),
+        turn.assistantMessageId,
+        { fullReasoning: true },
+      );
+      expect(observation.snapshot.streamingMessage?.parts[0]).toMatchObject({
+        text: '',
+        hasText: true,
+      });
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('editing a completed answer invalidates an uneditable copy and publishes only committed text', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      const message = await f.host.editMessage({
+        sessionId: f.sessionId,
+        messageId: turn.assistantMessageId,
+        parts: [{ id: 'answer', expectedText: 'Answer', text: 'Corrected' }],
+      });
+      expect(message.parts).toContainEqual({
+        id: 'answer',
+        type: 'text',
+        text: 'Corrected',
+        state: 'done',
+      });
+      expect(message.parts[0]).toMatchObject({ type: 'reasoning', text: 'Reasoning' });
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
+      expect(f.copies.has(f.sessionId)).toBe(false);
+      expect(events.filter((event) => event.type === 'message.edited')).toEqual([
+        { type: 'message.edited', message },
+      ]);
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('a native edit keeps its copy current and saves its refreshed context', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: turn.identity.turnId,
+      payload: { edited: true },
+    };
+    f.conversations.editReply = async (lane, input) => {
+      f.copies.get(laneKey(lane))!.revision = input.revision + 1;
+      return { contextCheckpoint: { assistantMessageId: turn.assistantMessageId, checkpoint } };
+    };
+    try {
+      await f.host.editMessage({
+        sessionId: f.sessionId,
+        messageId: turn.assistantMessageId,
+        parts: [{ id: 'answer', expectedText: 'Answer', text: 'Corrected' }],
+      });
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
+      expect(f.copies.get(f.sessionId)?.revision).toBe(1);
+      expect(await f.store.getLatestContextCheckpoint(f.sessionId)).toEqual({
+        assistantMessageId: turn.assistantMessageId,
+        checkpoint,
+      });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('editing keeps every copy that holds the answer and retires only the copies that cannot represent it', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    for (const slot of [1, 2])
+      f.copies.set(laneKey(runtimeLane(f.sessionId, slot)), { revision: 0, turns: [] });
+    await f.host.initialize();
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: turn.identity.turnId,
+      payload: { edited: true },
+    };
+    const editReply = jest.fn<
+      ReturnType<DurableAgentRuntime['editReply']>,
+      Parameters<DurableAgentRuntime['editReply']>
+    >(async (lane, input) => {
+      // Slot 2 does not hold a native copy of the answer.
+      if (lane.slot === 2) return undefined;
+      f.copies.get(laneKey(lane))!.revision = input.revision + 1;
+      return {
+        contextCheckpoint:
+          lane.slot === 0 ? { assistantMessageId: turn.assistantMessageId, checkpoint } : null,
+      };
+    });
+    f.conversations.editReply = editReply;
+    try {
+      await f.host.editMessage({
+        sessionId: f.sessionId,
+        messageId: turn.assistantMessageId,
+        parts: [{ id: 'answer', expectedText: 'Answer', text: 'Corrected' }],
+      });
+      expect(editReply.mock.calls.map(([lane]) => lane.slot).sort()).toEqual([0, 1, 2]);
+      expect([...f.copies].map(([key, copy]) => [key, copy.revision])).toEqual([
+        [laneKey(runtimeLane(f.sessionId, 0)), 1],
+        [laneKey(runtimeLane(f.sessionId, 1)), 1],
+      ]);
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(1);
+      expect(await f.store.getLatestContextCheckpoint(f.sessionId)).toEqual({
+        assistantMessageId: turn.assistantMessageId,
+        checkpoint,
+      });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('a failed Cherry edit cannot leave a revised native copy eligible for execution', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    f.conversations.editReply = async (lane, input) => {
+      f.copies.get(laneKey(lane))!.revision = input.revision + 1;
+      return { contextCheckpoint: null };
+    };
+    jest.spyOn(f.store, 'editMessage').mockRejectedValueOnce(new Error('disk full'));
+    try {
+      await expect(
+        f.host.editMessage({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          parts: [{ id: 'answer', expectedText: 'Answer', text: 'Unsaved' }],
+        }),
+      ).rejects.toThrow('disk full');
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(0);
+      expect(
+        (await f.store.getMessage(f.sessionId, turn.assistantMessageId))?.parts,
+      ).toContainEqual({ id: 'answer', type: 'text', text: 'Answer', state: 'done' });
+      expect(f.copies.has(f.sessionId)).toBe(false);
+    } finally {
+      await f.host.close();
+    }
+  });
   test('refuses queueing with a changed tool return contract during an active turn', async () => {
     const tool: RuntimeTool = {
       ref: { source: 'builtin', capabilityId: 'create_document' },
@@ -444,6 +695,67 @@ describe('durable tool diagnostics', () => {
           (event) => event.type === 'message.created' || event.type === 'message.finalized',
         ),
       ).toBe(false);
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('a withdrawn input hands the questions queued below it to its own parent', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const follow = async (text: string): Promise<RuntimeDurableTurn> => {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      return {
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      };
+    };
+    const withdrawn = await follow('B');
+    const remaining = await follow('C');
+    f.copies.get(f.sessionId)!.turns = [running, withdrawn, remaining];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      f.copies.get(f.sessionId)!.turns = [running, remaining];
+      f.emit({ ...withdrawn, status: 'cancelled' });
+      return 'aborted';
+    });
+    try {
+      await expect(
+        f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: withdrawn.identity.turnId }),
+      ).resolves.toBe('withdrawn');
+      const queue = [
+        { userMessage: { id: remaining.userMessageId, parentId: running.assistantMessageId } },
+      ];
+      expect(events.findLast((event) => event.type === 'queue.updated')).toMatchObject({
+        inputs: queue,
+      });
+      const refreshed = await f.host.observeSession(f.sessionId, () => {});
+      expect(refreshed.snapshot.queuedInputs).toMatchObject(queue);
+      refreshed.unsubscribe();
+      expect(await f.store.getMessage(f.sessionId, remaining.userMessageId)).toMatchObject({
+        parentId: running.assistantMessageId,
+      });
     } finally {
       observation.unsubscribe();
       await f.host.close();
@@ -2279,6 +2591,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           new Map(ids.includes(image.fileEntryId) ? [[image.fileEntryId, image]] : []),
         readAsBytes: async () => undefined,
         readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
         readAsDataUrl,
       },
     });
@@ -2607,10 +2920,18 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     state.emit({ ...running, status: 'completed' });
     await state.host.quiesce();
     expect(await Promise.all(statuses)).toEqual(['success']);
+    expect(
+      (await state.store.getMessage(state.sessionId, running.assistantMessageId))?.parts,
+    ).toEqual(running.parts);
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'message.finalized',
-        message: expect.objectContaining({ parts: running.parts }),
+        message: expect.objectContaining({
+          parts: [
+            { id: 'reasoning', type: 'reasoning', text: '', hasText: true, state: 'done' },
+            { id: 'answer', type: 'text', text: 'Answer', state: 'done' },
+          ],
+        }),
       }),
     );
     expect(
@@ -2664,6 +2985,99 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     await state.host.close();
   });
 
+  test('a new fork names itself from its first accepted input and leading answer only once', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({ naming: () => naming });
+    const source = await state.reserve();
+    await state.host.initialize();
+    try {
+      const fork = await state.host.forkSession({
+        sessionId: state.sessionId,
+        fromMessageId: source.assistantMessageId,
+        name: 'Branch - Original',
+      });
+      const send = (text: string) =>
+        state.host.submitMessage({
+          sessionId: fork.id,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text }],
+        });
+      const finish = async (assistantMessageId: string) => {
+        const turn = [...state.copies.values()]
+          .flatMap(({ turns }) => turns)
+          .find((candidate) => candidate.assistantMessageId === assistantMessageId)!;
+        state.emit({
+          ...turn,
+          status: 'completed',
+          answerBoundary: 'pi:done',
+          updatedAt: turn.updatedAt + 1,
+          parts: [{ id: 'answer', type: 'text', text: 'Branch answer', state: 'done' }],
+        });
+        await settle();
+      };
+      jest
+        .spyOn(state.store, 'reserveSubmission')
+        .mockRejectedValueOnce(new Error('write rejected'));
+      await expect(send('Rejected input')).rejects.toBeDefined();
+      expect(naming.maybeRenameFromFirstUserMessage).not.toHaveBeenCalled();
+      const first = await send('First branch question');
+      expect(naming.maybeRenameFromFirstUserMessage).toHaveBeenCalledWith(
+        fork.id,
+        expect.arrayContaining([expect.objectContaining({ text: 'First branch question' })]),
+        true,
+      );
+      await finish(first.assistantMessageId);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: fork.id,
+          userParts: expect.arrayContaining([
+            expect.objectContaining({ text: 'First branch question' }),
+          ]),
+        }),
+      );
+      const next = await send('Follow-up');
+      await finish(next.assistantMessageId);
+      expect(naming.maybeRenameFromFirstUserMessage).toHaveBeenCalledTimes(1);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('manually renaming a new fork cancels its first-input naming trigger', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({ naming: () => naming });
+    const source = await state.reserve();
+    await state.host.initialize();
+    try {
+      const fork = await state.host.forkSession({
+        sessionId: state.sessionId,
+        fromMessageId: source.assistantMessageId,
+      });
+      await state.host.renameSession({ sessionId: fork.id, name: 'My branch' });
+      await state.host.submitMessage({
+        sessionId: fork.id,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'New question' }],
+      });
+      expect((await state.store.getSession(fork.id))?.name).toBe('My branch');
+      expect(naming.maybeRenameFromFirstUserMessage).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('deleting a source physically removes its rows while an independent fork remains readable', async () => {
     const state = fixture();
     const turn = await state.reserve();
@@ -2701,6 +3115,159 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         runtimeLane(state.sessionId),
       );
       expect(await state.store.listMessages(state.sessionId)).toEqual([]);
+    } finally {
+      await state.host.close();
+    }
+  });
+});
+
+describe('quoted requests through durable execution', () => {
+  const fields = {
+    quotes: [
+      {
+        id: 'quote',
+        sourceMessageId: '00000000-0000-7000-8000-000000000001',
+        text: 'Immutable source snapshot',
+      },
+    ] as [{ id: string; sourceMessageId: string; text: string }],
+    quoteAuthor: { role: 'assistant' as const, name: 'Original author' },
+  };
+  test('recovered image tool preparation keeps the stored snapshot without a source lookup', async () => {
+    const prepare = jest.fn(async () => ({
+      settings: { mode: 'generate' as const, paramValues: {} },
+      execute: async () => [],
+    }));
+    const fileId = uuid();
+    const state = fixture({
+      imageGeneration: { prepare },
+      files: {
+        resolveAvailable: async () =>
+          new Map([
+            [
+              fileId,
+              {
+                fileEntryId: fileId,
+                name: 'image.png',
+                mediaType: 'image/png',
+                size: 10,
+                revision: 1,
+              },
+            ],
+          ]),
+        readAsBytes: async () => undefined,
+        readAsDataUrl: async () => undefined,
+        readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
+      },
+    });
+    const turn = await state.reserve('running', [
+      { id: 'p', type: 'text', state: 'done', text: '', ...fields },
+      {
+        id: 'f',
+        type: 'file',
+        purpose: 'input-attachment',
+        fileEntryId: fileId,
+        filename: 'image.png',
+        mediaType: 'image/png',
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      await state
+        .execution()!
+        .resolveTool(
+          turn.identity,
+          { source: 'builtin', capabilityId: 'image_generation' },
+          new AbortController().signal,
+        );
+      expect(prepare).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parts: [
+            expect.objectContaining({ ...fields, text: '' }),
+            expect.objectContaining({ type: 'file', fileEntryId: fileId }),
+          ],
+        }),
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(['failed', 'completed'] as const)(
+    'retry/answer-with from a %s question keeps a snapshot whose source is gone',
+    async (status) => {
+      const state = fixture();
+      const previous = await state.reserve(status, [
+        { id: 'p', type: 'text', state: 'done', text: 'Explain', ...fields },
+      ]);
+      await state.host.initialize();
+      try {
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: previous.assistantMessageId,
+          modelId: createUniqueModelId('provider', 'second-model'),
+        });
+        const request = jest.mocked(state.conversations.submit).mock.calls.at(-1)![1];
+        expect(request.input).toEqual([
+          {
+            type: 'text',
+            text: expect.stringContaining('> Immutable source snapshot\n\nExplain'),
+          },
+        ]);
+        expect(JSON.stringify(request.input).match(/> Immutable source snapshot/g)).toHaveLength(1);
+        expect(request.metadata.userParts).toEqual([expect.objectContaining(fields)]);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+  test('new and queued admission preserve original metadata and reject foreign sources before reservation', async () => {
+    const state = fixture();
+    const source = await state.reserve('completed');
+    const configure = jest.spyOn(state.conversations, 'configure');
+    jest
+      .spyOn(state.conversations, 'configuration')
+      .mockImplementation(async () => configure.mock.calls.at(-1)?.[1] ?? configuration);
+    await state.host.initialize();
+    try {
+      const quoted = {
+        ...fields,
+        quotes: [
+          { ...fields.quotes[0], sourceMessageId: source.assistantMessageId },
+        ] as typeof fields.quotes,
+      };
+      for (let index = 0; index < 2; index++) {
+        await state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: `Follow-up ${index}`, ...quoted }],
+        });
+      }
+      const requests = jest.mocked(state.conversations.submit).mock.calls.map((call) => call[1]);
+      expect(requests).toHaveLength(2);
+      for (const request of requests) {
+        expect(request.metadata.userParts).toEqual([expect.objectContaining(quoted)]);
+        expect(JSON.stringify(request.input).match(/> Immutable source snapshot/g)).toHaveLength(1);
+      }
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'foreign', ...fields }],
+        }),
+      ).rejects.toThrow();
+      expect(jest.mocked(state.conversations.submit)).toHaveBeenCalledTimes(2);
+      expect(() =>
+        state.host.startSession({
+          agentId: state.agentId,
+          sessionId: uuid(),
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'foreign', ...fields }],
+        }),
+      ).toThrow();
     } finally {
       await state.host.close();
     }

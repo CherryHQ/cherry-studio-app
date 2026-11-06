@@ -2,6 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import {
+  ContextMenu,
   ContentState,
   SelectionIndicator,
   Spinner,
@@ -24,9 +25,12 @@ import {
   type ConversationListStatus,
   useConversationAgents,
   useConversationSessions,
+  useConversationSessionChildren,
+  useConversationSessionPath,
   useConversationSource,
   useConversationSourceState,
   useConversationPreview,
+  useConversationAgentStatus,
 } from '@/frontend/appShell/conversation';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/navigation';
 import { conversationHref, useConversationTarget } from '@/frontend/appShell/navigation/chat';
@@ -36,10 +40,39 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
+import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
+import {
+  SidebarSessionBranchFrame,
+  SidebarSessionBranchLeading,
+  SidebarSessionBranchToggle,
+  type SidebarSessionBranchAction,
+  type SidebarSessionBranchAncestor,
+  type SidebarSessionBranchPosition,
+} from './SidebarSessionBranch';
 
 type RegisterEndReached = (handler?: () => void) => void;
+const noSessionPath: readonly ConversationSummary[] = [];
+const noAncestorContinuations: readonly SidebarSessionBranchAncestor[] = [];
+const statusLabelKeys = {
+  running: 'session.status.running',
+  'awaiting-approval': 'session.status.awaitingApproval',
+  'awaiting-input': 'chat.question.waiting',
+  failed: 'session.status.failed',
+  unread: 'session.status.completed',
+} as const satisfies Record<ConversationListStatus, string>;
+
+export type ConversationDestination =
+  | { kind: 'agent'; agent: AgentSummary }
+  | { kind: 'session'; session: ConversationSummary };
+
+type SelectDestination = (destination: ConversationDestination) => void;
+
+/** The sidebar's grouped catalog with destination callbacks instead of drawer management. */
+export function ConversationDestinationList({ onSelect }: { onSelect: SelectDestination }) {
+  return <SidebarAgentGroups onSelect={onSelect} showLoading />;
+}
 
 const rowLayout = LinearTransition.duration(duration.base)
   .easing(easing.settle)
@@ -109,7 +142,13 @@ function SidebarCatalog({
   );
 }
 
-function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
+function SidebarAgentGroups({
+  onSelect,
+  showLoading,
+}: {
+  onSelect?: SelectDestination;
+  showLoading: boolean;
+}) {
   const { t } = useTranslation();
   const query = useConversationAgents();
   if (query.isPending)
@@ -136,7 +175,12 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   return (
     <View className="gap-2">
       {query.items.map((agent) => (
-        <SidebarAgentGroup key={agent.id} agent={agent} showLoading={showLoading} />
+        <SidebarAgentGroup
+          key={agent.id}
+          agent={agent}
+          onSelect={onSelect}
+          showLoading={showLoading}
+        />
       ))}
       {query.isError ? (
         <View className="px-2">
@@ -155,60 +199,184 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
 }
 
 /** Every group starts collapsed; only the user's toggle expands one. */
-function SidebarAgentGroup({ agent, showLoading }: { agent: AgentSummary; showLoading: boolean }) {
+function SidebarAgentGroup({
+  agent,
+  onSelect,
+  showLoading,
+}: {
+  agent: AgentSummary;
+  onSelect?: SelectDestination;
+  showLoading: boolean;
+}) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const status = useConversationAgentStatus(agent.ref, !expanded);
+  const toggle = () => setExpanded((value) => !value);
+  const disclosure = expanded ? (
+    <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+  ) : (
+    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+  );
   return (
     <View testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={agent.name}
-          accessibilityState={{ expanded }}
-          testID={`sidebar-agent-${agent.id}`}
-          onPress={() => setExpanded((value) => !value)}
-        >
-          {({ pressed }) => (
-            <SidebarRowContent
-              className={cn('w-full', pressed && 'bg-sidebar-accent')}
-              leading={
-                <SidebarAgentIconSlot>
-                  <AgentAvatar
-                    name={agent.name}
-                    accessibilityLabel={agent.name}
-                    avatar={agent.avatar}
-                    emoji={agent.emoji}
-                    uri={agent.avatarUri}
-                    size={SIDEBAR_LEADING_SIZE}
-                  />
-                </SidebarAgentIconSlot>
-              }
-            >
-              <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-                {agent.name}
-              </Text>
-              {expanded ? (
-                <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        {onSelect ? (
+          <View className="flex-row items-center">
+            <View className="min-w-0 flex-1">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('conversation.destination.new', { name: agent.name })}
+                accessibilityValue={
+                  status
+                    ? { text: t('session.status.group', { status: t(statusLabelKeys[status]) }) }
+                    : undefined
+                }
+                onPress={() => onSelect({ kind: 'agent', agent })}
+                testID={`share-agent-${agent.id}`}
+              >
+                {({ pressed }) => (
+                  <SidebarAgentRowContent agent={agent} pressed={pressed} status={status} />
+                )}
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t(
+                expanded ? 'conversation.destination.collapse' : 'conversation.destination.expand',
+                { name: agent.name },
               )}
-            </SidebarRowContent>
-          )}
-        </Pressable>
+              accessibilityState={{ expanded }}
+              onPress={toggle}
+              testID={`share-agent-expand-${agent.id}`}
+            >
+              {({ pressed }) => (
+                <View
+                  className={cn(
+                    'min-h-12 w-11 items-center justify-center rounded-xl',
+                    pressed && 'bg-sidebar-accent',
+                  )}
+                >
+                  {disclosure}
+                </View>
+              )}
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={agent.name}
+            accessibilityValue={
+              status
+                ? { text: t('session.status.group', { status: t(statusLabelKeys[status]) }) }
+                : undefined
+            }
+            accessibilityState={{ expanded }}
+            testID={`sidebar-agent-${agent.id}`}
+            onPress={toggle}
+          >
+            {({ pressed }) => (
+              <SidebarAgentRowContent agent={agent} pressed={pressed} status={status}>
+                {/* The 12pt row inset plus half this slot matches a 44pt branch target's center. */}
+                <View className="w-5 shrink-0 items-center">{disclosure}</View>
+              </SidebarAgentRowContent>
+            )}
+          </Pressable>
+        )}
       </View>
-      {expanded ? <SidebarSessions agentRef={agent.ref} showLoading={showLoading} /> : null}
+      {expanded ? (
+        <SidebarSessions
+          agentRef={agent.ref}
+          agentId={agent.id}
+          onSelect={onSelect}
+          showLoading={showLoading}
+        />
+      ) : null}
     </View>
   );
 }
 
-function SidebarSessions({
+function SidebarAgentRowContent({
+  agent,
+  children,
+  pressed,
+  status,
+}: {
+  agent: AgentSummary;
+  children?: ReactNode;
+  pressed: boolean;
+  status?: ConversationListStatus;
+}) {
+  return (
+    <SidebarRowContent
+      className={cn('w-full', pressed && 'bg-sidebar-accent')}
+      leading={
+        <SidebarAgentIconSlot>
+          <AgentAvatar
+            name={agent.name}
+            accessibilityLabel={agent.name}
+            avatar={agent.avatar}
+            emoji={agent.emoji}
+            uri={agent.avatarUri}
+            size={SIDEBAR_LEADING_SIZE}
+          />
+        </SidebarAgentIconSlot>
+      }
+    >
+      <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+        {agent.name}
+      </Text>
+      <SidebarSessionStatus status={status} />
+      {children}
+    </SidebarRowContent>
+  );
+}
+
+type SidebarSessionsProps = {
+  agentRef?: AgentRef;
+  agentId?: string;
+  onSelect?: SelectDestination;
+  registerEndReachedHandler?: RegisterEndReached;
+  showLoading: boolean;
+};
+
+function SidebarSessions(props: SidebarSessionsProps) {
+  return props.onSelect ? (
+    <SidebarSessionList {...props} />
+  ) : (
+    <SidebarCurrentSessionList {...props} />
+  );
+}
+
+/** Drawer visibility and automatic path expansion stay out of the destination picker. */
+function SidebarCurrentSessionList(props: SidebarSessionsProps) {
+  const source = useConversationSource();
+  const navigation = useConversationTarget(source.ref);
+  const visible = useSidebarPresence() !== 'closed';
+  const path = useConversationSessionPath(visible ? navigation.sessionId : undefined);
+  return <SidebarSessionList {...props} activePath={path.items} visible={visible} />;
+}
+
+function includePathSession(
+  sessions: readonly ConversationSummary[],
+  session?: ConversationSummary,
+) {
+  return session && !sessions.some((item) => item.ref.sessionId === session.ref.sessionId)
+    ? [...sessions, session]
+    : sessions;
+}
+
+function SidebarSessionList({
   agentRef,
+  agentId,
+  activePath = noSessionPath,
+  visible = true,
+  onSelect,
   registerEndReachedHandler,
   showLoading,
 }: {
-  agentRef?: AgentRef;
-  registerEndReachedHandler?: RegisterEndReached;
-  showLoading: boolean;
-}) {
+  activePath?: readonly ConversationSummary[];
+  visible?: boolean;
+} & SidebarSessionsProps) {
   const { t } = useTranslation();
   const source = useConversationSource();
   const navigation = useConversationTarget(source.ref);
@@ -217,10 +385,13 @@ function SidebarSessions({
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
   const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions, isError } = query;
-  const { registerList } = useSidebarSelection();
-  useEffect(
-    () => registerList(`${source.scope}:${agentRef ?? ''}`, source, sessions.slice(0, limit)),
-    [agentRef, limit, registerList, sessions, source],
+  const root = activePath[0];
+  // The selected family's identity restores its path on navigation or drawer reopening.
+  // Other expanded families keep their own state.
+  const pathTarget = visible ? activePath.at(-1)?.ref.sessionId : undefined;
+  const shownSessions = includePathSession(
+    sessions.slice(0, limit),
+    !agentRef || root?.agentId === agentId ? root : undefined,
   );
   const loadMore = useCallback(() => {
     if (isFetchingNextPage || isError || (limit >= sessions.length && !hasNextPage)) return;
@@ -248,7 +419,7 @@ function SidebarSessions({
         />
       </View>
     );
-  if (query.isSuccess && !sessions.length)
+  if (query.isSuccess && !shownSessions.length)
     return (
       <View className="px-5 py-4">
         <ContentState.Empty description={t('session.list.empty')} />
@@ -256,15 +427,44 @@ function SidebarSessions({
     );
   return (
     <View className="px-2">
-      {sessions.slice(0, limit).map((session) => (
-        <SidebarSessionRow
-          key={session.ref.sessionId}
-          session={session}
-          selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
-          leading={leading}
-          selected={session.ref.sessionId === navigation.sessionId}
+      {onSelect ? null : (
+        <SidebarSessionSelectionRegistration
+          agentRef={agentRef}
+          sessions={shownSessions}
+          limit={shownSessions.length}
         />
-      ))}
+      )}
+      {shownSessions.map((session) =>
+        session.hasChildren && source.catalog.listSessionChildren ? (
+          <SidebarSessionTreeNode
+            key={
+              session.ref.sessionId === root?.ref.sessionId && pathTarget
+                ? JSON.stringify([session.ref.sessionId, pathTarget])
+                : session.ref.sessionId
+            }
+            session={session}
+            leading={leading}
+            onSelect={onSelect}
+            activePath={activePath}
+            visible={visible}
+          />
+        ) : onSelect ? (
+          <DestinationSessionRow
+            key={session.ref.sessionId}
+            leading={leading}
+            onSelect={onSelect}
+            session={session}
+          />
+        ) : (
+          <SidebarSessionRow
+            key={session.ref.sessionId}
+            session={session}
+            selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
+            leading={leading}
+            selected={session.ref.sessionId === navigation.sessionId}
+          />
+        ),
+      )}
       {query.isError ? (
         <LoadMore
           leading={leading}
@@ -291,22 +491,275 @@ function SidebarSessions({
   );
 }
 
+type SidebarSessionTreeNodeProps = {
+  session: ConversationSummary;
+  leading?: ReactNode;
+  onSelect?: SelectDestination;
+  depth?: number;
+  ancestorContinuations?: readonly SidebarSessionBranchAncestor[];
+  hasFollowingSibling?: boolean;
+  activePath: readonly ConversationSummary[];
+  visible: boolean;
+};
+
+function SidebarSessionTreeNode({
+  session,
+  leading,
+  onSelect,
+  depth = 0,
+  ancestorContinuations = noAncestorContinuations,
+  hasFollowingSibling = false,
+  activePath,
+  visible,
+}: SidebarSessionTreeNodeProps) {
+  const source = useConversationSource();
+  const navigation = useConversationTarget(source.ref);
+  const canExpand = Boolean(session.hasChildren && source.catalog.listSessionChildren);
+  const selectedId = activePath.at(-1)?.ref.sessionId;
+  const onSelectedPath = activePath.some((item) => item.ref.sessionId === session.ref.sessionId);
+  const [isExpanded, setExpanded] = useState(
+    onSelectedPath && selectedId !== session.ref.sessionId,
+  );
+  const expanded = canExpand && isExpanded;
+  const position: SidebarSessionBranchPosition = {
+    kind: 'session',
+    depth,
+    ancestorContinuations,
+    hasFollowingSibling,
+    expanded,
+    onSelectedPath,
+  };
+  const branch: SidebarSessionBranchAction | undefined = canExpand
+    ? { expanded, toggle: () => setExpanded((value) => !value) }
+    : undefined;
+  const descendants = expanded ? (
+    <SidebarSessionChildren
+      parent={session}
+      leading={leading}
+      onSelect={onSelect}
+      depth={depth + 1}
+      ancestorContinuations={
+        depth === 0
+          ? noAncestorContinuations
+          : [
+              ...ancestorContinuations,
+              { sessionId: session.ref.sessionId, continues: hasFollowingSibling },
+            ]
+      }
+      activePath={activePath}
+      visible={visible}
+    />
+  ) : null;
+  return onSelect ? (
+    <DestinationSessionRow
+      session={session}
+      leading={leading}
+      onSelect={onSelect}
+      position={position}
+      branch={branch}
+    >
+      {descendants}
+    </DestinationSessionRow>
+  ) : (
+    <SidebarSessionRow
+      session={session}
+      leading={leading}
+      selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
+      selected={session.ref.sessionId === navigation.sessionId}
+      position={position}
+      branch={branch}
+    >
+      {descendants}
+    </SidebarSessionRow>
+  );
+}
+
+function SidebarSessionChildren({
+  parent,
+  leading,
+  onSelect,
+  depth,
+  ancestorContinuations,
+  activePath,
+  visible,
+}: Omit<SidebarSessionTreeNodeProps, 'session' | 'hasFollowingSibling'> & {
+  parent: ConversationSummary;
+  depth: number;
+  ancestorContinuations: readonly SidebarSessionBranchAncestor[];
+}) {
+  const { t } = useTranslation();
+  const query = useConversationSessionChildren(parent.ref, visible);
+  const sessions = includePathSession(
+    query.items,
+    activePath.find((item) => item.forkedFromSessionId === parent.ref.sessionId),
+  );
+  const rowLeading = <SidebarSessionBranchLeading leading={leading} depth={depth} />;
+  const footer = query.isError ? (
+    <LoadMore leading={rowLeading} label={t('common.retry')} onPress={() => void query.refetch()} />
+  ) : query.hasNextPage ? (
+    <LoadMore
+      leading={rowLeading}
+      disabled={query.isFetchingNextPage}
+      onPress={() => void query.fetchNextPage()}
+    />
+  ) : query.isLoading ? (
+    <SidebarRowContent leading={rowLeading}>
+      <Text className="text-muted-foreground text-sm">{t('session.list.loading')}</Text>
+    </SidebarRowContent>
+  ) : null;
+  return (
+    <>
+      {onSelect ? null : (
+        <SidebarSessionSelectionRegistration
+          listKey={`children:${parent.ref.sessionId}`}
+          sessions={sessions}
+          limit={sessions.length}
+        />
+      )}
+      {sessions.map((session, index) => (
+        <SidebarSessionTreeNode
+          key={session.ref.sessionId}
+          session={session}
+          leading={leading}
+          onSelect={onSelect}
+          depth={depth}
+          ancestorContinuations={ancestorContinuations}
+          hasFollowingSibling={index < sessions.length - 1 || Boolean(footer)}
+          activePath={activePath}
+          visible={visible}
+        />
+      ))}
+      {footer ? (
+        <SidebarSessionBranchFrame
+          position={{ kind: 'continuation', depth, ancestorContinuations }}
+          leading={leading}
+        >
+          <View className="min-w-0 flex-1">{footer}</View>
+        </SidebarSessionBranchFrame>
+      ) : null}
+    </>
+  );
+}
+
+/** Drawer management stays out of the destination picker. */
+function SidebarSessionSelectionRegistration({
+  agentRef,
+  listKey,
+  limit,
+  sessions,
+}: {
+  agentRef?: AgentRef;
+  listKey?: string;
+  limit: number;
+  sessions: readonly ConversationSummary[];
+}) {
+  const source = useConversationSource();
+  const { registerList } = useSidebarSelection();
+  useEffect(
+    () =>
+      registerList(
+        `${source.scope}:${listKey ?? agentRef ?? ''}`,
+        source,
+        sessions.slice(0, limit),
+      ),
+    [agentRef, listKey, limit, registerList, sessions, source],
+  );
+  return null;
+}
+
+function DestinationSessionRow({
+  leading,
+  onSelect,
+  session,
+  position,
+  branch,
+  children,
+}: {
+  leading?: ReactNode;
+  onSelect: SelectDestination;
+  session: ConversationSummary;
+  position?: SidebarSessionBranchPosition;
+  branch?: SidebarSessionBranchAction;
+  children?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const { status } = useConversationPreview(session.ref, {
+    includeDescendants: branch?.expanded === false,
+  });
+  return (
+    <>
+      <SidebarSessionBranchFrame position={position} leading={leading}>
+        <View className="min-w-0 flex-1">
+          <Pressable
+            accessibilityLabel={session.title || t('session.list.untitled')}
+            accessibilityValue={
+              status
+                ? {
+                    text:
+                      branch?.expanded === false
+                        ? t('session.status.group', { status: t(statusLabelKeys[status]) })
+                        : t(statusLabelKeys[status]),
+                  }
+                : undefined
+            }
+            accessibilityRole="button"
+            onPress={() => onSelect({ kind: 'session', session })}
+            testID={`share-session-${session.ref.sessionId}`}
+          >
+            {({ pressed }) => (
+              <SidebarRowContent
+                trailingInset={branch ? 0 : undefined}
+                leading={
+                  position ? (
+                    <SidebarSessionBranchLeading leading={leading} depth={position.depth} />
+                  ) : (
+                    leading
+                  )
+                }
+                className={cn('w-full', pressed && 'bg-sidebar-accent')}
+              >
+                <SidebarSessionContent title={session.title} status={status} />
+              </SidebarRowContent>
+            )}
+          </Pressable>
+        </View>
+        {branch ? (
+          <SidebarSessionBranchToggle
+            action={branch}
+            title={session.title}
+            sessionId={session.ref.sessionId}
+          />
+        ) : null}
+      </SidebarSessionBranchFrame>
+      {children}
+    </>
+  );
+}
+
 function SidebarSessionRow({
   session,
   selectionKey,
   leading,
   selected,
+  position,
+  branch,
+  children,
 }: {
   session: ConversationSummary;
   selectionKey: string;
   leading?: ReactNode;
   selected: boolean;
+  position?: SidebarSessionBranchPosition;
+  branch?: SidebarSessionBranchAction;
+  children?: ReactNode;
 }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
   const { closeDrawer } = useSidebarActions('Sidebar session');
-  const { rename, remove, status } = useConversationPreview(session.ref);
+  const { rename, remove, status } = useConversationPreview(session.ref, {
+    includeDescendants: branch?.expanded === false,
+  });
   const selection = useSidebarSelection();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
@@ -376,8 +829,18 @@ function SidebarSessionRow({
     });
   }
   const row = (
-    <Pressable
+    <ContextMenu.Trigger
       accessibilityLabel={session.title || t('session.list.untitled')}
+      accessibilityValue={
+        status
+          ? {
+              text:
+                branch?.expanded === false
+                  ? t('session.status.group', { status: t(statusLabelKeys[status]) })
+                  : t(statusLabelKeys[status]),
+            }
+          : undefined
+      }
       accessibilityRole={isSelecting ? 'checkbox' : 'link'}
       accessibilityState={
         isSelecting
@@ -390,23 +853,21 @@ function SidebarSessionRow({
     >
       {({ pressed }) => (
         <SidebarRowContent
-          leading={leading}
-          className={cn(
-            'w-full',
-            !isSelecting && selected && 'bg-secondary/70',
-            pressed && 'bg-sidebar-accent',
-          )}
+          trailingInset={branch ? 0 : undefined}
+          leading={
+            position ? (
+              <SidebarSessionBranchLeading leading={leading} depth={position.depth} />
+            ) : (
+              leading
+            )
+          }
+          className={cn('w-full', pressed && 'bg-sidebar-accent')}
         >
-          <Text
-            className={cn(
-              'min-w-0 flex-1 text-base text-sidebar-foreground',
-              !isSelecting && selected && 'font-medium',
-            )}
-            numberOfLines={1}
-          >
-            {session.title || t('session.list.untitled')}
-          </Text>
-          <SidebarSessionStatus status={status} />
+          <SidebarSessionContent
+            title={session.title}
+            status={status}
+            isSelected={!isSelecting && selected}
+          />
           {isSelecting ? (
             <Animated.View entering={selectionEntrance} exiting={rowExit}>
               <SelectionIndicator
@@ -417,55 +878,91 @@ function SidebarSessionRow({
           ) : null}
         </SidebarRowContent>
       )}
-    </Pressable>
+    </ContextMenu.Trigger>
   );
   return (
-    <Animated.View layout={rowLayout} exiting={rowExit}>
-      {isSelecting ? (
-        row
-      ) : (
-        <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
-          {row}
-        </ContextMenuLink>
-      )}
-    </Animated.View>
+    <>
+      <Animated.View layout={rowLayout} exiting={rowExit}>
+        <SidebarSessionBranchFrame
+          position={position}
+          leading={leading}
+          selected={!isSelecting && selected}
+        >
+          <View className="min-w-0 flex-1">
+            {isSelecting ? (
+              row
+            ) : (
+              <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
+                {row}
+              </ContextMenuLink>
+            )}
+          </View>
+          {branch ? (
+            <SidebarSessionBranchToggle
+              action={branch}
+              title={session.title}
+              sessionId={session.ref.sessionId}
+              disabled={isDeleting}
+            />
+          ) : null}
+        </SidebarSessionBranchFrame>
+      </Animated.View>
+      {children}
+    </>
+  );
+}
+
+function SidebarSessionContent({
+  title,
+  status,
+  isSelected = false,
+}: {
+  title: string;
+  status?: ConversationListStatus;
+  isSelected?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Text
+        className={cn(
+          'min-w-0 flex-1 text-base text-sidebar-foreground',
+          isSelected && 'font-medium',
+        )}
+        numberOfLines={1}
+      >
+        {title || t('session.list.untitled')}
+      </Text>
+      <SidebarSessionStatus status={status} />
+    </>
   );
 }
 
 function SidebarSessionStatus({ status }: { status?: ConversationListStatus }) {
   const { t } = useTranslation();
-  const color = useThemeColor('foreground-tertiary');
+  const color = useThemeColor('muted-foreground');
   if (status === 'awaiting-approval' || status === 'awaiting-input')
     return (
-      <View className="shrink-0 rounded-full border border-warning-border bg-warning-subtle px-1.5">
-        <Text className="font-medium text-warning-subtle-foreground text-xs" numberOfLines={1}>
+      <View className="shrink-0">
+        <Text className="font-medium text-warning text-xs" numberOfLines={1}>
           {t(
             status === 'awaiting-input'
-              ? 'chat.question.waiting'
-              : 'session.status.awaitingApproval',
+              ? 'session.status.awaitingInputShort'
+              : 'session.status.awaitingApprovalShort',
           )}
         </Text>
       </View>
     );
   if (!status) return null;
   return (
-    <View className="shrink-0 flex-row items-center gap-1">
+    <View className="shrink-0">
       {status === 'running' ? (
         <Spinner accessible={false} color={color} size="sm" />
       ) : status === 'failed' ? (
-        <CircleAlertIcon accessible={false} className="size-3 text-error" />
+        <CircleAlertIcon accessible={false} className="size-4 text-error" />
       ) : (
         <View className="size-1.5 rounded-full bg-success" />
       )}
-      <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-        {t(
-          status === 'running'
-            ? 'session.status.running'
-            : status === 'failed'
-              ? 'session.status.failed'
-              : 'session.status.completed',
-        )}
-      </Text>
     </View>
   );
 }

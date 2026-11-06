@@ -8,6 +8,7 @@ import {
 } from '@/backend/data/db/schemas';
 import {
   AgentMessageViewSchema,
+  invalidQuoteCarriers,
   AgentMessagePartSchema,
   AgentSessionViewSchema,
   readAgentInferenceSnapshot,
@@ -135,10 +136,11 @@ export function toReadableAgentMessageViews(
     }
     try {
       const parts: unknown[] = Array.isArray(row.data?.parts) ? row.data.parts : [null];
+      const invalidCarriers = new Set(invalidQuoteCarriers(parts, row.role));
       const readableParts = parts.map((part, index): AgentMessagePart => {
         const parsed = AgentMessagePartSchema.safeParse(part);
-        if (parsed.success) return parsed.data;
-        logger.warn('Unreadable agent message part', parsed.error, {
+        if (parsed.success && !invalidCarriers.has(index)) return parsed.data;
+        logger.warn('Unreadable agent message part', parsed.success ? undefined : parsed.error, {
           messageId: row.id,
           partIndex: index,
           partType:

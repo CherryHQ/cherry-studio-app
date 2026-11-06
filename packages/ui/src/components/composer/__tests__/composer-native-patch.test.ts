@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 describe('react-native-enriched-markdown iOS patch', () => {
   test('keeps native inline icon bytes in the public, normalized, and generated prop contracts', () => {
     const patch = readFileSync(
-      `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
+      `${process.cwd()}/patches/react-native-enriched-markdown@1.1.1.patch`,
       'utf8',
     );
     expect(patch).toContain('icon?: string;');
@@ -35,13 +35,13 @@ describe('react-native-enriched-markdown iOS patch', () => {
 
   test('limits attachments to the leading object character and clears their old formatting', () => {
     const patch = readFileSync(
-      `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
+      `${process.cwd()}/patches/react-native-enriched-markdown@1.1.1.patch`,
       'utf8',
     );
     expect(patch).toContain('[storage.string characterAtIndex:iconIndex] == 0xFFFC');
     expect(patch).toContain('value:attachment range:NSMakeRange(iconIndex, 1)');
     expect(patch).toContain(
-      '[textStorage removeAttribute:NSAttachmentAttributeName range:scopeRange]',
+      'ENRMRemoveAttributeIfPresent(textStorage, NSAttachmentAttributeName, scopeRange, changed);',
     );
     expect(patch).toContain("spannable[range.start] != '\\uFFFC'");
     expect(patch).toContain('if (span is InputLinkIconSpan) range.start + 1 else range.end');
@@ -49,7 +49,7 @@ describe('react-native-enriched-markdown iOS patch', () => {
   });
   test('updates placeholder visibility while text is composing', () => {
     const patch = readFileSync(
-      `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
+      `${process.cwd()}/patches/react-native-enriched-markdown@1.1.1.patch`,
       'utf8',
     );
 
@@ -58,28 +58,20 @@ describe('react-native-enriched-markdown iOS patch', () => {
     );
   });
 
-  test('anchors list markers to complete grapheme clusters', () => {
+  // Upstream 1.1.1 ships both list-marker fixes the patch used to carry.
+  test('relies on upstream grapheme-cluster anchors and emoji-safe list marker metrics', () => {
     const patch = readFileSync(
-      `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
+      `${process.cwd()}/patches/react-native-enriched-markdown@1.1.1.patch`,
       'utf8',
     );
+    const ios = `${process.cwd()}/node_modules/react-native-enriched-markdown/ios`;
 
-    expect(patch).toContain(
+    expect(patch).not.toContain('a/ios/renderer/ListItemRenderer.m');
+    expect(patch).not.toContain('a/ios/utils/ListMarkerDrawer.m');
+    expect(readFileSync(`${ios}/renderer/ListItemRenderer.m`, 'utf8')).toContain(
       'const NSRange anchorRange = [string rangeOfComposedCharacterSequenceAtIndex:anchorLocation];',
     );
-    expect(patch).toContain(
-      '[output addAttribute:ListItemMarkerStartAttribute value:markers range:anchorRange];',
-    );
-  });
-
-  test('uses text font metrics for list markers that follow emoji', () => {
-    const patch = readFileSync(
-      `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
-      'utf8',
-    );
-
-    expect(patch).toContain('static NSString *const kAppleColorEmojiFontName');
-    expect(patch).toContain(
+    expect(readFileSync(`${ios}/utils/ListMarkerDrawer.m`, 'utf8')).toContain(
       'if (!font || [font.fontName isEqualToString:kAppleColorEmojiFontName])',
     );
   });
@@ -114,10 +106,10 @@ describe('react-native-enriched-markdown Android input patch', () => {
       /try\s*\{\s*super\.performLongClick\(\)\s*\} catch \(e: NullPointerException\)/,
     );
     expect(longPress).toMatch(
-      /val top = e\.stackTrace\.firstOrNull\(\)\s*if \(top == null \|\| top\.className != "android.widget.Editor" \|\|\s*\(top\.methodName != "performLongClick" && top\.methodName != "selectCurrentWordAndStartDrag"\)\s*\)\s*\{\s*throw e\s*\}/,
+      /val top = e\.stackTrace\.firstOrNull\(\)\s*(?:\/\/[^\n]*\n\s*)*if \(top == null \|\| !top\.className\.startsWith\("android.widget.Editor"\) \|\|\s*\(top\.methodName != "performLongClick" && top\.methodName != "selectCurrentWordAndStartDrag"\)\s*\)\s*\{\s*throw e\s*\}/,
     );
     // A handled long press must not dispatch an extra click on ACTION_UP.
-    expect(longPress).toMatch(/Log\.w\([^\n]+\)\s*\/\/[^\n]+\s*true\s*\}/);
+    expect(longPress).toMatch(/Log\.w\([^\n]+\)\s*true\s*\}/);
   });
 
   test('re-measures the field after an insert that suppresses the text watcher', () => {

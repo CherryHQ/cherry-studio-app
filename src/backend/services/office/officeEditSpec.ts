@@ -67,9 +67,19 @@ function imageReplacements<T extends z.ZodType>(anchor: T) {
 const source = { file_entry_id: FileEntryIdSchema };
 export const officeInspectSchema = z.strictObject({
   ...source,
-  kind: z.enum(['content', 'images']).default('content'),
+  kind: z.enum(['content', 'images', 'check', 'structure']).default('content'),
+  against_file_entry_id: FileEntryIdSchema.optional().describe(
+    'For kind check, compare with this untouched original and report only newly introduced findings.',
+  ),
   offset: z.int().nonnegative().default(0),
   limit: z.int().min(1).max(100).default(30),
+  finding_offset: z
+    .int()
+    .nonnegative()
+    .default(0)
+    .describe(
+      'For structure inspection, page through Excel formula findings or PowerPoint layout findings within the selected sheets/slides (100 per call).',
+    ),
   shape_offset: z
     .int()
     .nonnegative()
@@ -152,7 +162,9 @@ export type OfficeTransformRequest =
   | {
       operation: 'inspect';
       format: 'docx' | 'xlsx' | 'pptx';
-      kind?: 'content' | 'images';
+      kind?: 'content' | 'images' | 'check' | 'structure';
+      against?: boolean;
+      finding_offset?: number;
       offset: number;
       limit: number;
       shape_offset: number;

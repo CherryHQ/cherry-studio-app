@@ -15,6 +15,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
 } from '@/shared/contracts/fileAttachment';
+import type { VoiceEngineId } from '@/shared/contracts/voice';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -55,6 +56,7 @@ export interface PreferenceSchema {
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
   'chat.completion_notifications.enabled': boolean;
+  'chat.process.auto_collapse': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
@@ -63,10 +65,23 @@ export interface PreferenceSchema {
   'chat.web_search.max_results': number;
   'chat.web_search.model_tools_preferred': boolean;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
+  'chat.input.enter_to_send': boolean;
 
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  /** Null disables voice input and keeps the composer's send action. */
+  'feature.voice.dictation_engine': VoiceEngineId | null;
+  /** Null follows the app language. */
+  'feature.voice.dictation_language': LanguageVarious | null;
+  /** Null uses the first engine this device supports. */
+  'feature.voice.speech_engine': VoiceEngineId | null;
+  /** Audio files use SenseVoice unless the user selects the system's offline recognizer. */
+  'feature.voice.transcription_engine': VoiceEngineId;
+  /** Null follows the app language; independent of microphone dictation. */
+  'feature.voice.transcription_language': LanguageVarious | null;
+  /** Empty uses the system default voice for the app language. */
+  'feature.voice.system_voice': string;
 
   'file.document_parser.mode': DocumentParserMode;
   'file.export.watermark_enabled': boolean;
@@ -77,6 +92,8 @@ export interface PreferenceSchema {
 
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  /** The user hid the sidebar a wide window would otherwise keep beside the content. */
+  'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
   'ui.theme_mode': ThemeMode;
 }
@@ -99,6 +116,7 @@ export const PreferenceDefaults = {
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
+  'chat.process.auto_collapse': true,
   'agent.default_model_id': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'cutoff',
@@ -107,10 +125,17 @@ export const PreferenceDefaults = {
   'chat.web_search.max_results': 5,
   'chat.web_search.model_tools_preferred': true,
   'chat.web_search.provider_overrides': {},
+  'chat.input.enter_to_send': false,
 
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'feature.voice.dictation_engine': null,
+  'feature.voice.dictation_language': null,
+  'feature.voice.speech_engine': null,
+  'feature.voice.system_voice': '',
+  'feature.voice.transcription_engine': 'sensevoice',
+  'feature.voice.transcription_language': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
   'file.export.watermark_enabled': true,
@@ -121,6 +146,7 @@ export const PreferenceDefaults = {
 
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
@@ -141,4 +167,10 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   'app.user.id',
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
+  // Engine support and system voices differ per device.
+  'feature.voice.dictation_engine',
+  'feature.voice.speech_engine',
+  'feature.voice.transcription_engine',
+  'feature.voice.system_voice',
+  'ui.sidebar.collapsed',
 ] as const satisfies readonly PreferenceKeyType[];

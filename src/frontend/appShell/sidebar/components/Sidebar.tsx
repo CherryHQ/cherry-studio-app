@@ -5,7 +5,7 @@ import { type ComponentType, useCallback, useEffect, useMemo } from 'react';
 import { Keyboard, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { useIsSidebarPersistent } from '@/frontend/appShell/layout';
+import { useCanDockSidebar } from '@/frontend/appShell/layout';
 import {
   chatRouteParams,
   useChatSource,
@@ -18,6 +18,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import type { SessionSearchResult } from '../hooks/sessionSearch';
+import { useCloseDrawerForExternalNavigation } from '../hooks/useCloseDrawerForExternalNavigation';
 import {
   sessionSearchResultHref,
   useSessionSearch,
@@ -58,9 +59,13 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
   const searchRequest = useSessionSearchRequest();
-  const isPersistent = useIsSidebarPersistent();
+  const canDock = useCanDockSidebar();
   const pane = useFilePane();
   const { column, setContent } = useSidebarColumn();
+  const prepareExternalNavigation = useCloseDrawerForExternalNavigation(
+    navigation,
+    column.kind === 'permanent',
+  );
   const currentConversation = useConversationTarget({ kind: 'local' });
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
@@ -68,8 +73,8 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   // A permanent drawer has nothing to close, but an overlay left open before the window widened
   // would otherwise reappear over the chat once the window narrows again.
   useEffect(() => {
-    if (isPersistent) navigation.closeDrawer();
-  }, [isPersistent, navigation]);
+    if (canDock) navigation.closeDrawer();
+  }, [canDock, navigation]);
 
   // Conversation actions assume the chat is on screen. Beside a wide window's page, return to the
   // chat first; pages above it are dismissed, as their own back steps would.
@@ -97,13 +102,14 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         navigation.closeDrawer();
         returnToChat();
       },
+      prepareExternalNavigation,
       returnToChat,
       openSearch:
         source === 'local'
           ? () => {
               navigation.closeDrawer();
               // A wide window searches in the column, beside the chat its results open.
-              if (isPersistent && SearchPanel) setContent('search');
+              if (canDock && SearchPanel) setContent('search');
               else openSessionSearch();
             }
           : undefined,
@@ -133,7 +139,8 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       sessionId,
       sourceChat,
       navigation,
-      isPersistent,
+      prepareExternalNavigation,
+      canDock,
       openDestination,
       openSessionSearch,
       pane,

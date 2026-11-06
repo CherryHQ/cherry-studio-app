@@ -32,6 +32,7 @@ import {
   readMessageTranslations,
   type MessageTranslations,
 } from '@/shared/data/types/messageTranslation';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -132,7 +133,13 @@ export class AgentSessionMessageService {
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
     if (query.aroundMessageId) {
-      return this.readAround(sessionId, query.aroundMessageId, limit, query.settledOnly);
+      return this.readAround(
+        sessionId,
+        query.aroundMessageId,
+        limit,
+        query.settledOnly,
+        query.aroundMode,
+      );
     }
 
     const cursor = decodeListCursor(query.cursor, asNumericKey, 'agent-session-messages');
@@ -204,6 +211,7 @@ export class AgentSessionMessageService {
     messageId: string,
     limit: number,
     settledOnly = false,
+    aroundMode?: 'exact',
   ) {
     const readTarget = (candidates: SQL) =>
       this.db
@@ -222,7 +230,7 @@ export class AgentSessionMessageService {
     let [target] = await readTarget(eq(agentSessionMessageTable.id, messageId));
     // Selecting another answer above it takes the message out of the transcript; read around its
     // nearest ancestor still shown, where the branches part.
-    if (!target && !(await this.isOnSelectedPath(sessionId, messageId)))
+    if (!target && aroundMode !== 'exact' && !(await this.isOnSelectedPath(sessionId, messageId)))
       [target] = await readTarget(
         sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId, messageId)})`,
       );
@@ -338,7 +346,9 @@ export class AgentSessionMessageService {
     }
     return items.map((item) => {
       const siblings = item.parentId === undefined ? undefined : children.get(item.parentId);
-      return siblings && siblings.length > 1 ? { ...item, siblings } : item;
+      return projectAgentMessageDisplay(
+        siblings && siblings.length > 1 ? { ...item, siblings } : item,
+      );
     });
   }
 

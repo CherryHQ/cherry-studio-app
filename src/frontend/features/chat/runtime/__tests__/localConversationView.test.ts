@@ -62,6 +62,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     respondQuestion: jest.fn(async () => undefined),
     retryMessage: jest.fn(async () => undefined),
     editUserMessage: jest.fn(async () => undefined),
+    editMessage: jest.fn(async () => undefined),
     forkSession: jest.fn(async () => ({ id: 'fork' }) as never),
     deleteTurn: jest.fn(async () => undefined),
     selectMessage: jest.fn(async () => ({ id: 'session' }) as never),
@@ -95,6 +96,21 @@ test('a queued-only session blocks history edits while leaving its queue outside
   const projected = f.projector.message(row, f.state);
   expect(projected.actions.remove?.availability).toEqual({ state: 'disabled', reason: 'busy' });
   expect(f.projector.snapshot(f.state, undefined).executions).toEqual([]);
+});
+
+test('every successful answer offers editing, disabled together while the session is busy', () => {
+  const rows = [message('first'), message('second')];
+  const f = fixture();
+  const history = f.projector.history(rows, f.state);
+  expect(history.map((row) => row.actions.edit?.availability.state)).toEqual([
+    'enabled',
+    'enabled',
+  ]);
+  f.set({ isSubmitting: true });
+  expect(f.projector.message(rows[0], f.state).actions.edit?.availability).toEqual({
+    state: 'disabled',
+    reason: 'busy',
+  });
 });
 
 test('a changed approval payload under the same id rejects the earlier decision', async () => {
@@ -238,6 +254,8 @@ test('message actions follow the busy state and reuse projections while it is un
   expect(f.projector.message(answer, f.state)).toBe(idle);
   expect(idle.actions.retry?.availability).toEqual({ state: 'enabled' });
   expect(idle.actions.remove?.availability).toEqual({ state: 'enabled' });
+  await idle.actions.remove!.execute(undefined);
+  expect(f.client.deleteTurn).toHaveBeenCalledWith('session', answer.turnId, answer.id);
   expect(await idle.actions.fork!.execute({ title: 'Copy' })).toEqual({
     state: 'applied',
     value: { source: { kind: 'local' }, sessionId: 'fork' },
@@ -271,7 +289,7 @@ test('message actions follow the busy state and reuse projections while it is un
   expect(f.projector.message(message('user', 'user'), f.state).actions.answerWith).toBeUndefined();
   const user = message('question', 'user');
   // Editing a question waits for the Session to settle, like regeneration.
-  const busyEdit = f.projector.message(user, f.state).actions.edit;
+  const busyEdit = f.projector.message(user, f.state).actions.editUser;
   expect(busyEdit?.availability).toEqual({ state: 'disabled', reason: 'busy' });
   expect(await busyEdit!.execute({ text: 'edited' })).toMatchObject({
     state: 'rejected',
@@ -279,7 +297,7 @@ test('message actions follow the busy state and reuse projections while it is un
   });
   expect(f.client.editUserMessage).not.toHaveBeenCalled();
   f.set({ activeTurn: null });
-  const idleEdit = f.projector.message(user, f.state).actions.edit;
+  const idleEdit = f.projector.message(user, f.state).actions.editUser;
   expect(idleEdit?.availability).toEqual({ state: 'enabled' });
   expect(await idleEdit!.execute({ text: 'edited' })).toEqual({
     state: 'applied',
@@ -292,7 +310,7 @@ test('message actions follow the busy state and reuse projections while it is un
   });
   f.client.editUserMessage.mockClear();
   expect(
-    await f.projector.message(message('system', 'system'), f.state).actions.edit?.execute({
+    await f.projector.message(message('system', 'system'), f.state).actions.editUser?.execute({
       text: 'edited',
     }),
   ).toBeUndefined();
@@ -356,5 +374,21 @@ test('cancellation targets the observed turn and the snapshot reports freshness 
   expect(f.projector.snapshot(f.state, undefined)).toMatchObject({
     freshness: { state: 'unavailable', failure: { code: 'internal' } },
     executions: [],
+  });
+});
+
+test('user branching and assistant reply editing keep distinct action contracts', async () => {
+  const f = fixture();
+  const question = f.projector.message(message('question', 'user'), f.state);
+  const answer = f.projector.message(message('answer'), f.state);
+  expect(question.actions.edit).toBeUndefined();
+  expect(question.actions.editUser?.availability.state).toBe('enabled');
+  expect(answer.actions.edit?.availability.state).toBe('enabled');
+  expect(answer.actions.editUser).toBeUndefined();
+  await question.actions.editUser!.execute({ text: 'Question revised' });
+  expect(f.client.editUserMessage).toHaveBeenCalledWith({
+    sessionId: 'session',
+    messageId: 'question',
+    text: 'Question revised',
   });
 });

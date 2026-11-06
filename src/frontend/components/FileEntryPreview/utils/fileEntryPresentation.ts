@@ -1,6 +1,7 @@
 import type { FilePreviewFile } from '@cherrystudio/ui/components';
 
 import { type FileEntry, filenameExtension } from '@/shared/data/types/file';
+import { isAudioMediaType } from '@/shared/utils/audioFileTypes';
 
 export function fileEntryDisplayName(entry: Pick<FileEntry, 'filename'>): string {
   return entry.filename;
@@ -10,7 +11,7 @@ export function fileEntryExtensionLabel(entry: Pick<FileEntry, 'filename'>): str
   return filenameExtension(entry.filename)?.slice(0, 5).toUpperCase() ?? '';
 }
 
-export type FileEntryKind = 'document' | 'html' | 'image' | 'markdown' | 'text';
+export type FileEntryKind = 'audio' | 'document' | 'html' | 'image' | 'markdown' | 'text';
 
 const kindByMediaType = new Map<string, FileEntryKind>([
   ['text/html', 'html'],
@@ -32,6 +33,7 @@ export function fileEntryPreviewKind(entry: Pick<FileEntry, 'mediaType'>): FileE
 
   return (
     kindByMediaType.get(mediaType) ??
+    (isAudioMediaType(mediaType) ? 'audio' : undefined) ??
     (mediaType.startsWith('image/') ? 'image' : undefined) ??
     (mediaType.startsWith('text/') ? 'text' : undefined) ??
     'document'

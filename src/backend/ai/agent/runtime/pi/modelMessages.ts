@@ -155,6 +155,12 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
     name: part.name,
     mediaType: part.mediaType,
     ...(part.attachmentReport?.parser ? { parser: part.attachmentReport.parser } : {}),
+    ...(part.attachmentReport?.mode === 'image-text'
+      ? {
+          interpretation:
+            'OCR text from the first image frame only. The model has not received image pixels; visual details and layout may be missing.',
+        }
+      : {}),
     truncation: part.truncated ? '[truncated]' : '[complete]',
     content: part.text,
   } as const;

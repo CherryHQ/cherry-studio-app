@@ -6,6 +6,7 @@ export * from './button';
 export * from './chip';
 export * from './composer';
 export * from './content-state';
+export * from './date-range-picker';
 export * from './dialog';
 export * from './file-preview';
 export * from './image';

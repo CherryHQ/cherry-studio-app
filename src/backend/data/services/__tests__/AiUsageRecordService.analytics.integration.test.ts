@@ -36,16 +36,18 @@ describe('AI usage analytics', () => {
     const database = drizzle(
       async (sql, params, method) => {
         const statement = sqlite.prepare(sql);
+        // Drizzle maps fields by position. Object rows reorder numeric column names
+        // and collapse duplicate SQL expressions.
+        statement.setReturnArrays(true);
         if (method === 'run') {
           statement.run(...params);
           return { rows: [] };
         }
         if (method === 'get') {
-          const row = statement.get(...params) as Record<string, unknown> | undefined;
-          return { rows: row ? [Object.values(row)] : [] };
+          const row = statement.get(...params);
+          return { rows: row ? Object.values(row) : [] };
         }
-        const rows = statement.all(...params) as Record<string, unknown>[];
-        return { rows: rows.map(Object.values) };
+        return { rows: statement.all(...params) };
       },
       undefined as never,
       { casing: 'snake_case', schema },
@@ -73,6 +75,295 @@ describe('AI usage analytics', () => {
   afterEach(async () => {
     await uninstallTestHost();
     sqlite.close();
+  });
+
+  test('aggregates full history without combining currencies or inventing missing metrics', async () => {
+    const old = new Date(2022, 0, 15, 12).getTime();
+    const recent = new Date(2026, 9, 15, 12).getTime();
+    await service.recordInvocations([
+      {
+        ...invocation(
+          'old',
+          old,
+          { inputTokens: 100, outputTokens: 20, reasoningTokens: 5, cacheReadTokens: 30 },
+          context('a'),
+          { amount: 1, currency: 'USD' },
+        ),
+        metrics: { timeFirstTokenMs: 100, timeCompletionMs: 1100 },
+      },
+      {
+        ...invocation('recent', recent, { inputTokens: 200, outputTokens: 40 }, context('a'), {
+          amount: 8,
+          currency: 'CNY',
+        }),
+        metrics: { timeFirstTokenMs: 300, timeCompletionMs: 1300 },
+      },
+      { ...invocation('missing', recent, undefined), metrics: undefined },
+    ]);
+    const result = await service.analytics({
+      from: 0,
+      to: recent,
+      groupBy: 'model',
+      metric: 'cost',
+      currency: 'USD',
+      includePerformance: true,
+    });
+    expect(result.granularity).toBe('month');
+    expect(result.firstRecordAt).toBe(old);
+    expect(result.stats.totals).toMatchObject({
+      requestCount: 3,
+      unpricedRequestCount: 1,
+      totalCost: 1,
+    });
+    expect(result.composition).toMatchObject({
+      totalTokens: 360,
+      inputTokens: 300,
+      outputTokens: 60,
+      reasoningTokens: 5,
+      cacheReadTokens: 30,
+      imageCount: null,
+      cacheWriteTokens: null,
+    });
+    expect(result.timeline.costTotals).toEqual([
+      { currency: 'CNY', total: 8 },
+      { currency: 'USD', total: 1 },
+    ]);
+    expect(result.timeline.buckets.map((bucket) => bucket.date)).toEqual([
+      '2022-01-01',
+      '2026-10-01',
+    ]);
+    expect(result.performance!.timeFirstTokenMs).toEqual({
+      sampleCount: 2,
+      average: 200,
+      median: 200,
+      p95: 300,
+    });
+    expect(result.performance!.tokensPerSecond).toEqual({
+      sampleCount: 2,
+      average: 30,
+      median: 30,
+      p95: 40,
+    });
+    expect(result.performance!.timeThinkingMs).toEqual({
+      sampleCount: 0,
+      average: null,
+      median: null,
+      p95: null,
+    });
+  });
+
+  test('keeps ranked model stacks and the remaining usage in the same calendar bucket', async () => {
+    const createdAt = new Date(2026, 9, 29, 12).getTime();
+    await service.recordInvocations([
+      invocation(
+        'top',
+        createdAt,
+        { totalTokens: 100, inputTokens: 80, outputTokens: 20 },
+        context('a', { modelId: 'top' }),
+      ),
+      invocation(
+        'other-a',
+        createdAt,
+        { totalTokens: 50, inputTokens: 30, outputTokens: 10 },
+        context('a', { modelId: 'second' }),
+      ),
+      invocation(
+        'other-b',
+        createdAt,
+        { totalTokens: 30, inputTokens: 20, outputTokens: 5 },
+        context('a', { modelId: 'third' }),
+      ),
+    ]);
+    const result = await service.analytics({
+      from: 0,
+      to: createdAt,
+      groupBy: 'model',
+      metric: 'tokens',
+      limit: 1,
+    });
+    expect(result.timeline.buckets).toEqual([
+      expect.objectContaining({
+        date: '2026-10-29',
+        modelId: 'top',
+        totalTokens: 100,
+        totalInputTokens: 80,
+        totalOutputTokens: 20,
+        requestCount: 1,
+      }),
+      expect.objectContaining({
+        date: '2026-10-29',
+        isOther: true,
+        totalTokens: 80,
+        totalInputTokens: 50,
+        totalOutputTokens: 15,
+        requestCount: 2,
+      }),
+    ]);
+    expect(result.timeline.buckets.reduce((sum, bucket) => sum + bucket.totalTokens, 0)).toBe(
+      result.stats.totals.totalTokens,
+    );
+    expect(result.performance).toBeUndefined();
+    expect(result.performanceByModel).toBeUndefined();
+  });
+
+  test('compares model response percentiles within provider identities and the selected scope', async () => {
+    await service.recordInvocations([
+      ...[100, 200, 300, 400].map((timeFirstTokenMs, index) => ({
+        ...invocation(`a-${index}`, 1000, undefined, context('a', { modelId: 'shared' })),
+        metrics: { timeFirstTokenMs },
+      })),
+      ...[0, 600].map((timeFirstTokenMs, index) => ({
+        ...invocation(`b-${index}`, 1000, undefined, context('b', { modelId: 'shared' })),
+        metrics: { timeFirstTokenMs },
+      })),
+      {
+        ...invocation('other-model', 1000, undefined, context('a', { modelId: 'other' })),
+        metrics: { timeFirstTokenMs: 2000 },
+      },
+      {
+        ...invocation('no-timing', 1000, undefined, context('a', { modelId: 'shared' })),
+        metrics: undefined,
+      },
+      {
+        ...invocation('outside-range', 3000, undefined, context('a', { modelId: 'shared' })),
+        metrics: { timeFirstTokenMs: 9000 },
+      },
+    ]);
+    const query = { from: 0, to: 2000, groupBy: 'model' as const, includePerformance: true };
+    const result = await service.analytics({ ...query, limit: 2 });
+    expect(result.performanceByModel).toEqual([
+      {
+        providerId: 'a',
+        providerName: 'Provider A',
+        modelId: 'shared',
+        sampleCount: 4,
+        average: 250,
+        median: 250,
+        p95: 400,
+      },
+      {
+        providerId: 'b',
+        providerName: 'Provider B',
+        modelId: 'shared',
+        sampleCount: 2,
+        average: 300,
+        median: 300,
+        p95: 600,
+      },
+    ]);
+    const filtered = await service.analytics({
+      ...query,
+      sourceId: 'assistant-a',
+      search: 'shared',
+    });
+    expect(filtered.performanceByModel).toEqual([result.performanceByModel![0]]);
+    const missing = await service.analytics({ ...query, modelId: 'missing' });
+    expect(missing.performanceByModel).toEqual([]);
+  });
+
+  test('shares exact identities and literal search between analytics and paginated records', async () => {
+    const capture = context('a', {
+      modelId: 'model%_one',
+      credentialReceipt: {
+        attribution: 'explicit',
+        id: 'key-1',
+        label: 'Work',
+        masked: 'sk-…1234',
+      },
+    });
+    await service.recordInvocations([
+      invocation('match-1', 1000, { totalTokens: 2 }, capture),
+      invocation('match-2', 2000, { totalTokens: 3 }, capture),
+      invocation(
+        'other-provider',
+        3000,
+        { totalTokens: 4 },
+        context('b', { modelId: 'model%_one' }),
+      ),
+      invocation('other-model', 3000, { totalTokens: 5 }, context('a', { modelId: 'modelXXone' })),
+    ]);
+    const filter = {
+      providerId: 'a',
+      sourceType: 'assistant' as const,
+      sourceId: 'assistant-a',
+      apiKeyId: 'key-1',
+      modality: 'language' as const,
+      search: '%_',
+    };
+    const stats = await service.analytics({ ...filter, from: 0, to: 4000, groupBy: 'model' });
+    const first = await service.list({ ...filter, from: 0, to: 4000, limit: 1 });
+    const next = await service.list({
+      ...filter,
+      from: 0,
+      to: 4000,
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(stats.stats.totals).toMatchObject({ recordCount: 2, totalTokens: 5 });
+    expect(first.total).toBe(2);
+    expect(first.items[0].requestId).toBe('match-2');
+    expect(next.items[0].requestId).toBe('match-1');
+    expect(next.nextCursor).toBeUndefined();
+    const unknown = await service.analytics({
+      from: 0,
+      to: 4000,
+      groupBy: 'apiKey',
+      apiKeyId: null,
+    });
+    expect(unknown.stats.totals.recordCount).toBe(2);
+  });
+
+  test.each(['createdAt', 'totalTokens', 'cost'] as const)(
+    'retains the currency scope when sorting records by %s and searching across pages',
+    async (sortBy) => {
+      const capture = context('a', { pricingSnapshot: null });
+      await service.recordInvocations([
+        invocation('usd-1', 1000, { totalTokens: 1 }, capture, { amount: 1, currency: 'USD' }),
+        invocation('usd-2', 2000, { totalTokens: 2 }, capture, { amount: 2, currency: 'USD' }),
+        invocation('cny', 3000, { totalTokens: 3 }, capture, { amount: 3, currency: 'CNY' }),
+        invocation('unpriced', 4000, { totalTokens: 4 }, capture),
+      ]);
+      const query = {
+        from: 0,
+        to: 5000,
+        providerId: 'a',
+        modelId: 'model-1',
+        search: 'model-1',
+        costCurrency: 'USD' as const,
+        sortBy,
+        sortOrder: 'desc' as const,
+        limit: 1,
+      };
+      const first = await service.list(query);
+      const next = await service.list({ ...query, cursor: first.nextCursor });
+      expect(first.total).toBe(2);
+      expect(first.items.map((record) => record.requestId)).toEqual(['usd-2']);
+      expect(next.items.map((record) => record.requestId)).toEqual(['usd-1']);
+      expect(next.nextCursor).toBeUndefined();
+    },
+  );
+
+  test('excludes legacy aggregates and non-language speed samples from performance', async () => {
+    await service.recordInvocations([
+      invocation('legacy', 1000, { outputTokens: 10 }),
+      { ...invocation('image', 2000, { outputTokens: 100 }), modality: 'image', imageCount: 1 },
+    ]);
+    sqlite.exec(
+      "UPDATE ai_usage_record SET record_kind = 'legacy-aggregate', message_kind = 'chat', message_id = 'old-message', request_count = 8 WHERE request_id = 'legacy'",
+    );
+    const result = await service.analytics({
+      from: 0,
+      to: 3000,
+      groupBy: 'model',
+      includePerformance: true,
+    });
+    expect(result.stats.totals).toMatchObject({ requestCount: 9, estimatedRequestCount: 8 });
+    expect(result.performance!.timeFirstTokenMs.sampleCount).toBe(1);
+    expect(result.performance!.tokensPerSecond.sampleCount).toBe(0);
+    expect(result.performanceByModel).toEqual([
+      expect.objectContaining({ providerId: 'a', modelId: 'model-1', sampleCount: 1 }),
+    ]);
+    expect(result.composition.imageCount).toBe(1);
   });
 
   test('commits message projections with usage and notifies only new facts', async () => {
@@ -122,6 +413,7 @@ describe('AI usage analytics', () => {
       await service.recordInvocations([first, second, image]);
       expect(listener).toHaveBeenCalledTimes(1);
       expect(listener).toHaveBeenCalledWith([
+        '/ai-usage-records/analytics',
         '/ai-usage-records',
         '/ai-usage-records/stats',
         '/ai-usage-records/timeline',
@@ -196,6 +488,7 @@ describe('AI usage analytics', () => {
       });
       const unsubscribe = subscribeDataApiChanges(listener);
       const analyticsPaths = [
+        '/ai-usage-records/analytics',
         '/ai-usage-records',
         '/ai-usage-records/stats',
         '/ai-usage-records/timeline',

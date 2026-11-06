@@ -132,6 +132,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           },
         ],
         key: 'skill-actions',
+        nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
         type: 'menu',
       },
     ],

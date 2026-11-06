@@ -1,4 +1,4 @@
-# PDF Text Extraction
+# PDF and Image Text Extraction
 
 Local Expo module used by attachment preparation and Agent file reads. PDFKit (iOS) and PDFBox
 (Android) extract existing text first. A page is rendered for Apple Vision or the bundled ML Kit
@@ -8,6 +8,21 @@ caption therefore cannot suppress recognition of the scanned body, while a text 
 figure, or a scan that already carries a text layer, keeps its native text without OCR.
 Recognition does not send page images to an OCR service.
 Normal conversation submission still sends the resulting text to the selected model.
+
+`extractImageText` also recognizes standalone PNG/JPEG/WebP/GIF attachments, using the same native
+engines and cancellation queue. Images are decoded to at most a 2560-pixel edge and four million
+pixels, with camera orientation applied and transparent backgrounds composited onto white. Only the
+first frame is read. The shared result/progress contract represents an image as one recognition
+page; the UI shows image recognition without a PDF page counter. Android uses subsampled decoding,
+so the decoded image can be smaller than the ceiling. An oriented/opaque copy may coexist with its
+bounded source during preparation.
+
+Chat sends image pixels to vision-capable models. For text-only models it automatically sends OCR
+text, including when rebuilding history. The model envelope explicitly identifies OCR-only content;
+the transcript retains the original attachment and reports that only text was delivered. Current
+images without readable text, failed recognition, and unsupported app-language scripts stop submission
+with distinct errors. `read_file` and `library_read_file` use the same extraction and text paging for
+text-only models. Painting reference images still require native image input.
 
 ## Processing and ownership
 
@@ -52,20 +67,23 @@ Normal conversation submission still sends the resulting text to the selected mo
 
 ## Reuse and cancellation
 
-`src/backend/services/file/pdfText.ts` shares one extraction between concurrent consumers and
+`src/backend/services/file/fileTextExtraction.ts` shares PDF/image extraction between concurrent consumers and
 reuses the same derived disk result for attachments, later turns and file tools. Cache keys include
 the managed filename (immutable entry ID), byte size, modification time, extraction-policy version,
-page ceiling and app language. Availability/authorization and source byte limits are checked before cache access.
+source kind, page ceiling and app language. Availability/authorization and source byte limits are checked before cache access.
 No successful text results or page images accumulate in a process-wide memory cache.
 
-`pdfTextCache.ts` owns the disposable `Paths.cache/PdfText` directory: at most 64 MiB retained,
+`fileTextCache.ts` owns the disposable `Paths.cache/PdfText` directory (the existing directory name
+is retained for cleanup of older results): at most 64 MiB retained,
 8 MiB per entry, at most 256 entries, validated JSON, best-effort writes, oldest-write eviction. Hard deletion removes
 that entry's cache and the restore gate clears the directory. Policy changes, eviction, OS cache
 purging or corrupt cache files require extraction again; ordinary follow-up reads reuse it.
 
 Each consumer can stop immediately. Only the last consumer cancels the shared native request;
 the extraction slot remains occupied until native cleanup finishes. Aborted or failed extraction
-is never cached. `observePdfOcr` aggregates each file's extraction states, preferring active
+is never cached; a standalone image in an unsupported app language is not cached either. An empty
+image result is cached so history rebuilds do not recognize it again.
+`observeFileOcr` aggregates each file's extraction states, preferring active
 recognition over queued reads. Cancelling or finishing one extraction cannot clear another's state.
 A running `read_file` call links its call ID to the entry it resolved, so its row follows reads by
 workspace path as well as by entry ID.
@@ -102,6 +120,12 @@ pending-reply and tool-row progress in both themes. Include a text PDF with a lo
 scan on iOS, and Russian/Japanese app languages. Include images inside nested forms and inline images. Check Chinese and
 English recognition on representative physical devices. Complex tables/formulas, reconstruction
 of multi-column reading order and searchable-PDF export remain separate work.
+
+Image acceptance additionally covers text-only versus vision models, OCR-only transcript notices,
+first-use offline PNG/JPEG/WebP/GIF reads, first-frame behavior, EXIF rotation/mirroring, transparent
+backgrounds, empty/failed/unsupported recognition, shared cancellation/cache reuse and history model
+switches. Android instrumented sources exercise bounded image decoding, EXIF orientation and the
+bundled recognizer. Added source coverage does not imply that native or device checks have run.
 
 References: [Apple Vision](https://developer.apple.com/documentation/vision/vnrecognizetextrequest),
 [ML Kit Android setup](https://developers.google.com/ml-kit/vision/text-recognition/v2/android),

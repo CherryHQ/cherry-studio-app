@@ -36,6 +36,10 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
+
 jest.mock('../hooks/useConversationFeedbackHint', () => ({
   useConversationFeedbackHint: jest.fn(),
 }));
@@ -43,6 +47,10 @@ jest.mock('../hooks/useConversationFeedback', () => ({
   useConversationFeedback: () => undefined,
 }));
 
+jest.mock('../../../voice/useMessageSpeech', () => ({
+  useEndReadingWithConversation: jest.fn(),
+  useMessageSpeech: () => ({ isSpeaking: false, toggle: jest.fn() }),
+}));
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
   useMessageTranslation: () => undefined,
@@ -102,6 +110,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+    useComposerExpansion: () => null,
     useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
@@ -248,6 +257,12 @@ function ChatWorkspace(
     />
   );
 }
+
+jest.mock('../components/ChatComposerClearance', () => ({
+  ChatComposerClearance: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('../../../quotes/MessageQuoteHighlight', () => ({ MessageQuoteHighlight: () => null }));
 
 jest.mock('../components/ChatInitialRenderCover', () => ({
   ChatInitialRenderCover: ({ isVisible }: { isVisible: boolean }) => {

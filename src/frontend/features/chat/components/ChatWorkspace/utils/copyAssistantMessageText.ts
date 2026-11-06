@@ -1,5 +1,6 @@
+import { createCodeBlockMarkdown } from '@cherrystudio/ui/markdown';
+
 import type { CherryMessagePart } from '@/shared/data/types/message';
-import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
 
 export function copyAssistantMessageText(parts: readonly CherryMessagePart[]): string {
   return parts

@@ -320,11 +320,11 @@ export class AgentSessionChatClient {
   }
 
   /**
-   * The removal reaches live state through the Session's own `turn.deleted`
+   * The removal reaches live state through the Session's own deletion
    * event, so a caller that is already observing needs no separate reconcile.
    */
-  async deleteTurn(sessionId: string, turnId: string): Promise<void> {
-    await this.protocol.deleteTurn({ sessionId, turnId });
+  async deleteTurn(sessionId: string, turnId: string, messageId?: string): Promise<void> {
+    await this.protocol.deleteTurn({ sessionId, turnId, ...(messageId ? { messageId } : {}) });
   }
 
   async submitMessage(input: AgentSubmitMessageInput) {
@@ -728,6 +728,7 @@ export class AgentSessionChatClient {
         this.commitLiveMessages(entry);
         return;
       }
+      case 'message.edited':
       case 'message.finalized':
         // Parallel answers keep streaming: drop only this message's unflushed text.
         for (const [key, pending] of entry.pendingTextDeltas)
@@ -748,14 +749,20 @@ export class AgentSessionChatClient {
         )
           this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
-      case 'turn.deleted': {
+      case 'turn.deleted':
+      case 'messages.deleted': {
         for (const messageId of event.messageIds) {
           entry.liveMessages.delete(messageId);
           this.toolInputPreviews.clearMessage(messageId);
         }
         // The last turn this generation ran may be the one that just left the
         // transcript; keeping its view would report a turn nothing can show.
-        const isActiveTurnDeleted = entry.state.activeTurn?.id === event.turnId;
+        const isActiveTurnDeleted = Boolean(
+          entry.state.activeTurn &&
+          (event.type === 'turn.deleted'
+            ? entry.state.activeTurn.id === event.turnId
+            : event.messageIds.includes(entry.state.activeTurn.assistantMessageId)),
+        );
         this.commitLiveMessages(entry, {
           ...(isActiveTurnDeleted
             ? { activeTurn: null, pendingApprovals: [], pendingQuestion: null }

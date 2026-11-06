@@ -292,13 +292,62 @@ describe('Pi durable request diagnostics', () => {
       attributes: {
         'error.stage': 'stream',
         'error.category': failure.category,
-        'error.code': failure.code,
+        'error.code': failure.code === 'runtime_error' ? 'provider_error' : failure.code,
         'error.retryable': failure.retryable,
         'error.retry_scope': 'automatic',
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');
   });
+
+  test.each([
+    { rawStopReason: undefined, code: 'provider_error', category: 'unknown' },
+    { rawStopReason: 'SAFETY', code: 'provider_error', category: 'content_filter' },
+    { rawStopReason: 'PROHIBITED_CONTENT', code: 'provider_error', category: 'content_filter' },
+    { rawStopReason: 'IMAGE_RECITATION', code: 'provider_error', category: 'content_filter' },
+    { rawStopReason: undefined, code: 'content_filter', category: 'content_filter' },
+  ])(
+    'emits $category for structured safety $rawStopReason / $code',
+    async ({ rawStopReason, code, category }) => {
+      const { traces, records } = createTraceRecorder();
+      const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+      const source = new AssistantMessageEventStream();
+      const message: AssistantMessage = {
+        ...emptyAssistantMessage(wire),
+        stopReason: 'error',
+        rawStopReason,
+        errorMessage: 'private content_filter_results: filtered false',
+        diagnostics: [
+          {
+            type: 'provider_response_failure',
+            timestamp: 1,
+            error: { code, message: 'private message' },
+            details: { body: 'private content_filter_results' },
+          },
+        ],
+      };
+      source.push({ type: 'error', reason: 'error', error: message });
+      bridge.streamFn.mockReturnValueOnce(source);
+      await bridge.registerModel(reference);
+      const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+        messages: [],
+      });
+      expect(result.stopReason).toBe('error');
+      expect(result.rawStopReason).toBe(rawStopReason);
+      expect(result.errorMessage).toBe(message.errorMessage);
+      expect(records.at(-1)).toMatchObject({
+        status: 'error',
+        attributes: {
+          'gen_ai.response.finish_reason': 'error',
+          'error.category': category,
+          'error.retryable': false,
+          'error.retry_scope': 'automatic',
+        },
+      });
+      expect(JSON.stringify(records)).not.toContain('private');
+      expect(JSON.stringify(records)).not.toContain('content_filter_results');
+    },
+  );
 
   test('keeps provider resolution separate from streaming failures', async () => {
     const { traces, records } = createTraceRecorder();

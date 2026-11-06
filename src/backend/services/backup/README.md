@@ -13,9 +13,15 @@ counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
 This is a mobile format. Desktop physical backups are rejected. Compatibility requires an exact
-prefix of bundled SQLite migrations; different migration lineage, future formats and unknown schema
-objects are rejected. Custom SQL triggers are excluded from the structure comparison because restore
-normalization and `DbService` recreate them from the running bundle.
+prefix of bundled SQLite migrations; different migration lineage and future formats are rejected.
+Export and import rebuild their private database copy from that prefix, then copy known tables and
+columns by name. Missing nullable/defaulted columns use the standard schema's defaults. Unknown
+tables, columns, indexes, views and triggers are omitted; indexes, triggers and search state are
+rebuilt from bundled definitions. Source SQL is never executed and its text is not compared.
+Missing required tables/columns, invalid records and broken references still fail rather than
+silently skipping data. The live source database and the user's selected archive remain unchanged.
+Normalization scratch databases stay inside the operation directory, so normal cleanup and the
+existing startup sweep of previous processes' backup directories also remove interrupted copies.
 
 Archives are unencrypted and include database-held model keys and remote server headers. They exclude
 SecureStore values, desktop pairing tokens, device permissions, caches, logs and extracted documents.
@@ -27,8 +33,8 @@ successful saving.
 While a backup or restore runs, an app-wide progress dialog blocks every route; the user can only
 wait or cancel. Capture refuses active chat/job execution, and a freeze keeps new Agent turns and
 background jobs from starting while the SQLite backup API snapshots the database (including WAL
-data) and managed resources are copied. Jobs resume before compression. Missing original files fail
-export rather than silently producing an incomplete full backup. Skill installation/update writes
+data), the copy is normalized and managed resources are copied. Jobs resume before compression.
+Missing original files fail export rather than silently producing an incomplete full backup. Skill installation/update writes
 participate in the same capture exclusion and restored Skill packages follow the new generation.
 A finished export stays in the `exported` phase, carrying the archive URI and content counts,
 until `cancel()` dismisses it. Dismissing deletes the archive, as does starting the next export;
@@ -36,20 +42,29 @@ the user keeps only copies saved or shared from it.
 
 Hashing uses the file module's shared native streaming hash. ZIP processing uses the restricted
 reader and streaming writer in `src/backend/utils` (shared with Skill packages and diagnostics), in
-bounded chunks. Limits are 1 GiB compressed, 1 GiB expanded and 10,000 payload entries, with a
+bounded chunks. Export progress counts uncompressed payload bytes across two passes: hashing and
+packing, each weighted by the same fixed captured file sizes. The manifest contributes no progress
+bytes. Hash progress advances at file boundaries; packing reports after each successful chunk,
+with the terminal value deferred until archive finalization and handle cleanup succeed. Runtime
+publishes the real byte counters only when the integer percentage changes, plus the initial state
+and lifecycle transitions. An all-zero payload stays indeterminate. Reaching 100% means the archive
+was packed; it does not prove the user saved or shared it. Capture, copying and native hashing keep
+their existing liveness behavior.
+
+Limits are 1 GiB compressed, 1 GiB expanded and 10,000 payload entries, with a
 4 MiB manifest. Free space is checked while copying and extracting. Cancellation removes work
 owned by the operation before activation is committed.
 
 ## Restore
 
 Selection reads the chosen archive in place, validates the ZIP central directory and paths, extracts
-to app-owned cache, checks payload sizes and hashes, compares the actual SQLite structure against a database built from bundled SQL,
-then runs integrity/reference checks. Duplicate and case-colliding paths, traversal, encryption,
-symlinks, unexpected payloads, expansion limits and truncated archives fail before live data changes.
+to app-owned cache, checks payload sizes and hashes, imports the data into the standard schema for its
+migration version, then runs integrity/reference checks. Duplicate and case-colliding paths, traversal,
+encryption, symlinks, unexpected payloads, expansion limits and truncated archives fail before live data changes.
 
 Confirmation moves the verified payloads into a new generation, so a failed attempt requires
-selecting the backup again. Its database cancels unfinished
-jobs, marks partial replies interrupted, drops desktop pairing, rotates plugin credential references
+selecting the backup again. Its database applies any remaining migrations to upgrade older data,
+cancels unfinished jobs, marks partial replies interrupted, drops desktop pairing, rotates plugin credential references
 without copying their secret values, and retains the target device's identity/privacy/onboarding/
 background-notification preferences. Other settings and content come from the backup. Plugin rows
 and their tool bindings remain so users can reconnect them.
@@ -66,7 +81,10 @@ WebDAV/S3, scheduled backups, encryption, partial restore and desktop interchang
 
 Focused suites cover mutation admission, runtime progress state, serialized paths and limits, a
 pack/unpack round trip, ZIP truncation/encryption (in the shared reader suite), native-process
-state transitions, custom trigger comparison and SQLite normalization/rollback. Device acceptance
-must also exercise export/save/import on both platforms, cancellation, low disk, native termination
+state transitions, standard-schema imports, rebuilt search indexes and SQLite normalization/rollback.
+Export regressions cover the two-pass payload scale, manifest exclusion, file-boundary hashing,
+chunk-level packing before a database-only entry finishes, monotonic counters and integer-percentage
+publication deduplication, source-size mismatches, and cancellation during a chunk yield.
+Device acceptance must also exercise export/save/import on both platforms, cancellation, low disk, native termination
 during each restore phase, and the native module's durability. Those checks and native builds are
 not implied by editing this code.

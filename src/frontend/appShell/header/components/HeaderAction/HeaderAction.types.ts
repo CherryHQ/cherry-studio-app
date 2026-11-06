@@ -8,6 +8,9 @@ export type HeaderActionIconProps = {
 
 export type HeaderActionTone = 'default' | 'inverse';
 
+/** The existing action glyph as a template image for the native iOS toolbar. */
+export type HeaderNativeIcon = ImageSourcePropType;
+
 export type HeaderActionTargetSize = 'surface' | 'touch-target';
 
 type HeaderActionBase = {
@@ -21,11 +24,11 @@ export type HeaderToolbarAction =
       disabled?: boolean;
       icon: ComponentType<HeaderActionIconProps>;
       /**
-       * The same glyph as a template image. With it, the iOS chat header draws a standard toolbar
-       * button instead of a custom view, which the system can move, such as into an iPhone Duo's
+       * The same glyph as `icon`, supplied as a template image. The iOS header draws a native item
+       * instead of a custom view, which the system can move, such as into an iPhone Duo's
        * vertical rail.
        */
-      nativeIcon?: ImageSourcePropType;
+      nativeIcon?: HeaderNativeIcon;
       onPress: () => void;
       type: 'icon';
     })
@@ -41,6 +44,8 @@ export type HeaderToolbarAction =
       disabled?: boolean;
       icon: ComponentType<HeaderActionIconProps>;
       items: readonly MenuItem[];
+      /** The same glyph as `icon` for a native toolbar menu; see the icon action's `nativeIcon`. */
+      nativeIcon?: HeaderNativeIcon;
       type: 'menu';
     })
   | (HeaderActionBase & {

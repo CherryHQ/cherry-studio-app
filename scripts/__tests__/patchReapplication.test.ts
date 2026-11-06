@@ -33,7 +33,12 @@ function contains(source: string[], block: string[]): boolean {
   return source.some((_, start) => block.every((line, offset) => source[start + offset] === line));
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const workspace = readFileSync('pnpm-workspace.yaml', 'utf8');
+const lockfile = readFileSync('pnpm-lock.yaml', 'utf8');
 const patches = [...workspace.matchAll(/^ {2}['"]?(.+?)['"]?: (patches\/\S+\.patch)$/gm)].map(
   ([, spec, path]) => ({ spec, path }),
 );
@@ -42,7 +47,12 @@ test.each(patches)('$path cannot apply twice to its installed package', ({ spec,
   const at = spec.lastIndexOf('@');
   const name = spec.slice(0, at);
   const prefix = `${name.replace('/', '+')}@${spec.slice(at + 1)}_patch_hash=`;
-  const store = readdirSync('node_modules/.pnpm').find((entry) => entry.startsWith(prefix));
+  // Earlier patch revisions can leave sibling installs; check the one the lockfile selects.
+  const hash = new RegExp(`^ {2}['"]?${escapeRegExp(spec)}['"]?: (\\w+)$`, 'm').exec(lockfile)?.[1];
+  const store = readdirSync('node_modules/.pnpm').find(
+    (entry) =>
+      entry.startsWith(prefix) && hash?.startsWith(entry.slice(prefix.length).split('_')[0]),
+  );
   expect(store).toBeDefined();
   const root = join('node_modules/.pnpm', store!, 'node_modules', name);
 

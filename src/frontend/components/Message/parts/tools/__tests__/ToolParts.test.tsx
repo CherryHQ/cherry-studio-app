@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { GenericToolPart } from '../GenericToolPart';
@@ -19,6 +20,9 @@ jest.mock('@/frontend/components/McpApp', () => ({
   McpAppConversationBridge: ({ children }: { children: ReactNode }) => children,
   useMcpAppConversation: () => null,
 }));
+
+jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => [0] }));
+jest.mock('@cherrystudio/ui/utils', () => ({ normalizeFontSizeStep: (step: number) => step }));
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetStringAsync(text) }));
 jest.mock('@cherrystudio/app-icons/icons/copy', () => jest.requireActual('react-native').View);
@@ -90,6 +94,30 @@ jest.mock('@cherrystudio/ui/components', () => {
         <MockText>{children}</MockText>
       </MockView>
     ),
+    CodeBlock: ({
+      code,
+      copyLabel,
+      copyTestID,
+      onCopy,
+      title,
+      ...props
+    }: {
+      code: string;
+      copyLabel: string;
+      copyTestID?: string;
+      onCopy: (code: string) => void;
+      title: string;
+    }) => (
+      <MockView {...props} code={code} testID="mock-code-block">
+        <MockText>{title}</MockText>
+        <MockView
+          accessibilityHint={title}
+          accessibilityLabel={copyLabel}
+          onPress={() => onCopy(code)}
+          testID={copyTestID}
+        />
+      </MockView>
+    ),
     useToast: () => ({ toast: { show: mockToastShow } }),
     formatMessagePartValue: formatValue,
     hasMessagePartValue: hasValue,
@@ -111,6 +139,11 @@ jest.mock('@cherrystudio/ui/components', () => {
         </MockView>
       ),
       SectionBody: ({ children }: { children: ReactNode }) => <MockView>{children}</MockView>,
+      TextBody: ({ value }: { value: string }) => (
+        <MockView testID="mock-text-body" value={value}>
+          <MockText>{value}</MockText>
+        </MockView>
+      ),
       SectionTitle: ({ title }: { title: string }) => <MockText>{title}</MockText>,
       Source: ({ label }: { label: string }) => <MockText>{label}</MockText>,
       TextSection: ({ title, value, ...props }: { title: string; value: string }) => (
@@ -185,25 +218,27 @@ describe('tool message detail sheets', () => {
       findByTestID('tool-part-trigger').props.onPress();
     });
 
-    expect(findByTestID('mock-markdown-text').props.markdown).toBe(
-      '```json\n{\n  "answer": 42\n}\n```',
-    );
+    expect(findByTestID('mock-code-block').props).toMatchObject({
+      code: '{\n  "answer": 42\n}',
+      language: 'json',
+    });
   });
 
-  it('clips JSON before Markdown rendering and copies the full output on demand', async () => {
+  it('mounts the entire JSON only when opened and offers one full-output copy action', async () => {
     const output = { body: 'x'.repeat(5_000), tail: 'must remain copyable' };
     await render(<GenericToolPart part={makeToolPart({ output, toolName: 'calculator' })} />);
-    expect(findAllByTestID('mock-markdown-text')).toHaveLength(0);
+    expect(findAllByTestID('mock-code-block')).toHaveLength(0);
     expect(mockSetStringAsync).not.toHaveBeenCalled();
 
     await act(async () => {
       findByTestID('tool-part-trigger').props.onPress();
     });
 
-    const markdown = findByTestID('mock-markdown-text').props.markdown as string;
-    expect(markdown.length).toBeLessThan(4_020);
-    expect(markdown).not.toContain('must remain copyable');
-    expect(findText('chat.tool.previewTruncated')).toHaveLength(1);
+    const code = findByTestID('mock-code-block').props.code as string;
+    expect(code).toBe(JSON.stringify(output, null, 2));
+    expect(code).toContain('must remain copyable');
+    // findByProps throws when more than one outermost element carries the ID.
+    expect(() => findByTestID('tool-result-copy-full-text')).not.toThrow();
 
     await act(async () => {
       findByTestID('tool-result-copy-full-text').props.onPress();
@@ -211,10 +246,10 @@ describe('tool message detail sheets', () => {
 
     expect(mockSetStringAsync).toHaveBeenCalledWith(JSON.stringify(output, null, 2));
     expect(mockToastShow).toHaveBeenCalledWith({ label: 'chat.tool.copied', variant: 'success' });
-    expect(findByTestID('mock-markdown-text').props.markdown).toBe(markdown);
+    expect(findByTestID('mock-code-block').props.code).toBe(code);
   });
 
-  it('reports clipboard failures without expanding the preview', async () => {
+  it('reports clipboard failures while leaving the complete text readable', async () => {
     mockSetStringAsync.mockRejectedValueOnce(new Error('Clipboard unavailable'));
     await render(
       <GenericToolPart
@@ -232,10 +267,52 @@ describe('tool message detail sheets', () => {
       label: 'chat.tool.copyFailed',
       variant: 'danger',
     });
-    expect(findText('x'.repeat(5_000))).toHaveLength(0);
+    expect(findText('x'.repeat(5_000))).toHaveLength(1);
   });
 
-  it('copies all arguments even when the JSON preview is truncated', async () => {
+  it('keeps later MCP blocks readable and copies the entire result', async () => {
+    const first = 'log entry\r\n'.repeat(5_000);
+    const json = { tail: 'b'.repeat(5_000) };
+    await render(
+      <McpToolPart
+        part={makeToolPart({
+          toolName: 'mcp__example__read',
+          output: {
+            content: [
+              { type: 'text', text: first },
+              { type: 'text', text: JSON.stringify(json) },
+              { type: 'text', text: 'Final block\n\n' },
+            ],
+          },
+        })}
+      />,
+    );
+    await act(async () => findByTestID('mcp-tool-part-trigger').props.onPress());
+    expect(findText(first)).toHaveLength(1);
+    expect(findAllByTestID('mock-text-body').map((body) => body.props.value)).toEqual([
+      first,
+      'Final block\n\n',
+    ]);
+    expect(findByTestID('mock-code-block').props.code).toBe(JSON.stringify(json, null, 2));
+    expect(findText('Final block\n\n')).toHaveLength(1);
+    await act(async () => findByTestID('tool-result-copy-full-text').props.onPress());
+    expect(mockSetStringAsync).toHaveBeenCalledWith(
+      [first, JSON.stringify(json, null, 2), 'Final block\n\n'].join('\n\n'),
+    );
+  });
+
+  it('keeps body rendering separate from exact-source copy for long diagnostic text', async () => {
+    const value = `${'diagnostic line\r\n'.repeat(5_000)}尾部😀\n\n`;
+    await render(
+      <MessageDetailText copyTestID="diagnostic-copy" title="Diagnostic" value={value} />,
+    );
+
+    expect(findByTestID('mock-text-body').props.value).toBe(value);
+    await act(async () => findByTestID('diagnostic-copy').props.onPress());
+    expect(mockSetStringAsync).toHaveBeenCalledWith(value);
+  });
+
+  it('renders and copies all arguments beyond the old preview limit', async () => {
     const input = { prompt: '文'.repeat(5_000), refs: ['audio-1'] };
     await render(
       <GenericToolPart
@@ -244,25 +321,24 @@ describe('tool message detail sheets', () => {
     );
     await act(async () => findByTestID('tool-part-trigger').props.onPress());
 
-    const markdown = findByTestID('mock-markdown-text').props.markdown as string;
-    expect(markdown.startsWith('```json\n')).toBe(true);
-    expect(markdown).not.toContain('audio-1');
+    const code = findByTestID('mock-code-block').props.code as string;
+    expect(code).toBe(JSON.stringify(input, null, 2));
+    expect(code).toContain('audio-1');
     const copy = renderer!.root
       .findAllByType(View)
       .find((node) => node.props.accessibilityHint === 'chat.tool.arguments');
     await act(async () => copy!.props.onPress());
     expect(mockSetStringAsync).toHaveBeenCalledWith(JSON.stringify(input, null, 2));
-    expect(findByTestID('mock-markdown-text').props.markdown).toBe(markdown);
+    expect(findByTestID('mock-code-block').props.code).toBe(code);
   });
 
-  it('offers a copy action for short output without a truncation notice', async () => {
+  it('offers a copy action for short output', async () => {
     await render(
       <GenericToolPart
         part={makeToolPart({ output: 'A readable response.', toolName: 'analyze_media' })}
       />,
     );
     await act(async () => findByTestID('tool-part-trigger').props.onPress());
-    expect(findText('chat.tool.previewTruncated')).toHaveLength(0);
     await act(async () => findByTestID('tool-result-copy-full-text').props.onPress());
     expect(mockSetStringAsync).toHaveBeenCalledWith('A readable response.');
   });
@@ -523,8 +599,8 @@ describe('tool message detail sheets', () => {
       findByTestID('mcp-tool-part-trigger').props.onPress();
     });
 
-    expect(findByTestID('mock-markdown-text').props.markdown).toBe(
-      '```json\n{\n  "payload": {\n    "value": 1\n  },\n  "type": "future"\n}\n```',
+    expect(findByTestID('mock-code-block').props.code).toBe(
+      '{\n  "payload": {\n    "value": 1\n  },\n  "type": "future"\n}',
     );
   });
 
@@ -757,7 +833,8 @@ describe('tool message detail sheets', () => {
   }
 
   function findAllByTestID(testID: string) {
-    return renderer?.root.findAllByProps({ testID }) ?? [];
+    // Count the mocked View once, excluding its native host with the same testID.
+    return renderer?.root.findAllByType(View).filter((node) => node.props.testID === testID) ?? [];
   }
 
   function findText(text: string) {

@@ -93,8 +93,15 @@ type HarnessProps = {
   status?: 'idle' | 'generating';
   showText?: boolean;
   preparePrompt?: PaintingPromptPreparation;
+  onSubmissionSettled?: () => void;
 };
-function Probe({ canSend, status = 'idle', showText, preparePrompt }: HarnessProps) {
+function Probe({
+  canSend,
+  status = 'idle',
+  showText,
+  preparePrompt,
+  onSubmissionSettled,
+}: HarnessProps) {
   const session = usePaintingInputSession();
   useEffect(() => {
     mockSession = session;
@@ -105,6 +112,7 @@ function Probe({ canSend, status = 'idle', showText, preparePrompt }: HarnessPro
       onCancel={() => undefined}
       onGenerate={mockGenerate}
       preparePrompt={preparePrompt}
+      onSubmissionSettled={onSubmissionSettled}
       status={status}
     />
   );
@@ -153,6 +161,27 @@ describe('capability-aware painting input', () => {
     });
   });
   afterEach(() => act(() => renderer.unmount()));
+
+  it('releases the captured quote attempt when asynchronous attachment preparation rejects', async () => {
+    const order: string[] = [];
+    const preparePrompt = jest.fn((text: string) => {
+      order.push('capture');
+      return text;
+    });
+    const onSubmissionSettled = jest.fn(() => {
+      order.push('release');
+    });
+    mockPrepareAttachments.mockImplementationOnce(async () => {
+      order.push('prepare');
+      throw new Error('attachment unavailable');
+    });
+    update({ preparePrompt, onSubmissionSettled });
+    await expect(send()).rejects.toThrow('attachment unavailable');
+    expect(order).toEqual(['capture', 'prepare', 'release']);
+    expect(preparePrompt).toHaveBeenCalledTimes(1);
+    expect(onSubmissionSettled).toHaveBeenCalledTimes(1);
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
 
   it('freezes image-local instructions before prompt validation and asynchronous preparation', async () => {
     const preparePrompt = jest.fn((text: string) => ({

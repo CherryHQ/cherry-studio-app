@@ -45,7 +45,7 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
 jest.mock('@/frontend/appShell/pane/state', () => ({
   useFilePane: () => ({ isAvailable: mockPaneAvailable, open: mockPaneOpen }),
 }));
-jest.mock('@/frontend/appShell/layout', () => ({ useIsSidebarPersistent: () => false }));
+jest.mock('@/frontend/appShell/layout', () => ({ useCanDockSidebar: () => false }));
 jest.mock('../../SidebarColumn', () => ({
   useSidebarColumn: () => ({ column: { kind: 'overlay' }, setContent: jest.fn() }),
 }));
@@ -53,6 +53,9 @@ jest.mock('../../hooks/useSessionSearch', () => ({
   sessionSearchResultHref: jest.fn(),
   useSessionSearch: () => jest.fn(),
   useSessionSearchRequest: () => ({}),
+}));
+jest.mock('../../hooks/useCloseDrawerForExternalNavigation', () => ({
+  useCloseDrawerForExternalNavigation: () => jest.fn(),
 }));
 jest.mock('../../SidebarSelectionProvider', () => ({
   SidebarSelectionProvider: ({ children }: { children: ReactNode }) => children,

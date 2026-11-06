@@ -25,6 +25,7 @@ import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/compone
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatEditing } from '../../../context/ChatEditingProvider';
+import { editReplyHref } from '../../../editReply/editReplyRoute';
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
@@ -58,12 +59,13 @@ type AssistantMessageActionsState = {
 };
 
 type AssistantMessageActions = {
+  editAssistantMessage?: (input: { messageId: string }) => void;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
-  deleteMessageTurn?: (input: { turnId: string }) => void;
+  deleteMessageTurn?: (input: { turnId: string; messageId: string }) => void;
   /**
    * Shows another alternative at a branch point, restoring its own continuation. Resolves whether
    * the choice was applied.
@@ -84,6 +86,8 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   /** Opens the source-owned share selector; absent while no Session exists. */
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
+  /** The local Session whose answers open in the reply editor. */
+  sessionId?: string;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
@@ -92,6 +96,7 @@ export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
   onShare,
+  sessionId,
   snapshot,
   messages,
 }: AssistantMessageActionsProviderProps) {
@@ -124,16 +129,12 @@ export function AssistantMessageActionsProvider({
     [retryableKey],
   );
   const editableKey = messages
-    .flatMap((message) => (message.actions.edit ? [message.key] : []))
+    .flatMap((message) => (message.actions.edit || message.actions.editUser ? [message.key] : []))
     .join('\n');
   const editableMessageIds = useMemo(
     () => new Set(editableKey ? editableKey.split('\n') : []),
     [editableKey],
   );
-  // Every edit action shares the Session's availability; the menu disables the item, not hides it.
-  const isEditDisabled =
-    messages.find((message) => message.actions.edit)?.actions.edit?.availability.state !==
-    'enabled';
   const isBusy = snapshot.executions.some(
     (execution) =>
       execution.state === 'running' ||
@@ -214,6 +215,17 @@ export function AssistantMessageActionsProvider({
     },
     [translationStore],
   );
+  const edit = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      const current = latest.current;
+      const message = current.messages.find((message) => message.key === messageId);
+      if (!sessionId || current.isBusy || message?.actions.edit?.availability.state !== 'enabled')
+        return;
+      Keyboard.dismiss();
+      router.push(editReplyHref({ sessionId, messageId }));
+    },
+    [sessionId],
+  );
   const retry = useCallback(
     ({ messageId }: { messageId: string }) => {
       const current = latest.current;
@@ -245,10 +257,11 @@ export function AssistantMessageActionsProvider({
     [run],
   );
   const remove = useCallback(
-    ({ turnId }: { turnId: string }) => {
+    ({ turnId, messageId }: { turnId: string; messageId: string }) => {
       const current = latest.current;
       const message = current.messages.find(
-        (message) => message.display.turnId === turnId && message.actions.remove,
+        (message) =>
+          message.key === messageId && message.display.turnId === turnId && message.actions.remove,
       );
       if (!message || current.isBusy) return;
       current.alert.confirm({
@@ -303,7 +316,8 @@ export function AssistantMessageActionsProvider({
     ({ messageId }: { messageId: string }) => {
       if (latest.current.isBusy) return;
       const message = latest.current.messages.find((message) => message.key === messageId);
-      if (message) beginEdit({ messageId, initialText: editInitialText(message) });
+      if (message?.actions.editUser?.availability.state === 'enabled')
+        beginEdit({ messageId, initialText: editInitialText(message) });
     },
     [beginEdit],
   );
@@ -311,6 +325,16 @@ export function AssistantMessageActionsProvider({
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}
       onShare={share}
+      onEdit={editableMessageIds.size ? edit : undefined}
+      editableMessageIds={editableMessageIds}
+      isEditDisabled={
+        isBusy ||
+        messages.some(
+          (message) =>
+            (message.actions.edit ?? message.actions.editUser) &&
+            (message.actions.edit ?? message.actions.editUser)?.availability.state !== 'enabled',
+        )
+      }
       onFork={messages.some((message) => message.actions.fork) ? fork : undefined}
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
       onRetry={retryableMessageIds.size ? retry : undefined}
@@ -320,10 +344,8 @@ export function AssistantMessageActionsProvider({
       }
       onEditUserMessage={editableMessageIds.size ? editUserMessage : undefined}
       isDeleteDisabled={isBusy}
-      isEditDisabled={isEditDisabled}
       isRetryDisabled={isBusy}
       retryableMessageIds={retryableMessageIds}
-      editableMessageIds={editableMessageIds}
     >
       {children}
       {answeringMessage ? (
@@ -346,6 +368,7 @@ export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
   onShare: shareAssistantMessage,
+  onEdit: editAssistantMessage,
   onFork: forkFromAssistantMessage,
   onDelete: deleteMessageTurn,
   onRetry: retryAssistantMessage,
@@ -353,13 +376,14 @@ export function ChatMessageActionsProvider({
   onAnswerWithModel: answerWithModel,
   onEditUserMessage: editUserMessage,
   isDeleteDisabled = true,
-  isEditDisabled = false,
   isRetryDisabled = true,
   retryableMessageIds = EMPTY_MESSAGE_IDS,
   editableMessageIds = EMPTY_MESSAGE_IDS,
+  isEditDisabled = true,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   onShare: AssistantMessageActions['shareAssistantMessage'];
+  onEdit?: AssistantMessageActions['editAssistantMessage'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
   onDelete?: AssistantMessageActions['deleteMessageTurn'];
   onRetry?: AssistantMessageActions['retryAssistantMessage'];
@@ -438,6 +462,7 @@ export function ChatMessageActionsProvider({
   const actionsValue = useMemo(
     () => ({
       answerWithModel,
+      editAssistantMessage,
       copyAssistantMessage,
       deleteMessageTurn,
       editUserMessage,
@@ -448,6 +473,7 @@ export function ChatMessageActionsProvider({
     }),
     [
       answerWithModel,
+      editAssistantMessage,
       copyAssistantMessage,
       deleteMessageTurn,
       editUserMessage,

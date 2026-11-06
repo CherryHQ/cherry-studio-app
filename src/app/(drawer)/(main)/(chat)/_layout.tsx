@@ -18,7 +18,7 @@ export default function ChatStackLayout() {
   const [foregroundColor, chatBackgroundColor] = useThemeColor(['foreground', 'chat-background']);
 
   return (
-    // Only the chat leads with the sidebar; every other page in the content region leads with back.
+    // The chat always leads with the sidebar; other pages do only at a wide window's first level.
     <RouteHeaderProvider rootAction="drawer">
       <FilePaneHost library={<FileLibraryScreen />} renderFile={renderPaneFile}>
         <Stack

@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { SkillActionSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
-import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
+import { AgentImageGenerationSchema, AgentInputPartsSchema } from './views';
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
 export const AgentRenameSessionInputSchema = z.strictObject({
@@ -18,6 +18,12 @@ export const AgentRenameSessionInputSchema = z.strictObject({
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
+export const AgentReadReasoningInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  partId: z.string().min(1),
+});
+export type AgentReadReasoningInput = z.infer<typeof AgentReadReasoningInputSchema>;
 /**
  * Further models answering the same question in parallel. Each answer is an
  * ordinary assistant message in the same multi-model sibling group.
@@ -39,7 +45,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   /** Allocated once by the send action and reused for display and persistence. */
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  parts: z.array(AgentInputPartSchema).min(1),
+  parts: AgentInputPartsSchema,
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
@@ -63,7 +69,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  parts: z.array(AgentInputPartSchema).min(1),
+  parts: AgentInputPartsSchema,
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
@@ -94,12 +100,14 @@ export const AgentForkSessionInputSchema = z.strictObject({
 export type AgentForkSessionInput = z.infer<typeof AgentForkSessionInputSchema>;
 /**
  * Deletion is turn-scoped. A transcript replays `tool-call` and `tool-result`
- * as a pair, so removing one message of a turn would leave history no provider
- * accepts; the UI therefore resolves the pressed message to its turn.
+ * as a pair. A selected alternative is removed with its complete descendant
+ * messages; a question with one answer retains the existing turn deletion.
  */
 export const AgentDeleteTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+  /** With alternative answers, remove only this answer and its descendants. */
+  messageId: z.string().min(1).optional(),
 });
 export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
 /** Moves the Session's selected leaf into the branch that contains `messageId`. */
@@ -141,6 +149,27 @@ export const AgentEditUserMessageInputSchema = z.strictObject({
   skillAction: SkillActionSchema.optional(),
 });
 export type AgentEditUserMessageInput = z.infer<typeof AgentEditUserMessageInputSchema>;
+const AgentReplyPartEditSchema = z.strictObject({
+  /** A text part of the answer; reasoning, files and tool receipts are not editable. */
+  id: z.string().min(1),
+  /** The part's current text, rejecting an edit of text that changed meanwhile. */
+  expectedText: z.string().min(1),
+  text: z
+    .string()
+    .max(1_000_000)
+    .refine((text) => text.trim().length > 0),
+});
+export type AgentReplyPartEdit = z.infer<typeof AgentReplyPartEditSchema>;
+/** Optimistic edits of a successful answer's text parts. */
+export const AgentEditMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  parts: z
+    .array(AgentReplyPartEditSchema)
+    .min(1)
+    .refine((parts) => new Set(parts.map((part) => part.id)).size === parts.length),
+});
+export type AgentEditMessageInput = z.infer<typeof AgentEditMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),

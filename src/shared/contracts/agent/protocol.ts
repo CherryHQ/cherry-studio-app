@@ -7,14 +7,22 @@ import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
   AgentDeleteTurnInput,
   AgentEditUserMessageInput,
+  AgentEditMessageInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
+  AgentReadReasoningInput,
   AgentSelectMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
 import type { AgentRespondQuestionInput } from './userQuestion';
-import type { AgentErrorView, AgentSessionStatus, AgentSessionView } from './views';
+import type {
+  AgentErrorView,
+  AgentMessageView,
+  AgentReasoningDetail,
+  AgentSessionStatus,
+  AgentSessionView,
+} from './views';
 
 /**
  * Protocol operation failure. The `view` is the JSON-safe protocol value; the
@@ -28,10 +36,17 @@ export class AgentProtocolError extends Error {
 }
 
 export interface AgentProtocol {
+  /** Read one full reasoning phase on demand, from the active runtime or saved transcript. */
+  readReasoning(input: AgentReadReasoningInput): Promise<AgentReasoningDetail>;
+  /** Edits a successful answer while idle, including its future model context. */
+  editMessage(input: AgentEditMessageInput): Promise<AgentMessageView>;
   /** Stable, immutable snapshot; null until this generation runs a turn in the Session. */
   getSessionStatus(sessionId: string): AgentSessionStatus | null;
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
+  /** Sessions with a status in this generation; used for collapsed catalog groups. */
+  getSessionStatusIds(): readonly string[];
+  subscribeSessionStatuses(listener: () => void): () => void;
 
   /** Bytes held by disposable execution copies; transcripts and attachments are excluded. */
   getWorkingStorageSize(): Promise<number>;
@@ -59,6 +74,7 @@ export interface AgentProtocol {
    * Removes one settled turn from the transcript and clears any context
    * checkpoint that may have summarized it. The turn's side effects are not
    * undone: this erases the record, not what the record describes.
+   * Naming an answer with siblings removes only that answer's subtree.
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 

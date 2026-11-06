@@ -58,11 +58,11 @@ export interface PpioTaskResult {
     eta?: number;
     progress_percent?: number;
   };
-  images?: Array<{
+  images?: {
     image_url: string;
     image_url_ttl: string;
     image_type: string;
-  }>;
+  }[];
   extra?: {
     seed?: string;
     has_nsfw_contents?: boolean[];
@@ -70,7 +70,7 @@ export interface PpioTaskResult {
 }
 
 export interface PpioSyncResult {
-  images?: Array<string | { image_url?: string; url?: string }>;
+  images?: (string | { image_url?: string; url?: string })[];
 }
 
 /**
@@ -198,7 +198,7 @@ class PpioTransport implements ImageGenerationTransport {
           throw createAbortError('PPIO API request aborted');
         }
 
-        throw new Error(`PPIO API request timeout after ${timeout / 1000}s`);
+        throw new Error(`PPIO API request timeout after ${timeout / 1000}s`, { cause: error });
       }
       throw error;
     } finally {

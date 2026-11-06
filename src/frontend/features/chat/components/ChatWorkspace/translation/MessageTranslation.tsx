@@ -1,3 +1,4 @@
+import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
@@ -112,6 +113,14 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
                 variant="ghost"
               />
             </ActionMenu>
+            <Button
+              accessibilityLabel={t('chat.translation.hide')}
+              icon={<ChevronUpIcon className="text-muted-foreground" size={15} />}
+              onPress={() => translation.store.toggle(translation.source)}
+              size="xs"
+              testID="message-translation-collapse"
+              variant="ghost"
+            />
           </View>
         </MessagePart.Translation>
       </ContextMenuExclusion>

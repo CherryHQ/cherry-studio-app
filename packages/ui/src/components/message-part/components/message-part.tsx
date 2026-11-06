@@ -21,6 +21,7 @@ import {
 } from './message-part-sections';
 import { MessagePartSource } from './message-part-source';
 import { MessagePartStatus } from './message-part-status';
+import { MessagePartTextBody } from './message-part-text-body';
 import { MessagePartTranslation } from './message-part-translation';
 import { MessagePartUnknown } from './message-part-unknown';
 
@@ -45,6 +46,7 @@ export const MessagePart = Object.assign(MessagePartRoot, {
   Source: MessagePartSource,
   Status: MessagePartStatus,
   Summary: MessagePartSummary,
+  TextBody: MessagePartTextBody,
   TextSection: MessagePartTextSection,
   Tool: MessagePartTool,
   ToolGroup: MessagePartToolGroup,
