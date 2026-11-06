@@ -43,7 +43,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 84
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 86
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -58,6 +58,7 @@ block leaves when upstream ships an equivalent.
 | Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
 | Signed YAML scanner failure status after grammar restoration | Bug fix | #1586 | Tree-sitter YAML 0.7.1 returns `-1` through plain `char` | Upstream preserves signed failure statuses on unsigned-char targets |
 | Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
+| Input link-label bracket and backslash escaping in both native serializers | Bug fix | Inline message quotes | Not fixed in 1.1.1 | Upstream emits escaped Markdown link labels without changing literal prose |
 | iOS nested display math fitted to the column | Bug fix | #1484 | Not fixed in 1.1.1 | Upstream fits nested display math |
 | Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
 | Android display math retained during R8 shrinking | Bug fix | [Upstream #1042](https://github.com/software-mansion/enriched-markdown/issues/1042) | Backports [#1101](https://github.com/software-mansion/enriched-markdown/pull/1101); 1.1.1 still keeps the old class package | Upstream ships the `segments.MathContainerView` keep rule |
@@ -78,7 +79,11 @@ source text, not behavior.
 
 `enrichedMarkdownInputLinkPress.test.ts` guards both published editor entry points and the native
 link-press event delivery. Quote taps use platform tap recognition and retain ordinary text editing.
-The app converts local text bounds into window coordinates for an anchored text popover.
+The app converts local editor text bounds into window coordinates for an anchored text popover;
+sent-message references use the native press position because nested `Text` has no layout box.
+The native serializers escape brackets and backslashes only inside link labels, preserving quote
+snapshots containing those characters. `enrichedMarkdownAtomicLinks.test.ts` guards patch delivery;
+the quote parser regression uses the native serialized format directly.
 This patch requires a new development client. Device acceptance must cover taps at both ends of
 short and wrapped quotes, keyboard open/closed, scrolling and cancelled taps, long-press selection,
 atomic deletion, undo, and draft restoration on iOS and Android.

@@ -3,7 +3,7 @@ import {
   ContextMenuExclusion,
   type InfoPopoverAnchor,
 } from '@cherrystudio/ui/components';
-import { type ComponentRef, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image, Text, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
@@ -131,17 +131,14 @@ function InlineQuoteReference({
   quote: MessageQuote;
   onOpen: (anchor: InfoPopoverAnchor, text: string) => void;
 }) {
-  const ref = useRef<ComponentRef<typeof Text>>(null);
   return (
     <Text
       className="text-link"
-      ref={ref}
       accessibilityRole="button"
       accessibilityLabel={quote.text}
-      onPress={() =>
-        ref.current?.measureInWindow((pageX, pageY, width, height) =>
-          onOpen({ pageX, pageY, width, height }, quote.text),
-        )
+      // Nested Text has no layout box; anchor to the native press instead.
+      onPress={({ nativeEvent: { pageX, pageY } }) =>
+        onOpen({ pageX, pageY, width: 0, height: 0 }, quote.text)
       }
     >
       {quote.reference?.label}

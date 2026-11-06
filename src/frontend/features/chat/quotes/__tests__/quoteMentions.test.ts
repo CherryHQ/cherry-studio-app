@@ -49,6 +49,24 @@ test('shifts subsequent reference offsets past removed syntax and escaped labels
   expect(parsed.shift(0)).toBe(0);
 });
 
+test('reads native serialized link labels with brackets and literal backslashes', () => {
+  const quote: MessageQuote = {
+    ...first,
+    text: String.raw`First [passage] C:\work\[draft]`,
+  };
+  // This is the native serializer's output, not createQuoteMention's fixture format.
+  const draft = String.raw`before [“First \[passage\] C:\\work\\\[draft\]”](quote://first) after`;
+  const parsed = readQuoteMentions(draft, [quote]);
+  expect(parsed.text).toBe(String.raw`before “First [passage] C:\work\[draft]” after`);
+  expect(parsed.quotes).toEqual([
+    {
+      ...quote,
+      reference: { label: String.raw`“First [passage] C:\work\[draft]”`, offset: 7 },
+    },
+  ]);
+  expect(parsed.shift(draft.indexOf('after'))).toBe(parsed.text.indexOf('after'));
+});
+
 test('deleted and unknown references cannot attach a stale quote', () => {
   expect(readQuoteMentions('My answer', [first]).quotes).toEqual([]);
   const parsed = readQuoteMentions(createQuoteMention(first), []);

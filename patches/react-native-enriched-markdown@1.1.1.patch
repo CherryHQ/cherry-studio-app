@@ -3658,3 +3658,69 @@ new file mode 100644
 +  }
 +  companion object { const val EVENT_NAME = "onLinkPress" }
 +}
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/MarkdownSerializer.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/MarkdownSerializer.kt
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/MarkdownSerializer.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/MarkdownSerializer.kt
+@@ -119,12 +119,19 @@ object MarkdownSerializer {
+ 
+     val markdown = StringBuilder(text.length + events.size * 4)
+     var lastPosition = 0
++    var isInsideLink = false
+ 
+     for (event in events) {
+       val position = event.position.coerceAtMost(text.length)
+ 
+       if (position > lastPosition) {
+-        markdown.append(text, lastPosition, position)
++        if (isInsideLink) {
++          // Keep literal label characters from becoming Markdown link delimiters.
++          val fragment = text.substring(lastPosition, position)
++          markdown.append(fragment.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]"))
++        } else {
++          markdown.append(text, lastPosition, position)
++        }
+         lastPosition = position
+       }
+ 
+@@ -133,6 +140,7 @@ object MarkdownSerializer {
+       } else {
+         markdown.append(closingDelimiter(event.type, event.url))
+       }
++      if (event.type == StyleType.LINK) isInsideLink = event.isOpening
+     }
+ 
+     if (lastPosition < text.length) {
+diff --git a/ios/input/ENRMMarkdownSerializer.mm b/ios/input/ENRMMarkdownSerializer.mm
+--- a/ios/input/ENRMMarkdownSerializer.mm
++++ b/ios/input/ENRMMarkdownSerializer.mm
+@@ -194,13 +194,21 @@ + (NSString *)serializePlainText:(NSString *)text ranges:(NSArray<ENRMFormatting
+ 
+   NSMutableString *markdown = [NSMutableString stringWithCapacity:textLength + eventCount * 4];
+   NSUInteger lastPosition = 0;
++  BOOL isInsideLink = NO;
+ 
+   for (NSUInteger currentEvent = 0; currentEvent < eventIndex; currentEvent++) {
+     BoundaryEvent event = events[currentEvent];
+     NSUInteger position = MIN(event.position, textLength);
+ 
+     if (position > lastPosition) {
+-      [markdown appendString:[text substringWithRange:NSMakeRange(lastPosition, position - lastPosition)]];
++      NSString *fragment = [text substringWithRange:NSMakeRange(lastPosition, position - lastPosition)];
++      if (isInsideLink) {
++        // Keep literal label characters from becoming Markdown link delimiters.
++        fragment = [fragment stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
++        fragment = [fragment stringByReplacingOccurrencesOfString:@"[" withString:@"\\["];
++        fragment = [fragment stringByReplacingOccurrencesOfString:@"]" withString:@"\\]"];
++      }
++      [markdown appendString:fragment];
+       lastPosition = position;
+     }
+ 
+@@ -209,6 +217,7 @@ + (NSString *)serializePlainText:(NSString *)text ranges:(NSArray<ENRMFormatting
+     } else {
+       [markdown appendString:closingDelimiterForType(event.type, event.url)];
+     }
++    if (event.type == ENRMInputStyleTypeLink) isInsideLink = event.isOpening;
+   }
+ 
+   if (lastPosition < textLength) {
