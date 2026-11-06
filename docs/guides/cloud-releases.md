@@ -234,10 +234,10 @@ This is a separate artifact from the public APK; keep separate directories when 
 
 Upload that same APK to each of HONOR, Xiaomi, OPPO, and vivo and complete each store's materials
 and review in its console. An upload retry reuses this artifact. The workflow does not upload,
-submit for review, poll the stores, or publish version metadata. API access and a metadata hosting
-owner still need configuration as described in
-[Domestic Android Store Updates](./domestic-store-updates.md). A successful build cannot trigger
-four simultaneous update announcements; the client needs each store's actual live status.
+submit for review or poll the stores. Client update queries use the vendor integrations or the
+existing GitCode query as described in
+[Domestic Android Store Updates](./domestic-store-updates.md). Store publication remains independent
+of build completion and GitCode publication.
 
 ## iOS
 

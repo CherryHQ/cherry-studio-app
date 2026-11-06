@@ -1,8 +1,19 @@
-const { AndroidConfig, withAndroidManifest } = require('expo/config-plugins');
+const {
+  AndroidConfig,
+  withAndroidManifest,
+  withProjectBuildGradle,
+} = require('expo/config-plugins');
 
 const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
 
 module.exports = (config, { apkUpdatesEnabled }) => {
+  config = withProjectBuildGradle(config, (mod) => {
+    const marker = '// Cherry app-update vendor SDKs';
+    if (!mod.modResults.contents.includes(marker)) {
+      mod.modResults.contents += `\n${marker}\nallprojects {\n  repositories {\n    flatDir { dirs "$rootDir/../modules/app-update/android/libs" }\n  }\n}\n`;
+    }
+    return mod;
+  });
   // Explicitly remove this permission from every store/preview manifest, including library merges.
   config.android ??= {};
   config.android.permissions = (config.android.permissions ?? []).filter(

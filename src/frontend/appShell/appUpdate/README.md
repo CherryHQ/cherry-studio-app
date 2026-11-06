@@ -1,14 +1,14 @@
 # Application Updates
 
 This app-shell module owns update presentation across the application. `AppUpdateProvider` exposes
-shared actions and renders `AppUpdateDialog` or the manual `AppUpdateStoreDialog`; `AppUpdateObserver` runs the startup check and
+shared actions and renders `AppUpdateDialog`; `AppUpdateObserver` runs the startup check and
 the cold-start offer; `useAppUpdateEntry` gives a page the state for an ordinary "check for updates"
 row. Pages render that row with their own settings components and do not own channel decisions,
 transfers or update UI.
 
-The observer checks after bootstrap without blocking startup. Each cold launch checks again;
-returning to the foreground refreshes stale results (six hours, or 15 minutes for domestic stores).
-Query keys include the channel and the selected domestic store.
+The observer checks after bootstrap, privacy consent and foreground activation without blocking
+startup. Each cold launch checks again; returning to the foreground refreshes results older than
+six hours. Query keys include the channel.
 
 ## Cold-Start Offer
 
@@ -24,29 +24,28 @@ There are no passive update toasts.
 
 ## Dialog
 
-The centered dialog shows the version, the installed version, the release notes for the channel in a
-bounded scrolling region, and one next step: download (APK) or open the selected app store;
-then progress with cancel or continue in background, installation, or retry. Closing it never stops
+The centered dialog shows the version, the installed version, and one next step: download (APK) or
+open the selected app store; then progress with cancel or continue in background, installation, or
+retry. Closing it never stops
 a transfer, and reopening it from About shows the transfer's current state. A retry fetches the
 latest release, so a replaced or withdrawn package is not downloaded again. Installation explains
 that active tasks are interrupted; Android's install-source permission is requested from an alert
 after the dialog closes.
 
-Release notes load when the dialog opens, one query per release and UI language. Dialog children
-render through a portal outside the app providers, so the query and font-size preference are read
-outside the dialog and its children only receive values. APK notes are Markdown; store notes are
-plain text. Google Play publishes none to the app, so the dialog states that the store has an
-update. A missing note never blocks the update.
+The presentation stores `coldStart` or `manual` alongside the release. Only `coldStart` enables
+and renders the notes query, keyed by release and language with six-hour freshness. Cached notes
+are hidden for manual checks, retries and transfer reopen. Missing notes omit the region. Dialog
+children use a portal, so provider hooks remain outside it. GitCode-backed notes are Markdown;
+vendor notes are plain text. A second trigger cannot replace an open prompt.
 
 ## Entry
 
 About keeps its single row with an optional `NEW` badge. A tap opens the dialog for a recorded
 release or an active transfer without a request; otherwise it checks once, sharing one request and
 outcome across repeated taps, and reports up-to-date, unavailable or failed checks with a toast.
-Expired domestic metadata is fetched again before reopening a cached offer. A domestic `storeOnly`
-result opens a manual store-choice dialog, including a translated explanation when no supported
-store is available. It is not an update offer, does not record a reminder, and never opens on its
-own at startup. Store-open failures use the existing translated failure toast.
+Domestic store releases use the same dialog and a generic "Go to app store" action. Query-source
+selection and store routing remain in the backend; there is no store chooser or domestic-specific
+cache policy. Store-open failures use the existing translated failure toast.
 
 Backend failures map to translated copy; raw diagnostic errors stay out of UI. All supported locales
 own the `appUpdate.*` catalog entries.

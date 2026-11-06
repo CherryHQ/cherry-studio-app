@@ -174,7 +174,7 @@ Source regressions cover installed-version comparisons and distribution gates. N
 fingerprint parity, and measured savings require authorized builds and device/server
 checks; source changes and lint do not establish these outcomes.
 
-Domestic store updates additionally use the public metadata contract in
+Domestic store checks use vendor client queries or the existing GitCode query as described in
 [Domestic Android Store Updates](./domestic-store-updates.md). The `domestic-stores` OTA target
 and the `all` choice include the new channel. Until its first compatible EAS build is recorded,
 select an existing target explicitly; `all` will correctly fail the receiving-build check.

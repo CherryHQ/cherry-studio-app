@@ -16,25 +16,31 @@ private val STORE_PACKAGES = mapOf(
 internal class DomesticStores(private val context: Context) {
   @Suppress("DEPRECATION")
   fun info(): Map<String, Any?> {
-    val source = runCatching {
+    val sources = runCatching {
       if (Build.VERSION.SDK_INT >= 30) {
         val info = context.packageManager.getInstallSourceInfo(context.packageName)
         val owner = if (Build.VERSION.SDK_INT >= 34) info.updateOwnerPackageName else null
-        owner ?: info.installingPackageName
+        listOfNotNull(owner, info.installingPackageName)
       } else {
-        context.packageManager.getInstallerPackageName(context.packageName)
+        listOfNotNull(context.packageManager.getInstallerPackageName(context.packageName))
       }
-    }.getOrNull()
+    }.getOrDefault(emptyList())
+    val available = STORE_PACKAGES.keys.filter { availablePackage(it) != null }
     return mapOf(
-      "preferred" to STORE_PACKAGES.entries.firstOrNull { source in it.value }?.key,
-      "available" to STORE_PACKAGES.keys.filter { availablePackage(it) != null },
+      "preferred" to sources.firstNotNullOfOrNull { source ->
+        STORE_PACKAGES.entries.firstOrNull { it.key in available && source in it.value }?.key
+      },
+      "available" to available,
+      "brand" to Build.BRAND,
+      "manufacturer" to Build.MANUFACTURER,
     )
   }
 
-  fun open(store: String) {
+  fun open(store: String, grayApkId: String?) {
     require(STORE_PACKAGES.containsKey(store)) { "Unknown domestic store" }
+    require(grayApkId == null || (store == "vivo" && grayApkId.matches(Regex("[0-9]+")))) { "Invalid vivo update target" }
     val packageName = requireNotNull(availablePackage(store)) { "The requested store is unavailable" }
-    context.startActivity(intent(store, packageName))
+    context.startActivity(intent(store, packageName, grayApkId))
   }
 
   @Suppress("DEPRECATION")
@@ -43,10 +49,11 @@ internal class DomesticStores(private val context: Context) {
     activity?.activityInfo?.let { it.enabled && it.exported && it.applicationInfo.enabled } == true
   }
 
-  private fun intent(store: String, packageName: String): Intent {
+  private fun intent(store: String, packageName: String, grayApkId: String? = null): Intent {
     val uri = Uri.parse("market://details").buildUpon().appendQueryParameter("id", context.packageName)
     if (store == "vivo") {
       uri.appendQueryParameter("th_name", "self_update")
+      if (grayApkId != null) uri.appendQueryParameter("gray_apk_id", grayApkId)
     }
     return Intent(Intent.ACTION_VIEW, uri.build()).apply {
       setPackage(packageName)

@@ -9,16 +9,16 @@ import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUp
  */
 export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
   return queryOptions({
-    queryKey: queryKeys.appUpdate.latest(appUpdate.channel, appUpdate.store),
+    queryKey: queryKeys.appUpdate.latest(appUpdate.channel),
     queryFn: ({ signal }) => appUpdate.check(signal),
     enabled: appUpdate.isEnabled,
-    staleTime: appUpdate.channel === 'domestic-stores' ? 15 * 60_000 : 6 * 60 * 60 * 1000,
+    staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
     retry: 1,
   });
 }
 
-/** A published version's notes never change, so one lookup per release and language suffices. */
+/** Notes may be corrected after publication; only the cold-start dialog requests them. */
 export function appUpdateReleaseNotesQueryOptions(
   appUpdate: AppUpdateModule,
   release: AppUpdateRelease,
@@ -27,7 +27,7 @@ export function appUpdateReleaseNotesQueryOptions(
   return queryOptions({
     queryKey: queryKeys.appUpdate.notes(release.id, language),
     queryFn: () => appUpdate.releaseNotes(release, language),
-    staleTime: Infinity,
+    staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
   });
 }

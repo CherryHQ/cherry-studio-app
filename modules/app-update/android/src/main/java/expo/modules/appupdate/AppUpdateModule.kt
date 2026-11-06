@@ -11,6 +11,7 @@ import androidx.core.content.FileProvider
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.UpdateAvailability
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -19,17 +20,30 @@ import org.json.JSONObject
 
 class AppUpdateModule : Module() {
   private val context get() = requireNotNull(appContext.reactContext)
+  private var domesticUpdates: DomesticStoreUpdates? = null
 
   override fun definition() = ModuleDefinition {
     Name("AppUpdate")
+    AsyncFunction("checkDomesticStoreUpdate") { id: String, store: String, promise: Promise ->
+      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
+      val updates = domesticUpdates ?: DomesticStoreUpdates(context.applicationContext).also { domesticUpdates = it }
+      updates.check(id, store, promise)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("cancelDomesticStoreUpdate") { id: String -> domesticUpdates?.cancel(id) }
+      .runOnQueue(Queues.MAIN)
+    OnDestroy {
+      val updates = domesticUpdates
+      domesticUpdates = null
+      Handler(Looper.getMainLooper()).post { updates?.dispose() }
+    }
     Function("getDomesticStoreInfo") {
       check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
       DomesticStores(context).info()
     }
-    AsyncFunction("openDomesticStore") { store: String ->
+    AsyncFunction("openDomesticStore") { store: String, grayApkId: String? ->
       check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
-      DomesticStores(context).open(store)
-    }
+      DomesticStores(context).open(store, grayApkId)
+    }.runOnQueue(Queues.MAIN)
     Function("isApkInstallationEnabled") { apkInstallationEnabled() }
     Function("canInstallPackages") {
       apkInstallationEnabled() &&

@@ -22,7 +22,6 @@ const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
  */
 export function AppUpdateObserver() {
   const appUpdate = useBackendModule('appUpdate');
-  const { data, status } = useQuery(appUpdateQueryOptions(appUpdate));
   const actions = useAppUpdateActions();
   const coverVisible = useStartupCoverVisible();
   const privacyPending = usePrivacyConsentPending();
@@ -31,6 +30,10 @@ export function AppUpdateObserver() {
   const pathname = usePathname();
   const params = useGlobalSearchParams<ChatRouteParamsInput>();
   const [active, setActive] = useState(AppState.currentState === 'active');
+  const { data, status } = useQuery({
+    ...appUpdateQueryOptions(appUpdate),
+    enabled: appUpdate.isEnabled && !privacyPending && active,
+  });
   const settled = useRef(false);
   const route = parseChatRoute(params);
   // A new chat with nothing handed to it; a share or a notification arrives with a target.
@@ -60,7 +63,6 @@ export function AppUpdateObserver() {
     if (status !== 'success') return;
     settled.current = true;
     if (data.status !== 'available' || appUpdate.getDownload().status !== 'idle') return;
-    if (data.channel === 'domestic-stores' && data.expiresAt <= Date.now()) return;
     const previous = cacheService.getPersist('app_update.last_reminder');
     const now = Date.now();
     if (
@@ -69,7 +71,7 @@ export function AppUpdateObserver() {
       now - previous.remindedAt < REMINDER_INTERVAL_MS
     )
       return;
-    actions.open(data);
+    actions.open(data, 'coldStart');
   }, [
     active,
     coverVisible,

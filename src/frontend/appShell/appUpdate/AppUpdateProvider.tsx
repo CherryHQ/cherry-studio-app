@@ -1,15 +1,22 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, type PropsWithChildren, use, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  type PropsWithChildren,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { cacheService } from '@/frontend/data/CacheService';
-import type { AppUpdateRelease, DomesticAppStore } from '@/shared/contracts/appUpdate';
+import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
-import { AppUpdateDialog } from './AppUpdateDialog';
+import { AppUpdateDialog, type AppUpdateOrigin } from './AppUpdateDialog';
 import { appUpdateQueryOptions } from './appUpdateQueries';
-import { AppUpdateStoreDialog } from './AppUpdateStoreDialog';
 
 const UNAVAILABLE_KEYS = {
   unsupported: 'appUpdate.unsupported',
@@ -22,12 +29,12 @@ type AppUpdateActions = {
   /** A manual check: opens the dialog for a known or newly found update, otherwise reports why not. */
   check(): Promise<void>;
   /** Presents one release in the update dialog and records it as this release's reminder. */
-  open(release: AppUpdateRelease): void;
+  open(release: AppUpdateRelease, origin?: AppUpdateOrigin): void;
 };
 const AppUpdateActionsContext = createContext<AppUpdateActions | null>(null);
 
 /**
- * Shared decisions and update presentation: either a known release or a manual store choice.
+ * Shared decisions and the update dialog for a known release.
  * Availability and transfer subscriptions remain in leaf consumers.
  */
 export function AppUpdateProvider({ children }: PropsWithChildren) {
@@ -36,12 +43,22 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   const { alert } = useAlert();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const [release, setRelease] = useState<AppUpdateRelease | null>(null);
-  const [stores, setStores] = useState<DomesticAppStore[] | null>(null);
+  const [presentation, setPresentation] = useState<{
+    release: AppUpdateRelease;
+    origin: AppUpdateOrigin;
+  } | null>(null);
   const pendingCheck = useRef<Promise<void> | null>(null);
 
+  useEffect(() => {
+    if (!presentation) return;
+    cacheService.setPersist('app_update.last_reminder', {
+      releaseId: presentation.release.id,
+      remindedAt: Date.now(),
+    });
+  }, [presentation]);
+
   const dialog = useMemo(() => {
-    const close = () => setRelease(null);
+    const close = () => setPresentation(null);
 
     const install = async () => {
       try {
@@ -94,15 +111,11 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
           staleTime: 0,
         });
         if (result.status === 'available') {
-          setRelease(result);
+          setPresentation({ release: result, origin: 'manual' });
           start(result);
           return;
         }
         close();
-        if (result.status === 'storeOnly') {
-          setStores(result.stores);
-          return;
-        }
         toast.show({
           label:
             result.status === 'upToDate'
@@ -118,14 +131,9 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   }, [appUpdate, queryClient, alert, toast, t]);
 
   const actions = useMemo<AppUpdateActions>(() => {
-    const open = (next: AppUpdateRelease) => {
-      // Any presentation counts as the reminder, so a cold start does not repeat it within a day.
-      cacheService.setPersist('app_update.last_reminder', {
-        releaseId: next.id,
-        remindedAt: Date.now(),
-      });
-      setStores(null);
-      setRelease(next);
+    const open = (next: AppUpdateRelease, origin: AppUpdateOrigin = 'manual') => {
+      // Never replace a prompt already being read, including two opens in the same render.
+      setPresentation((current) => current ?? { release: next, origin });
     };
 
     const check = async () => {
@@ -136,10 +144,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       }
       const options = appUpdateQueryOptions(appUpdate);
       const recorded = queryClient.getQueryData(options.queryKey);
-      if (
-        recorded?.status === 'available' &&
-        (recorded.channel !== 'domestic-stores' || recorded.expiresAt > Date.now())
-      ) {
+      if (recorded?.status === 'available') {
         open(recorded);
         return;
       }
@@ -147,7 +152,6 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       try {
         const result = await queryClient.fetchQuery({ ...options, staleTime: 0 });
         if (result.status === 'available') open(result);
-        else if (result.status === 'storeOnly') setStores(result.stores);
         else if (result.status === 'upToDate') {
           toast.show({ label: t('appUpdate.upToDate', { version: result.currentVersion }) });
         } else toast.show({ label: t(UNAVAILABLE_KEYS[result.reason]) });
@@ -171,16 +175,10 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   return (
     <AppUpdateActionsContext value={actions}>
       {children}
-      <AppUpdateDialog actions={dialog} release={release} />
-      <AppUpdateStoreDialog
-        stores={stores}
-        onClose={() => setStores(null)}
-        onOpenStore={(store) => {
-          setStores(null);
-          void appUpdate.openStore({ channel: 'domestic-stores', store }).catch(() => {
-            toast.show({ label: t('appUpdate.openFailed'), variant: 'danger' });
-          });
-        }}
+      <AppUpdateDialog
+        actions={dialog}
+        release={presentation?.release ?? null}
+        origin={presentation?.origin ?? null}
       />
     </AppUpdateActionsContext>
   );

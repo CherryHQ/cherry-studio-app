@@ -5,6 +5,14 @@ const withAppUpdates = require('../withAppUpdates');
 
 jest.mock('expo/config-plugins', () => ({
   ...jest.requireActual('expo/config-plugins'),
+  withProjectBuildGradle: (
+    config: Record<string, unknown>,
+    action: (value: unknown) => unknown,
+  ) => {
+    const mod = { modResults: { contents: config.gradleContents ?? 'allprojects {}' } };
+    action(mod);
+    return { ...config, gradleContents: mod.modResults.contents };
+  },
   withAndroidManifest: (config: unknown, action: (value: unknown) => unknown) => action(config),
 }));
 
@@ -47,4 +55,13 @@ test('switching the same generated manifest to APK permits installation without 
     ),
   ).toEqual([{ $: { 'android:name': permission } }]);
   expect(apk.android.blockedPermissions).not.toContain(permission);
+});
+
+test('vendor archives resolve from a stable local repository without duplicating prebuild entries', () => {
+  const first = withAppUpdates(config(), { apkUpdatesEnabled: false });
+  const second = withAppUpdates(first, { apkUpdatesEnabled: false });
+  expect(second.gradleContents).toBe(first.gradleContents);
+  expect(second.gradleContents).toContain(
+    'flatDir { dirs "$rootDir/../modules/app-update/android/libs" }',
+  );
 });

@@ -13,7 +13,7 @@ The [app-shell integration](../../../frontend/appShell/appUpdate/README.md) owns
 | --- | --- | --- |
 | Android `production-apk` | GitCode latest stable mobile release | Download in the app, then confirm Android installation |
 | Android `production-google-play` | Google Play's update-availability API for this installation | Open Google Play, with official web-listing fallback |
-| Android `production-domestic-stores` | Public per-store live-version manifest | Open the selected domestic store; manual choice when availability is unknown |
+| Android `production-domestic-stores` | HONOR/Xiaomi SDKs and vivo device query; GitCode for OPPO | Open the automatically resolved domestic store |
 | iOS `production-ios` | Apple's public software lookup for the installed bundle | Open App Store |
 | `preview`, absent or unknown release channel | None | No update entry or automatic request |
 
@@ -56,12 +56,13 @@ claim that the app is current.
   missing regional listing is `noRelease`. This checks App Store publications, not new TestFlight
   builds. Store submission or TestFlight upload alone is never an availability signal.
 
-- **Domestic stores:** `domesticStoreRelease` reads a credential-free HTTPS manifest, validates its
-  package identity and the selected store independently, then compares native build numbers.
-  Entries expire within 24 hours and only all-supported-device publications can announce updates.
-  Unconfigured, missing, expired, or failed data produces `storeOnly`, never `upToDate`. The shared
-  dialog offers manual store visits for that result and automatic reminders ignore it. Query keys
-  and reminder IDs include the store. See the deployment contract in
+- **Domestic stores:** use the integrated HONOR/Xiaomi SDK or vivo device query. OPPO reuses
+  `checkGitcodeRelease`; its available result becomes a domestic store target with no APK URLs
+  and `versionCode: null`. GitCode describes the project release, while the store decides actual
+  installation availability. Vendor results compare native build numbers. Both paths preserve
+  errors and use the existing result states, query cache and update dialog. Installation/update
+  owner and device identity resolve the target automatically; checks and store actions reread it.
+  Native requests follow caller/module cancellation and time out after 15 seconds. See
   [Domestic Android Store Updates](../../../../docs/guides/domestic-store-updates.md).
 
 ## Release Notes
@@ -76,7 +77,9 @@ selects the version for the UI language. A failed lookup returns what the releas
   onward, which describes attachments and checksums the app handles itself.
 - **App Store:** Apple's lookup `releaseNotes` for the queried region, as plain text.
 - **Google Play:** none; the in-app update API exposes only a version code.
-- **Domestic stores:** optional plain text in the store manifest; no GitCode/GitHub substitution.
+- **Domestic stores:** HONOR description and Xiaomi update log remain plain text; vivo supplies
+  no notes. The GitCode fallback uses the APK note reader above. Only cold-start presentation
+  invokes the notes reader.
 
 ## APK Transfer And Installation
 

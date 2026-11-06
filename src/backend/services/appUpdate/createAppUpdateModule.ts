@@ -3,14 +3,20 @@ import Constants from 'expo-constants';
 import { getLocales } from 'expo-localization';
 import { Linking, Platform } from 'react-native';
 
-import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
+import type {
+  AppUpdateModule,
+  AppUpdateResult,
+  DomesticAppStore,
+} from '@/shared/contracts/appUpdate';
 
+import type { NativeAppUpdate } from '../../../../modules/app-update';
 import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
-import { checkDomesticStoreRelease } from './domesticStoreRelease';
 import { assertApkRelease, checkGitcodeRelease } from './gitcodeRelease';
+import { checkNativeDomesticStoreRelease } from './nativeDomesticStoreRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
@@ -24,9 +30,9 @@ export function createAppUpdateModule(dependencies: {
     __DEV__ && Constants.expoConfig?.extra?.isApkUpdatesEnabled === true,
   );
   const download = createApkDownload();
-  const stores =
+  const lifetime = new AbortController();
+  const readStores = () =>
     channel === 'domestic-stores' ? getNativeAppUpdate()?.getDomesticStoreInfo?.() : null;
-  const store = stores?.preferred ?? (stores?.available.length === 1 ? stores.available[0]! : null);
   let stopped = false;
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
 
@@ -41,7 +47,6 @@ export function createAppUpdateModule(dependencies: {
 
   return {
     channel,
-    store,
     isEnabled: channel !== null,
     async check(signal): Promise<AppUpdateResult> {
       signal?.throwIfAborted();
@@ -60,23 +65,44 @@ export function createAppUpdateModule(dependencies: {
       }
       if (!Application.applicationId) return { status: 'unavailable', reason: 'unknownVersion' };
       if (channel === 'domestic-stores') {
-        if (!stores) return { status: 'unavailable', reason: 'nativeUnavailable' };
-        const fallback: AppUpdateResult = { status: 'storeOnly', stores: stores.available };
-        if (!store || !stores.available.includes(store)) return fallback;
-        const currentBuild = Number(Application.nativeBuildVersion);
-        if (!Number.isSafeInteger(currentBuild) || currentBuild <= 0) return fallback;
+        const store = resolveDomesticStore(readStores());
+        if (!store) return { status: 'unavailable', reason: 'nativeUnavailable' };
+        const linked = linkAbortSignals(signal ? [lifetime.signal, signal] : [lifetime.signal]);
         try {
-          return await checkDomesticStoreRelease(
-            store,
-            Application.applicationId,
-            currentVersion,
-            currentBuild,
-            signal,
-          );
-        } catch {
-          signal?.throwIfAborted();
-          // Unknown availability offers a manual visit, never an "up to date" assertion.
-          return fallback;
+          let result: AppUpdateResult;
+          if (store === 'oppo') {
+            const release = await checkGitcodeRelease(currentVersion, linked.signal);
+            result =
+              release.status === 'available'
+                ? {
+                    status: 'available',
+                    channel,
+                    store,
+                    id: `domestic-stores:${store}:${release.id}`,
+                    currentVersion,
+                    latestVersion: release.latestVersion,
+                    notes: release.notes,
+                    versionCode: null,
+                  }
+                : release;
+          } else {
+            const currentBuild = Number(Application.nativeBuildVersion);
+            if (!Number.isSafeInteger(currentBuild) || currentBuild <= 0)
+              return { status: 'unavailable', reason: 'unknownVersion' };
+            result = await checkNativeDomesticStoreRelease(
+              store,
+              Application.applicationId,
+              currentVersion,
+              currentBuild,
+              linked.signal,
+            );
+          }
+          linked.signal.throwIfAborted();
+          if (resolveDomesticStore(readStores()) !== store)
+            return { status: 'unavailable', reason: 'nativeUnavailable' };
+          return result;
+        } finally {
+          linked.dispose();
         }
       }
       if (channel === 'google-play') {
@@ -112,10 +138,10 @@ export function createAppUpdateModule(dependencies: {
       }
       if (release.channel === 'domestic-stores') {
         const native = getNativeAppUpdate();
-        if (!native?.getDomesticStoreInfo?.().available.includes(release.store)) {
+        if (!native || resolveDomesticStore(native.getDomesticStoreInfo?.()) !== release.store) {
           throw new Error('The requested domestic store is unavailable');
         }
-        await native.openDomesticStore(release.store);
+        await native.openDomesticStore(release.store, release.grayApkId ?? null);
         return;
       }
       if (channel === 'google-play') {
@@ -173,8 +199,33 @@ export function createAppUpdateModule(dependencies: {
     },
     async dispose() {
       stopped = true;
+      lifetime.abort();
       await download.dispose();
       await installation?.catch(() => {});
     },
   };
+}
+
+const DEVICE_STORES: Partial<Record<string, DomesticAppStore>> = {
+  honor: 'honor',
+  xiaomi: 'xiaomi',
+  redmi: 'xiaomi',
+  poco: 'xiaomi',
+  oppo: 'oppo',
+  realme: 'oppo',
+  oneplus: 'oppo',
+  vivo: 'vivo',
+  iqoo: 'vivo',
+};
+
+function resolveDomesticStore(
+  info: ReturnType<NativeAppUpdate['getDomesticStoreInfo']> | null | undefined,
+): DomesticAppStore | null {
+  if (!info) return null;
+  if (info.preferred && info.available.includes(info.preferred)) return info.preferred;
+  for (const identity of [info.brand, info.manufacturer]) {
+    const candidate = DEVICE_STORES[identity.trim().toLowerCase()];
+    if (candidate && info.available.includes(candidate)) return candidate;
+  }
+  return info.available.length === 1 ? info.available[0]! : null;
 }

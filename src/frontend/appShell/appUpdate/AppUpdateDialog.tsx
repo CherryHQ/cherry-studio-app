@@ -11,7 +11,8 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { AppUpdateDownload, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { appUpdateReleaseNotesQueryOptions, useAppUpdateDownload } from './appUpdateQueries';
-import { DOMESTIC_STORE_KEYS } from './domesticStoreKeys';
+
+export type AppUpdateOrigin = 'coldStart' | 'manual';
 
 export type AppUpdateDialogActions = {
   cancel(): Promise<void>;
@@ -24,6 +25,7 @@ export type AppUpdateDialogActions = {
 const STORE_KEYS = {
   'app-store': 'appUpdate.openAppStore',
   'google-play': 'appUpdate.openGooglePlay',
+  'domestic-stores': 'appUpdate.openStore',
 } as const;
 
 /**
@@ -33,9 +35,11 @@ const STORE_KEYS = {
 export function AppUpdateDialog({
   actions,
   release,
+  origin,
 }: {
   actions: AppUpdateDialogActions;
   release: AppUpdateRelease | null;
+  origin: AppUpdateOrigin | null;
 }) {
   const appUpdate = useBackendModule('appUpdate');
   const transfer = useAppUpdateDownload(appUpdate);
@@ -50,6 +54,7 @@ export function AppUpdateDialog({
       actions={actions}
       current={current}
       open={release !== null}
+      origin={origin}
       transfer={transfer}
     />
   );
@@ -63,11 +68,13 @@ function AppUpdateDialogContent({
   actions,
   current,
   open,
+  origin,
   transfer,
 }: {
   actions: AppUpdateDialogActions;
   current: AppUpdateRelease;
   open: boolean;
+  origin: AppUpdateOrigin | null;
   transfer: AppUpdateDownload;
 }) {
   const appUpdate = useBackendModule('appUpdate');
@@ -75,7 +82,7 @@ function AppUpdateDialogContent({
   const { t, i18n } = useTranslation();
   const notes = useQuery({
     ...appUpdateReleaseNotesQueryOptions(appUpdate, current, i18n.language),
-    enabled: open,
+    enabled: open && origin === 'coldStart',
   });
 
   return (
@@ -94,29 +101,30 @@ function AppUpdateDialogContent({
       <Text className="text-sm text-muted-foreground">
         {t('appUpdate.currentVersion', { version: current.currentVersion })}
       </Text>
-      <ReleaseNotes
-        channel={current.channel}
-        fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
-        loading={notes.isPending}
-        notes={notes.data ?? null}
-      />
+      {origin === 'coldStart' && (
+        <ReleaseNotes
+          release={current}
+          fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
+          loading={notes.isPending}
+          notes={notes.data ?? null}
+        />
+      )}
       <AppUpdateDialogActionsView actions={actions} release={current} transfer={transfer} />
     </Dialog>
   );
 }
 
 function ReleaseNotes({
-  channel,
+  release,
   fontSizeStep,
   loading,
   notes,
 }: {
-  channel: AppUpdateRelease['channel'];
+  release: AppUpdateRelease;
   fontSizeStep: TypographySizeStep;
   loading: boolean;
   notes: string | null;
 }) {
-  const { t } = useTranslation();
   if (loading) {
     return (
       <View className="h-16 items-center justify-center">
@@ -124,16 +132,13 @@ function ReleaseNotes({
       </View>
     );
   }
-  if (!notes) {
-    return channel === 'google-play' || channel === 'domestic-stores' ? (
-      <Text className="text-base text-foreground">{t('appUpdate.storeAvailable')}</Text>
-    ) : null;
-  }
+  if (!notes) return null;
   // Notes scroll inside a bounded region so the actions below stay in view.
   return (
     <ScrollView className="max-h-80" nestedScrollEnabled showsVerticalScrollIndicator={false}>
       {/* GitCode and GitHub publish Markdown; store listings publish plain text with line breaks. */}
-      {channel === 'apk' ? (
+      {release.channel === 'apk' ||
+      (release.channel === 'domestic-stores' && release.versionCode === null) ? (
         <MarkdownText
           fontSizeStep={fontSizeStep}
           markdown={notes}
@@ -238,13 +243,7 @@ function AppUpdateDialogActionsView({
       return (
         <View className="gap-3">
           <Button onPress={() => actions.start(release)} testID="app-update-start">
-            {t(
-              release.channel === 'apk'
-                ? 'appUpdate.download'
-                : release.channel === 'domestic-stores'
-                  ? DOMESTIC_STORE_KEYS[release.store]
-                  : STORE_KEYS[release.channel],
-            )}
+            {t(release.channel === 'apk' ? 'appUpdate.download' : STORE_KEYS[release.channel])}
           </Button>
           {later}
         </View>

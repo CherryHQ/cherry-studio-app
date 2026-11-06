@@ -19,6 +19,16 @@ const apk: AppUpdateRelease = {
     'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v1.10.0/SHA256SUMS',
 };
 
+const domestic: AppUpdateRelease = {
+  channel: 'domestic-stores',
+  store: 'oppo',
+  id: 'domestic-stores:oppo:apk:1.10.0',
+  currentVersion: apk.currentVersion,
+  latestVersion: apk.latestVersion,
+  notes: apk.notes,
+  versionCode: null,
+};
+
 beforeEach(() => jest.clearAllMocks());
 
 test.each([
@@ -37,25 +47,34 @@ test.each([
   expect(normalizeReleaseNotes(body)).toBe(expected);
 });
 
-test('Chinese interfaces keep the GitCode notes without another request', async () => {
-  await expect(readReleaseNotes(apk, 'zh-TW')).resolves.toBe('中文说明');
-  expect(mockRequest).not.toHaveBeenCalled();
-});
+test.each([apk, domestic])(
+  'Chinese interfaces keep the GitCode notes for $channel',
+  async (release) => {
+    await expect(readReleaseNotes(release, 'zh-TW')).resolves.toBe('中文说明');
+    expect(mockRequest).not.toHaveBeenCalled();
+  },
+);
 
-test('other interfaces read the English notes for the same tag', async () => {
-  mockRequest.mockResolvedValue({ data: { body: '# Title\n\n## Fixes\n\n- One' } });
-  await expect(readReleaseNotes(apk, 'en-US')).resolves.toBe('## Fixes\n\n- One');
-  expect(mockRequest).toHaveBeenCalledWith(
-    expect.objectContaining({ path: '/repos/CherryHQ/cherry-studio-app/releases/tags/v1.10.0' }),
-  );
-});
+test.each([apk, domestic])(
+  'other interfaces read the same-tag English notes for $channel',
+  async (release) => {
+    mockRequest.mockResolvedValue({ data: { body: '# Title\n\n## Fixes\n\n- One' } });
+    await expect(readReleaseNotes(release, 'en-US')).resolves.toBe('## Fixes\n\n- One');
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/repos/CherryHQ/cherry-studio-app/releases/tags/v1.10.0' }),
+    );
+  },
+);
 
-test('unreachable or empty English notes fall back to the Chinese notes', async () => {
-  mockRequest.mockRejectedValueOnce(new Error('offline'));
-  await expect(readReleaseNotes(apk, 'en-US')).resolves.toBe('中文说明');
-  mockRequest.mockResolvedValueOnce({ data: { body: '' } });
-  await expect(readReleaseNotes(apk, 'de-DE')).resolves.toBe('中文说明');
-});
+test.each([apk, domestic])(
+  'unreachable or empty English notes keep the $channel source notes',
+  async (release) => {
+    mockRequest.mockRejectedValueOnce(new Error('offline'));
+    await expect(readReleaseNotes(release, 'en-US')).resolves.toBe('中文说明');
+    mockRequest.mockResolvedValueOnce({ data: { body: '' } });
+    await expect(readReleaseNotes(release, 'de-DE')).resolves.toBe('中文说明');
+  },
+);
 
 test('store releases use the notes their store published', async () => {
   const store: AppUpdateRelease = {
