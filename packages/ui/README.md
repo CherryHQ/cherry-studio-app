@@ -5,6 +5,18 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`CardStack` is a controlled preview deck for a small ordered collection. It renders an upright
+current card with up to two translated/rotated cards behind it and accessible previous/next actions.
+Callers supply items, the current index, item content and localized labels; the stack owns no
+selection, conversion, file access or delivery. Fixed depth slots retain the foreground browser's
+identity across pages. Native fling recognition owns swipe thresholds and cancellation; vertical
+movement yields to the sheet, and cancelled flings do not change the index. Content must supply
+appropriate image sizes and disable irrelevant interactions in background slots.
+Optional `layout="fill"` lets a single item fill the available frame without reserving pagination
+space. The caller owns the surrounding gutters. Collections retain the compact deck and controls;
+the default `stack` layout keeps the same compact frame for single and multiple items.
+
+
 `ReorderList` is a controlled ordering list for small collections. It renders the shared Section
 rows with labeled up/down buttons, disables moves at the first and last positions, and returns
 a reordered copy without changing item identities or metadata. Callers supply item keys, labels,

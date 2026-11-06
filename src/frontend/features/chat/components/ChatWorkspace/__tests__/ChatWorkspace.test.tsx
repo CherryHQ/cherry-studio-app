@@ -13,6 +13,15 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('../../../share/chatShareSelection', () => ({
+  useChatShareSelectionActions: () => ({ beginSelection: jest.fn() }),
+  useIsChatShareSelecting: () => false,
+}));
+jest.mock('../../../share/ChatShareControls', () => ({
+  ChatShareMessageSelection: () => null,
+  ChatShareSelectionSpacer: () => null,
+}));
+
 const mockPendingSendDisplayed = jest.fn();
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);

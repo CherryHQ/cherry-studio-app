@@ -2,6 +2,7 @@ import { type MenuItem, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShareFiles } from '@/frontend/appShell/sharing';
 import { useSelectionActions, useSelectionState } from '@/frontend/components/Selection';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
@@ -18,6 +19,7 @@ export function useFileLibraryItemActions(onTranscribe: (file: LibraryFile) => v
   const { toast } = useToast();
   const { alert } = useAlert();
   const files = useBackendModule('file');
+  const sharing = useShareFiles();
   const { enterEditing, selectIds } = useSelectionActions();
   const { isDeletionPending } = useSelectionState();
   const editFolder = useMutation('PATCH', '/files/folders/:id');
@@ -119,6 +121,17 @@ export function useFileLibraryItemActions(onTranscribe: (file: LibraryFile) => v
       ...(selection.kind === 'file'
         ? [
             {
+              id: 'share',
+              group: 'sharing',
+              label: t('common.share'),
+              disabled: sharing.isSharing || isPending || isDeletionPending,
+              onPress: () => void sharing.share([selection.file.entry.id]),
+            },
+          ]
+        : []),
+      ...(selection.kind === 'file'
+        ? [
+            {
               disabled: isPending || isDeletionPending,
               id: 'select',
               label: t('library.selection.start'),
@@ -159,7 +172,17 @@ export function useFileLibraryItemActions(onTranscribe: (file: LibraryFile) => v
         onPress: () => trash(selection),
       },
     ],
-    [enterEditing, isDeletionPending, isPending, onTranscribe, rename, selectIds, t, trash],
+    [
+      enterEditing,
+      isDeletionPending,
+      isPending,
+      onTranscribe,
+      rename,
+      selectIds,
+      sharing,
+      t,
+      trash,
+    ],
   );
 
   return { closeMove, getMenuItems, isPending, move, moving };

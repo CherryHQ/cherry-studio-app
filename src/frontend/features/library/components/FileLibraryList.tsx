@@ -227,7 +227,10 @@ export function FileLibraryList({
         style={styles.list}
         testID="file-library-list"
       />
-      <FileLibrarySelectionControls refresh={refresh} />
+      <FileLibrarySelectionControls
+        refresh={refresh}
+        fileOrder={entries.map((file) => file.entry.id)}
+      />
     </>
   );
 }

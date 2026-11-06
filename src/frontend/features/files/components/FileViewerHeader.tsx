@@ -2,9 +2,9 @@ import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { useShareFile } from '@/frontend/appShell/fileExport';
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
-import { fileEntryPreviewKind, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
+import { useShareFile } from '@/frontend/appShell/sharing';
+import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 const EMPTY_ITEMS: readonly MenuItem[] = [];
@@ -20,20 +20,16 @@ export function FileViewerHeader({
   const leadingAction = useRouteHeaderLeadingAction();
   const { openFileEntryWithSystem } = useOpenFileEntry();
   const { isSharing, share } = useShareFile(file);
-  const isImage = fileEntryPreviewKind(file.entry) === 'image';
 
   const menuItems: MenuItem[] = [
     ...items,
-    ...(!isImage
-      ? [
-          {
-            disabled: isSharing,
-            id: 'share',
-            label: t('fileViewer.share'),
-            onPress: () => void share(),
-          },
-        ]
-      : []),
+    {
+      disabled: isSharing,
+      id: 'share',
+      group: 'sharing',
+      label: t('fileViewer.share'),
+      onPress: () => void share(),
+    },
     {
       id: 'open-with',
       label: t('filePreview.openWith'),

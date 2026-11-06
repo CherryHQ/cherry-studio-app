@@ -4,12 +4,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import {
-  ChatShareSelectionProvider,
   useChatShareSelectionActions,
   useChatShareSelectionCount,
   useChatShareSelectionState,
   useIsChatMessageSelected,
-} from '../ChatShareSelectionProvider';
+} from '../chatShareSelection';
+import { ChatShareSelectionProvider } from '../ChatShareSelectionProvider';
 
 const target = {
   ref: { source: { kind: 'local' as const }, sessionId: 'session' },

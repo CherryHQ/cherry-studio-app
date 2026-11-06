@@ -2,7 +2,7 @@ import { DocumentExportError, type ExportDocument } from '@/shared/contracts/doc
 
 import { DEFAULT_CONTENT_LABELS } from '../contentPresentation';
 import { normalizeDocument } from '../normalizeDocument';
-import { renderHtml, renderMarkdownPreview } from '../renderHtml';
+import { renderDocumentPreview, renderHtml, renderMarkdownPreview } from '../renderHtml';
 import { renderMarkdown } from '../renderMarkdown';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -30,6 +30,93 @@ const presentation = {
     inlineCodeForeground: '#111111',
   },
 };
+
+test('message image cards excerpt before reading omitted assets while complete formats retain them', async () => {
+  const source = Array.from(
+    { length: 100 },
+    (_, index) => `Paragraph ${index}: ${'一段完整的正文。'.repeat(15)}`,
+  ).join('\n\n');
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [
+        {
+          id: 'answer',
+          presentation: 'message',
+          heading: 'Assistant',
+          blocks: [
+            { kind: 'markdown', source },
+            { kind: 'image', assetId: 'omitted', alt: 'Final image' },
+          ],
+        },
+      ],
+      assets: {
+        omitted: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000001' },
+      },
+    },
+  });
+  const card = {
+    ...presentation,
+    imageFrame: {
+      background: '#ffffff',
+      label: 'Message',
+      excerptLabel: 'Excerpt · Full content in HTML or Markdown',
+    },
+  };
+  const readImage = jest.fn(async () => new Uint8Array());
+  const preview = renderDocumentPreview(document, card);
+  const { html } = await renderHtml(
+    document,
+    card,
+    new Map(),
+    readImage,
+    new AbortController().signal,
+  );
+  expect(readImage).not.toHaveBeenCalled();
+  expect(preview).toBe(html);
+  expect(html).toContain('Paragraph 0:');
+  expect(html).not.toContain('Paragraph 99:');
+  expect(html).toContain('<p class="share-excerpt">Excerpt');
+  expect(renderMarkdown(document)).toContain('Paragraph 99:');
+  const full = await renderHtml(
+    document,
+    presentation,
+    new Map(),
+    readImage,
+    new AbortController().signal,
+  );
+  expect(full.html).toContain('Paragraph 99:');
+  expect(full.html).not.toContain('data-share-card-max-height');
+  expect(readImage).toHaveBeenCalledTimes(1);
+});
+
+test('a short message card stays complete and does not claim it is an excerpt', async () => {
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [
+        {
+          id: 'answer',
+          presentation: 'message',
+          blocks: [{ kind: 'markdown', source: 'A **complete** reply.\n\n- First\n- Second' }],
+        },
+      ],
+    },
+  });
+  const { html } = await renderHtml(
+    document,
+    {
+      ...presentation,
+      imageFrame: { background: '#ffffff', label: 'Message', excerptLabel: 'Excerpt' },
+    },
+    new Map(),
+    jest.fn(),
+    new AbortController().signal,
+  );
+  expect(html).toContain('<strong>complete</strong>');
+  expect(html).toContain('<li>Second</li>');
+  expect(html).toContain('<p class="share-excerpt" hidden>');
+});
 
 test('plain Markdown remains usable without chat, while the session owns its copied input', () => {
   const input = {
@@ -356,7 +443,7 @@ test('repeated embedded images do not impose an output text budget', async () =>
     ).join('\n\n'),
   });
   const dataUrl = `data:image/png;base64,${'A'.repeat(1024 * 1024)}`;
-  const cache = new Map([['https://example.com/image.png', { dataUrl }]]);
+  const cache = new Map([['remote:https://example.com/image.png', { dataUrl }]]);
   const { html, issues } = await renderHtml(
     document,
     presentation,
@@ -443,6 +530,8 @@ test('images show labelled code previews alongside prose and inline code', async
   expect(html).toContain('Before.');
   expect(html).toContain('After.');
   expect(html).toContain('<pre><code>');
+  expect(html).toContain('.image-print .code-block{height:auto;overflow:visible;display:block}');
+  expect(html).toContain('white-space:pre-wrap;overflow-wrap:anywhere');
   const browser = await renderHtml(
     document,
     presentation,
@@ -487,7 +576,7 @@ test('four-column tables retain their rows, headers, alignment and media in imag
     '| Name | Link | Image | Note |\n| --- | :---: | --- | ---: |\n| Alpha | [Docs](https://example.com/docs) | ![Photo](https://example.com/photo.png) | **Keep me** |';
   const document = normalizeDocument({ kind: 'markdown', source });
   const cache = new Map([
-    ['https://example.com/photo.png', { dataUrl: 'data:image/png;base64,AA==' }],
+    ['remote:https://example.com/photo.png', { dataUrl: 'data:image/png;base64,AA==' }],
   ]);
   const read = jest.fn();
   const { html } = await renderHtml(

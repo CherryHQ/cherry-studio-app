@@ -144,7 +144,10 @@ function FileLibraryScreenBody() {
                   testID: 'file-library-folders',
                 },
               ]}
-              onValueChange={setBrowseMode}
+              onValueChange={(value) => {
+                exitEditing();
+                setBrowseMode(value);
+              }}
               testID="file-library-browse"
               value={browseMode}
             />
@@ -165,7 +168,10 @@ function FileLibraryScreenBody() {
                       }
                       hitSlop={6}
                       key={value}
-                      onSelectedChange={() => setFilter(value)}
+                      onSelectedChange={() => {
+                        exitEditing();
+                        setFilter(value);
+                      }}
                       selected={selected}
                       testID={`file-library-filter-${value}`}
                     >
