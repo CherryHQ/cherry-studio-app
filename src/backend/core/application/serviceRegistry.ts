@@ -26,8 +26,10 @@ import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { IosBackgroundExecutionSource } from '@/backend/services/keepAlive/IosBackgroundExecutionSource';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
+import { ProviderCatalogRuntime } from '@/backend/services/providers/ProviderCatalogRuntime';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { VertexAuthClient } from '@/backend/services/providers/vertex';
+import { RegionService } from '@/backend/services/region';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -72,6 +74,8 @@ export const services = {
   BackgroundActivityManager,
   BackgroundReplyRuntime,
   WebSearchService,
+  RegionService,
+  ProviderCatalogRuntime,
   ProviderRegistryUpdaterService,
   TraceStorageService,
   DiagnosticBundleService,
