@@ -312,7 +312,14 @@ test.each(['error', 'interrupted', 'cancelled'] as const)(
       ...message('answer'),
       parentId: 'question',
       status,
-      error: { code: 'EXECUTION_FAILED', message: 'Original failure', retryable: true },
+      parts: [
+        ...message('answer').parts,
+        {
+          id: 'original-failure',
+          type: 'data-error',
+          data: { code: 'EXECUTION_FAILED', message: 'Original failure', retryable: true },
+        },
+      ],
       siblings: [
         { id: 'answer', modelId: null, status, siblingsGroupId: 0 },
         { id: 'other-answer', modelId: null, status: 'success', siblingsGroupId: 0 },
@@ -339,8 +346,10 @@ test.each(['error', 'interrupted', 'cancelled'] as const)(
     expect(pending.actions.retry).toBeUndefined();
     expect(pending.actions.answerWith).toBeUndefined();
     expect(answer.status).toBe(status);
-    expect(answer.parts).toEqual(message('answer').parts);
-    expect(answer.error?.message).toBe('Original failure');
+    expect(answer.parts).toMatchObject([
+      ...message('answer').parts,
+      { type: 'data-error', data: { message: 'Original failure' } },
+    ]);
     expect(answer.siblings?.map((sibling) => sibling.status)).toEqual([status, 'success']);
 
     // An observed reservation may remove the overlay before admission finishes.
@@ -348,9 +357,7 @@ test.each(['error', 'interrupted', 'cancelled'] as const)(
     const [restored] = f.projector.history(rows, f.state);
     expect(restored.state).toBe(status);
     expect(restored.display.branch).toEqual(original.display.branch);
-    expect(restored.display.data.parts).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: 'text', text: 'answer' })]),
-    );
+    expect(restored.display.data.parts).toEqual(original.display.data.parts);
     expect(restored.actions.retry?.availability.state).toBe('disabled');
     f.set({ isSubmitting: false });
     expect(f.projector.history(rows, f.state)[0].actions.retry?.availability.state).toBe('enabled');

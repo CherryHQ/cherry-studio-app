@@ -128,9 +128,7 @@ export function createLocalConversationProjector(input: {
       const canModify = isSettled && !retrying && message.role !== 'system';
       const projected: ConversationMessage = {
         ...projectLocalTranscriptMessage(
-          retrying
-            ? { ...message, status: 'pending', parts: [], error: null, stats: null }
-            : message,
+          retrying ? { ...message, status: 'pending', parts: [], stats: null } : message,
           cache,
         ),
         actions: {
