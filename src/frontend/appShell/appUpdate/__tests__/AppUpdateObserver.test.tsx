@@ -87,7 +87,7 @@ afterEach(() => {
 
 test('a cold start on the landing chat offers the release once', async () => {
   await launch();
-  expect(mockOpen).toHaveBeenCalledWith(available);
+  expect(mockOpen).toHaveBeenCalledWith(available, 'coldStart');
 
   await act(async () => {
     await queryClient.refetchQueries();
@@ -133,4 +133,11 @@ test('a new chat for a chosen agent still counts as the landing chat', async () 
   mockParams = { agentId: 'a' };
   await launch();
   expect(mockOpen).toHaveBeenCalledTimes(1);
+});
+
+test('privacy consent prevents starting a vendor query', async () => {
+  mockPrivacyPending = true;
+  await launch();
+  expect(mockUpdate.check).not.toHaveBeenCalled();
+  expect(mockOpen).not.toHaveBeenCalled();
 });

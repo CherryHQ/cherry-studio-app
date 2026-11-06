@@ -12,6 +12,8 @@ import type { AppUpdateDownload, AppUpdateRelease } from '@/shared/contracts/app
 
 import { appUpdateReleaseNotesQueryOptions, useAppUpdateDownload } from './appUpdateQueries';
 
+export type AppUpdateOrigin = 'coldStart' | 'manual';
+
 export type AppUpdateDialogActions = {
   cancel(): Promise<void>;
   close(): void;
@@ -23,6 +25,7 @@ export type AppUpdateDialogActions = {
 const STORE_KEYS = {
   'app-store': 'appUpdate.openAppStore',
   'google-play': 'appUpdate.openGooglePlay',
+  'domestic-stores': 'appUpdate.openStore',
 } as const;
 
 /**
@@ -32,9 +35,11 @@ const STORE_KEYS = {
 export function AppUpdateDialog({
   actions,
   release,
+  origin,
 }: {
   actions: AppUpdateDialogActions;
   release: AppUpdateRelease | null;
+  origin: AppUpdateOrigin | null;
 }) {
   const appUpdate = useBackendModule('appUpdate');
   const transfer = useAppUpdateDownload(appUpdate);
@@ -49,6 +54,7 @@ export function AppUpdateDialog({
       actions={actions}
       current={current}
       open={release !== null}
+      origin={origin}
       transfer={transfer}
     />
   );
@@ -62,11 +68,13 @@ function AppUpdateDialogContent({
   actions,
   current,
   open,
+  origin,
   transfer,
 }: {
   actions: AppUpdateDialogActions;
   current: AppUpdateRelease;
   open: boolean;
+  origin: AppUpdateOrigin | null;
   transfer: AppUpdateDownload;
 }) {
   const appUpdate = useBackendModule('appUpdate');
@@ -74,7 +82,7 @@ function AppUpdateDialogContent({
   const { t, i18n } = useTranslation();
   const notes = useQuery({
     ...appUpdateReleaseNotesQueryOptions(appUpdate, current, i18n.language),
-    enabled: open,
+    enabled: open && origin === 'coldStart',
   });
 
   return (
@@ -93,29 +101,33 @@ function AppUpdateDialogContent({
       <Text className="text-sm text-muted-foreground">
         {t('appUpdate.currentVersion', { version: current.currentVersion })}
       </Text>
-      <ReleaseNotes
-        channel={current.channel}
-        fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
-        loading={notes.isPending}
-        notes={notes.data ?? null}
-      />
+      {origin === 'coldStart' && (
+        <ReleaseNotes
+          markdown={
+            current.channel === 'apk' ||
+            (current.channel === 'domestic-stores' && current.notesSource === 'gitcode')
+          }
+          fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
+          loading={notes.isPending}
+          notes={notes.data ?? null}
+        />
+      )}
       <AppUpdateDialogActionsView actions={actions} release={current} transfer={transfer} />
     </Dialog>
   );
 }
 
 function ReleaseNotes({
-  channel,
+  markdown,
   fontSizeStep,
   loading,
   notes,
 }: {
-  channel: AppUpdateRelease['channel'];
+  markdown: boolean;
   fontSizeStep: TypographySizeStep;
   loading: boolean;
   notes: string | null;
 }) {
-  const { t } = useTranslation();
   if (loading) {
     return (
       <View className="h-16 items-center justify-center">
@@ -123,16 +135,12 @@ function ReleaseNotes({
       </View>
     );
   }
-  if (!notes) {
-    return channel === 'google-play' ? (
-      <Text className="text-base text-foreground">{t('appUpdate.storeAvailable')}</Text>
-    ) : null;
-  }
+  if (!notes) return null;
   // Notes scroll inside a bounded region so the actions below stay in view.
   return (
     <ScrollView className="max-h-80" nestedScrollEnabled showsVerticalScrollIndicator={false}>
       {/* GitCode and GitHub publish Markdown; store listings publish plain text with line breaks. */}
-      {channel === 'apk' ? (
+      {markdown ? (
         <MarkdownText
           fontSizeStep={fontSizeStep}
           markdown={notes}

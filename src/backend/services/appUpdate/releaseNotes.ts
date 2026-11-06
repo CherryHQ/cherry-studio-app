@@ -31,7 +31,10 @@ export async function readReleaseNotes(
   release: AppUpdateRelease,
   language: string,
 ): Promise<string | null> {
-  if (release.channel !== 'apk' || /^zh\b/i.test(language)) return release.notes;
+  const fromGitcode =
+    release.channel === 'apk' ||
+    (release.channel === 'domestic-stores' && release.notesSource === 'gitcode');
+  if (!fromGitcode || /^zh\b/i.test(language)) return release.notes;
   try {
     const { data } = await github.request<{ body?: string | null }>({
       method: 'GET',

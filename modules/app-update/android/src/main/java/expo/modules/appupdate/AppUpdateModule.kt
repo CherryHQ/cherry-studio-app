@@ -11,6 +11,7 @@ import androidx.core.content.FileProvider
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.UpdateAvailability
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -19,9 +20,30 @@ import org.json.JSONObject
 
 class AppUpdateModule : Module() {
   private val context get() = requireNotNull(appContext.reactContext)
+  private var domesticUpdates: DomesticStoreUpdates? = null
 
   override fun definition() = ModuleDefinition {
     Name("AppUpdate")
+    AsyncFunction("checkDomesticStoreUpdate") { id: String, store: String, promise: Promise ->
+      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
+      val updates = domesticUpdates ?: DomesticStoreUpdates(context.applicationContext).also { domesticUpdates = it }
+      updates.check(id, store, promise)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("cancelDomesticStoreUpdate") { id: String -> domesticUpdates?.cancel(id) }
+      .runOnQueue(Queues.MAIN)
+    OnDestroy {
+      val updates = domesticUpdates
+      domesticUpdates = null
+      Handler(Looper.getMainLooper()).post { updates?.dispose() }
+    }
+    Function("getDomesticStore") {
+      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
+      DomesticStores(context).resolve()
+    }
+    AsyncFunction("openDomesticStore") { store: String ->
+      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
+      DomesticStores(context).open(store)
+    }.runOnQueue(Queues.MAIN)
     Function("isApkInstallationEnabled") { apkInstallationEnabled() }
     Function("canInstallPackages") {
       apkInstallationEnabled() &&
@@ -85,11 +107,17 @@ class AppUpdateModule : Module() {
   private fun apkInstallationEnabled(): Boolean {
     val info = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
     if (info.metaData?.getBoolean("expo.modules.appupdate.APK_UPDATES_ENABLED", false) != true) return false
-    // Read the embedded manifest, never mutable JS config or an OTA-supplied header override.
-    val headers = info.metaData?.getString("expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY") ?: "{}"
-    val channel = JSONObject(headers).optString("expo-channel-name")
+    val channel = nativeChannel()
     return channel == "production-apk" ||
       (channel.isEmpty() && info.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
+  }
+
+  @Suppress("DEPRECATION")
+  private fun nativeChannel(): String {
+    // Read the embedded manifest, never mutable JS config or an OTA-supplied header override.
+    val info = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+    val headers = info.metaData?.getString("expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY") ?: "{}"
+    return JSONObject(headers).optString("expo-channel-name")
   }
 
   @Suppress("DEPRECATION")
