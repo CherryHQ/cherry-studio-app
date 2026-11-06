@@ -12,8 +12,8 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { JinaProvider } from '../JinaProvider';
 
 const mockIsMainland = jest.fn(() => false);
-jest.mock('@/backend/services/device', () => ({
-  isDeviceRegionMainlandChina: () => mockIsMainland(),
+jest.mock('@/backend/core/application/Application', () => ({
+  application: { get: () => ({ getCountry: async () => (mockIsMainland() ? 'CN' : 'US') }) },
 }));
 
 const config: WebSearchExecutionConfig = {
@@ -32,7 +32,7 @@ beforeEach(() => {
 });
 
 test.each([false, true])(
-  'selects built-in hosts using device region (mainland=%s)',
+  'selects built-in hosts using IP country (mainland=%s)',
   async (mainland) => {
     mockIsMainland.mockReturnValue(mainland);
     const provider = createProvider(['key']);

@@ -116,6 +116,8 @@ export const DefaultPersistCache: PersistCacheSchema = {
  * frontend persist cache.
  */
 export type BackendPersistCacheSchema = {
+  /** Last successful egress-IP country; null until a lookup succeeds. */
+  'region.last_country': string | null;
   // Local date (`YYYY-MM-DD`) of the last analytics activity ping, so cold starts
   // and foreground entries report at most once a day. Empty means never reported.
   'analytics.last_activity_date': string;
@@ -123,6 +125,7 @@ export type BackendPersistCacheSchema = {
 };
 
 export const DefaultBackendPersistCache: BackendPersistCacheSchema = {
+  'region.last_country': null,
   'analytics.last_activity_date': '',
   'internal.persist_probe': 0,
 };

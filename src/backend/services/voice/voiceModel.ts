@@ -6,12 +6,17 @@ import { VoiceError, type VoiceModelModule, type VoiceModelState } from '@/share
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { getVoiceInput } from '../../../../modules/voice-input';
-import { SENSE_VOICE_ASSETS, SENSE_VOICE_BYTES, SENSE_VOICE_DIRECTORY } from './senseVoiceAssets';
+import {
+  getSenseVoiceAssets,
+  SENSE_VOICE_ASSETS,
+  SENSE_VOICE_BYTES,
+  SENSE_VOICE_DIRECTORY,
+} from './senseVoiceAssets';
 
 const logger = loggerService.withContext('VoiceModel');
 
 /** One app generation owns download, verification and deletion. No startup work until requested. */
-export function createVoiceModel() {
+export function createVoiceModel(getCountry: () => Promise<string>) {
   let state: VoiceModelState = {
     status: 'not-downloaded',
     receivedBytes: 0,
@@ -129,8 +134,9 @@ export function createVoiceModel() {
         return Promise.reject(new VoiceError('busy', 'The offline recognizer is in use.'));
       return run('downloading', async (signal) => {
         const root = await directory();
+        const assets = getSenseVoiceAssets(await getCountry());
         let completed = 0;
-        for (const asset of SENSE_VOICE_ASSETS) {
+        for (const asset of assets) {
           signal.throwIfAborted();
           publish('downloading', completed);
           await downloadFile({
