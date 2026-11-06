@@ -1705,7 +1705,6 @@
   "settings.documentParser.builtinDescription": "Extrahiert nur Text, geeignet für Zusammenfassungen und Fragen und Antworten für textorientierte Dokumente. Geringere Token-Nutzung.",
   "settings.documentParser.saveFailed": "Der Dokumentparser konnte nicht gespeichert werden",
   "settings.documentParser.title": "Dokumentparser",
-  "settings.enterToSend.description": "Mit der Eingabetaste der Bildschirmtastatur senden. Zeilenumbrüche über die Bearbeitungsleiste einfügen.",
   "settings.enterToSend.saveFailed": "Die Einstellung zum Senden mit Enter konnte nicht gespeichert werden. Bitte versuche es erneut.",
   "settings.enterToSend.title": "Mit Enter senden",
   "settings.exportWatermark.saveFailed": "Die Wasserzeicheneinstellung konnte nicht gespeichert werden",

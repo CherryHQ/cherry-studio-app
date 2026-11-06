@@ -23,7 +23,6 @@ export function EnterToSendSetting() {
 
   return (
     <Section.SwitchItem
-      description={t('settings.enterToSend.description')}
       disabled={isSaving}
       label={t('settings.enterToSend.title')}
       onValueChange={(value) => {

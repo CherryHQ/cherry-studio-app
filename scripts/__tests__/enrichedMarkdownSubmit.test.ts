@@ -12,6 +12,24 @@ const additions = (path: string) =>
 
 // Upgrade guards for the maintained native boundary. These do not establish IME/device behavior.
 describe('native soft-keyboard submission', () => {
+  test('exposes custom edit actions at an iOS caret without adding selection-only actions', () => {
+    const menu = additions('ios/input/EnrichedMarkdownTextInput+ContextMenu.mm');
+    expect(menu).toContain('range.length == 0 && [self contextMenuItemTexts].count == 0');
+    expect(menu).toContain('menuConfig.format && range.length > 0');
+    expect(menu).toContain('menuConfig.copyAsMarkdown && range.length > 0');
+  });
+
+  test('uses Android native insertion and selection menus for the same custom actions', () => {
+    const menu = additions(
+      'android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt',
+    );
+    expect(menu).toContain(
+      'view.customInsertionActionModeCallback = view.customSelectionActionModeCallback',
+    );
+    expect(menu).toContain('selectionMenuConfig.format && view.selectionStart < view.selectionEnd');
+    expect(menu).toContain('customItemTexts.forEachIndexed');
+  });
+
   test('keeps the source and shipped JavaScript/type entry points on the same native contract', () => {
     for (const path of [
       'src/EnrichedMarkdownTextInput.tsx',

@@ -1722,7 +1722,6 @@
   "settings.documentParser.builtinDescription": "Apenas extrai texto, adequado para resumos e perguntas e respostas para documentos focados em texto. Menor utilização de token.",
   "settings.documentParser.saveFailed": "Não foi possível guardar o analisador do documento",
   "settings.documentParser.title": "Analisador de documentos",
-  "settings.enterToSend.description": "Envie com a tecla Enter do teclado no ecrã. Insira uma quebra de linha na barra de edição.",
   "settings.enterToSend.saveFailed": "Não foi possível guardar a definição de envio com Enter. Tente novamente.",
   "settings.enterToSend.title": "Enviar com Enter",
   "settings.exportWatermark.saveFailed": "Não foi possível guardar a definição da marca de água",

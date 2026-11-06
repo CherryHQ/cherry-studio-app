@@ -1705,7 +1705,6 @@
   "settings.documentParser.builtinDescription": "Metin odaklı belgeler için özetlere ve Soru-Cevaplara uygun olarak yalnızca metni çıkarır. Daha düşük jeton kullanımı.",
   "settings.documentParser.saveFailed": "Belge ayrıştırıcı kaydedilemedi",
   "settings.documentParser.title": "Belge ayrıştırıcı",
-  "settings.enterToSend.description": "Ekran klavyesinin Enter tuşuyla gönderin. Yeni satır eklemek için düzenleme araç çubuğunu kullanın.",
   "settings.enterToSend.saveFailed": "Enter ile gönderme ayarı kaydedilemedi. Lütfen tekrar deneyin.",
   "settings.enterToSend.title": "Enter ile gönder",
   "settings.exportWatermark.saveFailed": "Filigran ayarı kaydedilemedi",

@@ -1688,7 +1688,6 @@
   "settings.documentParser.builtinDescription": "仅提取文本，适合文字为主的文档摘要与问答；Token 消耗较少。",
   "settings.documentParser.saveFailed": "文档解析器设置保存失败",
   "settings.documentParser.title": "文档解析器",
-  "settings.enterToSend.description": "使用软键盘回车键发送消息，编辑时可在工具栏插入换行。",
   "settings.enterToSend.saveFailed": "无法保存回车发送设置，请重试。",
   "settings.enterToSend.title": "回车发送",
   "settings.exportWatermark.saveFailed": "无法保存水印设置",

@@ -20,7 +20,6 @@ import { DictationCancelAction } from '../../voice/DictationCancelAction';
 import { DictationStatus } from '../../voice/DictationStatus';
 import { useDictation } from '../../voice/useDictation';
 import { useDictationAvailability } from '../../voice/useDictationAvailability';
-import { ChatInputNewlineAction } from './components/ChatInputNewlineAction';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
 export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
@@ -127,11 +126,6 @@ function ChatInputLayout({
     >
       {leadingAction ?? <View className="w-8" />}
       {status ?? <Composer.EditorSecondary>{secondaryAction}</Composer.EditorSecondary>}
-      {submitOnReturn && isEditing && draft.length > 0 && !status ? (
-        <Composer.EditorSecondary>
-          <ChatInputNewlineAction />
-        </Composer.EditorSecondary>
-      ) : null}
       {streaming && hasFollowUp && onStop ? (
         <Composer.EditorSecondary>
           <Composer.Action

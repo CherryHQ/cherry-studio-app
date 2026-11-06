@@ -43,7 +43,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 81
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 83
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -65,6 +65,7 @@ block leaves when upstream ships an equivalent.
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
 | iOS code text drawn only around the visible window | Bug fix | #1530 | Not fixed in 1.1.1; a full-size backing store leaves a code block of a few thousand lines blank | Upstream draws long code blocks without a full-size backing store |
 | Native soft-keyboard submit and Send label (TS/JS, generated props/events, iOS and Android) | Product feature | #1573, #1591 | Not upstream | Upstream supplies a submit event that preserves IME composition and explicit newlines |
+| Native input custom edit actions at the caret and selection | Product feature | #1573, #1591 | 1.1.1 limits custom actions to nonempty selections | Upstream exposes custom actions in both insertion and selection menus |
 | Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
 | Code block 192 pt viewport, header and divider (gesture arbitration part is a fix) | Product customization | #606 | Not upstream | Never, unless the design changes |
 | Standalone code block external controls (style, generated props, layout/cache, menus and accessibility) | Product customization | CherryUI `CodeBlock` | Not upstream | Upstream supports caller-owned code-block controls without changing scrolling |

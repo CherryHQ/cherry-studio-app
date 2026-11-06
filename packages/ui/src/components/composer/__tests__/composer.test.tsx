@@ -261,7 +261,7 @@ describe('Composer', () => {
     expect(input.props.style).toEqual(expect.objectContaining({ color: '#111827', fontSize: 16 }));
   });
 
-  function renderReturnInput(submitOnReturn: boolean) {
+  function renderReturnInput(submitOnReturn: boolean, insertNewlineLabel = 'Insert newline') {
     const inputRef = createRef<ComposerInputHandle>();
     const onReturnSubmit = jest.fn();
     const onChangeText = jest.fn();
@@ -277,6 +277,7 @@ describe('Composer', () => {
           value={value}
         >
           <Composer.Input
+            insertNewlineLabel={insertNewlineLabel}
             onReturnSubmit={onReturnSubmit}
             ref={inputRef}
             submitOnReturn={submitOnReturn}
@@ -338,6 +339,43 @@ describe('Composer', () => {
     expect(inputRef.current!.insertText).toHaveBeenCalledWith('\n');
     submit('abc\n');
     expect(onReturnSubmit).toHaveBeenCalledWith('abc\n');
+  });
+
+  it.each([
+    { start: 1, end: 1 },
+    { start: 0, end: 3 },
+    { start: 3, end: 0 },
+  ])(
+    'inserts a menu newline after selection %j without replacing it or submitting',
+    (selection) => {
+      const { inputRef, onReturnSubmit } = renderReturnInput(true, '换行');
+      const input = inputRef.current!;
+      const commands: unknown[] = [];
+      jest.spyOn(input, 'setSelection').mockImplementation((start, end) => {
+        commands.push(['selection', start, end]);
+      });
+      jest.spyOn(input, 'insertText').mockImplementation((text) => {
+        commands.push(['insert', text]);
+      });
+      const menuItems = renderer!.root.findByType(EnrichedMarkdownTextInput).props.contextMenuItems;
+
+      expect(menuItems).toHaveLength(1);
+      expect(menuItems[0].text).toBe('换行');
+      act(() => menuItems[0].onPress({ selection }));
+
+      const cursor = Math.max(selection.start, selection.end);
+      expect(commands).toEqual([
+        ['selection', cursor, cursor],
+        ['insert', '\n'],
+      ]);
+      expect(input.setValue).not.toHaveBeenCalled();
+      expect(onReturnSubmit).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps the native menu unchanged when Return does not submit', () => {
+    renderReturnInput(false);
+    expect(renderer!.root.findByType(EnrichedMarkdownTextInput).props.contextMenuItems).toEqual([]);
   });
 
   // The field owns its own buffer, so a caller-side value has to be pushed into

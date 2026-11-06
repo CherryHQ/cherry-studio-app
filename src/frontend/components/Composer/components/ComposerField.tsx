@@ -99,6 +99,7 @@ export function ComposerField({
 
   return (
     <Composer.Input
+      insertNewlineLabel={t('chat.input.action.insertNewline')}
       layout={layout}
       markdownStyle={markdownStyle}
       onBlur={onBlur}

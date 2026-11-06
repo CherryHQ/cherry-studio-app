@@ -21,9 +21,7 @@ const mockCancel = jest.fn();
 const mockSubmit = jest.fn();
 const mockStop = jest.fn();
 const mockOpenFile = jest.fn();
-const mockInsertText = jest.fn();
 let mockEnterToSend = true;
-let mockIsEditing = true;
 let mockInputs: AgentQueuedInput[];
 let composer: ReturnType<typeof useComposerState>;
 let actions: ReturnType<typeof useComposerActions>;
@@ -88,7 +86,7 @@ jest.mock('../../../../voice/useDictationAvailability', () => ({
 }));
 jest.mock('@/frontend/components/Composer/hooks/useComposerPresentation', () => ({
   useComposerPresentation: () => ({
-    state: { isEditing: mockIsEditing },
+    state: { isEditing: true },
     actions: { dismissInput: jest.fn() },
   }),
 }));
@@ -203,7 +201,7 @@ function createInputHandle(): EnrichedMarkdownTextInputInstance {
     outdentList: jest.fn(),
     setLink: jest.fn(),
     insertLink: jest.fn(),
-    insertText: mockInsertText,
+    insertText: jest.fn(),
     insertMention: jest.fn(),
     startMention: jest.fn(),
     removeLink: jest.fn(),
@@ -298,7 +296,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockQuoteFields = {};
   mockEnterToSend = true;
-  mockIsEditing = true;
   mockInputs = [input(), input('turn-2')];
   mockCancel.mockImplementation(async (_sessionId: string, turnId: string) => {
     mockInputs = mockInputs.filter((queued) => queued.turnId !== turnId);
@@ -570,36 +567,9 @@ it('ignores a whitespace-only keyboard submission', async () => {
   expect(mockStop).not.toHaveBeenCalled();
 });
 
-it('hides the newline tool when editing ends, even with an unsent draft', () => {
-  mockIsEditing = false;
-  render('Keep this draft');
-  expect(tree.root.findAllByProps({ testID: 'composer-insert-newline' })).toHaveLength(0);
-});
-
-it('hides the newline tool for an empty draft while editing', () => {
-  render('');
-  expect(tree.root.findAllByProps({ testID: 'composer-insert-newline' })).toHaveLength(0);
-});
-
-it('inserts an explicit newline through the input ref without submitting or changing the queue', () => {
-  render('Keep editing');
-  const before = JSON.stringify(mockInputs);
-  const action = tree.root
-    .findAllByType('ComposerAction' as never)
-    .find((node) => node.props.testID === 'composer-insert-newline')!;
-  expect(action.props.accessibilityLabel).toBe('Insert newline');
-  act(() => action.props.onPress());
-  expect(mockInsertText).toHaveBeenCalledTimes(1);
-  expect(mockInsertText).toHaveBeenCalledWith('\n');
-  expect(composer.draft).toBe('Keep editing');
-  expect(JSON.stringify(mockInputs)).toBe(before);
-  expect(mockSubmit).not.toHaveBeenCalled();
-});
-
-it('removes the explicit newline action when the preference is off', () => {
+it('keeps native Return as editing when the preference is off', () => {
   mockEnterToSend = false;
   render('Use keyboard newlines');
-  expect(tree.root.findAllByProps({ testID: 'composer-insert-newline' })).toHaveLength(0);
   expect(tree.root.findByType('ChatEditor' as never).props.submitOnReturn).toBe(false);
 });
 

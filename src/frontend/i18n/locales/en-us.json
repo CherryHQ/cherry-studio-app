@@ -1705,7 +1705,6 @@
   "settings.documentParser.builtinDescription": "Extracts text only, suited to summaries and Q&A for text-focused documents. Lower token usage.",
   "settings.documentParser.saveFailed": "Could not save document parser",
   "settings.documentParser.title": "Document parser",
-  "settings.enterToSend.description": "Use the soft keyboard’s Return key to send. Insert a line break from the editing toolbar.",
   "settings.enterToSend.saveFailed": "Couldn't save the Send on Enter setting. Please try again.",
   "settings.enterToSend.title": "Send on Enter",
   "settings.exportWatermark.saveFailed": "Could not save watermark setting",

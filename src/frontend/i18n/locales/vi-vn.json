@@ -1688,7 +1688,6 @@
   "settings.documentParser.builtinDescription": "Chỉ trích xuất văn bản, phù hợp với phần tóm tắt và Hỏi đáp cho các tài liệu tập trung vào văn bản. Mức sử dụng mã thông báo thấp hơn.",
   "settings.documentParser.saveFailed": "Không thể lưu trình phân tích cú pháp tài liệu",
   "settings.documentParser.title": "Trình phân tích tài liệu",
-  "settings.enterToSend.description": "Gửi bằng phím Enter trên bàn phím ảo. Chèn dòng mới từ thanh công cụ chỉnh sửa.",
   "settings.enterToSend.saveFailed": "Không thể lưu cài đặt gửi bằng Enter. Vui lòng thử lại.",
   "settings.enterToSend.title": "Gửi bằng Enter",
   "settings.exportWatermark.saveFailed": "Không thể lưu cài đặt hình mờ",

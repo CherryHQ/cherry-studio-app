@@ -1705,7 +1705,6 @@
   "settings.documentParser.builtinDescription": "Εξάγει μόνο κείμενο, κατάλληλο για περιλήψεις και Q&A για έγγραφα που εστιάζουν στο κείμενο. Χαμηλότερη χρήση διακριτικού.",
   "settings.documentParser.saveFailed": "Δεν ήταν δυνατή η αποθήκευση του αναλυτή εγγράφων",
   "settings.documentParser.title": "Αναλυτής εγγράφων",
-  "settings.enterToSend.description": "Αποστολή με το πλήκτρο Enter του πληκτρολογίου οθόνης. Εισαγάγετε αλλαγή γραμμής από τη γραμμή εργαλείων επεξεργασίας.",
   "settings.enterToSend.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης αποστολής με Enter. Δοκιμάστε ξανά.",
   "settings.enterToSend.title": "Αποστολή με Enter",
   "settings.exportWatermark.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης υδατογραφήματος",

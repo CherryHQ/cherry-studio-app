@@ -1688,7 +1688,6 @@
   "settings.documentParser.builtinDescription": "僅提取文本，適合文字為主的文檔摘要與問答；Token 消耗較少。",
   "settings.documentParser.saveFailed": "文檔解析器設定儲存失敗",
   "settings.documentParser.title": "文檔解析器",
-  "settings.enterToSend.description": "使用螢幕鍵盤的返回鍵傳送訊息，編輯時可在工具列插入換行。",
   "settings.enterToSend.saveFailed": "無法儲存按 Enter 傳送設定，請重試。",
   "settings.enterToSend.title": "按 Enter 傳送",
   "settings.exportWatermark.saveFailed": "無法儲存浮水印設定",

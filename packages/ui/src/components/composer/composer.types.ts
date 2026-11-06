@@ -97,6 +97,8 @@ export type ComposerInputHandle = EnrichedMarkdownTextInputInstance;
 
 export type ComposerInputProps = {
   autoFocus?: boolean;
+  /** Native edit-menu action available while the soft keyboard Return submits. */
+  insertNewlineLabel?: string;
   /** Fills a bounded editing viewport while retaining native content measurement. */
   layout?: 'content' | 'fill';
   /**

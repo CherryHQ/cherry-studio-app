@@ -3215,3 +3215,69 @@ index 5b348e8fa..328146fec 100644
      cursorColor: cursorColor,
      selectionColor: selectionColor,
      isOnChangeMarkdownSet: onChangeMarkdown !== undefined,
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
+index 1ebda75c2..91ee489c1 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/toolbar/InputContextMenu.kt
+@@ -64,7 +64,7 @@ class InputContextMenu(
+           menu.removeGroup(FORMAT_MENU_GROUP_ID)
+           menu.removeGroup(CUSTOM_MENU_GROUP_ID)
+ 
+-          if (selectionMenuConfig.format) {
++          if (selectionMenuConfig.format && view.selectionStart < view.selectionEnd) {
+             val formatSubMenu =
+               menu.addSubMenu(FORMAT_MENU_GROUP_ID, MENU_FORMAT_ID, 100, selectionMenuConfig.formatLabel)
+             FORMAT_ITEMS.forEachIndexed { index, (styleType, labelOf) ->
+@@ -78,12 +78,12 @@ class InputContextMenu(
+             if (selectionMenuConfig.copyAsMarkdown) {
+               menu.add(FORMAT_MENU_GROUP_ID, MENU_COPY_MARKDOWN_ID, 101, selectionMenuConfig.copyAsMarkdownLabel)
+             }
++          }
+ 
+-            customItemTexts.forEachIndexed { index, text ->
+-              menu
+-                .add(CUSTOM_MENU_GROUP_ID, MENU_CUSTOM_BASE + index, index, text)
+-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+-            }
++          customItemTexts.forEachIndexed { index, text ->
++            menu
++              .add(CUSTOM_MENU_GROUP_ID, MENU_CUSTOM_BASE + index, index, text)
++              .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+           }
+ 
+           return true
+@@ -125,6 +125,7 @@ class InputContextMenu(
+ 
+         override fun onDestroyActionMode(mode: ActionMode) {}
+       }
++    view.customInsertionActionModeCallback = view.customSelectionActionModeCallback
+   }
+ 
+   private fun isFormatItemVisible(styleType: StyleType): Boolean =
+diff --git a/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm b/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm
+index e86bf44e4..e873c662d 100644
+--- a/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm
++++ b/ios/input/EnrichedMarkdownTextInput+ContextMenu.mm
+@@ -19,7 +19,7 @@ - (UIMenu *)textView:(UITextView *)textView
+     editMenuForTextInRange:(NSRange)range
+           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
+ {
+-  if (range.length == 0) {
++  if (range.length == 0 && [self contextMenuItemTexts].count == 0) {
+     return nil;
+   }
+ 
+@@ -94,11 +94,11 @@ - (UIMenu *)textView:(UITextView *)textView
+       break;
+     }
+   }
+-  if (menuConfig.format) {
++  if (menuConfig.format && range.length > 0) {
+     [systemActions insertObject:formatMenu atIndex:insertIndex];
+     insertIndex++;
+   }
+-  if (menuConfig.copyAsMarkdown) {
++  if (menuConfig.copyAsMarkdown && range.length > 0) {
+     [systemActions insertObject:copyMarkdownAction atIndex:insertIndex];
+   }
+   [allActions addObjectsFromArray:systemActions];

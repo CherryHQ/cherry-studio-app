@@ -810,6 +810,9 @@ newline or blurring the field. The caller connects that snapshot to its normal g
 path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
 path; they never infer submission from text changes. With the preference off, Return keeps its
 ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+While Return submits, the native text menu offers an action labelled by `insertNewlineLabel`.
+It inserts at the caret or after selected text without replacing that text or submitting.
+The native menu retains the system editing actions and works without a nonempty selection.
 The native contract is maintained in the enriched-input dependency patch and needs an updated
 development client on both platforms.
 

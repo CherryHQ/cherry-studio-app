@@ -52,6 +52,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   shared editing state. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
   It also forwards `submitOnReturn` and `onReturnSubmit`; `ComposerEditor` exposes the same props.
+  When Return submits, it supplies the translated native-menu newline label. The action inserts
+  after the selection, preserving selected words; it adds no toolbar button.
   Plugin and Skill references use the link color and stay inline at the field's font size. The
   native formatter marks their text range with the `com.cherryai.composer-mention-icon` attribute;
   the paste wrapper excludes marked ranges from media extraction while continuing to import real
