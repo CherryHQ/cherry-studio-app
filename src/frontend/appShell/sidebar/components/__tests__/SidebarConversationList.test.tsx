@@ -56,7 +56,10 @@ jest.mock('@/frontend/appShell/navigation', () => ({
   ContextMenuLink: ({ children }: { children: ReactNode }) => children,
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
+jest.mock('uniwind', () => ({
+  useResolveClassNames: () => ({}),
+  useUniwind: () => ({ theme: 'light' }),
+}));
 jest.mock('../../hooks/useSidebarPresence', () => ({
   useSidebarPresence: () => mockSidebarPresence,
 }));
