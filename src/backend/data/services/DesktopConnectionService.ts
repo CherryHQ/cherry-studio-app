@@ -1,5 +1,6 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import {
+  configuredEndpointsSchema,
   directEndpointSchema,
   directEndpointUrl,
   type DirectEndpoint,

@@ -861,6 +861,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'learned_endpoints',
+        'alias',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',
