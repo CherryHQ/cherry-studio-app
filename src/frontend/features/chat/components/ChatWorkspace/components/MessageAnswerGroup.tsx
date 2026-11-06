@@ -10,7 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { AssistantMessage, type MessageListItem } from '@/frontend/components/Message';
+import {
+  AssistantMessage,
+  type MessageListItem,
+  useMessageListDisclosureToggle,
+} from '@/frontend/components/Message';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
@@ -43,6 +47,7 @@ export function MessageAnswerGroup({
 function AnswerNavigation({ message }: { message: MessageListItem }) {
   const { t, i18n } = useTranslation();
   const { selectBranch } = useAssistantMessageActions();
+  const preserveReadingPosition = useMessageListDisclosureToggle();
   const { models, names, siblings } = useAnswerGroup(message);
   const index = Math.max(
     0,
@@ -54,6 +59,8 @@ function AnswerNavigation({ message }: { message: MessageListItem }) {
   const show = (targetIndex: number) => {
     const target = siblings[targetIndex];
     if (target && selectBranch) {
+      // A taller answer must not pull the reader to the live edge.
+      preserveReadingPosition();
       void selectBranch({ messageId: message.id, targetId: target.id });
     }
   };
