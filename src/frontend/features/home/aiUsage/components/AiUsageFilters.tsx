@@ -1,8 +1,10 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { ContentState, SelectField } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { ModelAvatar, ProviderAvatar } from '@/frontend/components/Avatar';
 import { ModelPickerDrawer } from '@/frontend/components/ModelPicker';
 import { ProviderPickerDrawer } from '@/frontend/components/ProviderPicker';
 import { useQuery } from '@/frontend/data';
@@ -47,23 +49,48 @@ export function AiUsageFilters({
 
   return (
     <>
-      <View className="flex-row gap-3" testID="ai-usage-filters">
+      <View className="flex-row items-center gap-5" testID="ai-usage-filters">
         {FILTER_GROUPS.map((group) => {
           const selected = scopes[group];
           const label = t(GROUP_LABELS[group]);
-          const value = selected ? usageGroupLabel(selected, t) : t('aiUsage.all');
+          const value = selected ? usageGroupLabel(selected, t) : label;
           return (
-            <View className="min-w-0 flex-1" key={group}>
+            <View
+              className={group === 'provider' ? 'min-w-0 max-w-[40%] shrink' : 'min-w-0 flex-1'}
+              key={group}
+            >
               <SelectField
-                accessibilityLabel={`${label}: ${value}`}
+                accessibilityLabel={`${label}: ${selected ? value : t('aiUsage.all')}`}
                 accessibilityState={{ expanded: field === group, selected: !!selected }}
+                className="min-h-11 border-0 bg-transparent px-0 py-1"
                 onPress={() => setField(group)}
                 testID={`ai-usage-filter-${group}`}
               >
-                <SelectField.Label>{label}</SelectField.Label>
-                <SelectField.Value>
-                  <SelectField.ValueText>{value}</SelectField.ValueText>
-                </SelectField.Value>
+                {selected?.groupBy === 'provider' ? (
+                  <ProviderAvatar
+                    providerId={selected.providerId ?? ''}
+                    providerName={value}
+                    size={24}
+                  />
+                ) : selected?.groupBy === 'model' ? (
+                  <ModelAvatar
+                    model={{
+                      id: `${selected.providerId ?? ''}::${selected.modelId ?? ''}`,
+                      modelId: selected.modelId ?? '',
+                      name: value,
+                      providerId: selected.providerId ?? '',
+                    }}
+                    size={24}
+                  />
+                ) : null}
+                <SelectField.ValueText
+                  className="text-left font-medium text-sm"
+                  ellipsizeMode="middle"
+                  numberOfLines={1}
+                >
+                  {value}
+                </SelectField.ValueText>
+                <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
               </SelectField>
             </View>
           );
