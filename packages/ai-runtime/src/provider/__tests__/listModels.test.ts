@@ -2,6 +2,7 @@ import type * as AiSdkProviderUtils from '@ai-sdk/provider-utils';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/universal/data/types/model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ModelListContext } from '../listModels';
 import { DEFAULT_VERTEX_MODEL_PUBLISHERS } from '../listModels/vertex';
 import { AIHubMixModelsResponseSchema } from '../listModelsSchemas';
 import { makeProvider } from './fixtures';
@@ -37,6 +38,7 @@ function listModels(
   provider: Parameters<typeof listPortableModels>[0],
   signal?: AbortSignal,
   options?: { throwOnError?: boolean },
+  contextOverrides: Partial<ModelListContext> = {},
 ) {
   return listPortableModels(
     provider,
@@ -46,6 +48,7 @@ function listModels(
       getCopilotToken: async (headers) => (await getCopilotTokenMock(null, headers)).token,
       getRotatedApiKey: getRotatedApiKeyMock,
       getVertexAccessToken: getVertexAccessTokenMock,
+      ...contextOverrides,
     },
     signal,
     options,
@@ -104,6 +107,75 @@ describe('listModels — default grouping', () => {
       expect(models.map((model) => model.group)).not.toContain(providerId);
     },
   );
+});
+
+describe('listModels — Poe endpoint discovery', () => {
+  it.each(['poe', 'poe-copy'])('uses each bot declaration on %s', async (id) => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: {
+        data: [
+          { id: 'community', supported_endpoints: ['/v1/chat/completions'] },
+          { id: 'claude', supported_endpoints: ['/v1/messages', '/v1/chat/completions'] },
+          { id: 'responses', supported_endpoints: ['/v1/responses', '/v1/chat/completions'] },
+        ],
+      },
+    });
+    const provider = makeProvider({
+      id,
+      presetProviderId: 'poe',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      endpointConfigs: { [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl: 'https://poe.test/v1' } },
+    });
+    const models = await listModels(provider, undefined, undefined, {
+      getModelEndpointTypes: () => [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    expect(models.map((model) => model.endpointTypes)).toEqual([
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+      [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ]);
+  });
+
+  it('keeps known registry routes and defaults an unknown bot to chat completions without declarations', async () => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: { data: [{ id: 'known' }, { id: 'unknown' }] },
+    });
+    const models = await listModels(makeProvider({ id: 'poe' }), undefined, undefined, {
+      getModelEndpointTypes: (id) =>
+        id === 'known' ? [ENDPOINT_TYPE.OPENAI_RESPONSES] : undefined,
+    });
+    expect(models.map((model) => model.endpointTypes)).toEqual([
+      [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    ]);
+  });
+});
+
+describe('listModels — malformed entry diagnostics', () => {
+  it('returns the valid models and reports skipped entries through the existing observer', async () => {
+    aiSdkGetFromApiMock.mockImplementationOnce(async ({ successfulResponseHandler }) =>
+      successfulResponseHandler({
+        response: new Response(
+          JSON.stringify({ data: [{ id: 'valid-model' }, { name: 'missing-id' }] }),
+          {
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+        url: 'https://provider.test/v1/models',
+        requestBodyValues: undefined,
+      }),
+    );
+    const diagnostics = vi.fn();
+    const models = await listModels(makeProvider({ id: 'custom' }), undefined, undefined, {
+      diagnostics,
+    });
+    expect(models.map((model) => model.apiModelId)).toEqual(['valid-model']);
+    expect(diagnostics.mock.calls[0][0]).toMatchObject({
+      code: 'model-list-entries-skipped',
+      providerId: 'custom',
+      error: expect.objectContaining({ message: 'Skipped 1 malformed model-list entries' }),
+    });
+  });
 });
 
 describe('listModels — Ollama capabilities', () => {

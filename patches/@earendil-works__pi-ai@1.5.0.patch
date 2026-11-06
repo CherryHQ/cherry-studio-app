@@ -255,7 +255,18 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { shortHash } from "../utils/hash.js";
-@@ -484,7 +485,13 @@
+@@ -427,6 +428,10 @@
+                     if (choice?.delta?.tool_calls) {
+                         for (const toolCall of choice.delta.tool_calls) {
+                             const { block, state } = ensureToolCallBlock(toolCall);
++                            const thoughtSignature = toolCall.extra_content?.google?.thought_signature;
++                            if (typeof thoughtSignature === "string" && thoughtSignature.length > 0) {
++                                block.thoughtSignature = thoughtSignature;
++                            }
+                             if (!block.id && toolCall.id) {
+                                 block.id = toolCall.id;
+                                 toolCallBlocksById.set(toolCall.id, block);
+@@ -484,7 +489,13 @@
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -270,6 +281,26 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
              // Some providers via OpenRouter give additional information in this field.
              // normalizeProviderError already stringifies the parsed body (error.error)
              // into errorMessage, so only append the raw metadata when it is not already
+@@ -1021,6 +1032,9 @@
+                             },
+                         };
+                     }
++                    const thoughtSignature = parseLegacyEncryptedReasoningDetail(tc.thoughtSignature)
++                        ? undefined
++                        : tc.thoughtSignature;
+                     return {
+                         id: tc.id,
+                         type: "function",
+@@ -1028,6 +1042,9 @@
+                             name: tc.name,
+                             arguments: JSON.stringify(tc.arguments),
+                         },
++                        ...(thoughtSignature
++                            ? { extra_content: { google: { thought_signature: thoughtSignature } } }
++                            : {}),
+                     };
+                 });
+             }
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
