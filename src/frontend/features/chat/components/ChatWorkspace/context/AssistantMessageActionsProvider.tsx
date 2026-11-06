@@ -54,7 +54,7 @@ type AssistantMessageActions = {
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
-  deleteMessageTurn?: (input: { turnId: string }) => void;
+  deleteMessageTurn?: (input: { turnId: string; messageId: string }) => void;
   /**
    * Shows another alternative at a branch point, restoring its own continuation. Resolves whether
    * the choice was applied.
@@ -245,10 +245,11 @@ export function AssistantMessageActionsProvider({
     [run],
   );
   const remove = useCallback(
-    ({ turnId }: { turnId: string }) => {
+    ({ turnId, messageId }: { turnId: string; messageId: string }) => {
       const current = latest.current;
       const message = current.messages.find(
-        (message) => message.display.turnId === turnId && message.actions.remove,
+        (message) =>
+          message.key === messageId && message.display.turnId === turnId && message.actions.remove,
       );
       if (!message || current.isBusy) return;
       current.alert.confirm({

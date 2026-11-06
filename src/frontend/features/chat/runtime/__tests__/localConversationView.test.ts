@@ -253,6 +253,8 @@ test('message actions follow the busy state and reuse projections while it is un
   expect(f.projector.message(answer, f.state)).toBe(idle);
   expect(idle.actions.retry?.availability).toEqual({ state: 'enabled' });
   expect(idle.actions.remove?.availability).toEqual({ state: 'enabled' });
+  await idle.actions.remove!.execute(undefined);
+  expect(f.client.deleteTurn).toHaveBeenCalledWith('session', answer.turnId, answer.id);
   expect(await idle.actions.fork!.execute({ title: 'Copy' })).toEqual({
     state: 'applied',
     value: { source: { kind: 'local' }, sessionId: 'fork' },

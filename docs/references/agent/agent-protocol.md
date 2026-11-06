@@ -421,6 +421,8 @@ Runtime identity.
 interface AgentProtocol {
   getSessionStatus(sessionId: string): AgentSessionStatus | null
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void
+  getSessionStatusIds(): readonly string[]
+  subscribeSessionStatuses(listener: () => void): () => void
 
   renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
@@ -490,6 +492,9 @@ changes; consumers subscribe and then read the snapshot. These in-process list o
 load messages or open Runtime sessions. Terminal status remains available after chat observers
 unsubscribe, clears on Session deletion, and resets with the Host generation. Completion read
 receipts are frontend-owned, per turn, and live only for the app process, matching Desktop.
+`getSessionStatusIds` enumerates the Sessions with such a snapshot; `subscribeSessionStatuses`
+notifies when any snapshot changes or is removed. Collapsed catalog groups combine these status
+values with metadata paths and read receipts, without opening transcripts or Runtime sessions.
 
 `startSession` is the Draft-to-Session boundary. It performs the same write-free turn preparation
 as `submitMessage`, opens the Runtime, and then atomically creates the durable Session together with
@@ -537,6 +542,10 @@ navigates to it and observes it like any other Session.
 `name` defaults to the source's. The client supplies it because a derived name is localized copy
 and the Host has no locale: it resolves the app language only to tell a naming model which language
 to write in, and never composes user-visible text itself.
+For a fork created during this Host's lifetime, its first admitted user message triggers the
+existing first-message title and summary naming policy once. This is runtime-only workflow state;
+no naming marker is stored in the database. Later submissions do not reset the title, and a manual
+rename of the fork cancels the pending reset.
 
 `deleteTurn` removes one settled turn from a Session. The unit is the turn because replayed
 history pairs every `tool-call` with its `tool-result`; the client resolves the pressed message to
@@ -545,6 +554,9 @@ the long-press menu, which stays non-destructive. The Host refuses the operation
 active turn — the same clean-cut rule a fork applies — and refuses a turn whose own rows have not
 settled. It clears any context checkpoint that may have summarized the removed turn, then
 publishes `turn.deleted` so observers drop the rows from live state.
+When the client also names a `messageId` and that answer has siblings, deletion removes only that
+answer and its descendants. The shared question and other answers remain, and observers receive
+`messages.deleted` with the exact removed ids. A single-answer question keeps turn deletion.
 
 Deletion is not an undo. A turn's tool calls already changed the one real world, and erasing their
 record does not reverse them; the Agent simply no longer sees that it made them. Replacing an

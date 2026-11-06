@@ -135,7 +135,7 @@ export function createLocalConversationProjector(input: {
           ...(canModify && message.turnId
             ? {
                 remove: action<void, void>(state, true, () =>
-                  client.deleteTurn(sessionId, message.turnId!),
+                  client.deleteTurn(sessionId, message.turnId!, message.id),
                 ),
               }
             : {}),
