@@ -75,7 +75,7 @@ export function AiUsageFilters({
                 ) : selected?.groupBy === 'model' ? (
                   <ModelAvatar
                     model={{
-                      id: usageGroupKey(selected),
+                      id: `${selected.providerId ?? ''}::${selected.modelId ?? ''}`,
                       modelId: selected.modelId ?? '',
                       name: value,
                       providerId: selected.providerId ?? '',
