@@ -32,6 +32,8 @@ const input: PairDesktopConnectionDto = {
   capabilities: ['agent'],
 };
 const connection: DesktopConnection = {
+  alias: null,
+  defaultName: 'Desktop',
   id: 'desktop',
   name: 'Desktop',
   status: 'paired',

@@ -1,6 +1,5 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import {
-  configuredEndpointsSchema,
   directEndpointSchema,
   directEndpointUrl,
   type DirectEndpoint,
@@ -34,6 +33,8 @@ import {
   type DesktopProviderSnapshot,
   type DesktopProvidersSnapshot,
   parseSupportedAuthConfig,
+  UpdateDesktopConnectionSchema,
+  type UpdateDesktopConnectionDto,
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 import { createUniqueModelId, ENDPOINT_TYPE, type EndpointType } from '@/shared/data/types/model';
@@ -41,6 +42,7 @@ import type { EndpointConfig, EndpointConfigs } from '@/shared/data/types/provid
 import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 import { isChatEndpointType } from '@/shared/utils/providerEndpoints';
 
+import { desktopConnectionName } from './desktopConnectionName';
 import { buildModelInsertValues, type CreateModelInput } from './ModelService';
 import {
   assertCustomProviderEndpointConfiguration,
@@ -56,22 +58,16 @@ function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
 }
 
-/**
- * Desktops pair under their network hostname, so `jds-MacBook-Pro.local` keeps only its host label.
- * Anything that is not a dotted hostname, such as a spaced display name, is shown unchanged.
- */
-function displayName(name: string): string {
-  const match = /^([a-z0-9-]*[a-z][a-z0-9-]*)(\.[a-z0-9-]+)+$/i.exec(name);
-  return match ? match[1] : name;
-}
-
 function rowToConnection(row: DesktopConnectionRow): DesktopConnection {
+  const defaultName = desktopConnectionName({ alias: null, name: row.name });
   return {
+    alias: row.alias,
     configuredEndpoints: row.configuredEndpoints,
     capabilities: row.grants.map((grant) => grant.domain),
+    defaultName,
     id: row.id,
     lastFetchedAt: row.lastFetchedAt,
-    name: displayName(row.name),
+    name: row.alias ?? defaultName,
     status: row.status,
   };
 }
@@ -367,7 +363,17 @@ export class DesktopConnectionService {
   ): Promise<DesktopConnection> {
     const connection = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
-      const values = { ...input, learnedEndpoints: [], status: 'paired' as const };
+      const { id, name, deviceId, desktopIdentity, grants } = input;
+      // Re-pairing refreshes desktop-owned fields while retaining the local alias.
+      const values = {
+        id,
+        name,
+        deviceId,
+        desktopIdentity,
+        grants,
+        learnedEndpoints: [],
+        status: 'paired' as const,
+      };
       const [row] = await (replace
         ? tx
             .update(desktopConnectionTable)
@@ -383,12 +389,12 @@ export class DesktopConnectionService {
     return connection;
   }
 
-  async updateEndpoints(id: string, input: DirectEndpoint[]): Promise<DesktopConnection> {
-    const configuredEndpoints = configuredEndpointsSchema.parse(input);
+  async update(id: string, input: UpdateDesktopConnectionDto): Promise<DesktopConnection> {
+    const values = UpdateDesktopConnectionSchema.parse(input);
     const connection = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(desktopConnectionTable)
-        .set({ configuredEndpoints })
+        .set(values)
         .where(eq(desktopConnectionTable.id, id))
         .returning();
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);

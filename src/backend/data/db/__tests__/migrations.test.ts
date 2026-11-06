@@ -6,6 +6,41 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds local device aliases without changing existing pairing data', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0014_desktop_connection_alias',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO desktop_connection
+          (id, name, device_id, desktop_identity, configured_endpoints, learned_endpoints,
+           grants, status, last_fetched_at, created_at, updated_at)
+        VALUES
+          ('pc', 'desktop.local', 'phone', 'peer', '[]', '[]',
+           '[{"domain":"agent","grantId":"grant"}]', 'paired', 3, 1, 2);
+      `);
+      const previous = database.prepare('SELECT * FROM desktop_connection').get();
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT * FROM desktop_connection').get()).toEqual({
+        ...previous,
+        alias: null,
+      });
+      database
+        .prepare('UPDATE desktop_connection SET alias = ? WHERE id = ?')
+        .run('Work.mac', 'pc');
+      expect(database.prepare('SELECT name, alias FROM desktop_connection').get()).toEqual({
+        name: 'desktop.local',
+        alias: 'Work.mac',
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds the direct-child index without rewriting fork lineage or activity', () => {
     const database = new DatabaseSync(':memory:');
     try {

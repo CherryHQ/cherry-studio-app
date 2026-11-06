@@ -85,7 +85,8 @@ describe('DesktopConnectionService provider synchronization', () => {
     try {
       const operations = [
         () => service.savePair(original, true, signal()),
-        () => service.updateEndpoints(connectionId, [endpoint]),
+        () => service.update(connectionId, { configuredEndpoints: [endpoint] }),
+        () => service.update(connectionId, { alias: 'Work.mac' }),
         () => service.updateLearnedEndpoints(connectionId, [endpoint], original, signal()),
         () =>
           service.addEndpoint(
@@ -119,7 +120,7 @@ describe('DesktopConnectionService provider synchronization', () => {
   it('does not notify for duplicate addresses, stale pairing, or cancellation', async () => {
     const original = await service.getRow(connectionId);
     const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
-    await service.updateEndpoints(connectionId, [endpoint]);
+    await service.update(connectionId, { configuredEndpoints: [endpoint] });
     await service.updateLearnedEndpoints(connectionId, [endpoint], original, signal());
     const changed = jest.fn();
     const unsubscribe = subscribeDataApiChanges(changed);
@@ -145,14 +146,15 @@ describe('DesktopConnectionService provider synchronization', () => {
     }
   });
 
-  it.each(['pair', 'endpoints', 'learned', 'add', 'status', 'import', 'remove'] as const)(
+  it.each(['pair', 'endpoints', 'alias', 'learned', 'add', 'status', 'import', 'remove'] as const)(
     'does not publish a %s write that fails at commit',
     async (operation) => {
       const original = await service.getRow(connectionId);
       const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
       const operations = {
         pair: () => service.savePair({ ...original, name: 'New name' }, true, signal()),
-        endpoints: () => service.updateEndpoints(connectionId, [endpoint]),
+        endpoints: () => service.update(connectionId, { configuredEndpoints: [endpoint] }),
+        alias: () => service.update(connectionId, { alias: 'Work.mac' }),
         learned: () => service.updateLearnedEndpoints(connectionId, [endpoint], original, signal()),
         add: () => service.addEndpoint(connectionId, endpoint, original, signal()),
         status: () => service.updateStatus(connectionId, { lastFetchedAt: 123 }, signal()),
@@ -187,7 +189,7 @@ describe('DesktopConnectionService provider synchronization', () => {
     const original = await service.getRow(connectionId);
     const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };
     const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
-    await service.updateEndpoints(connectionId, [manual]);
+    await service.update(connectionId, { configuredEndpoints: [manual] });
     await service.updateLearnedEndpoints(connectionId, [vpn, vpn], original, signal());
     expect(await service.getRow(connectionId)).toMatchObject({
       learnedEndpoints: [vpn],
@@ -215,14 +217,14 @@ describe('DesktopConnectionService provider synchronization', () => {
       service.updateLearnedEndpoints(connectionId, [], original, cancelled.signal),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect((await service.getRow(connectionId)).learnedEndpoints).toEqual([updated]);
-    await service.updateEndpoints(connectionId, []);
+    await service.update(connectionId, { configuredEndpoints: [] });
     expect((await service.getRow(connectionId)).learnedEndpoints).toEqual([updated]);
   });
 
   it('clears learned routes on re-pairing and rejects a late response from the previous binding', async () => {
     const previous = await service.getRow(connectionId);
     const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
-    await service.updateEndpoints(connectionId, [endpoint]);
+    await service.update(connectionId, { configuredEndpoints: [endpoint] });
     await service.updateLearnedEndpoints(connectionId, [endpoint], previous, signal());
     const { id, name, desktopIdentity, grants } = previous;
     await service.savePair(
@@ -244,7 +246,7 @@ describe('DesktopConnectionService provider synchronization', () => {
     const original = await service.getRow(connectionId);
     const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };
     const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
-    await service.updateEndpoints(connectionId, [manual]);
+    await service.update(connectionId, { configuredEndpoints: [manual] });
     await service.addEndpoint(connectionId, vpn, original, signal());
     await service.addEndpoint(connectionId, vpn, original, signal());
     expect(await service.getRow(connectionId)).toMatchObject({
@@ -266,7 +268,7 @@ describe('DesktopConnectionService provider synchronization', () => {
       port: 23333,
       security: 'ws' as const,
     }));
-    await service.updateEndpoints(connectionId, full);
+    await service.update(connectionId, { configuredEndpoints: full });
     await expect(service.addEndpoint(connectionId, vpn, original, signal())).rejects.toMatchObject({
       details: { reason: 'endpoint-limit' },
     });
@@ -295,8 +297,71 @@ describe('DesktopConnectionService provider synchronization', () => {
         .update(desktopConnectionTable)
         .set({ name: stored })
         .where(eq(desktopConnectionTable.id, connectionId));
-      await expect(service.getById(connectionId)).resolves.toMatchObject({ name: shown });
+      await expect(service.getById(connectionId)).resolves.toMatchObject({
+        alias: null,
+        defaultName: shown,
+        name: shown,
+      });
     }
+  });
+
+  it('uses a literal local alias in list and detail reads without changing pairing', async () => {
+    const original = await service.getRow(connectionId);
+    await expect(service.update(connectionId, { alias: '  Work.mac  ' })).resolves.toMatchObject({
+      alias: 'Work.mac',
+      defaultName: original.name,
+      id: connectionId,
+      name: 'Work.mac',
+    });
+    expect((await service.list()).items[0].name).toBe('Work.mac');
+    expect(await service.getRow(connectionId)).toMatchObject({
+      alias: 'Work.mac',
+      name: original.name,
+      deviceId: original.deviceId,
+      desktopIdentity: original.desktopIdentity,
+      grants: original.grants,
+      status: original.status,
+      configuredEndpoints: original.configuredEndpoints,
+      learnedEndpoints: original.learnedEndpoints,
+    });
+  });
+
+  it('preserves a local alias across address updates and re-pairing until it is cleared', async () => {
+    const original = await service.getRow(connectionId);
+    await service.update(connectionId, { alias: 'Work.mac' });
+    await service.update(connectionId, { configuredEndpoints: [] });
+    // A stale pairing snapshot must not overwrite an alias saved while approval was pending.
+    await service.savePair(
+      { ...original, name: 'new-desktop.local', deviceId: 'replacement' },
+      true,
+      signal(),
+    );
+    await expect(service.getById(connectionId)).resolves.toMatchObject({
+      alias: 'Work.mac',
+      defaultName: 'new-desktop',
+      name: 'Work.mac',
+    });
+    expect(await service.getRow(connectionId)).toMatchObject({
+      alias: 'Work.mac',
+      name: 'new-desktop.local',
+      deviceId: 'replacement',
+    });
+    for (const alias of [null, '  ']) {
+      await service.update(connectionId, { alias: 'Work.mac' });
+      await expect(service.update(connectionId, { alias })).resolves.toMatchObject({
+        alias: null,
+        defaultName: 'new-desktop',
+        name: 'new-desktop',
+      });
+      expect((await service.getRow(connectionId)).alias).toBeNull();
+    }
+  });
+
+  it('rejects invalid alias updates without changing the stored connection', async () => {
+    const original = await service.getRow(connectionId);
+    await expect(service.update(connectionId, {})).rejects.toBeDefined();
+    await expect(service.update(connectionId, { alias: 'a'.repeat(129) })).rejects.toBeDefined();
+    expect(await service.getRow(connectionId)).toEqual(original);
   });
 
   it('imports the complete API key list and keeps desktop order and labels when resynced', async () => {
