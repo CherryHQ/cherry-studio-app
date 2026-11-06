@@ -1764,7 +1764,6 @@
   "settings.deviceConnections.status.paired": "Gepaart",
   "settings.deviceConnections.statusLabel": "Status",
   "settings.deviceConnections.syncGuide.entry": "Anbieter von Synchronisierungsmodellen",
-  "settings.deviceConnections.syncGuide.entryDescription": "Anbietereinstellungen und aktivierte Modelle von diesem Computer importieren",
   "settings.deviceConnections.title": "Geräteverbindungen",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Behält Überschriften, Tabellen und andere Strukturen für die Analyse komplexer Dokumente bei. Höhere Token-Nutzung.",

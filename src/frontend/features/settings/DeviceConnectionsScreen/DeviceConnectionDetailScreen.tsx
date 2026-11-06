@@ -159,7 +159,6 @@ export function DeviceConnectionDetailScreen() {
           ) : null}
           {connection.capabilities.includes('configuration') ? (
             <Section.Item
-              description={t('settings.deviceConnections.syncGuide.entryDescription')}
               label={t('settings.deviceConnections.syncGuide.entry')}
               onPress={() =>
                 router.replace({

@@ -1764,7 +1764,6 @@
   "settings.deviceConnections.status.paired": "Ζεύγος",
   "settings.deviceConnections.statusLabel": "Κατάσταση",
   "settings.deviceConnections.syncGuide.entry": "Συγχρονισμός παρόχων μοντέλων",
-  "settings.deviceConnections.syncGuide.entryDescription": "Εισαγάγετε ρυθμίσεις παρόχου και ενεργοποιημένα μοντέλα από αυτόν τον υπολογιστή",
   "settings.deviceConnections.title": "Συνδέσεις συσκευής",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Διατηρεί επικεφαλίδες, πίνακες και άλλες δομές για την ανάλυση πολύπλοκων εγγράφων. Υψηλότερη χρήση διακριτικού.",

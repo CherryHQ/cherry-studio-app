@@ -1781,7 +1781,6 @@
   "settings.deviceConnections.status.paired": "Împereche",
   "settings.deviceConnections.statusLabel": "Stare",
   "settings.deviceConnections.syncGuide.entry": "Sincronizați furnizorii de modele",
-  "settings.deviceConnections.syncGuide.entryDescription": "Importați setările furnizorului și modelele activate de pe acest computer",
   "settings.deviceConnections.title": "Conexiuni dispozitiv",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Păstrează titlurile, tabelele și alte structuri pentru analiza documentelor complexe. Utilizare mai mare a jetoanelor.",

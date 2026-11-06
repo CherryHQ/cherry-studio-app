@@ -1781,7 +1781,6 @@
   "settings.deviceConnections.status.paired": "Jumelé",
   "settings.deviceConnections.statusLabel": "Statut",
   "settings.deviceConnections.syncGuide.entry": "Fournisseurs de modèles de synchronisation",
-  "settings.deviceConnections.syncGuide.entryDescription": "Importer les paramètres du fournisseur et les modèles activés à partir de cet ordinateur",
   "settings.deviceConnections.title": "Connexions des appareils",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Préserve les titres, les tableaux et autres structures pour analyser des documents complexes. Utilisation plus élevée des jetons.",

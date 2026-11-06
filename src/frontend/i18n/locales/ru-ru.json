@@ -1798,7 +1798,6 @@
   "settings.deviceConnections.status.paired": "В паре",
   "settings.deviceConnections.statusLabel": "Статус",
   "settings.deviceConnections.syncGuide.entry": "Поставщики моделей синхронизации",
-  "settings.deviceConnections.syncGuide.entryDescription": "Импортировать настройки провайдера и включенные модели с этого компьютера",
   "settings.deviceConnections.title": "Подключения устройства",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Сохраняет заголовки, таблицы и другую структуру для анализа сложных документов. Более высокое использование токенов.",

@@ -1747,7 +1747,6 @@
   "settings.deviceConnections.status.paired": "ペアリング",
   "settings.deviceConnections.statusLabel": "ステータス",
   "settings.deviceConnections.syncGuide.entry": "同期モデルプロバイダー",
-  "settings.deviceConnections.syncGuide.entryDescription": "このコンピュータからプロバイダ設定と有効なモデルをインポートします",
   "settings.deviceConnections.title": "デバイスの接続",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "複雑な文書を分析するために、見出し、表、およびその他の構造を保存します。トークンの使用量が多くなる。",

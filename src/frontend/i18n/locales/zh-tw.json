@@ -1747,7 +1747,6 @@
   "settings.deviceConnections.status.paired": "已配對",
   "settings.deviceConnections.statusLabel": "狀態",
   "settings.deviceConnections.syncGuide.entry": "從桌面端同步模型供應商",
-  "settings.deviceConnections.syncGuide.entryDescription": "從桌面端導入供應商配置和已啓用的模型",
   "settings.deviceConnections.title": "設備互聯",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "保留標題、表格等結構，更適合複雜文檔分析；Token 消耗較多。",

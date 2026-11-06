@@ -1747,7 +1747,6 @@
   "settings.deviceConnections.status.paired": "Đã ghép nối",
   "settings.deviceConnections.statusLabel": "Trạng thái",
   "settings.deviceConnections.syncGuide.entry": "Nhà cung cấp mô hình đồng bộ hóa",
-  "settings.deviceConnections.syncGuide.entryDescription": "Nhập cài đặt nhà cung cấp và mô hình được kích hoạt từ máy tính này",
   "settings.deviceConnections.title": "Kết nối thiết bị",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Giữ nguyên các tiêu đề, bảng và cấu trúc khác để phân tích các tài liệu phức tạp. Việc sử dụng mã thông báo cao hơn.",

@@ -1764,7 +1764,6 @@
   "settings.deviceConnections.status.paired": "Paired",
   "settings.deviceConnections.statusLabel": "Status",
   "settings.deviceConnections.syncGuide.entry": "Sync model providers",
-  "settings.deviceConnections.syncGuide.entryDescription": "Import provider settings and enabled models from this computer",
   "settings.deviceConnections.title": "Device Connections",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Preserves headings, tables, and other structure for analyzing complex documents. Higher token usage.",

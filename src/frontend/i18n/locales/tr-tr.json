@@ -1764,7 +1764,6 @@
   "settings.deviceConnections.status.paired": "Eşleştirildi",
   "settings.deviceConnections.statusLabel": "Durum",
   "settings.deviceConnections.syncGuide.entry": "Senkronizasyon modeli sağlayıcıları",
-  "settings.deviceConnections.syncGuide.entryDescription": "Sağlayıcı ayarlarını ve etkin modelleri bu bilgisayardan içe aktarın",
   "settings.deviceConnections.title": "Cihaz Bağlantıları",
   "settings.documentParser.anydoc": "AnyDoc\n\n[0016]] Karmaşık belgeleri analiz etmek için başlıkları, tabloları ve diğer yapıları korur. Daha yüksek jeton kullanımı.",
   "settings.documentParser.anydocDescription": "Karmaşık belgeleri analiz etmek için başlıkları, tabloları ve diğer yapıları korur. Daha fazla token kullanır.",

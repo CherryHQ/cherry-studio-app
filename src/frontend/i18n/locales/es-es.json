@@ -1781,7 +1781,6 @@
   "settings.deviceConnections.status.paired": "Emparejado",
   "settings.deviceConnections.statusLabel": "Estado",
   "settings.deviceConnections.syncGuide.entry": "Proveedores de modelos de sincronización",
-  "settings.deviceConnections.syncGuide.entryDescription": "Importar configuraciones de proveedor y modelos habilitados desde esta computadora",
   "settings.deviceConnections.title": "Conexiones de dispositivos",
   "settings.documentParser.anydoc": "AnyDoc",
   "settings.documentParser.anydocDescription": "Conserva encabezados, tablas y otras estructuras para analizar documentos complejos. Mayor uso de tokens.",
