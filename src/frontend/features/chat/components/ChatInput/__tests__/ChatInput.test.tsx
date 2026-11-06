@@ -6,6 +6,9 @@ import type { PaintingInputSubmission } from '@/frontend/components/PaintingInpu
 import type { QuoteFields } from '@/shared/contracts/agent';
 
 import { ChatInput } from '../ChatInput';
+jest.mock('../hooks/useChatEditDraft', () => ({
+  useChatEditDraft: () => ({ editing: null, cancelEdit: jest.fn(), commitEdit: jest.fn() }),
+}));
 
 let mockImageMode = false;
 let mockFields: QuoteFields;

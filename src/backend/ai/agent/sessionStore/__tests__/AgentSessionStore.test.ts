@@ -2517,6 +2517,47 @@ describe('SqliteAgentSessionStore message tree', () => {
     expect(await store.hasChildren(sessionId, first.assistantMessage.id)).toBe(true);
   });
 
+  test('reserving an edit adds a sibling question and selects its own answer', async () => {
+    const first = await settleTurn(store, sessionId, 'Q1');
+    const later = await settleTurn(store, sessionId, 'Q2');
+    const edited = await store.reserveSubmission({
+      sessionId,
+      parentMessageId: first.userMessage.parentId,
+      userMessageId: uuidv7(),
+      assistantMessageId: uuidv7(),
+      ...RESERVATION_FACTS,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Q1, edited', state: 'done' }],
+    });
+    // The edited question keeps its own answers and the later exchange: the edit
+    // is a sibling question under the same parent, not a replacement branch.
+    expect(edited.userMessage.parentId).toBe(first.userMessage.parentId);
+    expect(edited.assistantMessage).toMatchObject({
+      parentId: edited.userMessage.id,
+      siblingsGroupId: 0,
+      turnId: edited.turnId,
+      status: 'pending',
+    });
+    expect(edited.turnId).not.toBe(first.turnId);
+    expect(await activeNode()).toBe(edited.assistantMessage.id);
+    // The transcript reads the edited branch from the selected leaf.
+    expect(await ids()).toEqual([edited.userMessage.id, edited.assistantMessage.id]);
+    expect(await ids(later.assistantMessage.id)).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+      later.userMessage.id,
+      later.assistantMessage.id,
+    ]);
+    expect(
+      (await store.listTurnMessages(sessionId, edited.turnId)).flatMap(
+        (message) => `${message.id}:${message.status}`,
+      ),
+    ).toEqual([`${edited.userMessage.id}:success`, `${edited.assistantMessage.id}:pending`]);
+    // The accumulated activity time still belongs to the edit.
+    expect(await store.getSession(sessionId)).toMatchObject({
+      activeNodeId: edited.assistantMessage.id,
+    });
+  });
+
   test('deleting a question removes all of its answers and keeps later questions on its parent', async () => {
     const first = await settleTurn(store, sessionId, 'Q1');
     const second = await settleTurn(store, sessionId, 'Q2');

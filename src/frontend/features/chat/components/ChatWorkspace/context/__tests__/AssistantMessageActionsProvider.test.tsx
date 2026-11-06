@@ -13,8 +13,12 @@ import {
 } from '../AssistantMessageActionsProvider';
 
 let mockRetryOutcome: OperationOutcome<void>;
+let mockEditOutcome: OperationOutcome<void>;
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockEditMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockBeginEdit = jest.fn();
+const mockEndEdit = jest.fn();
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
 /** Captures the confirm request so a test can accept it the way a user would. */
@@ -55,6 +59,9 @@ const mockAlert = {
 };
 const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
 jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+jest.mock('../../../../context/ChatEditingProvider', () => ({
+  useChatEditing: () => ({ editing: null, beginEdit: mockBeginEdit, endEdit: mockEndEdit }),
+}));
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => mockAlert,
@@ -105,6 +112,29 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
       }}
       messages={[
         {
+          key: 'user-1',
+          state: 'success',
+          completeness: 'complete',
+          display: {
+            id: 'user-1',
+            role: 'user',
+            status: 'success',
+            turnId: 'turn-1',
+            data: {
+              parts: [{ type: 'text', text: 'Question' }],
+            },
+          },
+          actions: {
+            editUser: {
+              availability: { state: 'enabled' },
+              execute: async ({ text }) => {
+                await mockEditMessage({ messageId: 'user-1', text });
+                return mockEditOutcome;
+              },
+            },
+          },
+        },
+        {
           key: 'assistant-1',
           state: 'success',
           completeness: 'complete',
@@ -153,6 +183,7 @@ describe('AssistantMessageActionsProvider', () => {
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
     mockRetryOutcome = { state: 'applied', value: undefined };
+    mockEditOutcome = { state: 'applied', value: undefined };
     probeRef = createRef<ContextProbeHandle>();
   });
 
@@ -260,6 +291,18 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
     expect(mockShare).toHaveBeenCalledWith('answer', undefined);
     expect(mockRetryMessage).not.toHaveBeenCalled();
+  });
+
+  test('starts composer edit mode with the question text', () => {
+    renderProvider();
+    act(() => probeRef.current?.actions.editUserMessage!({ messageId: 'user-1' }));
+
+    // The composer owns the editing session from here: it submits through the
+    // chat controls and restores the typed edit when admission is rejected.
+    expect(mockBeginEdit).toHaveBeenCalledWith({
+      messageId: 'user-1',
+      initialText: 'Question',
+    });
   });
 
   test('ignores repeated share taps until the chat regains focus', () => {

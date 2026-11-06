@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View, type ViewInstance } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
@@ -48,6 +48,7 @@ import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
+import { useChatEditDraft } from './hooks/useChatEditDraft';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
@@ -57,6 +58,7 @@ import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
+import { buildEditUserMessageInput } from './utils/editSubmission';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
@@ -212,6 +214,7 @@ export function ChatInput({
           />
         ) : (
           <TextChatInput
+            sessionId={sessionId}
             mode={mode}
             agentId={agentId}
             skillAction={skillAction}
@@ -235,6 +238,7 @@ export function ChatInput({
 }
 
 function TextChatInput({
+  sessionId,
   mode,
   agentId,
   agentModelAnswersInParallel,
@@ -250,7 +254,7 @@ function TextChatInput({
   selectedModelItem,
   selectModel,
   setReplyModels,
-}: Omit<ChatInputProps, 'sessionId'> & {
+}: ChatInputProps & {
   mode: AgentMode;
   skillAction?: SkillAction;
   providerSetupReturnTo: string;
@@ -269,7 +273,8 @@ function TextChatInput({
 }) {
   const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
-  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
+  const { cancelEdit, commitEdit, editing } = useChatEditDraft();
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
@@ -324,6 +329,23 @@ function TextChatInput({
   }, [closeModelPicker, openProviderSetup]);
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
+      if (editing) {
+        await editMessage(
+          buildEditUserMessageInput({
+            sessionId,
+            messageId: editing.messageId,
+            text,
+            attachmentCount: attachments.length,
+            mode,
+            replyModels,
+            selectedModelId,
+            reasoningEfforts,
+            reasoningSelection,
+          }),
+        );
+        commitEdit();
+        return;
+      }
       const attempt = quoteActions?.capture();
       try {
         setOpenPicker(null);
@@ -383,7 +405,12 @@ function TextChatInput({
       }
     },
     [
+      editMessage,
+      editing,
+      commitEdit,
       quoteActions,
+      reasoningSelection,
+      sessionId,
       isReasoningEffortSelected,
       mcpApps,
       mode,
@@ -434,75 +461,99 @@ function TextChatInput({
                 reasoningEfforts={reasoningEfforts}
               >
                 {(effortGauge) => (
-                  <ChatInputComposer
-                    canSend={
-                      selectedModelItem &&
-                      (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
-                        ? canSend
-                        : false
-                    }
-                    dismissKeyboardOnSend={dismissKeyboardOnSend}
-                    getSendErrorLabel={getSendErrorLabel}
-                    onSend={handleSendPress}
-                    onStop={() => void cancel()}
-                    streaming={isBusy}
-                    testID="chat-composer"
-                  >
-                    <ChatInputAccessories>
-                      <View
-                        accessibilityElementsHidden={isPickerVisible}
-                        importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
-                        pointerEvents={isPickerVisible ? 'none' : 'auto'}
-                        style={isPickerVisible ? foldedAttachmentsStyle : undefined}
-                      >
-                        <DraftMessageQuotePreview />
-                        <ComposerAttachments />
-                        <AudioAttachmentNotice />
-                        {mode === 'standard' ? <McpAppContextNotice /> : null}
+                  <>
+                    {editing ? (
+                      <View className="flex-row items-center justify-between px-3 pb-1 pt-2">
+                        <Text className="text-xs font-medium text-muted-foreground">
+                          {t('chat.input.editing.title')}
+                        </Text>
+                        <Pressable
+                          accessibilityLabel={t('common.cancel')}
+                          accessibilityRole="button"
+                          onPress={cancelEdit}
+                        >
+                          <Text className="text-xs font-medium text-primary">
+                            {t('common.cancel')}
+                          </Text>
+                        </Pressable>
                       </View>
-                    </ChatInputAccessories>
-                    <ChatInputSurface
-                      streaming={isBusy}
-                      placeholder={
-                        skillAction
-                          ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
-                          : placeholder
+                    ) : null}
+                    <ChatInputComposer
+                      canSend={
+                        selectedModelItem &&
+                        (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
+                          ? canSend
+                          : false
                       }
+                      dismissKeyboardOnSend={dismissKeyboardOnSend}
+                      getSendErrorLabel={getSendErrorLabel}
+                      onSend={handleSendPress}
                       onStop={() => void cancel()}
-                      fieldStyle={isPickerVisible ? compactInputStyle : undefined}
-                      leadingAction={
-                        <ChatInputMenu
-                          media={mode === 'minimal' ? 'images' : 'all'}
-                          onPickSkills={
-                            mode === 'standard' && agentId && !isParallel
-                              ? () => setOpenPicker('skill')
-                              : undefined
+                      streaming={isBusy}
+                      testID="chat-composer"
+                    >
+                      <ChatInputAccessories>
+                        <View
+                          accessibilityElementsHidden={isPickerVisible}
+                          importantForAccessibility={
+                            isPickerVisible ? 'no-hide-descendants' : 'auto'
                           }
-                          onPickPlugins={
-                            mode === 'standard' && !isParallel
-                              ? () => setOpenPicker('plugin')
-                              : undefined
-                          }
-                          onPickPrompts={
-                            mode === 'standard' && prompts.length > 0
-                              ? () => setOpenPicker('prompt')
-                              : undefined
-                          }
-                          triggerRef={pluginMenuRef}
-                        />
-                      }
-                      secondaryAction={
-                        <ChatInputModelPill
-                          model={selectedModelItem}
-                          onClearReplyModels={clearReplyModels}
-                          onPress={modelPicker.open}
-                          replyModels={replyModels}
-                        />
-                      }
-                      trailingAction={effortGauge}
-                      dictation
-                    />
-                  </ChatInputComposer>
+                          pointerEvents={isPickerVisible ? 'none' : 'auto'}
+                          style={isPickerVisible ? foldedAttachmentsStyle : undefined}
+                        >
+                          <DraftMessageQuotePreview />
+                          <ComposerAttachments />
+                          <AudioAttachmentNotice />
+                          {mode === 'standard' ? <McpAppContextNotice /> : null}
+                        </View>
+                      </ChatInputAccessories>
+                      <ChatInputSurface
+                        streaming={isBusy}
+                        placeholder={
+                          skillAction
+                            ? t(
+                                skillAction === 'create'
+                                  ? 'skills.create.hint'
+                                  : 'skills.find.hint',
+                              )
+                            : placeholder
+                        }
+                        onStop={() => void cancel()}
+                        fieldStyle={isPickerVisible ? compactInputStyle : undefined}
+                        leadingAction={
+                          <ChatInputMenu
+                            media={mode === 'minimal' ? 'images' : 'all'}
+                            onPickSkills={
+                              mode === 'standard' && agentId && !isParallel
+                                ? () => setOpenPicker('skill')
+                                : undefined
+                            }
+                            onPickPlugins={
+                              mode === 'standard' && !isParallel
+                                ? () => setOpenPicker('plugin')
+                                : undefined
+                            }
+                            onPickPrompts={
+                              mode === 'standard' && prompts.length > 0
+                                ? () => setOpenPicker('prompt')
+                                : undefined
+                            }
+                            triggerRef={pluginMenuRef}
+                          />
+                        }
+                        secondaryAction={
+                          <ChatInputModelPill
+                            model={selectedModelItem}
+                            onClearReplyModels={clearReplyModels}
+                            onPress={modelPicker.open}
+                            replyModels={replyModels}
+                          />
+                        }
+                        trailingAction={effortGauge}
+                        dictation
+                      />
+                    </ChatInputComposer>
+                  </>
                 )}
               </ChatInputEffortOverlay>
             </View>

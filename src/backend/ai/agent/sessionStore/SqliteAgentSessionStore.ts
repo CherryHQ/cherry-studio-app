@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -28,7 +28,12 @@ import {
 } from '@/backend/data/services/utils/agentSessionRows';
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
-import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
+import {
+  AgentMessageSiblingSchema,
+  type AgentMessageSibling,
+  type AgentMessageView,
+  type AgentSessionView,
+} from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
@@ -908,6 +913,31 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       )
       .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
     return rows.map(toAgentMessageView);
+  }
+
+  async listBranchSiblings(
+    sessionId: string,
+    parentId: string | null,
+  ): Promise<AgentMessageSibling[]> {
+    const rows = await this.dbService
+      .getDb()
+      .select({
+        id: agentSessionMessageTable.id,
+        modelId: agentSessionMessageTable.modelId,
+        status: agentSessionMessageTable.status,
+        siblingsGroupId: agentSessionMessageTable.siblingsGroupId,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          parentId === null
+            ? isNull(agentSessionMessageTable.parentId)
+            : eq(agentSessionMessageTable.parentId, parentId),
+        ),
+      )
+      .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+    return rows.map((row) => AgentMessageSiblingSchema.parse(row));
   }
 
   async hasChildren(sessionId: string, messageId: string): Promise<boolean> {

@@ -123,6 +123,32 @@ export const AgentRetryMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
+export const AgentEditUserMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  /** The settled user row the edited question branches from; it stays in the tree. */
+  messageId: z.string().min(1),
+  /**
+   * The replacement question text. The Host derives the new input from the
+   * stored parts, not from client parts: inline references are remapped onto
+   * the edited text and carried file parts stay attached.
+   */
+  text: z.string().min(1),
+  /** Snapshots the composer's selected model while its Agent mutation settles. */
+  modelId: UniqueModelIdSchema.optional(),
+  additionalReplies: AgentAdditionalRepliesSchema.optional(),
+  /** Per-turn only; this value is never persisted back to the Agent. */
+  reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  imageGeneration: AgentImageGenerationSchema.optional(),
+  /**
+   * Skills the user selected explicitly in the composer. Each must be bound,
+   * enabled, and user-invocable for this Agent; the Host loads their
+   * instructions for this turn only and never persists the selection.
+   */
+  skillIds: z.array(SkillIdSchema).max(8).optional(),
+  /** App-owned composer action; no installation occurs until the user sends the request. */
+  skillAction: SkillActionSchema.optional(),
+});
+export type AgentEditUserMessageInput = z.infer<typeof AgentEditUserMessageInputSchema>;
 const AgentReplyPartEditSchema = z.strictObject({
   /** A text part of the answer; reasoning, files and tool receipts are not editable. */
   id: z.string().min(1),

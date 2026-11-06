@@ -1,8 +1,9 @@
 import type {
   AgentApprovalView,
+  AgentEditUserMessageInput,
+  AgentEvent,
   AgentPendingQuestion,
   AgentUserAnswers,
-  AgentEvent,
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
@@ -364,6 +365,31 @@ export class AgentSessionChatClient {
       return session;
     } finally {
       // Admission never replaces the source answer, whether a branch was created or rejected.
+      this.endSubmission(entry, submission);
+      this.updateState(entry, {
+        ...entry.state,
+        isSubmitting: false,
+      });
+      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+        this.stopObservation(entry);
+        this.sessions.delete(input.sessionId);
+      }
+    }
+  }
+
+  async editUserMessage(input: AgentEditUserMessageInput): Promise<void> {
+    const entry = this.getEntry(input.sessionId);
+    // The original question and its answers stay visible while the engine
+    // prepares the edited branch beside them.
+    const submission = this.beginSubmission(entry);
+    try {
+      await this.observe(input.sessionId);
+      throwIfSubmissionCancelled(submission);
+      await this.protocol.editUserMessage(input);
+      this.options.onSessionChanged?.(input.sessionId);
+      this.options.onTranscriptChanged?.(input.sessionId);
+    } finally {
+      // Admission only adds the sibling branch; the edited rows never change.
       this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,

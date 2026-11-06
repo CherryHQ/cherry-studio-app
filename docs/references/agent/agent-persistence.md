@@ -324,6 +324,13 @@ ledger totals remain intact. Preparation must finish before this operation; a re
 does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
 recorded prefix. Retry never creates a Session or inserts another user message.
 
+Editing adds `reserveEditSubmission`: one transaction re-reads the edited user row and refuses a
+missing or non-user row, or one whose answers have not settled, then inserts the sibling question
+under that row's parent with a pending answer below it and selects the answer. The edited row and
+its answers are untouched, and the question/answer pair shares a fresh turn id. The new branch runs
+on its own working copy, so this reservation does not invalidate existing copies or advance
+`runtimeRevision`.
+
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:
 
@@ -349,7 +356,9 @@ projection:
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a
   multi-model question reserves every answer in one new sibling group. Regeneration, including
-  answering with another model, reserves a sibling answer to the same question. Selecting a message
+  answering with another model, reserves a sibling answer to the same question. Editing a settled
+  question reserves a sibling question under its parent plus one answer, and selects that answer;
+  the edited row and its answers stay in the tree. Selecting a message
   keeps the leaf when the message is already on the selected branch, otherwise it selects the
   newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`
   wherever the branch passes a parent with several children. A search result is selected once when
