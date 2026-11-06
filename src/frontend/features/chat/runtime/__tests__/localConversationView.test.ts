@@ -306,16 +306,21 @@ test('history keeps its rows while live state streams and refreshes them when bu
 });
 
 test.each(['error', 'interrupted', 'cancelled'] as const)(
-  'a %s answer shows pending during retry preparation without changing its stored content',
+  'a %s answer and its card show pending during retry preparation without changing stored content',
   (status) => {
     const answer: AgentMessageView = {
       ...message('answer'),
+      parentId: 'question',
       status,
       error: { code: 'EXECUTION_FAILED', message: 'Original failure', retryable: true },
+      siblings: [
+        { id: 'answer', modelId: null, status, siblingsGroupId: 0 },
+        { id: 'other-answer', modelId: null, status: 'success', siblingsGroupId: 0 },
+      ],
     };
     const rows = [answer];
     const f = fixture();
-    f.projector.history(rows, f.state);
+    const [original] = f.projector.history(rows, f.state);
 
     f.set({ isSubmitting: true, pendingRetryMessageId: answer.id });
     const [pending] = f.projector.history(rows, f.state);
@@ -324,17 +329,25 @@ test.each(['error', 'interrupted', 'cancelled'] as const)(
       id: answer.id,
       status: 'pending',
       data: { parts: [] },
+      branch: {
+        siblings: [
+          { id: answer.id, status: 'pending' },
+          { id: 'other-answer', status: 'success' },
+        ],
+      },
     });
     expect(pending.actions.retry).toBeUndefined();
     expect(pending.actions.answerWith).toBeUndefined();
     expect(answer.status).toBe(status);
     expect(answer.parts).toEqual(message('answer').parts);
     expect(answer.error?.message).toBe('Original failure');
+    expect(answer.siblings?.map((sibling) => sibling.status)).toEqual([status, 'success']);
 
     // An observed reservation may remove the overlay before admission finishes.
     f.set({ pendingRetryMessageId: undefined });
     const [restored] = f.projector.history(rows, f.state);
     expect(restored.state).toBe(status);
+    expect(restored.display.branch).toEqual(original.display.branch);
     expect(restored.display.data.parts).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'text', text: 'answer' })]),
     );
