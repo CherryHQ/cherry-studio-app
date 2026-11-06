@@ -43,6 +43,7 @@ export function buildEditUserMessageInput({
     // restores the typed edit instead of clearing it.
     throw new AgentProtocolError({
       code: sessionId ? 'CAPABILITY_UNSUPPORTED' : 'SESSION_NOT_FOUND',
+      retryable: false,
       message: sessionId
         ? 'Editing keeps the original message attachments.'
         : 'Editing requires an existing Session.',

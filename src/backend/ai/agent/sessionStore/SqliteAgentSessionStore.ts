@@ -29,6 +29,7 @@ import {
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import {
+  AgentMessageSiblingSchema,
   type AgentMessageSibling,
   type AgentMessageView,
   type AgentSessionView,
@@ -936,12 +937,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         ),
       )
       .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
-    return rows.map((row) => ({
-      id: row.id,
-      modelId: row.modelId,
-      status: row.status,
-      siblingsGroupId: row.siblingsGroupId,
-    }));
+    return rows.map((row) => AgentMessageSiblingSchema.parse(row));
   }
 
   async hasChildren(sessionId: string, messageId: string): Promise<boolean> {
