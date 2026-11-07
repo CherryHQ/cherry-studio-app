@@ -167,6 +167,57 @@ async function waitForCall(mock: { mock: { calls: unknown[] } }): Promise<void> 
   expect(mock.mock.calls.length).toBeGreaterThan(0);
 }
 
+test('terminal cancellation events and refreshed snapshot retain queued B and C', async () => {
+  const queuedInputs = ['B', 'C'].map((id) => ({
+    turnId: id,
+    userMessage: {
+      ...userMessage(),
+      id: `${id}-user`,
+      turnId: id,
+      parts: [{ id, type: 'text' as const, text: id, state: 'done' as const }],
+    },
+    assistantMessageId: `${id}-answer`,
+  }));
+  const activeTurn: AgentTurnView = {
+    id: 'turn-1',
+    sessionId: 'session-1',
+    status: 'running',
+    assistantMessageId: 'assistant-1',
+    startedAt: '2026-08-25T00:00:00.000Z',
+    endedAt: null,
+    error: null,
+  };
+  let publish!: (event: AgentEvent) => void;
+  let current = {
+    ...snapshot(),
+    activeTurn: activeTurn as AgentTurnView | null,
+    streamingMessage: assistantMessage() as AgentMessageView | null,
+    queuedInputs,
+  };
+  const client = new AgentSessionChatClient(
+    protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: current, unsubscribe() {} };
+    }),
+  );
+  const release = client.subscribe('session-1', () => {});
+  try {
+    await client.observe('session-1');
+    publish({ type: 'turn.updated', turn: { ...activeTurn, status: 'cancelling' } });
+    expect(client.getState('session-1').queuedInputs).toEqual(queuedInputs);
+    publish({ type: 'turn.updated', turn: { ...activeTurn, status: 'cancelled' } });
+    expect(client.getState('session-1').queuedInputs).toEqual(queuedInputs);
+    publish({ type: 'message.finalized', message: { ...assistantMessage(), status: 'cancelled' } });
+    expect(client.getState('session-1').queuedInputs).toEqual(queuedInputs);
+    current = { ...current, activeTurn: null, streamingMessage: null };
+    await client.refresh('session-1');
+    expect(client.getState('session-1').queuedInputs).toEqual(queuedInputs);
+  } finally {
+    release();
+    client.dispose();
+  }
+});
+
 describe('AgentSessionChatClient', () => {
   test('keeps live text on runtime failure and clears the error after refreshing the observation', async () => {
     let publish!: (event: AgentEvent) => void;

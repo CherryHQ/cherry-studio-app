@@ -176,6 +176,10 @@ describe('ChatProvider Draft handoff', () => {
   });
 
   it('allows a drafted follow-up while retaining the active stop control', () => {
+    mockChatState.queuedInputs = [
+      { turnId: 'B', assistantMessageId: 'answer-B', userMessage: {} as AgentMessageView },
+      { turnId: 'C', assistantMessageId: 'answer-C', userMessage: {} as AgentMessageView },
+    ];
     mockChatState.activeTurn = {
       id: 'active-turn',
       sessionId: 'session-1',
@@ -194,6 +198,13 @@ describe('ChatProvider Draft handoff', () => {
       void currentControls().cancel();
     });
     expect(mockCancelTurn).toHaveBeenCalledWith('session-1', 'active-answer');
+    act(() => {
+      mockChatState.activeTurn = null;
+      for (const listener of mockChatListeners) listener();
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    expect(mockChatState.queuedInputs.map((item) => item.turnId)).toEqual(['B', 'C']);
   });
 
   it('follows the selected answer instead of another model still running in the background', async () => {

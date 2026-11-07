@@ -665,6 +665,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     };
   }
 
+  async stopTurn(lane: RuntimeLane, requestId: string) {
+    await this.requireRuntime().stopTurn(laneKey(lane), requestId);
+  }
+
   async abort(lane: RuntimeLane) {
     await this.requireRuntime().stop(laneKey(lane));
   }

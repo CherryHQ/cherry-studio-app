@@ -1285,7 +1285,7 @@ export class DurableAgentHost implements AgentProtocol {
         type: 'turn.updated',
         turn: { ...projectDurableHostTurn(state.active).turn, status: 'cancelling' },
       });
-      await this.conversations.abort(state.lane);
+      await this.conversations.stopTurn(state.lane, state.active.identity.requestId);
     }
   }
 
