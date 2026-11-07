@@ -134,7 +134,7 @@ patchedDependencies:
   '@earendil-works/chord@1.5.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
   '@earendil-works/pi-ai@1.5.0': a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9
   '@earendil-works/pi-codemode@1.5.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
-  '@earendil-works/pi-durable@1.5.0': a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4
+  '@earendil-works/pi-durable@1.5.0': ab6ed924730a2f54ee925e798a71d490fd39451b162d04867916debd197e8224
   '@google/genai@2.21.0': 983ccdfd42605ab2b240e038dce5736c0745313e7aced3b7e269b0e6911a97b5
   '@magrinj/expo-quick-look@0.3.1': 35520d77ed4612922b6a4ec70813738d976812225a1f806b1a40329e8adf6277
   '@noble/hashes@1.8.0': d01f7c80279d99c93f2d4879f21c72760af853ca4f15bb965324af52c5de60f9
@@ -285,7 +285,7 @@ importers:
         version: 1.5.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
       '@earendil-works/pi-durable':
         specifier: 1.5.0
-        version: 1.5.0(patch_hash=a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        version: 1.5.0(patch_hash=ab6ed924730a2f54ee925e798a71d490fd39451b162d04867916debd197e8224)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@expo/dom-webview':
         specifier: ~58.0.2
         version: 58.0.2(expo@58.0.22)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -585,7 +585,7 @@ importers:
         version: 12.3.1
       react-native-streamdown:
         specifier: 0.2.0
-        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(d6384186c237e1db0b878e2b6650924d)
+        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(52dd06c1ccf7e98cfe7cbc17424d28a1)
       react-native-svg:
         specifier: 15.16.0
         version: 15.16.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -997,7 +997,7 @@ importers:
         version: 5.10.1(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-streamdown:
         specifier: '*'
-        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(d6384186c237e1db0b878e2b6650924d)
+        version: 0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(52dd06c1ccf7e98cfe7cbc17424d28a1)
       react-native-svg:
         specifier: 15.16.0
         version: 15.16.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -13183,7 +13183,7 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-durable@1.5.0(patch_hash=a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-durable@1.5.0(patch_hash=ab6ed924730a2f54ee925e798a71d490fd39451b162d04867916debd197e8224)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@earendil-works/chord': 1.5.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)(esbuild@0.28.2)(ws@8.21.1)
       '@earendil-works/pi-ai': 1.5.0(patch_hash=a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
@@ -22528,7 +22528,7 @@ snapshots:
 
   react-native-skia-apple-tvos@154.0.0: {}
 
-  react-native-streamdown@0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(d6384186c237e1db0b878e2b6650924d):
+  react-native-streamdown@0.2.0(patch_hash=fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3)(52dd06c1ccf7e98cfe7cbc17424d28a1):
     dependencies:
       react: 19.3.0
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)

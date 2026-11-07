@@ -569,3 +569,207 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 });
+
+test('stopTurn holds queued inputs and destructive stop still withdraws them', async () => {
+  const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+  try {
+    const conversation = await runtime.ensureConversation(seed);
+    const ids = await conversation.commit(async (tx) => {
+      const live = await tx.doc(LiveDoc, conversation.id);
+      const inbox = await tx.doc(InboxDoc, conversation.id);
+      const entry = await tx.appendEntry(UserEntry, conversation.id, {
+        model: [{ role: 'user', content: 'A', timestamp: 1 }],
+      });
+      const a = await tx.createSubmission({
+        conversationId: conversation.id,
+        type: 'input',
+        requestId: 'A',
+        status: 'placed',
+        entry: entry.id,
+      });
+      const taskId = await tx.createTask(
+        GenerationTask,
+        {},
+        { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+      );
+      live.run = { taskId, inputs: [a.id], turns: 0 };
+      const b = await tx.createSubmission({
+        conversationId: conversation.id,
+        type: 'input',
+        requestId: 'B',
+        status: 'queued',
+      });
+      const c = await tx.createSubmission({
+        conversationId: conversation.id,
+        type: 'input',
+        requestId: 'C',
+        status: 'queued',
+      });
+      inbox.items.push(
+        { id: b.id, mode: 'followUp', content: 'B' },
+        { id: c.id, mode: 'followUp', content: 'C' },
+      );
+      return { b: b.id, c: c.id };
+    }, BACKGROUND_CONTEXT);
+    await runtime.stopTurn(seed.sessionId, 'A');
+    await runtime.stopTurn(seed.sessionId, 'A');
+    const inbox = await conversation.commit(
+      async (tx) =>
+        (await tx.doc(InboxDoc, conversation.id)).items.map((item) => [
+          item.id,
+          item.mode !== 'write' && item.held,
+        ]),
+      BACKGROUND_CONTEXT,
+    );
+    expect(inbox).toEqual([
+      [ids.b, true],
+      [ids.c, true],
+    ]);
+    for (const id of [ids.b, ids.c]) {
+      const record = (await runtime.inputRecord(seed.sessionId, id === ids.b ? 'B' : 'C'))!;
+      expect(record.status).toBe('queued');
+      expect(record.entry).toBeUndefined();
+    }
+    await runtime.stop(seed.sessionId);
+    expect((await runtime.inputRecord(seed.sessionId, 'B'))!.status).toBe('unanswered');
+  } finally {
+    await runtime.close();
+  }
+});
+
+test.each(['write', 'input', 'continue'] as const)(
+  'held inputs survive reopen and %s admission',
+  async (admission) => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    let runtime = await PiDurableRuntime.open(storage, options());
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      const activeId = await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        const entry = await tx.appendEntry(UserEntry, conversation.id, {
+          model: [{ role: 'user', content: 'A', timestamp: 1 }],
+        });
+        const a = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          requestId: 'A',
+          status: 'placed',
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          GenerationTask,
+          {},
+          {
+            ownership: { kind: 'conversation' },
+            conversationId: conversation.id,
+          },
+        );
+        live.run = { taskId, inputs: [a.id], turns: 0 };
+        for (const requestId of ['B', 'C']) {
+          const item = await tx.createSubmission({
+            conversationId: conversation.id,
+            type: 'input',
+            requestId,
+            status: 'queued',
+          });
+          inbox.items.push({ id: item.id, mode: 'followUp', content: requestId });
+        }
+        return a.id;
+      }, BACKGROUND_CONTEXT);
+      await conversation.abort(BACKGROUND_CONTEXT, {
+        background: true,
+        keepQueuedInputs: true,
+        expectedInput: activeId,
+      });
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, options());
+      const reopened = (await runtime.conversation(seed.sessionId))!;
+      runtime.resume();
+      await reopened.waitForIdle(BACKGROUND_CONTEXT);
+      const draft =
+        admission === 'input'
+          ? { type: 'input' as const, requestId: 'new', content: 'Resent B' }
+          : admission === 'write'
+            ? {
+                type: 'write' as const,
+                requestId: 'new',
+                entry: {
+                  kind: 'note',
+                  model: [{ role: 'user' as const, content: 'write', timestamp: 2 }],
+                },
+              }
+            : { type: 'continue' as const, requestId: 'new' };
+      await reopened.submit(draft, BACKGROUND_CONTEXT);
+      const items = await reopened.commit(
+        async (tx) =>
+          (await tx.doc(InboxDoc, reopened.id)).items.map((item) => [
+            item.mode !== 'write' && item.content,
+            item.mode !== 'write' && item.held,
+          ]),
+        BACKGROUND_CONTEXT,
+      );
+      expect(items).toEqual([
+        ['B', true],
+        ['C', true],
+      ]);
+      for (const id of ['B', 'C']) {
+        expect(await runtime.inputRecord(seed.sessionId, id)).toMatchObject({ status: 'queued' });
+        expect((await runtime.inputRecord(seed.sessionId, id))!.entry).toBeUndefined();
+      }
+    } finally {
+      await runtime.close();
+    }
+  },
+);
+
+test.each(['write', 'input', 'continue'] as const)(
+  '%s boundary skips persisted held inputs',
+  async (admission) => {
+    const harness = await Harness.open(new MemoryStorage(), options(), BACKGROUND_CONTEXT);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' } },
+        BACKGROUND_CONTEXT,
+      );
+      await conversation.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        for (const requestId of ['B', 'C']) {
+          const item = await tx.createSubmission({
+            conversationId: conversation.id,
+            type: 'input',
+            requestId,
+            status: 'queued',
+          });
+          inbox.items.push({ id: item.id, mode: 'followUp', content: requestId, held: true });
+        }
+      }, BACKGROUND_CONTEXT);
+      const draft =
+        admission === 'input'
+          ? { type: 'input' as const, content: 'Resent B' }
+          : admission === 'write'
+            ? {
+                type: 'write' as const,
+                entry: {
+                  kind: 'note',
+                  model: [{ role: 'user' as const, content: 'write', timestamp: 2 }],
+                },
+              }
+            : { type: 'continue' as const };
+      await conversation.submit(draft, BACKGROUND_CONTEXT);
+      const inbox = await harness.snapshot(InboxDoc, conversation.id, BACKGROUND_CONTEXT);
+      expect(inbox?.items.map((item) => item.mode !== 'write' && item.content)).toEqual(['B', 'C']);
+      const records = (await harness.inspect(BACKGROUND_CONTEXT)).submissions;
+      expect(
+        records
+          .filter((record) => record.requestId === 'B' || record.requestId === 'C')
+          .map((record) => record.status),
+      ).toEqual(['queued', 'queued']);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  },
+);

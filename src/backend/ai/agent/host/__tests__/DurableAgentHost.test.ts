@@ -182,6 +182,10 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     drainUsage: async () => {
       steps.push('usage');
     },
+    stopTurn: jest.fn(async (lane, requestId) => {
+      for (const turn of copies.get(laneKey(lane))?.turns ?? [])
+        if (turn.identity.requestId === requestId) emit({ ...turn, status: 'cancelled' });
+    }),
     abort: jest.fn(async (lane) => {
       for (const turn of copies.get(laneKey(lane))?.turns ?? [])
         if (['queued', 'running'].includes(turn.status)) emit({ ...turn, status: 'cancelled' });
@@ -701,6 +705,86 @@ describe('durable tool diagnostics', () => {
     }
   });
 
+  test.each([false, true])(
+    'stopping active answer preserves queued reservations (messageId: %s)',
+    async (withMessageId) => {
+      const f = fixture();
+      const active = await f.reserve('running');
+      const queued: RuntimeDurableTurn[] = [];
+      for (const text of ['B', 'C']) {
+        const reserved = await f.store.reserveSubmission({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          userParts: [{ id: text, type: 'text', text, state: 'done' }],
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          inferenceSnapshot,
+        });
+        queued.push({
+          ...active,
+          identity: { ...active.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+          userMessageId: reserved.userMessage.id,
+          assistantMessageId: reserved.assistantMessage.id,
+          inputBoundary: null,
+          answerBoundary: null,
+          status: 'queued',
+          parts: [],
+          metadata: { ...active.metadata, userParts: reserved.userMessage.parts as never },
+        });
+      }
+      f.copies.get(f.sessionId)!.turns = [active, ...queued];
+      const events: AgentEvent[] = [];
+      const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+      await f.host.initialize();
+      try {
+        const initial = await f.host.observeSession(f.sessionId, () => {});
+        const before = initial.snapshot.queuedInputs;
+        initial.unsubscribe();
+        expect(before.map((item) => item.userMessage.parts)).toEqual(
+          queued.map((turn) => turn.metadata.userParts),
+        );
+        await f.host.cancelTurn({
+          sessionId: f.sessionId,
+          turnId: active.identity.turnId,
+          ...(withMessageId ? { messageId: active.assistantMessageId } : {}),
+        });
+        const refreshed = await f.host.observeSession(f.sessionId, () => {});
+        expect(refreshed.snapshot.queuedInputs).toEqual(before);
+        refreshed.unsubscribe();
+        expect(await f.store.getMessage(f.sessionId, active.assistantMessageId)).toMatchObject({
+          status: 'cancelled',
+          parts: expect.arrayContaining([expect.objectContaining({ text: 'Answer' })]),
+        });
+        for (const turn of queued) {
+          expect(await f.store.getMessage(f.sessionId, turn.userMessageId)).not.toBeNull();
+          expect(await f.store.getMessage(f.sessionId, turn.assistantMessageId)).toMatchObject({
+            status: 'pending',
+          });
+        }
+        expect(
+          f.copies
+            .get(f.sessionId)!
+            .turns.filter((turn) => turn.status === 'queued')
+            .map((turn) => turn.identity.turnId),
+        ).toEqual(queued.map((turn) => turn.identity.turnId));
+        expect(events).toContainEqual({ type: 'queue.updated', inputs: before });
+        expect(
+          events
+            .filter((event) => event.type === 'queue.updated')
+            .every(
+              (event) =>
+                event.type === 'queue.updated' &&
+                JSON.stringify(event.inputs) === JSON.stringify(before),
+            ),
+        ).toBe(true);
+        expect(events.filter((event) => event.type === 'turn.deleted')).toEqual([]);
+      } finally {
+        observation.unsubscribe();
+        await f.host.close();
+      }
+    },
+  );
+
   test('a withdrawn input hands the questions queued below it to its own parent', async () => {
     const f = fixture();
     const running = await f.reserve('running');
@@ -744,6 +828,11 @@ describe('durable tool diagnostics', () => {
       await expect(
         f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: withdrawn.identity.turnId }),
       ).resolves.toBe('withdrawn');
+      expect(await f.store.getMessage(f.sessionId, withdrawn.userMessageId)).toBeNull();
+      expect(await f.store.getMessage(f.sessionId, withdrawn.assistantMessageId)).toBeNull();
+      expect(await f.store.getMessage(f.sessionId, remaining.assistantMessageId)).toMatchObject({
+        status: 'pending',
+      });
       const queue = [
         { userMessage: { id: remaining.userMessageId, parentId: running.assistantMessageId } },
       ];
