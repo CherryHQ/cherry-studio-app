@@ -1,4 +1,4 @@
-import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
+import type { ApkUpdateRelease, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { normalizeReleaseNotes, readReleaseNotes } from '../releaseNotes';
 
@@ -7,7 +7,7 @@ jest.mock('@/backend/services/http', () => ({
   createHttpClient: () => ({ request: (request: unknown) => mockRequest(request) }),
 }));
 
-const apk: AppUpdateRelease = {
+const apk: ApkUpdateRelease = {
   channel: 'apk',
   id: 'apk:1.10.0',
   currentVersion: '1.9.0',
@@ -40,6 +40,18 @@ test.each([
 test('Chinese interfaces keep the GitCode notes without another request', async () => {
   await expect(readReleaseNotes(apk, 'zh-TW')).resolves.toBe('中文说明');
   expect(mockRequest).not.toHaveBeenCalled();
+});
+
+test('notes language stays independent from an overseas APK source', async () => {
+  const globalApk: ApkUpdateRelease = {
+    ...apk,
+    downloadUrl: apk.downloadUrl.replace('gitcode.com', 'github.com'),
+    notes: 'English notes',
+  };
+  await expect(readReleaseNotes(globalApk, 'en-US')).resolves.toBe('English notes');
+  expect(mockRequest).not.toHaveBeenCalled();
+  mockRequest.mockResolvedValue({ data: { body: '# Title\n\n中文说明' } });
+  await expect(readReleaseNotes(globalApk, 'zh-CN')).resolves.toBe('中文说明');
 });
 
 test('other interfaces read the English notes for the same tag', async () => {

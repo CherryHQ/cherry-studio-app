@@ -127,6 +127,7 @@ export function createBackend(
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
+    region: { getCountry(): Promise<string> };
     trash: Pick<TrashRuntime, 'trashFile'>;
     account: AccountModule;
     cloud: CloudModule;
@@ -248,6 +249,7 @@ export function createBackend(
     servers: services.mcpServer,
   });
   const providers = createProvidersModule({
+    getCountry: () => infrastructure.region.getCountry(),
     accounts: infrastructure.providerAccounts,
     hasAvailableModels: async (provider) =>
       (await services.model.list({ providerId: provider.id, enabled: true })).some((model) =>
@@ -347,6 +349,7 @@ export function createBackend(
       getLocales().map((locale) => locale.languageTag),
     );
   const voice = createVoice({
+    getCountry: () => infrastructure.region.getCountry(),
     preference: services.preference,
     permissions: services.devicePermissions,
     language: () => appLanguage(services.preference.readCached('app.language')),
@@ -365,6 +368,7 @@ export function createBackend(
   infrastructure.agentHostDependencies.configureVoice(voice.module);
 
   const appUpdate = createAppUpdateModule({
+    getCountry: () => infrastructure.region.getCountry(),
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
   });
   const uuRemote = createUuRemoteModule({
