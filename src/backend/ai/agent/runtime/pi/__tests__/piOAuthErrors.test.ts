@@ -11,6 +11,7 @@ import {
   providerAccountStorage,
   type StoredPiAccount,
 } from '@/backend/services/providers/account/providerAccountStorage';
+import { createPkceChallenge } from '@/backend/utils/oauth';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 
 import { PiProviderAccountAdapter } from '../PiProviderAccountAdapter';
@@ -32,7 +33,10 @@ const credential: OAuthCredential = {
 
 beforeEach(() => {
   mockRequest.mockReset();
-  configureOAuthPlatform({ fetch: createProviderAccountFetch() });
+  configureOAuthPlatform({
+    fetch: createProviderAccountFetch(),
+    generatePKCE: createPkceChallenge,
+  });
 });
 
 it.each(['authorization', 'network'] as const)(
