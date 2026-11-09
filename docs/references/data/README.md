@@ -245,3 +245,5 @@ preference initialization, boot theme, and i18n only. The root route keeps the
 native splash visible until initialization settles.
 The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after the gate opens;
 Agent reconciliation, MCP initialization, jobs, and other host-owned work remain off first paint.
+
+The `chat.cache_hit_rate.enabled` preference defaults to false and controls the optional cache hit rate in context usage details. The rate is attributed cache reads divided by all recorded input for the answer, including writes; raw cache counts remain visible. This accounting scope is separate from the last measured request occupancy.

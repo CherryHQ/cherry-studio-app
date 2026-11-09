@@ -99,3 +99,5 @@ or selection conformance. With explicit device-verification authorization, check
 See the [Chat Input README](../../../src/frontend/features/chat/components/ChatInput/README.md),
 [shared Composer README](../../../src/frontend/components/Composer/README.md), and
 [Interaction And Gesture Arbitration](../interaction-and-gesture-arbitration.md) for ownership.
+
+The context usage ring appears in the composer at rest and while editing, with one operable trigger. Opening its detail sheet uses the composer keyboard handoff; dictation and send/stop actions remain available.

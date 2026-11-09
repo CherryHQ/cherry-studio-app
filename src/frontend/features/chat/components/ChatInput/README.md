@@ -152,3 +152,5 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
   deletes their unexecuted message pair without invalidating the current model context. Steering
   remains outside this composer.
+
+The chat-owned context usage action uses the composer compact and editing slots and presents one detail sheet after keyboard handoff. It displays the latest compatible measured request against declared model capacity, with attributed cache accounting and current compaction status.

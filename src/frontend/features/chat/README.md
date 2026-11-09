@@ -137,3 +137,5 @@ the remote execution controls, so workspace references are acquired for the new 
 from an existing session or an admitted start opens a distinct draft; admission is checked at click
 time and navigation invalidates the old handoff immediately. Pending/uncertain operations remain
 recoverable and cannot redirect the new draft when their replies arrive.
+
+The runtime public boundary exports `selectContextUsageSource` and `ContextUsageSource` for selecting the latest eligible branch measurement, and `useAgentContextStatus` for the current Session compaction status.
