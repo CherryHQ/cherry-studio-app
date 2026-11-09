@@ -12,7 +12,7 @@ dependencies the same way, so no separate build hook is needed.
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
-| `production` / `production-google-play` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
+| `production` / `production-google-play` / `production-domestic-stores` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
 
 The shared [reporting registry](../../src/frontend/appShell/observability/reportingServices.json)
 owns per-service build flags. Sentry uses immutable native metadata and rejects debug binaries.
@@ -55,12 +55,17 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 | --- | --- | --- | --- |
 | `development` | Cherry Studio Dev | `.dev` | `cherrystudio-dev` |
 | `preview` | Cherry Studio Preview | `.preview` | `cherrystudio-preview` |
-| `production` / `production-google-play` | Cherry Studio | none | `cherrystudio` |
+| `production` / `production-google-play` / `production-domestic-stores` | Cherry Studio | none | `cherrystudio` |
 
 `production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
 AAB without adding an app identity or runtime environment, and explicitly disables APK update
 checks. The existing `production` profile creates public Android APKs with GitCode update checks
 and iOS IPAs with this feature disabled. Public APKs are published to GitHub and mirrored to GitCode.
+
+`production-domestic-stores` also inherits the production identity and signing credentials, but
+produces an APK on `production-domestic-stores` with APK installation disabled. Submit the same
+store APK separately to HONOR, Xiaomi, OPPO, and vivo. See
+[Domestic Android Store Updates](./domestic-store-updates.md); do not substitute the public APK.
 
 The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
 `com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
@@ -127,9 +132,10 @@ an OTA update cannot change the policy in an existing installation.
 ## APK Update Distribution
 
 Preview and production packages also include the EAS Update client for compatible code and asset
-changes. Public Android APKs use `production-apk`, Google Play uses `production-google-play`, and
-iOS production uses `production-ios`; preview uses `preview`. Existing installations need one new
-native package first. Development and Storybook do not automatically fetch OTA updates. See
+changes. Public Android APKs use `production-apk`, Google Play uses `production-google-play`,
+domestic stores use `production-domestic-stores`, and iOS production uses `production-ios`;
+preview uses `preview`. Existing installations need one new native package first. Development and
+Storybook do not automatically fetch OTA updates. See
 [Application Updates](./app-updates.md) for publication and runtime compatibility.
 
 The native update channel selects the shared package-update strategy: `production-apk` checks
@@ -139,8 +145,8 @@ disabled. Notifications and About share one state; native updates require an exp
 See the [update infrastructure](../../src/backend/services/appUpdate/README.md).
 
 `APK_UPDATES_ENABLED` is the existing build-time switch for APK installation capability. The Android
-`production` profile sets it to `true`; `production-google-play` sets it to `false`, excluding
-`REQUEST_INSTALL_PACKAGES`. Do not override it in shared EAS environments or upload the public APK
+`production` profile sets it to `true`; `production-google-play` and `production-domestic-stores`
+set it to `false`, excluding `REQUEST_INSTALL_PACKAGES`. Do not override it in shared EAS environments or upload the public APK
 as a store artifact. The native installer independently checks the embedded channel.
 
 For an explicitly authorized development session, supply `APK_UPDATES_ENABLED=true` during both
@@ -226,6 +232,13 @@ When a Google Play release build is explicitly requested, use its separate AAB p
 
 ```bash
 pnpm build:local --platform android --profile production-google-play --output /absolute/path/to/cherry-studio-0.1.0-android.aab
+```
+
+When a domestic store release build is explicitly requested, use its separate APK profile and
+archive it apart from the public APK, for example under `<version>/domestic-stores/build-<number>/`:
+
+```bash
+pnpm build:local --platform android --profile production-domestic-stores --output /absolute/path/to/cherry-studio-0.1.0-android.apk
 ```
 
 Google Play requires an AAB for a new app; renaming an APK does not convert its format. See

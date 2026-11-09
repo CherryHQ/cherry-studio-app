@@ -13,6 +13,7 @@ The [app-shell integration](../../../frontend/appShell/appUpdate/README.md) owns
 | --- | --- | --- |
 | Android `production-apk` | IP-selected GitCode (CN) or GitHub (other countries) latest stable mobile release | Download in the app, then confirm Android installation |
 | Android `production-google-play` | Google Play's update-availability API for this installation | Open Google Play, with official web-listing fallback |
+| Android `production-domestic-stores` | HONOR/Xiaomi SDKs and vivo device query; GitCode for OPPO | Open the automatically resolved domestic store |
 | iOS `production-ios` | Apple's public software lookup for the installed bundle | Open App Store |
 | `preview`, absent or unknown release channel | None | No update entry or automatic request |
 
@@ -20,8 +21,9 @@ The embedded `expo-updates` channel is authoritative; mutable manifest extras ca
 updates on Play or iOS. An unconfigured Android development client can opt in using
 `APK_UPDATES_ENABLED=true`. The existing flag also controls the APK installation permission at
 build time: `production.android.env` sets it to `true`, and `production-google-play.android.env`
-sets it to `false`. Preview always excludes the permission. Keep the flag out of shared EAS
-environments; build profiles own it. Development needs it at **both native build and Metro time**.
+and `production-domestic-stores.android.env` set it to `false`. Preview always excludes the
+permission. Keep the flag out of shared EAS environments; build profiles own it. Development needs
+it at **both native build and Metro time**.
 
 The native Android module independently requires the embedded `production-apk` channel (or a
 channel-less debuggable app) and the build-time flag. Store and preview manifests explicitly remove
@@ -58,6 +60,13 @@ claim that the app is current.
   missing regional listing is `noRelease`. This checks App Store publications, not new TestFlight
   builds. Store submission or TestFlight upload alone is never an availability signal.
 
+- **Domestic stores:** native code resolves a single store when the module is created. HONOR,
+  Xiaomi and vivo use their client queries and compare native builds; OPPO reuses GitCode's
+  stable-release query. Results expose an explicit `notesSource` and a store action, without APK
+  URLs or native build fields. Store actions check the module's target before native navigation.
+  See [Domestic Android Store Updates](../../../../docs/guides/domestic-store-updates.md) for
+  publication semantics, query lifecycle and integration status.
+
 ## Release Notes
 
 Each available release carries `notes` from its own source, and `releaseNotes(release, language)`
@@ -71,6 +80,11 @@ selects the version for the UI language. A failed lookup returns what the releas
   onward, which describes attachments and checksums the app handles itself.
 - **App Store:** Apple's lookup `releaseNotes` for the queried region, as plain text.
 - **Google Play:** none; the in-app update API exposes only a version code.
+- **Domestic stores:** HONOR description and Xiaomi update log remain plain text; vivo supplies
+  no notes. The GitCode fallback uses the APK note reader above.
+
+Every open update dialog invokes the notes reader, including manual checks and transfer reopen;
+the frontend caches results by release and language for six hours.
 
 ## APK Transfer And Installation
 

@@ -18,7 +18,7 @@ test.each([
     'production',
     'android',
     true,
-    { PROFILE: 'production', APK_UPDATES_ENABLED: 'true' },
+    { PROFILE: 'production', SENTRY_URL: 'https://sentry.io/', APK_UPDATES_ENABLED: 'true' },
   ],
   [
     'google-play',
@@ -26,9 +26,29 @@ test.each([
     'production',
     'android',
     true,
-    { PROFILE: 'production', ANDROID_COMPRESS_NATIVE_LIBS: 'false', APK_UPDATES_ENABLED: 'false' },
+    {
+      PROFILE: 'production',
+      SENTRY_URL: 'https://sentry.io/',
+      ANDROID_COMPRESS_NATIVE_LIBS: 'false',
+      APK_UPDATES_ENABLED: 'false',
+    },
   ],
-  ['ios', 'production-ios', 'production', 'ios', true, { PROFILE: 'production' }],
+  [
+    'ios',
+    'production-ios',
+    'production',
+    'ios',
+    true,
+    { PROFILE: 'production', SENTRY_URL: 'https://sentry.io/' },
+  ],
+  [
+    'domestic-stores',
+    'production-domestic-stores',
+    'production',
+    'android',
+    true,
+    { PROFILE: 'production', SENTRY_URL: 'https://sentry.io/', APK_UPDATES_ENABLED: 'false' },
+  ],
 ])(
   '%s publishes with its build profile channel and env',
   (name, channel, environment, platform, release, env) => {
@@ -58,9 +78,9 @@ test('pins the same EAS CLI as the release workflows', () => {
 
 test('the OTA workflow offers exactly the release targets', () => {
   const workflow = readFileSync('.github/workflows/ota-update.yml', 'utf8');
-  expect(workflow).toContain('options: [all, apk, google-play, ios]');
-  expect(workflow).toContain('targets=\'["apk","google-play","ios"]\'');
-  for (const name of ['apk', 'google-play', 'ios'])
+  expect(workflow).toContain('options: [all, apk, google-play, domestic-stores, ios]');
+  expect(workflow).toContain('targets=\'["apk","google-play","domestic-stores","ios"]\'');
+  for (const name of ['apk', 'google-play', 'domestic-stores', 'ios'])
     expect(resolveTarget(eas, name).release).toBe(true);
 });
 
