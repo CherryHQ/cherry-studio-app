@@ -475,6 +475,16 @@ diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
  import { getProviderEnvValue } from "../../utils/provider-env.js";
  import { sleep } from "../../utils/sleep.js";
  import { pollOAuthDeviceCodeFlow } from "./device-code.js";
+@@ -181,6 +182,9 @@
+         }
+         catch (error) {
++            // Native fetch bindings preserve terminal OAuth rejection metadata.
++            if (error && typeof error.status === "number" && error.status >= 400 && error.status < 500 && error.status !== 429)
++                throw error;
+             lastError = error instanceof Error ? error : new Error(String(error));
+             continue;
+         }
+         const json = await readJson(response);
 diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
 --- a/dist/auth/oauth/openai-codex.js
 +++ b/dist/auth/oauth/openai-codex.js
@@ -508,6 +518,15 @@ diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
  }
  function parseAuthorizationInput(input) {
      const value = input.trim();
+@@ -136,7 +127,7 @@
+     }
+     catch (error) {
+-        throw new Error(`OpenAI Codex token refresh error: ${error instanceof Error ? error.message : String(error)}`);
++        throw new Error(`OpenAI Codex token refresh error: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+     }
+     return readTokenResponse(response, "refresh");
+ }
+ async function startOpenAICodexDeviceAuth(signal) {
 diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
 --- a/dist/auth/oauth/openrouter.js
 +++ b/dist/auth/oauth/openrouter.js
