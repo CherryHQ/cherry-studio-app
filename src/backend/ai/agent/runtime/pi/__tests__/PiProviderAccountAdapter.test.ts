@@ -1,4 +1,8 @@
-import { xaiOAuth, type OAuthCredential } from '@earendil-works/pi-ai/native-oauth';
+import {
+  openaiCodexOAuth,
+  xaiOAuth,
+  type OAuthCredential,
+} from '@earendil-works/pi-ai/native-oauth';
 
 import { HttpError } from '@/backend/services/http';
 import {
@@ -21,7 +25,12 @@ jest.mock('@earendil-works/pi-ai/native-oauth', () => {
     refresh: jest.fn(),
     toAuth: async (credential: OAuthCredential) => ({ apiKey: credential.access }),
   };
-  return { ...actual, configureOAuthPlatform: jest.fn(), xaiOAuth: flow };
+  return {
+    ...actual,
+    configureOAuthPlatform: jest.fn(),
+    xaiOAuth: flow,
+    openaiCodexOAuth: { ...flow, login: jest.fn(), refresh: jest.fn() },
+  };
 });
 
 function deferred<T>() {
@@ -110,6 +119,33 @@ it('preserves stored credentials and hides upstream secrets when refresh fails',
     new ProviderAccountError('authorization'),
   );
   expect(accounts.get('first')?.credential.refresh).toBe('refresh-fixture');
+});
+
+it('clears an expired Codex grant on manual logout and permits a fresh login', async () => {
+  adapter.configure({
+    get: async (id) => ({ id, presetProviderId: 'openai-codex', name: id, createdAt }),
+  });
+  jest.mocked(openaiCodexOAuth.login).mockResolvedValueOnce({ ...credential, expires: 0 });
+  jest
+    .mocked(openaiCodexOAuth.refresh)
+    .mockRejectedValueOnce(new Error('invalid_grant secret-server-response'));
+  await login('first');
+  await expect(adapter.refresh('first')).rejects.toEqual(new ProviderAccountError('authorization'));
+
+  await adapter.logout('first');
+  expect(accounts.has('first')).toBe(false);
+  expect((await adapter.getStatus('first')).signedIn).toBe(false);
+  const provider = { id: 'first', presetProviderId: 'openai-codex' };
+  await expect(adapter.resolveAuth(provider)).resolves.toBeUndefined();
+
+  jest.mocked(openaiCodexOAuth.login).mockImplementationOnce(async () => {
+    expect(accounts.has('first')).toBe(false);
+    return { ...credential, access: 'new-access', refresh: 'new-refresh' };
+  });
+  await login('first');
+  expect((await adapter.getStatus('first')).signedIn).toBe(true);
+  expect((await adapter.resolveAuth(provider))?.auth.apiKey).toBe('new-access');
+  expect(openaiCodexOAuth.refresh).toHaveBeenCalledTimes(1);
 });
 
 it.each([
