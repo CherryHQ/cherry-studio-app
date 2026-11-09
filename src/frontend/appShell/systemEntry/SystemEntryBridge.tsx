@@ -1,65 +1,105 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from 'expo-router';
+import { usePathname, useRootNavigationState, useRouter } from 'expo-router';
+import {
+  createContext,
+  type PropsWithChildren,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  type ChatRouteParamsInput,
-  chatHref,
-  createChatComposerHandoff,
-  chatRouteParams,
-  parseChatRoute,
-} from '@/frontend/appShell/navigation/chat';
+import { chatHref, createChatComposerHandoff } from '@/frontend/appShell/navigation/chat';
 import {
   type ComposerInitialAttachment,
   isComposerImageMediaType,
 } from '@/frontend/components/Composer/utils/composerAttachments';
 import { useBackendModule } from '@/frontend/data';
-import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 import type { SystemAction, SystemSharedFile } from '@/shared/contracts';
 
 import { useSystemEntryClaims } from './useSystemEntryClaims';
 
-/** Hands an incoming system share to the chat composer, for the user to edit, retarget, and send. */
-export function SystemEntryBridge() {
+type ShareDestination = { kind: 'draft'; agentId: string } | { kind: 'session'; sessionId: string };
+
+const SystemShareContext = createContext<{
+  isPending: boolean;
+  cancel(): void;
+  select(destination: ShareDestination): void;
+} | null>(null);
+
+export function useSystemShareDestination() {
+  const context = use(SystemShareContext);
+  if (!context) throw new Error('SystemEntryBridge is required');
+  return context;
+}
+
+/** Owns the unsent share while a separate route chooses its destination. */
+export function SystemEntryBridge({ children }: PropsWithChildren) {
   const module = useBackendModule('systemEntry');
   const router = useRouter();
   const pathname = usePathname();
   const navigation = useRootNavigationState();
   const { t } = useTranslation();
   const { toast } = useToast();
-  // The Agent a share opens under is the one a new chat would use: the Agent in view, then the
-  // first available one.
-  const params = useGlobalSearchParams<ChatRouteParamsInput>();
-  const route = parseChatRoute(params);
-  const target = route.status === 'ready' ? route.target : undefined;
-  const openSession = useAgentSession(target?.kind === 'session' ? target.sessionId : undefined);
-  const { agents } = useAgentsApi();
-  const recentAgentId =
-    (target?.kind === 'draft' ? target.agentId : openSession.data?.agentId) ?? agents[0]?.id;
+  const [pendingAction, setPendingAction] = useState<SystemAction>();
+  // The phase prevents same-pass deliveries and double taps before React commits state.
+  const phase = useRef<'idle' | 'choosing' | 'leaving'>('idle');
+  const hasEnteredDestination = useRef(false);
+  const isDestination = pathname === '/share-destination';
+
+  useEffect(() => {
+    if (isDestination) {
+      hasEnteredDestination.current = true;
+    } else if (hasEnteredDestination.current) {
+      hasEnteredDestination.current = false;
+      phase.current = 'idle';
+      setPendingAction(undefined);
+    }
+  }, [isDestination]);
 
   const deliver = (action: SystemAction) => {
-    // Without an Agent there is nowhere to put a share, so it waits for a later pass.
-    if (!navigation?.key || !recentAgentId) return false;
-    const composerHandoff = createChatComposerHandoff({
-      attachments: action.files.map(toShareAttachment),
-      draft: action.text,
-    });
-    const chatTarget = { agentId: recentAgentId, kind: 'draft', composerHandoff } as const;
-    // Seed the chat in view, or come back to chat from wherever the app was left. Dismissing pops
-    // to chat when it is in the stack and replaces the current page when it is not.
-    if (pathname === '/') router.setParams(chatRouteParams(chatTarget));
-    else router.dismissTo(chatHref(chatTarget));
+    if (!navigation?.key || phase.current !== 'idle' || isDestination) return false;
+    phase.current = 'choosing';
+    setPendingAction(action);
+    router.push('/share-destination');
     return true;
   };
 
+  const select = useCallback(
+    (destination: ShareDestination) => {
+      if (!pendingAction || phase.current !== 'choosing') return;
+      phase.current = 'leaving';
+      const composerHandoff = createChatComposerHandoff({
+        attachments: pendingAction.files.map(toShareAttachment),
+        draft: pendingAction.text,
+      });
+      router.dismissTo(chatHref({ ...destination, composerHandoff }));
+    },
+    [pendingAction, router],
+  );
+
+  const cancel = useCallback(() => {
+    if (phase.current !== 'choosing') return;
+    phase.current = 'leaving';
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }, [router]);
+  const context = useMemo(
+    () => ({ isPending: Boolean(pendingAction), select, cancel }),
+    [pendingAction, select, cancel],
+  );
+
   useSystemEntryClaims({
     deliver,
-    isReady: Boolean(navigation?.key && recentAgentId),
+    isReady: Boolean(navigation?.key && !pendingAction && !isDestination),
     module,
     onFailure: () => toast.show({ label: t('systemEntry.failed'), variant: 'danger' }),
   });
 
-  return null;
+  return <SystemShareContext value={context}>{children}</SystemShareContext>;
 }
 
 function toShareAttachment(file: SystemSharedFile): ComposerInitialAttachment {

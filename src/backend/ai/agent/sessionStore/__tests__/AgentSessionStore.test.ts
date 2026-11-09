@@ -733,7 +733,8 @@ describe('SqliteAgentSessionStore conformance', () => {
     const fields = {
       quotes: [
         { id: 'q', sourceMessageId: first.assistantMessage.id, text: 'Original answer' },
-      ] as [{ id: string; sourceMessageId: string; text: string }],
+        { id: 'q2', sourceMessageId: first.assistantMessage.id, text: 'Another selection' },
+      ] as { id: string; sourceMessageId: string; text: string }[],
       quoteAuthor: { role: 'assistant' as const },
     };
     const second = await store.reserveSubmission({
@@ -758,7 +759,7 @@ describe('SqliteAgentSessionStore conformance', () => {
     if (fork.status !== 'forked') throw new Error(fork.status);
     const copy = await store.listMessages(fork.session.id);
     expect(copy[2].parts[0]).toMatchObject({
-      quotes: [{ ...fields.quotes[0], sourceMessageId: copy[1].id }],
+      quotes: fields.quotes.map((quote) => ({ ...quote, sourceMessageId: copy[1].id })),
       quoteAuthor: fields.quoteAuthor,
     });
     expect(await store.getMessage(fork.session.id, first.assistantMessage.id)).toBeNull();
@@ -866,7 +867,7 @@ describe('SqliteAgentSessionStore conformance', () => {
     // Without an override the fork inherits the conversation's name; any
     // derived wording is the client's to compose, not the store's.
     expect(fork.name).toBe('Maths');
-    expect(fork.isNameManuallyEdited).toBe(true);
+    expect(fork.isNameManuallyEdited).toBe(false);
     expect(fork.forkedFromSessionId).toBe(source.id);
     expect(await store.getSession(fork.id)).toEqual(fork);
 
@@ -2445,6 +2446,53 @@ describe('SqliteAgentSessionStore message tree', () => {
     expect(await activeNode()).toBe(continued.assistantMessage.id);
   });
 
+  test('deletes only the selected answer subtree while retaining the question, siblings and independent forks', async () => {
+    const first = await settleTurn(store, sessionId, 'Shared question');
+    const kept = await settleTurn(store, sessionId, 'Follow-up on A');
+    const sibling = await store.reserveAnswer({
+      sessionId,
+      userMessageId: first.userMessage.id,
+      assistantMessageId: uuidv7(),
+      ...RESERVATION_FACTS,
+    });
+    await settle(sibling.assistantMessage.id);
+    const followUp = await settleTurn(store, sessionId, 'Follow-up on B');
+    const nested = await store.reserveAnswer({
+      sessionId,
+      userMessageId: followUp.userMessage.id,
+      assistantMessageId: uuidv7(),
+      ...RESERVATION_FACTS,
+    });
+    await settle(nested.assistantMessage.id);
+    const fork = await store.forkSession({ sessionId, fromMessageId: nested.assistantMessage.id });
+    if (fork.status !== 'forked') throw new Error('Expected a fork');
+
+    const result = await store.deleteTurn({
+      sessionId,
+      turnId: first.turnId,
+      messageId: sibling.assistantMessage.id,
+    });
+    expect(result).toEqual({
+      status: 'deleted',
+      branchDeleted: true,
+      deletedMessageIds: expect.arrayContaining([
+        sibling.assistantMessage.id,
+        followUp.userMessage.id,
+        followUp.assistantMessage.id,
+        nested.assistantMessage.id,
+      ]),
+    });
+    expect(await ids()).toEqual([
+      first.userMessage.id,
+      first.assistantMessage.id,
+      kept.userMessage.id,
+      kept.assistantMessage.id,
+    ]);
+    expect(await activeNode()).toBe(kept.assistantMessage.id);
+    expect(await store.getMessage(sessionId, sibling.assistantMessage.id)).toBeNull();
+    expect(await store.listMessages(fork.session.id)).toHaveLength(4);
+  });
+
   test('continues from an earlier answer without dropping its existing continuation', async () => {
     const first = await settleTurn(store, sessionId, 'Q1');
     const later = await settleTurn(store, sessionId, 'Q2');
@@ -2503,7 +2551,11 @@ describe('SqliteAgentSessionStore message tree', () => {
   test('deleting the selected branch selects the newest surviving leaf', async () => {
     const first = await settleTurn(store, sessionId, 'Q1');
     const second = await settleTurn(store, sessionId, 'Q2');
-    await store.deleteTurn({ sessionId, turnId: second.turnId });
+    await store.deleteTurn({
+      sessionId,
+      turnId: second.turnId,
+      messageId: second.assistantMessage.id,
+    });
     expect(await activeNode()).toBe(first.assistantMessage.id);
     await store.deleteTurn({ sessionId, turnId: first.turnId });
     expect(await activeNode()).toBeNull();

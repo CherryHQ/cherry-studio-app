@@ -9,7 +9,6 @@ import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
 import { TOOL_SEARCH_TOOL_NAME } from '@earendil-works/pi-durable/tool-search';
 import { z } from 'zod';
 
-import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
@@ -36,6 +35,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
+import { readPiTerminalError } from './piModelError';
 import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
@@ -285,6 +285,8 @@ export function projectPiTurn(options: {
   partial?: AssistantMessage;
   partialId?: string;
   active?: boolean;
+  /** Active observations carry reasoning status; explicit detail reads retain the full text. */
+  fullReasoning?: boolean;
   inherited?: boolean;
   toolStates?: ReadonlyMap<string, 'running' | 'input-available' | 'interrupted'>;
   nestedTools?: ReadonlyMap<
@@ -317,19 +319,8 @@ export function projectPiTurn(options: {
       for (const key of Object.keys(billed) as (keyof RuntimeUsage)[])
         usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
-    if (message.stopReason === 'error') {
-      const diagnostic = message.diagnostics?.findLast(
-        (entry) =>
-          entry.type === 'provider_response_failure' ||
-          entry.type === 'pi_messages_response_failure',
-      );
-      // Stored diagnostics are normalized before commit, which fills a missing code with
-      // `runtime_error`; that placeholder does not describe a provider failure.
-      const code =
-        diagnostic?.error?.code === undefined || diagnostic.error.code === 'runtime_error'
-          ? 'provider_error'
-          : String(diagnostic.error.code);
-      const body = diagnostic?.details?.body;
+    const terminalError = readPiTerminalError(message);
+    if (terminalError) {
       const imageTool =
         message.api === 'cherry-image'
           ? parts.findLast(
@@ -338,24 +329,7 @@ export function projectPiTurn(options: {
           : undefined;
       // The image scheduling message carries no new provider response. Its tool receipt owns
       // the failure shown by the Host, including explicit-user-retry eligibility.
-      error =
-        (imageTool?.type === 'tool' ? imageTool.error : undefined) ??
-        normalizeAiError(
-          {
-            code,
-            name: diagnostic?.error?.name,
-            message:
-              message.errorMessage ?? diagnostic?.error?.message ?? 'The provider request failed.',
-            statusCode: diagnostic?.details?.statusCode ?? diagnostic?.details?.status,
-            responseBody: typeof body === 'string' ? body : JSON.stringify(body),
-            // This flag permits a user retry after correcting configuration or account limits.
-            // Automatic retry is decided separately by Pi from the terminal diagnostic.
-            retryable: message.api !== 'cherry-image',
-            finishReason: message.stopReason,
-          },
-          [],
-          { providerId: message.provider, modelId: message.model },
-        );
+      error = (imageTool?.type === 'tool' ? imageTool.error : undefined) ?? terminalError;
     }
     const web = readPiWebResult(message);
     // Anthropic splits one answer at every citation; the fragments are a single paragraph flow.
@@ -380,15 +354,24 @@ export function projectPiTurn(options: {
       }
       answer = undefined;
       if (block.type === 'thinking') {
+        const statusOnly = options.active && !options.fullReasoning;
+        const hasText = Boolean(block.thinking.trim());
         const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
         const previous = parts.at(-1);
         // Adjacent summaries remain one phase, including across provider retries.
         // Keep a growing phase visible even before its first readable summary arrives.
         if (previous?.type === 'reasoning') {
-          if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
+          if (statusOnly) previous.hasText = previous.hasText || hasText;
+          else if (hasText) previous.text = `${previous.text}\n\n${block.thinking}`;
           previous.state = state;
-        } else if (block.thinking.trim() || state === 'streaming') {
-          parts.push({ id, type: 'reasoning', text: block.thinking, state });
+        } else if (hasText || state === 'streaming') {
+          parts.push({
+            id,
+            type: 'reasoning',
+            text: statusOnly ? '' : block.thinking,
+            ...(statusOnly ? { hasText } : {}),
+            state,
+          });
         }
         return;
       }

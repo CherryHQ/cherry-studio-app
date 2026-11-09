@@ -1,5 +1,5 @@
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
-import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, ContentState, Image, Section } from '@cherrystudio/ui/components';
 import { useQueries } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, Text, View } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -25,6 +26,8 @@ import {
 
 type AgentToolsSectionProps = {
   bindings: readonly WriteAgentToolBinding[];
+  hasServersError: boolean;
+  isServersLoading: boolean;
   onChange: (bindings: WriteAgentToolBinding[]) => void;
   originalBindings: readonly AgentToolBinding[];
   servers: readonly McpServer[];
@@ -32,12 +35,15 @@ type AgentToolsSectionProps = {
 
 export function AgentToolsSection({
   bindings,
+  hasServersError,
+  isServersLoading,
   onChange,
   originalBindings,
   servers,
 }: AgentToolsSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const mcpIcon = useMcpIcon();
   const [isAdding, setIsAdding] = useState(false);
   const mcp = useBackendModule('mcp');
   const serverOptions = useMemo(
@@ -59,6 +65,7 @@ export function AgentToolsSection({
     (option) =>
       !option.binding?.enabled && option.server?.isEnabled && isRunnableMcpServer(option.server),
   );
+  const hasServerOptions = !isServersLoading && !hasServersError && availableServers.length > 0;
   const serversById = useMemo(
     () => new Map(servers.map((server) => [server.id, server])),
     [servers],
@@ -176,32 +183,47 @@ export function AgentToolsSection({
         </Section>
       ) : null}
       <BottomSheet
+        footer={
+          <Button
+            onPress={() => {
+              setIsAdding(false);
+              router.push('/plugins');
+            }}
+          >
+            {t('agent.tools.manage')}
+          </Button>
+        }
         onClose={() => setIsAdding(false)}
         open={isAdding}
         size="medium"
         title={t('agent.tools.add')}
       >
-        <ScrollView contentContainerClassName="pt-2" showsVerticalScrollIndicator={false}>
-          <Section variant="plain">
-            {availableServers.map((option) => (
-              <Section.Item
-                key={option.serverId}
-                label={option.displayName || t('agent.tools.server')}
-                onPress={() => {
-                  onChange(setAgentMcpServerEnabled(bindings, option, true));
-                  setIsAdding(false);
-                }}
-                showChevron={false}
-              />
-            ))}
-            <Section.Item
-              label={t('agent.tools.manage')}
-              onPress={() => {
-                setIsAdding(false);
-                router.push('/plugins');
-              }}
+        <ScrollView
+          contentContainerClassName={hasServerOptions ? 'pt-2' : 'grow justify-center px-6 py-8'}
+          showsVerticalScrollIndicator={false}
+        >
+          {isServersLoading ? (
+            <ContentState.Loading title={t('agent.tools.loading')} />
+          ) : hasServerOptions ? (
+            <Section variant="plain">
+              {availableServers.map((option) => (
+                <Section.Item
+                  key={option.serverId}
+                  label={option.displayName || t('agent.tools.server')}
+                  onPress={() => {
+                    onChange(setAgentMcpServerEnabled(bindings, option, true));
+                    setIsAdding(false);
+                  }}
+                  showChevron={false}
+                />
+              ))}
+            </Section>
+          ) : (
+            <ContentState.Empty
+              icon={<Image className="size-12" contentFit="contain" source={mcpIcon} />}
+              title={t('agent.tools.empty')}
             />
-          </Section>
+          )}
         </ScrollView>
       </BottomSheet>
     </View>

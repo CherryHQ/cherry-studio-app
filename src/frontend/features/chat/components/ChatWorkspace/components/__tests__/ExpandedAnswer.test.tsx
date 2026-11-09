@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import { BackHandler, Platform, Pressable } from 'react-native';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
@@ -10,6 +10,7 @@ import { ExpandedAnswerProvider } from '../ExpandedAnswer';
 const mockSelectBranch = jest.fn();
 let mockAnswers = new Map<string, MessageListItem>();
 let mockFocused = true;
+let mockComposerHeight = 116;
 
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
@@ -54,7 +55,7 @@ jest.mock('react-native-reanimated', () => {
     interpolate: () => 0,
     runOnJS: (fn: unknown) => fn,
     useAnimatedReaction: () => undefined,
-    useAnimatedStyle: () => ({}),
+    useAnimatedStyle: (style: () => object) => style(),
     useReducedMotion: () => false,
     useSharedValue: (initial: unknown) => {
       const ref = useRef({
@@ -87,6 +88,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     Button: (props: object) => createElement('Button', props),
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
     Skeleton: () => null,
+    useComposerExpansion: () => ({ meta: { contentInset: { get: () => mockComposerHeight } } }),
   };
 });
 
@@ -158,6 +160,7 @@ describe('ExpandedAnswerProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFocused = true;
+    mockComposerHeight = 116;
     mockSelectBranch.mockResolvedValue(true);
     mockAnswers = new Map([
       ['a1', answer('a1')],
@@ -237,6 +240,36 @@ describe('ExpandedAnswerProvider', () => {
     expect(renderer!.root.findAllByProps({ testID: 'expanded-answer' })).toHaveLength(0);
   });
 
+  test('the composer footprint stays uncovered during closing without resizing the transcript', async () => {
+    await open('a1');
+    const viewport = transcriptClip().children[0] as ReactTestInstance;
+    expect(transcriptClip().props.className).toBe('flex-1 overflow-hidden');
+    expect(transcriptClip().props.style).toEqual({ maxHeight: 642 });
+    expect(viewport.props.style).toEqual({ height: 758 });
+
+    // Closing has started, but its animation has not released the elevated workspace yet.
+    let finishClose: () => void = () => {};
+    mockWithTiming.mockImplementationOnce((to, _config, done) => {
+      finishClose = () => done?.(true);
+      return to;
+    });
+    await act(async () => close().props.onPress());
+    expect(layer()).toBeTruthy();
+    expect(transcriptClip().props.style).toEqual({ maxHeight: 642 });
+
+    // Follow the measured dock rather than assuming a one-row input height.
+    mockComposerHeight = 156;
+    act(() => renderer!.update(tree([row()])));
+    expect(transcriptClip().props.style).toEqual({ maxHeight: 602 });
+    expect(viewport.props.style).toEqual({ height: 758 });
+
+    act(finishClose);
+    await act(() => new Promise(requestAnimationFrame));
+    expect(transcriptClip().props.className).toBe('flex-1');
+    expect(transcriptClip().props.style).toEqual({ maxHeight: undefined });
+    expect(viewport.props.style).toEqual({ flex: 1 });
+  });
+
   test('Android back closes the layer, but leaves it to a route pushed over the chat', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     // The latest subscription runs first, as on Android.
@@ -290,6 +323,7 @@ describe('ExpandedAnswerProvider', () => {
         }),
       });
     });
+    act(() => transcriptClip().props.onLayout({ nativeEvent: { layout: { height: 758 } } }));
     act(() => renderer!.root.findByProps({ testID: 'open' }).props.onPress({ id, selection }));
     const probe = renderer!.root.find(
       (node) => node.props.pointerEvents === 'none' && typeof node.props.onLayout === 'function',
@@ -314,6 +348,15 @@ describe('ExpandedAnswerProvider', () => {
   function layer() {
     return renderer!.root.find(
       (node) => typeof node.type === 'string' && node.props.testID === 'expanded-answer',
+    );
+  }
+
+  function transcriptClip() {
+    return renderer!.root.find(
+      (node) =>
+        typeof node.type === 'string' &&
+        typeof node.props.accessibilityElementsHidden === 'boolean' &&
+        typeof node.props.onLayout === 'function',
     );
   }
 

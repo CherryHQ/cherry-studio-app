@@ -304,6 +304,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   return {
     host,
     store,
+    raw: harness.raw,
     seedFolder: harness.seedFolder,
     conversations,
     sessionId,
@@ -324,6 +325,123 @@ async function settle() {
 }
 
 describe('durable tool diagnostics', () => {
+  test('reads valid saved reasoning around an unsupported part without relaxing execution reads', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    try {
+      f.copies.clear();
+      const text = 'Full saved reasoning.\n'.repeat(500);
+      const data = JSON.stringify({
+        parts: [
+          { id: 'first', type: 'reasoning', text, state: 'done' },
+          { id: 'future', type: 'future' },
+          { id: 'later', type: 'reasoning', text: 'A separate phase.', state: 'done' },
+        ],
+      });
+      f.raw
+        .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+        .run(data, turn.assistantMessageId);
+
+      for (const [partId, expected] of [
+        ['first', text],
+        ['later', 'A separate phase.'],
+      ] as const) {
+        await expect(
+          f.host.readReasoning({
+            sessionId: f.sessionId,
+            messageId: turn.assistantMessageId,
+            partId,
+          }),
+        ).resolves.toEqual({ text: expected, state: 'done' });
+      }
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'future',
+        }),
+      ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+      await expect(f.store.getMessage(f.sessionId, turn.assistantMessageId)).rejects.toThrow();
+      expect(
+        f.raw
+          .prepare('SELECT data FROM agent_session_message WHERE id = ?')
+          .get(turn.assistantMessageId),
+      ).toEqual({ data });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('reads a full saved reasoning phase without including the next phase or answer', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    const text = 'Earlier reasoning.\n'.repeat(500);
+    turn.parts = [
+      { id: 'first', type: 'reasoning', text, state: 'done' },
+      { id: 'summary', type: 'reasoning', text: 'A continuation.', state: 'done' },
+      { id: 'answer', type: 'text', text: 'Answer', state: 'done' },
+      { id: 'later', type: 'reasoning', text: 'Another phase.', state: 'done' },
+    ];
+    await f.host.initialize();
+    try {
+      f.copies.clear();
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'first',
+        }),
+      ).resolves.toEqual({ text: `${text}\n\nA continuation.`, state: 'done' });
+      for (const { messageId, partId } of [
+        { messageId: turn.userMessageId, partId: 'question' },
+        { messageId: turn.assistantMessageId, partId: 'answer' },
+      ])
+        await expect(
+          f.host.readReasoning({ sessionId: f.sessionId, messageId, partId }),
+        ).rejects.toMatchObject({
+          view: { code: 'MESSAGE_NOT_FOUND' },
+        });
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('reads full live reasoning without expanding the normal observation payload', async () => {
+    const f = fixture();
+    const turn = await f.reserve('running');
+    const text = 'Full live thinking.\n'.repeat(500);
+    turn.parts = [{ id: 'phase', type: 'reasoning', text, state: 'streaming' }];
+    const read = jest.spyOn(f.conversations, 'message');
+    await f.host.initialize();
+    const observation = await f.host.observeSession(f.sessionId, () => {});
+    try {
+      expect(observation.snapshot.streamingMessage?.parts[0]).toMatchObject({
+        text: '',
+        hasText: true,
+      });
+      await expect(
+        f.host.readReasoning({
+          sessionId: f.sessionId,
+          messageId: turn.assistantMessageId,
+          partId: 'phase',
+        }),
+      ).resolves.toEqual({ text, state: 'streaming' });
+      expect(read).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: f.sessionId }),
+        turn.assistantMessageId,
+        { fullReasoning: true },
+      );
+      expect(observation.snapshot.streamingMessage?.parts[0]).toMatchObject({
+        text: '',
+        hasText: true,
+      });
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
   test('editing a completed answer invalidates an uneditable copy and publishes only committed text', async () => {
     const f = fixture();
     const turn = await f.reserve();
@@ -2486,10 +2604,18 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     state.emit({ ...running, status: 'completed' });
     await state.host.quiesce();
     expect(await Promise.all(statuses)).toEqual(['success']);
+    expect(
+      (await state.store.getMessage(state.sessionId, running.assistantMessageId))?.parts,
+    ).toEqual(running.parts);
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'message.finalized',
-        message: expect.objectContaining({ parts: running.parts }),
+        message: expect.objectContaining({
+          parts: [
+            { id: 'reasoning', type: 'reasoning', text: '', hasText: true, state: 'done' },
+            { id: 'answer', type: 'text', text: 'Answer', state: 'done' },
+          ],
+        }),
       }),
     );
     expect(
@@ -2541,6 +2667,99 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ),
     ).toHaveLength(1);
     await state.host.close();
+  });
+
+  test('a new fork names itself from its first accepted input and leading answer only once', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({ naming: () => naming });
+    const source = await state.reserve();
+    await state.host.initialize();
+    try {
+      const fork = await state.host.forkSession({
+        sessionId: state.sessionId,
+        fromMessageId: source.assistantMessageId,
+        name: 'Branch - Original',
+      });
+      const send = (text: string) =>
+        state.host.submitMessage({
+          sessionId: fork.id,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text }],
+        });
+      const finish = async (assistantMessageId: string) => {
+        const turn = [...state.copies.values()]
+          .flatMap(({ turns }) => turns)
+          .find((candidate) => candidate.assistantMessageId === assistantMessageId)!;
+        state.emit({
+          ...turn,
+          status: 'completed',
+          answerBoundary: 'pi:done',
+          updatedAt: turn.updatedAt + 1,
+          parts: [{ id: 'answer', type: 'text', text: 'Branch answer', state: 'done' }],
+        });
+        await settle();
+      };
+      jest
+        .spyOn(state.store, 'reserveSubmission')
+        .mockRejectedValueOnce(new Error('write rejected'));
+      await expect(send('Rejected input')).rejects.toBeDefined();
+      expect(naming.maybeRenameFromFirstUserMessage).not.toHaveBeenCalled();
+      const first = await send('First branch question');
+      expect(naming.maybeRenameFromFirstUserMessage).toHaveBeenCalledWith(
+        fork.id,
+        expect.arrayContaining([expect.objectContaining({ text: 'First branch question' })]),
+        true,
+      );
+      await finish(first.assistantMessageId);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: fork.id,
+          userParts: expect.arrayContaining([
+            expect.objectContaining({ text: 'First branch question' }),
+          ]),
+        }),
+      );
+      const next = await send('Follow-up');
+      await finish(next.assistantMessageId);
+      expect(naming.maybeRenameFromFirstUserMessage).toHaveBeenCalledTimes(1);
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('manually renaming a new fork cancels its first-input naming trigger', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({ naming: () => naming });
+    const source = await state.reserve();
+    await state.host.initialize();
+    try {
+      const fork = await state.host.forkSession({
+        sessionId: state.sessionId,
+        fromMessageId: source.assistantMessageId,
+      });
+      await state.host.renameSession({ sessionId: fork.id, name: 'My branch' });
+      await state.host.submitMessage({
+        sessionId: fork.id,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'New question' }],
+      });
+      expect((await state.store.getSession(fork.id))?.name).toBe('My branch');
+      expect(naming.maybeRenameFromFirstUserMessage).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
   });
 
   test('deleting a source physically removes its rows while an independent fork remains readable', async () => {
@@ -2721,6 +2940,22 @@ describe('quoted requests through durable execution', () => {
           userMessageId: uuid(),
           assistantMessageId: uuid(),
           parts: [{ type: 'text', text: 'foreign', ...fields }],
+        }),
+      ).rejects.toThrow();
+      expect(jest.mocked(state.conversations.submit)).toHaveBeenCalledTimes(2);
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [
+            {
+              type: 'text',
+              text: 'A valid first source must not hide a foreign second source',
+              ...quoted,
+              quotes: [...quoted.quotes, { ...fields.quotes[0], id: 'foreign-second' }],
+            },
+          ],
         }),
       ).rejects.toThrow();
       expect(jest.mocked(state.conversations.submit)).toHaveBeenCalledTimes(2);

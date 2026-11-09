@@ -8,6 +8,9 @@ history, message rows and parts, viewport following, and scroll restoration.
 
 - `MessageList` renders a virtualized history from `MessageListItem` values and delegates
   every row to the feature-owned `renderMessage` function.
+- `useMessageListDisclosureToggle` leaves live-edge following before a reader changes inline
+  content, including switching answers. Call it before the content-changing action; the list
+  retains ownership of reading position and scroll compensation.
 - `MessageListItem` contains only the persistence-neutral fields needed for rendering. Its optional
   `stats.runtimeTiming` carries message-owned execution timing; `partKeys` carries source-owned part
   identity beside the projected visual parts; `systemEvent` carries a feature-synthesized timeline
@@ -95,7 +98,7 @@ instead of creating feature-owned rows or sheets:
 | --- | --- | --- |
 | Summary | `MessagePart.Summary` | Renders the title, status text, tone, running shimmer, and disclosure chevron. |
 | Interaction | `MessagePart.Tool` | Owns local open/close state and connects the summary press to its detail. Business renderers do not lift this transient state. |
-| Process | `MessagePart.Process` | After streaming settles, renders one neutral total-duration disclosure before the answer. Defaults closed unless the reader already opened a tool group. |
+| Process | `MessagePart.Process` | After streaming settles, renders one neutral total-duration disclosure before the answer. Successful replies follow the process auto-collapse preference; interrupted replies retain the existing tool-group expansion rule. |
 | Grouping | `MessagePart.ToolGroup` | Owns the group summary row and inline step container. Defaults closed during both streaming and completion; the message retains manual group state across completion and outer folding. |
 | Detail shell | `MessagePart.Detail` | Owns the `BottomSheet`, title, dismissal, scrolling, content insets, and spacing. Tool and source details share this shell. |
 | Detail content | The part renderer | Supplies business content through shared sections; source cards and media retain their specialized renderers. |
@@ -137,9 +140,14 @@ markdown renders into, so a reader keeps their place in the transcript. While a 
 its process has no total-duration wrapper. Narration, reasoning, and in-loop compaction markers
 between tool calls share one collapsed tool group; other visible parts separate groups. Reasoning
 without tools retains its existing disclosure. Once the response settles, every
-visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
-row whose label is the message's total wall-clock duration. A manually opened tool group keeps that
-outer process open on completion. Expanding it reveals narration and tool groups in their original order.
+visible transcript part except the final result text moves into one `MessagePart.Process`
+row whose label is the message's total wall-clock duration. The `chat.process.auto_collapse`
+preference defaults to `true`: a successfully completed reply starts with its entire process
+collapsed, including any tool groups the reader opened while it streamed. Turning the preference
+off starts that outer process expanded. Paused and failed replies retain an already opened tool
+group's outer expansion. Later manual toggles are never overwritten by rerenders or preference
+changes. Inner reasoning and tool disclosures keep their existing manual behavior. Expanding the
+outer process reveals narration and tool groups in their original order.
 Messages without timing metadata use a plain process title instead of an invented duration. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
 views must use `MessagePart.Detail`. The source group stays out of layout while the assistant is

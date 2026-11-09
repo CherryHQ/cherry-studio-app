@@ -396,6 +396,7 @@ describe('ProviderService', () => {
  */
 async function createReadService(db: object): Promise<ProviderService> {
   await installTestHost({
+    ProviderCatalogRuntime: { ensureReady: async () => {} },
     CacheService: createCacheService(),
     DbService: { getDb: () => db } as unknown as DbService,
   });

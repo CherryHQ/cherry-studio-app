@@ -30,6 +30,7 @@ export type AgentSqlValue = null | number | bigint | string | Uint8Array;
 export interface AgentSqlExecutor {
   exec(sql: string): Promise<void>;
   run(sql: string, ...params: AgentSqlValue[]): Promise<void>;
+  runCounted(sql: string, ...params: AgentSqlValue[]): Promise<number>;
   get<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T | undefined>;
   all<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]>;
 }
@@ -79,6 +80,10 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
     });
   }
 
+  runCounted(sql: string, ...params: AgentSqlValue[]): Promise<number> {
+    return this.enqueue(async () => (await this.sqlite.runAsync(sql, bindings(params))).changes);
+  }
+
   get<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T | undefined> {
     return this.enqueue(
       async () => (await this.sqlite.getFirstAsync<T>(sql, bindings(params))) ?? undefined,
@@ -104,6 +109,10 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
         run: async (sql, ...params) => {
           assertActive();
           await this.sqlite.runAsync(sql, bindings(params));
+        },
+        runCounted: async (sql, ...params) => {
+          assertActive();
+          return (await this.sqlite.runAsync(sql, bindings(params))).changes;
         },
         get: async <Row extends object>(sql: string, ...params: AgentSqlValue[]) => {
           assertActive();

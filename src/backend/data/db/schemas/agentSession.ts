@@ -53,6 +53,8 @@ export const agentSessionTable = sqliteTable(
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),
     index('agent_session_last_activity_at_idx').on(t.lastActivityAt),
+    // Mobile loads one expanded sibling list at a time in stable creation order.
+    index('agent_session_forked_from_created_id_idx').on(t.forkedFromSessionId, t.createdAt, t.id),
   ],
 );
 

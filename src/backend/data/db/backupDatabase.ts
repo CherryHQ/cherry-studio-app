@@ -1,5 +1,5 @@
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
 import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { BackupError } from '@/shared/contracts/backup';
@@ -19,12 +19,6 @@ const migrationSql = (index: number): string => {
   return sql;
 };
 const sha256 = (value: string) => digestStringAsync(CryptoDigestAlgorithm.SHA256, value);
-
-// Custom SQL triggers are dropped and recreated from the running bundle (by restore
-// normalization and by DbService at startup), so a backup's older bodies never survive.
-const REBUILT_TRIGGERS = customSqlStatements.flatMap(
-  (sql) => /^\s*CREATE TRIGGER\s+(\w+)/i.exec(sql)?.[1] ?? [],
-);
 
 export async function bundledBackupVersion(): Promise<BackupDatabaseVersion> {
   return {
@@ -78,18 +72,6 @@ export function assertNoSidecars(file: File): void {
   }
 }
 
-export async function readBackupSchema(db: SQLiteDatabase): Promise<string> {
-  const rows = await db.getAllAsync<{ type: string; name: string; sql: string }>(
-    `SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL
-     AND name NOT GLOB 'sqlite_*' AND NOT (type = 'table' AND name IN
-       ('agent_session_message_fts_data','agent_session_message_fts_idx','agent_session_message_fts_docsize','agent_session_message_fts_config'))
-     AND NOT (type = 'trigger' AND name IN (${REBUILT_TRIGGERS.map(() => '?').join(',')}))
-     ORDER BY type, name`,
-    REBUILT_TRIGGERS,
-  );
-  return JSON.stringify(rows.map((row) => ({ ...row, sql: row.sql.replace(/\s+/g, ' ').trim() })));
-}
-
 async function applyMigrations(db: SQLiteDatabase, count: number): Promise<void> {
   await db.execAsync(`CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
     id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric
@@ -113,13 +95,9 @@ async function applyMigrations(db: SQLiteDatabase, count: number): Promise<void>
       throw error;
     }
   }
-  for (const sql of customSqlStatements) await db.execAsync(sql);
 }
 
-export async function validateBackupDatabase(
-  file: File,
-  version: BackupDatabaseVersion,
-): Promise<void> {
+async function validateBackupVersion(version: BackupDatabaseVersion): Promise<void> {
   const bundled = await bundledBackupVersion();
   if (
     !version.migrations.length ||
@@ -132,56 +110,157 @@ export async function validateBackupDatabase(
   ) {
     throw new BackupError('incompatible');
   }
-  const referenceDirectory = new Directory(Paths.cache, `backup-schema-${randomUUID()}`);
-  referenceDirectory.create();
+}
+
+async function validateMigrationJournal(
+  db: SQLiteDatabase,
+  version: BackupDatabaseVersion,
+): Promise<void> {
+  const applied = await db.getAllAsync<{ created_at: number; hash: string }>(
+    'SELECT created_at, hash FROM __drizzle_migrations ORDER BY created_at',
+  );
+  if (
+    applied.length !== version.migrations.length ||
+    applied.some(
+      (entry, index) => entry.created_at !== version.migrations[index].when || entry.hash !== '',
+    )
+  )
+    throw new BackupError('incompatible');
+}
+
+async function validateDatabaseContents(db: SQLiteDatabase): Promise<void> {
+  const integrity = await db.getFirstAsync<{ integrity_check: string }>('PRAGMA integrity_check');
+  if (integrity?.integrity_check !== 'ok') throw new BackupError('invalid');
+  const sessionKeys = await db.getAllAsync<{ id: number; from: string }>(
+    'PRAGMA foreign_key_list(agent_session)',
+  );
+  const workspaceKey = sessionKeys.find((key) => key.from === 'workspace_folder_id')?.id;
+  const violations = await db.getAllAsync<{ table: string; fkid: number }>(
+    'PRAGMA foreign_key_check',
+  );
+  if (
+    violations.some(
+      (violation) => violation.table !== 'agent_session' || violation.fkid !== workspaceKey,
+    )
+  )
+    throw new BackupError('invalid');
+  await validateFileLibraryDatabase(db);
+}
+
+/** Check an already normalized database without rewriting the staged file or its hash. */
+export async function validateBackupDatabase(
+  file: File,
+  version: BackupDatabaseVersion,
+): Promise<void> {
+  await validateBackupVersion(version);
+  await withBackupDatabase(file, async (db) => {
+    await db.execAsync('PRAGMA query_only = ON');
+    await validateMigrationJournal(db, version);
+    await validateDatabaseContents(db);
+  });
+}
+
+const quoteIdentifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
+const identifierKey = (name: string) => name.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+
+/** Import data only. The destination's migrations own every table, index and constraint. */
+async function copyBackupRows(db: SQLiteDatabase, source: File): Promise<void> {
+  await db.runAsync(
+    'ATTACH DATABASE ? AS backup_source',
+    decodeURIComponent(new URL(source.uri).pathname),
+  );
   try {
-    const expected = await withBackupDatabase(
-      new File(referenceDirectory, 'schema.db'),
-      async (db) => {
-        await applyMigrations(db, version.migrations.length);
-        return readBackupSchema(db);
-      },
+    const tables = await db.getAllAsync<{ name: string }>(
+      `SELECT name FROM main.sqlite_master WHERE type = 'table'
+       AND name NOT GLOB 'sqlite_*' AND name != '__drizzle_migrations' ORDER BY name`,
     );
-    await withBackupDatabase(file, async (db) => {
-      await db.execAsync('PRAGMA query_only = ON');
-      if ((await readBackupSchema(db)) !== expected)
-        throw new BackupError(
-          'incompatible',
-          'Database structure does not match its migration lineage.',
+    const sourceTables = await db.getAllAsync<{ name: string; type: string }>(
+      'PRAGMA backup_source.table_list',
+    );
+    await db.execAsync('PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE');
+    try {
+      for (const { name } of tables) {
+        if (
+          !sourceTables.some(
+            (table) => table.type === 'table' && identifierKey(table.name) === name,
+          )
+        )
+          throw new BackupError('invalid', `Missing backup table: ${name}.`);
+        const columns = await db.getAllAsync<{
+          name: string;
+          notnull: number;
+          dflt_value: string | null;
+        }>(`PRAGMA main.table_info(${quoteIdentifier(name)})`);
+        const sourceColumns = new Set(
+          (
+            await db.getAllAsync<{ name: string }>(
+              `PRAGMA backup_source.table_info(${quoteIdentifier(name)})`,
+            )
+          ).map((column) => identifierKey(column.name)),
         );
-      const applied = await db.getAllAsync<{ created_at: number; hash: string }>(
-        'SELECT created_at, hash FROM __drizzle_migrations ORDER BY created_at',
-      );
-      if (
-        applied.length !== version.migrations.length ||
-        applied.some(
-          (entry, index) =>
-            entry.created_at !== version.migrations[index].when || entry.hash !== '',
+        if (
+          columns.some(
+            (column) =>
+              !sourceColumns.has(column.name) && column.notnull && column.dflt_value === null,
+          )
         )
-      )
-        throw new BackupError('incompatible');
-      const integrity = await db.getFirstAsync<{ integrity_check: string }>(
-        'PRAGMA integrity_check',
-      );
-      if (integrity?.integrity_check !== 'ok') throw new BackupError('invalid');
-      const sessionKeys = await db.getAllAsync<{ id: number; from: string }>(
-        'PRAGMA foreign_key_list(agent_session)',
-      );
-      const workspaceKey = sessionKeys.find((key) => key.from === 'workspace_folder_id')?.id;
-      const violations = await db.getAllAsync<{ table: string; fkid: number }>(
-        'PRAGMA foreign_key_check',
-      );
-      if (
-        violations.some(
-          (violation) => violation.table !== 'agent_session' || violation.fkid !== workspaceKey,
-        )
-      )
-        throw new BackupError('invalid');
-      await validateFileLibraryDatabase(db);
-      await db.execAsync('PRAGMA query_only = OFF');
-    });
+          throw new BackupError('invalid', `Missing required backup column in ${name}.`);
+        const copiedColumns = columns
+          .filter(
+            (column) =>
+              sourceColumns.has(column.name) &&
+              !(name === 'agent_session_message' && column.name === 'fts_rowid'),
+          )
+          .map((column) => quoteIdentifier(column.name))
+          .join(', ');
+        await db.execAsync(
+          `INSERT INTO main.${quoteIdentifier(name)} (${copiedColumns}) SELECT ${copiedColumns} FROM backup_source.${quoteIdentifier(name)}`,
+        );
+      }
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      if (/constraint failed|datatype mismatch/i.test(String(error)))
+        throw new BackupError(
+          'invalid',
+          'Backup records violate the standard database constraints.',
+        );
+      throw error;
+    }
   } finally {
-    if (referenceDirectory.exists) referenceDirectory.delete();
+    await db.execAsync('DETACH DATABASE backup_source');
+  }
+}
+
+/** Rebuild only the captured/extracted copy; never run source DDL or mutate the live database. */
+export async function normalizeBackupDatabase(
+  file: File,
+  version: BackupDatabaseVersion,
+): Promise<void> {
+  await validateBackupVersion(version);
+  // Keep interrupted normalization inside the operation's existing cleanup boundary.
+  const directory = new Directory(file.parentDirectory, `backup-normalize-${randomUUID()}`);
+  directory.create();
+  try {
+    await withBackupDatabase(file, async (source) => {
+      await validateMigrationJournal(source, version);
+      await withBackupDatabase(new File(directory, 'cherry.db'), async (db) => {
+        await applyMigrations(db, version.migrations.length);
+        await copyBackupRows(db, file);
+        // Search row IDs and FTS tables are derived state, not portable records.
+        await db.execAsync('UPDATE agent_session_message SET fts_rowid = rowid');
+        for (const sql of customSqlStatements) await db.execAsync(sql);
+        await db.execAsync(
+          "INSERT INTO agent_session_message_fts(agent_session_message_fts) VALUES ('rebuild')",
+        );
+        await validateDatabaseContents(db);
+        await backupDatabaseAsync({ sourceDatabase: db, destDatabase: source });
+      });
+      await sealDatabase(source);
+    });
+    assertNoSidecars(file);
+  } finally {
+    if (directory.exists) directory.delete();
   }
 }
 
@@ -199,6 +278,7 @@ export async function prepareRestoredDatabase(
 ): Promise<void> {
   await withBackupDatabase(file, async (db) => {
     await applyMigrations(db, migrations.journal.entries.length);
+    for (const sql of customSqlStatements) await db.execAsync(sql);
     await restoreDeviceState(db, preferences);
     await sealDatabase(db);
   });

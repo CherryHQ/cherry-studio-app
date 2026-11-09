@@ -25,6 +25,7 @@ export const Phase = {
   PostReady: 'postReady',
 } as const;
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare -- Type and value namespaces share the public enum-like name.
 export type Phase = (typeof Phase)[keyof typeof Phase];
 
 /**
@@ -51,6 +52,7 @@ export const LifecycleState = {
   Destroyed: 'destroyed',
 } as const;
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare -- Type and value namespaces share the public enum-like name.
 export type LifecycleState = (typeof LifecycleState)[keyof typeof LifecycleState];
 
 /**

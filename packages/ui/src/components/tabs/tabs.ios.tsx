@@ -4,6 +4,7 @@ import { PlatformColor, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { duration, easing } from '../../motion';
+import { TabsContent } from './tabs-content';
 import type { TabsProps } from './tabs.types';
 
 const tabHeight = 34;
@@ -12,7 +13,11 @@ const supportsGlass = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 type Segment = { width: number; x: number };
 
-export function Tabs<TValue extends string>({
+export function Tabs<TValue extends string>(props: TabsProps<TValue>) {
+  return props.variant ? <TabsContent {...props} /> : <PlatformTabs {...props} />;
+}
+
+function PlatformTabs<TValue extends string>({
   accessibilityLabel,
   items,
   layout = 'fill',

@@ -50,6 +50,8 @@ export function readKnownAiFinishReason(value: unknown): string | undefined {
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   authentication_error: 'auth',
   content_filter: 'content_filter',
+  content_policy_violation: 'content_filter',
+  contentfilter: 'content_filter',
   context_length_exceeded: 'context_length',
   duplicate_tool_call_id: 'tool_failed',
   econnrefused: 'network',
@@ -83,6 +85,24 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   unsupported_tools: 'invalid_input',
 };
 
+// These provider/transport codes fill an unknown cause without replacing the existing
+// status and message policy (for example, TLS or timeout evidence in a no_response error).
+const FALLBACK_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
+  api_error: 'provider_unavailable',
+  billing_not_active: 'quota',
+  freeusagelimiterror: 'quota',
+  gousagelimiterror: 'quota',
+  no_response: 'network',
+  overloaded_error: 'provider_unavailable',
+  permission_error: 'permission',
+  server_error: 'provider_unavailable',
+  stream_disconnected: 'network',
+  stream_idle_timeout: 'timeout',
+  subscription_sharing_usage_limit_exceeded: 'quota',
+  usage_limit_reached: 'quota',
+  usage_not_included: 'quota',
+};
+
 function includesAny(text: string, values: readonly string[]): boolean {
   return values.some((value) => text.includes(value));
 }
@@ -102,7 +122,18 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   const finishReason = facts.finishReason?.trim().toLowerCase();
   if (
     finishReason &&
-    ['content-filter', 'content_filter', 'safety', 'recitation'].includes(finishReason)
+    [
+      'content-filter',
+      'content_filter',
+      'safety',
+      'recitation',
+      'blocklist',
+      'prohibited_content',
+      'spii',
+      'image_safety',
+      'image_prohibited_content',
+      'image_recitation',
+    ].includes(finishReason)
   ) {
     return 'content_filter';
   }
@@ -227,19 +258,6 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   if (
     includesAny(text, [
-      'content_filter',
-      'content_policy',
-      'prohibited_content',
-      'responsible_ai',
-      'output_blocked',
-      'blocked by safety',
-      'recitation',
-    ])
-  ) {
-    return 'content_filter';
-  }
-  if (
-    includesAny(text, [
       'mcp server',
       'mcp connection',
       'mcp error',
@@ -306,5 +324,5 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   ) {
     return 'parse';
   }
-  return 'unknown';
+  return (code && FALLBACK_CODE_REASONS[code]) || 'unknown';
 }

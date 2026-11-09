@@ -18,6 +18,12 @@ export const AgentRenameSessionInputSchema = z.strictObject({
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
+export const AgentReadReasoningInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  partId: z.string().min(1),
+});
+export type AgentReadReasoningInput = z.infer<typeof AgentReadReasoningInputSchema>;
 /**
  * Further models answering the same question in parallel. Each answer is an
  * ordinary assistant message in the same multi-model sibling group.
@@ -94,12 +100,14 @@ export const AgentForkSessionInputSchema = z.strictObject({
 export type AgentForkSessionInput = z.infer<typeof AgentForkSessionInputSchema>;
 /**
  * Deletion is turn-scoped. A transcript replays `tool-call` and `tool-result`
- * as a pair, so removing one message of a turn would leave history no provider
- * accepts; the UI therefore resolves the pressed message to its turn.
+ * as a pair. A selected alternative is removed with its complete descendant
+ * messages; a question with one answer retains the existing turn deletion.
  */
 export const AgentDeleteTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+  /** With alternative answers, remove only this answer and its descendants. */
+  messageId: z.string().min(1).optional(),
 });
 export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
 /** Moves the Session's selected leaf into the branch that contains `messageId`. */

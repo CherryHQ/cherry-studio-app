@@ -40,8 +40,10 @@ import { resetFileTextCacheForRestore } from '@/backend/services/file/fileTextCa
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
+import type { ProviderCatalogRuntime } from '@/backend/services/providers/ProviderCatalogRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
+import type { RegionService } from '@/backend/services/region';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -155,6 +157,8 @@ export function createAppBootstrapRuntime(
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',
   );
+  const providerCatalog = host.container.get<ProviderCatalogRuntime>('ProviderCatalogRuntime');
+  const region = host.container.get<RegionService>('RegionService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const services = createBackendServices({
@@ -171,6 +175,7 @@ export function createAppBootstrapRuntime(
     dataApiDependencies,
     disposeSystemEntry,
     disposeAppUpdate,
+    disposeUuRemote,
     disposeSkills,
     disposeVoice,
     initializeSkills,
@@ -194,6 +199,7 @@ export function createAppBootstrapRuntime(
     diagnostics,
     languageServing,
     providerRegistryUpdater,
+    region,
     trash,
   });
   backup.configure(
@@ -201,6 +207,7 @@ export function createAppBootstrapRuntime(
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      providerCatalog.hasPendingStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
     () => {
@@ -224,6 +231,7 @@ export function createAppBootstrapRuntime(
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
       desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
+      desktopConnectionNameChanged: (id) => desktopConnectionManager.refreshName(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
@@ -262,6 +270,7 @@ export function createAppBootstrapRuntime(
           disposeSkills(),
           disposeVoice(),
           disposeAppUpdate(),
+          disposeUuRemote(),
         ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
@@ -321,8 +330,22 @@ export function createAppBootstrapRuntime(
       }
     },
     runPostReadyTasks: async () => {
+      if (host.state !== 'ready') return;
       // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
+      const results = await Promise.allSettled([
+        region.getCountry(),
+        providerCatalog.ensureReady(),
+      ]);
+      if (host.state === 'ready') {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            loggerService
+              .withContext('AppBootstrap')
+              .warn('Regional discovery initialization failed', result.reason);
+          }
+        }
+      }
     },
   };
 }

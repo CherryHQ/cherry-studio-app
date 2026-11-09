@@ -60,6 +60,115 @@ describe('AgentSessionService persistence', () => {
     });
   });
 
+  test('paginates root families by their latest activity and loads only direct children', async () => {
+    for (const [id, lastActivityAt] of [
+      ['main', 100],
+      ['other', 200],
+      ['fork', 300],
+      ['nested', 400],
+    ] as const)
+      insertSession(sqlite, { id, lastActivityAt, agentId: 'agent-1' });
+    insertSession(sqlite, { id: 'another-agent', lastActivityAt: 500, agentId: 'agent-2' });
+    sqlite
+      .prepare('UPDATE agent_session SET forked_from_session_id = ? WHERE id = ?')
+      .run('main', 'fork');
+    sqlite
+      .prepare('UPDATE agent_session SET forked_from_session_id = ? WHERE id = ?')
+      .run('fork', 'nested');
+
+    const first = await agentSessionService.listByCursor({
+      groupBy: 'root',
+      agentId: 'agent-1',
+      limit: 1,
+    });
+    expect(first.items.map(({ id, hasChildren }) => ({ id, hasChildren }))).toEqual([
+      { id: 'main', hasChildren: true },
+    ]);
+    const next = await agentSessionService.listByCursor({
+      groupBy: 'root',
+      agentId: 'agent-1',
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(next.items.map(({ id }) => id)).toEqual(['other']);
+    expect(next.nextCursor).toBeUndefined();
+
+    const children = await agentSessionService.listByCursor({ parentSessionId: 'main', limit: 1 });
+    expect(
+      children.items.map(({ id, hasChildren, forkedFromSessionId }) => ({
+        id,
+        hasChildren,
+        forkedFromSessionId,
+      })),
+    ).toEqual([{ id: 'fork', hasChildren: true, forkedFromSessionId: 'main' }]);
+    expect(children.nextCursor).toBeUndefined();
+    const grandchildren = await agentSessionService.listByCursor({ parentSessionId: 'fork' });
+    expect(grandchildren.items.map(({ id, hasChildren }) => ({ id, hasChildren }))).toEqual([
+      { id: 'nested', hasChildren: false },
+    ]);
+    expect((await agentSessionService.listByCursor()).items).toHaveLength(5);
+  });
+
+  test('keeps sibling pagination stable when replies change activity ordering', async () => {
+    insertSession(sqlite, { agentId: 'agent-1', id: 'root', lastActivityAt: 1 });
+    for (const id of ['child-a', 'child-b', 'child-c']) {
+      insertSession(sqlite, { agentId: 'agent-1', id, lastActivityAt: 2 });
+      sqlite
+        .prepare('UPDATE agent_session SET forked_from_session_id = ? WHERE id = ?')
+        .run('root', id);
+    }
+    const first = await agentSessionService.listByCursor({ parentSessionId: 'root', limit: 1 });
+    expect(first.items.map(({ id }) => id)).toEqual(['child-a']);
+    sqlite.prepare('UPDATE agent_session SET last_activity_at = 999 WHERE id = ?').run('child-a');
+    const second = await agentSessionService.listByCursor({
+      parentSessionId: 'root',
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(second.items.map(({ id }) => id)).toEqual(['child-b']);
+    const third = await agentSessionService.listByCursor({
+      parentSessionId: 'root',
+      limit: 1,
+      cursor: second.nextCursor,
+    });
+    expect(third.items.map(({ id }) => id)).toEqual(['child-c']);
+    expect(third.nextCursor).toBeUndefined();
+  });
+
+  test('reads the complete selected path in root-first order and handles a deleted origin', async () => {
+    for (const [id, parent] of [
+      ['root', null],
+      ['child', 'root'],
+      ['leaf', 'child'],
+    ] as const) {
+      insertSession(sqlite, { agentId: 'agent-1', id, lastActivityAt: 1 });
+      if (parent)
+        sqlite
+          .prepare('UPDATE agent_session SET forked_from_session_id = ? WHERE id = ?')
+          .run(parent, id);
+    }
+    expect(
+      (await agentSessionService.getPath('leaf')).map(
+        ({ id, hasChildren, forkedFromSessionId }) => ({ id, hasChildren, forkedFromSessionId }),
+      ),
+    ).toEqual([
+      { id: 'root', hasChildren: true, forkedFromSessionId: null },
+      { id: 'child', hasChildren: true, forkedFromSessionId: 'root' },
+      { id: 'leaf', hasChildren: false, forkedFromSessionId: 'child' },
+    ]);
+    sqlite.prepare('DELETE FROM agent_session WHERE id = ?').run('root');
+    expect((await agentSessionService.getPath('leaf')).map(({ id }) => id)).toEqual([
+      'child',
+      'leaf',
+    ]);
+    expect(
+      (await agentSessionService.listByCursor({ groupBy: 'root' })).items.map(({ id }) => id),
+    ).toEqual(['child']);
+    await expect(agentSessionService.getPath('missing')).rejects.toMatchObject({
+      details: { id: 'missing', resource: 'AgentSession' },
+    });
+  });
+
   test('searches titles across agents with literal wildcards and cursor pagination', async () => {
     insertSession(sqlite, { agentId: 'agent-1', id: '计划 100%_a', lastActivityAt: 100 });
     insertSession(sqlite, { agentId: 'agent-2', id: '计划 100%_b', lastActivityAt: 200 });

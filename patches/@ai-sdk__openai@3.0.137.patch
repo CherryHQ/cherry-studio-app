@@ -1,0 +1,156 @@
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2077,7 +2077,8 @@
+       created: import_v48.z.number().nullish(),
+       data: import_v48.z.array(
+         import_v48.z.object({
+-          b64_json: import_v48.z.string(),
++          b64_json: import_v48.z.string().nullish(),
++          url: import_v48.z.string().nullish(),
+           revised_prompt: import_v48.z.string().nullish()
+         })
+       ),
+@@ -2315,7 +2316,11 @@
+         fetch: this.config.fetch
+       });
+       return {
+-        images: response2.data.map((item) => item.b64_json),
++        images: response2.data.flatMap((item) => {
++          if (typeof item.b64_json === "string") return [item.b64_json];
++          if (typeof item.url === "string") return [item.url];
++          return [];
++        }),
+         warnings,
+         usage: response2.usage != null ? {
+           inputTokens: (_e = response2.usage.input_tokens) != null ? _e : void 0,
+@@ -2386,7 +2391,11 @@
+       fetch: this.config.fetch
+     });
+     return {
+-      images: response.data.map((item) => item.b64_json),
++      images: response.data.flatMap((item) => {
++        if (typeof item.b64_json === "string") return [item.b64_json];
++        if (typeof item.url === "string") return [item.url];
++        return [];
++      }),
+       warnings,
+       usage: response.usage != null ? {
+         inputTokens: (_i = response.usage.input_tokens) != null ? _i : void 0,
+diff --git a/dist/index.mjs b/dist/index.mjs
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -2119,7 +2119,8 @@
+       created: z8.number().nullish(),
+       data: z8.array(
+         z8.object({
+-          b64_json: z8.string(),
++          b64_json: z8.string().nullish(),
++          url: z8.string().nullish(),
+           revised_prompt: z8.string().nullish()
+         })
+       ),
+@@ -2360,7 +2361,11 @@
+         fetch: this.config.fetch
+       });
+       return {
+-        images: response2.data.map((item) => item.b64_json),
++        images: response2.data.flatMap((item) => {
++          if (typeof item.b64_json === "string") return [item.b64_json];
++          if (typeof item.url === "string") return [item.url];
++          return [];
++        }),
+         warnings,
+         usage: response2.usage != null ? {
+           inputTokens: (_e = response2.usage.input_tokens) != null ? _e : void 0,
+@@ -2431,7 +2436,11 @@
+       fetch: this.config.fetch
+     });
+     return {
+-      images: response.data.map((item) => item.b64_json),
++      images: response.data.flatMap((item) => {
++        if (typeof item.b64_json === "string") return [item.b64_json];
++        if (typeof item.url === "string") return [item.url];
++        return [];
++      }),
+       warnings,
+       usage: response.usage != null ? {
+         inputTokens: (_i = response.usage.input_tokens) != null ? _i : void 0,
+diff --git a/dist/internal/index.js b/dist/internal/index.js
+--- a/dist/internal/index.js
++++ b/dist/internal/index.js
+@@ -2117,7 +2117,8 @@
+       created: import_v48.z.number().nullish(),
+       data: import_v48.z.array(
+         import_v48.z.object({
+-          b64_json: import_v48.z.string(),
++          b64_json: import_v48.z.string().nullish(),
++          url: import_v48.z.string().nullish(),
+           revised_prompt: import_v48.z.string().nullish()
+         })
+       ),
+@@ -2355,7 +2356,11 @@
+         fetch: this.config.fetch
+       });
+       return {
+-        images: response2.data.map((item) => item.b64_json),
++        images: response2.data.flatMap((item) => {
++          if (typeof item.b64_json === "string") return [item.b64_json];
++          if (typeof item.url === "string") return [item.url];
++          return [];
++        }),
+         warnings,
+         usage: response2.usage != null ? {
+           inputTokens: (_e = response2.usage.input_tokens) != null ? _e : void 0,
+@@ -2426,7 +2431,11 @@
+       fetch: this.config.fetch
+     });
+     return {
+-      images: response.data.map((item) => item.b64_json),
++      images: response.data.flatMap((item) => {
++        if (typeof item.b64_json === "string") return [item.b64_json];
++        if (typeof item.url === "string") return [item.url];
++        return [];
++      }),
+       warnings,
+       usage: response.usage != null ? {
+         inputTokens: (_i = response.usage.input_tokens) != null ? _i : void 0,
+diff --git a/dist/internal/index.mjs b/dist/internal/index.mjs
+--- a/dist/internal/index.mjs
++++ b/dist/internal/index.mjs
+@@ -2111,7 +2111,8 @@
+       created: z8.number().nullish(),
+       data: z8.array(
+         z8.object({
+-          b64_json: z8.string(),
++          b64_json: z8.string().nullish(),
++          url: z8.string().nullish(),
+           revised_prompt: z8.string().nullish()
+         })
+       ),
+@@ -2352,7 +2353,11 @@
+         fetch: this.config.fetch
+       });
+       return {
+-        images: response2.data.map((item) => item.b64_json),
++        images: response2.data.flatMap((item) => {
++          if (typeof item.b64_json === "string") return [item.b64_json];
++          if (typeof item.url === "string") return [item.url];
++          return [];
++        }),
+         warnings,
+         usage: response2.usage != null ? {
+           inputTokens: (_e = response2.usage.input_tokens) != null ? _e : void 0,
+@@ -2423,7 +2428,11 @@
+       fetch: this.config.fetch
+     });
+     return {
+-      images: response.data.map((item) => item.b64_json),
++      images: response.data.flatMap((item) => {
++        if (typeof item.b64_json === "string") return [item.b64_json];
++        if (typeof item.url === "string") return [item.url];
++        return [];
++      }),
+       warnings,
+       usage: response.usage != null ? {
+         inputTokens: (_i = response.usage.input_tokens) != null ? _i : void 0,

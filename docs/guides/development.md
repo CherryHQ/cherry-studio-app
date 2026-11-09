@@ -43,7 +43,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 65
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 86
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -54,16 +54,22 @@ block leaves when upstream ships an equivalent.
 | Android input null and long-press guards | Bug fix | #973, #1015 | 1.1.1 guards only `Editor.performLongClick`; touch and drag paths are not upstream | Upstream guards the same Sentry crashes |
 | Android input height invalidation and scroll clamp | Bug fix | #1028 | Not upstream | Upstream re-measures after insertion |
 | Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |
+| Android simple line breaking for live input and height measurement | Bug fix | Google Play 0.5.3 (204) input ANR | 1.1.1 forces high-quality paragraph optimization | Upstream uses simple line breaking in both input and measurement |
 | iOS input measurement without main-thread waits | Bug fix | Duo startup and display-transition deadlock | [#582](https://github.com/software-mansion/enriched-markdown/pull/582) leaves input measurement unresolved | Upstream input layout consumes immutable text without waiting for the main thread |
 | Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
+| Signed YAML scanner failure status after grammar restoration | Bug fix | #1586 | Tree-sitter YAML 0.7.1 returns `-1` through plain `char` | Upstream preserves signed failure statuses on unsigned-char targets |
 | Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
+| Input link-label bracket and backslash escaping in both native serializers | Bug fix | Inline message quotes | Not fixed in 1.1.1 | Upstream emits escaped Markdown link labels without changing literal prose |
 | iOS nested display math fitted to the column | Bug fix | #1484 | Not fixed in 1.1.1 | Upstream fits nested display math |
 | Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
 | Android display math retained during R8 shrinking | Bug fix | [Upstream #1042](https://github.com/software-mansion/enriched-markdown/issues/1042) | Backports [#1101](https://github.com/software-mansion/enriched-markdown/pull/1101); 1.1.1 still keeps the old class package | Upstream ships the `segments.MathContainerView` keep rule |
 | iOS asynchronous clipboard paste keeping Markdown | Bug fix | #1467, #1476 | Not fixed in 1.1.1 | Upstream reads the clipboard asynchronously |
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
 | iOS code text drawn only around the visible window | Bug fix | #1530 | Not fixed in 1.1.1; a full-size backing store leaves a code block of a few thousand lines blank | Upstream draws long code blocks without a full-size backing store |
+| Native soft-keyboard submit and Send label (TS/JS, generated props/events, iOS and Android) | Product feature | #1573, #1591 | Not upstream | Upstream supplies a submit event that preserves IME composition and explicit newlines |
+| Native input custom edit actions at the caret and selection | Product feature | #1573, #1591 | 1.1.1 limits custom actions to nonempty selections | Upstream exposes custom actions in both insertion and selection menus |
 | Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
+| Input link presses with local text-range bounds (native recognizers, emitters, JS and codegen declarations) | Product feature | Inline message quotes | Not upstream in 1.1.1 | Upstream exposes input link taps and their bounds |
 | Code block 192 pt viewport, header and divider (gesture arbitration part is a fix) | Product customization | #606 | Not upstream | Never, unless the design changes |
 | Standalone code block external controls (style, generated props, layout/cache, menus and accessibility) | Product customization | CherryUI `CodeBlock` | Not upstream | Upstream supports caller-owned code-block controls without changing scrolling |
 | Table scrollbar that does not fade | Product customization | #606 | Not upstream | Never, unless the design changes |
@@ -71,6 +77,24 @@ block leaves when upstream ships an equivalent.
 
 `scripts/__tests__/enrichedMarkdown*.test.ts` and `patchReapplication.test.ts` guard the installed
 source text, not behavior.
+
+Android live input and its height measurement use the same simple line-breaking strategy, matching
+the platform's editing default. This avoids whole-paragraph line-break optimization on each edit.
+The input measurement guard protects patch delivery; a new Android client still needs acceptance
+with long drafts, paste, IME composition, and width changes.
+
+`enrichedMarkdownInputLinkPress.test.ts` guards both published editor entry points and the native
+link-press event delivery. Quote taps use platform tap recognition and retain ordinary text editing.
+The app converts local editor text bounds into window coordinates for an anchored text popover;
+sent-message references use the native press position because nested `Text` has no layout box.
+Android input links use a native selection path clipped to the tapped line so soft-wrap boundaries
+do not borrow the next line's caret position when calculating hit bounds.
+The native serializers escape brackets and backslashes only inside link labels, preserving quote
+snapshots containing those characters. `enrichedMarkdownAtomicLinks.test.ts` guards patch delivery;
+the quote parser regression uses the native serialized format directly.
+This patch requires a new development client. Device acceptance must cover taps at both ends of
+short and wrapped quotes, keyboard open/closed, scrolling and cancelled taps, long-press selection,
+atomic deletion, undo, and draft restoration on iOS and Android.
 
 The iOS input publishes immutable text and layout attributes in Fabric state. Its layout node
 measures the snapshot at the current width without calling the live view; before the first native
@@ -118,7 +142,7 @@ acceptance still owns native arbitration. `gestureHandlerPressablePatch.test.ts`
 
 ### Android Offline Model Storage Patch
 
-`patches/expo-modules-core@58.0.26.patch` includes `noBackupFilesDir` in Expo's canonical internal
+`patches/expo-modules-core@58.0.29.patch` includes `noBackupFilesDir` in Expo's canonical internal
 storage roots. The offline voice model lives there to survive cache eviction without entering OS
 backups. Upstream only recognizes `filesDir` and `cacheDir`; other paths fall back to `canRead()` /
 `canWrite()` on the target itself. A new model directory or file therefore fails permission checks
@@ -129,6 +153,19 @@ upstream includes this private storage root. `expoFilePermissions.test.ts` guard
 source and patch hash in PR CI; `patchReapplication.test.ts` guards repeat installation. These
 checks do not establish device behavior. Delivering this fix requires a new Android package;
 acceptance must cover first download, cancellation, retry, deletion and download after deletion.
+
+### Android Fetch Request Body Patch
+
+`patches/expo@58.0.22.patch` writes byte-array request bodies through an Okio source, emitting
+segments as they fill. OkHttp's byte-array body writes the whole payload into its buffered sink
+before emitting, temporarily allocating another body-sized buffer. Google Play build 204 reported
+an out-of-memory crash on that exact request-body write path.
+
+The patch preserves body bytes, content type, content length, replayability, and null/empty-body
+semantics. Its `NativeRequestTest` regression checks buffering bounds, bytes, metadata, and a second
+write of the same body. Remove it when Expo streams byte-array request bodies without a full extra
+buffer. Delivery requires a new Android client; native tests and large-body upload, cancellation,
+and retry acceptance remain required before release.
 
 ### Pi Dependency Upgrades
 

@@ -49,27 +49,30 @@ Current producers are:
 
 Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
 `error.category`, the product `AiFailureReason` that `classifyAiFailureReason` derives from the
-structured code and status alone. Messages are not used to guess a category. Provider codes the
-product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
-`piModelDiagnostics.ts`. A 4xx status without a product reason is `unknown`; `http.status_code`
-keeps the status. Final `ai.turn_state` failures also retain `error.product_reason` from the existing
-product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper,
-and available source name/origin/status. The product reason may have been inferred from the
-caller-visible message; it is distinct from the request's structured-only `error.category`.
-Only the closed reason is copied, never the message or response body.
+normalized provider facts. Safety requires an explicit source code or exact safety finish reason;
+other categories retain their existing status and message rules. Provider/transport code fallbacks
+(for example `usage_limit_reached` or `overloaded_error`) belong to that shared classifier, after
+more specific status/message evidence.
+`piModelError.ts` adapts terminal provider facts, including the raw provider finish reason, for both
+turn projection and generation diagnostics. The Host packages those facts with `createAiFailure`;
+diagnostics apply the same shared classification without supplying a product override to the Host.
+Pre-stream failures expose only structured facts, so their category may differ from a later product
+snapshot with more evidence. A 4xx status without a product reason is `unknown`; `http.status_code`
+keeps the status. Final `ai.turn_state` failures retain `error.product_reason` from the product
+failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper, and available
+source name/origin/status. Only the closed reason is copied, never the message or response body.
 `gen_ai.response.finish_reason` retains Pi's normalized outcome;
 `gen_ai.response.raw_finish_reason` on `pi.generate_content` retains a known provider enum such as
 `SAFETY` or `MALFORMED_FUNCTION_CALL`. The producer and archive exporter use the same closed
-allowlist. These facts support diagnostic analysis without changing error classification or Pi's
-automatic retry decision. Product failure context continues to use Pi's normalized `finishReason`.
+allowlist. These diagnostic fields do not override the shared error classifier or Pi's automatic
+retry decision.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
-`stream_disconnected`; both are network failures, and `no_response` also covers native timeouts
-and TLS errors because the rejection carries no cause. Gemini and host-authenticated Vertex use
-the same injected transport as the other supported adapters. Terminal model failures record Pi's
-retry classification of the error as `error.retryable`, qualified by `error.retry_scope: automatic`;
-whether a retry happened
+`stream_disconnected`; both fall back to network failures. More specific message evidence can
+identify a timeout, TLS failure, or interrupted stream. Gemini and host-authenticated Vertex use
+the same injected transport as the other supported adapters. Terminal model failures record Pi's retry classification of the
+error as `error.retryable`, qualified by `error.retry_scope: automatic`; whether a retry happened
 also depends on the retry budget and context
 overflow handling. Cancellation remains a cancelled outcome. Correlate existing retry attempt logs
 with model requests and the final `ai.turn_state` to distinguish a failed attempt from a turn that

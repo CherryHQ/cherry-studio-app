@@ -9,6 +9,8 @@ import {
   AgentInputPartSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
+  AgentReadReasoningInputSchema,
+  AgentReasoningDetailSchema,
   AgentMessageDeltaSchema,
   AgentSessionSnapshotSchema,
   AgentSessionStatusSchema,
@@ -23,6 +25,25 @@ import {
 } from '../agent';
 
 const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search' } as const;
+
+test('status-only reasoning retains its full-text availability through serialization', () => {
+  const status = { id: 'phase', type: 'reasoning', text: '', hasText: true, state: 'done' };
+  expect(AgentMessagePartSchema.parse(roundTrip(status))).toEqual(status);
+  expect(AgentMessagePartSchema.safeParse({ ...status, hasText: 'yes' }).success).toBe(false);
+});
+
+test('reasoning detail reads round-trip full text and accept only source identifiers', () => {
+  const input = { sessionId: 'session', messageId: 'answer', partId: 'phase' };
+  expect(AgentReadReasoningInputSchema.parse(roundTrip(input))).toEqual(input);
+  for (const invalid of [
+    { ...input, partId: '' },
+    { ...input, text: 'Client supplied text' },
+  ])
+    expect(AgentReadReasoningInputSchema.safeParse(invalid).success).toBe(false);
+  const detail = { text: 'Complete thinking text.\n'.repeat(1000), state: 'streaming' };
+  expect(AgentReasoningDetailSchema.parse(roundTrip(detail))).toEqual(detail);
+  expect(AgentReasoningDetailSchema.safeParse({ ...detail, state: 'pending' }).success).toBe(false);
+});
 
 test('transient context and runtime events round-trip without diagnostic payloads', () => {
   for (const event of [
@@ -791,7 +812,6 @@ describe('local message quotes', () => {
   });
   test.each([
     { ...carrier, quotes: [] },
-    { ...carrier, quotes: [quote, quote] },
     { ...carrier, quotes: [{ ...quote, id: '' }] },
     { ...carrier, quotes: [{ ...quote, sourceMessageId: 'not-a-uuid' }] },
     { ...carrier, quotes: [{ ...quote, text: ' \n ' }] },
@@ -800,6 +820,36 @@ describe('local message quotes', () => {
     { ...carrier, type: 'reasoning', id: 'r', state: 'done' },
   ])('rejects malformed or orphaned quote fields %#', (part) => {
     expect(AgentInputPartSchema.safeParse(part).success).toBe(false);
+  });
+  test('accepts multiple inline quotes and rejects mismatched or overlapping ranges', () => {
+    const text = '“First” answer\n“Second” follow-up';
+    const quotes = [
+      { ...quote, reference: { label: '“First”', offset: 0 } },
+      {
+        ...quote,
+        id: 'second',
+        reference: { label: '“Second”', offset: text.indexOf('“Second”') },
+      },
+    ];
+    expect(AgentInputPartSchema.parse({ ...carrier, text, quotes })).toMatchObject({ quotes });
+    expect(
+      AgentInputPartSchema.safeParse({
+        ...carrier,
+        text,
+        quotes: [quotes[0], { ...quotes[1], reference: { label: '“First”', offset: 0 } }],
+      }).success,
+    ).toBe(false);
+    expect(AgentInputPartSchema.safeParse({ ...carrier, text: 'Wrong text', quotes }).success).toBe(
+      false,
+    );
+    expect(
+      AgentInputPartSchema.safeParse({
+        ...carrier,
+        text: '“MCP”',
+        quotes: [{ ...quote, reference: { label: '“MCP”', offset: 0 } }],
+        pluginReferences: [{ type: 'plugin', pluginId: 'mcp', label: 'MCP', offset: 1 }],
+      }).success,
+    ).toBe(false);
   });
   test('checks the entire input, first carrier and attachment-only sendability', () => {
     expect(AgentSubmitMessageInputSchema.safeParse(submit([carrier, carrier])).success).toBe(false);

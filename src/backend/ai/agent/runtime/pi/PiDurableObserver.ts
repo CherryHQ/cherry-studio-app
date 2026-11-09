@@ -1,17 +1,16 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import { CompactionEntry, GenerationTask } from '@earendil-works/pi-durable';
+import { CompactionEntry } from '@earendil-works/pi-durable';
 import type {
-  AgentEvent,
-  AgentEventStream,
+  ConversationView,
+  EntryId,
   EntryRecord,
+  InboxState,
   JsonObject,
-  MessageChange,
-  SnapshotEvent,
+  LiveState,
   SubmissionId,
   SubmissionRecord,
-  TaskGraph,
-  TaskGraphWatch,
+  WatchHandle,
 } from '@earendil-works/pi-durable';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -23,32 +22,38 @@ import {
   type RuntimeLane,
 } from '../durableTypes';
 import type { RuntimeToolProgress } from '../types';
-import { projectPiTurn } from './piDurableProjection';
+import { projectPiTurn, readPiSubmission } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
 import { hasResponseContent } from './piStreamEvents';
 
-type InputView = { record: SubmissionRecord; metadata: JsonObject | undefined };
+type InputView = {
+  record: SubmissionRecord;
+  metadata: JsonObject | undefined;
+  terminalEntries?: readonly EntryRecord[];
+};
 const logger = loggerService.withContext('PiDurableObserver');
 
-/** A disposable presentation mount. Stopping it releases observation and preserves execution. */
+/** A disposable presentation mount. Cherry owns settled history; Pi supplies current execution. */
 export class PiDurableObserver {
-  private stream: AgentEventStream | undefined;
-  private workWatch: TaskGraphWatch | undefined;
-  private tasks: TaskGraph = { tasks: {} };
+  private stream: WatchHandle<ConversationView> | undefined;
+  private unsubscribeSubmissions: (() => void) | undefined;
+  private view: ConversationView | undefined;
+  private processing: Promise<void> = Promise.resolve();
+  private ready = false;
+  private stopped = false;
+  private readonly pendingSubmissions = new Map<SubmissionId, SubmissionRecord>();
   private readonly inputs = new Map<SubmissionId, InputView>();
-  private readonly entries = new Map<number, EntryRecord>();
+  private readonly entries = new Map<EntryId, EntryRecord>();
+  /** Terminal IDs for this mount; a delayed view may still name an already settled input. */
+  private readonly settled = new Set<SubmissionId>();
+  private newest: EntryId | undefined;
+  private live: Readonly<LiveState> = {};
+  private retrying = false;
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
   private readonly nestedTools = new Map<
     string,
     { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
   >();
-  private run: readonly SubmissionId[] = [];
-  private partial: AssistantMessage | undefined;
-  private generationAttempt = 0;
-  /** A provider attempt failed and Pi retries it; cleared once the next attempt produces output. */
-  private retrying = false;
-  private readonly compactions = new Map<number, boolean>();
-  private compactionFailed = false;
 
   constructor(
     private readonly runtime: PiDurableRuntime,
@@ -57,25 +62,32 @@ export class PiDurableObserver {
   ) {}
 
   async start(): Promise<RuntimeConversationSnapshot> {
-    if (this.stream) throw new Error('The Pi observer is already attached.');
-    const stream = await this.runtime.watch(laneKey(this.lane));
-    this.stream = stream;
+    if (this.unsubscribeSubmissions) throw new Error('The Pi observer is already attached.');
+    this.stopped = false;
+    // Subscribe first: a whole run, or a queued withdrawal, can happen between view frames.
+    this.unsubscribeSubmissions = await this.runtime.observeSubmissions(
+      laneKey(this.lane),
+      (records) => {
+        for (const record of records)
+          if (record.type === 'input') this.pendingSubmissions.set(record.id, record);
+        if (this.ready && this.pendingSubmissions.size) this.flushSubmissions();
+      },
+    );
     try {
-      const workWatch = await this.runtime.watchWork();
-      this.workWatch = workWatch;
-      this.tasks = workWatch.value;
-      await this.loadSnapshot(stream.snapshot);
+      const stream = await this.runtime.watch(laneKey(this.lane));
+      this.stream = stream;
+      await this.advance(stream.value, true);
       const snapshot = this.snapshot();
-      stream.start(async (events) => this.advance(events));
-      workWatch.start(async (tasks) => {
-        const previous = this.tasks;
-        this.tasks = tasks;
-        for (const id of this.run) {
-          const input = this.inputs.get(id);
-          if (input && this.isPaused(input, previous) !== this.isPaused(input, tasks))
-            this.listener({ type: 'turn.updated', turn: this.project(input) });
-        }
+      this.ready = true;
+      stream.start(async (call) => {
+        if (call.kind === 'value') await this.enqueue(call.value);
       });
+      // The initial read may already see a terminal record. Deliver it after the snapshot too.
+      if (
+        this.pendingSubmissions.size ||
+        [...this.inputs.values()].some(({ record }) => isTerminal(record))
+      )
+        this.flushSubmissions();
       return snapshot;
     } catch (error) {
       await this.stop();
@@ -84,279 +96,212 @@ export class PiDurableObserver {
   }
 
   async stop(): Promise<void> {
+    this.stopped = true;
+    this.ready = false;
+    this.unsubscribeSubmissions?.();
+    this.unsubscribeSubmissions = undefined;
     const stream = this.stream;
-    const workWatch = this.workWatch;
     this.stream = undefined;
-    this.workWatch = undefined;
-    await Promise.all([stream?.stop(), workWatch?.stop()]);
-    this.tasks = { tasks: {} };
+    await stream?.stop();
+    await this.processing;
+    this.view = undefined;
+    this.pendingSubmissions.clear();
     this.inputs.clear();
     this.entries.clear();
+    this.settled.clear();
     this.toolStates.clear();
     this.nestedTools.clear();
-    this.run = [];
-    this.partial = undefined;
+    this.newest = undefined;
+    this.live = {};
     this.retrying = false;
-    this.compactions.clear();
-    this.compactionFailed = false;
   }
 
-  private async loadSnapshot(snapshot: SnapshotEvent) {
-    this.inputs.clear();
-    this.entries.clear();
-    this.toolStates.clear();
-    this.nestedTools.clear();
-    this.run = snapshot.run?.inputs ?? [];
-    this.partial = snapshot.generation?.message;
-    this.generationAttempt = snapshot.generation?.attempt ?? 0;
-    this.retrying = snapshot.generation?.retry !== undefined;
-    this.compactions.clear();
-    for (const compaction of snapshot.compactions)
-      this.compactions.set(compaction.taskId, compaction.blocking);
-    this.compactionFailed = snapshot.compactionFailure !== undefined;
-    const queued = new Set(snapshot.inbox.map((item) => item.id));
-    const through = snapshot.entries.at(-1)?.id;
-    for (const input of await this.runtime.submissions([...this.run, ...queued])) {
-      if (input.record.type !== 'input') continue;
-      // Read immutable identity after attachment, but preserve the lifecycle at the attached frame.
-      const record: SubmissionRecord = queued.has(input.record.id)
-        ? {
-            id: input.record.id,
-            conversationId: input.record.conversationId,
-            requestId: input.record.requestId,
-            type: 'input',
-            status: 'queued',
-          }
-        : input.record.entry !== undefined
-          ? {
-              id: input.record.id,
-              conversationId: input.record.conversationId,
-              requestId: input.record.requestId,
-              type: 'input',
-              status: 'placed',
-              entry: input.record.entry,
-            }
-          : input.record;
-      this.inputs.set(record.id, { ...input, record });
-      if (!queued.has(record.id))
-        for (const entry of await this.runtime.turnEntries(
+  /** Reuse the coherent watch frame, including the uncommitted provider text, only on demand. */
+  readReasoningTurn(lane: RuntimeLane, messageId: string) {
+    if (this.stopped || !this.ready || laneKey(lane) !== laneKey(this.lane)) return undefined;
+    const input = [...this.inputs.values()].find(
+      (item) => readPiSubmission(item.metadata).assistantMessageId === messageId,
+    );
+    return input ? this.project(input, true) : undefined;
+  }
+
+  private flushSubmissions() {
+    // Commit observers only buffer synchronously. All Session reads happen on this async queue.
+    void this.enqueue().catch((error) => {
+      logger.error('Could not project committed Pi inputs', {
+        sessionId: this.lane.sessionId,
+        slot: this.lane.slot,
+        error,
+      });
+    });
+  }
+
+  private enqueue(view?: ConversationView): Promise<void> {
+    const pending = this.processing.then(async () => {
+      const next = view ?? this.view;
+      if (!this.stopped && next) await this.advance(next);
+    });
+    this.processing = pending.catch(() => {});
+    return pending;
+  }
+
+  private async advance(view: ConversationView, initial = false) {
+    const changes = [...this.pendingSubmissions.values()];
+    this.pendingSubmissions.clear();
+    try {
+      const live = (view.docs['pi.live'] as Readonly<LiveState> | undefined) ?? {};
+      const inbox = (view.docs['pi.inbox'] as Readonly<InboxState> | undefined)?.items ?? [];
+      const visibleIds = new Set([...(live.run?.inputs ?? []), ...inbox.map((item) => item.id)]);
+      const previousContext = this.contextStatus();
+      const previousQueue = this.queueKey();
+      const records = new Map(changes.map((record) => [record.id, record]));
+      const missing = [...new Set([...visibleIds, ...records.keys()])].filter(
+        (id) => !this.inputs.has(id) && !this.settled.has(id),
+      );
+      for (const input of await this.runtime.submissions(missing)) {
+        if (input.record.type === 'input') this.inputs.set(input.record.id, input);
+      }
+      for (const record of records.values()) {
+        if (record.type !== 'input' || this.settled.has(record.id)) continue;
+        const input = this.inputs.get(record.id);
+        // A read can already see a later commit than the one that scheduled this callback.
+        if (input && isTerminal(input.record) && !isTerminal(record)) continue;
+        this.inputs.set(record.id, {
+          record,
+          metadata: input?.metadata ?? (await this.runtime.submissionMetadata(record)),
+        });
+      }
+
+      const through = view.entries.at(-1)?.id ?? view.before;
+      const gap =
+        view.before !== undefined && (this.newest === undefined || view.before > this.newest);
+      for (const entry of view.entries) {
+        if (
+          !initial &&
+          (this.newest === undefined || entry.id > this.newest) &&
+          CompactionEntry.is(entry)
+        )
+          logger.info('Pi durable context compaction', {
+            sessionId: this.lane.sessionId,
+            slot: this.lane.slot,
+            operation: 'pi.compaction',
+            entryId: Number(entry.id),
+            reasonCode: entry.data?.reason,
+            outcome: 'committed',
+          });
+        this.entries.set(entry.id, entry);
+      }
+      for (const input of this.inputs.values()) {
+        const { record } = input;
+        if (record.entry === undefined) continue;
+        const terminal = isTerminal(record);
+        if (!terminal && !gap && this.entries.has(record.entry)) continue;
+        if (!terminal && (through === undefined || through < record.entry)) continue;
+        // A terminal result must include the entire turn, even if the watch never showed it.
+        const entries = await this.runtime.turnEntries(
           laneKey(this.lane),
           record,
           BACKGROUND_CONTEXT,
-          through,
-        ))
-          this.entries.set(entry.id, entry);
+          terminal ? undefined : through,
+        );
+        if (terminal) input.terminalEntries = entries;
+        for (const entry of entries) this.entries.set(entry.id, entry);
+      }
+      if (this.stopped) return;
+      const previousRun = this.live.run;
+      this.logProgress(live);
+      this.retrying =
+        live.generation?.retry !== undefined ||
+        (this.retrying &&
+          live.generation !== undefined &&
+          (live.generation.message === undefined ||
+            live.generation.message.stopReason === 'error' ||
+            !hasResponseContent(live.generation.message)));
+      this.live = live;
+      this.view = view;
+      this.newest = through;
+      this.toolStates.clear();
+      for (const tool of live.tools ?? []) {
+        if (tool.status !== 'done')
+          this.toolStates.set(
+            tool.callId,
+            tool.status === 'running' ? 'running' : 'input-available',
+          );
+        else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
+      }
+      this.nestedTools.clear();
+      for (const tool of live.nestedTools ?? []) {
+        this.nestedTools.set(tool.callId, {
+          parentCallId: tool.parentCallId,
+          name: tool.name,
+          args: JSON.stringify(tool.arguments).slice(0, 1000),
+          status: tool.summary
+            ? tool.summary.isError
+              ? 'error'
+              : 'ok'
+            : tool.status === 'done'
+              ? 'interrupted'
+              : tool.status,
+        });
+      }
+      if (initial) return;
+
+      if (this.contextStatus() !== previousContext)
+        this.listener({ type: 'context.updated', status: this.contextStatus() });
+      for (const input of this.inputs.values()) {
+        // A placed record can outpace its run frame while the old inbox still names it.
+        if (input.record.status === 'placed' && !live.run?.inputs.includes(input.record.id))
+          continue;
+        if (input.record.status === 'unanswered') {
+          const stored = readPiSubmission(input.metadata);
+          const taskId = live.runFailure?.inputs.includes(input.record.id)
+            ? live.runFailure.taskId
+            : [live.run, previousRun].find((run) => run?.inputs.includes(input.record.id))?.taskId;
+          logger.error('Pi durable run ended without an answer', {
+            sessionId: this.lane.sessionId,
+            slot: this.lane.slot,
+            operation: 'pi.run',
+            ...(taskId !== undefined ? { taskId: Number(taskId) } : {}),
+            reasonCode: input.record.reason,
+            requestId: stored.requestId,
+            turnId: stored.turnId,
+            assistantMessageId: stored.assistantMessageId,
+          });
+        }
+        this.listener({ type: 'turn.updated', turn: this.project(input) });
+      }
+      if (this.queueKey() !== previousQueue)
+        this.listener({ type: 'queue.updated', queue: this.snapshot().queue });
+      for (const [id, input] of this.inputs)
+        if (isTerminal(input.record)) {
+          this.settled.add(id);
+          this.inputs.delete(id);
+        }
+      const earliest = Math.min(
+        ...[...this.inputs.values()].flatMap(({ record }) =>
+          record.entry === undefined ? [] : [record.entry],
+        ),
+      );
+      for (const id of this.entries.keys()) if (id < earliest) this.entries.delete(id);
+    } catch (error) {
+      for (const record of changes)
+        if (!this.pendingSubmissions.has(record.id)) this.pendingSubmissions.set(record.id, record);
+      throw error;
     }
-    for (const entry of snapshot.entries) this.entries.set(entry.id, entry);
-    for (const tool of snapshot.tools) {
-      if (tool.status !== 'done')
-        this.toolStates.set(tool.callId, tool.status === 'running' ? 'running' : 'input-available');
-      else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
-    }
-    for (const tool of snapshot.nestedTools)
-      this.nestedTools.set(tool.callId, {
-        parentCallId: tool.parentCallId,
-        name: tool.name,
-        args: JSON.stringify(tool.arguments).slice(0, 1000),
-        status: tool.summary
-          ? tool.summary.isError
-            ? 'error'
-            : 'ok'
-          : tool.status === 'done'
-            ? 'interrupted'
-            : tool.status,
-      });
   }
 
-  private async advance(events: readonly AgentEvent[]) {
-    const replacement = events.find((event) => event.type === 'snapshot');
-    if (replacement?.type === 'snapshot') {
-      await this.loadSnapshot(replacement);
-      this.listener({ type: 'snapshot', snapshot: this.snapshot() });
-      return;
-    }
-    const touched = new Set(this.run);
-    const previousContextStatus = this.contextStatus();
-    const wasQueue = [...this.inputs.values()]
+  private queueKey() {
+    return [...this.inputs.values()]
       .filter((input) => input.record.status === 'queued')
       .map((input) => input.record.id)
       .join(',');
-    // Immutable input metadata commits before admission. Resolve it once per new visible submission.
-    for (const event of events) {
-      if (event.type !== 'submission' || event.record.type !== 'input') continue;
-      const existing = this.inputs.get(event.record.id);
-      this.inputs.set(event.record.id, {
-        record: event.record,
-        metadata: existing?.metadata ?? (await this.runtime.submissionMetadata(event.record)),
-      });
-      touched.add(event.record.id);
-    }
-    for (const event of events)
-      switch (event.type) {
-        case 'run_start':
-          this.run = event.inputs;
-          this.partial = undefined;
-          this.retrying = false;
-          this.toolStates.clear();
-          this.nestedTools.clear();
-          event.inputs.forEach((id) => touched.add(id));
-          break;
-        case 'run_end':
-          event.inputs.forEach((id) => touched.add(id));
-          this.run = [];
-          this.partial = undefined;
-          this.retrying = false;
-          break;
-        case 'message_start':
-          if (event.message.role === 'assistant') {
-            this.partial = event.message;
-            // The failed attempt's own message follows its retry event in the same batch.
-            if (event.message.stopReason !== 'error' && hasResponseContent(event.message))
-              this.retrying = false;
-          }
-          break;
-        case 'message_update':
-          if (this.partial) {
-            this.partial = updatedMessage(this.partial, event.changes, event.usage);
-            if (this.partial.stopReason !== 'error' && hasResponseContent(this.partial))
-              this.retrying = false;
-          }
-          break;
-        case 'message_end':
-          this.entries.set(event.entry.id, event.entry);
-          for (const message of event.entry.model ?? []) {
-            if (message.role === 'assistant') {
-              this.partial = undefined;
-              // Throttled partials may leave the first response content in the final entry only.
-              if (message.stopReason !== 'error' && hasResponseContent(message))
-                this.retrying = false;
-            }
-          }
-          break;
-        case 'entry_appended':
-          this.entries.set(event.entry.id, event.entry);
-          if (CompactionEntry.is(event.entry)) {
-            this.compactionFailed = false;
-            logger.info('Pi durable context compaction', {
-              sessionId: this.lane.sessionId,
-              slot: this.lane.slot,
-              operation: 'pi.compaction',
-              entryId: Number(event.entry.id),
-              reasonCode: event.entry.data?.reason,
-              outcome: 'committed',
-            });
-          }
-          break;
-        case 'compaction_start':
-          this.compactions.set(event.taskId, event.blocking);
-          logger.info('Pi durable context compaction', {
-            sessionId: this.lane.sessionId,
-            slot: this.lane.slot,
-            operation: 'pi.compaction',
-            taskId: Number(event.taskId),
-            reasonCode: event.reason,
-            blocking: event.blocking,
-            outcome: 'started',
-          });
-          break;
-        case 'compaction_end':
-          logger.info('Pi durable context compaction', {
-            sessionId: this.lane.sessionId,
-            slot: this.lane.slot,
-            operation: 'pi.compaction',
-            taskId: Number(event.taskId),
-            reasonCode: event.reason,
-            blocking: this.compactions.get(event.taskId),
-            outcome: event.error === undefined ? 'ended' : 'failed',
-          });
-          this.compactions.delete(event.taskId);
-          if (event.error !== undefined) this.compactionFailed = true;
-          break;
-        case 'auto_retry_start':
-          logger.warn('Pi durable generation retry scheduled', {
-            ...this.diagnosticContext(),
-            operation: 'pi.retry',
-            retryAttempt: event.attempt,
-          });
-          this.partial = undefined;
-          this.generationAttempt = event.attempt;
-          this.retrying = true;
-          break;
-        case 'auto_retry_end':
-          this.generationAttempt = event.attempt;
-          break;
-        case 'tool_execution_start':
-          if (event.parentToolCallId) {
-            this.nestedTools.set(event.toolCallId, {
-              parentCallId: event.parentToolCallId,
-              name: event.toolName,
-              args: JSON.stringify(event.args).slice(0, 1000),
-              status: 'running',
-            });
-            break;
-          }
-          this.toolStates.set(event.toolCallId, 'running');
-          break;
-        case 'tool_execution_end':
-          if (event.parentToolCallId) {
-            const nested = this.nestedTools.get(event.toolCallId);
-            if (nested) {
-              nested.status = event.result
-                ? event.result.isError
-                  ? 'error'
-                  : 'ok'
-                : 'interrupted';
-            }
-            break;
-          }
-          if (event.entry) this.entries.set(event.entry.id, event.entry);
-          else {
-            this.toolStates.set(event.toolCallId, 'interrupted');
-            logger.warn('Pi durable tool execution interrupted', {
-              ...this.diagnosticContext(),
-              operation: 'pi.execute_tool',
-              toolCallId: event.toolCallId,
-            });
-          }
-          break;
-        case 'task_failed':
-          logger.error('Pi durable task failed', {
-            // Compaction and extension tasks need not belong to the currently displayed run.
-            ...(event.kind === 'pi.generation' || event.kind === 'pi.tool'
-              ? this.diagnosticContext()
-              : { sessionId: this.lane.sessionId, slot: this.lane.slot }),
-            operation: 'pi.task',
-            taskId: Number(event.taskId),
-            taskKind: event.kind,
-          });
-          break;
-      }
-    if (this.contextStatus() !== previousContextStatus)
-      this.listener({ type: 'context.updated', status: this.contextStatus() });
-    for (const id of this.run) touched.add(id);
-    for (const id of touched) {
-      const input = this.inputs.get(id);
-      if (input) this.listener({ type: 'turn.updated', turn: this.project(input) });
-    }
-    const queue = [...this.inputs.values()].filter((input) => input.record.status === 'queued');
-    if (wasQueue !== queue.map((input) => input.record.id).join(','))
-      this.listener({ type: 'queue.updated', queue: queue.map((input) => this.project(input)) });
-    // The observer holds only current presentation. Finished history is read from native entries.
-    for (const [id, input] of this.inputs)
-      if (input.record.status === 'done' || input.record.status === 'unanswered')
-        this.inputs.delete(id);
-    const earliest = Math.min(
-      ...[...this.inputs.values()].flatMap(({ record }) =>
-        record.entry === undefined ? [] : [record.entry],
-      ),
-    );
-    for (const id of this.entries.keys()) if (id < earliest) this.entries.delete(id);
   }
 
   private snapshot(): RuntimeConversationSnapshot {
-    const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
+    const id = this.live.run?.inputs[0];
+    const active = id === undefined ? undefined : this.inputs.get(id);
     return {
-      activeTurn: active ? this.project(active) : null,
+      activeTurn: active && !isTerminal(active.record) ? this.project(active) : null,
       contextStatus: this.contextStatus(),
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
@@ -364,45 +309,46 @@ export class PiDurableObserver {
     };
   }
 
-  /** Only blocking compaction delays a reply; background compaction is not presented. */
   private contextStatus(): 'compacting' | 'compaction-failed' | null {
-    for (const blocking of this.compactions.values()) if (blocking) return 'compacting';
-    // A background compaction in progress supersedes an earlier failure.
-    return this.compactions.size === 0 && this.compactionFailed ? 'compaction-failed' : null;
+    if (this.live.compactions?.some((compaction) => compaction.blocking)) return 'compacting';
+    return !this.live.compactions?.length && this.live.compactionFailure
+      ? 'compaction-failed'
+      : null;
   }
 
-  private diagnosticContext() {
-    const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
-    return {
-      sessionId: this.lane.sessionId,
-      slot: this.lane.slot,
-      requestId: active?.record.requestId,
-      turnId: active?.metadata?.turnId,
-      assistantMessageId: active?.metadata?.assistantMessageId,
-    };
+  private logProgress(live: Readonly<LiveState>) {
+    const context = { sessionId: this.lane.sessionId, slot: this.lane.slot };
+    for (const compaction of live.compactions ?? [])
+      if (!this.live.compactions?.some((previous) => previous.taskId === compaction.taskId))
+        logger.info('Pi durable context compaction', {
+          ...context,
+          operation: 'pi.compaction',
+          taskId: Number(compaction.taskId),
+          reasonCode: compaction.trigger,
+          blocking: compaction.blocking,
+          outcome: 'started',
+        });
+    for (const previous of this.live.compactions ?? [])
+      if (!live.compactions?.some((compaction) => compaction.taskId === previous.taskId))
+        logger.info('Pi durable context compaction', {
+          ...context,
+          operation: 'pi.compaction',
+          taskId: Number(previous.taskId),
+          reasonCode: previous.trigger,
+          blocking: previous.blocking,
+          outcome: live.compactionFailure?.taskId === previous.taskId ? 'failed' : 'ended',
+        });
+    if (live.generation?.retry && live.generation.retry !== this.live.generation?.retry)
+      logger.warn('Pi durable generation retry scheduled', {
+        ...context,
+        operation: 'pi.retry',
+        retryAttempt: live.generation.attempt,
+      });
   }
 
-  private isPaused(input: InputView, graph = this.tasks): boolean {
-    return Object.values(graph.tasks).some((task) => {
-      if (task.blocked !== 'restart_limit') return false;
-      let owner = task;
-      while (owner.owner !== undefined) {
-        if (owner.background) return false;
-        const parent = graph.tasks[String(owner.owner)];
-        if (!parent) return false;
-        owner = parent;
-      }
-      // Child conversations belong to the generation that awaits them; standalone compactions do not.
-      return (
-        !owner.background &&
-        owner.kind === GenerationTask.definition.name &&
-        owner.conversationId === input.record.conversationId
-      );
-    });
-  }
-
-  private project(input: InputView) {
-    const active = this.run.includes(input.record.id);
+  private project(input: InputView, fullReasoning = false) {
+    const active =
+      input.record.status === 'placed' && this.live.run?.inputs.includes(input.record.id) === true;
     const start = input.record.entry;
     const next = Math.min(
       ...[...this.inputs.values()].flatMap(({ record }) =>
@@ -411,76 +357,33 @@ export class PiDurableObserver {
           : [],
       ),
     );
-    const entries = [...this.entries.values()]
-      .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
-      .sort((a, b) => a.id - b.id);
+    const entries =
+      input.terminalEntries ??
+      [...this.entries.values()]
+        .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
+        .sort((a, b) => a.id - b.id);
+    const partial = this.live.generation?.message as AssistantMessage | undefined;
     const turn = projectPiTurn({
       lane: this.lane,
       ...input,
       entries,
       active,
+      fullReasoning,
       toolStates: this.toolStates,
       nestedTools: this.nestedTools,
-      ...(active && this.partial
+      ...(active && partial
         ? {
-            partial: this.partial,
-            partialId: `pi:live:${input.record.id}:${this.generationAttempt}`,
+            partial,
+            partialId: `pi:live:${input.record.id}:${this.live.generation?.attempt ?? 0}`,
           }
         : {}),
     });
     return active
-      ? { ...turn, ...(this.retrying ? { isRetrying: true } : {}), isPaused: this.isPaused(input) }
+      ? { ...turn, ...(this.retrying ? { isRetrying: true } : {}), isPaused: false }
       : turn;
   }
 }
 
-function updatedMessage(
-  message: AssistantMessage,
-  changes: readonly MessageChange[],
-  usage: AssistantMessage['usage'],
-): AssistantMessage {
-  // A delta must not copy all preceding text, reasoning and tool arguments in a long reply.
-  // Copy only changed blocks/argument paths, keeping published snapshots immutable.
-  const next = { ...message, content: [...message.content], usage };
-  for (const change of changes) {
-    if (change.type === 'message') return change.message;
-    if (
-      change.type === 'text_start' ||
-      change.type === 'thinking_start' ||
-      change.type === 'toolcall_start' ||
-      change.type === 'block'
-    ) {
-      next.content[change.contentIndex] = change.block;
-      continue;
-    }
-    const block = next.content[change.contentIndex];
-    if (!block) continue;
-    if (change.type === 'text_delta' && block.type === 'text')
-      next.content[change.contentIndex] = { ...block, text: block.text + change.delta };
-    else if (change.type === 'thinking_delta' && block.type === 'thinking')
-      next.content[change.contentIndex] = { ...block, thinking: block.thinking + change.delta };
-    else if (change.type === 'toolcall_delta' && block.type === 'toolCall')
-      next.content[change.contentIndex] = {
-        ...block,
-        arguments: appendAtPath(block.arguments, change.path, change.delta) as JsonObject,
-      };
-  }
-  return next;
-}
-
-function appendAtPath(value: unknown, path: readonly (string | number)[], delta: string): unknown {
-  if (value === null || typeof value !== 'object' || path.length === 0) return value;
-  const object = value as Record<string | number, unknown>;
-  const key = path[0]!;
-  const previous = object[key];
-  const next =
-    path.length === 1
-      ? typeof previous === 'string'
-        ? previous + delta
-        : delta
-      : appendAtPath(previous, path.slice(1), delta);
-  if (next === previous) return value;
-  const copy = Array.isArray(value) ? [...value] : { ...object };
-  (copy as Record<string | number, unknown>)[key] = next;
-  return copy;
+function isTerminal(record: SubmissionRecord) {
+  return record.status === 'done' || record.status === 'unanswered';
 }

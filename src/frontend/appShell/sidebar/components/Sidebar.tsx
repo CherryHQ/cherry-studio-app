@@ -18,6 +18,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import type { SessionSearchResult } from '../hooks/sessionSearch';
+import { useCloseDrawerForExternalNavigation } from '../hooks/useCloseDrawerForExternalNavigation';
 import {
   sessionSearchResultHref,
   useSessionSearch,
@@ -61,6 +62,10 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   const canDock = useCanDockSidebar();
   const pane = useFilePane();
   const { column, setContent } = useSidebarColumn();
+  const prepareExternalNavigation = useCloseDrawerForExternalNavigation(
+    navigation,
+    column.kind === 'permanent',
+  );
   const currentConversation = useConversationTarget({ kind: 'local' });
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
@@ -97,6 +102,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         navigation.closeDrawer();
         returnToChat();
       },
+      prepareExternalNavigation,
       returnToChat,
       openSearch:
         source === 'local'
@@ -133,6 +139,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       sessionId,
       sourceChat,
       navigation,
+      prepareExternalNavigation,
       canDock,
       openDestination,
       openSessionSearch,

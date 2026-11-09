@@ -154,6 +154,7 @@ function fixture() {
   const database: RuntimeSqlDatabase = {
     exec: unavailable,
     run: unavailable,
+    runCounted: unavailable,
     get: unavailable,
     all: unavailable,
     transaction: unavailable,
@@ -500,7 +501,7 @@ describe('Persistent Agent facade', () => {
             conversationId: conversation.id,
           },
         );
-        live.run = { taskId, inputs: [record.id] };
+        live.run = { taskId, inputs: [record.id], turns: 0 };
       }, BACKGROUND_CONTEXT);
       await legacy.close();
 

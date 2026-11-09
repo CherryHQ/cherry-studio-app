@@ -31,6 +31,7 @@ export type RuntimeSqlValue = null | number | bigint | string | Uint8Array;
 export interface RuntimeSqlExecutor {
   exec(sql: string): Promise<void>;
   run(sql: string, ...params: RuntimeSqlValue[]): Promise<void>;
+  runCounted(sql: string, ...params: RuntimeSqlValue[]): Promise<number>;
   get<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row | undefined>;
   all<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row[]>;
 }
@@ -305,6 +306,7 @@ export interface DurableAgentRuntime {
   message(
     lane: RuntimeLane,
     messageId: string,
+    options?: { fullReasoning?: boolean },
   ): Promise<{ turn: RuntimeDurableTurn; role: 'user' | 'assistant' } | undefined>;
   exportTurn(
     lane: RuntimeLane,
