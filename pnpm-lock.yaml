@@ -107,6 +107,7 @@ settings:
 
 overrides:
   '@siteed/sherpa-onnx.rn>@expo/config-plugins': 58.0.11
+  '@earendil-works/pi-ai>@google/genai': 2.23.0
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
   '@storybook/react-native-ui': 10.5.1
@@ -132,10 +133,10 @@ patchedDependencies:
   '@ai-sdk/openai@3.0.137': 7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c
   '@anthropic-ai/vertex-sdk@0.22.0': dc49494cc694489210145cb544aa2dce2ab41f237b8b761da036f1b8875b121b
   '@earendil-works/chord@1.5.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
-  '@earendil-works/pi-ai@1.5.0': 498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b
+  '@earendil-works/pi-ai@1.5.0': 142401ad9a61ab44cc83f2d29cc67b0632ea8c6cc9659afdbcbfc8221bf38770
   '@earendil-works/pi-codemode@1.5.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
   '@earendil-works/pi-durable@1.5.0': a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4
-  '@google/genai@2.21.0': 983ccdfd42605ab2b240e038dce5736c0745313e7aced3b7e269b0e6911a97b5
+  '@google/genai@2.23.0': f8c24f89a1e0efc0ec08958013d1350e96e9ce9aeb1b730e74e2307b19f1e5e0
   '@magrinj/expo-quick-look@0.3.1': 35520d77ed4612922b6a4ec70813738d976812225a1f806b1a40329e8adf6277
   '@noble/hashes@1.8.0': d01f7c80279d99c93f2d4879f21c72760af853ca4f15bb965324af52c5de60f9
   '@openrouter/ai-sdk-provider@2.10.0': 2c35b3db284d8b886568aa45c9c46d1a47397087392670bdac93f88a9e1aebf8
@@ -280,7 +281,7 @@ importers:
         version: 1.5.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)(esbuild@0.28.2)(ws@8.21.1)
       '@earendil-works/pi-ai':
         specifier: 1.5.0
-        version: 1.5.0(patch_hash=498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        version: 1.5.0(patch_hash=142401ad9a61ab44cc83f2d29cc67b0632ea8c6cc9659afdbcbfc8221bf38770)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode':
         specifier: 1.5.0
         version: 1.5.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
@@ -3006,8 +3007,8 @@ packages:
     resolution: {integrity: sha512-EbxYllZ7/ozONVZd425cm4XnolfW+AmSFT5aP7Jdno6oc3WrYQcHz2CO20z/2rwWwYgztmV2PXvYH+BQ8YFjqg==}
     hasBin: true
 
-  '@google/genai@2.21.0':
-    resolution: {integrity: sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q==}
+  '@google/genai@2.23.0':
+    resolution: {integrity: sha512-NFMzktoZ7jJg9AA3vUbWZocnkQP6DSGzL21ORwdVcBWkHli3k7v6B9zy07M4bTiKDAyIWfUh2J/oLYxCu0hNpQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -13156,13 +13157,13 @@ snapshots:
       esbuild: 0.28.2
       ws: 8.21.1
 
-  '@earendil-works/pi-ai@1.5.0(patch_hash=498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@1.5.0(patch_hash=142401ad9a61ab44cc83f2d29cc67b0632ea8c6cc9659afdbcbfc8221bf38770)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.129.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-schema': 1.5.0
       '@earendil-works/pi-telemetry': 1.5.0
-      '@google/genai': 2.21.0(patch_hash=983ccdfd42605ab2b240e038dce5736c0745313e7aced3b7e269b0e6911a97b5)(supports-color@8.1.1)
+      '@google/genai': 2.23.0(patch_hash=f8c24f89a1e0efc0ec08958013d1350e96e9ce9aeb1b730e74e2307b19f1e5e0)(supports-color@8.1.1)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@8.1.1)
       https-proxy-agent: 9.1.0(supports-color@8.1.1)
@@ -13188,7 +13189,7 @@ snapshots:
   '@earendil-works/pi-durable@1.5.0(patch_hash=a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@earendil-works/chord': 1.5.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)(esbuild@0.28.2)(ws@8.21.1)
-      '@earendil-works/pi-ai': 1.5.0(patch_hash=498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+      '@earendil-works/pi-ai': 1.5.0(patch_hash=142401ad9a61ab44cc83f2d29cc67b0632ea8c6cc9659afdbcbfc8221bf38770)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode': 1.5.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
       '@earendil-works/pi-schema': 1.5.0
       '@earendil-works/pi-telemetry': 1.5.0
@@ -14391,7 +14392,7 @@ snapshots:
       chalk: 4.1.2
       js-yaml: 4.3.0
 
-  '@google/genai@2.21.0(patch_hash=983ccdfd42605ab2b240e038dce5736c0745313e7aced3b7e269b0e6911a97b5)(supports-color@8.1.1)':
+  '@google/genai@2.23.0(patch_hash=f8c24f89a1e0efc0ec08958013d1350e96e9ce9aeb1b730e74e2307b19f1e5e0)(supports-color@8.1.1)':
     dependencies:
       google-auth-library: 10.9.1(supports-color@8.1.1)
       p-retry: 4.6.2
