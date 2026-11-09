@@ -29,7 +29,12 @@ import { areAllSelected, toggleSelection } from '@/frontend/components/Selection
 
 import { useSidebarPresence } from './hooks/useSidebarPresence';
 
-type SelectionEntry = { key: string; source: ConversationSource; ref: ConversationRef };
+type SelectionEntry = {
+  key: string;
+  source: ConversationSource;
+  ref: ConversationRef;
+  parentKey?: string;
+};
 type SelectionSnapshot = {
   isSelecting: boolean;
   isDeleting: boolean;
@@ -92,7 +97,7 @@ export function SidebarSelectionProvider({
         if (selection !== store.generation() || store.getSnapshot().isDeleting) return;
         store.beginDeletion();
         void (async () => {
-          const failed = new Set<string>();
+          const failed = new Map<string, SelectionEntry>();
           // Local session deletion cancels active turns and writes SQLite; keep admissions serial.
           for (const entry of entries) {
             try {
@@ -101,7 +106,7 @@ export function SidebarSelectionProvider({
                 entry.source.state.getSnapshot().availability.state !== 'enabled' ||
                 remove?.availability.state !== 'enabled'
               ) {
-                failed.add(entry.key);
+                failed.set(entry.key, entry);
                 continue;
               }
               const result = await remove.execute(undefined);
@@ -111,10 +116,10 @@ export function SidebarSelectionProvider({
               ) {
                 store.confirmDeleted(entry.key);
               } else {
-                failed.add(entry.key);
+                failed.set(entry.key, entry);
               }
             } catch {
-              failed.add(entry.key);
+              failed.set(entry.key, entry);
             }
           }
           store.finishDeletion(selection, failed);
@@ -169,6 +174,7 @@ function createSelectionStore() {
   };
   let generation = 0;
   const entries = new Map<string, SelectionEntry>();
+  const promotedRetryIds = new Set<string>();
   const listeners = new Set<() => void>();
   const update = (next: SelectionSnapshot) => {
     state = next;
@@ -182,6 +188,12 @@ function createSelectionStore() {
       if (!liveIds.has(id)) entries.delete(id);
     }
     const selectedIds = new Set([...state.selectedIds].filter((id) => liveIds.has(id)));
+    for (const id of promotedRetryIds) {
+      if (liveIds.has(id) && !entries.get(id)?.parentKey) {
+        selectedIds.add(id);
+        promotedRetryIds.delete(id);
+      }
+    }
     update({ ...state, lists, selectedIds });
   };
 
@@ -210,7 +222,14 @@ function createSelectionStore() {
         )
           return [];
         const selectionKey = JSON.stringify([source.scope, session.ref.sessionId]);
-        entries.set(selectionKey, { key: selectionKey, source, ref: session.ref });
+        entries.set(selectionKey, {
+          key: selectionKey,
+          source,
+          ref: session.ref,
+          parentKey: session.forkedFromSessionId
+            ? JSON.stringify([source.scope, session.forkedFromSessionId])
+            : undefined,
+        });
         return [selectionKey];
       });
       updateLists(new Map(state.lists).set(key, ids));
@@ -223,10 +242,12 @@ function createSelectionStore() {
     },
     enter: (id?: string) => {
       if (state.isDeleting || (id && !entries.has(id))) return;
+      promotedRetryIds.clear();
       generation++;
       update({ ...state, isSelecting: true, selectedIds: new Set(id ? [id] : []) });
     },
     exit: () => {
+      promotedRetryIds.clear();
       generation++;
       if (state.isSelecting || state.selectedIds.size)
         update({ ...state, isSelecting: false, selectedIds: new Set() });
@@ -234,6 +255,7 @@ function createSelectionStore() {
     toggle: (id: string) => {
       if (!state.isSelecting || state.isDeleting || state.deletedIds.has(id) || !entries.has(id))
         return;
+      promotedRetryIds.delete(id);
       update({ ...state, selectedIds: toggleSelection(state.selectedIds, id) });
     },
     toggleAll: () => {
@@ -242,24 +264,43 @@ function createSelectionStore() {
       const clear = areAllSelected(state.selectedIds, ids);
       const selectedIds = new Set(state.selectedIds);
       for (const id of ids) {
-        if (clear) selectedIds.delete(id);
-        else selectedIds.add(id);
+        if (clear) {
+          selectedIds.delete(id);
+          promotedRetryIds.delete(id);
+        } else selectedIds.add(id);
       }
       update({ ...state, selectedIds });
     },
     selectedEntries: () => [...state.selectedIds].flatMap((id) => entries.get(id) ?? []),
     beginDeletion: () => update({ ...state, isDeleting: true }),
     confirmDeleted: (id: string) => {
+      promotedRetryIds.delete(id);
       const selectedIds = new Set(state.selectedIds);
       selectedIds.delete(id);
       update({ ...state, selectedIds, deletedIds: new Set(state.deletedIds).add(id) });
     },
-    finishDeletion: (selection: number, failed: ReadonlySet<string>) => {
-      const selectedIds = new Set(shownIds().filter((id) => failed.has(id)));
+    finishDeletion: (selection: number, failed: ReadonlyMap<string, SelectionEntry>) => {
+      // Deleting a parent promotes surviving forks; their old list may unmount before roots refresh.
+      if (generation === selection) {
+        for (const entry of failed.values()) {
+          const current = entries.get(entry.key);
+          if (
+            entry.parentKey &&
+            state.deletedIds.has(entry.parentKey) &&
+            (!current || current.parentKey === entry.parentKey)
+          )
+            promotedRetryIds.add(entry.key);
+        }
+      }
+      const selectedIds = new Set(
+        shownIds().filter((id) => failed.has(id) || state.selectedIds.has(id)),
+      );
       update({
         ...state,
         isDeleting: false,
-        ...(generation === selection ? { selectedIds, isSelecting: selectedIds.size > 0 } : {}),
+        ...(generation === selection
+          ? { selectedIds, isSelecting: selectedIds.size > 0 || promotedRetryIds.size > 0 }
+          : {}),
       });
     },
   };
