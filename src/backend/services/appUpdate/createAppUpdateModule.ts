@@ -1,20 +1,20 @@
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
-import { getLocales } from 'expo-localization';
 import { Linking, Platform } from 'react-native';
 
 import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
 import { getNativeAppUpdate } from '../../../../modules/app-update';
+import { assertApkRelease, checkApkRelease } from './apkRelease';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
-import { assertApkRelease, checkGitcodeRelease } from './gitcodeRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
 
 export function createAppUpdateModule(dependencies: {
+  getCountry(): Promise<string>;
   requestInstallPermission: () => Promise<boolean>;
 }): AppUpdateModule & { dispose(): Promise<void> } {
   const channel = resolveAppUpdateChannel(
@@ -48,7 +48,14 @@ export function createAppUpdateModule(dependencies: {
         if (!getNativeAppUpdate()?.isApkInstallationEnabled()) {
           return { status: 'unavailable', reason: 'nativeUnavailable' };
         }
-        const result = await checkGitcodeRelease(currentVersion, signal);
+        const country = await dependencies.getCountry();
+        signal?.throwIfAborted();
+        if (stopped) return { status: 'unavailable', reason: 'unsupported' };
+        const result = await checkApkRelease(
+          currentVersion,
+          country === 'CN' ? 'gitcode' : 'github',
+          signal,
+        );
         signal?.throwIfAborted();
         download.clearObsoleteFailure(result.status === 'available' ? result.id : null);
         return result;
@@ -77,8 +84,9 @@ export function createAppUpdateModule(dependencies: {
           storeUrl: `https://play.google.com/store/apps/details?id=${Application.applicationId}`,
         };
       }
-      const region = getLocales()[0]?.regionCode;
-      const country = region && /^[A-Z]{2}$/.test(region) ? region : 'US';
+      const country = await dependencies.getCountry();
+      signal?.throwIfAborted();
+      if (stopped) return { status: 'unavailable', reason: 'unsupported' };
       return checkAppStoreRelease(Application.applicationId, currentVersion, country, signal);
     },
     async openStore(release) {

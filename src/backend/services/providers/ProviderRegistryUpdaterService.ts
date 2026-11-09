@@ -1,6 +1,7 @@
 import { loggerService } from '@logger';
 import { Platform } from 'react-native';
 
+import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -18,7 +19,6 @@ import {
   type RemoteRegistryFileName,
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { isDeviceRegionMainlandChina } from '@/backend/services/device';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
@@ -197,7 +197,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     let reachedSource = false;
     let lastError: Error | undefined;
 
-    for (const source of this.getSourceOrder()) {
+    for (const source of await this.getSourceOrder()) {
       if (this.stopped) {
         return undefined;
       }
@@ -236,7 +236,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
     const sources = [
       preferredSource,
-      ...this.getSourceOrder().filter((source) => source !== preferredSource),
+      ...(await this.getSourceOrder()).filter((source) => source !== preferredSource),
     ];
     let lastError: Error | undefined;
 
@@ -407,8 +407,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  private getSourceOrder(): RegistryNetworkSource[] {
-    return isDeviceRegionMainlandChina() ? ['gitcode', 'github'] : ['github', 'gitcode'];
+  private async getSourceOrder(): Promise<RegistryNetworkSource[]> {
+    const country = await application.get('RegionService').getCountry();
+    return country === 'CN' ? ['gitcode', 'github'] : ['github', 'gitcode'];
   }
 }
 

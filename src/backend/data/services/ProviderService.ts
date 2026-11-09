@@ -435,6 +435,7 @@ export class ProviderService {
   }
 
   async list(query: { enabled?: boolean } = {}): Promise<Provider[]> {
+    await application.get('ProviderCatalogRuntime').ensureReady();
     const rows =
       query.enabled === undefined
         ? await this.db.select().from(userProviderTable).orderBy(asc(userProviderTable.orderKey))
@@ -448,6 +449,7 @@ export class ProviderService {
   }
 
   async listPage(query: ProviderListPageQuery = {}): Promise<CursorPaginationResponse<Provider>> {
+    await application.get('ProviderCatalogRuntime').ensureReady();
     const limit = Math.min(
       Math.max(query.limit ?? DEFAULT_PROVIDER_PAGE_LIMIT, 1),
       MAX_PROVIDER_PAGE_LIMIT,
