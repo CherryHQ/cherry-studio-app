@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { downloadFile, FileDownloadError } from '@/backend/services/download';
 import { hashLocalFile } from '@/backend/services/file/fileHash';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import { VoiceError, type VoiceModelModule, type VoiceModelState } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -134,7 +135,8 @@ export function createVoiceModel(getCountry: () => Promise<string>) {
         return Promise.reject(new VoiceError('busy', 'The offline recognizer is in use.'));
       return run('downloading', async (signal) => {
         const root = await directory();
-        const assets = getSenseVoiceAssets(await getCountry());
+        signal.throwIfAborted();
+        const assets = getSenseVoiceAssets(await raceAbort(getCountry(), signal));
         let completed = 0;
         for (const asset of assets) {
           signal.throwIfAborted();

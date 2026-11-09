@@ -152,6 +152,7 @@ observes the backend-owned operation; leaving settings does not cancel it. Retry
 verified assets and restarts an interrupted file. Model storage survives cache eviction and is
 excluded from OS backup. A new app generation verifies cached bytes before use. Deletion is blocked
 while recognition holds a model lease; disposal cancels downloads and joins active native work.
+Cancellation also releases a pending country lookup wait without cancelling the shared lookup.
 
 [`modules/voice-input`](../../modules/voice-input/README.md) records 16 kHz mono PCM16 WAV, with a
 native 30-second limit. Stop or the limit transitions the composer to transcription. SenseVoice

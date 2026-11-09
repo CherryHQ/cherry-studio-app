@@ -235,7 +235,8 @@ than empty successful searches.
 Jina's built-in addresses use the shared IP country, with CN as the detection-failure fallback.
 CN uses the mainland mirror (`s.jinaai.cn`, `r.jinaai.cn`), and other countries use the global hosts.
 When the chosen host cannot be connected to, the request is sent once to the other. A timeout or an
-answer from the service is not retried, and an address the user entered is used as is.
+answer from the service is not retried, and an address the user entered is used as is without
+triggering country detection.
 
 SearXNG returns the instance's result snippets and sends the configured engine list only when one
 is stored; it does not read each result page. Several API keys rotate per provider across lookups,

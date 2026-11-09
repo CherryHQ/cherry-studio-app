@@ -1,5 +1,5 @@
 import { isWebSearchError } from '@cherrystudio/web-search';
-import { getJinaHostCandidates } from '@cherrystudio/web-search/providers/jina';
+import { getJinaHostCandidates, JINA_MIRROR_HOSTS } from '@cherrystudio/web-search/providers/jina';
 
 import { application } from '@/backend/core/application/Application';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -26,9 +26,11 @@ export class JinaProvider extends RemoteWebSearchProvider {
     options?: RequestInit,
   ) {
     options?.signal?.throwIfAborted();
-    const country = await application.get('RegionService').getCountry();
-    options?.signal?.throwIfAborted();
     const configuredHost = resolveProviderApiHost(this.provider, capability).replace(/\/+$/, '');
+    const country = Object.hasOwn(JINA_MIRROR_HOSTS, configuredHost)
+      ? await application.get('RegionService').getCountry()
+      : undefined;
+    options?.signal?.throwIfAborted();
     const [apiHost, alternateHost] = getJinaHostCandidates(
       configuredHost,
       country === 'CN' ? 'mainland-china' : 'global',

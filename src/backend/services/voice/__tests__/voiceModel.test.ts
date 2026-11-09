@@ -88,6 +88,63 @@ test('download failures remain visible until retry and cannot become ready throu
   expect(model.module.getState().status).toBe('ready');
 });
 
+test.each(['cancel', 'dispose'] as const)(
+  '%s releases a pending country wait without cancelling the shared lookup',
+  async (action) => {
+    let finishCountry!: (value: string) => void;
+    const country = new Promise<string>((resolve) => {
+      finishCountry = resolve;
+    });
+    let countryRequested!: () => void;
+    const requested = new Promise<void>((resolve) => {
+      countryRequested = resolve;
+    });
+    const model = createVoiceModel(() => {
+      countryRequested();
+      return country;
+    });
+    const downloading = model.module.download();
+    try {
+      await requested;
+      let stopped = false;
+      const stopping = (action === 'cancel' ? model.module.cancel() : model.dispose()).then(() => {
+        stopped = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(stopped).toBe(true);
+      expect(model.module.getState().status).toBe('not-downloaded');
+      expect(downloadFile).not.toHaveBeenCalled();
+
+      finishCountry('US');
+      await Promise.all([downloading, stopping]);
+      await expect(country).resolves.toBe('US');
+      expect(downloadFile).not.toHaveBeenCalled();
+
+      if (action === 'cancel') {
+        await model.module.download();
+        expect(model.module.getState().status).toBe('ready');
+      } else {
+        await expect(model.module.download()).rejects.toThrow('stopped');
+      }
+    } finally {
+      finishCountry('US');
+      await model.dispose();
+      await downloading;
+    }
+  },
+);
+
+test('immediate cancellation does not start a country lookup', async () => {
+  const getCountry = jest.fn(async () => 'CN');
+  const model = createVoiceModel(getCountry);
+  const downloading = model.module.download();
+  await model.module.cancel();
+  await downloading;
+  expect(getCountry).not.toHaveBeenCalled();
+  expect(downloadFile).not.toHaveBeenCalled();
+  await model.dispose();
+});
+
 test('disposal cancels and joins downloads before rejecting new work', async () => {
   let rejectDownload!: (reason: unknown) => void;
   let signal!: AbortSignal;

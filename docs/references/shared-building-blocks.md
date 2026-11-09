@@ -20,6 +20,7 @@ it already exists.
 | Remote web-search provider protocols and metadata | `@cherrystudio/web-search`; mobile transport and policy adapters in `src/backend/services/webSearch` |
 | Identifying outbound headers | `defaultAppHeaders` in `src/backend/utils/defaultAppHeaders.ts` |
 | Combining abort signals | `linkAbortSignals` in `src/backend/utils/linkAbortSignals.ts` |
+| Cancelling a caller's wait without cancelling shared work | `raceAbort` in `src/backend/utils/raceAbort.ts` |
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
