@@ -9,10 +9,19 @@ import {
 import { useChatQuoteActions, useChatQuoteState } from '../ChatQuoteContext';
 import { ChatQuoteProvider } from '../ChatQuoteProvider';
 import { attachMessageQuote } from '../messageQuoteInput';
+import { createQuoteMention } from '../quoteMentions';
 
 const mockFocus = jest.fn();
-const mockMeta = { inputRef: { current: { focus: mockFocus } } };
-jest.mock('@/frontend/components/Composer', () => ({ useComposerMeta: () => mockMeta }));
+const mockInsertLink = jest.fn();
+const mockMeta = {
+  inputRef: { current: { focus: mockFocus, insertLink: mockInsertLink, insertText: jest.fn() } },
+};
+const mockSubscribe = () => () => {};
+jest.mock('@cherrystudio/ui/components', () => ({ AnchoredInfoPopover: () => null }));
+jest.mock('@/frontend/components/Composer', () => ({
+  useComposerMeta: () => mockMeta,
+  useComposerActions: () => ({ subscribeDraftEdits: mockSubscribe }),
+}));
 // The public barrel loads the whole message renderer; the provider only needs the context.
 jest.mock('@/frontend/components/Message', () =>
   jest.requireActual('@/frontend/components/Message/parts/MessageSelectionActionContext'),
@@ -48,7 +57,8 @@ const tree = (sessionId: string | undefined, enabled = true) => (
 const quote = (text = 'Selected passage') =>
   act(() => selection!.onPress({ messageId: sourceId, text }));
 let renderer: ReactTestRenderer;
-beforeEach(() => mockFocus.mockClear());
+beforeEach(() => jest.clearAllMocks());
+const draft = () => (state.fields.quotes ?? []).map(createQuoteMention).join(' ') + ' Request';
 afterEach(() => {
   act(() => renderer?.unmount());
 });
@@ -73,6 +83,10 @@ test('quoting a selection records the exact text and answer, then focuses on the
     expect(mockFocus).not.toHaveBeenCalled();
     act(() => frame(0));
     expect(mockFocus).toHaveBeenCalledTimes(1);
+    expect(mockInsertLink).toHaveBeenCalledWith(
+      '“line one line two”',
+      expect.stringMatching(/^quote:\/\//),
+    );
     const first = state.fields;
     quote('   ');
     expect(state.fields).toBe(first);
@@ -86,17 +100,18 @@ test('captures exactly one send attempt, locks selection, retains rejection and 
     renderer = create(tree('A'));
   });
   quote();
+  const originalFields = state.fields;
   let attempt: ReturnType<typeof actions.capture>;
   act(() => {
-    attempt = actions.capture();
+    attempt = actions.capture(draft());
   });
-  expect(() => actions.capture()).toThrow();
+  expect(() => actions.capture(draft())).toThrow();
   act(() => actions.clearQuote());
   quote('Another passage');
-  expect(state.fields).toBe(attempt!.fields);
+  expect(state.fields).toBe(originalFields);
   const parts = attachMessageQuote(
     [
-      { type: 'text', text: 'Request' },
+      { type: 'text', text: '“Selected passage” Request' },
       { type: 'text', text: 'MCP' },
     ],
     attempt!.fields,
@@ -106,13 +121,13 @@ test('captures exactly one send attempt, locks selection, retains rejection and 
   expect(
     attachMessageQuote(
       [{ type: 'file', fileEntryId: 'f', mediaType: 'image/png' }],
-      attempt!.fields,
+      originalFields,
     )[0],
-  ).toMatchObject({ type: 'text', text: '', quotes: attempt!.fields.quotes });
+  ).toMatchObject({ type: 'text', text: '', quotes: originalFields.quotes });
   act(() => attempt.finish(false));
-  expect(state.fields).toEqual(attempt!.fields);
+  expect(state.fields).toBe(originalFields);
   act(() => {
-    const accepted = actions.capture();
+    const accepted = actions.capture(draft());
     accepted.finish(true);
     accepted.finish(false);
   });
@@ -147,9 +162,29 @@ test('late admission rejection after a session switch cannot restore the old quo
   quote();
   let attempt!: ReturnType<typeof actions.capture>;
   act(() => {
-    attempt = actions.capture();
+    attempt = actions.capture(draft());
   });
   act(() => renderer.update(tree('B')));
   act(() => attempt.finish(false));
   expect(state.fields).toEqual({});
+});
+
+test('captures several selections in editor order and excludes deleted quotes', () => {
+  act(() => {
+    renderer = create(tree('A'));
+  });
+  quote('First');
+  quote('Second');
+  const available = state.fields.quotes!;
+  let attempt!: ReturnType<typeof actions.capture>;
+  act(() => {
+    attempt = actions.capture(`${createQuoteMention(available[1])} answer`);
+  });
+  expect(attempt.fields.quotes).toHaveLength(1);
+  expect(attempt.fields.quotes![0]).toMatchObject({
+    text: 'Second',
+    reference: { offset: 0, label: '“Second”' },
+  });
+  act(() => attempt.finish(false));
+  expect(state.fields.quotes).toHaveLength(2);
 });

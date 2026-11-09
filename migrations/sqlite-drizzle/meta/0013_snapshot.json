@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d821ba19-3334-410c-945f-5e9c12001ec5",
+  "id": "444f8f5c-2275-45c2-89bc-7a2d0ae83fe5",
   "prevId": "9b4246bb-1c49-4c6b-a5c2-f2e1e2f19751",
   "tables": {
     "app_state": {
@@ -270,27 +270,6 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "managed_remote_id": {
-          "name": "managed_remote_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "default_model_id": {
-          "name": "default_model_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "allowed_model_ids": {
-          "name": "allowed_model_ids",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "order_key": {
           "name": "order_key",
           "type": "text",
@@ -330,11 +309,6 @@
           "name": "agent_order_key_idx",
           "columns": ["order_key"],
           "isUnique": false
-        },
-        "agent_managed_remote_id_idx": {
-          "name": "agent_managed_remote_id_idx",
-          "columns": ["managed_remote_id"],
-          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -456,13 +430,6 @@
           "autoincrement": false,
           "default": "'{\"modelInvocable\":true,\"userInvocable\":true}'"
         },
-        "managed_remote_id": {
-          "name": "managed_remote_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -493,11 +460,6 @@
           "name": "agent_global_skill_is_enabled_idx",
           "columns": ["is_enabled"],
           "isUnique": false
-        },
-        "agent_global_skill_managed_remote_id_idx": {
-          "name": "agent_global_skill_managed_remote_id_idx",
-          "columns": ["managed_remote_id"],
-          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -810,6 +772,11 @@
         "agent_session_last_activity_at_idx": {
           "name": "agent_session_last_activity_at_idx",
           "columns": ["last_activity_at"],
+          "isUnique": false
+        },
+        "agent_session_forked_from_created_id_idx": {
+          "name": "agent_session_forked_from_created_id_idx",
+          "columns": ["forked_from_session_id", "created_at", "id"],
           "isUnique": false
         }
       },
@@ -1784,13 +1751,6 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "managed_remote_id": {
-          "name": "managed_remote_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1815,11 +1775,6 @@
         "mcp_server_builtin_idx": {
           "name": "mcp_server_builtin_idx",
           "columns": ["builtin_id"],
-          "isUnique": true
-        },
-        "mcp_server_managed_remote_id_idx": {
-          "name": "mcp_server_managed_remote_id_idx",
-          "columns": ["managed_remote_id"],
           "isUnique": true
         }
       },

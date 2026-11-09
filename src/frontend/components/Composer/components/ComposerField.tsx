@@ -24,7 +24,16 @@ import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
  */
 type ComposerFieldProps = Pick<
   ComposerInputProps,
-  'layout' | 'onBlur' | 'onFocus' | 'onLayout' | 'placeholder' | 'style' | 'testID'
+  | 'layout'
+  | 'onBlur'
+  | 'onFocus'
+  | 'onLayout'
+  | 'onLinkPress'
+  | 'onReturnSubmit'
+  | 'placeholder'
+  | 'style'
+  | 'submitOnReturn'
+  | 'testID'
 > & { attachmentMode?: 'images' | 'text-only' };
 
 export function ComposerField({
@@ -32,8 +41,11 @@ export function ComposerField({
   onBlur,
   onFocus,
   onLayout,
+  onLinkPress,
+  onReturnSubmit,
   placeholder,
   style,
+  submitOnReturn,
   testID,
   attachmentMode = 'images',
 }: ComposerFieldProps) {
@@ -67,6 +79,7 @@ export function ComposerField({
         // Menus and the sidebar use the same ToolCase shape as a Lucide SVG.
         '^skill://': { ...mentionStyle, icon: skillInlineIcon['tool-case'], iconTint: true },
         '^selection://': { ...mentionStyle, icon: pluginInlineIcons['file-text'], iconTint: true },
+        '^quote://': mentionStyle,
       },
     };
   }, [linkColor, theme]);
@@ -89,15 +102,19 @@ export function ComposerField({
 
   return (
     <Composer.Input
+      insertNewlineLabel={t('chat.input.action.insertNewline')}
       layout={layout}
       markdownStyle={markdownStyle}
       onBlur={onBlur}
       onFocus={handleFocus}
       onLayout={handleLayout}
+      onLinkPress={onLinkPress}
       onPaste={handlePaste}
+      onReturnSubmit={onReturnSubmit}
       placeholder={placeholder ?? t('chat.inputPlaceholder')}
       ref={inputRef}
       style={style}
+      submitOnReturn={submitOnReturn}
       testID={testID}
     />
   );

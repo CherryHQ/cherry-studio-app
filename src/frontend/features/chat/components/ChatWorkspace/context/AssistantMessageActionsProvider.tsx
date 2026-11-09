@@ -55,7 +55,7 @@ type AssistantMessageActions = {
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
-  deleteMessageTurn?: (input: { turnId: string }) => void;
+  deleteMessageTurn?: (input: { turnId: string; messageId: string }) => void;
   /**
    * Shows another alternative at a branch point, restoring its own continuation. Resolves whether
    * the choice was applied.
@@ -125,13 +125,15 @@ export function AssistantMessageActionsProvider({
     () => new Set(editableKey ? editableKey.split('\n') : []),
     [editableKey],
   );
-  const isBusy = snapshot.executions.some(
-    (execution) =>
-      execution.state === 'running' ||
-      execution.state === 'awaiting-approval' ||
-      execution.state === 'awaiting-input' ||
-      execution.state === 'finalizing',
-  );
+  const isBusy =
+    Boolean(snapshot.isSubmitting) ||
+    snapshot.executions.some(
+      (execution) =>
+        execution.state === 'running' ||
+        execution.state === 'awaiting-approval' ||
+        execution.state === 'awaiting-input' ||
+        execution.state === 'finalizing',
+    );
   // Rows receive these handlers through context. The transcript and snapshot
   // change on every streamed update, so the handlers read them when invoked;
   // only whether an action exists or is enabled reaches rows as rendered state.
@@ -247,10 +249,11 @@ export function AssistantMessageActionsProvider({
     [run],
   );
   const remove = useCallback(
-    ({ turnId }: { turnId: string }) => {
+    ({ turnId, messageId }: { turnId: string; messageId: string }) => {
       const current = latest.current;
       const message = current.messages.find(
-        (message) => message.display.turnId === turnId && message.actions.remove,
+        (message) =>
+          message.key === messageId && message.display.turnId === turnId && message.actions.remove,
       );
       if (!message || current.isBusy) return;
       current.alert.confirm({

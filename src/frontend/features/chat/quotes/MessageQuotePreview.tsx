@@ -1,8 +1,5 @@
-import CircleXIcon from '@cherrystudio/app-icons/icons/circle-x';
 import {
   BackgroundPressExclusion,
-  Button,
-  Composer,
   ContextMenuExclusion,
   useToast,
 } from '@cherrystudio/ui/components';
@@ -15,45 +12,30 @@ import { v7 as uuidv7 } from 'uuid';
 import type { QuoteFields } from '@/shared/contracts/agent';
 import { stripMarkdownFormatting } from '@/shared/utils/markdownFormatting';
 
-import { useChatQuoteActions, useChatQuoteState } from './ChatQuoteContext';
-
-/** The quote waiting in the composer, in the attachment row's place above the field. */
-export function DraftMessageQuotePreview() {
-  const { fields, isBusy } = useChatQuoteState();
-  const actions = useChatQuoteActions();
-  const { t } = useTranslation();
-  const line = useQuoteLine(fields);
-  return (
-    <Composer.Collapsible style={draftRowStyle}>
-      {line ? (
-        <BackgroundPressExclusion>
-          <ContextMenuExclusion className="flex-row items-center rounded-lg bg-secondary">
-            <Pressable
-              {...line.pressProps}
-              className="min-w-0 flex-1 py-1.5 pl-3 active:opacity-70"
-            >
-              <Text className="text-muted-foreground text-sm" numberOfLines={1}>
-                {line.text}
-              </Text>
-            </Pressable>
-            <Button
-              accessibilityLabel={t('chat.quote.remove')}
-              disabled={isBusy}
-              icon={<CircleXIcon className="text-muted-foreground" />}
-              onPress={actions?.clearQuote}
-              shape="pill"
-              size="xs"
-              variant="ghost"
-            />
-          </ContextMenuExclusion>
-        </BackgroundPressExclusion>
-      ) : null}
-    </Composer.Collapsible>
-  );
-}
+import { useChatQuoteActions } from './ChatQuoteContext';
 
 /** The quote a sent message carries; pressing it scrolls the transcript to the source. */
 export function MessageQuotePreview({ fields }: { fields: QuoteFields }) {
+  const occurrences = new Map<string, number>();
+  return (
+    <>
+      {fields.quotes
+        ?.filter((quote) => !quote.reference)
+        .map((quote) => {
+          const occurrence = occurrences.get(quote.id) ?? 0;
+          occurrences.set(quote.id, occurrence + 1);
+          return (
+            <LegacyMessageQuotePreview
+              key={`${quote.id}-${occurrence}`}
+              fields={{ ...fields, quotes: [quote] }}
+            />
+          );
+        })}
+    </>
+  );
+}
+
+function LegacyMessageQuotePreview({ fields }: { fields: QuoteFields }) {
   const line = useQuoteLine(fields);
   if (!line) return null;
   return (
@@ -74,11 +56,12 @@ export function MessageQuotePreview({ fields }: { fields: QuoteFields }) {
 
 /** "Author: excerpt" in plain text, or nothing for a part without a quote. */
 export function messageQuoteLine(fields: QuoteFields, t: TFunction): string | undefined {
-  const quote = fields.quotes?.[0];
-  if (!quote || !fields.quoteAuthor) return undefined;
+  if (!fields.quotes?.length || !fields.quoteAuthor) return undefined;
   return t('chat.quote.line', {
     author: fields.quoteAuthor.name ?? t('chat.quote.assistant'),
-    text: stripMarkdownFormatting(quote.text).replace(/\s+/g, ' ').trim(),
+    text: fields.quotes
+      .map((quote) => stripMarkdownFormatting(quote.text).replace(/\s+/g, ' ').trim())
+      .join('\n'),
   });
 }
 
@@ -88,7 +71,7 @@ function useQuoteLine(fields: QuoteFields) {
   const { toast } = useToast();
   const actions = useChatQuoteActions();
   const [isOpening, setIsOpening] = useState(false);
-  const quote = fields.quotes?.[0];
+  const quote = fields.quotes?.find((item) => !item.reference);
   const text = messageQuoteLine(fields, t);
   if (!quote || !text) return undefined;
   const open = actions
@@ -116,6 +99,3 @@ function useQuoteLine(fields: QuoteFields) {
     },
   };
 }
-
-// Matches the attachment row: flush with the field's text, the composer's rhythm below it.
-const draftRowStyle = { paddingBottom: 8, paddingTop: 2 } as const;

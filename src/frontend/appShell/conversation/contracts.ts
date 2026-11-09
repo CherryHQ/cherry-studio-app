@@ -173,6 +173,8 @@ export type ConversationMessage = {
   };
 };
 export type ConversationSnapshot = {
+  /** A submission or answer retry is being prepared before its execution is reserved. */
+  isSubmitting?: boolean;
   agentId?: string;
   workspaceId?: string;
   workspaceKind?: 'registered' | 'system';
@@ -228,6 +230,9 @@ export type ConversationSummary = {
   agentId?: string;
   title: string;
   updatedAt?: string;
+  createdAt?: string;
+  forkedFromSessionId?: string | null;
+  hasChildren?: boolean;
 };
 export type ConversationListStatus =
   | 'running'
@@ -246,7 +251,17 @@ export interface ConversationCatalog {
   readonly cacheScope?: QueryScope;
   subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
   readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
-  previewSession?(ref: ConversationRef): ConversationPreview;
+  previewSession?(
+    ref: ConversationRef,
+    options?: { includeDescendants?: boolean },
+  ): ConversationPreview;
+  previewAgent?(ref: AgentRef): Readable<ConversationListStatus | undefined>;
+  listSessionChildren?(
+    parent: ConversationRef,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<ConversationSummary>>;
+  readSessionPath?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary[]>;
   listAgents(
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,

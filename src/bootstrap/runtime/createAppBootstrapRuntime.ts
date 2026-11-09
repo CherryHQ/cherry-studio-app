@@ -268,6 +268,7 @@ export function createAppBootstrapRuntime(
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
       desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
+      desktopConnectionNameChanged: (id) => desktopConnectionManager.refreshName(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
