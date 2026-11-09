@@ -199,6 +199,15 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      isComponentReady = true
    }
  
+@@ -172,7 +222,7 @@
+     gravity = Gravity.TOP or Gravity.START
+ 
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY
++      breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+     }
+ 
+     setEditableFactory(MarkdownEditableFactory(this))
 @@ -210,8 +260,18 @@ class EnrichedMarkdownTextInputView(
      inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
    }
@@ -330,7 +339,7 @@ index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1
      }
  
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
-index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb16459b6fe 100644
+index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..604e820431aa84223e2b21b42e64d90601f707c6 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 @@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.input.layout
@@ -375,6 +384,15 @@ index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb1
      return size
    }
  
+@@ -128,7 +132,7 @@
+         .setLineSpacing(0f, 1f)
+ 
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
++      builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE)
+     }
+ 
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
 index a961e675a0b0e4358675f9de6d8c75e83dd34bae..e785ba8fa23fe2ba663a74a614845b426fc5d410 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
