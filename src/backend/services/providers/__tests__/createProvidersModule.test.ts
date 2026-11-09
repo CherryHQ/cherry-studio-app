@@ -4,6 +4,16 @@ import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import { createProvidersModule, type ProvidersModuleDependencies } from '../createProvidersModule';
 
+let mockDeviceRegion: string | null = 'CN';
+
+jest.mock('expo-localization', () => ({
+  getLocales: () => [{ languageTag: 'zh-CN', regionCode: mockDeviceRegion }],
+}));
+
+beforeEach(() => {
+  mockDeviceRegion = 'CN';
+});
+
 function subject() {
   let provider = {
     id: 'custom',
@@ -57,14 +67,17 @@ function subject() {
 
 describe('explicit provider activation', () => {
   it.each([
-    { country: 'CN', expected: ['deepseek'] },
-    { country: 'US', expected: ['deepseek', 'openai'] },
-    { country: null, expected: ['deepseek'] },
+    { country: 'CN', deviceRegion: 'US', expected: ['deepseek'] },
+    { country: 'US', deviceRegion: 'CN', expected: ['deepseek', 'openai'] },
+    { country: null, deviceRegion: 'CN', expected: ['deepseek'] },
+    { country: null, deviceRegion: 'US', expected: ['deepseek', 'openai'] },
+    { country: null, deviceRegion: null, expected: ['deepseek'] },
   ])(
-    'selects discovery and recommendations from IP country $country',
-    async ({ country, expected }) => {
+    'selects discovery from IP $country and device region $deviceRegion',
+    async ({ country, deviceRegion, expected }) => {
       const { dependencies } = subject();
       dependencies.getCountry = async () => country;
+      mockDeviceRegion = deviceRegion;
       dependencies.catalog.list = () =>
         [
           { id: 'deepseek', name: 'DeepSeek', availableInEditions: ['global', 'cn'] },
@@ -76,6 +89,27 @@ describe('explicit provider activation', () => {
       expect(entries.every((entry) => entry.isRecommended)).toBe(true);
     },
   );
+
+  it('keeps overseas discovery and imports available when privacy refusal leaves the country unknown', async () => {
+    mockDeviceRegion = 'US';
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => null;
+    const loader = new MobileRegistryLoader();
+    dependencies.catalog = {
+      isExcluded: (id) => loader.isProviderExcludedFromCatalog(id),
+      list: () => loader.loadProviders(),
+    };
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const backend = createProvidersModule(dependencies);
+    const ids = (await backend.listCatalog()).map((entry) => entry.id);
+    expect(ids).toEqual(expect.arrayContaining(['openai', 'anthropic', 'gemini']));
+
+    for (const id of ['openai', 'anthropic', 'gemini']) {
+      const installed = { id, name: id, isEnabled: false } as Provider;
+      jest.mocked(dependencies.providers.create).mockResolvedValueOnce(installed);
+      await expect(backend.importPreset(id)).resolves.toBe(installed);
+    }
+  });
 
   it('exposes and imports international presets after detection changes to an overseas VPN exit', async () => {
     const { dependencies } = subject();

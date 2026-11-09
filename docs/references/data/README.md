@@ -212,8 +212,11 @@ journaled under `app_state` keys prefixed with `seed:`.
 
 Fresh-install recommendations and new-provider discovery share the same egress-country policy in
 all distributions, including domestic-store builds. A detected non-CN country permits global
-entries, including through an overseas VPN exit; CN or an unknown country selects domestic entries.
-The unknown result remains `null` in region detection. Existing saved providers are preserved.
+entries, including through an overseas VPN exit; detected CN selects domestic entries. An unknown
+country uses the device region (`getLocales()[0]?.regionCode`) for these two catalog decisions:
+CN selects domestic entries, other regions select global entries, and a missing region retains the
+domestic default. The unknown result remains `null` in region detection. Existing saved providers
+are preserved; mirror selection, Jina and voice retain their existing CN fallback.
 
 `ProviderRegistryUpdaterService` activates the newest complete compatible saved model catalog,
 or the pinned `@cherrystudio/provider-registry` package's bundled `models.json` and

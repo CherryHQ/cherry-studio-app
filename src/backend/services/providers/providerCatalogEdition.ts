@@ -1,6 +1,8 @@
 import type { ProviderEdition } from '@cherrystudio/provider-registry';
+import { getLocales } from 'expo-localization';
 
-/** All distributions select by egress country, using domestic discovery when unknown. */
+/** Prefer detected egress country, then device region, retaining CN if neither is available. */
 export function getProviderCatalogEdition(country: string | null): ProviderEdition {
-  return country === null || country === 'CN' ? 'cn' : 'global';
+  const region = country ?? getLocales()[0]?.regionCode ?? 'CN';
+  return region === 'CN' ? 'cn' : 'global';
 }

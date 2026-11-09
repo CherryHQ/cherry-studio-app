@@ -16,13 +16,16 @@ Only successful country codes are cached; no country, IP address or coordinates 
 A failed lookup returns `null`, including after a previous result expires. Unknown is never
 classified as a detected CN country or cached, so the next eligible caller can retry. Mobile has
 no application-owned proxy configuration; the ten-minute expiry bounds stale detection when a
-system VPN or network changes. Device language, locale and time zone do not select network region.
+system VPN or network changes. Device settings never change the detected network country.
 
 A detected CN selects domestic provider discovery and GitCode distribution; other detected
 countries select global discovery and GitHub distribution. This applies to every distribution,
 including domestic-store builds: a detected overseas VPN exit permits international discovery.
-`getProviderCatalogEdition` owns the common discovery/recommendation policy; an unknown country
-selects the domestic edition without changing the detection result. Download clients also retain
+`getProviderCatalogEdition` owns the common discovery/recommendation policy. When detection is
+unavailable or declined, only discovery and fresh-install recommendations fall back to the device
+region from `getLocales()[0]?.regionCode`: CN selects domestic entries and other regions select
+global entries. If the device region is also missing, the domestic default remains. This fallback
+never changes the detection result or its cache. Download clients retain
 their historical domestic-source preference when the country is unknown. Offline voice downloads
 use byte-identical immutable ModelScope/Hugging Face mirrors.
 App Store lookup retains its CN request fallback when unknown. Installed store
