@@ -90,7 +90,7 @@ export function PaintingSettingsBottomSheet({
 }: PaintingSettingsBottomSheetProps) {
   const { t } = useTranslation();
   const [activeEnumKey, setActiveEnumKey] = useState<CanonicalParamKey | null>(null);
-  const fields = orderedFields(getImageParamFields(resolvedMode));
+  const fields = orderedFields(getImageParamFields(resolvedMode, values));
   const activeEnumField = fields.find(
     (field): field is EnumImageParamField =>
       field.key === activeEnumKey && field.spec.type === 'enum' && field.spec.render !== 'chips',

@@ -61,6 +61,7 @@ export const DIFFUSION_WIRE_PROFILE: WireProfile = {
     'guidanceScale',
     'promptEnhancement',
     'quality',
+    'outputFormat',
   ],
 };
 

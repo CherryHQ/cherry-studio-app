@@ -115,7 +115,10 @@ reader baseline with `minAppVersion` independently.
 
 Mobile exposes GIF for generation using the pinned SDK's existing support and the API's default
 frame count and duration. Catalog projection omits custom frame controls and the GIF edit option;
-static-image editing retains PNG, JPEG and WebP. Native OpenAI adapters receive the SDK's
+static-image editing retains PNG, JPEG and WebP. GIF controls use automatic sizing to stay within
+the default frame budget and exclude transparent backgrounds. Changing output format reconciles
+those dependent controls; shared request admission rejects incompatible explicit parameters.
+Native OpenAI adapters receive the SDK's
 `outputFormat` option, while compatible adapters receive the catalog's `output_format` wire name.
 No additional SDK patch is needed for this generation-only scope. GIF playback and original-file
 export remain Mobile-owned; execution and device acceptance of the v4 integration remain pending.

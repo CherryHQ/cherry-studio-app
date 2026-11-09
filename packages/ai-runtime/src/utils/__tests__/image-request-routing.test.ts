@@ -1,4 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { ImageModelV3CallOptions } from '@ai-sdk/provider';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { generateImage } from 'ai';
@@ -31,7 +32,7 @@ function callOptions(
 ): ImageModelV3CallOptions {
   const provider: Provider = {
     id: `copy-${providerId}`,
-    presetProviderId: providerId,
+    presetProviderId: providerId === 'openai-compatible' ? undefined : providerId,
     name: providerId,
     isEnabled: true,
     authType: 'api-key',
@@ -67,7 +68,7 @@ function callOptions(
 describe('painting parameters through the image provider to the HTTP request', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(['openai', 'dmxapi', 'newapi', 'aihubmix'])(
+  it.each(['openai', 'dmxapi', 'newapi', 'aihubmix', 'openai-compatible'])(
     '%s generates GIFs with the API defaults and retains the encoded bytes',
     async (providerId) => {
       const base64 = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -82,7 +83,9 @@ describe('painting parameters through the image provider to the HTTP request', (
             ? createNewApi(settings)
             : providerId === 'aihubmix'
               ? createAihubmix(settings)
-              : createOpenAI(settings);
+              : providerId === 'openai-compatible'
+                ? createOpenAICompatible({ ...settings, name: `copy-${providerId}` })
+                : createOpenAI(settings);
       const modelId = 'gpt-image-2.6-flare';
       const options = callOptions(providerId, modelId, {
         complexity: 'medium',
@@ -92,7 +95,6 @@ describe('painting parameters through the image provider to the HTTP request', (
         model: provider.imageModel(modelId),
         prompt: 'a walking fox',
         n: 1,
-        size: '1024x1024',
         providerOptions: options.providerOptions,
         maxRetries: 0,
       });
@@ -106,6 +108,7 @@ describe('painting parameters through the image provider to the HTTP request', (
         'frame_duration_ms',
         'output_compression',
         'outputFormat',
+        'size',
       ]) {
         expect(fields).not.toHaveProperty(key);
       }

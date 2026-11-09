@@ -171,6 +171,23 @@ describe('image provider option routing', () => {
     });
   });
 
+  it('maps output format for custom compatible providers without losing sampling options', () => {
+    expect(
+      build(
+        'openai-compatible',
+        { outputFormat: 'gif', complexity: 'medium', cfg: 7.5, seed: 4 },
+        provider('custom-provider'),
+      ),
+    ).toEqual({
+      'custom-provider': {
+        output_format: 'gif',
+        complexity: 'medium',
+        cfg: 7.5,
+        seed: 4,
+      },
+    });
+  });
+
   it('uses the shared MiniMax and Doubao wire registrations', () => {
     expect(
       build(
