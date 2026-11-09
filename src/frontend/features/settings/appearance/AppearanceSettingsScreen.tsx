@@ -12,6 +12,7 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
 import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSetting';
+import { CacheHitRateSetting } from './components/CacheHitRateSetting';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { EnterToSendSetting } from './components/EnterToSendSetting';
 import { MultiModelCardsSetting } from './components/MultiModelCardsSetting';
@@ -84,6 +85,7 @@ export default function AppearanceSettingsScreen() {
           <MultiModelCardsSetting />
           <DocumentParserSetting />
           <AutoCollapseProcessSetting />
+          <CacheHitRateSetting />
         </Section>
       </SettingsScrollPage>
       <OptionPickerBottomSheet

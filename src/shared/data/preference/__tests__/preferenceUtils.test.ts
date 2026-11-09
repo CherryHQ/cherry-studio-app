@@ -57,3 +57,9 @@ test('dictation is opt-in and voice engine choices stay on the device', () => {
     ]),
   );
 });
+
+test('cache hit rate is registered, opt-in, and syncable', () => {
+  expect(isPreferenceKey('chat.cache_hit_rate.enabled')).toBe(true);
+  expect(getDefaultValue('chat.cache_hit_rate.enabled')).toBe(false);
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).not.toContain('chat.cache_hit_rate.enabled');
+});
