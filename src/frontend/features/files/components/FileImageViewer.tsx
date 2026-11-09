@@ -39,10 +39,7 @@ export function FileImageViewer({
   // A pane is not a stack screen: it has no screen options to set, and sits below the status bar.
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
-  const saveToPhotos = useSaveImageToPhotos(
-    { uri: file.uri, provenance: file.entry.provenance },
-    { watermark: 'none' },
-  );
+  const saveToPhotos = useSaveImageToPhotos({ uri: file.uri });
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);

@@ -18,6 +18,7 @@ import {
 import type { HtmlConversionArtifact } from '@/shared/contracts/documentExport';
 import { DocumentExportError, HTML_CONVERSION_MAX_PAGES } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 
 import { useHtmlConversion } from '../hooks/useHtmlConversion';
 import { ShareFormatMenu, type ShareFormat } from './ShareFormatMenu';
@@ -47,7 +48,25 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
   const [attempt, setAttempt] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const pending = useRef<AbortController | undefined>(undefined);
-  const savePhotos = useSaveImagesToPhotos({ watermark: 'none' });
+  const savePhotos = useSaveImagesToPhotos();
+  const convertFiles = useCallback(
+    async (signature: ExportWatermark, signal: AbortSignal) => {
+      const artifacts: HtmlConversionArtifact[] = [];
+      for (const file of request.files) {
+        const artifact = await convert(
+          file,
+          format === 'pptx' ? 'pptx' : 'image',
+          signature,
+          signal,
+        );
+        artifacts.push(artifact);
+        if (artifacts.reduce((sum, item) => sum + item.pages.length, 0) > HTML_CONVERSION_MAX_PAGES)
+          throw new DocumentExportError('size-limit');
+      }
+      return artifacts;
+    },
+    [convert, format, request.files],
+  );
   useEffect(() => () => pending.current?.abort(), []);
   useEffect(() => {
     if (format === 'original' || !canConvert) return;
@@ -56,22 +75,7 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
       request.id,
       (async () => {
         try {
-          const artifacts: HtmlConversionArtifact[] = [];
-          const signature = createWatermark();
-          for (const file of request.files) {
-            const artifact = await convert(
-              file,
-              format === 'pptx' ? 'pptx' : 'image',
-              signature,
-              controller.signal,
-            );
-            artifacts.push(artifact);
-            if (
-              artifacts.reduce((sum, item) => sum + item.pages.length, 0) >
-              HTML_CONVERSION_MAX_PAGES
-            )
-              throw new DocumentExportError('size-limit');
-          }
+          const artifacts = await convertFiles(createWatermark(), controller.signal);
           if (!controller.signal.aborted) setConversion({ format, watermark, artifacts });
         } catch (error) {
           if (!controller.signal.aborted)
@@ -80,7 +84,7 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
       })(),
     );
     return () => controller.abort();
-  }, [attempt, canConvert, convert, createWatermark, format, request, watermark]);
+  }, [attempt, canConvert, convertFiles, createWatermark, format, request.id, watermark]);
   const current =
     conversion?.format === format && conversion.watermark === watermark ? conversion : undefined;
   const isConverting = format !== 'original' && !current;
@@ -109,7 +113,10 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
               format === 'original'
                 ? request.files
                 : current!.artifacts.map((artifact) => artifact.file),
-              { watermark: { kind: 'none' }, signal: controller.signal },
+              {
+                watermark: format === 'original' ? createWatermark() : { kind: 'none' },
+                signal: controller.signal,
+              },
             );
           else if (format === 'original' || format === 'image')
             await savePhotos((signal) =>
@@ -120,10 +127,10 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
                   if (format === 'original')
                     return request.files.map((file) => ({
                       uri: file.uri,
-                      provenance: file.entry.provenance,
                     }));
                   const images: { uri: string }[] = [];
-                  for (const artifact of current!.artifacts)
+                  const artifacts = await convertFiles({ kind: 'none' }, signal);
+                  for (const artifact of artifacts)
                     images.push(
                       await prepareSharedFile(artifact.file, {
                         watermark: { kind: 'none' },
@@ -135,7 +142,8 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
               ),
             );
           else {
-            for (const artifact of current!.artifacts) await artifact.save(controller.signal);
+            const artifacts = await convertFiles({ kind: 'none' }, controller.signal);
+            for (const artifact of artifacts) await artifact.save(controller.signal);
             toast.show({ label: t('sharing.savedToLibrary'), variant: 'success' });
           }
         } catch (error) {

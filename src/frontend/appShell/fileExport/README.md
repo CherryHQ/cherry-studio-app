@@ -5,13 +5,13 @@ components and pages consume this module; this module does not import page code.
 
 ## Configuration
 
-Application entry points accept `FileExportOptions`: `{ watermark?: 'cherry' | 'none' }`.
+Sharing entry points accept `FileExportOptions`: `{ watermark?: 'cherry' | 'none' }`.
 Omitted styles follow the global Share watermark setting (`file.export.watermark_enabled`), which
 defaults to enabled and lives under Settings > General. `useExportWatermarkStyle` resolves this
 preference; explicit `cherry` or `none` options override it for that request.
-`appShell/sharing` freezes the resolved style for converted formats and offers a request-local
-watermark menu. Original file and image delivery always keeps the original bytes. HTML conversion
-uses the selected style for PNG and PPTX. PPTX applies the
+`appShell/sharing` freezes the resolved style for sharing and offers a request-local watermark menu
+for converted formats. Original bitmap sharing also uses that style; other original files retain
+their bytes. HTML conversion uses the selected style for shared PNG and PPTX. PPTX applies the
 footer only to the final captured slide, without adding a slide.
 
 `useExportWatermark` resolves the selected style into an `ExportWatermark` once per operation.
@@ -39,14 +39,14 @@ opening, without a footer, because the image renderer only decodes bitmaps.
 The in-app preview and original image used for editing retain their bytes.
 
 The global preference is persisted; each export resolves its own watermark selection without adding
-file metadata. Existing `document-export` files are completed outputs: ordinary sharing and photo
-saving reuse their exact bytes, whether the generating request used `cherry` or
-`none`. Choosing a different style requires a new export from source; `none` does not remove a footer
+file metadata. Managed bitmap files, including saved `document-export` images, follow the selected
+style when shared. Local photo saving retains the supplied bytes. `none` does not remove a footer
 already baked into pixels or authored content.
 
 Document HTML/image capture applies the resolved watermark during rendering, avoiding a second
 bitmap pass. HTML-file conversion uses the shared image renderer before persistence. Completed
-files then follow the existing file-delivery policy without another watermark pass.
+temporary `ExportFile` descriptors are copied without another watermark pass; managed files later
+selected from the library follow the current sharing setting.
 
 ## Delivery And Lifetime
 
@@ -63,8 +63,11 @@ without re-encoding, and a failed copy never opens a partial share sheet.
 
 `useShareFile` and `useShareFiles` in `appShell/sharing` own source preparation, panel admission,
 busy state and localized feedback. The low-level functions here only perform delivery.
-`useSaveImageToPhotos` owns add-only permission guidance and releases its prepared image after
-Photos copies it. System opening reuses `prepareFileExport`.
+`useSaveImageToPhotos` and `useSaveImagesToPhotos` own add-only permission guidance and copy the
+supplied image bytes directly into Photos. They accept no watermark option and do not read the
+sharing setting. Document and HTML callers prepare separate unwatermarked artifacts before local
+saving; a watermarked share preview is never reused for that save. System opening reuses
+`prepareFileExport`.
 
 Shared/system-open copies remain in the OS-managed cache because recipients may read after the
 chooser closes. Shared copies use one path per entry revision and watermark treatment, so sharing

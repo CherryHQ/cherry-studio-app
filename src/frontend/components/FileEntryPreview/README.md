@@ -31,7 +31,7 @@ logging, and the single opening policy shared by the composer, messages, and fil
   the attachment image and painting outputs so neither renders a broken frame.
 
 Application-level sharing and watermark preparation belong to `appShell/fileExport`. System
-opening consumes its `prepareFileExport`; completed document exports retain their original bytes.
+opening consumes its `prepareFileExport`; managed bitmap images follow the requested watermark style.
 
 Opening failures report a toast. Thumbnail failures are logged and keep the existing fallback.
 The image thumbnail query uses the same resolved-entry shape and query key as the file library.

@@ -5,27 +5,18 @@ import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
 import { canRequestDevicePermission, canUseDevicePermission } from '@/shared/contracts';
-import type { FileExportOptions } from '@/shared/contracts/fileExport';
-import type { FileEntryProvenance } from '@/shared/data/types/file';
-
-import { prepareImageExport } from './prepareImageExport';
-import { useExportWatermark } from './useExportWatermark';
 
 /** Shared add-only Photos permission flow for generated and managed images. */
-export function useSaveImageToPhotos(
-  { uri, provenance }: { uri: string; provenance?: FileEntryProvenance },
-  options: FileExportOptions = {},
-) {
-  const save = useSaveImagesToPhotos(options);
-  return useCallback(() => save(async () => [{ uri, provenance }]), [save, uri, provenance]);
+export function useSaveImageToPhotos({ uri }: { uri: string }) {
+  const save = useSaveImagesToPhotos();
+  return useCallback(() => save(async () => [{ uri }]), [save, uri]);
 }
 
-export function useSaveImagesToPhotos(options: FileExportOptions = {}) {
+export function useSaveImagesToPhotos() {
   const { t } = useTranslation();
   const permissions = useBackendModule('permissions');
   const { toast } = useToast();
   const { alert } = useAlert();
-  const createWatermark = useExportWatermark(options.watermark);
   const saving = useRef<AbortController | undefined>(undefined);
   const mounted = useRef(true);
   useEffect(() => {
@@ -45,13 +36,7 @@ export function useSaveImagesToPhotos(options: FileExportOptions = {}) {
         const images = await read(controller.signal);
         for (const image of images) {
           controller.signal.throwIfAborted();
-          const exported = await prepareImageExport(image, createWatermark());
-          try {
-            controller.signal.throwIfAborted();
-            await MediaLibrary.Asset.create(exported.uri);
-          } finally {
-            exported.release();
-          }
+          await MediaLibrary.Asset.create(image.uri);
         }
         controller.signal.throwIfAborted();
         toast.show({ label: t('imageActions.saved'), variant: 'success' });
@@ -62,7 +47,7 @@ export function useSaveImagesToPhotos(options: FileExportOptions = {}) {
         if (saving.current === controller) saving.current = undefined;
       }
     },
-    [createWatermark, t, toast],
+    [t, toast],
   );
 
   const showOpenSettingsAlert = useCallback(() => {
@@ -131,6 +116,4 @@ export function useSaveImagesToPhotos(options: FileExportOptions = {}) {
   return download;
 }
 
-type ReadImages = (
-  signal: AbortSignal,
-) => Promise<readonly { uri: string; provenance?: FileEntryProvenance }[]>;
+type ReadImages = (signal: AbortSignal) => Promise<readonly { uri: string }[]>;

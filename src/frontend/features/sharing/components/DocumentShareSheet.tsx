@@ -55,7 +55,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
   );
   const [isPending, setIsPending] = useState(false);
   const pending = useRef<AbortController | undefined>(undefined);
-  const savePhotos = useSaveImagesToPhotos({ watermark: 'none' });
+  const savePhotos = useSaveImagesToPhotos();
   useEffect(() => () => pending.current?.abort(), []);
   const perform = (action: 'share' | 'save') => {
     if (pending.current) return;
@@ -78,7 +78,9 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
               { signal: controller.signal, watermark: { kind: 'none' } },
             );
           else {
-            const artifact = await preview.getArtifact(controller.signal);
+            const artifact = await preview.getArtifact(controller.signal, {
+              watermark: { kind: 'none' },
+            });
             await request.session.save(artifact, controller.signal);
             controller.signal.throwIfAborted();
             toast.show({ label: t('sharing.savedToLibrary'), variant: 'success' });
@@ -121,7 +123,9 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
           setIsPending(true);
           setDeliveryPresentation(presentation);
           try {
-            const artifact = await preview.getArtifact(controller.signal);
+            const artifact = await preview.getArtifact(controller.signal, {
+              watermark: { kind: 'none' },
+            });
             if (artifact.format !== 'image') throw new Error('Expected image output');
             const images: { uri: string }[] = [];
             for (const page of artifact.pages)

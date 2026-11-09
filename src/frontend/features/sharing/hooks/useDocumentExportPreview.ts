@@ -9,9 +9,10 @@ import {
   type ExportFormat,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
-/** Preparing a readable preview never captures PNGs. Delivery renders the chosen format once. */
+/** Preparing a readable preview never captures PNGs. Delivery selects its own watermark treatment. */
 export function useDocumentExportPreview(
   session: DocumentExportSession,
   format: ExportFormat,
@@ -73,22 +74,31 @@ export function useDocumentExportPreview(
       ? result
       : undefined;
   const getArtifact = useCallback(
-    async (signal: AbortSignal, onProgress?: (progress: DocumentExportProgress) => void) => {
+    async (
+      signal: AbortSignal,
+      options?: {
+        watermark?: ExportWatermark;
+        onProgress?: (progress: DocumentExportProgress) => void;
+      },
+    ) => {
       signal.throwIfAborted();
       await tail.current.catch(() => {});
       signal.throwIfAborted();
+      const outputPresentation = options?.watermark
+        ? { ...presentation, watermark: options.watermark }
+        : presentation;
       return session.render(
         format === 'image'
           ? {
               format,
-              presentation,
+              presentation: outputPresentation,
               capture,
-              layout: presentation.imageFrame?.excerptLabel ? 'single' : 'pages',
+              layout: outputPresentation.imageFrame?.excerptLabel ? 'single' : 'pages',
             }
           : format === 'html'
-            ? { format, presentation }
-            : { format, watermark: presentation.watermark },
-        { signal, onProgress },
+            ? { format, presentation: outputPresentation }
+            : { format, watermark: outputPresentation.watermark },
+        { signal, onProgress: options?.onProgress },
       );
     },
     [capture, format, presentation, session],

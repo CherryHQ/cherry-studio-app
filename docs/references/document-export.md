@@ -53,7 +53,8 @@ are preferred; a final oversized paragraph or code block is explicitly excerpted
 fences. A localized notice identifies excerpts and points to complete HTML/Markdown. An additional
 110% layout ceiling trims the semantic tail after fonts/images settle if needed; preview and capture
 use the same script. Omitted pictures are not prepared. The preview scrolls at readable card width.
-The quiet message-card footer uses a subtle separator, Cherry identity and download QR.
+When sharing watermark is enabled, the quiet message-card footer uses a subtle separator, Cherry
+identity and download QR. Local saved output omits that watermark footer.
 
 Cards through 2000 logical pixels use 3x output density; taller cards use 2x. The capture owner keeps
 native snapshots within the available viewport, then joins tiles into one PNG. A single tile retains
@@ -83,12 +84,14 @@ artifacts may be explicitly saved, and repeated saves reuse committed entries.
 
 Share sends temporary descriptors directly through file export. It does not call `session.save`.
 Image Save writes to Photos using stable OS-cache copies; document and PPT Save explicitly create
-managed entries. Both are distinct from sharing.
+managed entries. All local Save actions render without watermark, independently of the sharing
+setting or preview, before making those copies or entries.
 
 `prepareSharedFile` makes a stable, filename-preserving delivery copy before an external reader
 can outlive the source request. Finalized temporary outputs are not watermarked again. Original
-file/image sharing and original-image saving keep their bytes; request watermark settings apply
-to generated formats and never rewrite the global preference.
+non-image file sharing and original-image saving keep their bytes. Original bitmap sharing and
+generated share formats follow the request's watermark setting without rewriting the global
+preference.
 
 The sharing request retains physical capture, copying and delivery promises, then runs registered
 artifact cleanup and document disposal before releasing admission. The backend runtime cancels

@@ -137,7 +137,7 @@ test.each(['native', 'web'])(
 );
 
 test.each(['none', 'cherry'] as const)(
-  'a completed document keeps its bytes when delivery requests %s',
+  'a saved document image follows the sharing watermark setting (%s)',
   async (style) => {
     const uri = 'file:///managed/conversation.png';
     const entry = FileEntrySchema.parse({
@@ -152,18 +152,27 @@ test.each(['none', 'cherry'] as const)(
     const original = new Uint8Array([1, 2, 3]);
     mockFiles.set(uri, original);
     const requestedWatermark: ExportWatermark = style === 'none' ? { kind: 'none' } : watermark;
-    const photo = await prepareImageExport(
-      { uri, provenance: entry.provenance },
-      requestedWatermark,
-    );
+    const photo = await prepareImageExport({ uri }, requestedWatermark);
     const shared = await prepareFileExport({ entry, uri }, requestedWatermark);
-    expect(photo.uri).toBe(uri);
-    expect(shared).toMatchObject({ uri, filename: entry.filename, mediaType: entry.mediaType });
+    if (style === 'none') {
+      expect(photo.uri).toBe(uri);
+      expect(shared).toMatchObject({ uri, filename: entry.filename, mediaType: entry.mediaType });
+      expect(mockResources).toHaveLength(0);
+    } else {
+      expect(photo.uri).not.toBe(uri);
+      expect(shared.uri).not.toBe(uri);
+      expect(mockFiles.get(shared.uri)).toEqual(mockEncodedImage);
+      expect(mockText.mock.calls).toEqual([
+        [signature.brandName],
+        [signature.downloadLabel],
+        [signature.brandName],
+        [signature.downloadLabel],
+      ]);
+    }
     // Neither operation owns the managed source, so releasing its export cannot remove it.
     photo.release();
     shared.release();
     expect(mockFiles.get(uri)).toBe(original);
-    expect(mockResources).toHaveLength(0);
   },
 );
 

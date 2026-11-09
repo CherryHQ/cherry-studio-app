@@ -28,7 +28,8 @@ background paper slots do not mount additional document browsers. Message images
 360 logical pixels wide, with a shared source budget of 1500 content pixels for one message or
 3400 for multiple messages. Long selections explicitly show an excerpt notice; HTML and Markdown
 retain the full source. The image preview scrolls at the card width instead of shrinking a long
-card into unreadable text. Prepared preview and capture use identical content, typography and footer.
+card into unreadable text. Share preview and capture use identical content, typography and footer;
+local saves render the same content without the sharing watermark.
 Output density is 3x through 2000 logical pixels and 2x above that. Viewport-sized tiles are joined
 into one PNG; a single tile reuses the captured bytes without another bitmap/encode pass.
 Generic document images retain full pagination: at most 480 content pixels plus 16 top spacing,
@@ -42,8 +43,9 @@ source-keyed assets; cache retention is bounded.
 
 ## Files and HTML
 
-Original files share as independent files in frozen source order. File-library requests always
-share originals and show no format or watermark menu, including all-HTML selections. Other
+Original files share as independent files in frozen source order. File-library requests show no
+conversion or watermark menu, including all-HTML selections; original bitmap sharing still follows
+the global watermark setting. Other
 all-HTML requests with conversion enabled offer Original, Image and PPT. Authored HTML keeps its
 existing desktop capture strategy. PPT previews
 reuse the captured page images and delivery sends PPTX files. Conversions remain temporary and are
@@ -54,8 +56,11 @@ multi-file delivery.
 
 Share sends temporary artifacts through `appShell/fileExport` without saving to the file library.
 Document image Save writes all pages to Photos after copying them into the stable delivery cache;
-HTML/Markdown and PPT Save explicitly persist into the library; converted HTML images save to Photos. Original image groups
-can save to Photos. Permission handling stays in the existing file-export owner.
+HTML/Markdown and PPT Save explicitly persist into the library; converted HTML images save to Photos.
+All local saves use unwatermarked artifacts even when the share preview has a watermark. Document
+and HTML conversions prepare a separate clean artifact instead of reusing the signed preview.
+Original image groups can save their unchanged bytes to Photos. Permission handling stays in the
+existing file-export owner.
 
 The request retains in-flight generation and copying before disposal. Each native captured page is
 copied and released before the next; the shared HtmlCapture executor owns the physical lease.

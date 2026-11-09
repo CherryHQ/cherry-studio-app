@@ -9,10 +9,13 @@ The source owns selection. The panel previews that fixed collection and has no a
 selection controls. Closing and reopening from the source creates a fresh request. Closing the
 system share chooser leaves the panel open; it never claims recipient delivery.
 
-Original files retain their bytes. Conversion formats initialize watermark from the global setting
-and let the user change it for this request in the format menu. The global preference is unchanged.
+Sharing initializes its watermark from the global setting. Conversion formats let the user change
+it for this request in the format menu. Original bitmap shares use the resolved style as well;
+other original files retain their bytes. Local saving always uses an unwatermarked artifact,
+independently of the share preview. The global preference is unchanged.
 File-library entry points use `useShareFiles({ allowConversion: false })`. The frozen request keeps
-that policy, so single files and all-HTML selections expose only original-file delivery.
+that policy, so single files and all-HTML selections expose no format-conversion choices. Sharing
+watermark treatment still applies to bitmap copies.
 
 `retainShareOperation` holds source bytes through physical capture, copies and external delivery.
 `registerShareCleanup` registers temporary conversion artifacts. Closing waits for in-flight work,

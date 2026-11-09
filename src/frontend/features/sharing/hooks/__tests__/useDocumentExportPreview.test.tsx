@@ -9,6 +9,7 @@ import {
   type ExportFormat,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 
 import { useDocumentExportPreview } from '../useDocumentExportPreview';
 
@@ -157,6 +158,46 @@ test('message card delivery produces one image and uses the same presentation as
     { format: 'image', presentation: card, capture, layout: 'single' },
   ]);
 });
+
+test.each(['image', 'html', 'markdown'] as const)(
+  'local %s saving can render without the active sharing watermark',
+  async (format) => {
+    const ref = createRef<Preview>();
+    const session = createSession();
+    const watermark: ExportWatermark = {
+      kind: 'cherry',
+      signature: {
+        background: 'white',
+        foreground: 'black',
+        brandColor: 'red',
+        logoDataUrl: 'data:image/png;base64,AA==',
+        brandName: 'Cherry Studio',
+        downloadLabel: 'Scan',
+        downloadLinkLabel: 'Download',
+        downloadUrl: 'https://example.com',
+        qrCodeDataUrl: 'data:image/png;base64,AA==',
+      },
+    };
+    const signed = { ...presentation, watermark };
+    await act(async () => {
+      renderer = create(
+        <Probe ref={ref} session={session} format={format} currentPresentation={signed} />,
+      );
+    });
+    await ref.current!.getArtifact(new AbortController().signal, { watermark: { kind: 'none' } });
+    const saved = session.render.mock.calls.at(-1)![0];
+    expect(saved.format).toBe(format);
+    expect(saved.format === 'markdown' ? saved.watermark : saved.presentation.watermark).toEqual({
+      kind: 'none',
+    });
+    await ref.current!.getArtifact(new AbortController().signal);
+    const shared = session.render.mock.calls.at(-1)![0];
+    expect(shared.format === 'markdown' ? shared.watermark : shared.presentation.watermark).toBe(
+      watermark,
+    );
+    expect(signed.watermark).toBe(watermark);
+  },
+);
 
 test('preparation failure is explicit and never changes the selected export format', async () => {
   const ref = createRef<Preview>();
