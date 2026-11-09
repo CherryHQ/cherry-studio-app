@@ -828,7 +828,10 @@ test('context status consumer ignores unrelated streamed messages', () => {
   let renders = 0;
   let status: ReturnType<typeof useAgentContextStatus>;
   function ContextProbe() {
-    status = useAgentContextStatus('session-1');
+    const currentStatus = useAgentContextStatus('session-1');
+    useEffect(() => {
+      status = currentStatus;
+    }, [currentStatus]);
     renders++;
     return null;
   }

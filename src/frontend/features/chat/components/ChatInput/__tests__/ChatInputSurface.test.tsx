@@ -14,10 +14,10 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => [false] }));
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const component =
-    (name: string) =>
-    ({ children, ...props }: any) =>
-      React.createElement(name, props, children);
+  const component = (name: string) =>
+    function MockComponent({ children, ...props }: any) {
+      return React.createElement(name, props, children);
+    };
   return {
     useComposerExpansion: () => null,
     Composer: {

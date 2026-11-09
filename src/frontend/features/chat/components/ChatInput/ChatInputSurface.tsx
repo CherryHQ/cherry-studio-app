@@ -8,6 +8,7 @@ import {
   type ComponentProps,
   type PropsWithChildren,
   type ReactNode,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -130,10 +131,14 @@ function ChatInputLayout({
   const owner = contextUsage
     ? JSON.stringify([contextUsageSessionId, contextUsageMessageId])
     : undefined;
-  const ownerRef = useRef({ owner, generation: 0 });
-  if (ownerRef.current.owner !== owner) {
-    ownerRef.current = { owner, generation: ownerRef.current.generation + 1 };
+  const [ownership, setOwnership] = useState({ owner, generation: 0 });
+  if (ownership.owner !== owner) {
+    setOwnership({ owner, generation: ownership.generation + 1 });
   }
+  const ownerRef = useRef(ownership);
+  useLayoutEffect(() => {
+    ownerRef.current = ownership;
+  }, [ownership]);
   const [sheetOwner, setSheetOwner] = useState<{ owner: string; generation: number }>();
   const [submitOnReturn] = usePreference('chat.input.enter_to_send');
   const submit = useComposerSubmit();
@@ -209,7 +214,7 @@ function ChatInputLayout({
       {contextUsage &&
       owner &&
       sheetOwner?.owner === owner &&
-      sheetOwner.generation === ownerRef.current.generation ? (
+      sheetOwner.generation === ownership.generation ? (
         <ContextUsageDetail
           open
           onClose={() => setSheetOwner(undefined)}
