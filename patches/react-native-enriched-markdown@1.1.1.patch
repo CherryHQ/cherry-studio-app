@@ -183,7 +183,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    private var detectScrollMovement = false
    var scrollEnabled: Boolean = true
  
-@@ -151,6 +192,15 @@ class EnrichedMarkdownTextInputView(
+@@ -151,6 +192,16 @@ class EnrichedMarkdownTextInputView(
    init {
      setupDetectorPipeline()
      prepareComponent()
@@ -191,15 +191,16 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
 +      if (!submitOnReturn || actionId != EditorInfo.IME_ACTION_SEND || event != null) {
 +        false
 +      } else {
++        val editable = text ?: return@setOnEditorActionListener true
 +        // Candidate confirmation must never submit. The IME owns committing it.
-+        if (BaseInputConnection.getComposingSpanStart(text) < 0) eventEmitter.emitSubmit()
++        if (BaseInputConnection.getComposingSpanStart(editable) < 0) eventEmitter.emitSubmit()
 +        true
 +      }
 +    }
      isComponentReady = true
    }
  
-@@ -210,8 +260,18 @@ class EnrichedMarkdownTextInputView(
+@@ -210,8 +261,18 @@ class EnrichedMarkdownTextInputView(
      inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
    }
  
@@ -218,7 +219,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      return InputConnectionWrapper(base, this)
    }
  
-@@ -278,6 +338,7 @@ class EnrichedMarkdownTextInputView(
+@@ -278,6 +339,7 @@ class EnrichedMarkdownTextInputView(
    override fun isLayoutRequested(): Boolean = false
  
    override fun onTouchEvent(ev: MotionEvent): Boolean {
@@ -226,7 +227,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      when (ev.action) {
        MotionEvent.ACTION_DOWN -> {
          detectScrollMovement = true
-@@ -295,7 +356,19 @@ class EnrichedMarkdownTextInputView(
+@@ -295,7 +357,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -247,7 +248,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    }
  
    override fun performClick(): Boolean = super.performClick()
-@@ -315,7 +388,10 @@ class EnrichedMarkdownTextInputView(
+@@ -315,7 +389,10 @@ class EnrichedMarkdownTextInputView(
        super.performLongClick()
      } catch (e: NullPointerException) {
        val top = e.stackTrace.firstOrNull()
@@ -259,7 +260,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
          throw e
        }
        Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
-@@ -336,6 +412,32 @@ class EnrichedMarkdownTextInputView(
+@@ -336,6 +413,32 @@ class EnrichedMarkdownTextInputView(
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -292,7 +293,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -498,6 +600,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +601,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()
