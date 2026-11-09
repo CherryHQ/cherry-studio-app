@@ -24,8 +24,11 @@ New or changed native APIs require a new installation package. See
 constraints. No vendor credentials live in this module. Store/installer navigation does not
 establish installation success.
 
-Only `production-domestic-stores` enables `cherry.appUpdate.domesticStoresEnabled` during native
-generation. That flag selects the vendor implementation, its manifest overlay and both AARs;
+Only the Android `production-domestic-stores` profile sets `DOMESTIC_STORES_ENABLED=true` in
+`eas.json`. App config maps it to `cherry.appUpdate.domesticStoresEnabled` during native generation.
+The explicit profile env is shared by build submission, native generation and OTA fingerprinting;
+`EAS_BUILD_PROFILE` is a worker-only variable and must not select this flag.
+That flag selects the vendor implementation, its manifest overlay and both AARs;
 other builds compile the disabled factory without vendor dependencies, permissions or store queries.
 The same flag selects the module's consumer ProGuard rules for HONOR's three guarded optional
 HiAnalytics references; ordinary APK and Play builds do not load those suppressions.
