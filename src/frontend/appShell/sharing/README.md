@@ -11,6 +11,8 @@ system share chooser leaves the panel open; it never claims recipient delivery.
 
 Original files retain their bytes. Conversion formats initialize watermark from the global setting
 and let the user change it for this request in the format menu. The global preference is unchanged.
+File-library entry points use `useShareFiles({ allowConversion: false })`. The frozen request keeps
+that policy, so single files and all-HTML selections expose only original-file delivery.
 
 `retainShareOperation` holds source bytes through physical capture, copies and external delivery.
 `registerShareCleanup` registers temporary conversion artifacts. Closing waits for in-flight work,

@@ -14,7 +14,7 @@ type ShareSource =
       initialFormat: ExportFormat;
       allowedFormats: readonly ExportFormat[];
     }
-  | { kind: 'files'; files: readonly ResolvedFile[] };
+  | { kind: 'files'; files: readonly ResolvedFile[]; allowConversion: boolean };
 type ShareRequest = ShareSource & {
   id: string;
   watermark: ExportWatermarkStyle;
@@ -48,12 +48,18 @@ export function createDocumentShareRequest({
 export function createFileShareRequest(
   files: readonly ResolvedFile[],
   watermark: ExportWatermarkStyle,
+  allowConversion = true,
 ) {
   if (!files.length) throw new Error('No files to share');
   const snapshot = files.map((file) =>
     Object.freeze({ uri: file.uri, entry: Object.freeze({ ...file.entry }) }),
   );
-  return createRequest({ kind: 'files', files: Object.freeze(snapshot), watermark });
+  return createRequest({
+    kind: 'files',
+    files: Object.freeze(snapshot),
+    watermark,
+    allowConversion,
+  });
 }
 
 function createRequest(input: ShareSource & Pick<ShareRequest, 'watermark'>) {

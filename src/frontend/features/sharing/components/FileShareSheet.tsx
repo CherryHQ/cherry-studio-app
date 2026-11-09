@@ -32,7 +32,9 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
   const [format, setFormat] = useState<ShareFormat>('original');
   const [watermark, setWatermark] = useState(request.watermark);
   const [index, setIndex] = useState(0);
-  const canConvert = request.files.every((file) => fileEntryPreviewKind(file.entry) === 'html');
+  const canConvert =
+    request.allowConversion &&
+    request.files.every((file) => fileEntryPreviewKind(file.entry) === 'html');
   const areImages = request.files.every((file) => fileEntryPreviewKind(file.entry) === 'image');
   const createWatermark = useExportWatermark(watermark);
   const { convert, surface } = useHtmlConversion(request.id);
@@ -153,30 +155,31 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
       })(),
     );
   };
-  const renderItem = useCallback(
-    (item: Preview, frame: { width: number }) =>
-      item.original && fileEntryPreviewKind(item.original.entry) !== 'image' ? (
-        <View className="flex-1 items-center justify-center gap-5 px-4" pointerEvents="none">
-          <LoadedFileEntryPreview
-            entry={item.original.entry}
-            previewUri={undefined}
-            uri={item.original.uri}
-            size={Math.max(48, frame.width - 32)}
-          />
-          <Text className="text-center text-foreground text-sm" numberOfLines={2}>
-            {item.name}
-          </Text>
-        </View>
-      ) : (
-        <Image
-          source={{ uri: item.uri }}
-          contentFit="contain"
-          className="h-full w-full bg-card"
-          recyclingKey={item.uri}
+  const renderItem = useCallback((item: Preview, frame: { width: number }) => {
+    const previewSize = Math.max(48, Math.min(112, frame.width - 32));
+    return item.original && fileEntryPreviewKind(item.original.entry) !== 'image' ? (
+      <View className="flex-1 items-center justify-center gap-5 px-4" pointerEvents="none">
+        <LoadedFileEntryPreview
+          entry={item.original.entry}
+          previewUri={undefined}
+          uri={item.original.uri}
+          size={previewSize}
+          iconSize={(previewSize / 112) * 60}
+          variant="icon"
         />
-      ),
-    [],
-  );
+        <Text className="text-center font-medium text-base text-foreground" numberOfLines={2}>
+          {item.name}
+        </Text>
+      </View>
+    ) : (
+      <Image
+        source={{ uri: item.uri }}
+        contentFit="contain"
+        className="h-full w-full bg-card"
+        recyclingKey={item.uri}
+      />
+    );
+  }, []);
   return (
     <ShareSheet
       isPending={isPending || isConverting}

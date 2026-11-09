@@ -147,7 +147,6 @@ export function FileImageViewer({
         items={[
           {
             id: 'save',
-            group: 'sharing',
             label: t('sharing.saveToPhotos'),
             onPress: () => void saveToPhotos(),
           },

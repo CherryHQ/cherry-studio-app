@@ -59,21 +59,18 @@ export function PaintingFocusChrome({
     if (image) {
       items.push({
         id: 'save',
-        group: 'sharing',
         label: t('painting.focus.save'),
         onPress: () => void save(),
       });
       items.push({
         disabled: !file.data || isSharing,
         id: 'share',
-        group: 'sharing',
         label: t('painting.focus.share'),
         onPress: () => void share(),
       });
       if (groupFileEntryIds && groupFileEntryIds.length > 1)
         items.push({
           id: 'share-group',
-          group: 'sharing',
           label: t('sharing.imageGroup'),
           disabled: isSharing || isSharingGroup,
           onPress: () => void shareGroup(groupFileEntryIds),
@@ -82,7 +79,6 @@ export function PaintingFocusChrome({
     if (onSelectImages)
       items.push({
         id: 'select-images',
-        group: 'sharing',
         label: t('sharing.selectImages'),
         disabled: isSharing || isSharingGroup,
         onPress: onSelectImages,

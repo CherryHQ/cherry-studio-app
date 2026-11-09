@@ -18,7 +18,7 @@ actions or conversion progress layer. Capture scripts and temporary conversion l
 to `features/sharing`, using the shared HtmlCapture executor and Backend.documentExport.
 
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. Its
-  header groups sharing and saving to Photos in More, alongside system opening. A
+  header offers sharing and saving to Photos in More, alongside system opening. A
   caller-owned image editing request also supplies Edit. Cropping, rotation, mirroring,
   straightening and perspective adjustments create a new managed image through
   `Backend.file.editImage`. Only an accepted source-matching callback replaces the caller's

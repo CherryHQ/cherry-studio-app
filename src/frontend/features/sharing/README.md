@@ -4,6 +4,8 @@
 HTML conversion. The title is Share, supported formats live in a compact menu, and the fixed footer
 contains Share plus an applicable Save action. Watermark is a menu setting. The panel does not
 change selection or show a second selection workflow.
+Sharing-related context menus, More menus, and format menus use a single flat list without section
+separators, including their file-library, file-viewer, and painting entry points.
 The native transparent modal route owns a local `BottomSheetProvider`. Its sheet stays inside that
 route's controller hierarchy, allowing native format menus to present and keeping sheet controls
 above the route's touch surface.
@@ -13,7 +15,8 @@ above the route's touch surface.
 CherryUI `CardStack` holds three fixed preview slots with slight rotation and translation behind
 the upright current card. Native horizontal flings and accessible previous/next buttons change the
 current item. Vertical interaction belongs to BottomSheet. Original images use their real content;
-other files reuse the platform file preview. Native gesture acceptance remains pending.
+other files use the file library's shared type icons and colors on a neutral tile. Native gesture
+acceptance remains pending.
 HTML, Markdown and single-card message images use `CardStack`'s `fill` layout, occupying the space
 between the header and action footer with 16-point side and 8-point vertical gutters. There is no
 empty pagination row for these single previews. Generic paginated images and file decks retain
@@ -39,8 +42,10 @@ source-keyed assets; cache retention is bounded.
 
 ## Files and HTML
 
-Original files share as independent files in frozen source order. An all-HTML collection offers
-Original, Image and PPT. Authored HTML keeps its existing desktop capture strategy. PPT previews
+Original files share as independent files in frozen source order. File-library requests always
+share originals and show no format or watermark menu, including all-HTML selections. Other
+all-HTML requests with conversion enabled offer Original, Image and PPT. Authored HTML keeps its
+existing desktop capture strategy. PPT previews
 reuse the captured page images and delivery sends PPTX files. Conversions remain temporary and are
 reused within the request. Only explicit Save persists them. A failed member prevents partial
 multi-file delivery.

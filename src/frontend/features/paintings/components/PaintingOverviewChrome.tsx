@@ -40,7 +40,6 @@ export function PaintingOverviewChrome({
         items: [
           {
             id: 'share',
-            group: 'sharing',
             label: t('common.share'),
             disabled: isSharing || !onShare,
             onPress: () => onShare?.(),
@@ -49,7 +48,6 @@ export function PaintingOverviewChrome({
             ? [
                 {
                   id: 'select-images',
-                  group: 'sharing',
                   label: t('sharing.selectImages'),
                   disabled: isSharing,
                   onPress: onSelectImages,

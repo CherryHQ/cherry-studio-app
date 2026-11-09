@@ -271,7 +271,6 @@ function BoardCard({
   const items = [
     {
       id: 'share',
-      group: 'sharing',
       label: t('common.share'),
       disabled: extraData.isSharing,
       onPress: () => extraData.onShare(card.board.id),

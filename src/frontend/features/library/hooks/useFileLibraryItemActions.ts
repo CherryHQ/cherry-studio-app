@@ -19,7 +19,7 @@ export function useFileLibraryItemActions(onTranscribe: (file: LibraryFile) => v
   const { toast } = useToast();
   const { alert } = useAlert();
   const files = useBackendModule('file');
-  const sharing = useShareFiles();
+  const sharing = useShareFiles({ allowConversion: false });
   const { enterEditing, selectIds } = useSelectionActions();
   const { isDeletionPending } = useSelectionState();
   const editFolder = useMutation('PATCH', '/files/folders/:id');
@@ -122,7 +122,6 @@ export function useFileLibraryItemActions(onTranscribe: (file: LibraryFile) => v
         ? [
             {
               id: 'share',
-              group: 'sharing',
               label: t('common.share'),
               disabled: sharing.isSharing || isPending || isDeletionPending,
               onPress: () => void sharing.share([selection.file.entry.id]),

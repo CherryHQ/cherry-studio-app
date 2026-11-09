@@ -26,7 +26,6 @@ export function FileViewerHeader({
     {
       disabled: isSharing,
       id: 'share',
-      group: 'sharing',
       label: t('fileViewer.share'),
       onPress: () => void share(),
     },

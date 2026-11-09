@@ -140,6 +140,8 @@ label and type metadata.
 
 Audio cards use a neutral waveform icon. Compact audio attachments show their extension below
 the filename; opening and transcription state remain caller-owned.
+The `icon` variant accepts `iconSize` for the glyph, independently of the tile's `size`;
+omitting it keeps the existing 24-point glyph.
 
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The

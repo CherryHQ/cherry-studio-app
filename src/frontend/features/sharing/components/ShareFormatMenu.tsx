@@ -29,7 +29,6 @@ export function ShareFormatMenu({
         : t(`documentExport.formats.${value}`);
   const items: MenuItem[] = formats.map((value) => ({
     id: value,
-    group: 'format',
     label: label(value),
     checked: format === value,
     disabled,
@@ -38,7 +37,6 @@ export function ShareFormatMenu({
   if (onWatermarkChange)
     items.push({
       id: 'watermark',
-      group: 'settings',
       label: t('sharing.watermark'),
       checked: watermark,
       disabled,

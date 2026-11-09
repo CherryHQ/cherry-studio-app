@@ -31,7 +31,7 @@ export function FileLibrarySelectionControls({
   const { exitEditing, selectIds } = useSelectionActions();
   const [movingIds, setMovingIds] = useState<readonly string[] | null>(null);
   const { move, progress } = useMoveLibraryFiles();
-  const sharing = useShareFiles();
+  const sharing = useShareFiles({ allowConversion: false });
   const formatter = new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language);
 
   async function moveSelected(folderId: string | null) {

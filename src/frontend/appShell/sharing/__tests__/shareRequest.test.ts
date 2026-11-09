@@ -1,7 +1,9 @@
 import type { DocumentExportSession } from '@/shared/contracts/documentExport';
+import { FileEntrySchema } from '@/shared/data/types/file';
 
 import {
   createDocumentShareRequest,
+  createFileShareRequest,
   finishShareRequest,
   getShareRequest,
   retainShareOperation,
@@ -9,6 +11,30 @@ import {
 } from '../shareRequest';
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'request' }));
+
+test('keeps library file shares on their frozen originals while other callers retain conversion', async () => {
+  const entry = FileEntrySchema.parse({
+    id: '11111111-1111-4111-8111-111111111111',
+    filename: 'report.html',
+    mediaType: 'text/html',
+    provenance: 'generated',
+    size: 1024,
+    createdAt: 1,
+    updatedAt: 2,
+  });
+  const files = [{ entry, uri: 'file:///library/report.html' }];
+  const libraryRequest = createFileShareRequest(files, 'cherry', false)!;
+  entry.filename = 'renamed.html';
+  expect(getShareRequest(libraryRequest.id)).toMatchObject({
+    kind: 'files',
+    allowConversion: false,
+    files: [{ uri: 'file:///library/report.html', entry: { filename: 'report.html' } }],
+  });
+  await finishShareRequest(libraryRequest.id);
+  const viewerRequest = createFileShareRequest(files, 'cherry')!;
+  expect(getShareRequest(viewerRequest.id)).toMatchObject({ allowConversion: true });
+  await finishShareRequest(viewerRequest.id);
+});
 
 function session(dispose = jest.fn(async () => {})) {
   return {

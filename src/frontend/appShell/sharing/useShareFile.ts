@@ -11,8 +11,13 @@ import type { FileEntryId } from '@/shared/data/types/file';
 
 import { createFileShareRequest, finishShareRequest } from './shareRequest';
 
+type FileShareOptions = FileExportOptions & {
+  /** Library shares keep the selected bytes and expose no conversion choices. */
+  allowConversion?: boolean;
+};
+
 /** Freeze the complete ordered selection before presenting the common share sheet. */
-export function useShareFiles(options: FileExportOptions = {}) {
+export function useShareFiles(options: FileShareOptions = {}) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const api = useApiClient();
@@ -29,6 +34,7 @@ export function useShareFiles(options: FileExportOptions = {}) {
   }, []);
   const defaultWatermark = useExportWatermarkStyle();
   const watermark = options.watermark ?? defaultWatermark;
+  const allowConversion = options.allowConversion ?? true;
   const share = useCallback(
     async (source: readonly (FileEntryId | ResolvedFile)[]) => {
       if (pending.current || !source.length) return;
@@ -56,7 +62,7 @@ export function useShareFiles(options: FileExportOptions = {}) {
             }
         }
         controller.signal.throwIfAborted();
-        const request = createFileShareRequest(files, watermark);
+        const request = createFileShareRequest(files, watermark, allowConversion);
         if (!request) {
           toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });
           return;
@@ -76,14 +82,14 @@ export function useShareFiles(options: FileExportOptions = {}) {
         if (mounted.current) setIsSharing(false);
       }
     },
-    [api, fileModule, t, toast, watermark],
+    [allowConversion, api, fileModule, t, toast, watermark],
   );
   return { isSharing, share };
 }
 
 export function useShareFile(
   file: ResolvedFile | null | undefined,
-  options: FileExportOptions = {},
+  options: FileShareOptions = {},
 ) {
   const { isSharing, share: shareFiles } = useShareFiles(options);
   const share = useCallback(
