@@ -54,6 +54,7 @@ block leaves when upstream ships an equivalent.
 | Android input null and long-press guards | Bug fix | #973, #1015 | 1.1.1 guards only `Editor.performLongClick`; touch and drag paths are not upstream | Upstream guards the same Sentry crashes |
 | Android input height invalidation and scroll clamp | Bug fix | #1028 | Not upstream | Upstream re-measures after insertion |
 | Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |
+| Android simple line breaking for live input and height measurement | Bug fix | Google Play 0.5.3 (204) input ANR | 1.1.1 forces high-quality paragraph optimization | Upstream uses simple line breaking in both input and measurement |
 | iOS input measurement without main-thread waits | Bug fix | Duo startup and display-transition deadlock | [#582](https://github.com/software-mansion/enriched-markdown/pull/582) leaves input measurement unresolved | Upstream input layout consumes immutable text without waiting for the main thread |
 | Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
 | Signed YAML scanner failure status after grammar restoration | Bug fix | #1586 | Tree-sitter YAML 0.7.1 returns `-1` through plain `char` | Upstream preserves signed failure statuses on unsigned-char targets |
@@ -76,6 +77,11 @@ block leaves when upstream ships an equivalent.
 
 `scripts/__tests__/enrichedMarkdown*.test.ts` and `patchReapplication.test.ts` guard the installed
 source text, not behavior.
+
+Android live input and its height measurement use the same simple line-breaking strategy, matching
+the platform's editing default. This avoids whole-paragraph line-break optimization on each edit.
+The input measurement guard protects patch delivery; a new Android client still needs acceptance
+with long drafts, paste, IME composition, and width changes.
 
 `enrichedMarkdownInputLinkPress.test.ts` guards both published editor entry points and the native
 link-press event delivery. Quote taps use platform tap recognition and retain ordinary text editing.
@@ -147,6 +153,19 @@ upstream includes this private storage root. `expoFilePermissions.test.ts` guard
 source and patch hash in PR CI; `patchReapplication.test.ts` guards repeat installation. These
 checks do not establish device behavior. Delivering this fix requires a new Android package;
 acceptance must cover first download, cancellation, retry, deletion and download after deletion.
+
+### Android Fetch Request Body Patch
+
+`patches/expo@58.0.22.patch` writes byte-array request bodies through an Okio source, emitting
+segments as they fill. OkHttp's byte-array body writes the whole payload into its buffered sink
+before emitting, temporarily allocating another body-sized buffer. Google Play build 204 reported
+an out-of-memory crash on that exact request-body write path.
+
+The patch preserves body bytes, content type, content length, replayability, and null/empty-body
+semantics. Its `NativeRequestTest` regression checks buffering bounds, bytes, metadata, and a second
+write of the same body. Remove it when Expo streams byte-array request bodies without a full extra
+buffer. Delivery requires a new Android client; native tests and large-body upload, cancellation,
+and retry acceptance remain required before release.
 
 ### Pi Dependency Upgrades
 
