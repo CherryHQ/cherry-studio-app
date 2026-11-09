@@ -315,8 +315,8 @@ test('an evicted or incompatible APK leaves readiness so the user can download a
 test('a cached store result can still open after backend recreation, but cannot redirect elsewhere', async () => {
   jest.replaceProperty(runningUpdate, 'channel', 'production-google-play');
   const result = await create().check();
-  if (result.status !== 'available' || result.channel === 'apk')
-    throw new Error('Expected store release');
+  if (result.status !== 'available' || result.channel !== 'google-play')
+    throw new Error('Expected Google Play release');
   const recreated = create();
   await recreated.openStore(result);
   await expect(
