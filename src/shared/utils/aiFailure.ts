@@ -9,13 +9,22 @@ export type AiFailureFacts = {
   statusCode?: number;
 };
 
-// Provider-owned enums only: raw reasons from compatible gateways can contain arbitrary text.
+// Known provider values only: compatible gateways can return arbitrary finish-reason text.
 const KNOWN_FINISH_REASONS = new Set([
   'stop',
   'length',
   'tool_calls',
   'function_call',
   'content_filter',
+  // Pi retains Responses statuses, including the two known incomplete-reason combinations.
+  'completed',
+  'failed',
+  'cancelled',
+  'in_progress',
+  'queued',
+  'incomplete',
+  'incomplete.max_output_tokens',
+  'incomplete.content_filter',
   'end_turn',
   'max_tokens',
   'stop_sequence',

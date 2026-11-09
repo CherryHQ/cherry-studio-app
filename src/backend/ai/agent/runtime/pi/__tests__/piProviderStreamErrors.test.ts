@@ -548,9 +548,13 @@ describe('Gemini injected transport', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  test.each(['SAFETY', 'MALFORMED_FUNCTION_CALL', 'UNEXPECTED_TOOL_CALL'])(
-    'retains the provider terminal reason %s',
-    async (finishReason) => {
+  test.each([
+    { finishReason: 'SAFETY', category: 'content_filter' },
+    { finishReason: 'MALFORMED_FUNCTION_CALL', category: 'unknown' },
+    { finishReason: 'UNEXPECTED_TOOL_CALL', category: 'unknown' },
+  ])(
+    'retains the provider terminal reason $finishReason with category $category',
+    async ({ finishReason, category }) => {
       const stream = await bind(
         async () =>
           new Response(
@@ -563,7 +567,7 @@ describe('Gemini injected transport', () => {
       const result = await (await stream(googleModel, context, {})).result();
       expect(result).toMatchObject({ stopReason: 'error', rawStopReason: finishReason });
       expect(piModelTerminalErrorAttributes(result)).toMatchObject({
-        'error.category': 'unknown',
+        'error.category': category,
         'error.retryable': false,
       });
     },
