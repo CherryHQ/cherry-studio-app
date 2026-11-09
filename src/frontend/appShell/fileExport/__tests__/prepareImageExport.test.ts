@@ -190,7 +190,7 @@ test('none preserves the source format and bytes without native image work', asy
   expect(mockResources).toHaveLength(0);
 });
 
-test.each(['image/gif', 'IMAGE/GIF', 'image/gif; charset=binary'])(
+test.each(['image/gif', 'IMAGE/GIF', 'image/gif;charset=binary'])(
   'GIF saving and sharing preserve the original with a watermark selected (%s)',
   async (mediaType) => {
     // The media type remains authoritative even when the URI has no GIF suffix.
@@ -216,6 +216,22 @@ test.each(['image/gif', 'IMAGE/GIF', 'image/gif; charset=binary'])(
     expect(shared).toMatchObject({ uri, filename: 'animation.gif', mediaType });
     photo.release();
     shared.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
+test.each(['image/gif; charset=binary', ' IMAGE/GIF ; charset=binary '])(
+  'GIF photo exports normalize media types with whitespace (%s)',
+  async (mediaType) => {
+    const uri = 'file:///managed/animation';
+    const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    mockFiles.set(uri, original);
+
+    const photo = await prepareImageExport({ uri, mediaType }, watermark);
+    expect(photo.uri).toBe(uri);
+    photo.release();
     expect(mockFiles.get(uri)).toBe(original);
     expect(mockFiles.size).toBe(1);
     expect(mockResources).toHaveLength(0);
