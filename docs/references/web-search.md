@@ -232,7 +232,7 @@ one hosted service, not a general MCP client: it accepts MCP JSON and SSE respon
 both `Highlights` and `Text` search content, and treats protocol/tool errors as failures rather
 than empty successful searches.
 
-Jina's built-in addresses use the shared IP country. When detection is unavailable or declined,
+Jina's built-in addresses use the shared IP country. When detection is unavailable,
 the client retains its mainland-host preference without selecting a provider edition.
 CN uses the mainland mirror (`s.jinaai.cn`, `r.jinaai.cn`), and other countries use the global hosts.
 When the chosen host cannot be connected to, the request is sent once to the other. A timeout or an

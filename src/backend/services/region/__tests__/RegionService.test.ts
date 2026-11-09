@@ -108,44 +108,24 @@ test.each([{ country_code: 'China' }, { country: 'US' }])(
   },
 );
 
-test('does not detect or expose cached countries after consent is declined', async () => {
-  enabled = false;
-  cache.set('region.egress_country', 'CN', 10_000);
-  await expect(region.getCountry()).resolves.toBeNull();
-  expect(mockRequest).not.toHaveBeenCalled();
-});
-
-test.each([true, false])(
-  'waits for the initial policy decision before resolving region (accept: %s)',
-  async (accept) => {
-    version = '';
-    let resolved = false;
-    const country = region.getCountry().then((value) => {
-      resolved = true;
-      return value;
-    });
-    await Promise.resolve();
-    expect(resolved).toBe(false);
-    expect(mockRequest).not.toHaveBeenCalled();
-    enabled = accept;
-    version = LATEST_PRIVACY_POLICY_VERSION;
-    mockRequest.mockResolvedValue({ data: { country_code: 'CN' } });
-    consentListeners.get('app.privacy.policy_version')?.forEach((listener) => listener());
-    await expect(country).resolves.toBe(accept ? 'CN' : null);
-    expect(mockRequest).toHaveBeenCalledTimes(accept ? 1 : 0);
+test.each([
+  { decision: 'unanswered', consentEnabled: false, policyVersion: '' },
+  { decision: 'declined', consentEnabled: false, policyVersion: LATEST_PRIVACY_POLICY_VERSION },
+  { decision: 'accepted', consentEnabled: true, policyVersion: LATEST_PRIVACY_POLICY_VERSION },
+])(
+  'detects and caches the country with an $decision privacy disclosure',
+  async ({ consentEnabled, policyVersion }) => {
+    enabled = consentEnabled;
+    version = policyVersion;
+    mockRequest.mockResolvedValue({ data: { country_code: 'US' } });
+    await expect(region.getCountry()).resolves.toBe('US');
+    await expect(region.getCountry()).resolves.toBe('US');
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(cache.get('region.egress_country')).toBe('US');
   },
 );
 
-test('shutdown cancels a pending policy wait without issuing a lookup', async () => {
-  version = '20200101';
-  const country = region.getCountry();
-  const rejected = expect(country).rejects.toMatchObject({ name: 'AbortError' });
-  await region._doStop();
-  await rejected;
-  expect(mockRequest).not.toHaveBeenCalled();
-});
-
-test('revoking consent aborts the lookup and refuses its late country', async () => {
+test('changing consent neither aborts a lookup nor clears its cached country', async () => {
   let finish!: (value: unknown) => void;
   mockRequest.mockImplementation(
     () =>
@@ -156,30 +136,16 @@ test('revoking consent aborts the lookup and refuses its late country', async ()
   const country = region.getCountry();
   enabled = false;
   consentListeners.get('app.privacy.data_collection.enabled')?.forEach((listener) => listener());
-  expect(mockRequest.mock.calls[0]![0].signal.aborted).toBe(true);
+  expect(mockRequest.mock.calls[0]![0].signal.aborted).toBe(false);
   finish({ data: { country_code: 'CN' } });
-  await expect(country).resolves.toBeNull();
-  expect(cache.get('region.egress_country')).toBeUndefined();
-  await expect(region.getCountry()).resolves.toBeNull();
-  expect(mockRequest).toHaveBeenCalledTimes(1);
-});
-
-test('accepting the policy makes a previously skipped lookup retryable', async () => {
-  enabled = false;
-  await expect(region.getCountry()).resolves.toBeNull();
+  await expect(country).resolves.toBe('CN');
   enabled = true;
-  mockRequest.mockResolvedValue({ data: { country_code: 'US' } });
-  await expect(region.getCountry()).resolves.toBe('US');
-  expect(mockRequest).toHaveBeenCalledTimes(1);
-});
-
-test('revocation clears a previously detected country', async () => {
-  mockRequest.mockResolvedValue({ data: { country_code: 'CN' } });
-  await expect(region.getCountry()).resolves.toBe('CN');
+  consentListeners.get('app.privacy.data_collection.enabled')?.forEach((listener) => listener());
   enabled = false;
   consentListeners.get('app.privacy.data_collection.enabled')?.forEach((listener) => listener());
-  expect(cache.get('region.egress_country')).toBeUndefined();
-  await expect(region.getCountry()).resolves.toBeNull();
+  expect(cache.get('region.egress_country')).toBe('CN');
+  await expect(region.getCountry()).resolves.toBe('CN');
+  expect(mockRequest).toHaveBeenCalledTimes(1);
 });
 
 test('disposal aborts a pending lookup and rejects its late country without caching it', async () => {

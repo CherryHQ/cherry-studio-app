@@ -141,7 +141,7 @@ row. The row groups the model name, size or current status, and download/cancel/
 the overseas mirror is
 [csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17).
 The shared IP country selects ModelScope in CN and Hugging Face elsewhere. When detection is
-unavailable or declined, the download client retains its ModelScope preference without asserting
+unavailable, the download client retains its ModelScope preference without asserting
 a country. Existing verified files remain usable in either region. The upstream model and its
 licensing information are
 [FunAudioLLM/SenseVoiceSmall](https://huggingface.co/FunAudioLLM/SenseVoiceSmall).

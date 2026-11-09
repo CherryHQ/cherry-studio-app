@@ -170,7 +170,7 @@ The shared IP country selects the new-provider catalog and recommendations from 
 bundled registry's upstream edition labels. Successful detections are cached for ten minutes.
 All distributions, including domestic-store builds, use this policy: an overseas VPN exit allows
 international discovery once detected. Discovery and first-install recommendations share
-`getProviderCatalogEdition`; when detection is unavailable or declined, they use the device region
+`getProviderCatalogEdition`; when detection is unavailable, they use the device region
 from `getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select
 global entries; only a missing device region retains the domestic default. The detection result
 remains unknown. Mobile capability exclusions and the

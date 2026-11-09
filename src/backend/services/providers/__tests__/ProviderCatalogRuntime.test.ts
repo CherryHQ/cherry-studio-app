@@ -51,7 +51,7 @@ test.each([
   },
 );
 
-test('shutdown releases catalog admission while the region is waiting for a privacy decision', async () => {
+test('shutdown releases catalog admission while region detection is pending', async () => {
   let requested!: () => void;
   const started = new Promise<void>((resolve) => {
     requested = resolve;

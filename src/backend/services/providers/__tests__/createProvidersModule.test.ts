@@ -90,7 +90,7 @@ describe('explicit provider activation', () => {
     },
   );
 
-  it('keeps overseas discovery and imports available when privacy refusal leaves the country unknown', async () => {
+  it('keeps overseas discovery and imports available when detection leaves the country unknown', async () => {
     mockDeviceRegion = 'US';
     const { dependencies } = subject();
     dependencies.getCountry = async () => null;

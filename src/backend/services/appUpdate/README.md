@@ -55,7 +55,7 @@ claim that the app is current.
 - **App Store:** `appStoreRelease` queries Apple's public lookup by the installed bundle identifier,
   validates the returned identity, compares the numeric store version and constructs an official
   `apps.apple.com` URL. The query uses the shared IP country, with successful detections cached
-  for ten minutes and the existing CN lookup fallback when detection is unavailable or declined; this is not
+  for ten minutes and the existing CN lookup fallback when detection is unavailable; this is not
   account-storefront detection, so an IP/account region mismatch can suppress a reminder. A
   missing regional listing is `noRelease`. This checks App Store publications, not new TestFlight
   builds. Store submission or TestFlight upload alone is never an availability signal.

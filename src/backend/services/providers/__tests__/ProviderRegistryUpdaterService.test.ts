@@ -304,7 +304,7 @@ it('aborts an in-flight download on stop and never activates it afterwards', asy
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
 
-it('stops while region detection is still waiting for a privacy decision', async () => {
+it('stops while region detection is still pending', async () => {
   let requested!: () => void;
   const started = new Promise<void>((resolve) => {
     requested = resolve;
