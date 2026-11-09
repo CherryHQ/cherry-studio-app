@@ -10,7 +10,7 @@ import { ProviderCatalogRuntime } from '../ProviderCatalogRuntime';
 
 let database: ReturnType<typeof createServiceTestDatabase>;
 let catalog: ProviderCatalogRuntime;
-let country: jest.Mock<Promise<string>, []>;
+let country: jest.Mock<Promise<string | null>, []>;
 
 beforeEach(async () => {
   database = createServiceTestDatabase();
@@ -31,6 +31,34 @@ test.each(['CN', 'US'])('installs only the first recommended set allowed in %s',
   const providers = await database.database.select().from(userProviderTable);
   expect(providers.some((provider) => provider.providerId === 'deepseek')).toBe(true);
   expect(providers.some((provider) => provider.providerId === 'openai')).toBe(value === 'US');
+});
+
+test('unknown detection seeds domestic recommendations', async () => {
+  country.mockResolvedValue(null);
+  await catalog.ensureReady();
+  const providers = await database.database.select().from(userProviderTable);
+  expect(providers.some((provider) => provider.providerId === 'deepseek')).toBe(true);
+  expect(providers.some((provider) => provider.providerId === 'openai')).toBe(false);
+});
+
+test('shutdown releases catalog admission while the region is waiting for a privacy decision', async () => {
+  let requested!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  country.mockImplementation(
+    () =>
+      new Promise(() => {
+        requested();
+      }),
+  );
+  const initialization = catalog.ensureReady();
+  const rejected = expect(initialization).rejects.toMatchObject({ name: 'AbortError' });
+  await started;
+  await catalog._doStop();
+  await rejected;
+  expect(catalog.hasPendingStorageWork()).toBe(false);
+  expect(await database.database.select().from(userProviderTable)).toEqual([]);
 });
 
 test('a later cold start in China preserves international providers, credentials and disabled choices', async () => {

@@ -56,7 +56,8 @@ distribution configuration; matching runtime versions additionally enforce nativ
 
 The shared package-update infrastructure uses the cached IP country to select GitCode APK upgrades
 in CN or GitHub APK upgrades elsewhere, and uses that country for App Store lookup. Failed country
-detection defaults to CN. Store update channels remain tied to the installed distribution.
+detection leaves the region unknown; package-update clients retain their CN request/source fallback.
+IP lookup waits for the current privacy decision and runs only with consent. Store update channels remain tied to the installed distribution.
 Its APK strategy compares the installed
 version from `expo-application`, rather than an OTA manifest's version, and packaged builds enable
 APK downloads only on the native channel `production-apk`, which an OTA cannot change. A development client

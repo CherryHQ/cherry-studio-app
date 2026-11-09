@@ -8,6 +8,8 @@ import {
   type ProviderModelOverride,
   type Registry,
 } from '@cherrystudio/provider-registry';
+import { bundledModels } from '@cherrystudio/provider-registry/data/models';
+import { bundledProviderModels } from '@cherrystudio/provider-registry/data/provider-models';
 
 import {
   findMobileProvider,
@@ -234,6 +236,16 @@ export class MobileRegistryLoader {
           ),
       },
     };
+  }
+
+  /** The pinned package is the complete offline baseline; apply the same native capability admission. */
+  installBundledSnapshot(): void {
+    this.installRemoteSnapshot(
+      this.parseRemoteSnapshot({
+        models: bundledModels,
+        providerModels: bundledProviderModels,
+      }),
+    );
   }
 
   installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {

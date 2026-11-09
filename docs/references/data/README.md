@@ -210,16 +210,21 @@ bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do no
 Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
 journaled under `app_state` keys prefixed with `seed:`.
 
-`ProviderRegistryUpdaterService` restores the newest compatible saved model catalog after startup.
-When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
-in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with
-fallback to the other source. Startup also migrates an older schema snapshot to the current v4
-directory, retaining the old snapshot if offline or if the update fails. Once a v4 snapshot is
-saved, the later refresh trigger is opening a provider's model list. Applying a newer catalog while
-that list is visible shows a global success toast at the top of the screen. Offline or unchanged catalogs
-keep the saved snapshot without a toast. The app does not bundle these model files. Model selection,
-model editing, and model calls require a downloaded snapshot; welcome, provider configuration, and
-history remain accessible. Model workflows present a retry action when the initial download fails.
+Fresh-install recommendations and new-provider discovery share the same egress-country policy in
+all distributions, including domestic-store builds. A detected non-CN country permits global
+entries, including through an overseas VPN exit; CN or an unknown country selects domestic entries.
+The unknown result remains `null` in region detection. Existing saved providers are preserved.
+
+`ProviderRegistryUpdaterService` activates the newest complete compatible saved model catalog,
+or the pinned `@cherrystudio/provider-registry` package's bundled `models.json` and
+`provider-models.json` when no saved snapshot is usable. This complete local baseline is available
+before regional and Mobile capability filtering, so model selection, editing and calls do not wait
+for the network. The same native capability admission applies to bundled and downloaded metadata.
+Startup refreshes an absent or older-schema saved snapshot from v4 in the background. The detected
+IP country selects GitCode in CN or GitHub elsewhere, with fallback to the other mirror. A failed,
+partial or incompatible update retains the local catalog. Once a v4 snapshot is saved, opening a
+provider's model list is the later refresh trigger; a successfully applied update refreshes mounted
+projections and can show the existing success toast.
 
 Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
 replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move

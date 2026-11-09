@@ -13,6 +13,7 @@ import {
 } from '@/shared/contracts';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 
+import { getProviderCatalogEdition } from './providerCatalogEdition';
 import { getProviderConfigurationIssue } from './providerConfiguration';
 
 type ProviderAvatarStorage = {
@@ -22,7 +23,7 @@ type ProviderAvatarStorage = {
 };
 
 export type ProvidersModuleDependencies = {
-  getCountry(): Promise<string>;
+  getCountry(): Promise<string | null>;
   accounts: ProviderAccountsModule;
   avatars: ProviderAvatarStorage;
   catalog: {
@@ -56,7 +57,7 @@ export function createProvidersModule({
   hasAvailableModels,
 }: ProvidersModuleDependencies): ProvidersModule {
   const listRegionalCatalog = async () => {
-    const edition = (await getCountry()) === 'CN' ? 'cn' : 'global';
+    const edition = getProviderCatalogEdition(await getCountry());
     return catalog
       .list()
       .filter(

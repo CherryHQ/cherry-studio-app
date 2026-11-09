@@ -258,10 +258,12 @@ user-owned verification policy.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
-- `RegionService` owns the shared IPinfo Lite egress-country lookup, ten-minute success cache and
-  CN failure fallback; the host aborts and joins it. `ProviderCatalogRuntime` owns post-ready provider
-  seeding, including initial recommendations selected by country. Provider list queries join that
-  initialization; existing seeded installations do not wait for country detection. Backup admission
+- `RegionService` owns the consent-gated IPinfo Lite egress-country lookup, ten-minute success cache
+  and explicit unknown-country result; the host aborts and joins it. `ProviderCatalogRuntime` owns
+  post-ready provider seeding. Discovery and initial recommendations share `getProviderCatalogEdition`: all distributions
+  use detected CN/overseas countries to select domestic/global entries, with domestic entries when
+  detection is unknown. Domestic-store builds also permit a detected overseas VPN exit.
+  Provider list queries join that initialization; existing seeded installations do not wait for country detection. Backup admission
   includes pending seeding.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.

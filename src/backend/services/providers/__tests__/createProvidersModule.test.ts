@@ -59,6 +59,7 @@ describe('explicit provider activation', () => {
   it.each([
     { country: 'CN', expected: ['deepseek'] },
     { country: 'US', expected: ['deepseek', 'openai'] },
+    { country: null, expected: ['deepseek'] },
   ])(
     'selects discovery and recommendations from IP country $country',
     async ({ country, expected }) => {
@@ -76,6 +77,39 @@ describe('explicit provider activation', () => {
     },
   );
 
+  it('exposes and imports international presets after detection changes to an overseas VPN exit', async () => {
+    const { dependencies } = subject();
+    jest.mocked(dependencies.getCountry).mockResolvedValueOnce('CN').mockResolvedValue('US');
+    dependencies.catalog.list = () =>
+      [
+        { id: 'deepseek', name: 'DeepSeek', availableInEditions: ['global', 'cn'] },
+        { id: 'openai', name: 'OpenAI', availableInEditions: ['global'] },
+      ] as ReturnType<ProvidersModuleDependencies['catalog']['list']>;
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const installed = { id: 'openai', name: 'OpenAI', isEnabled: false } as Provider;
+    jest.mocked(dependencies.providers.create).mockResolvedValue(installed);
+    const backend = createProvidersModule(dependencies);
+
+    expect((await backend.listCatalog()).map((entry) => entry.id)).toEqual(['deepseek']);
+    expect((await backend.listCatalog()).map((entry) => entry.id)).toEqual(['deepseek', 'openai']);
+    await expect(backend.importPreset('openai')).resolves.toBe(installed);
+  });
+
+  it('admits Kimi Code in China while retaining regional hiding for global-only presets', async () => {
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => 'CN';
+    const loader = new MobileRegistryLoader();
+    dependencies.catalog = {
+      isExcluded: (id) => loader.isProviderExcludedFromCatalog(id),
+      list: () => loader.loadProviders(),
+    };
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const ids = (await createProvidersModule(dependencies).listCatalog()).map((entry) => entry.id);
+    expect(ids).toContain('kimi-coding');
+    expect(ids).not.toContain('openai');
+    expect(ids).not.toContain('github');
+  });
+
   it('keeps an installed international provider usable after moving to China', async () => {
     const { dependencies } = subject();
     dependencies.getCountry = async () => 'CN';
@@ -86,18 +120,21 @@ describe('explicit provider activation', () => {
     expect(dependencies.providers.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a new international preset in China without writing provider data', async () => {
-    const { dependencies } = subject();
-    dependencies.getCountry = async () => 'CN';
-    dependencies.catalog.list = () =>
-      [{ id: 'openai', name: 'OpenAI', availableInEditions: ['global'] }] as ReturnType<
-        ProvidersModuleDependencies['catalog']['list']
-      >;
-    await expect(createProvidersModule(dependencies).importPreset('openai')).rejects.toThrow(
-      'unavailable',
-    );
-    expect(dependencies.providers.create).not.toHaveBeenCalled();
-  });
+  it.each(['CN', null])(
+    'rejects a new international preset for country %s without writing provider data',
+    async (country) => {
+      const { dependencies } = subject();
+      dependencies.getCountry = async () => country;
+      dependencies.catalog.list = () =>
+        [{ id: 'openai', name: 'OpenAI', availableInEditions: ['global'] }] as ReturnType<
+          ProvidersModuleDependencies['catalog']['list']
+        >;
+      await expect(createProvidersModule(dependencies).importPreset('openai')).rejects.toThrow(
+        'unavailable',
+      );
+      expect(dependencies.providers.create).not.toHaveBeenCalled();
+    },
+  );
 
   it('marks only enabled providers as enabled in the catalog', async () => {
     const { dependencies } = subject();

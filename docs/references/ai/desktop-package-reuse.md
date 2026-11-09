@@ -180,12 +180,14 @@ check, platform exports, and device acceptance before the registry compatibility
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
 | V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
 | V4 image controls | Implemented; validation pending | GIF generation with API frame defaults and complexity; GIF editing and custom frame controls remain excluded |
-| Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; all model rows come from the remote snapshot |
+| Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; models use a complete cached snapshot or the bundled baseline |
 
 ### Remote catalog policy
 
-Mobile fetches `models.json` and `provider-models.json` on first use, during a saved-schema upgrade,
-and after explicit model-list access. Before it admits a newer Desktop snapshot, the Runtime must
+Mobile activates a complete compatible saved snapshot or the pinned package's bundled
+`models.json` and `provider-models.json` before model use. Startup updates an absent or older saved
+snapshot in the background; later refreshes follow explicit model-list access. Network failures
+retain the local catalog. Before it admits a newer Desktop snapshot, the Runtime must
 understand every required field it consumes and
 explicitly classify unsupported optional fields as ignored product capabilities.
 

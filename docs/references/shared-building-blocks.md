@@ -13,7 +13,8 @@ it already exists.
 | Need | Owner |
 | --- | --- |
 | Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
-| IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; shared IPinfo Lite lookup, ten-minute success cache and CN failure fallback |
+| IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; consent-gated IPinfo Lite lookup, ten-minute success cache and explicit unknown-country result |
+| Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions select by egress country, with a domestic catalog for CN or unknown countries |
 | Non-streaming HTTP requests | `createHttpClient` in `src/backend/services/http`, the only transport; its README lists the streaming exceptions |
 | Verified remote file downloads | `downloadFile` in `src/backend/services/download`; native streaming, progress, cancellation and SHA-256 for APK updates and offline models |
 | Fetch-shaped adapter for a protocol SDK | `createFetchBridge` in `src/backend/services/http` |

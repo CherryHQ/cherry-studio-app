@@ -406,6 +406,10 @@ export class ProviderRegistryService {
     return this.loader.parseRemoteSnapshot(input);
   }
 
+  installBundledSnapshot(): void {
+    this.loader.installBundledSnapshot();
+  }
+
   installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
     this.loader.installRemoteSnapshot(snapshot);
   }

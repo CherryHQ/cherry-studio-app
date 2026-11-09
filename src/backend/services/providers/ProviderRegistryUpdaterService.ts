@@ -20,6 +20,7 @@ import {
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
@@ -69,7 +70,7 @@ type StagedSnapshot = {
  * The payload is unsigned, so `providers.json` deliberately remains bundled:
  * remote data can improve model descriptions and capabilities, but can never
  * redirect credentials or change a provider's API destination. Startup restores
- * the persistent snapshot and downloads one only when none is saved. Later
+ * a complete compatible persistent snapshot or the bundled baseline before any network work. Later
  * refreshes happen when the user opens a provider's model list.
  */
 @Injectable('ProviderRegistryUpdaterService')
@@ -80,6 +81,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private activeSlot: ProviderRegistrySnapshot['slot'] | undefined;
   private applyInFlight: Promise<ProviderRegistryUpdateResult> | undefined;
   private readonly requestControllers = new Set<AbortController>();
+  private readonly controller = new AbortController();
   private stopped = false;
   private cacheInFlight: Promise<void> | undefined;
 
@@ -99,7 +101,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
       void this.applyUpdate().catch((error: unknown) => {
         if (!this.stopped) {
           logger.warn(
-            'Could not download the model registry; model use will retry',
+            'Could not update the model registry; keeping the local catalog',
             toError(error),
           );
         }
@@ -109,27 +111,22 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
+  /** Model use waits only for local activation, never for a mirror to become reachable. */
   public async ensureReady(): Promise<void> {
     await this.restoreSnapshot();
-    if (!providerRegistryService.isReady()) {
-      await this.applyUpdate();
-    }
     if (!providerRegistryService.isReady()) {
       throw new Error('No compatible model registry is available');
     }
   }
 
   private restoreSnapshot(): Promise<void> {
-    this.cacheInFlight ??=
-      Platform.OS === 'web'
-        ? Promise.resolve()
-        : this.activateCachedSnapshot().catch((error: unknown) => {
-            logger.warn(
-              'Could not restore the model registry; a download is required',
-              toError(error),
-            );
-          });
+    this.cacheInFlight ??= this.activateCachedSnapshot().catch((error: unknown) => {
+      logger.warn(
+        'Could not restore the model registry; using the bundled catalog',
+        toError(error),
+      );
+      if (!this.stopped) providerRegistryService.installBundledSnapshot();
+    });
     return this.cacheInFlight;
   }
 
@@ -156,6 +153,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private stopRequests(): void {
     if (this.stopped) return;
     this.stopped = true;
+    this.controller.abort();
     for (const controller of this.requestControllers) {
       controller.abort();
     }
@@ -166,7 +164,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private async activateCachedSnapshot(): Promise<void> {
-    const snapshots = await readProviderRegistrySnapshots();
+    const snapshots = Platform.OS === 'web' ? [] : await readProviderRegistrySnapshots();
     snapshots.sort(
       (left, right) =>
         right.manifest.schemaVersion - left.manifest.schemaVersion ||
@@ -190,6 +188,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
         );
       }
     }
+    if (!this.stopped) providerRegistryService.installBundledSnapshot();
   }
 
   /** The first reachable source whose manifest is newer than the active snapshot. */
@@ -408,8 +407,11 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private async getSourceOrder(): Promise<RegistryNetworkSource[]> {
-    const country = await application.get('RegionService').getCountry();
-    return country === 'CN' ? ['gitcode', 'github'] : ['github', 'gitcode'];
+    const country = await raceAbort(
+      application.get('RegionService').getCountry(),
+      this.controller.signal,
+    );
+    return country === 'CN' || country === null ? ['gitcode', 'github'] : ['github', 'gitcode'];
   }
 }
 
