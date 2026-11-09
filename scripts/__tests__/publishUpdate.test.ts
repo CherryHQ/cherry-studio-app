@@ -109,7 +109,7 @@ test.each([
   }
   try {
     process.env = { ...environment, ...resolveTarget(eas, name).env };
-    const context = { config: appConfig.expo } as ConfigContext;
+    const context = { config: appConfig.expo } as unknown as ConfigContext;
     // Build submission and OTA both evaluate without the worker-only profile variable.
     const local = configureApp(context);
     process.env.EAS_BUILD_PROFILE = buildProfile;
