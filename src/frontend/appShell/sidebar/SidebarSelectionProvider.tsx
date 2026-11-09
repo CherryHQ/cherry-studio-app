@@ -176,6 +176,14 @@ function createSelectionStore() {
   };
   const shownIds = () =>
     [...new Set([...state.lists.values()].flat())].filter((id) => !state.deletedIds.has(id));
+  const updateLists = (lists: SelectionSnapshot['lists']) => {
+    const liveIds = new Set([...lists.values()].flat());
+    for (const id of entries.keys()) {
+      if (!liveIds.has(id)) entries.delete(id);
+    }
+    const selectedIds = new Set([...state.selectedIds].filter((id) => liveIds.has(id)));
+    update({ ...state, lists, selectedIds });
+  };
 
   return {
     getSnapshot: () => state,
@@ -205,12 +213,12 @@ function createSelectionStore() {
         entries.set(selectionKey, { key: selectionKey, source, ref: session.ref });
         return [selectionKey];
       });
-      update({ ...state, lists: new Map(state.lists).set(key, ids) });
+      updateLists(new Map(state.lists).set(key, ids));
       return () => {
         if (state.lists.get(key) !== ids) return;
         const lists = new Map(state.lists);
         lists.delete(key);
-        update({ ...state, lists });
+        updateLists(lists);
       };
     },
     enter: (id?: string) => {
@@ -247,10 +255,11 @@ function createSelectionStore() {
       update({ ...state, selectedIds, deletedIds: new Set(state.deletedIds).add(id) });
     },
     finishDeletion: (selection: number, failed: ReadonlySet<string>) => {
+      const selectedIds = new Set(shownIds().filter((id) => failed.has(id)));
       update({
         ...state,
         isDeleting: false,
-        ...(generation === selection ? { selectedIds: failed, isSelecting: failed.size > 0 } : {}),
+        ...(generation === selection ? { selectedIds, isSelecting: selectedIds.size > 0 } : {}),
       });
     },
   };

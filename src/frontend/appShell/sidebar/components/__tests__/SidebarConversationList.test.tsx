@@ -320,3 +320,36 @@ it('keeps the ordinary sidebar Agent row as full-row expansion', () => {
   expect(renderer.root.findByProps({ testID: 'sidebar-session-session-1' })).toBeDefined();
   expect(onSelect).not.toHaveBeenCalled();
 });
+
+it('updates a registered list without unregistering it until the list unmounts', () => {
+  const unregisterFirst = jest.fn();
+  const unregisterLatest = jest.fn();
+  const registerList = jest
+    .fn()
+    .mockReturnValueOnce(unregisterFirst)
+    .mockReturnValue(unregisterLatest);
+  mockDrawerSelection.mockReturnValue({ registerList });
+  const list = (
+    <SidebarConversationList mode="sessions" showLoading registerEndReachedHandler={jest.fn()} />
+  );
+  act(() => renderer.update(list));
+
+  const sessions = [
+    mockSession,
+    { ...mockSession, ref: { ...mockSession.ref, sessionId: 'session-2' } },
+  ];
+  mockSessions.mockReturnValue({ data: {}, items: sessions, isSuccess: true });
+  act(() =>
+    renderer.update(
+      <SidebarConversationList mode="sessions" showLoading registerEndReachedHandler={jest.fn()} />,
+    ),
+  );
+
+  expect(registerList).toHaveBeenLastCalledWith('local-scope:', expect.anything(), sessions);
+  expect(unregisterFirst).not.toHaveBeenCalled();
+  expect(unregisterLatest).not.toHaveBeenCalled();
+
+  act(() => renderer.update(<ConversationDestinationList onSelect={onSelect} />));
+  expect(unregisterLatest).toHaveBeenCalledTimes(1);
+  expect(unregisterFirst).not.toHaveBeenCalled();
+});
