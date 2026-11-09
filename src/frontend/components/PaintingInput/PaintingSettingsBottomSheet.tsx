@@ -655,6 +655,14 @@ function EnumSelectionPage({
       testID={`painting-setting-options-${field.key}`}
     >
       <Section variant="plain">
+        {field.spec.default === undefined && !options.includes('auto') ? (
+          <Section.RadioItem
+            label={t('painting.settings.option.auto')}
+            onPress={() => onValueChange(field.key, undefined)}
+            selected={selectedValue === undefined}
+            testID={`painting-setting-option-${field.key}-auto`}
+          />
+        ) : null}
         {options.map((option) => {
           const isSelected = selectedValue === option;
 
