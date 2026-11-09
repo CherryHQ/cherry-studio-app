@@ -111,9 +111,17 @@ JavaScript-only fixes between tags; branch pushes and tags never publish updates
    git push -u origin hotfix/v0.3.0-ota
    ```
 
-   Optionally run `pnpm update:check apk` (or `google-play`, `ios`) on the branch first.
+   Optionally run `pnpm update:check apk` (or `google-play`, `domestic-stores`, `ios`) on the branch
+   first.
 3. In GitHub Actions, run [OTA Update](../../.github/workflows/ota-update.yml) with the branch as
    `ref`, the targets (`all` by default), and a message.
+
+`all` includes `apk`, `google-play`, `domestic-stores`, and `ios`. Every selected channel must have
+a finished EAS build with the same runtime before anything publishes. Until the domestic channel
+has its first compatible build, select an existing target explicitly; `all` fails the receiving-build
+check. Stable tags create domestic builds; prerelease tags do not. Adding native vendor integrations
+requires a [native release](./cloud-releases.md#domestic-android-stores) before publishing compatible
+JavaScript-only fixes to that channel.
 
 The workflow pins the commit, then:
 
@@ -161,11 +169,12 @@ here. Evaluate it separately; do not claim a fixed reduction percentage.
 
 ## Acceptance
 
-Before the first production publish, cover newly built eligible clients on iOS, Google Play, and
-public APK:
+Before the first production publish, cover newly built eligible clients on iOS, Google Play,
+domestic Android stores, and public APK:
 
 - Download and activation on the subsequent launch, including offline and interrupted downloads.
-- Channel/runtime isolation; Play remains unable to open APK downloads even with an enabled OTA flag.
+- Channel/runtime isolation; Play and domestic store clients remain unable to open APK downloads
+  even with an enabled OTA flag.
 - No active-chat reload, and retained drafts/history through an update.
 - Native version/build display, diagnostic update ID/channel/runtime/embedded-launch status, and
   Sentry source-map matching for the exact published export.
@@ -177,9 +186,7 @@ fingerprint parity, and measured savings require authorized builds and device/se
 checks; source changes and lint do not establish these outcomes.
 
 Domestic store checks use vendor client queries or the existing GitCode query as described in
-[Domestic Android Store Updates](./domestic-store-updates.md). The `domestic-stores` OTA target
-and the `all` choice include the new channel. Until its first compatible EAS build is recorded,
-select an existing target explicitly; `all` will correctly fail the receiving-build check.
+[Domestic Android Store Updates](./domestic-store-updates.md).
 
 ## References
 
