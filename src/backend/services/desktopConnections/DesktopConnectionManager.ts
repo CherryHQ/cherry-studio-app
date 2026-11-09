@@ -17,6 +17,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { DesktopConnectionRow } from '@/backend/data/db/schemas';
+import { desktopConnectionName } from '@/backend/data/services/desktopConnectionName';
 import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
 import type {
@@ -126,7 +127,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
         ? [
             {
               id,
-              name: entry.row.name,
+              name: desktopConnectionName(entry.row),
               token: entry.connectionToken,
               status: entry.session?.isOpen ? ('connected' as const) : ('connecting' as const),
             },
@@ -550,7 +551,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
         new AbortController().signal,
         expected,
       );
-      if (this.entries.get(id) === entry) entry.row = { ...expected, grants };
+      if (this.entries.get(id) === entry) entry.row = { ...entry.row, grants };
     });
   }
   private updateAuthorization(entry: ConnectionEntry, update: () => Promise<void>) {
@@ -825,6 +826,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     this.resolver.seed(id, desktopIdentity, endpoints);
     const entry = this.entries.get(id);
     if (entry) this.ensureConnected(id, entry);
+  }
+
+  async refreshName(id: string): Promise<void> {
+    const row = await this.store!.getRow(id);
+    const entry = this.entries.get(id);
+    if (!entry || fingerprint(entry.row) !== fingerprint(row)) return;
+    entry.row = { ...entry.row, name: row.name, alias: row.alias };
+    this.publishConnections();
   }
 
   async refreshEndpoints(id: string) {

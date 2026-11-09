@@ -28,7 +28,8 @@ boundaries around it.
   projection policy. The concrete Runtime enters through the composition root's `AgentRuntime`
   registration; the Host never constructs one.
   It also retains a small status snapshot for each Session that runs in the current generation,
-  with status-only subscriptions for lists; transcript observation remains route-scoped.
+  with status-only subscriptions for individual rows and collapsed catalog groups. The catalog
+  can enumerate only those status-bearing Session IDs; transcript observation remains route-scoped.
   Automatic summary naming uses the bound text generator with lifecycle cancellation and usage
   capture; incomplete output leaves the temporary title intact.
 - `agent/modelCheck/` runs a bounded, cancellable chat connection probe through that same bound

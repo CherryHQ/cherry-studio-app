@@ -1,4 +1,4 @@
-import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
+import { ContentState, Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback } from 'react';
@@ -8,7 +8,7 @@ import { Text, View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
 import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule, useMutation } from '@/frontend/data';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,
@@ -23,8 +23,42 @@ export function DeviceConnectionDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
   const { isRemoving, remove } = useDesktopConnectionActions();
+  const { isLoading: isRenaming, trigger: rename } = useMutation(
+    'PATCH',
+    '/desktop-connections/:id',
+  );
+
+  const requestRename = useCallback(() => {
+    if (!connection || isRenaming || isRemoving) return;
+    alert.prompt({
+      title: t('settings.deviceConnections.name'),
+      confirmLabel: t('common.save'),
+      input: {
+        accessibilityLabel: t('settings.deviceConnections.name'),
+        autoFocus: true,
+        initialValue: connection.alias ?? '',
+        maxLength: 128,
+        placeholder: connection.defaultName,
+      },
+      onConfirm: (value) => {
+        const alias = value.trim() || null;
+        if (alias === connection.alias) return;
+        void rename({ params: { id: connection.id }, body: { alias } })
+          .then(() => {
+            toast.show({
+              label: t('settings.deviceConnections.rename.success'),
+              variant: 'success',
+            });
+          })
+          .catch(() => {
+            toast.show({ label: t('settings.deviceConnections.rename.failed'), variant: 'danger' });
+          });
+      },
+    });
+  }, [alert, connection, isRenaming, isRemoving, rename, t, toast]);
 
   const requestRemove = useCallback(() => {
     if (!connectionId || !connection) {
@@ -73,6 +107,25 @@ export function DeviceConnectionDetailScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
         <Section.Item
+          accessibilityHint={t('common.rename')}
+          accessibilityValue={{ text: connection.name }}
+          disabled={isRenaming || isRemoving}
+          label={t('settings.deviceConnections.name')}
+          onPress={requestRename}
+          trailing={
+            <Text
+              className={
+                connection.alias === null
+                  ? 'shrink text-muted-foreground'
+                  : 'shrink text-foreground'
+              }
+              numberOfLines={1}
+            >
+              {connection.name}
+            </Text>
+          }
+        />
+        <Section.Item
           label={t('settings.deviceConnections.capabilities.label')}
           trailing={
             <Text className="text-muted-foreground">
@@ -106,7 +159,6 @@ export function DeviceConnectionDetailScreen() {
           ) : null}
           {connection.capabilities.includes('configuration') ? (
             <Section.Item
-              description={t('settings.deviceConnections.syncGuide.entryDescription')}
               label={t('settings.deviceConnections.syncGuide.entry')}
               onPress={() =>
                 router.replace({
@@ -138,7 +190,7 @@ export function DeviceConnectionDetailScreen() {
       <Section>
         <Section.Item
           destructive
-          disabled={isRemoving}
+          disabled={isRemoving || isRenaming}
           label={t('settings.deviceConnections.remove.action')}
           onPress={requestRemove}
           showChevron={false}

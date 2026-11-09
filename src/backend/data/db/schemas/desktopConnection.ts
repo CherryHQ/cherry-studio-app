@@ -7,6 +7,8 @@ import { createUpdateTimestamps } from './_columnHelpers';
 export const desktopConnectionTable = sqliteTable('desktop_connection', {
   id: text().primaryKey(),
   name: text().notNull(),
+  // Mobile-local display override, retained independently of desktop pairing metadata.
+  alias: text(),
   deviceId: text('device_id').notNull(),
   desktopIdentity: text('desktop_identity').notNull(),
   configuredEndpoints: text('configured_endpoints', { mode: 'json' })

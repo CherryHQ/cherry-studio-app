@@ -132,7 +132,7 @@ patchedDependencies:
   '@ai-sdk/openai@3.0.109': 2951bbb210e2d7f37ade9b2a3ce26d2e725041e88d762f222850cec81571203f
   '@anthropic-ai/vertex-sdk@0.22.0': dc49494cc694489210145cb544aa2dce2ab41f237b8b761da036f1b8875b121b
   '@earendil-works/chord@1.5.0': b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58
-  '@earendil-works/pi-ai@1.5.0': a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9
+  '@earendil-works/pi-ai@1.5.0': 498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b
   '@earendil-works/pi-codemode@1.5.0': 77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4
   '@earendil-works/pi-durable@1.5.0': a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4
   '@google/genai@2.21.0': 983ccdfd42605ab2b240e038dce5736c0745313e7aced3b7e269b0e6911a97b5
@@ -158,7 +158,7 @@ patchedDependencies:
   react-native-anydoc@0.4.1: 2cfc6ca60d6e0a51a169135e3ea1cd8d43ec9be6b773248ccc443ea9ee364b36
   react-native-background-actions@4.1.0: 6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970
   react-native-drawer-layout@4.2.12: 54e51ac742c1f6c04271d72b99f35ef356244455ecab0ea84b88eea4cf3291a2
-  react-native-enriched-markdown@1.1.1: dd515a7c6d2d1b2245759d3db5f7963c6dd3adf4dd7e9afb8c054bbc4ea05c1c
+  react-native-enriched-markdown@1.1.1: 5077656a0b630b29a71d516e93bdf6e7684fc5b4cc4c77421da1fc6ce6401535
   react-native-gesture-handler@3.3.0: abb5e60a0a1da478e56771aaec1a5c029331ad04e5fff2e647672694f1b17c86
   react-native-keyboard-controller@1.22.9: fcefd856c7edcf8595c96f35f13fea7ba2abf3ab6d88ad68161b81f5492da5a4
   react-native-nitro-modules@0.36.4: 1183e2143742971fbebe791e96c438bcbe4ee0d331149ab8dbe39a17070c0421
@@ -279,7 +279,7 @@ importers:
         version: 1.5.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)(esbuild@0.28.2)(ws@8.21.1)
       '@earendil-works/pi-ai':
         specifier: 1.5.0
-        version: 1.5.0(patch_hash=a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+        version: 1.5.0(patch_hash=498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode':
         specifier: 1.5.0
         version: 1.5.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
@@ -546,7 +546,7 @@ importers:
         version: 7.0.2(react-native-svg@15.16.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-enriched-markdown:
         specifier: 1.1.1
-        version: 1.1.1(patch_hash=dd515a7c6d2d1b2245759d3db5f7963c6dd3adf4dd7e9afb8c054bbc4ea05c1c)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+        version: 1.1.1(patch_hash=5077656a0b630b29a71d516e93bdf6e7684fc5b4cc4c77421da1fc6ce6401535)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-gesture-handler:
         specifier: ~3.3.0
         version: 3.3.0(patch_hash=abb5e60a0a1da478e56771aaec1a5c029331ad04e5fff2e647672694f1b17c86)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -979,7 +979,7 @@ importers:
         version: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
       react-native-enriched-markdown:
         specifier: '*'
-        version: 1.1.1(patch_hash=dd515a7c6d2d1b2245759d3db5f7963c6dd3adf4dd7e9afb8c054bbc4ea05c1c)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+        version: 1.1.1(patch_hash=5077656a0b630b29a71d516e93bdf6e7684fc5b4cc4c77421da1fc6ce6401535)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-gesture-handler:
         specifier: '*'
         version: 3.3.0(patch_hash=abb5e60a0a1da478e56771aaec1a5c029331ad04e5fff2e647672694f1b17c86)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -13154,7 +13154,7 @@ snapshots:
       esbuild: 0.28.2
       ws: 8.21.1
 
-  '@earendil-works/pi-ai@1.5.0(patch_hash=a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@1.5.0(patch_hash=498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.129.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
@@ -13186,7 +13186,7 @@ snapshots:
   '@earendil-works/pi-durable@1.5.0(patch_hash=a9fc4717ac96ee55f775e17b640c7029ede96ceac90e3da8c7f7ee3a22ec65f4)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(esbuild@0.28.2)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@earendil-works/chord': 1.5.0(patch_hash=b762b8f908b2333842d883ffff23af122147adc86e35b4cf1325f6192ef46c58)(esbuild@0.28.2)(ws@8.21.1)
-      '@earendil-works/pi-ai': 1.5.0(patch_hash=a6e8229be05a941b5d7a315751ea569d73f1bf5f1a97b912a3cc4bdb43468ea9)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
+      '@earendil-works/pi-ai': 1.5.0(patch_hash=498ee1985739fc6c55b515be0061955978661bfcd407bfa7bf8b2a7d7274f07b)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@6.28.0)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-codemode': 1.5.0(patch_hash=77f32217cd2e05b8692458f93be6895a10987c44d29cfa646944c21df55551d4)
       '@earendil-works/pi-schema': 1.5.0
       '@earendil-works/pi-telemetry': 1.5.0
@@ -22424,7 +22424,7 @@ snapshots:
       react-native-reanimated: 4.7.1(patch_hash=3c2dff311c8f3f482f98169829798437b3ec53d58888938956d428322017f8e6)(react-native-worklets@0.13.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       use-latest-callback: 0.2.6(react@19.3.0)
 
-  react-native-enriched-markdown@1.1.1(patch_hash=dd515a7c6d2d1b2245759d3db5f7963c6dd3adf4dd7e9afb8c054bbc4ea05c1c)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
+  react-native-enriched-markdown@1.1.1(patch_hash=5077656a0b630b29a71d516e93bdf6e7684fc5b4cc4c77421da1fc6ce6401535)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
     dependencies:
       react: 19.3.0
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
@@ -22532,7 +22532,7 @@ snapshots:
     dependencies:
       react: 19.3.0
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
-      react-native-enriched-markdown: 1.1.1(patch_hash=dd515a7c6d2d1b2245759d3db5f7963c6dd3adf4dd7e9afb8c054bbc4ea05c1c)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+      react-native-enriched-markdown: 1.1.1(patch_hash=5077656a0b630b29a71d516e93bdf6e7684fc5b4cc4c77421da1fc6ce6401535)(katex@0.17.0)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-worklets: 0.13.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1)
       remend: 1.3.0
 

@@ -25,7 +25,7 @@ import { useAssistantMessageActions } from '../context/AssistantMessageActionsPr
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageAnswerCards } from './MessageAnswerCards';
+import { MessageAnswerGroup } from './MessageAnswerGroup';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -131,9 +131,8 @@ function AssistantMessageHeader({
 }
 
 /**
- * An answer with its header and actions. Several answers to one question are cards to swipe
- * between, each opening in full over the screen; a source that cannot switch answers shows only
- * the selected one.
+ * An answer with its header and actions. Grouped answers use the preferred presentation;
+ * a source that cannot switch answers shows only the selected one.
  */
 function AssistantChatMessage({
   accessories,
@@ -172,12 +171,9 @@ function AssistantChatMessage({
     <View className="w-full gap-2.5">
       {header}
       {isGrouped ? (
-        <>
-          <View pointerEvents={isSelecting ? 'none' : 'auto'}>
-            <MessageAnswerCards message={message} />
-          </View>
-          <View className="w-full gap-2">{extras}</View>
-        </>
+        <View className="w-full gap-2.5" pointerEvents={isSelecting ? 'none' : 'auto'}>
+          <MessageAnswerGroup message={message}>{extras}</MessageAnswerGroup>
+        </View>
       ) : (
         <AssistantMessage message={message}>{extras}</AssistantMessage>
       )}
