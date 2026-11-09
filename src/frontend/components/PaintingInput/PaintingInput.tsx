@@ -139,7 +139,7 @@ function PaintingInputControls({
   const visibleAttachments = isReferenceVisible
     ? input.attachments
     : input.attachments.filter((item) => item.id !== input.referenceAttachment?.id);
-  const paramFields = getImageParamFields(input.resolvedMode);
+  const paramFields = getImageParamFields(input.resolvedMode, input.paramValues);
   const settingsSummary = imageParamSummary(t, paramFields, input.paramValues);
   const modelLabel =
     selectedModel?.name ?? historicalModelLabel(painting) ?? t('settings.model.painting.title');

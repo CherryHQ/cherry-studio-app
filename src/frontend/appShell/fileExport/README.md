@@ -36,6 +36,10 @@ without smoothing. Regenerate the PNG when changing the URL.
 `prepareFileExport` supplies matching filename and media type; non-image source files pass through.
 SVG files also pass through with their original bytes, filename and media type for sharing and system
 opening, without a footer, because the image renderer only decodes bitmaps.
+GIF files retain their original bytes, filename and media type for Photos saving, sharing and system
+opening, even when a watermark is selected: the footer renderer would flatten their animation to a
+single PNG frame. The source media type identifies GIFs; URI-only callers fall back to the file
+extension.
 The in-app preview and original image used for editing retain their bytes.
 
 The global preference is persisted; each export resolves its own watermark selection without adding

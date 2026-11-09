@@ -13,15 +13,15 @@ import { ProviderRegistryUpdaterService } from '../ProviderRegistryUpdaterServic
 import { providerRegistryUpdates } from '../providerRegistryUpdates';
 
 const mockRequest = jest.fn();
+const mockGetCountry = jest.fn(async () => 'US');
+jest.mock('@/backend/core/application/Application', () => ({
+  application: { get: () => ({ getCountry: mockGetCountry }) },
+}));
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: ({ baseUrl }: { baseUrl: string }) => ({
     request: (request: unknown) => mockRequest(baseUrl, request),
   }),
   isHttpError: () => false,
-}));
-jest.mock('expo-localization', () => ({
-  getLocales: () => [{ regionCode: 'US' }],
-  getCalendars: () => [{ timeZone: 'UTC' }],
 }));
 jest.mock('../providerRegistrySnapshot', () => ({
   readProviderRegistrySnapshots: jest.fn(),
@@ -37,7 +37,7 @@ class Updater extends ProviderRegistryUpdaterService {
   }
 }
 
-function snapshot(revision: number, minimum = '2.1.4') {
+function snapshot(revision: number, minimum = REGISTRY_DESKTOP_COMPATIBILITY_VERSION) {
   const manifest: CatalogManifest = {
     files: { 'models.json': `models-${revision}`, 'provider-models.json': `providers-${revision}` },
     minAppVersion: minimum,
@@ -69,6 +69,7 @@ function serve(snapshotToServe: ReturnType<typeof snapshot>) {
 let updater: Updater;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetCountry.mockResolvedValue('US');
   providerRegistryService.clearRemoteSnapshot();
   providerRegistryUpdates.clear();
   jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([]);
@@ -77,6 +78,17 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await updater.stop();
+});
+
+it.each([
+  ['CN', 'raw.gitcode.com'],
+  ['US', 'raw.githubusercontent.com'],
+])('selects the registry mirror from the shared IP country %s', async (country, host) => {
+  mockGetCountry.mockResolvedValue(country);
+  serve(snapshot(1));
+  await updater.ensureReady();
+  expect(providerRegistryService.isReady()).toBe(true);
+  expect(new URL(mockRequest.mock.calls[0]![0]).hostname).toBe(host);
 });
 
 it('automatically downloads on first launch and shares it with concurrent model selection', async () => {
@@ -164,9 +176,9 @@ it('uses a saved older compatible snapshot offline and retains it after refresh 
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
 
-it('migrates an old cached schema to v3 even when its revision is higher', async () => {
-  const cached = snapshot(100, '2.0.8');
-  cached.manifest.schemaVersion = 1;
+it('migrates a cached v3 schema to v4 even when its revision is higher', async () => {
+  const cached = snapshot(100, '2.1.4');
+  cached.manifest.schemaVersion = 3;
   jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([cached]);
   serve(snapshot(2));
   await updater.start();
@@ -174,13 +186,13 @@ it('migrates an old cached schema to v3 even when its revision is higher', async
   expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-2');
   expect(writeProviderRegistrySnapshot).toHaveBeenCalledWith(
     expect.anything(),
-    expect.objectContaining({ schemaVersion: 3, revision: 2 }),
+    expect.objectContaining({ schemaVersion: 4, revision: 2 }),
     'a',
   );
-  expect(mockRequest.mock.calls.every(([source]) => source.endsWith('/v3'))).toBe(true);
+  expect(mockRequest.mock.calls.every(([source]) => source.endsWith('/v4'))).toBe(true);
 });
 
-it('prefers the saved v3 snapshot over an older schema with a higher revision', async () => {
+it('prefers the saved v4 snapshot over an older schema with a higher revision', async () => {
   const older = snapshot(100, '2.0.8');
   older.manifest.schemaVersion = 1;
   jest
@@ -191,7 +203,20 @@ it('prefers the saved v3 snapshot over an older schema with a higher revision', 
   expect(mockRequest).not.toHaveBeenCalled();
 });
 
-it('rejects an old-schema manifest returned from the v3 publication path', async () => {
+it('downloads v4 when the producer version predates its minimum reader', async () => {
+  const remote = snapshot(1);
+  remote.manifest.sourceAppVersion = '2.1.10';
+  serve(remote);
+  await updater.ensureReady();
+  expect(providerRegistryService.isReady()).toBe(true);
+  expect(writeProviderRegistrySnapshot).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ schemaVersion: 4, minAppVersion: '2.1.11' }),
+    undefined,
+  );
+});
+
+it('rejects an old-schema manifest returned from the v4 publication path', async () => {
   const remote = snapshot(1, '2.0.8');
   remote.manifest.schemaVersion = 1;
   serve(remote);

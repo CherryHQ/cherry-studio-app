@@ -1,12 +1,16 @@
+import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { ImageModelV3CallOptions } from '@ai-sdk/provider';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { generateImage } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createAihubmix } from '../../provider/custom/aihubmix/aihubmixProvider';
 import { createDashScopeProvider } from '../../provider/custom/dashscope/dashscopeProvider';
 import { createDmxapiProvider } from '../../provider/custom/dmxapi/dmxapiProvider';
 import type { ImageTransportDescriptor } from '../../provider/custom/imageGenerationModel';
 import { createModelscopeProvider } from '../../provider/custom/modelscope/modelscopeProvider';
+import { createNewApi } from '../../provider/custom/newapiProvider';
 import { createPpioProvider } from '../../provider/custom/ppio/ppioProvider';
 import { createTokenhubProvider } from '../../provider/custom/tokenhub/tokenhub-provider';
 import { splitImageParamValues } from '../imageOptions';
@@ -25,10 +29,11 @@ function callOptions(
   modelId: string,
   paramValues: Record<string, unknown>,
   modelDescriptor?: ImageTransportDescriptor,
+  presetProviderId = providerId === 'openai-compatible' ? undefined : providerId,
 ): ImageModelV3CallOptions {
   const provider: Provider = {
     id: `copy-${providerId}`,
-    presetProviderId: providerId,
+    presetProviderId,
     name: providerId,
     isEnabled: true,
     authType: 'api-key',
@@ -63,6 +68,91 @@ function callOptions(
 
 describe('painting parameters through the image provider to the HTTP request', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(['openai', 'dmxapi', 'newapi', 'aihubmix', 'openai-compatible'])(
+    '%s generates GIFs with the API defaults and retains the encoded bytes',
+    async (providerId) => {
+      const base64 = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+        jsonResponse({ data: [{ b64_json: base64 }] }),
+      );
+      const settings = { apiKey: 'test-key', baseURL: 'https://images.example.com/v1', fetch };
+      const provider =
+        providerId === 'dmxapi'
+          ? createDmxapiProvider(settings)
+          : providerId === 'newapi'
+            ? createNewApi(settings)
+            : providerId === 'aihubmix'
+              ? createAihubmix(settings)
+              : providerId === 'openai-compatible'
+                ? createOpenAICompatible({ ...settings, name: `copy-${providerId}` })
+                : createOpenAI(settings);
+      const modelId = 'gpt-image-2.6-flare';
+      const options = callOptions(providerId, modelId, {
+        complexity: 'medium',
+        outputFormat: 'gif',
+      });
+      const result = await generateImage({
+        model: provider.imageModel(modelId),
+        prompt: 'a walking fox',
+        n: 1,
+        providerOptions: options.providerOptions,
+        maxRetries: 0,
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [url, request] = fetch.mock.calls[0]!;
+      expect(url).toBe('https://images.example.com/v1/images/generations');
+      const fields = JSON.parse(request?.body as string);
+      expect(fields).toMatchObject({ model: modelId, output_format: 'gif', complexity: 'medium' });
+      for (const key of [
+        'frame_count',
+        'frame_duration_ms',
+        'output_compression',
+        'outputFormat',
+        'size',
+      ]) {
+        expect(fields).not.toHaveProperty(key);
+      }
+      expect(result.images).toHaveLength(1);
+      expect(result.image.mediaType).toBe('image/gif');
+      expect(result.image.base64).toBe(base64);
+    },
+  );
+
+  it('sends GIF output format through an imported AiHubMix compatible image endpoint', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      jsonResponse({ data: [{ b64_json: 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' }] }),
+    );
+    const provider = createOpenAICompatible({
+      apiKey: 'test-key',
+      baseURL: 'https://images.example.com/v1',
+      name: 'copy-openai-compatible',
+      fetch,
+    });
+    const modelId = 'gpt-image-2.6-flare';
+    const options = callOptions(
+      'openai-compatible',
+      modelId,
+      { outputFormat: 'gif', complexity: 'medium' },
+      undefined,
+      'aihubmix',
+    );
+
+    await generateImage({
+      model: provider.imageModel(modelId),
+      prompt: 'a walking fox',
+      n: 1,
+      providerOptions: options.providerOptions,
+      maxRetries: 0,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, request] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://images.example.com/v1/images/generations');
+    const fields = JSON.parse(request?.body as string);
+    expect(fields).toMatchObject({ model: modelId, output_format: 'gif', complexity: 'medium' });
+    expect(fields).not.toHaveProperty('outputFormat');
+  });
 
   it.each(['qwen-image-3.0', 'qwen-image-3.0-pro'])(
     'sends %s reference images and negative prompt to the synchronous multimodal route',

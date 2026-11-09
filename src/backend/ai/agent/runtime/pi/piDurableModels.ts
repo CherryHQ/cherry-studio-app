@@ -14,6 +14,7 @@ import { createModels, createProvider } from '@earendil-works/pi-ai/models';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
 
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
+import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
@@ -389,6 +390,7 @@ async function* tracedStream(
           event.type === 'done' ? 'ok' : message.stopReason === 'aborted' ? 'cancelled' : 'error',
           {
             'gen_ai.response.finish_reason': message.stopReason,
+            'gen_ai.response.raw_finish_reason': readKnownAiFinishReason(message.rawStopReason),
             ...piModelTerminalErrorAttributes(message),
           },
         );

@@ -73,6 +73,8 @@ export const DefaultUseCache: UseCacheSchema = {
  * observable as `undefined`; entries are not initialized from defaults.
  */
 export type BackendCacheSchema = {
+  // Successfully detected egress country; expires after ten minutes.
+  'region.egress_country': string;
   // Round-robin cursor for enabled provider API keys.
   'settings.provider.${providerId}.last_used_key_id': string;
 };

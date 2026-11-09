@@ -1,11 +1,11 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.5` and
-`@cherrystudio/ai-sdk-provider@0.1.10` in place of local source packages; Expo and device acceptance
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.8` and
+`@cherrystudio/ai-sdk-provider@0.1.11` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.3.4` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.4.0` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
-The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
+The registry compatibility baseline is `2.1.11`; device acceptance is separate from package
 and Metro checks.**
 
 This reference defines what Mobile may reuse from Cherry Desktop. A Desktop implementation is a
@@ -60,8 +60,9 @@ conversation consumer: that execution and context are owned by
 `src/backend/ai/agent/runtime/pi/`. New versions must still be reviewed against the consumed
 exports, patched AI SDK dependencies, Metro graph, and Mobile adapters.
 
-Version `2.4.5` adds an OpenRouter reranking-model factory. Its exports and dependency ranges
-remain unchanged.
+Version `2.4.8` includes the resolved model in non-streaming text and image plugin contexts,
+removes the unused provider-utils runtime dependency, and requires the GPT Image 2.6-capable
+OpenAI adapter. The existing OpenRouter reranking-model factory remains available.
 
 ### `@cherrystudio/ai-sdk-provider`
 
@@ -69,22 +70,23 @@ Mobile uses the published package for CherryIN and OpenAI-compatible provider be
 reranking, reasoning-model token conversion, and embedding. New versions require consumer and
 dependency review before the pinned version changes.
 
-Version `0.1.10` disables strict-tool declarations on CherryIN's Anthropic endpoint because its
-upstream rejects that field. Mobile's conversation tools remain on the Pi path.
+Version `0.1.11` requires the GPT Image 2.6-capable OpenAI adapter. CherryIN's Anthropic endpoint
+continues to omit the unsupported strict-tool field. Mobile's conversation tools remain on the Pi path.
 
 ### Dependency resolution
 
-The published `ai-core@2.4.5` and `ai-sdk-provider@0.1.10` require OpenAI SDK `3.0.109`; `ai-core`
-also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
-Both Cherry packages now require Google SDK `3.0.132`. Mobile pins it with its required
-`@ai-sdk/provider@3.0.18` and `@ai-sdk/provider-utils@4.0.58`, retaining the Google model-path and
-image-routing patch.
+The published `ai-core@2.4.8` and `ai-sdk-provider@0.1.11` require OpenAI SDK `3.0.137` or newer
+within AI SDK 6. Mobile pins `3.0.137` with Azure `3.0.148`, which uses that same OpenAI version,
+and carries the matching image-URL response patch across all four published JavaScript entries.
+The shared SDK dependencies are pinned to `@ai-sdk/provider@3.0.19` and
+`@ai-sdk/provider-utils@4.0.64`, as required by the OpenAI adapter. Google remains at `3.0.132`
+with the existing model-path and image-routing patch.
 Expo-specific dependency choices and Pi patches remain Mobile-owned. A later Desktop version bump
 by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.3.4` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.4.0` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -103,6 +105,23 @@ excludes `ultra` from selectable reasoning efforts and rejects
 
 The `0.3.4` update adds OpenRouter's optional reranker model-list URL. Mobile preserves this
 connection metadata but currently lists OpenRouter chat, embedding, and image models only.
+
+The `0.4.0` package includes GPT Image 2.6 scene complexity, animated GIF format, frame count,
+and frame duration, following the `0.3.5` model additions and `0.3.6` stable Hunyuan 4 metadata.
+Mobile downloads those controls from the upstream v4 stream with a Desktop `2.1.11` reader baseline.
+Older cached snapshots remain usable offline while startup attempts the v4 upgrade. The producer
+version records provenance and may predate the declared minimum reader; compatibility compares the
+reader baseline with `minAppVersion` independently.
+
+Mobile exposes GIF for generation using the pinned SDK's existing support and the API's default
+frame count and duration. Catalog projection omits custom frame controls and the GIF edit option;
+static-image editing retains PNG, JPEG and WebP. GIF controls use automatic sizing to stay within
+the default frame budget and exclude transparent backgrounds. Changing output format reconciles
+those dependent controls; shared request admission rejects incompatible explicit parameters.
+Native OpenAI adapters receive the SDK's
+`outputFormat` option, while compatible adapters receive the catalog's `output_format` wire name.
+No additional SDK patch is needed for this generation-only scope. GIF playback and original-file
+export remain Mobile-owned; execution and device acceptance of the v4 integration remain pending.
 
 The `0.3.3` update includes LongCat-2.5 endpoint and reasoning declarations, Qwen 3.8 Flash Next
 effort inference, and corrected MiMo API model IDs. Model data still arrives through remote catalog
@@ -151,7 +170,7 @@ check, platform exports, and device acceptance before the registry compatibility
 
 | Registry concern | Mobile state | Runtime scope |
 | --- | --- | --- |
-| Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older cached schemas remain readable offline; baseline `2.1.4` |
+| Remote manifest compatibility | Implemented with an independent registry compatibility version; v4 validation pending | Downloads v4; older cached schemas remain readable offline; baseline `2.1.11` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
 | Reasoning wire dialects | Implemented for Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
@@ -160,6 +179,7 @@ check, platform exports, and device acceptance before the registry compatibility
 | Server tools and model eligibility | Implemented for the Pi conversation path from the bundled declarations; live-provider validation pending | Downloaded catalogs cannot grant a native tool; endpoints without an adapter keep the application Web Search |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
 | V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
+| V4 image controls | Implemented; validation pending | GIF generation with API frame defaults and complexity; GIF editing and custom frame controls remain excluded |
 | Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; all model rows come from the remote snapshot |
 
 ### Remote catalog policy
@@ -177,7 +197,7 @@ definitions, base URLs, adapter families, headers, or credential behavior. Incom
 are rejected before download and activation. The Mobile-owned provider extensions affect connection metadata only; remote snapshots replace
 all model rows, including the `github` namespace.
 
-The current download lane is v3. Unknown capabilities and efforts are dropped at the smallest list
+The current download lane is v4. Unknown capabilities and efforts are dropped at the smallest list
 item; entries with an unsupported protocol are omitted. `serverTools` in a downloaded catalog and
 `ultra` have no Mobile consumer. The `adaptive-between-tools` model dialect is also excluded while the
 pinned Anthropic SDK lacks `between_tools`. Always-on adaptive reasoning uses the shared interpreter.

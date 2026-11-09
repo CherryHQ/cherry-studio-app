@@ -416,6 +416,7 @@ function PaintingBoardContent({
           canAnnotate={!previewNode && referenceImage !== null && !annotation.isSubmitting}
           imageCount={focusedNode?.images.length ?? 1}
           key={shownImage.uri}
+          mediaType={shownImage.mediaType}
           onAddAnnotation={annotation.addAnnotation}
           onRemoveAnnotation={annotation.removeAnnotation}
           onSelectAnnotation={annotation.selectAnnotation}

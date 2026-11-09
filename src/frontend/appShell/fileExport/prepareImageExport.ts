@@ -22,16 +22,21 @@ import {
   exportSignatureColumns,
   validateExportSignature,
 } from '@/shared/utils/exportSignature';
+import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 type PreparedImage = { uri: string; release(): void };
 
 /** Apply the selected sharing treatment to a disposable copy of a source image. */
 export async function prepareImageExport(
-  source: { uri: string },
+  source: { uri: string; mediaType?: string },
   watermark: ExportWatermark,
 ): Promise<PreparedImage> {
   const signature = getExportSignature(watermark);
-  if (!signature) return { uri: source.uri, release() {} };
+  const mediaType = source.mediaType
+    ? source.mediaType.split(';')[0].trim().toLowerCase()
+    : imageMediaTypeFromExtension(source.uri.split(/[?#]/)[0].split('.').pop());
+  // The footer renderer writes a single PNG frame. GIF exports must keep their encoded bytes.
+  if (!signature || mediaType === 'image/gif') return { uri: source.uri, release() {} };
   validateExportSignature(signature);
 
   const resources: { dispose(): void }[] = [];
@@ -148,7 +153,10 @@ export async function prepareFileExport(
   ) {
     return { uri, filename: entry.filename, mediaType: entry.mediaType, release() {} };
   }
-  const image = await prepareImageExport({ uri }, watermark);
+  const image = await prepareImageExport({ uri, mediaType: entry.mediaType }, watermark);
+  if (image.uri === uri) {
+    return { ...image, filename: entry.filename, mediaType: entry.mediaType };
+  }
   const stem = entry.filename.replace(/\.[^.]+$/, '');
   return { ...image, filename: `${stem.slice(0, 251)}.png`, mediaType: 'image/png' };
 }
