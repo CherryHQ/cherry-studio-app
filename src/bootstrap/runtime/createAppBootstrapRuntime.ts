@@ -43,6 +43,7 @@ import type { ProviderAccountRuntime } from '@/backend/services/providers/accoun
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
@@ -148,6 +149,7 @@ export function createAppBootstrapRuntime(
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
+  const screenAwake = host.container.get<ScreenAwakeRuntime>('ScreenAwakeRuntime');
   const languageServing = host.container.get<
     LanguageServingSupport & AgentRuntime & RuntimeTextGenerator
   >('AgentRuntime');
@@ -194,6 +196,7 @@ export function createAppBootstrapRuntime(
     remoteAgent,
     diagnostics,
     languageServing,
+    screenAwake,
     providerRegistryUpdater,
     trash,
   });

@@ -29,6 +29,7 @@ import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -63,6 +64,7 @@ export const services = {
   RemoteAgentRuntime,
   DocumentExportRuntime,
   PreferenceService,
+  ScreenAwakeRuntime,
   AnalyticsService,
   BackgroundActivityEnvironment,
   AndroidBackgroundActivityRuntime,

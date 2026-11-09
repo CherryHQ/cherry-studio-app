@@ -30,6 +30,7 @@ import {
   createSqliteStoreHarness,
   type SqliteStoreHarness,
 } from '../../sessionStore/__tests__/_sqliteStoreHarness';
+import { createAskUserQuestionTool } from '../../tools/askUserQuestionTool';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
@@ -311,6 +312,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     agentId,
     steps,
     copies,
+    listeners,
     emit,
     reserve,
     background,
@@ -323,6 +325,366 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 async function settle() {
   for (let round = 0; round < 20; round++) await new Promise((resolve) => setImmediate(resolve));
 }
+
+describe.each([true, false])('screen-awake generation demand (port provided: %s)', (provided) => {
+  function screenFixture(overrides: Partial<MobileAgentHostPorts> = {}) {
+    const release = jest.fn();
+    const generationLease = jest.fn(() => ({ release }));
+    const state = fixture({
+      ...overrides,
+      generationLease: provided ? generationLease : undefined,
+    });
+    return {
+      ...state,
+      generationLease,
+      release,
+      expectLeases(acquired: number, released: number) {
+        expect(generationLease).toHaveBeenCalledTimes(provided ? acquired : 0);
+        expect(release).toHaveBeenCalledTimes(provided ? released : 0);
+      },
+    };
+  }
+
+  async function reserveNext(
+    state: ReturnType<typeof screenFixture>,
+    previous: RuntimeDurableTurn,
+    status: 'running' | 'queued',
+  ): Promise<RuntimeDurableTurn> {
+    const reserved = await state.store.reserveSubmission({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'next', type: 'text', text: 'Continue', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    return {
+      ...previous,
+      identity: { ...previous.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
+      status,
+      parts: [],
+    };
+  }
+
+  function requestApproval(state: ReturnType<typeof screenFixture>, turn: RuntimeDurableTurn) {
+    const approvalId = uuid();
+    const controller = new AbortController();
+    const response = state.execution()!.requestApproval(
+      turn.identity,
+      {
+        id: approvalId,
+        turnId: turn.identity.turnId,
+        toolCallId: 'search',
+        toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+        displayName: 'Search',
+        input: {},
+        status: 'pending',
+      },
+      controller.signal,
+    );
+    const approve = () =>
+      state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        approvalId,
+        decision: 'approve',
+      });
+    return { response, approve };
+  }
+
+  test('new running answers share one lease across lanes until the last answer finishes', async () => {
+    const state = screenFixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    state.expectLeases(0, 0);
+    await state.host.submitMessage({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Compare' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      additionalReplies: [
+        { modelId: createUniqueModelId('provider', 'second-model'), assistantMessageId: uuid() },
+      ],
+    });
+    const running = [...state.copies.values()].flatMap((copy) =>
+      copy.turns.filter((turn) => turn.status === 'running'),
+    );
+    expect(running).toHaveLength(2);
+    state.expectLeases(1, 0);
+    state.emit({ ...running[0]!, status: 'completed' });
+    state.expectLeases(1, 0);
+    state.emit({ ...running[1]!, status: 'completed' });
+    state.expectLeases(1, 1);
+    await state.host.close();
+    state.expectLeases(1, 1);
+  });
+
+  test.each(['completed', 'failed', 'cancelled', 'interrupted'] as const)(
+    'restored running turn acquires at initialize and releases once on %s',
+    async (status) => {
+      const state = screenFixture();
+      const turn = await state.reserve('running');
+      await state.host.initialize();
+      state.expectLeases(1, 0);
+      state.emit({ ...turn, status });
+      state.expectLeases(1, 1);
+      state.emit({ ...turn, status });
+      await state.host.close();
+      state.expectLeases(1, 1);
+    },
+  );
+
+  test('approval wait releases demand and resolving the last approval restores it', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const first = requestApproval(state, turn);
+    const second = requestApproval(state, turn);
+    await settle();
+    state.expectLeases(1, 1);
+    await first.approve();
+    await expect(first.response).resolves.toBe('approve');
+    state.expectLeases(1, 1);
+    await second.approve();
+    await expect(second.response).resolves.toBe('approve');
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('question wait releases demand and answering restores it', async () => {
+    const state = screenFixture({
+      tools: { getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser)] },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const controller = new AbortController();
+    const tool = await state
+      .execution()!
+      .resolveTool(
+        turn.identity,
+        { source: 'builtin', capabilityId: 'ask_user_question' },
+        controller.signal,
+      );
+    const response = tool.execute({
+      turnId: turn.identity.turnId,
+      toolCallId: 'question',
+      signal: controller.signal,
+      input: {
+        questions: [{ id: 'choice', question: 'Which one?', selection: 'single', options: [] }],
+      },
+    });
+    state.expectLeases(1, 1);
+    await state.host.respondQuestion({
+      sessionId: state.sessionId,
+      turnId: turn.identity.turnId,
+      toolCallId: 'question',
+      answer: {
+        answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'First', skipped: false }],
+      },
+    });
+    await response;
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('cancel suppresses late running deltas and a new successor restores demand', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    jest.spyOn(state.conversations, 'abort').mockResolvedValue(undefined);
+    await state.host.cancelTurn({ sessionId: state.sessionId, turnId: turn.identity.turnId });
+    state.expectLeases(1, 1);
+    state.emit({ ...turn, parts: [] });
+    state.listeners.get(state.sessionId)!({
+      type: 'snapshot',
+      snapshot: { activeTurn: turn, queue: [] },
+    });
+    state.expectLeases(1, 1);
+    state.emit(await reserveNext(state, turn, 'running'));
+    state.expectLeases(2, 1);
+    state.emit({ ...turn, status: 'cancelled' });
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('queued input behind approval holds no demand until it actually starts', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const approval = requestApproval(state, turn);
+    await settle();
+    state.expectLeases(1, 1);
+    const queued = await reserveNext(state, turn, 'queued');
+    state.emit(queued);
+    state.listeners.get(state.sessionId)!({ type: 'queue.updated', queue: [queued] });
+    state.expectLeases(1, 1);
+    const approved = approval.approve();
+    state.emit({ ...turn, status: 'completed' });
+    await approved;
+    await approval.response;
+    state.expectLeases(1, 1);
+    state.emit({ ...queued, status: 'running' });
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('cancel suppression survives suspension and stale terminal callbacks after reopening', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const stale = state.listeners.get(state.sessionId)!;
+    jest.spyOn(state.conversations, 'abort').mockResolvedValue(undefined);
+    await state.host.cancelTurn({ sessionId: state.sessionId, turnId: turn.identity.turnId });
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    await state.host.resumeSuspended();
+    state.expectLeases(1, 1);
+    stale({ type: 'turn.updated', turn: { ...turn, status: 'cancelled' } });
+    state.expectLeases(1, 1);
+    state.emit(await reserveNext(state, turn, 'running'));
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('retry backoff releases execution protection while retaining screen demand', async () => {
+    const executionRelease = jest.fn();
+    const state = screenFixture({ executionLease: () => ({ release: executionRelease }) });
+    let watchWork!: (active: boolean) => void;
+    jest.spyOn(state.conversations, 'watchWork').mockImplementation(async (listener) => {
+      watchWork = listener;
+      return { active: true, unsubscribe: async () => {} };
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    watchWork(false);
+    expect(executionRelease).toHaveBeenCalledTimes(1);
+    state.expectLeases(1, 0);
+    state.emit({ ...turn, updatedAt: turn.updatedAt + 1 });
+    state.expectLeases(1, 0);
+    state.emit({ ...turn, status: 'completed' });
+    state.expectLeases(1, 1);
+    await state.host.close();
+  });
+
+  test.each(['suspend', 'close'] as const)(
+    '%s releases before slow cleanup and stale callbacks cannot restore demand',
+    async (operation) => {
+      let interrupt!: (reason: Error) => void | Promise<void>;
+      const state = screenFixture({
+        executionLease: (onInterrupt) => {
+          interrupt = onInterrupt;
+          return { release() {} };
+        },
+      });
+      let finishCleanup!: () => void;
+      const cleanup = new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      });
+      const unsubscribe = jest.fn(async () => cleanup);
+      jest
+        .spyOn(state.conversations, 'watchWork')
+        .mockResolvedValueOnce({ active: true, unsubscribe });
+      const turn = await state.reserve('running');
+      await state.host.initialize();
+      const stale = state.listeners.get(state.sessionId)!;
+      state.expectLeases(1, 0);
+      const stopping =
+        operation === 'suspend' ? interrupt(new Error('Expired')) : state.host.close();
+      state.expectLeases(1, 1);
+      stale({ type: 'turn.updated', turn });
+      state.expectLeases(1, 1);
+      expect(state.conversations.close).not.toHaveBeenCalled();
+      finishCleanup();
+      await stopping;
+      stale({ type: 'turn.updated', turn });
+      state.expectLeases(1, 1);
+      if (operation === 'suspend') {
+        await state.host.resumeSuspended();
+        state.expectLeases(2, 1);
+        stale({ type: 'snapshot', snapshot: { activeTurn: null, queue: [] } });
+        state.expectLeases(2, 1);
+      }
+      await state.host.close();
+      state.expectLeases(operation === 'suspend' ? 2 : 1, operation === 'suspend' ? 2 : 1);
+    },
+  );
+
+  test('snapshot removal releases demand and restored snapshot reacquires it', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const listener = state.listeners.get(state.sessionId)!;
+    listener({ type: 'snapshot', snapshot: { activeTurn: null, queue: [] } });
+    state.expectLeases(1, 1);
+    listener({ type: 'snapshot', snapshot: { activeTurn: turn, queue: [] } });
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('resuming an idle copy does not reacquire from its previous running callback', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const stale = state.listeners.get(state.sessionId)!;
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    state.expectLeases(1, 1);
+    state.copies.get(state.sessionId)!.turns = [{ ...turn, status: 'completed' }];
+    await state.host.resumeSuspended();
+    state.expectLeases(1, 1);
+    stale({ type: 'turn.updated', turn });
+    state.expectLeases(1, 1);
+    await state.host.close();
+  });
+
+  test('detaching the last running lane releases demand even without a terminal delta', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const stale = state.listeners.get(state.sessionId)!;
+    jest.spyOn(state.conversations, 'abort').mockResolvedValue(undefined);
+    await state.host.deleteSession({ sessionId: state.sessionId });
+    state.expectLeases(1, 1);
+    stale({ type: 'turn.updated', turn });
+    state.expectLeases(1, 1);
+    await state.host.close();
+  });
+});
+
+test('screen-awake port failures do not throw into generation transitions', async () => {
+  const release = jest.fn(() => {
+    throw new Error('Release failed');
+  });
+  const generationLease = jest
+    .fn(() => ({ release }))
+    .mockImplementationOnce(() => {
+      throw new Error('Acquire failed');
+    });
+  const state = fixture({ generationLease });
+  const turn = await state.reserve('running');
+  await expect(state.host.initialize()).resolves.toBeUndefined();
+  expect(() => state.emit(turn)).not.toThrow();
+  expect(generationLease).toHaveBeenCalledTimes(2);
+  expect(() => state.emit({ ...turn, status: 'completed' })).not.toThrow();
+  expect(release).toHaveBeenCalledTimes(1);
+  await state.host.close();
+  expect(release).toHaveBeenCalledTimes(1);
+});
 
 describe('durable tool diagnostics', () => {
   test('reads valid saved reasoning around an unsupported part without relaxing execution reads', async () => {
