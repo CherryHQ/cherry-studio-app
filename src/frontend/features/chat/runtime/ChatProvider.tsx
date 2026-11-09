@@ -199,6 +199,15 @@ export function useAgentSessionState(sessionId: string | undefined) {
   return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectSessionState);
 }
 
+/** Observe only the Session's compaction status. */
+export function useAgentContextStatus(sessionId: string | undefined) {
+  return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectContextStatus);
+}
+
+function selectContextStatus(state: AgentSessionChatState) {
+  return state.contextStatus;
+}
+
 /** The named answers among the Session's live rows, in `ids` order; the same array while they read the same. */
 export function useAgentLiveAnswers(
   sessionId: string | undefined,

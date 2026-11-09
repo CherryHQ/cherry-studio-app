@@ -7,6 +7,7 @@ import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import {
   ChatProvider,
   useAgentChatControls,
+  useAgentContextStatus,
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
 } from '../ChatProvider';
@@ -822,3 +823,35 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
+test('context status consumer ignores unrelated streamed messages', () => {
+  let renders = 0;
+  let status: ReturnType<typeof useAgentContextStatus>;
+  function ContextProbe() {
+    status = useAgentContextStatus('session-1');
+    renders++;
+    return null;
+  }
+  let renderer: ReactTestRenderer;
+  act(() => {
+    renderer = create(
+      <ChatProvider>
+        <ContextProbe />
+      </ChatProvider>,
+    );
+  });
+  const initialRenders = renders;
+  act(() => {
+    mockChatState.liveMessages = [...mockChatState.liveMessages];
+    mockChatListeners.forEach((listener) => listener());
+  });
+  expect(renders).toBe(initialRenders);
+  act(() => {
+    mockChatState.contextStatus = 'compacting';
+    mockChatListeners.forEach((listener) => listener());
+  });
+  expect(status!).toBe('compacting');
+  expect(renders).toBe(initialRenders + 1);
+  act(() => renderer!.unmount());
+  mockChatState.contextStatus = undefined;
+});
