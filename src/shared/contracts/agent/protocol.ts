@@ -43,6 +43,9 @@ export interface AgentProtocol {
   getSessionStatus(sessionId: string): AgentSessionStatus | null;
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
+  /** Sessions with a status in this generation; used for collapsed catalog groups. */
+  getSessionStatusIds(): readonly string[];
+  subscribeSessionStatuses(listener: () => void): () => void;
 
   /** Bytes held by disposable execution copies; transcripts and attachments are excluded. */
   getWorkingStorageSize(): Promise<number>;
@@ -70,6 +73,7 @@ export interface AgentProtocol {
    * Removes one settled turn from the transcript and clears any context
    * checkpoint that may have summarized it. The turn's side effects are not
    * undone: this erases the record, not what the record describes.
+   * Naming an answer with siblings removes only that answer's subtree.
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 

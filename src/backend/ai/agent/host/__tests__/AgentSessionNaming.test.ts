@@ -71,6 +71,38 @@ function createNaming(input: {
 }
 
 describe('AgentSessionNaming', () => {
+  test('a fork’s first input replaces its inherited title through the existing naming policy', async () => {
+    const { createEmptySession, generateText, naming, store } = createNaming({});
+    const session = await createEmptySession();
+    await store.autoRenameSession(session.id, '', 'Branch - Original topic');
+    const userParts = [{ type: 'text' as const, text: 'A different plan' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts, true);
+    expect((await store.getSession(session.id))?.name).toBe('A different plan');
+    await naming.maybeRenameFromConversationSummary({
+      sessionId: session.id,
+      userParts,
+      assistantParts: [{ id: 'answer', type: 'text', text: 'A new answer', state: 'done' }],
+    });
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect((await store.getSession(session.id))?.name).toBe('Generated summary');
+    await naming.maybeRenameFromFirstUserMessage(session.id, [
+      { type: 'text', text: 'Another input' },
+    ]);
+    expect((await store.getSession(session.id))?.name).toBe('Generated summary');
+  });
+
+  test('the fork title reset preserves a manual name', async () => {
+    const { createEmptySession, naming, store } = createNaming({});
+    const session = await createEmptySession();
+    await store.renameSession(session.id, 'My branch');
+    await naming.maybeRenameFromFirstUserMessage(
+      session.id,
+      [{ type: 'text', text: 'New input' }],
+      true,
+    );
+    expect((await store.getSession(session.id))?.name).toBe('My branch');
+  });
+
   test('uses the first user message as a temporary automatic title', async () => {
     const { createEmptySession, generateText, naming } = createNaming({});
     const session = await createEmptySession();

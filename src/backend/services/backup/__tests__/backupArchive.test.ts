@@ -66,6 +66,7 @@ jest.mock('expo-file-system', () => {
           const bytes = files.get(fileUri)!;
           const result = bytes.slice(this.offset, this.offset + length);
           this.offset += result.length;
+          mockReadOffsets.set(fileUri, this.offset);
           return result;
         },
         writeBytesSync(bytes: Uint8Array) {
@@ -98,6 +99,7 @@ jest.mock('@/backend/services/file/fileHash', () => ({
 }));
 
 const mockHash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+const mockReadOffsets = new Map<string, number>();
 
 test('extracts stored Office files without interpreting their inner ZIP entries as backup entries', async () => {
   const database = strToU8('database fixture');
@@ -199,11 +201,15 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
   await packBackup(root, manifest, output, new AbortController().signal, (done, total) =>
     progress.push([done, total]),
   );
-  expect(progress).toEqual([
-    [1, 3],
-    [2, 3],
-    [3, 3],
-  ]);
+  const payloadBytes = database.length + image.length;
+  expect(progress[0]).toEqual([0, payloadBytes]);
+  expect(progress.at(-1)).toEqual([payloadBytes, payloadBytes]);
+  for (const [index, [done, total]] of progress.entries()) {
+    expect(Number.isSafeInteger(done)).toBe(true);
+    expect(total).toBe(payloadBytes);
+    expect(done).toBeGreaterThanOrEqual(index === 0 ? 0 : progress[index - 1]![0]);
+    expect(done).toBeLessThanOrEqual(total);
+  }
 
   const archive = await output.bytes();
   expect(compressionMethods(archive)).toEqual([
@@ -221,4 +227,117 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
     ),
   ).resolves.toEqual(manifest);
   await expect(new File('file:///cache/restored', filePath).bytes()).resolves.toEqual(image);
+});
+
+test('rejects offsetting payload size changes after the manifest was built', async () => {
+  const root = new Directory('file:///cache/offsetting-sizes');
+  const database = strToU8('database');
+  const image = strToU8('image');
+  const filePath = 'files/10000000-0000-4000-8000-000000000004.png';
+  const manifest: BackupManifest = {
+    product: 'cherry-mobile',
+    formatVersion: 1,
+    id: '20000000-0000-4000-8000-000000000004',
+    createdAt: '2026-10-15T00:00:00.000Z',
+    appVersion: '0.2.1',
+    platform: 'ios',
+    migrations: [{ when: 1789461429602, sha256: 'a'.repeat(64) }],
+    counts: { sessions: 0, messages: 0, files: 1, pluginConnections: 0 },
+    entries: [
+      { path: 'database/cherry.db', size: database.length, sha256: mockHash(database) },
+      { path: filePath, size: image.length, sha256: mockHash(image) },
+    ],
+  };
+  const manifestBytes = strToU8(JSON.stringify(manifest));
+  new File(root, 'manifest.json').writeSync(manifestBytes);
+  const databaseFile = new File(root, 'database/cherry.db');
+  const imageFile = new File(root, filePath);
+  databaseFile.writeSync(database);
+  imageFile.writeSync(image);
+  databaseFile.writeSync(strToU8('database+'));
+  imageFile.writeSync(strToU8('imag'));
+  const payloadBytes = manifest.entries.reduce((sum, entry) => sum + entry.size, 0);
+  expect(manifestBytes.length + databaseFile.size + imageFile.size).toBe(
+    manifestBytes.length + payloadBytes,
+  );
+
+  // Without per-file size pinning, the unchanged total lets packing silently write
+  // payloads whose sizes disagree with the manifest.
+  await expect(
+    packBackup(
+      root,
+      manifest,
+      new File('file:///cache/offsetting-sizes.zip'),
+      new AbortController().signal,
+      () => {},
+    ),
+  ).rejects.toThrow('ZIP source size does not match expected size');
+});
+
+test('reports payload progress before a database-only entry finishes', async () => {
+  jest.useFakeTimers();
+  const root = new Directory('file:///cache/database-only');
+  const database = new Uint8Array(256 * 1024).map((_, index) => index % 251);
+  const manifest: BackupManifest = {
+    product: 'cherry-mobile',
+    formatVersion: 1,
+    id: '20000000-0000-4000-8000-000000000003',
+    createdAt: '2026-10-15T00:00:00.000Z',
+    appVersion: '0.2.1',
+    platform: 'ios',
+    migrations: [{ when: 1789461429602, sha256: 'a'.repeat(64) }],
+    counts: { sessions: 0, messages: 0, files: 0, pluginConnections: 0 },
+    entries: [{ path: 'database/cherry.db', size: database.length, sha256: mockHash(database) }],
+  };
+  const manifestBytes = strToU8(JSON.stringify(manifest));
+  expect(manifestBytes.length).toBeLessThan(65536);
+  new File(root, 'manifest.json').writeSync(manifestBytes);
+  const databaseFile = new File(root, 'database/cherry.db');
+  databaseFile.writeSync(database);
+  const output = new File('file:///cache/database-only.zip');
+  const progress: [number, number][] = [];
+  let settled = false;
+  const packing = packBackup(root, manifest, output, new AbortController().signal, (done, total) =>
+    progress.push([done, total]),
+  ).then(() => {
+    settled = true;
+  });
+  // Handle rejection immediately, while retaining it for the awaited assertion path.
+  void packing.catch(() => {});
+  let cleanupFailure: { error: unknown } | undefined;
+  try {
+    // The manifest's first chunk has been consumed; its yield is still pending.
+    expect(mockReadOffsets.get(new File(root, 'manifest.json').uri)).toBe(manifestBytes.length);
+    expect(progress.every(([done]) => done === 0)).toBe(true);
+    jest.advanceTimersToNextTimer();
+    await Promise.resolve();
+
+    // Resume only the manifest yield, stopping at the first database chunk's yield.
+    expect(mockReadOffsets.get(databaseFile.uri)).toBe(65536);
+    expect(jest.getTimerCount()).toBe(1);
+    expect(settled).toBe(false);
+    expect(progress).toContainEqual([65536, 262144]);
+    for (const [index, [done, total]] of progress.entries()) {
+      expect(total).toBe(262144);
+      expect(done).toBeGreaterThanOrEqual(index === 0 ? 0 : progress[index - 1]![0]);
+      expect(done).toBeLessThanOrEqual(total);
+    }
+    const observedPayloadBytes = progress.at(-1)![0];
+    expect(Math.floor(((262144 + observedPayloadBytes) / (2 * 262144)) * 100)).toBe(62);
+  } finally {
+    try {
+      await jest.runAllTimersAsync();
+      await packing;
+    } catch (error) {
+      // Cleanup failures must not replace an earlier assertion failure.
+      cleanupFailure = { error };
+    } finally {
+      jest.useRealTimers();
+    }
+  }
+  if (cleanupFailure) throw cleanupFailure.error;
+  expect(progress.at(-1)).toEqual([262144, 262144]);
+  const extracted = unzipSync(await output.bytes());
+  expect(Object.keys(extracted)).toEqual(['manifest.json', 'database/cherry.db']);
+  expect(extracted['database/cherry.db']).toEqual(database);
 });

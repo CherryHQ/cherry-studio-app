@@ -812,7 +812,6 @@ describe('local message quotes', () => {
   });
   test.each([
     { ...carrier, quotes: [] },
-    { ...carrier, quotes: [quote, quote] },
     { ...carrier, quotes: [{ ...quote, id: '' }] },
     { ...carrier, quotes: [{ ...quote, sourceMessageId: 'not-a-uuid' }] },
     { ...carrier, quotes: [{ ...quote, text: ' \n ' }] },
@@ -821,6 +820,36 @@ describe('local message quotes', () => {
     { ...carrier, type: 'reasoning', id: 'r', state: 'done' },
   ])('rejects malformed or orphaned quote fields %#', (part) => {
     expect(AgentInputPartSchema.safeParse(part).success).toBe(false);
+  });
+  test('accepts multiple inline quotes and rejects mismatched or overlapping ranges', () => {
+    const text = '“First” answer\n“Second” follow-up';
+    const quotes = [
+      { ...quote, reference: { label: '“First”', offset: 0 } },
+      {
+        ...quote,
+        id: 'second',
+        reference: { label: '“Second”', offset: text.indexOf('“Second”') },
+      },
+    ];
+    expect(AgentInputPartSchema.parse({ ...carrier, text, quotes })).toMatchObject({ quotes });
+    expect(
+      AgentInputPartSchema.safeParse({
+        ...carrier,
+        text,
+        quotes: [quotes[0], { ...quotes[1], reference: { label: '“First”', offset: 0 } }],
+      }).success,
+    ).toBe(false);
+    expect(AgentInputPartSchema.safeParse({ ...carrier, text: 'Wrong text', quotes }).success).toBe(
+      false,
+    );
+    expect(
+      AgentInputPartSchema.safeParse({
+        ...carrier,
+        text: '“MCP”',
+        quotes: [{ ...quote, reference: { label: '“MCP”', offset: 0 } }],
+        pluginReferences: [{ type: 'plugin', pluginId: 'mcp', label: 'MCP', offset: 1 }],
+      }).success,
+    ).toBe(false);
   });
   test('checks the entire input, first carrier and attachment-only sendability', () => {
     expect(AgentSubmitMessageInputSchema.safeParse(submit([carrier, carrier])).success).toBe(false);

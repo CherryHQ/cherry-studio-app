@@ -84,7 +84,10 @@ function enrichFromRegistry(model: Model, provider: Provider): Model {
       preferRegistryArray(merged.capabilities, model.capabilities) ?? model.capabilities,
     contextWindow: merged.contextWindow ?? model.contextWindow,
     description: merged.description ?? model.description,
-    endpointTypes: preferRegistryArray(merged.endpointTypes, model.endpointTypes),
+    endpointTypes:
+      (provider.presetProviderId ?? provider.id) === 'poe'
+        ? preferRegistryArray(model.endpointTypes, merged.endpointTypes)
+        : preferRegistryArray(merged.endpointTypes, model.endpointTypes),
     family: merged.family ?? model.family,
     group: merged.group ?? model.group,
     imageGeneration: merged.imageGeneration ?? model.imageGeneration,

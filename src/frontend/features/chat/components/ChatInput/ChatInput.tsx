@@ -36,7 +36,7 @@ import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/mo
 
 import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
 import { attachMessageQuote } from '../../quotes/messageQuoteInput';
-import { DraftMessageQuotePreview } from '../../quotes/MessageQuotePreview';
+import { readQuoteMentions } from '../../quotes/quoteMentions';
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { AudioAttachmentNotice } from './components/AudioAttachmentNotice';
@@ -86,8 +86,8 @@ export function ChatInput({
   );
   const prepareImagePrompt = useCallback(
     (text: string) => {
-      imageAttempt.current = quoteActions?.capture();
-      return text;
+      imageAttempt.current = quoteActions?.capture(text);
+      return readQuoteMentions(text, imageAttempt.current?.fields.quotes).text;
     },
     [quoteActions],
   );
@@ -193,7 +193,7 @@ export function ChatInput({
         isImageGenerationModel(selectedModelItem.model) &&
         !skillAction ? (
           <PaintingInput
-            accessory={<DraftMessageQuotePreview />}
+            onLinkPress={quoteActions?.previewQuote}
             canSend={canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             menu={
@@ -299,7 +299,7 @@ function TextChatInput({
   }, [closeModelPicker, openProviderSetup]);
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
-      const attempt = quoteActions?.capture();
+      const attempt = quoteActions?.capture(text);
       try {
         const plugins =
           mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
@@ -315,19 +315,25 @@ function TextChatInput({
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
         // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
         const selections = readSelectionMentions(prompt);
+        const quoted = readQuoteMentions(selections.text, attempt?.fields.quotes);
         const shifted = <T extends { offset: number }>(references: T[]) =>
           references.map((reference) => ({
             ...reference,
-            offset: selections.shift(reference.offset),
+            offset: quoted.shift(selections.shift(reference.offset)),
           }));
         const parts = attachMessageQuote(
           toAgentInputParts(
-            { attachments, text: selections.text },
+            { attachments, text: quoted.text },
             shifted(pluginReferences),
             shifted(skillReferences),
-            selections.selectionReferences,
+            selections.selectionReferences.map((reference) => ({
+              ...reference,
+              offset: quoted.shift(reference.offset),
+            })),
           ),
-          attempt?.fields ?? {},
+          quoted.quotes.length
+            ? { quotes: quoted.quotes, quoteAuthor: attempt?.fields.quoteAuthor }
+            : {},
         );
         const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
         for (const context of appContexts)
@@ -405,13 +411,13 @@ function TextChatInput({
             >
               <ChatInputAccessories>
                 <View>
-                  <DraftMessageQuotePreview />
                   <ComposerAttachments />
                   <AudioAttachmentNotice />
                   {mode === 'standard' ? <McpAppContextNotice /> : null}
                 </View>
               </ChatInputAccessories>
               <ChatInputSurface
+                onLinkPress={quoteActions?.previewQuote}
                 streaming={isBusy}
                 placeholder={
                   skillAction

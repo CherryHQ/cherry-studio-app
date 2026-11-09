@@ -127,7 +127,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
             disabled: isDeleteDisabled,
             id: 'delete',
             label: t('common.delete'),
-            onPress: () => deleteMessageTurn({ turnId }),
+            onPress: () => deleteMessageTurn({ turnId, messageId: message.id }),
           },
         ]
       : []),

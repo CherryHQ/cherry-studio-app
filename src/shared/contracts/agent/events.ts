@@ -73,6 +73,11 @@ export const AgentEventSchema = z.union([
     turnId: z.string().min(1),
     messageIds: z.array(z.string().min(1)).min(1),
   }),
+  /** One answer branch was removed; other answers can still share its turn. */
+  z.strictObject({
+    type: z.literal('messages.deleted'),
+    messageIds: z.array(z.string().min(1)).min(1),
+  }),
   z.strictObject({ type: z.literal('approval.requested'), approval: AgentApprovalViewSchema }),
   z.strictObject({ type: z.literal('approval.resolved'), approval: AgentApprovalViewSchema }),
 ]);

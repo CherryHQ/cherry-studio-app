@@ -42,6 +42,9 @@ import {
   validateResourceReferences,
 } from './backupResources';
 
+// Keep native size snapshots cooperative by yielding every 64 entries.
+const INVENTORY_YIELD_ENTRIES = 64;
+
 @Injectable('BackupRuntime')
 @DependsOn(['DbService'])
 export class BackupRuntime extends BaseService implements BackupModule {
@@ -111,16 +114,44 @@ export class BackupRuntime extends BaseService implements BackupModule {
         } finally {
           release();
         }
-        const entries: BackupManifest['entries'] = [];
-        for (const [index, path] of resources.paths.entries()) {
+        signal.throwIfAborted();
+        let payloadBytes = 0;
+        const payloads: { path: string; file: File; size: number }[] = [];
+        for (const path of resources.paths) {
           signal.throwIfAborted();
           const file = archiveFile(work, path);
-          entries.push({
-            path,
-            size: file.size,
-            sha256: await hashLocalFile(file.uri, signal),
-          });
-          this.publish({ phase: 'packing', completed: index, total: resources.paths.length * 2 });
+          const size = file.size;
+          if (!Number.isSafeInteger(size) || size < 0) throw new BackupError('invalid');
+          payloadBytes += size;
+          if (!Number.isSafeInteger(payloadBytes)) throw new BackupError('invalid');
+          if (payloadBytes > BACKUP_LIMITS.expandedBytes) throw new BackupError('too-large');
+          payloads.push({ path, file, size });
+          if (payloads.length % INVENTORY_YIELD_ENTRIES === 0) {
+            signal.throwIfAborted();
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            signal.throwIfAborted();
+          }
+        }
+        if (payloads.length > BACKUP_LIMITS.entries) throw new BackupError('too-large');
+        const totalBytes = 2 * payloadBytes;
+        let lastPercentage = -1;
+        const publishPacking = (completed: number) => {
+          signal.throwIfAborted();
+          const percentage = totalBytes > 0 ? Math.floor((completed / totalBytes) * 100) : 0;
+          if (percentage === lastPercentage) return;
+          lastPercentage = percentage;
+          this.publish({ phase: 'packing', completed, total: totalBytes });
+        };
+        publishPacking(0);
+        const entries: BackupManifest['entries'] = [];
+        let hashedBytes = 0;
+        for (const { path, file, size } of payloads) {
+          signal.throwIfAborted();
+          const sha256 = await hashLocalFile(file.uri, signal);
+          signal.throwIfAborted();
+          entries.push({ path, size, sha256 });
+          hashedBytes += size;
+          publishPacking(hashedBytes);
         }
         if (Platform.OS !== 'ios' && Platform.OS !== 'android')
           throw new BackupError('unavailable');
@@ -139,19 +170,20 @@ export class BackupRuntime extends BaseService implements BackupModule {
         const manifestBytes = new TextEncoder().encode(json).length;
         if (
           manifestBytes > BACKUP_LIMITS.manifestBytes ||
-          manifestBytes + entries.reduce((sum, entry) => sum + entry.size, 0) >
-            BACKUP_LIMITS.expandedBytes
+          manifestBytes + payloadBytes > BACKUP_LIMITS.expandedBytes
         )
           throw new BackupError('too-large');
         const manifestFile = archiveFile(work, 'manifest.json');
         manifestFile.create();
         manifestFile.writeSync(json);
-        requireDiskSpace(entries.reduce((sum, entry) => sum + entry.size, 0));
+        requireDiskSpace(payloadBytes);
         const filename = `cherry-mobile-${manifest.createdAt.replace(/[:.]/g, '-')}-${manifest.id.slice(0, 8)}.zip`;
         const output = new File(work, filename);
-        await packBackup(work, manifest, output, signal, (done, total) =>
-          this.publish({ phase: 'packing', completed: done, total }),
-        );
+        await packBackup(work, manifest, output, signal, (done, total) => {
+          if (total !== payloadBytes) throw new BackupError('invalid');
+          publishPacking(payloadBytes + done);
+        });
+        signal.throwIfAborted();
         this.exported = work;
         completed = true;
         this.publish({

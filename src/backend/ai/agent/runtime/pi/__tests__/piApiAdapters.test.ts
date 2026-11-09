@@ -3,7 +3,7 @@ import {
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
 } from '@cherrystudio/provider-registry';
-import type { FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+import type { AssistantMessage, FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
@@ -436,6 +436,172 @@ describe('Pi API adapters', () => {
       'gen_ai.request.max_tokens': 2048,
       'gen_ai.request.max_tokens_field': 'max_tokens',
     });
+  });
+
+  test('applies Gemini tool compatibility after an existing payload hook without registry parameters', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockOpenAiCompletionsStreamSimple);
+    const stream = await bindPiStream(adapter, {
+      apiKey: 'key',
+      fetch: mockFetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 256,
+    });
+    const piModel = { api: 'openai-completions', id: 'gemini-3-pro' } as PiModel<SupportedPiApi>;
+    await stream(piModel, context, {
+      onPayload: async () => ({
+        messages: [
+          {
+            role: 'assistant',
+            tool_calls: [
+              {
+                id: 'call',
+                type: 'function',
+                function: { name: 'lookup', arguments: '{}' },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const options = mockOpenAiCompletionsStreamSimple.mock.calls.at(-1)![2];
+    expect(await options.onPayload({}, piModel)).toMatchObject({
+      messages: [
+        {
+          tool_calls: [
+            {
+              extra_content: { google: { thought_signature: 'skip_thought_signature_validator' } },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('round-trips streamed Gemini tool signatures through saved context and isolates foreign histories', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
+    const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+      '@earendil-works/pi-ai/api/openai-completions',
+    );
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+    const payloads: Record<string, unknown>[] = [];
+    const completion = (deltas: Record<string, unknown>[], finishReason: string) =>
+      new Response(
+        [...deltas, {}]
+          .map(
+            (delta, index) =>
+              `data: ${JSON.stringify({
+                id: 'completion',
+                choices: [
+                  { index: 0, delta, finish_reason: index === deltas.length ? finishReason : null },
+                ],
+              })}\n\n`,
+          )
+          .join('') + 'data: [DONE]\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    const fetch = jest.fn(async (_url: unknown, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return payloads.length === 1
+        ? completion(
+            [
+              {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'signed',
+                    type: 'function',
+                    function: { name: 'lookup', arguments: '{}' },
+                  },
+                  {
+                    index: 1,
+                    id: 'unsigned',
+                    type: 'function',
+                    function: { name: 'lookup', arguments: '{}' },
+                  },
+                ],
+              },
+              // The signature may arrive after the call's ID, name and arguments.
+              {
+                tool_calls: [
+                  {
+                    index: 0,
+                    extra_content: { google: { thought_signature: 'real-google-signature' } },
+                  },
+                ],
+              },
+              { tool_calls: [{ index: 0, extra_content: { google: { thought_signature: '' } } }] },
+            ],
+            'tool_calls',
+          )
+        : completion([{ content: 'Done' }], 'stop');
+    });
+    const stream = await bindPiStream(adapter, {
+      apiKey: 'key',
+      fetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 256,
+    });
+    const model: PiModel<'openai-completions'> = {
+      api: 'openai-completions',
+      provider: 'gemini-compatible',
+      id: 'gemini-3-pro',
+      name: 'Gemini',
+      baseUrl: 'https://provider.test/v1',
+      input: ['text'],
+      reasoning: true,
+      contextWindow: 4096,
+      maxTokens: 256,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    const first = await (
+      await stream(
+        model,
+        normalizeContext({
+          messages: [{ role: 'user', content: 'Look up both items.', timestamp: 1 }],
+        }),
+      )
+    ).result();
+    expect(first.stopReason).toBe('toolUse');
+    expect(first.content).toEqual([
+      expect.objectContaining({ id: 'signed', thoughtSignature: 'real-google-signature' }),
+      expect.not.objectContaining({ thoughtSignature: expect.anything() }),
+    ]);
+    const saved = JSON.parse(JSON.stringify(first)) as AssistantMessage;
+    const legacy = { type: 'reasoning.encrypted', id: 'legacy', data: 'encrypted-reasoning' };
+    saved.content.push({
+      type: 'toolCall',
+      id: 'legacy',
+      name: 'lookup',
+      arguments: {},
+      thoughtSignature: JSON.stringify(legacy),
+    });
+    for (const replay of [
+      { model, message: saved, signed: true },
+      { model: { ...model, provider: 'other-provider' }, message: saved, signed: false },
+      { model: { ...model, id: 'gemini-4-argon' }, message: saved, signed: false },
+      { model, message: { ...saved, api: 'google-generative-ai' as const }, signed: false },
+    ]) {
+      const source = await stream(replay.model, normalizeContext({ messages: [replay.message] }));
+      expect((await source.result()).stopReason).toBe('stop');
+      const assistant = (payloads.at(-1)!.messages as Record<string, unknown>[]).find(
+        (message) => message.role === 'assistant',
+      )!;
+      const calls = assistant.tool_calls as {
+        id: string;
+        extra_content: { google: { thought_signature: string } };
+      }[];
+      expect(calls.map((call) => [call.id, call.extra_content.google.thought_signature])).toEqual([
+        ['signed', replay.signed ? 'real-google-signature' : 'skip_thought_signature_validator'],
+        ['unsigned', 'skip_thought_signature_validator'],
+        ['legacy', 'skip_thought_signature_validator'],
+      ]);
+      if (replay.signed) expect(assistant.reasoning_details).toEqual([legacy]);
+      else expect(assistant).not.toHaveProperty('reasoning_details');
+    }
+    expect(saved.content[0]).toMatchObject({ thoughtSignature: 'real-google-signature' });
   });
 
   test.each([

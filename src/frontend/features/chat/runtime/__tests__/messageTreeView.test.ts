@@ -109,21 +109,25 @@ describe('message tree view', () => {
     expect(changed).not.toBe(before);
   });
 
-  test('keeps the answers last read for a question while another answer to it runs', () => {
-    const added = message('a1b', 'q1', 'assistant', 'streaming');
-    const sibling = { id: 'a1', modelId: null, status: 'success' as const, siblingsGroupId: 0 };
-    // Read while the question was settled; the next reading omits its answering turn.
-    const read = readQuestionAnswers(
-      [persisted[0]!],
-      readQuestionAnswers([{ ...persisted[1]!, siblings: [sibling] }]),
-    );
-    const shown = [persisted[0]!, added];
-    const [, answer] = withLiveSiblings(shown, [added], read);
-    expect(answer?.siblings).toEqual([
-      { id: 'a1', modelId: null, status: 'success', siblingsGroupId: 0 },
-      { id: 'a1b', modelId: null, status: 'streaming', siblingsGroupId: 0 },
-    ]);
-    // A first answer with nothing read before it has no alternatives.
-    expect(withLiveSiblings(shown, [added], new Map())).toBe(shown);
-  });
+  test.each(['pending', 'streaming'] as const)(
+    'selects an added %s answer with cards before history refreshes',
+    (status) => {
+      const added = message('a1b', 'q1', 'assistant', status);
+      // A lone persisted answer has no siblings field until another answer is saved.
+      const read = readQuestionAnswers(persisted);
+      const selected = selectedBranchMessages([...persisted, added], added.id);
+      const shown = withLiveSiblings(selected, [added], read);
+      expect(shown.map((row) => row.id)).toEqual(['q1', 'a1b']);
+      expect(shown[1]?.siblings).toEqual([
+        { id: 'a1', modelId: null, status: 'success', siblingsGroupId: 0 },
+        { id: 'a1b', modelId: null, status, siblingsGroupId: 0 },
+      ]);
+      // Settled history then omits the answering turn; the cards must stay present.
+      expect(
+        withLiveSiblings(selected, [added], readQuestionAnswers([persisted[0]!], read)),
+      ).toEqual(shown);
+      // A first answer with nothing read before it has no alternatives.
+      expect(withLiveSiblings(selected, [added], new Map())).toBe(selected);
+    },
+  );
 });

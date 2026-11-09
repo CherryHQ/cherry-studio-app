@@ -15,7 +15,11 @@ export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
 export { ComposerSessionProvider } from './components/ComposerSessionProvider';
-export { ComposerSurface, type ComposerSendPayload } from './components/ComposerSurface';
+export {
+  ComposerSurface,
+  type ComposerSendPayload,
+  useComposerSubmit,
+} from './components/ComposerSurface';
 export { useComposerMediaActions } from './hooks/useComposerMediaActions';
 export { useComposerDocumentPicker } from './hooks/useComposerDocumentPicker';
 export {
