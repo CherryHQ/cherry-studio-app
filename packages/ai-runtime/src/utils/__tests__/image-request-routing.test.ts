@@ -29,10 +29,11 @@ function callOptions(
   modelId: string,
   paramValues: Record<string, unknown>,
   modelDescriptor?: ImageTransportDescriptor,
+  presetProviderId = providerId === 'openai-compatible' ? undefined : providerId,
 ): ImageModelV3CallOptions {
   const provider: Provider = {
     id: `copy-${providerId}`,
-    presetProviderId: providerId === 'openai-compatible' ? undefined : providerId,
+    presetProviderId,
     name: providerId,
     isEnabled: true,
     authType: 'api-key',
@@ -117,6 +118,41 @@ describe('painting parameters through the image provider to the HTTP request', (
       expect(result.image.base64).toBe(base64);
     },
   );
+
+  it('sends GIF output format through an imported AiHubMix compatible image endpoint', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      jsonResponse({ data: [{ b64_json: 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' }] }),
+    );
+    const provider = createOpenAICompatible({
+      apiKey: 'test-key',
+      baseURL: 'https://images.example.com/v1',
+      name: 'copy-openai-compatible',
+      fetch,
+    });
+    const modelId = 'gpt-image-2.6-flare';
+    const options = callOptions(
+      'openai-compatible',
+      modelId,
+      { outputFormat: 'gif', complexity: 'medium' },
+      undefined,
+      'aihubmix',
+    );
+
+    await generateImage({
+      model: provider.imageModel(modelId),
+      prompt: 'a walking fox',
+      n: 1,
+      providerOptions: options.providerOptions,
+      maxRetries: 0,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, request] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://images.example.com/v1/images/generations');
+    const fields = JSON.parse(request?.body as string);
+    expect(fields).toMatchObject({ model: modelId, output_format: 'gif', complexity: 'medium' });
+    expect(fields).not.toHaveProperty('outputFormat');
+  });
 
   it.each(['qwen-image-3.0', 'qwen-image-3.0-pro'])(
     'sends %s reference images and negative prompt to the synchronous multimodal route',

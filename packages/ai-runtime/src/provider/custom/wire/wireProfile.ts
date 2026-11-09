@@ -90,8 +90,8 @@ const OPENAI_COMPATIBLE_WIRE_PROFILE: WireProfile = {
 /**
  * aihubmix aggregator. Reproduces the `aihubmix` emitter: the OpenAI image body
  * PLUS `seed` (aihubmix's backends — Doubao Seedream / Qwen-Image / FLUX / iRAG /
- * Ideogram — mostly accept `seed`, unlike OpenAI's own model). Dual-keyed under
- * `openai` + `aihubmix` by the registry.
+ * Ideogram — mostly accept `seed`, unlike OpenAI's own model). The registry
+ * uses compatible field names for the primary body and this SDK shape under `openai`.
  */
 export const AIHUBMIX_WIRE_PROFILE: WireProfile = {
   ...OPENAI_WIRE_PROFILE,
@@ -290,9 +290,17 @@ export const WIRE_REGISTRY: Record<string, WireRegistration> = {
   doubao: { profile: DOUBAO_WIRE_PROFILE, key: 'bytedance', passthrough: true },
   // passthrough: forward the vendor bag (imageResolution / addWatermark /
   // sequentialImageGeneration / responseFormat …) under the `aihubmix` key, where
-  // the per-backend custom model (Doubao Seedream / Qwen / Wan …) reads it. The
-  // `openai` mirror stays clean (mapped fields only).
-  aihubmix: { profile: AIHUBMIX_WIRE_PROFILE, dualOpenAI: true, passthrough: true },
+  // the per-backend custom model (Doubao Seedream / Qwen / Wan …) reads it.
+  // The primary body can also reach a generic compatible adapter through an imported
+  // image endpoint, which bypasses AiHubMix's own field-name conversion.
+  aihubmix: {
+    profile: {
+      ...AIHUBMIX_WIRE_PROFILE,
+      fields: OPENAI_COMPATIBLE_WIRE_PROFILE.fields,
+    },
+    passthrough: true,
+    also: [{ key: 'openai', profile: AIHUBMIX_WIRE_PROFILE }],
+  },
   dmxapi: {
     profile: DMXAPI_WIRE_PROFILE,
     also: [
