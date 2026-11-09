@@ -218,14 +218,16 @@ CN selects domestic entries, other regions select global entries, and a missing 
 domestic default. The unknown result remains `null` in region detection. Existing saved providers
 are preserved; mirror selection, Jina and voice retain their existing CN fallback.
 
-`ProviderRegistryUpdaterService` activates the newest complete compatible saved model catalog,
-or the pinned `@cherrystudio/provider-registry` package's bundled `models.json` and
-`provider-models.json` when no saved snapshot is usable. This complete local baseline is available
-before regional and Mobile capability filtering, so model selection, editing and calls do not wait
-for the network. The same native capability admission applies to bundled and downloaded metadata.
-Startup refreshes an absent or older-schema saved snapshot from v4 in the background. The detected
-IP country selects GitCode in CN or GitHub elsewhere, with fallback to the other mirror. A failed,
-partial or incompatible update retains the local catalog. Once a v4 snapshot is saved, opening a
+`ProviderRegistryUpdaterService` activates the newest complete compatible saved model catalog.
+When no saved snapshot is usable, model selection, editing and calls wait for a shared download of
+`models.json` and `provider-models.json`; failed first downloads expose the existing retry action.
+These model files are not bundled. Welcome, provider configuration and history remain accessible.
+Downloaded metadata passes Mobile capability admission before activation. Startup refreshes an
+absent or older-schema saved snapshot from v4 in the background. The detected IP country selects
+GitCode in CN or when unknown, and GitHub elsewhere, with fallback to the other source. GitCode
+uses `api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw/{encoded-file-path}` with
+`ref=x-files/provider-registry`; its preview raw host is not used for model metadata. A failed,
+partial or incompatible update retains any compatible local catalog. Once a v4 snapshot is saved, opening a
 provider's model list is the later refresh trigger; a successfully applied update refreshes mounted
 projections and can show the existing success toast.
 

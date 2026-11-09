@@ -58,12 +58,15 @@ function snapshot(revision: number, minimum = REGISTRY_DESKTOP_COMPATIBILITY_VER
   return { files, manifest, slot: 'a' as const };
 }
 function serve(snapshotToServe: ReturnType<typeof snapshot>) {
-  mockRequest.mockImplementation(async (_source: string, { path }: { path: string }) => ({
-    data:
-      path === '/manifest.json'
-        ? JSON.stringify(snapshotToServe.manifest)
-        : snapshotToServe.files[path.slice(1) as keyof typeof snapshotToServe.files],
-  }));
+  mockRequest.mockImplementation(async (_source: string, { path }: { path: string }) => {
+    const name = decodeURIComponent(path).split('/').at(-1);
+    return {
+      data:
+        name === 'manifest.json'
+          ? JSON.stringify(snapshotToServe.manifest)
+          : snapshotToServe.files[name as keyof typeof snapshotToServe.files],
+    };
+  });
 }
 
 let updater: Updater;
@@ -81,22 +84,33 @@ afterEach(async () => {
 });
 
 it.each([
-  ['CN', 'raw.gitcode.com'],
+  ['CN', 'api.gitcode.com'],
   ['US', 'raw.githubusercontent.com'],
-  [null, 'raw.gitcode.com'],
+  [null, 'api.gitcode.com'],
 ])('selects the registry mirror from the shared IP country %s', async (country, host) => {
   mockGetCountry.mockResolvedValue(country);
   serve(snapshot(1));
-  await updater.applyUpdate();
+  await updater.ensureReady();
   expect(providerRegistryService.isReady()).toBe(true);
   expect(new URL(mockRequest.mock.calls[0]![0]).hostname).toBe(host);
+});
+
+it('downloads every GitCode v4 file through the raw API with the registry branch', async () => {
+  mockGetCountry.mockResolvedValue('CN');
+  serve(snapshot(1));
+  await updater.ensureReady();
+  for (const path of ['/v4%2Fmanifest.json', '/v4%2Fmodels.json', '/v4%2Fprovider-models.json']) {
+    expect(mockRequest).toHaveBeenCalledWith(
+      'https://api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw',
+      expect.objectContaining({ path, query: { ref: 'x-files/provider-registry' } }),
+    );
+  }
 });
 
 it('automatically downloads on first launch and shares it with concurrent model selection', async () => {
   serve(snapshot(1));
   await updater.start();
   await Promise.all([updater.ensureReady(), updater.ensureReady()]);
-  await updater.applyUpdate();
   expect(providerRegistryService.isReady()).toBe(true);
   expect(
     providerRegistryService.lookupModel('openai', 'test-model').presetModel?.maxOutputTokens,
@@ -222,9 +236,8 @@ it('rejects an old-schema manifest returned from the v4 publication path', async
   const remote = snapshot(1, '2.0.8');
   remote.manifest.schemaVersion = 1;
   serve(remote);
-  await expect(updater.applyUpdate()).rejects.toThrow('Unsupported registry schema');
-  expect(providerRegistryService.isReady()).toBe(true);
-  expect(providerRegistryService.lookupModel('openai', 'gpt-4o').presetModel).not.toBeNull();
+  await expect(updater.ensureReady()).rejects.toThrow('Unsupported registry schema');
+  expect(providerRegistryService.isReady()).toBe(false);
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
 
@@ -239,13 +252,10 @@ it('falls back to the previous complete snapshot when the newest payload is inva
   expect(mockRequest).not.toHaveBeenCalled();
 });
 
-it('keeps bundled models usable offline and later updates through the fallback host', async () => {
+it('keeps first download retryable after failure and uses the fallback host', async () => {
   mockRequest.mockRejectedValue(new Error('Offline'));
-  await updater.ensureReady();
-  expect(mockRequest).not.toHaveBeenCalled();
-  expect(providerRegistryService.lookupModel('openai', 'gpt-4o').presetModel).not.toBeNull();
-  await expect(updater.applyUpdate()).rejects.toThrow('Offline');
-  expect(providerRegistryService.isReady()).toBe(true);
+  await expect(updater.ensureReady()).rejects.toThrow('Offline');
+  expect(providerRegistryService.isReady()).toBe(false);
   const remote = snapshot(1);
   serve(remote);
   const success = mockRequest.getMockImplementation()!;
@@ -254,7 +264,7 @@ it('keeps bundled models usable offline and later updates through the fallback h
       ? Promise.reject(new Error('Host unavailable'))
       : success(source, request),
   );
-  await updater.applyUpdate();
+  await updater.ensureReady();
   expect(providerRegistryService.isReady()).toBe(true);
   expect(writeProviderRegistrySnapshot).toHaveBeenCalledWith(
     remote.files,
@@ -272,15 +282,13 @@ it('does not replace the active snapshot when durable storage fails', async () =
   expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-1');
 });
 
-it('retains bundled models when the remote catalog requires an unsupported reader', async () => {
+it('rejects unsupported first downloads without reporting an empty catalog as current', async () => {
   const unsupported = snapshot(1);
   unsupported.manifest.minAppVersion = '9.0.0';
   unsupported.manifest.sourceAppVersion = '9.0.0';
   serve(unsupported);
-  await updater.ensureReady();
-  await expect(updater.applyUpdate()).resolves.toEqual({ status: 'current' });
-  expect(providerRegistryService.isReady()).toBe(true);
-  expect(providerRegistryService.lookupModel('openai', 'gpt-4o').presetModel).not.toBeNull();
+  await expect(updater.ensureReady()).rejects.toThrow('No provider registry source is available');
+  expect(providerRegistryService.isReady()).toBe(false);
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
 
@@ -296,7 +304,7 @@ it('aborts an in-flight download on stop and never activates it afterwards', asy
         requested();
       }),
   );
-  const ready = updater.applyUpdate().catch(() => undefined);
+  const ready = updater.ensureReady().catch(() => undefined);
   await started;
   await updater.stop();
   await ready;

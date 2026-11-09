@@ -89,17 +89,6 @@ describe('remote catalog compatibility', () => {
 });
 
 describe('MobileRegistryLoader', () => {
-  it('loads the complete pinned offline catalog through the same native admission as downloads', () => {
-    const loader = new MobileRegistryLoader();
-    loader.installBundledSnapshot();
-    expect(loader.isReady()).toBe(true);
-    expect(loader.getModelsVersion()).toBe(models.version);
-    expect(loader.getProviderModelsVersion()).toBe(providerModels.version);
-    expect(loader.findModel('gpt-4o')).toEqual(downloadedLoader().findModel('gpt-4o'));
-    expect(loader.findModel('gpt-4o')).not.toBeNull();
-    expect(loader.loadProviderModels()).toEqual(downloadedLoader().loadProviderModels());
-  });
-
   it('keeps trusted providers available but blocks model reads before download and after clearing', () => {
     const loader = new MobileRegistryLoader();
     expect(loader.loadProviders().length).toBeGreaterThan(0);

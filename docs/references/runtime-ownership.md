@@ -268,7 +268,8 @@ user-owned verification policy.
   Provider list queries join that initialization; existing seeded installations do not wait for country detection. Backup admission
   includes pending seeding.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
-  approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
+  approved-cache activation, shared first downloads and request cancellation; the host stops it.
+  Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
 - `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops

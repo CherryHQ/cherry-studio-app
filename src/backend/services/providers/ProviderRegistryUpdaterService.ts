@@ -35,7 +35,7 @@ const logger = loggerService.withContext('ProviderRegistryUpdaterService');
 const REMOTE_BRANCH = 'x-files/provider-registry';
 const REMOTE_SUBPATH = `v${REGISTRY_SCHEMA_VERSION}`;
 const REGISTRY_SOURCES = {
-  gitcode: `https://raw.gitcode.com/CherryHQ/cherry-studio/raw/${encodeURIComponent(REMOTE_BRANCH)}/${REMOTE_SUBPATH}`,
+  gitcode: 'https://api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw',
   github: `https://raw.githubusercontent.com/CherryHQ/cherry-studio/refs/heads/${REMOTE_BRANCH}/${REMOTE_SUBPATH}`,
 } as const;
 
@@ -70,7 +70,7 @@ type StagedSnapshot = {
  * The payload is unsigned, so `providers.json` deliberately remains bundled:
  * remote data can improve model descriptions and capabilities, but can never
  * redirect credentials or change a provider's API destination. Startup restores
- * a complete compatible persistent snapshot or the bundled baseline before any network work. Later
+ * a complete compatible persistent snapshot and downloads one when none is saved. Later
  * refreshes happen when the user opens a provider's model list.
  */
 @Injectable('ProviderRegistryUpdaterService')
@@ -101,7 +101,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
       void this.applyUpdate().catch((error: unknown) => {
         if (!this.stopped) {
           logger.warn(
-            'Could not update the model registry; keeping the local catalog',
+            'Could not download the model registry; model use will retry',
             toError(error),
           );
         }
@@ -111,9 +111,12 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  /** Model use waits only for local activation, never for a mirror to become reachable. */
+  /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
   public async ensureReady(): Promise<void> {
     await this.restoreSnapshot();
+    if (!providerRegistryService.isReady()) {
+      await this.applyUpdate();
+    }
     if (!providerRegistryService.isReady()) {
       throw new Error('No compatible model registry is available');
     }
@@ -121,11 +124,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
   private restoreSnapshot(): Promise<void> {
     this.cacheInFlight ??= this.activateCachedSnapshot().catch((error: unknown) => {
-      logger.warn(
-        'Could not restore the model registry; using the bundled catalog',
-        toError(error),
-      );
-      if (!this.stopped) providerRegistryService.installBundledSnapshot();
+      logger.warn('Could not restore the model registry; a download is required', toError(error));
     });
     return this.cacheInFlight;
   }
@@ -188,7 +187,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
         );
       }
     }
-    if (!this.stopped) providerRegistryService.installBundledSnapshot();
   }
 
   /** The first reachable source whose manifest is newer than the active snapshot. */
@@ -391,7 +389,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
         }),
         maxResponseBytes: maxBytes,
         method: 'GET',
-        path: `/${name}`,
+        path:
+          source === 'gitcode' ? `/${encodeURIComponent(`${REMOTE_SUBPATH}/${name}`)}` : `/${name}`,
+        query: source === 'gitcode' ? { ref: REMOTE_BRANCH } : undefined,
         responseType: 'text',
         signal: controller.signal,
       });

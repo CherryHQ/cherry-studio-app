@@ -83,7 +83,8 @@ Runtime admits compatible endpoints; native Ollama endpoints remain unsupported.
 reachability. Optional API-key authentication is persisted through `authConfig.required`, so
 keyless gateways can serve conversations and run connection checks without adding a dummy key.
 Before returning a preview with selectable providers, the workflow prepares the shared model
-catalog from its compatible saved snapshot or bundled baseline before confirmation.
+catalog from a compatible saved snapshot or a shared download before confirmation. A failed first
+download leaves the workflow retryable.
 
 ## Provider Configuration
 
