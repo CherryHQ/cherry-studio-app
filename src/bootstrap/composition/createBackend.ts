@@ -77,6 +77,7 @@ import {
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
+import { createUuRemoteModule } from '@/backend/services/uuRemote';
 import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
@@ -95,6 +96,7 @@ export type BackendComposition = {
   disposeSystemEntry(): Promise<void>;
   disposeVoice(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
+  disposeUuRemote(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -122,6 +124,7 @@ export function createBackend(
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
+    region: { getCountry(): Promise<string> };
     trash: Pick<TrashRuntime, 'trashFile'>;
   },
 ): BackendComposition {
@@ -237,6 +240,7 @@ export function createBackend(
     servers: services.mcpServer,
   });
   const providers = createProvidersModule({
+    getCountry: () => infrastructure.region.getCountry(),
     accounts: infrastructure.providerAccounts,
     hasAvailableModels: async (provider) =>
       (await services.model.list({ providerId: provider.id, enabled: true })).some((model) =>
@@ -336,6 +340,7 @@ export function createBackend(
       getLocales().map((locale) => locale.languageTag),
     );
   const voice = createVoice({
+    getCountry: () => infrastructure.region.getCountry(),
     preference: services.preference,
     permissions: services.devicePermissions,
     language: () => appLanguage(services.preference.readCached('app.language')),
@@ -354,12 +359,20 @@ export function createBackend(
   infrastructure.agentHostDependencies.configureVoice(voice.module);
 
   const appUpdate = createAppUpdateModule({
+    getCountry: () => infrastructure.region.getCountry(),
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
+  });
+  const uuRemote = createUuRemoteModule({
+    connectionExists: async (id) => {
+      const connection = await desktopStore.getById(id).catch(() => null);
+      return connection !== null;
+    },
   });
 
   return {
     disposeVoice: voice.dispose,
     disposeAppUpdate: appUpdate.dispose,
+    disposeUuRemote: uuRemote.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -383,6 +396,7 @@ export function createBackend(
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
+      uuRemote: uuRemote.module,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
       file: {

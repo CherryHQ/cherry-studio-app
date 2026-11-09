@@ -23,22 +23,35 @@ export async function packBackup(
   manifest: BackupManifest,
   output: File,
   signal: AbortSignal,
-  progress: (completed: number, total: number) => void,
+  progress: (processedPayloadBytes: number, totalPayloadBytes: number) => void,
 ): Promise<void> {
-  const paths = ['manifest.json', ...manifest.entries.map((entry) => entry.path)];
+  signal.throwIfAborted();
+  validateManifest(manifest);
+  const payloadBytes = manifest.entries.reduce((sum, entry) => sum + entry.size, 0);
+  const manifestFile = archiveFile(root, 'manifest.json');
+  const manifestBytes = manifestFile.size;
+  const totalBytes = manifestBytes + payloadBytes;
+  if (!Number.isSafeInteger(totalBytes)) throw new BackupError('invalid');
   await writeZipFile(
     output,
-    paths.map(
-      (path): ZipWriteEntry => ({
-        name: path,
-        file: archiveFile(root, path),
-        compression: path.startsWith('database/') || path === 'manifest.json' ? 1 : 'store',
-      }),
-    ),
+    [
+      { name: 'manifest.json', file: manifestFile, expectedSize: manifestBytes, compression: 1 },
+      ...manifest.entries.map(
+        ({ path, size }): ZipWriteEntry => ({
+          name: path,
+          file: archiveFile(root, path),
+          expectedSize: size,
+          compression: path.startsWith('database/') ? 1 : 'store',
+        }),
+      ),
+    ],
     {
       signal,
       limit: { bytes: BACKUP_LIMITS.archiveBytes, error: () => new BackupError('too-large') },
-      onEntryWritten: progress,
+      onProgress: (processedBytes, writerTotal) => {
+        if (writerTotal !== totalBytes) throw new BackupError('invalid');
+        progress(Math.max(0, processedBytes - manifestBytes), payloadBytes);
+      },
     },
   );
 }

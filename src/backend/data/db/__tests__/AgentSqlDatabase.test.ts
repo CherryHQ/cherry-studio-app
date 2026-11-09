@@ -47,6 +47,21 @@ function connection() {
 }
 
 describe('AgentSqlDatabase', () => {
+  test.each([0, 1, 4])(
+    'returns %i changed rows on the connection and inside a transaction',
+    async (changes) => {
+      const { database, sqlite } = connection();
+      sqlite.runAsync.mockResolvedValue({ changes, lastInsertRowId: 99 });
+      await expect(database.runCounted('UPDATE records SET value = ?', 'next')).resolves.toBe(
+        changes,
+      );
+      await expect(
+        database.transaction((tx) => tx.runCounted('DELETE FROM records')),
+      ).resolves.toBe(changes);
+      expect(sqlite.runAsync).toHaveBeenCalledWith('UPDATE records SET value = ?', ['next']);
+    },
+  );
+
   test('opens the Android SQLite path without requiring a file URI', async () => {
     const { sqlite, operations } = connection();
     // SQLite accepts its native default path; FileSystem requires a URI instead.
@@ -84,7 +99,7 @@ describe('AgentSqlDatabase', () => {
     });
     await entered.promise;
     const read = database.get('outside read');
-    const write = database.run('outside write');
+    const write = database.runCounted('outside write');
     const second = database.transaction((tx) => tx.exec('second transaction'));
     await Promise.resolve();
     expect(operations).toEqual(['BEGIN IMMEDIATE', 'inside']);
@@ -126,7 +141,7 @@ describe('AgentSqlDatabase', () => {
       throw failure;
     });
     await expect(transaction).rejects.toMatchObject({ errors: [failure, rollbackFailure] });
-    await expect(database.run('must not run')).rejects.toBeInstanceOf(AggregateError);
+    await expect(database.runCounted('must not run')).rejects.toBeInstanceOf(AggregateError);
     expect(sqlite.runAsync).not.toHaveBeenCalled();
     await database.close();
     expect(sqlite.closeAsync).toHaveBeenCalledTimes(1);
@@ -139,6 +154,7 @@ describe('AgentSqlDatabase', () => {
       escaped = tx;
     });
     await expect(escaped.run('late write')).rejects.toThrow('already settled');
+    await expect(escaped.runCounted('late counted write')).rejects.toThrow('already settled');
     await expect(escaped.get('late read')).rejects.toThrow('already settled');
     expect(sqlite.runAsync).not.toHaveBeenCalled();
     expect(sqlite.getFirstAsync).not.toHaveBeenCalled();

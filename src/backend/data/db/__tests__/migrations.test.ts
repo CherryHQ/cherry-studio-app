@@ -6,6 +6,81 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds local device aliases without changing existing pairing data', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0014_desktop_connection_alias',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO desktop_connection
+          (id, name, device_id, desktop_identity, configured_endpoints, learned_endpoints,
+           grants, status, last_fetched_at, created_at, updated_at)
+        VALUES
+          ('pc', 'desktop.local', 'phone', 'peer', '[]', '[]',
+           '[{"domain":"agent","grantId":"grant"}]', 'paired', 3, 1, 2);
+      `);
+      const previous = database.prepare('SELECT * FROM desktop_connection').get();
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT * FROM desktop_connection').get()).toEqual({
+        ...previous,
+        alias: null,
+      });
+      database
+        .prepare('UPDATE desktop_connection SET alias = ? WHERE id = ?')
+        .run('Work.mac', 'pc');
+      expect(database.prepare('SELECT name, alias FROM desktop_connection').get()).toEqual({
+        name: 'desktop.local',
+        alias: 'Work.mac',
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test('adds the direct-child index without rewriting fork lineage or activity', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0013_agent_session_branches',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Chat', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, forked_from_session_id, last_activity_at, created_at, updated_at)
+        VALUES ('root', 'agent', 'Original', NULL, 100, 1, 1), ('fork', 'agent', 'Fork', 'root', 200, 2, 2);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare(
+            'SELECT id, forked_from_session_id, last_activity_at FROM agent_session ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        { id: 'fork', forked_from_session_id: 'root', last_activity_at: 200 },
+        { id: 'root', forked_from_session_id: null, last_activity_at: 100 },
+      ]);
+      const columns = database
+        .prepare("PRAGMA index_info('agent_session_forked_from_created_id_idx')")
+        .all() as { name: string }[];
+      expect(columns.map(({ name }) => name)).toEqual([
+        'forked_from_session_id',
+        'created_at',
+        'id',
+      ]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('turns each linear transcript into one branch selected at its newest message', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -786,6 +861,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'learned_endpoints',
+        'alias',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',

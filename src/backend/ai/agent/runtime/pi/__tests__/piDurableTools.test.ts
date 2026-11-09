@@ -1,9 +1,13 @@
+import { constants, createContext, runInContext } from 'node:vm';
+
 import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { TSchema } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
+import { parseToolCallArguments } from '@earendil-works/pi-ai/utils/json-parse';
+import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
 import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
+import { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
   AssistantEntry,
   createRegistry,
@@ -14,6 +18,7 @@ import {
   Harness,
   MemoryStorage,
   ToolTask,
+  ToolResultEntry,
   type Conversation,
   type EntryId,
   type Extension,
@@ -21,10 +26,16 @@ import {
   type SubmissionRecord,
   type ToolTaskCheckpoint,
 } from '@earendil-works/pi-durable';
+import { CodemodeStoreDoc, createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 
+import { officeInputSchemas } from '@/backend/services/office';
+
+import { toRuntimeInputSchema } from '../../../tools/runtimeToolSchema';
 import type { RuntimeArtifact, RuntimeTool, RuntimeToolResult } from '../../types';
 import { PiCodemodeArtifactsEntry, PiCodemodeFiles } from '../piCodemodeFiles';
+import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from '../piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
+import { PI_CODEMODE_VM_SOURCE } from '../piCodemodeSandbox';
 import { projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -33,6 +44,38 @@ import { ToolInstructions } from '../piToolInstructions';
 /** Preserve the same durable records across Harness instances, as a reopened SQL adapter does. */
 class ReopenableMemoryStorage extends MemoryStorage {
   override async close(): Promise<void> {}
+}
+
+/** Use the real host serialization and native prelude for store/load, without native execution. */
+function createCacheSandbox() {
+  return new CodemodeSandboxBase({}, (data, events) => {
+    const realm = createContext(constants.DONT_CONTEXTIFY, { microtaskMode: 'afterEvaluate' });
+    runInContext('delete globalThis.console', realm);
+    const factory = runInContext(PI_CODEMODE_VM_SOURCE, realm);
+    const bridge = factory(
+      (message: string) => events.message(JSON.parse(message)),
+      () => {},
+      JSON.stringify({ ...data, fingerprint: 'test' }),
+      'test-engine',
+    );
+    runInContext('void 0', realm);
+    expect(bridge.drained()).toBe('done');
+    return {
+      post() {
+        throw new Error('Cache scripts must not call tools.');
+      },
+      async stop() {},
+    };
+  });
+}
+
+async function runCachedScript(store: Record<string, JsonValue>, code: string) {
+  const sandbox = createCacheSandbox();
+  try {
+    return await sandbox.start(code, { store, startedAt: 100, seed: 1, onCall() {} }).result;
+  } finally {
+    await sandbox.close();
+  }
 }
 
 function cancelled(context: Context): Promise<never> {
@@ -104,6 +147,8 @@ async function toolTask(
   args: Record<string, JsonValue> = { name: 'note.txt' },
   callId = 'call',
   legacyCheckpoint?: ToolTaskCheckpoint,
+  unoffered = false,
+  argumentsError?: string,
 ): Promise<TaskId> {
   return conversation.commit(async (tx) => {
     const message = emptyAssistantMessage({
@@ -123,12 +168,20 @@ async function toolTask(
         {
           ...message,
           stopReason: 'toolUse',
-          content: [{ type: 'toolCall', id: callId, name, arguments: args }],
+          content: [
+            {
+              type: 'toolCall',
+              id: callId,
+              name,
+              arguments: args,
+              ...(argumentsError ? { argumentsError } : {}),
+            },
+          ],
         },
       ],
     });
     if (legacyCheckpoint) {
-      // Seed the 1.1 persisted shape; only the installed 1.2 ToolTask may execute it after reopen.
+      // Seed the 1.1 persisted shape; only the installed 1.5 ToolTask may execute it after reopen.
       const unexpectedExecution = async () => {
         throw new Error('The legacy fixture must never execute.');
       };
@@ -147,13 +200,242 @@ async function toolTask(
     }
     return tx.createTask(
       ToolTask,
-      { kind: 'model', assistant: assistant.id, callId },
+      {
+        kind: 'model',
+        assistant: assistant.id,
+        callId,
+        ...(unoffered ? { unoffered: true as const } : {}),
+      },
       { ownership: { kind: 'conversation' } },
     );
   }, BACKGROUND_CONTEXT);
 }
 
 describe('durable capability boundary', () => {
+  test('adds the required empty properties map only to model-facing parameterless object tools', () => {
+    const inputSchema = { type: 'object', additionalProperties: false };
+    const referenced = {
+      type: 'object',
+      $ref: '#/$defs/Input',
+      $defs: { Input: { type: 'object', properties: { query: { type: 'string' } } } },
+    };
+    const declared = { type: 'object', properties: { query: { type: 'string' } } };
+    const extension = capabilityExtension({
+      name: 'schema-compatibility',
+      approve: async () => true,
+      tools: [
+        capability({
+          providerName: 'empty',
+          ref: { source: 'mcp', serverId: 'server', rawToolName: 'empty' },
+          inputSchema,
+        }),
+        capability({ providerName: 'referenced', inputSchema: referenced }),
+        capability({ providerName: 'declared', inputSchema: declared }),
+      ],
+    });
+    expect(extension.tools?.find((tool) => tool.name === 'empty')?.parameters).toEqual({
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    });
+    expect(inputSchema).toEqual({ type: 'object', additionalProperties: false });
+    expect(extension.tools?.find((tool) => tool.name === 'referenced')?.parameters).toEqual(
+      referenced,
+    );
+    expect(extension.tools?.find((tool) => tool.name === 'declared')?.parameters).toEqual(declared);
+  });
+
+  test('approval and execution receive the same coerced JSON Schema input, including extra properties', async () => {
+    const execute = jest.fn<ReturnType<RuntimeTool['execute']>, Parameters<RuntimeTool['execute']>>(
+      async () => ({ value: 'ok', artifacts: [] }),
+    );
+    const approve = jest.fn<
+      Promise<boolean>,
+      Parameters<Parameters<typeof createPiDurableToolExtension>[0]['approve']>
+    >(async () => true);
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: [
+        capability({
+          inputSchema: {
+            type: 'object',
+            properties: {
+              count: { type: 'integer' },
+              names: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['count', 'names'],
+            additionalProperties: true,
+          },
+          execute,
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', {
+          count: '2',
+          names: 'one',
+          extra: { kept: true },
+        }),
+        BACKGROUND_CONTEXT,
+      );
+      const expected = { count: 2, names: ['one'], extra: { kept: true } };
+      expect(approve.mock.calls[0]?.[1]).toEqual(expected);
+      expect(execute.mock.calls[0]?.[0].input).toEqual(expected);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  test.each(['direct', 'nested', 'malformed'] as const)(
+    'bounds %s validation feedback through native hooks while preserving the original input',
+    async (mode) => {
+      const execute = jest.fn(async () => ({ value: 'must not run', artifacts: [] }));
+      const args = Object.fromEntries(
+        Array.from({ length: 20 }, (_, index) => [`field${index}`, 'PRIVATE'.repeat(2_000)]),
+      );
+      const malformed = parseToolCallArguments('{"field0":"' + 'PRIVATE'.repeat(2_000));
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [
+          scriptCapability(),
+          capability({
+            approval: 'auto',
+            execute,
+            inputSchema: {
+              type: 'object',
+              properties: Object.fromEntries(
+                Object.keys(args).map((key) => [key, { type: 'number' }]),
+              ),
+            },
+          }),
+        ],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              description: 'Validate a nested call.',
+              parameters: { type: 'object' },
+              async execute(_raw, api, context) {
+                const result = await api.executeTool('create_file', args, context, {
+                  key: 'invalid',
+                });
+                expect(result.diagnostics[0]?.message).not.toContain('PRIVATE');
+                return result;
+              },
+            }),
+          ],
+        }),
+      });
+      const harness = await open(new MemoryStorage(), extension);
+      try {
+        const conversation = await harness.createConversation(
+          { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+          BACKGROUND_CONTEXT,
+        );
+        await harness.waitForTask(
+          await toolTask(
+            conversation,
+            mode === 'nested' ? 'codemode' : 'create_file',
+            mode === 'malformed' ? {} : args,
+            'call',
+            undefined,
+            false,
+            mode === 'malformed' ? malformed.argumentsError : undefined,
+          ),
+          BACKGROUND_CONTEXT,
+        );
+        const entries = (
+          await conversation.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        const result = entries.findLast(ToolResultEntry.is)!;
+        const message = result.data.diagnostics?.[0]?.message ?? '';
+        expect(result.model?.[0]).toMatchObject({ isError: true });
+        expect(message).not.toContain('Received arguments:');
+        expect(message).not.toContain('PRIVATE'.repeat(10));
+        expect(message.length).toBeLessThanOrEqual(2000);
+        expect(message.match(/  - /g)?.length ?? 0).toBeLessThanOrEqual(5);
+        if (mode !== 'malformed') expect(message).toContain('field0');
+        expect(execute).not.toHaveBeenCalled();
+        expect(entries.find(AssistantEntry.is)?.model?.[0]).toMatchObject({
+          content: [{ arguments: mode === 'malformed' ? {} : args }],
+        });
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
+  test.each(['invalid_arguments', 'blocked', 'tool_unavailable'] as const)(
+    'keeps %s Code Mode failures intact when afterTool runs without executing the script',
+    async (code) => {
+      const execute = jest.fn(async () => ({
+        output: [{ type: 'text' as const, text: 'must not run' }],
+      }));
+      const approve = jest.fn(async () => code !== 'blocked');
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [scriptCapability('ask')],
+        approve,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              description: 'Run a script.',
+              parameters: {
+                type: 'object',
+                properties: { code: { type: 'string' } },
+                required: ['code'],
+              },
+              replay: 'unsafe',
+              execute,
+            }),
+          ],
+        }),
+      });
+      const harness = await open(new MemoryStorage(), extension);
+      try {
+        const conversation = await harness.createConversation(
+          { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+          BACKGROUND_CONTEXT,
+        );
+        await harness.waitForTask(
+          await toolTask(
+            conversation,
+            'codemode',
+            code === 'invalid_arguments' ? {} : { code: 'return 1' },
+            'call',
+            undefined,
+            code === 'tool_unavailable',
+          ),
+          BACKGROUND_CONTEXT,
+        );
+        const entries = (
+          await conversation.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        const result = entries.find(ToolResultEntry.is)!;
+        expect(result.data.diagnostics).toEqual([
+          expect.objectContaining({ code, severity: 'error' }),
+        ]);
+        expect(result.model?.[0]).toMatchObject({ role: 'toolResult', isError: true });
+        expect(result.model?.[0]).not.toHaveProperty('details');
+        expect(execute).not.toHaveBeenCalled();
+        if (code === 'tool_unavailable') expect(approve).not.toHaveBeenCalled();
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
   test('defers Skill installation and adaptation without MCP while retaining all readers and call permissions', async () => {
     const names = [
       'load_skill',
@@ -289,7 +571,7 @@ describe('durable capability boundary', () => {
         tools: [
           defineTool({
             name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
+            parameters: { type: 'object' },
             description: 'Save a batch of files.',
             replay: 'safe',
             async execute(_args, api, context) {
@@ -350,7 +632,7 @@ describe('durable capability boundary', () => {
         tools: [
           defineTool({
             name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
+            parameters: { type: 'object' },
             description: 'Save one file.',
             replay: 'safe',
             async execute(_args, api, context) {
@@ -398,7 +680,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Run a script.',
               replay: 'safe',
               execute: async () => ({ output: [] }),
@@ -445,7 +727,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Create a file then wait.',
               replay: 'safe',
               async execute(_args, api, context) {
@@ -543,7 +825,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Run a script.',
               replay: 'safe',
               execute: async () => ({
@@ -615,7 +897,7 @@ describe('durable capability boundary', () => {
       tools: [
         defineTool({
           name: 'codemode',
-          parameters: { type: 'object' } as TSchema,
+          parameters: { type: 'object' },
           description: 'Exercise native child calls.',
           replay: 'safe',
           callers: ['model'],
@@ -705,7 +987,7 @@ describe('durable capability boundary', () => {
         tools: [
           defineTool({
             name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
+            parameters: { type: 'object' },
             description: 'Exercise the declared child result.',
             replay: 'safe',
             async execute(_args, api, context) {
@@ -796,7 +1078,7 @@ describe('durable capability boundary', () => {
           tools: [
             defineTool({
               name: 'codemode',
-              parameters: { type: 'object' } as TSchema,
+              parameters: { type: 'object' },
               description: 'Show a widget.',
               replay: 'safe',
               async execute(_args, api, context) {
@@ -1357,4 +1639,362 @@ describe('durable capability boundary', () => {
       await reopened.close(BACKGROUND_CONTEXT);
     }
   });
+});
+
+test('retains console overflow in the native store across parent failure and reopen, without library artifacts', async () => {
+  const storage = new ReopenableMemoryStorage();
+  const code = '/* input stays in the transcript */'.repeat(500);
+  const log = 'console "output"\\path\n中文🍒'.repeat(500);
+  let outputKey = '';
+  const extension = capabilityExtension({
+    name: 'cherry',
+    tools: [scriptCapability()],
+    approve: async () => true,
+    codemode: defineExtension({
+      name: 'test-codemode',
+      tools: [
+        defineTool({
+          name: 'codemode',
+          description: 'Fail after producing console output.',
+          parameters: { type: 'object' },
+          replay: 'safe',
+          callers: ['model'],
+          async execute(_raw, api, context) {
+            expect(
+              await retainPiCodemodeOutput(
+                'too-large.txt',
+                'x'.repeat(2 * 1024 * 1024),
+                api,
+                context,
+              ),
+            ).toMatchObject({ error: expect.stringContaining('working cache limit') });
+            const saved = await retainPiCodemodeOutput('output.txt', log, api, context);
+            if (!('path' in saved)) throw new Error(saved.error);
+            expect(saved.path).toMatch(/^store:/);
+            outputKey = saved.path.slice('store:'.length);
+            expect(await retainPiCodemodeOutput('output.txt', log, api, context)).toEqual(saved);
+            throw new Error('Execution failed');
+          },
+        }),
+      ],
+    }),
+  });
+  const harness = await open(storage, extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    const taskId = await toolTask(conversation, 'codemode', { code });
+    await harness.waitForTask(taskId, BACKGROUND_CONTEXT);
+    expect(
+      (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values,
+    ).toEqual({ [outputKey]: log });
+    const messages = (await conversation.context(BACKGROUND_CONTEXT)).messages;
+    expect(messages.find((item) => item.role === 'assistant')).toMatchObject({
+      content: [{ type: 'toolCall', arguments: { code } }],
+    });
+    expect(messages.at(-1)).toMatchObject({ isError: true });
+    expect(await harness.snapshot(PiCodemodeFiles, taskId, BACKGROUND_CONTEXT)).toBeUndefined();
+    await harness.close(BACKGROUND_CONTEXT);
+    const reopened = await open(storage, extension);
+    try {
+      const values = (
+        await reopened.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT)
+      )?.values;
+      expect(values).toEqual({ [outputKey]: log });
+      if (!values) throw new Error('Expected persisted working data');
+      await expect(
+        runCachedScript(values, `return load(${JSON.stringify(outputKey)});`),
+      ).resolves.toMatchObject({ ok: true, value: log });
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('bounds overflow by encoded value and total cache size while preserving scripts and receipt capacity', async () => {
+  const preserved = {
+    'office.script': 'return 1;',
+    'office.data.1': 'x'.repeat(200 * 1024),
+    'office.data.2': 'y'.repeat(200 * 1024),
+    'office.receipt': { fileEntryId: 'existing-file' },
+  };
+  const text = 'x'.repeat(256 * 1024 - 2); // Including JSON's quotes, exactly one native value.
+  let outputKey = '';
+  const extension = defineExtension({
+    name: 'test-output-budget',
+    tools: [
+      defineTool({
+        name: 'cache_output',
+        description: 'Retain bounded output.',
+        parameters: { type: 'object' },
+        async execute(_raw, api, context) {
+          for (const oversized of ['x'.repeat(2 * 1024 * 1024), '\n'.repeat(150 * 1024)]) {
+            expect(await retainPiCodemodeOutput('oversized.txt', oversized, api, context)).toEqual({
+              error: expect.stringContaining('working cache limit'),
+            });
+          }
+          // Both outputs individually fit; concurrent commits must share the same total budget.
+          const outputs = await Promise.all(
+            ['first.txt', 'second.txt'].map((name) =>
+              retainPiCodemodeOutput(name, text, api, context),
+            ),
+          );
+          expect(outputs.filter((output) => 'error' in output)).toHaveLength(1);
+          const savedIndex = outputs.findIndex((output) => 'path' in output);
+          const saved = outputs[savedIndex];
+          if (!saved || !('path' in saved)) throw new Error('Expected one saved output');
+          outputKey = saved.path.slice('store:'.length);
+          expect(
+            await retainPiCodemodeOutput(
+              savedIndex === 0 ? 'first.txt' : 'second.txt',
+              text,
+              api,
+              context,
+            ),
+          ).toEqual(saved);
+          return { output: [] };
+        },
+      }),
+    ],
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await conversation.commit(async (tx) => {
+      (await tx.doc(CodemodeStoreDoc, conversation.id)).values = preserved;
+    }, BACKGROUND_CONTEXT);
+    await harness.waitForTask(await toolTask(conversation, 'cache_output', {}), BACKGROUND_CONTEXT);
+    expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+      isError: false,
+    });
+    const values = (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))
+      ?.values;
+    expect(values).toEqual({ ...preserved, [outputKey]: text });
+    if (!values) throw new Error('Expected persisted working data');
+    const next = await runCachedScript(
+      values,
+      `
+      store('office.script', 's'.repeat(128 * 1024));
+      store('office.next-receipt', { fileEntryId: 'new-file' });
+      return load(${JSON.stringify(outputKey)}).length;
+    `,
+    );
+    expect(next).toMatchObject({
+      ok: true,
+      value: text.length,
+      storeWrites: {
+        set: {
+          'office.script': 's'.repeat(128 * 1024),
+          'office.next-receipt': { fileEntryId: 'new-file' },
+        },
+      },
+    });
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('accounts for pending script writes before saving overflow and leaves small receipts writable', async () => {
+  const sandbox = createCacheSandbox();
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
+    writeOutput: async (name, data, api, context, writes) => {
+      if (typeof data !== 'string') throw new Error('Expected text output');
+      return retainPiCodemodeOutput(name, data, api, context, writes);
+    },
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await harness.waitForTask(
+      await toolTask(conversation, 'codemode', {
+        code: `
+          for (let index = 0; index < 4; index++) store('chunk' + index, 'x'.repeat(250 * 1024));
+          console.log('y'.repeat(64 * 1024));
+        `,
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    const message = (await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1);
+    expect(message).toMatchObject({ role: 'toolResult', isError: false });
+    const output =
+      message?.role === 'toolResult'
+        ? message.content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n')
+        : '';
+    expect(output).toContain('Could not save the full output');
+    expect(output).not.toContain('Full output: store:');
+    expect(
+      Object.keys(
+        (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))!.values,
+      ).sort(),
+    ).toEqual(['chunk0', 'chunk1', 'chunk2', 'chunk3']);
+
+    await harness.waitForTask(
+      await toolTask(
+        conversation,
+        'codemode',
+        {
+          code: `store('receipt', { fileEntryId: 'created-file' }); return load('chunk0').length;`,
+        },
+        'receipt',
+      ),
+      BACKGROUND_CONTEXT,
+    );
+    expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+      isError: false,
+    });
+    expect(
+      (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values
+        .receipt,
+    ).toEqual({ fileEntryId: 'created-file' });
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+    await sandbox.close();
+  }
+});
+
+test('accounts for replaced and deleted values when admitting overflow before script settlement', async () => {
+  const sandbox = createCacheSandbox();
+  let outputKey = '';
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
+    writeOutput: async (name, data, api, context, writes) => {
+      if (typeof data !== 'string') throw new Error('Expected text output');
+      const saved = await retainPiCodemodeOutput(name, data, api, context, writes);
+      if ('path' in saved) outputKey = saved.path.slice('store:'.length);
+      return saved;
+    },
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await conversation.commit(async (tx) => {
+      (await tx.doc(CodemodeStoreDoc, conversation.id)).values = {
+        obsolete: 'x'.repeat(200 * 1024),
+        source: 'y'.repeat(200 * 1024),
+      };
+    }, BACKGROUND_CONTEXT);
+    await harness.waitForTask(
+      await toolTask(conversation, 'codemode', {
+        code: `
+          store('obsolete', undefined);
+          store('source', 's'.repeat(250 * 1024));
+          store('data', 'd'.repeat(200 * 1024));
+          console.log('z'.repeat(200 * 1024));
+        `,
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+      isError: false,
+    });
+    const values = (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))!
+      .values;
+    expect(Object.keys(values).sort()).toEqual([outputKey, 'data', 'source'].sort());
+    expect(values.source).toBe('s'.repeat(250 * 1024));
+    expect(values.data).toBe('d'.repeat(200 * 1024));
+    await expect(
+      runCachedScript(values, `return load(${JSON.stringify(outputKey)});`),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: expect.stringContaining('z'.repeat(200 * 1024)),
+    });
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+    await sandbox.close();
+  }
+});
+
+test('rejects all pending cache writes when another commit consumes their space before settlement', async () => {
+  const sandbox = createCacheSandbox();
+  const peerValues = { first: 'p'.repeat(200 * 1024), second: 'q'.repeat(200 * 1024) };
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
+    writeOutput: async (name, data, api, context, writes) => {
+      if (typeof data !== 'string') throw new Error('Expected text output');
+      // The VM has already checked its own writes; another task commits before it settles.
+      await api.commit(async (tx) => {
+        Object.assign((await tx.doc(CodemodeStoreDoc, api.conversationId)).values, peerValues);
+      }, context);
+      return retainPiCodemodeOutput(name, data, api, context, writes);
+    },
+  });
+  const harness = await open(new MemoryStorage(), extension);
+  try {
+    const conversation = await harness.createConversation(
+      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+      BACKGROUND_CONTEXT,
+    );
+    await harness.waitForTask(
+      await toolTask(conversation, 'codemode', {
+        code: `
+          for (let index = 0; index < 3; index++) store('chunk' + index, 'x'.repeat(250 * 1024));
+          console.log('y'.repeat(64 * 1024));
+        `,
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    const message = (await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1);
+    expect(message).toMatchObject({ role: 'toolResult', isError: true });
+    const output =
+      message?.role === 'toolResult'
+        ? message.content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n')
+        : '';
+    expect(output).toContain("This script's cache writes were not saved");
+    expect(
+      (await harness.snapshot(CodemodeStoreDoc, conversation.id, BACKGROUND_CONTEXT))?.values,
+    ).toEqual(peerValues);
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+    await sandbox.close();
+  }
+});
+
+test('accepts finite workbook width adjustments at the provider boundary without changing cells', () => {
+  const args = {
+    filename: 'report.xlsx',
+    spec: {
+      version: 1,
+      sheets: [{ name: 'Data', rows: [['Original', '=A1', 100]], column_widths: [110, -4, 15] }],
+    },
+  };
+  const input = validateToolArguments(
+    {
+      name: 'create_workbook',
+      description: '',
+      parameters: toRuntimeInputSchema(officeInputSchemas.xlsx, 'input') as Record<string, unknown>,
+    },
+    { type: 'toolCall', id: 'call', name: 'create_workbook', arguments: args },
+  );
+  const result = officeInputSchemas.xlsx.parse(input);
+  expect(result.spec.sheets[0].column_widths).toEqual([80, 4, 15]);
+  expect(result.spec.sheets[0].rows).toEqual(args.spec.sheets[0].rows);
+  expect(args.spec.sheets[0].column_widths).toEqual([110, -4, 15]);
+  for (const width of ['110', NaN, Infinity]) {
+    expect(
+      officeInputSchemas.xlsx.safeParse({
+        ...args,
+        spec: { ...args.spec, sheets: [{ ...args.spec.sheets[0], column_widths: [width] }] },
+      }).success,
+    ).toBe(false);
+  }
 });

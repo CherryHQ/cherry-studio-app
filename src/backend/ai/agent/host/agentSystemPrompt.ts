@@ -175,7 +175,7 @@ Attachment envelopes state the parser, output format, and delivery status; their
   ) {
     sections.push(`## JavaScript Sandbox
 
-When an answer depends on exact computation (arithmetic, date and time differences, statistics, counting, sorting, parsing or transforming data), call the offered JavaScript execution tool directly instead of first working the result out in your reasoning. Follow its declared environment and tool-access contract. Answer from its returned result; correct errors instead of guessing. Page through saved full output with \`${READ_FILE_TOOL_NAME}\` instead of rerunning a script merely because its output was cut.`);
+When an answer depends on exact computation (arithmetic, date and time differences, statistics, counting, sorting, parsing or transforming data), call the offered JavaScript execution tool directly instead of first working the result out in your reasoning. Follow its declared environment and tool-access contract. Answer from its returned result; correct errors instead of guessing. Read saved output with load(key) using its returned store reference instead of rerunning a script merely because its output was cut. Intermediate scripts and data belong only in the private working cache, never the file library.`);
   }
 
   const onDemand = tools.flatMap((tool) =>

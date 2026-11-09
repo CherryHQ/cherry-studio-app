@@ -8,7 +8,8 @@ and installation. See [Cloud Releases](./cloud-releases.md).
 
 ## Checks And Store Actions
 
-Use the store's client query when one is integrated; otherwise reuse `checkGitcodeRelease`.
+Use the store's client query when one is integrated; otherwise reuse `checkApkRelease` with the
+`gitcode` source.
 The update action always opens the device's app store. The native module resolves one store from
 Android's installation/update source, falling back to device brand/manufacturer. The update module
 reads this target once when created; there is no store list or runtime source-switching workflow.

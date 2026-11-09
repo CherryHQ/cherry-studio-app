@@ -93,46 +93,30 @@ export function MessagePartProcess({
 
 export function MessagePartReasoning({
   children,
-  onDisclosureToggle,
+  detailTitle,
   state,
   statusText,
   testID = 'reasoning',
 }: MessagePartReasoningProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const isRunning = state === 'running';
-  const toggle = () => {
-    onDisclosureToggle?.();
-    setIsOpen((open) => !open);
-  };
 
   return (
     <View className="gap-1.5">
-      <MessagePartStatus
-        accessibilityLabel={statusText}
-        expanded={isOpen}
-        onPress={toggle}
-        testID={`${testID}-trigger`}
-      >
-        <View className="min-w-0 shrink">
-          {isRunning ? (
-            <ShimmerText className="text-sm" numberOfLines={1}>
-              {statusText}
-            </ShimmerText>
-          ) : (
-            <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
-              {statusText}
-            </Text>
-          )}
-        </View>
-        <MessagePartDisclosureIcon isOpen={isOpen} />
-      </MessagePartStatus>
-      <MessagePartCollapsible
-        className="border-border border-l-2 pl-3"
-        isOpen={isOpen}
-        testID={`${testID}-detail`}
-      >
-        {children}
-      </MessagePartCollapsible>
+      <MessagePartSummary
+        onPress={() => setIsOpen(true)}
+        state={state}
+        testID={testID}
+        title={statusText}
+      />
+      {isOpen ? (
+        <MessagePartDetail
+          onClose={() => setIsOpen(false)}
+          testID={`${testID}-detail`}
+          title={detailTitle ?? statusText}
+        >
+          {children}
+        </MessagePartDetail>
+      ) : null}
     </View>
   );
 }

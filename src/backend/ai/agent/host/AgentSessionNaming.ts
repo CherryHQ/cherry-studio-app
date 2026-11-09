@@ -56,8 +56,9 @@ export class AgentSessionNaming {
   maybeRenameFromFirstUserMessage(
     sessionId: string,
     parts: readonly AgentInputPart[],
+    replaceForkTitle = false,
   ): Promise<AgentSessionView | null> {
-    return this.track(() => this.renameFromFirstUserMessage(sessionId, parts));
+    return this.track(() => this.renameFromFirstUserMessage(sessionId, parts, replaceForkTitle));
   }
 
   maybeRenameFromConversationSummary(input: {
@@ -87,6 +88,7 @@ export class AgentSessionNaming {
   private async renameFromFirstUserMessage(
     sessionId: string,
     parts: readonly AgentInputPart[],
+    replaceForkTitle: boolean,
   ): Promise<AgentSessionView | null> {
     this.dependencies.signal?.throwIfAborted();
     const userText = extractText(parts);
@@ -95,7 +97,12 @@ export class AgentSessionNaming {
 
     const session = await this.dependencies.store.getSession(sessionId);
     this.dependencies.signal?.throwIfAborted();
-    if (!session || session.isNameManuallyEdited || !canAutoRename(session.name)) return null;
+    if (
+      !session ||
+      session.isNameManuallyEdited ||
+      (!replaceForkTitle && !canAutoRename(session.name))
+    )
+      return null;
 
     return this.dependencies.store.autoRenameSession(sessionId, session.name, nextName);
   }

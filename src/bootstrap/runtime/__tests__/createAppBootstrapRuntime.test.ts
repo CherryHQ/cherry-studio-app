@@ -36,6 +36,11 @@ const mockPreference = {
 const mockDesktopConnectionManager = { kind: 'desktop-connection-manager' };
 const mockProviderAccounts = { kind: 'provider-accounts' };
 const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
+const mockRegion = { getCountry: jest.fn(async () => 'US') };
+const mockProviderCatalog = {
+  hasPendingStorageWork: jest.fn(() => false),
+  ensureReady: jest.fn(async () => {}),
+};
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
 const mockKeepAlive = { acquire: jest.fn() };
@@ -54,6 +59,7 @@ const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockDisposeSkills = jest.fn(async () => {});
 const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
+const mockDisposeUuRemote = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -64,6 +70,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   disposeSkills: mockDisposeSkills,
   disposeVoice: mockDisposeVoice,
   disposeAppUpdate: mockDisposeAppUpdate,
+  disposeUuRemote: mockDisposeUuRemote,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -157,11 +164,14 @@ const createRuntime = () =>
     PreferenceService: mockPreference,
     ProviderAccountRuntime: mockProviderAccounts,
     ProviderRegistryUpdaterService: mockProviderRegistryUpdater,
+    RegionService: mockRegion,
+    ProviderCatalogRuntime: mockProviderCatalog,
     WebSearchService: mockWebSearch,
   });
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockProviderCatalog.hasPendingStorageWork.mockReturnValue(false);
   mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false });
 });
 
@@ -170,6 +180,18 @@ afterEach(async () => {
 });
 
 describe('createAppBootstrapRuntime', () => {
+  test('includes initial provider seeding in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockProviderCatalog.hasPendingStorageWork.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockProviderCatalog.hasPendingStorageWork.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
   test('includes pending MCP authorization writes in backup admission', async () => {
     const runtime = createRuntime();
     try {
@@ -330,6 +352,7 @@ describe('createAppBootstrapRuntime', () => {
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,
+      region: mockRegion,
       trash: mockTrash,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
@@ -379,6 +402,7 @@ describe('createAppBootstrapRuntime', () => {
     await firstDispose;
 
     expect(mockDisposeSystemEntry).toHaveBeenCalledTimes(1);
+    expect(mockDisposeUuRemote).toHaveBeenCalledTimes(1);
     // Native consumers stop before host-owned data and runtimes are disposed.
     expect(application.hasHost).toBe(false);
   });

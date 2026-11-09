@@ -54,6 +54,7 @@ export type DataApiDependencies = {
   contentSearch: ContentSearchService;
   desktopConnections: DesktopConnectionService;
   desktopConnectionEndpointsChanged: (id: string) => Promise<void>;
+  desktopConnectionNameChanged: (id: string) => Promise<void>;
   entitySearch: EntitySearchService;
   files: FileEntryService;
   jobs: JobService;
@@ -79,6 +80,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createDesktopConnectionHandlers(
       dependencies.desktopConnections,
       dependencies.desktopConnectionEndpointsChanged,
+      dependencies.desktopConnectionNameChanged,
     ),
     ...createFileHandlers(dependencies.files, dependencies.trashMutations),
     ...createJobHandlers(dependencies.jobs),

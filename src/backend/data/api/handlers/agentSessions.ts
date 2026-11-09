@@ -33,6 +33,9 @@ export function createAgentSessionHandlers(
       GET: async ({ query, signal }) =>
         service.listByCursor(ListAgentSessionsQuerySchema.parse(query ?? {}), signal),
     },
+    '/agent-sessions/:id/path': {
+      GET: async ({ params, signal }) => service.getPath(params.id, signal),
+    },
     '/agent-sessions/:id': {
       DELETE: async ({ params }) => {
         await runSessionMutation(params.id, () =>

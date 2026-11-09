@@ -18,6 +18,8 @@ import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
 
 type MessagePartRendererProps = {
+  sessionId?: string;
+  partId?: string;
   messageId?: string;
   isStreaming: boolean;
   messageParts?: readonly CherryMessagePart[];
@@ -28,6 +30,8 @@ type MessagePartRendererProps = {
 
 export const MessagePartRenderer = memo(function MessagePartRenderer({
   isStreaming,
+  sessionId,
+  partId,
   messageId,
   messageParts,
   part,
@@ -52,7 +56,14 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
         />
       );
     case 'reasoning':
-      return <ReasoningPart isStreaming={isStreaming && part.state !== 'done'} part={part} />;
+      return (
+        <ReasoningPart
+          isStreaming={isStreaming && part.state !== 'done'}
+          part={part}
+          partId={partId}
+          source={sessionId && messageId && partId ? { sessionId, messageId, partId } : undefined}
+        />
+      );
     case 'data-code':
       return <CodePart isStreaming={isStreaming} part={part} />;
     case 'data-compact':
@@ -82,6 +93,8 @@ function areMessagePartRendererPropsEqual(
 ) {
   if (
     previous.isStreaming !== next.isStreaming ||
+    previous.sessionId !== next.sessionId ||
+    previous.partId !== next.partId ||
     previous.messageId !== next.messageId ||
     previous.part !== next.part ||
     previous.renderMode !== next.renderMode ||

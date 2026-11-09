@@ -16,7 +16,6 @@ jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { version: '9.0.0', extra: { isApkUpdatesEnabled: true } } },
 }));
-jest.mock('expo-localization', () => ({ getLocales: () => [{ regionCode: 'CN' }] }));
 jest.mock('react-native', () => ({ Platform: { OS: 'android' }, Linking: { openURL: jest.fn() } }));
 jest.mock('../runningUpdate', () => ({ runningUpdate: { channel: 'production-apk' } }));
 const mockNative = {
@@ -47,15 +46,17 @@ const mockCheckNativeDomestic = jest.fn();
 jest.mock('../nativeDomesticStoreRelease', () => ({
   checkNativeDomesticStoreRelease: (...args: unknown[]) => mockCheckNativeDomestic(...args),
 }));
-jest.mock('../gitcodeRelease', () => ({
-  checkGitcodeRelease: (...args: unknown[]) => mockCheckApk(...args),
+jest.mock('../apkRelease', () => ({
+  checkApkRelease: (...args: unknown[]) => mockCheckApk(...args),
   assertApkRelease: (...args: unknown[]) => mockAssertApk(...args),
 }));
 jest.mock('../appStoreRelease', () => ({
   checkAppStoreRelease: (...args: unknown[]) => mockCheckAppStore(...args),
 }));
 const mockPermission = jest.fn(async () => true);
-const create = () => createAppUpdateModule({ requestInstallPermission: mockPermission });
+const mockGetCountry = jest.fn(async () => 'CN');
+const create = () =>
+  createAppUpdateModule({ getCountry: mockGetCountry, requestInstallPermission: mockPermission });
 const apk: ApkUpdateRelease = {
   channel: 'apk',
   id: 'apk:1.10.0',
@@ -70,6 +71,7 @@ const apk: ApkUpdateRelease = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetCountry.mockResolvedValue('CN');
   mockGetNative.mockReturnValue(mockNative);
   mockNative.isApkInstallationEnabled.mockReturnValue(true);
   mockNative.checkPlayUpdate.mockResolvedValue({ available: true, versionCode: 20 });
@@ -98,7 +100,7 @@ test('domestic distribution uses GitCode when no client query exists and only up
   });
   expect(result).not.toHaveProperty('downloadUrl');
   expect(result).not.toHaveProperty('checksumUrl');
-  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', expect.any(AbortSignal));
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', 'gitcode', expect.any(AbortSignal));
   expect(mockCheckNativeDomestic).not.toHaveBeenCalled();
   expect(mockDownload.download).not.toHaveBeenCalled();
   expect(mockNative.openDomesticStore).not.toHaveBeenCalled();
@@ -141,10 +143,35 @@ test('a store action must match the module’s resolved store', async () => {
 test('checks the installed version, forwards cancellation, and never downloads on discovery', async () => {
   const signal = new AbortController().signal;
   await expect(create().check(signal)).resolves.toEqual({ status: 'available', ...apk });
-  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', signal);
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', 'gitcode', signal);
   expect(mockDownload.clearObsoleteFailure).toHaveBeenCalledWith(apk.id);
   expect(mockDownload.download).not.toHaveBeenCalled();
   expect(Linking.openURL).not.toHaveBeenCalled();
+});
+
+test('foreign IP selects GitHub for APK updates', async () => {
+  mockGetCountry.mockResolvedValue('JP');
+  await create().check();
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', 'github', undefined);
+});
+
+test('App Store lookup uses the shared IP country', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
+  mockGetCountry.mockResolvedValue('JP');
+  mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
+  await create().check();
+  expect(mockCheckAppStore).toHaveBeenCalledWith('com.example.app', '1.9.0', 'JP', undefined);
+});
+
+test('cancelling while country is being resolved prevents update discovery', async () => {
+  const controller = new AbortController();
+  mockGetCountry.mockImplementationOnce(async () => {
+    controller.abort();
+    return 'CN';
+  });
+  await expect(create().check(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(mockCheckApk).not.toHaveBeenCalled();
 });
 
 test('only successful discovery can clear a withdrawn package failure', async () => {
@@ -334,7 +361,7 @@ test('checks and actions retain the single store resolved when the module is cre
 test('disposing cancels an in-flight GitCode fallback query', async () => {
   jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
   const updates = create();
-  mockCheckApk.mockImplementationOnce(async (_version, signal: AbortSignal) => {
+  mockCheckApk.mockImplementationOnce(async (_version, _source, signal: AbortSignal) => {
     await updates.dispose();
     signal.throwIfAborted();
   });

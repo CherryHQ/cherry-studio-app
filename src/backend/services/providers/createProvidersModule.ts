@@ -22,6 +22,7 @@ type ProviderAvatarStorage = {
 };
 
 export type ProvidersModuleDependencies = {
+  getCountry(): Promise<string>;
   accounts: ProviderAccountsModule;
   avatars: ProviderAvatarStorage;
   catalog: {
@@ -46,6 +47,7 @@ export type ProvidersModuleDependencies = {
 };
 
 export function createProvidersModule({
+  getCountry,
   accounts,
   avatars,
   catalog,
@@ -53,6 +55,16 @@ export function createProvidersModule({
   registryUpdates,
   hasAvailableModels,
 }: ProvidersModuleDependencies): ProvidersModule {
+  const listRegionalCatalog = async () => {
+    const edition = (await getCountry()) === 'CN' ? 'cn' : 'global';
+    return catalog
+      .list()
+      .filter(
+        (provider) =>
+          !catalog.isExcluded(provider.id) &&
+          (!provider.availableInEditions || provider.availableInEditions.includes(edition)),
+      );
+  };
   const getSetupStatus = async (providerId: string): Promise<ProviderSetupStatus> => {
     const provider = await providers.get(providerId);
     const [keys, auth] = await Promise.all([
@@ -78,34 +90,31 @@ export function createProvidersModule({
     },
     applyRegistryUpdate: registryUpdates.apply,
     importPreset: async (providerId) => {
-      const preset = catalog
-        .list()
-        .find((candidate) => candidate.id === providerId && !catalog.isExcluded(candidate.id));
+      const installed = await providers.find(providerId);
+      if (installed) return installed;
+      const preset = (await listRegionalCatalog()).find((candidate) => candidate.id === providerId);
 
       if (!preset) {
         throw new Error(`Provider preset '${providerId}' is unavailable`);
       }
 
-      return (
-        (await providers.find(providerId)) ?? providers.create(createPresetProviderInput(preset))
-      );
+      return providers.create(createPresetProviderInput(preset));
     },
     listCatalog: async () => {
-      const installedProviders = new Map(
-        (await providers.list()).map((provider) => [provider.id, provider]),
-      );
+      const [regionalCatalog, savedProviders] = await Promise.all([
+        listRegionalCatalog(),
+        providers.list(),
+      ]);
+      const installedProviders = new Map(savedProviders.map((provider) => [provider.id, provider]));
 
-      return catalog
-        .list()
-        .filter((provider) => !catalog.isExcluded(provider.id))
-        .map((provider) => ({
-          ...(provider.description ? { description: provider.description } : {}),
-          id: provider.id,
-          isEnabled: installedProviders.get(provider.id)?.isEnabled ?? false,
-          isInstalled: installedProviders.has(provider.id),
-          isRecommended: isRecommendedPresetProvider(provider.id),
-          name: provider.name,
-        }));
+      return regionalCatalog.map((provider) => ({
+        ...(provider.description ? { description: provider.description } : {}),
+        id: provider.id,
+        isEnabled: installedProviders.get(provider.id)?.isEnabled ?? false,
+        isInstalled: installedProviders.has(provider.id),
+        isRecommended: isRecommendedPresetProvider(provider.id),
+        name: provider.name,
+      }));
     },
     persistAvatar: avatars.persist,
     removeAvatar: avatars.remove,

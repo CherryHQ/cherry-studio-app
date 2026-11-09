@@ -64,6 +64,22 @@ temperature using model metadata and thinking-mode constraints. OpenAI-compatibl
 use `max_tokens` and omit OpenAI-only storage/strict-tool options; stream-usage parameters follow
 the endpoint's dialect declaration rather than URL detection.
 
+The maintained Pi AI patch captures Google Chat Completions tool-call signatures in Pi's existing
+`ToolCall.thoughtSignature` field and replays them for the same provider, model and API. At Pi's final
+payload boundary, Gemini 3/4 receives a compatibility marker only when no signature remains, such as
+imported history or a model switch. Native Google replay retains its own signature handling.
+Classic Qwen 3 models on LMStudio and GPUStack receive a prompt switch when using the shared generic
+Chat reasoning profile. Native thinking parameters come only from dedicated registry wire profiles;
+generic hosts retain their effort contract without an inferred `enable_thinking` parameter.
+Provider-default selections remain authoritative.
+Parameterless object tools receive an empty `properties` map in the model-facing copy without
+changing local validation or root-reference schemas.
+
+Poe model discovery consumes each bot's declared endpoints and preserves that result during catalog
+enrichment. With no declaration, it keeps a registered route or falls back to Chat Completions.
+Compatible model lists skip malformed entries individually and report the count through diagnostics;
+Gemini model discovery accepts null pagination markers.
+
 Model-backed application tools use this capability path:
 
 ```text

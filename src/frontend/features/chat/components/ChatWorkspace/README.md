@@ -71,6 +71,9 @@ start and the header fades with the motion's progress on the UI thread; nothing 
 out mid-motion, and the region is released before the closed layer is removed. A new action takes
 over from the current progress. With reduced motion the layer fades in and out in place. The
 transcript keeps its size and header inset throughout, so nothing under the layer moves.
+While the workspace is elevated, the transcript is clipped above the measured composer footprint
+without resizing its viewport. The shrinking answer and fading scrim reveal the mounted composer
+during closing rather than leaving its area blank until the layer is released.
 
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions
@@ -93,6 +96,9 @@ and it confirms destructively before removing the pressed answer together with t
 produced it: a transcript replays tool calls paired with their results, so half a turn is not
 replayable. The button is disabled while the Session is busy, like retry, because a running turn's
 rows must not disappear underneath it.
+For a question with multiple answers, the existing delete action targets the pressed answer and
+its descendants instead. Its shared question, sibling answers and independent fork Sessions remain.
+Single-answer deletion keeps the existing turn-removal behavior and confirmation presentation.
 Holding these regions belongs to the child interaction and does not open the message menu.
 
 `ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled

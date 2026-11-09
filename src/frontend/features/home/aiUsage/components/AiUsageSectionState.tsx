@@ -1,7 +1,6 @@
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Button, ContentState, Spinner } from '@cherrystudio/ui/components';
+import { Button, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
 
 type AiUsageSectionStatusProps = {
   isError: boolean;
@@ -36,31 +35,5 @@ export function AiUsageSectionStatus({
       testID={retryTestID}
       variant="ghost"
     />
-  );
-}
-
-export function AiUsageSectionError({
-  message,
-  onRetry,
-  testID,
-}: {
-  message: string;
-  onRetry: () => void;
-  testID: string;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <View className="min-h-40 justify-center px-6">
-      <ContentState.Error
-        primaryAction={{
-          children: t('aiUsage.retry'),
-          icon: <RefreshCwIcon />,
-          onPress: onRetry,
-          testID,
-        }}
-        title={message}
-      />
-    </View>
   );
 }

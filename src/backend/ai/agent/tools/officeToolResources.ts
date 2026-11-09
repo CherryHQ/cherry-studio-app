@@ -5,6 +5,7 @@ import {
   type OfficeImage,
 } from '@/backend/services/office';
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 import type { FileEntry, FileEntryProvenance } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
@@ -38,6 +39,38 @@ export type OfficeFiles = Pick<ManagedFileResolver, 'resolveAvailable'> & {
 };
 
 export type OfficeOperation = Awaited<ReturnType<typeof startOfficeOperation>>;
+
+/** Stage identifiers and timings only: never log document text, arguments, paths or file contents. */
+export function createOfficeTiming(toolCallId: string, capabilityId: string) {
+  const logger = loggerService.withContext('Office');
+  let current: string | undefined;
+  let startedAt = performance.now();
+  const finish = (outcome: string) => {
+    if (current)
+      logger.info('Office stage', {
+        operation: `office.${current}`,
+        toolCallId,
+        capabilityId,
+        outcome,
+        durationMs: performance.now() - startedAt,
+      });
+    current = undefined;
+  };
+  return {
+    stage(stage: string) {
+      finish('ended');
+      current = stage;
+      startedAt = performance.now();
+      logger.info('Office stage', {
+        operation: `office.${stage}`,
+        toolCallId,
+        capabilityId,
+        outcome: 'started',
+      });
+    },
+    finish,
+  };
+}
 
 // Image preparation, native compute and publication share a bounded lifetime.
 const officeOperationSlots = createConcurrencySlots(2);

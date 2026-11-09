@@ -7,6 +7,10 @@ import {
   type AiUsageRecordAttribution,
   type AiUsageRecordEntry,
   AiUsageRecordMessageKindSchema,
+  AiUsageRecordModalitySchema,
+  AiUsageRecordSourceTypeSchema,
+  AiUsageRecordAttributionSchema,
+  AiUsageRecordAuthMethodSchema,
 } from '@/shared/data/types/aiUsageRecord';
 import { CURRENCY, type Currency, objectValues } from '@/shared/data/types/model';
 
@@ -52,8 +56,24 @@ export type AiUsageRecordListSortBy = z.infer<typeof AiUsageRecordListSortBySche
 export const AiUsageRecordSortOrderSchema = z.enum(['asc', 'desc']);
 export type AiUsageRecordSortOrder = z.infer<typeof AiUsageRecordSortOrderSchema>;
 
+/** Snapshot identities, shared by charts, rankings and record drill-down. Null selects unknown. */
+const UsageFilterFields = {
+  providerId: z.string().nullable().optional(),
+  modelId: z.string().nullable().optional(),
+  sourceType: AiUsageRecordSourceTypeSchema.nullable().optional(),
+  sourceId: z.string().nullable().optional(),
+  apiKeyId: z.string().nullable().optional(),
+  apiKeyAttribution: AiUsageRecordAttributionSchema.optional(),
+  authMethod: AiUsageRecordAuthMethodSchema.nullable().optional(),
+  modality: AiUsageRecordModalitySchema.optional(),
+  search: z.string().trim().max(200).optional(),
+};
+export const AiUsageRecordFiltersSchema = z.strictObject(UsageFilterFields);
+export type AiUsageRecordFilters = z.infer<typeof AiUsageRecordFiltersSchema>;
+
 export const AiUsageRecordListQuerySchema = z
   .strictObject({
+    ...UsageFilterFields,
     cursor: z.string().optional(),
     limit: z.int().positive().max(AI_USAGE_RECORD_MAX_LIMIT).default(AI_USAGE_RECORD_DEFAULT_LIMIT),
     sortBy: AiUsageRecordListSortBySchema.default('createdAt'),
@@ -90,6 +110,7 @@ export const AiUsageRecordMetricSchema = z.enum(['tokens', 'requests', 'cost']);
 export type AiUsageRecordMetric = z.infer<typeof AiUsageRecordMetricSchema>;
 
 const AggregateQueryFields = {
+  ...UsageFilterFields,
   metric: AiUsageRecordMetricSchema.default('tokens'),
   currency: CurrencySchema.optional(),
   limit: z
@@ -181,6 +202,8 @@ export interface AiUsageRecordStatsMetrics {
   totalCacheReadTokens: number;
   totalCacheWriteTokens: number;
   recordCount: number;
+  tokenRecordCount: number;
+  costRecordCount: number;
   requestCount: number;
   estimatedRequestCount: number;
   unpricedRequestCount: number;
@@ -197,11 +220,15 @@ export interface AiUsageRecordTimelineBucket extends AiUsageRecordGroupIdentity 
   date: string;
   costCurrency: Currency | null;
   totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalNoCacheTokens: number;
   totalCacheReadTokens: number;
   totalCacheWriteTokens: number;
   totalCost: number;
   recordCount: number;
+  tokenRecordCount: number;
+  costRecordCount: number;
   requestCount: number;
   estimatedRequestCount: number;
   unpricedRequestCount: number;
@@ -221,7 +248,69 @@ export interface AiUsageRecordTimelineResponse {
   dailyCosts: AiUsageRecordDailyCost[];
 }
 
+/** Full-history analytics use adaptive buckets rather than the daily endpoint's range cap. */
+export const AiUsageRecordAnalyticsQuerySchema = z
+  .strictObject({
+    groupBy: AiUsageRecordGroupBySchema,
+    ...AggregateQueryFields,
+    includePerformance: z.boolean().default(false),
+  })
+  .superRefine((value, ctx) => {
+    if (value.to < value.from) {
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'to must not precede from' });
+    }
+    if (value.metric === 'cost' && value.currency === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['currency'],
+        message: 'currency is required for cost aggregation',
+      });
+    }
+  });
+export type AiUsageRecordAnalyticsQuery = z.infer<typeof AiUsageRecordAnalyticsQuerySchema>;
+export type AiUsageRecordAnalyticsQueryParams = z.input<typeof AiUsageRecordAnalyticsQuerySchema>;
+export type AiUsageRecordGranularity = 'day' | 'month' | 'year';
+export type AiUsageRecordPerformanceMetric =
+  | 'timeFirstTokenMs'
+  | 'timeCompletionMs'
+  | 'timeThinkingMs'
+  | 'tokensPerSecond';
+export interface AiUsageRecordPerformanceSummary {
+  sampleCount: number;
+  average: number | null;
+  median: number | null;
+  p95: number | null;
+}
+export interface AiUsageRecordModelPerformance extends AiUsageRecordPerformanceSummary {
+  providerId: string | null;
+  providerName: string | null;
+  modelId: string | null;
+}
+export interface AiUsageRecordAnalyticsResponse {
+  stats: AiUsageRecordStatsResponse;
+  timeline: AiUsageRecordTimelineResponse;
+  granularity: AiUsageRecordGranularity;
+  firstRecordAt: number | null;
+  composition: {
+    totalTokens: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    reasoningTokens: number | null;
+    noCacheTokens: number | null;
+    cacheReadTokens: number | null;
+    cacheWriteTokens: number | null;
+    imageCount: number | null;
+  };
+  performance?: Record<AiUsageRecordPerformanceMetric, AiUsageRecordPerformanceSummary>;
+  performanceByModel?: AiUsageRecordModelPerformance[];
+  providerReportedRequestCount: number;
+  computedRequestCount: number;
+}
+
 export type AiUsageRecordSchemas = {
+  '/ai-usage-records/analytics': {
+    GET: { query: AiUsageRecordAnalyticsQueryParams; response: AiUsageRecordAnalyticsResponse };
+  };
   '/ai-usage-records': {
     GET: { query?: AiUsageRecordListQueryParams; response: AiUsageRecordListResponse };
   };
