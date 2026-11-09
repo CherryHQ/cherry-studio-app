@@ -3,6 +3,12 @@ import { createFetchBridge, HttpError } from '@/backend/services/http';
 import { ProviderOauthErrorSchema } from './providerOauth';
 
 const MAX_ACCOUNT_RESPONSE_BYTES = 1_048_576;
+const CREDENTIAL_EXCHANGE_PATHS = new Set([
+  '/oauth/token',
+  '/oauth2/token',
+  '/api/oauth/token',
+  '/copilot_internal/v2/token',
+]);
 
 function requireAccountEndpoint(value: string): URL {
   try {
@@ -37,6 +43,11 @@ export function createProviderAccountFetch(): typeof globalThis.fetch {
         .json()
         .catch(() => undefined),
     );
+    // Only credential exchanges can reject the stored renewal grant. Copilot /models
+    // uses a newly issued access token, so its failure must not invalidate the GitHub grant.
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const isConfigurationFailure = failure.success && failure.data.error !== 'invalid_grant';
+    if (!isConfigurationFailure && !CREDENTIAL_EXCHANGE_PATHS.has(url.pathname)) return response;
     // Preserve confirmed rejections before SDKs replace their structured fields with error text.
     // Pending/slow-down responses still belong to the SDK's device-code polling loop.
     if (failure.success || response.status === 401) {

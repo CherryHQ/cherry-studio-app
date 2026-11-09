@@ -84,3 +84,37 @@ it('leaves an ordinary non-JSON rejection available for SDK handling', async () 
   expect(response.status).toBe(403);
   expect(await response.text()).toBe('Forbidden');
 });
+
+it.each([
+  ['https://auth.openai.com/oauth/token', 'POST'],
+  ['https://auth.x.ai/oauth2/token', 'POST'],
+  ['https://auth.kimi.com/api/oauth/token', 'POST'],
+  ['https://api.company.ghe.com/copilot_internal/v2/token', 'GET'],
+])('preserves a credential-exchange 401 from %s', async (url, method) => {
+  mockRequest.mockResolvedValueOnce({ status: 401, headers: {}, data: 'Unauthorized' });
+  await expect(fetchAccount(new Request(url, { method }))).rejects.toMatchObject({
+    kind: 'http',
+    status: 401,
+  });
+});
+
+it.each(['Unauthorized', JSON.stringify({ error: 'invalid_grant' })])(
+  'leaves a secondary endpoint rejection available for SDK handling: %s',
+  async (body) => {
+    mockRequest.mockResolvedValueOnce({ status: 401, headers: {}, data: body });
+    const response = await fetchAccount('https://api.individual.githubcopilot.com/models');
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe(body);
+  },
+);
+
+it('preserves client configuration errors outside credential exchanges', async () => {
+  mockRequest.mockResolvedValueOnce({
+    status: 400,
+    headers: {},
+    data: JSON.stringify({ error: 'invalid_client' }),
+  });
+  await expect(
+    fetchAccount('https://auth.openai.com/api/accounts/deviceauth/usercode', { method: 'POST' }),
+  ).rejects.toMatchObject({ kind: 'http', status: 400, code: 'invalid_client' });
+});
