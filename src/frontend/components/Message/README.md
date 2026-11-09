@@ -8,6 +8,9 @@ history, message rows and parts, viewport following, and scroll restoration.
 
 - `MessageList` renders a virtualized history from `MessageListItem` values and delegates
   every row to the feature-owned `renderMessage` function.
+- `useMessageListDisclosureToggle` leaves live-edge following before a reader changes inline
+  content, including switching answers. Call it before the content-changing action; the list
+  retains ownership of reading position and scroll compensation.
 - `MessageListItem` contains only the persistence-neutral fields needed for rendering. Its optional
   `stats.runtimeTiming` carries message-owned execution timing; `partKeys` carries source-owned part
   identity beside the projected visual parts; `systemEvent` carries a feature-synthesized timeline

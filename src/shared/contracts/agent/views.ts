@@ -483,12 +483,13 @@ export const AgentInputPartSchema = z.union([
     })
     .refine(hasQuotePair, { message: 'Quote and author must occur together.' })
     .refine(
-      ({ text, pluginReferences, skillReferences, selectionReferences }) => {
+      ({ text, pluginReferences, skillReferences, selectionReferences, quotes }) => {
         let end = 0;
         return [
           ...(pluginReferences ?? []),
           ...(skillReferences ?? []),
           ...(selectionReferences ?? []),
+          ...(quotes ?? []).flatMap((quote) => (quote.reference ? [quote.reference] : [])),
         ]
           .sort((left, right) => left.offset - right.offset)
           .every((reference) => {

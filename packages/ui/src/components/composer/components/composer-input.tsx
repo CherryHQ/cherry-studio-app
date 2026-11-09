@@ -1,7 +1,7 @@
 import { TextInputWrapper } from 'expo-paste-input';
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
+import { type ContextMenuItem, EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { useCSSVariable, useResolveClassNames } from 'uniwind';
 
 import type { ComposerInputHandle, ComposerInputProps } from '../composer.types';
@@ -28,15 +28,19 @@ const fillInputStyle = { height: '100%', maxHeight: '100%' } as const;
  */
 export function ComposerInput({
   autoFocus = false,
+  insertNewlineLabel = 'Insert newline',
   layout,
   markdownStyle,
   onBlur,
   onFocus,
   onLayout,
+  onLinkPress,
   onPaste,
+  onReturnSubmit,
   placeholder,
   ref,
   style,
+  submitOnReturn = false,
   testID,
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
@@ -59,6 +63,24 @@ export function ComposerInput({
   const selectionColor = Platform.OS === 'ios' ? selectionTint : selectionBackground;
   const fallbackRef = useRef<ComposerInputHandle | null>(null);
   const inputRef = ref ?? fallbackRef;
+  const contextMenuItems = useMemo<ContextMenuItem[]>(
+    () =>
+      submitOnReturn && onReturnSubmit
+        ? [
+            {
+              text: insertNewlineLabel,
+              onPress: ({ selection }) => {
+                const input = inputRef.current;
+                // Long press can select a word. Preserve it and insert after the selection.
+                const cursor = Math.max(selection.start, selection.end);
+                input?.setSelection(cursor, cursor);
+                input?.insertText('\n');
+              },
+            },
+          ]
+        : [],
+    [inputRef, insertNewlineLabel, onReturnSubmit, submitOnReturn],
+  );
   // The field is uncontrolled — it owns its own text and we mirror it out. This
   // records what it last told us so the sync below can tell a value that came
   // back from the field from one the caller pushed in.
@@ -83,6 +105,24 @@ export function ComposerInput({
       changeText(markdown);
     },
     [changeText],
+  );
+
+  const handleLinkPress = useCallback(
+    (event: { url: string; x: number; y: number; width: number; height: number }) => {
+      if (!onLinkPress) return;
+      const draft = emitted.current;
+      inputRef.current?.measureInWindow((pageX, pageY) => {
+        if (emitted.current !== draft) return;
+        onLinkPress({
+          url: event.url,
+          pageX: pageX + event.x,
+          pageY: pageY + event.y,
+          width: event.width,
+          height: event.height,
+        });
+      });
+    },
+    [inputRef, onLinkPress],
   );
 
   // Pushes a caller-side change — send clearing the draft, a failed send
@@ -110,6 +150,7 @@ export function ComposerInput({
     >
       <EnrichedMarkdownTextInput
         autoFocus={autoFocus}
+        contextMenuItems={contextMenuItems}
         cursorColor={typeof selectionTint === 'string' ? selectionTint : undefined}
         selectionColor={typeof selectionColor === 'string' ? selectionColor : undefined}
         // Set once. Every later change goes through the sync effect above.
@@ -123,6 +164,9 @@ export function ComposerInput({
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
         onLayout={onLayout}
+        onLinkPress={onLinkPress ? handleLinkPress : undefined}
+        onSubmit={submitOnReturn ? onReturnSubmit : undefined}
+        submitOnReturn={submitOnReturn && onReturnSubmit !== undefined}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined

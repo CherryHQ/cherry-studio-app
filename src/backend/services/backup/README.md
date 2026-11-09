@@ -46,7 +46,16 @@ the user keeps only copies saved or shared from it.
 
 Hashing uses the file module's shared native streaming hash. ZIP processing uses the restricted
 reader and streaming writer in `src/backend/utils` (shared with Skill packages and diagnostics), in
-bounded chunks. Limits are 1 GiB compressed, 1 GiB expanded and 10,000 payload entries, with a
+bounded chunks. Export progress counts uncompressed payload bytes across two passes: hashing and
+packing, each weighted by the same fixed captured file sizes. The manifest contributes no progress
+bytes. Hash progress advances at file boundaries; packing reports after each successful chunk,
+with the terminal value deferred until archive finalization and handle cleanup succeed. Runtime
+publishes the real byte counters only when the integer percentage changes, plus the initial state
+and lifecycle transitions. An all-zero payload stays indeterminate. Reaching 100% means the archive
+was packed; it does not prove the user saved or shared it. Capture, copying and native hashing keep
+their existing liveness behavior.
+
+Limits are 1 GiB compressed, 1 GiB expanded and 10,000 payload entries, with a
 4 MiB manifest. Free space is checked while copying and extracting. Cancellation removes work
 owned by the operation before activation is committed.
 
@@ -77,6 +86,9 @@ WebDAV/S3, scheduled backups, encryption, partial restore and desktop interchang
 Focused suites cover mutation admission, runtime progress state, serialized paths and limits, a
 pack/unpack round trip, ZIP truncation/encryption (in the shared reader suite), native-process
 state transitions, standard-schema imports, rebuilt search indexes and SQLite normalization/rollback.
+Export regressions cover the two-pass payload scale, manifest exclusion, file-boundary hashing,
+chunk-level packing before a database-only entry finishes, monotonic counters and integer-percentage
+publication deduplication, source-size mismatches, and cancellation during a chunk yield.
 Device acceptance must also exercise export/save/import on both platforms, cancellation, low disk, native termination
 during each restore phase, and the native module's durability. Those checks and native builds are
 not implied by editing this code.

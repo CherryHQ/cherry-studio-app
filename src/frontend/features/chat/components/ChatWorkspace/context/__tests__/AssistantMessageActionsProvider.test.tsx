@@ -91,12 +91,19 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
 
 const sessionRef = { source: { kind: 'local' as const }, sessionId: 'session-1' };
 
-function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
+function ProviderHarness({
+  probeRef,
+  isSubmitting = false,
+}: {
+  probeRef: Ref<ContextProbeHandle>;
+  isSubmitting?: boolean;
+}) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
       onShare={mockShare}
       snapshot={{
+        isSubmitting,
         title: mockSourceTitle ?? '',
         freshness: { state: 'current' },
         liveMessages: [],
@@ -182,6 +189,16 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
   }
+
+  test('disables message mutations while a retry is being prepared without an active execution', () => {
+    renderProvider();
+    expect(probeRef.current!.state.isRetryDisabled).toBe(false);
+    act(() => renderer!.update(<ProviderHarness probeRef={probeRef} isSubmitting />));
+    expect(probeRef.current!.state.isRetryDisabled).toBe(true);
+    expect(probeRef.current!.state.isDeleteDisabled).toBe(true);
+    act(() => renderer!.update(<ProviderHarness probeRef={probeRef} />));
+    expect(probeRef.current!.state.isRetryDisabled).toBe(false);
+  });
 
   test('remote presentation exposes copy and share without local transcript mutations', async () => {
     const share = jest.fn();
@@ -329,7 +346,9 @@ describe('AssistantMessageActionsProvider', () => {
   test('deletes a turn only after the destructive confirmation is accepted', async () => {
     renderProvider();
 
-    act(() => probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1' }));
+    act(() =>
+      probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1', messageId: 'assistant-1' }),
+    );
 
     // Nothing has happened yet: the alert is the gate, not a notification.
     expect(mockDeleteTurn).not.toHaveBeenCalled();
@@ -355,7 +374,9 @@ describe('AssistantMessageActionsProvider', () => {
     mockDeleteTurn.mockRejectedValueOnce(error);
     renderProvider();
 
-    act(() => probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1' }));
+    act(() =>
+      probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1', messageId: 'assistant-1' }),
+    );
     await act(async () => {
       mockAlertConfirm.mock.lastCall![0].onConfirm();
       await Promise.resolve();

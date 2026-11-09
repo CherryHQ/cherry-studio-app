@@ -3,9 +3,24 @@ import {
   DesktopProvidersSnapshotSchema,
   PairDesktopConnectionSchema,
   parseSupportedAuthConfig,
+  UpdateDesktopConnectionSchema,
 } from '../desktopConnections';
 
 describe('desktop connection api schemas', () => {
+  test('normalizes local aliases and requires at least one supported update', () => {
+    expect(UpdateDesktopConnectionSchema.parse({ alias: '  Work.mac  ' })).toEqual({
+      alias: 'Work.mac',
+    });
+    expect(UpdateDesktopConnectionSchema.parse({ alias: '  ' })).toEqual({ alias: null });
+    expect(UpdateDesktopConnectionSchema.parse({ alias: null })).toEqual({ alias: null });
+    expect(UpdateDesktopConnectionSchema.parse({ configuredEndpoints: [] })).toEqual({
+      configuredEndpoints: [],
+    });
+    for (const input of [{}, { name: 'Desktop' }, { alias: 'a'.repeat(129) }, { alias: 42 }]) {
+      expect(UpdateDesktopConnectionSchema.safeParse(input).success).toBe(false);
+    }
+  });
+
   test('does not let QR payloads inject a local connection ID', () => {
     const qr = DesktopPairingQrSchema.parse({
       connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',

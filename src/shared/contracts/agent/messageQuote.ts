@@ -4,6 +4,9 @@ export const MessageQuoteSchema = z.strictObject({
   id: z.string().refine((id) => id.trim().length > 0, 'Quote id must be nonempty.'),
   sourceMessageId: z.uuid(),
   text: z.string().refine((text) => text.trim().length > 0, 'Quote snapshot must be readable.'),
+  reference: z
+    .strictObject({ label: z.string().min(1), offset: z.number().int().nonnegative() })
+    .optional(),
 });
 export type MessageQuote = z.infer<typeof MessageQuoteSchema>;
 export const QuoteAuthorSchema = z.strictObject({
@@ -12,10 +15,10 @@ export const QuoteAuthorSchema = z.strictObject({
 });
 export type QuoteAuthor = z.infer<typeof QuoteAuthorSchema>;
 export const quoteFields = {
-  quotes: z.tuple([MessageQuoteSchema]).optional(),
+  quotes: z.array(MessageQuoteSchema).min(1).optional(),
   quoteAuthor: QuoteAuthorSchema.optional(),
 };
-export type QuoteFields = { quotes?: [MessageQuote]; quoteAuthor?: QuoteAuthor };
+export type QuoteFields = { quotes?: MessageQuote[]; quoteAuthor?: QuoteAuthor };
 
 export function hasQuotePair(part: QuoteFields): boolean {
   return Boolean(part.quotes) === Boolean(part.quoteAuthor);

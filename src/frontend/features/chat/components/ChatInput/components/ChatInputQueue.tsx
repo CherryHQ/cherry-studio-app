@@ -11,6 +11,7 @@ import { fileEntryUrl } from '@/shared/data/types/file';
 
 import { useChatQuoteActions, useChatQuoteState } from '../../../quotes/ChatQuoteContext';
 import { messageQuoteLine } from '../../../quotes/MessageQuotePreview';
+import { restoreQuoteMentions } from '../../../quotes/quoteMentions';
 import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
 import { QueuedInputPreview } from './QueuedInputSheets';
 
@@ -94,7 +95,9 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
         );
         setDraft(
           input.userMessage.parts
-            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+            .flatMap((part) =>
+              part.type === 'text' ? [restoreQuoteMentions(part.text, part.quotes)] : [],
+            )
             .join('\n'),
         );
         setAttachments(attachments);
@@ -120,7 +123,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   function takeBack() {
     if (!preview || composer.isSubmitting || pending[preview.turnId]) return;
     if (locks.current.has(JSON.stringify([sessionId, preview.turnId]))) return;
-    if (composer.draft.length > 0 || composer.attachments.length > 0 || quote.quotes?.length) {
+    if (composer.draft.length > 0 || composer.attachments.length > 0) {
       setConflict(true);
     } else {
       void withdraw(preview, true);
@@ -208,7 +211,16 @@ function QueuedInputRow({
     .flatMap((part) => (part.type === 'file' ? [part.filename ?? t('chat.queue.message')] : []))
     .join(' · ');
   const quote = input.userMessage.parts.flatMap((part) => {
-    const line = part.type === 'text' ? messageQuoteLine(part, t) : undefined;
+    const line =
+      part.type === 'text'
+        ? messageQuoteLine(
+            {
+              ...part,
+              quotes: part.quotes?.filter((quote) => !quote.reference),
+            },
+            t,
+          )
+        : undefined;
     return line ? [line] : [];
   })[0];
   // One quiet line under the request: what it carries besides its own words.
