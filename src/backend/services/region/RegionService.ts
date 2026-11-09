@@ -15,33 +15,29 @@ import { createHttpClient } from '@/backend/services/http';
 const logger = loggerService.withContext('RegionService');
 const CACHE_KEY = 'region.egress_country';
 const CACHE_TTL = 10 * 60 * 1_000;
-const DEFAULT_COUNTRY = 'CN';
 // Public project credential shared with Cherry Desktop's Lite integration.
 const IPINFO_TOKEN = '5aa4105b40adbc';
 const CountrySchema = z.string().regex(/^[A-Z]{2}$/);
 const IpRegionSchema = z.object({ country_code: CountrySchema });
 const ipinfo = createHttpClient({ baseUrl: 'https://api.ipinfo.io', timeoutMs: 5_000 });
 
-/** Shared egress-country detection with Desktop's success-cache and CN fallback policy. */
+/** Shared egress detection independent of data-collection consent. */
 @Injectable('RegionService')
 @DependsOn(['CacheService'])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('not-applicable')
 export class RegionService extends BaseService {
-  private inflight: Promise<string> | undefined;
+  private inflight: Promise<string | null> | undefined;
   private readonly controller = new AbortController();
 
   protected onInit(signal?: AbortSignal): void {
     const abort = () => this.controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     this.registerDisposable(() => signal?.removeEventListener('abort', abort));
-    if (signal?.aborted) {
-      abort();
-      return;
-    }
+    if (signal?.aborted) abort();
   }
 
-  getCountry(): Promise<string> {
+  getCountry(): Promise<string | null> {
     this.controller.signal.throwIfAborted();
     const cached = application.get('CacheService').get(CACHE_KEY);
     if (cached) return Promise.resolve(cached);
@@ -52,7 +48,7 @@ export class RegionService extends BaseService {
     return this.inflight;
   }
 
-  private async detectCountry(): Promise<string> {
+  private async detectCountry(): Promise<string | null> {
     const cache = application.get('CacheService');
     const { signal } = this.controller;
     try {
@@ -69,8 +65,8 @@ export class RegionService extends BaseService {
       return country;
     } catch (error) {
       signal.throwIfAborted();
-      logger.warn('IP region unavailable; using the CN default', { error });
-      return DEFAULT_COUNTRY;
+      logger.warn('IP region unavailable; keeping the country unknown', { error });
+      return null;
     }
   }
 

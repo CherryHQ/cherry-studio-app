@@ -84,6 +84,21 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+test('a native domestic-channel mismatch cannot fail application construction', async () => {
+  jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
+  mockNative.getDomesticStore.mockImplementationOnce(() => {
+    throw new Error('Channel mismatch');
+  });
+  const updates = create();
+  await expect(updates.check()).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'nativeUnavailable',
+  });
+  expect(mockCheckApk).not.toHaveBeenCalled();
+  expect(mockCheckNativeDomestic).not.toHaveBeenCalled();
+  await updates.dispose();
+});
+
 test('domestic distribution uses GitCode when no client query exists and only updates through the store', async () => {
   jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
   const updates = create();

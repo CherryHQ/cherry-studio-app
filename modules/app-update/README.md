@@ -3,7 +3,8 @@
 Android-only Expo module used by `backend/services/appUpdate`:
 
 - `getDomesticStore` resolves one store from the installation/update source, then device identity.
-  The application update module reads it once when created.
+  It returns null outside the compiled domestic distribution. The application reads it once; a
+  native resolution failure disables domestic update checks without failing startup.
 - `checkDomesticStoreUpdate(requestId, store)` queries HONOR/Xiaomi SDKs or vivo's local provider
   without opening vendor UI. `cancelDomesticStoreUpdate` releases the pending request.
 - `openDomesticStore(store)` opens that store's full-release listing after checking availability.
@@ -22,3 +23,14 @@ New or changed native APIs require a new installation package. See
 [domestic update guide](../../docs/guides/domestic-store-updates.md) for query lifecycle and SDK
 constraints. No vendor credentials live in this module. Store/installer navigation does not
 establish installation success.
+
+Only the Android `production-domestic-stores` profile sets `DOMESTIC_STORES_ENABLED=true` in
+`eas.json`. App config maps it to `cherry.appUpdate.domesticStoresEnabled` during native generation.
+The explicit profile env is shared by build submission, native generation and OTA fingerprinting;
+`EAS_BUILD_PROFILE` is a worker-only variable and must not select this flag.
+That flag selects the vendor implementation, its manifest overlay and both AARs;
+other builds compile the disabled factory without vendor dependencies, permissions or store queries.
+The same flag selects the module's consumer ProGuard rules for HONOR's three guarded optional
+HiAnalytics references; ordinary APK and Play builds do not load those suppressions.
+Regenerate native projects when switching profiles. Native compilation and R8/device acceptance
+remain separate required release checks.
