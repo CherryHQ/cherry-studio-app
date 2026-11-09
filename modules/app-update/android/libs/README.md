@@ -14,3 +14,9 @@ archive, review the official API and privacy changes, update this table, and obt
 for the new native build and device verification. `scripts/withAppUpdates.js` registers this
 folder as a Gradle repository only for `production-domestic-stores`; the Expo module selects
 the named AAR dependencies and vendor source/manifest only for that distribution.
+
+The HONOR archive's HiAnalytics helper catches a missing analytics SDK and disables reporting.
+Cherry does not bundle that optional SDK. When domestic SDKs are enabled, the module loads
+`proguard-rules.pro` as consumer rules to suppress missing-class diagnostics for only its three
+guarded HiAnalytics references. These rules complement SDK isolation; domestic-store release
+builds still include HONOR and need the rules during R8 processing.

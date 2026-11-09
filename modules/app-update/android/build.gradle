@@ -13,6 +13,9 @@ android {
     versionCode 1
     versionName '1.0.0'
     buildConfigField 'boolean', 'DOMESTIC_STORES_ENABLED', domesticStoresEnabled.toString()
+    if (domesticStoresEnabled) {
+      consumerProguardFiles 'proguard-rules.pro'
+    }
   }
   sourceSets {
     main.java.srcDir(domesticStoresEnabled ? 'src/domestic/java' : 'src/standard/java')

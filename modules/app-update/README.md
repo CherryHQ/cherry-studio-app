@@ -27,5 +27,7 @@ establish installation success.
 Only `production-domestic-stores` enables `cherry.appUpdate.domesticStoresEnabled` during native
 generation. That flag selects the vendor implementation, its manifest overlay and both AARs;
 other builds compile the disabled factory without vendor dependencies, permissions or store queries.
+The same flag selects the module's consumer ProGuard rules for HONOR's three guarded optional
+HiAnalytics references; ordinary APK and Play builds do not load those suppressions.
 Regenerate native projects when switching profiles. Native compilation and R8/device acceptance
 remain separate required release checks.
