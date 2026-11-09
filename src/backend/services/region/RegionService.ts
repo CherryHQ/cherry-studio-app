@@ -69,7 +69,7 @@ export class RegionService extends BaseService {
       return country;
     } catch (error) {
       signal.throwIfAborted();
-      logger.warn('IP region unavailable; using the CN default', error);
+      logger.warn('IP region unavailable; using the CN default', { error });
       return DEFAULT_COUNTRY;
     }
   }
