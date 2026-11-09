@@ -100,11 +100,13 @@ ${
 .image-print summary{cursor:default}
 .image-print summary::after{display:none}
 ${
-  imageFrame.excerptLabel
+  imageFrame.layout === 'single'
     ? `
-.image-print .document-content{padding:24px;gap:24px}
+.image-print .document-content{padding:24px 24px 0;gap:24px}
 .image-print .export-image img{max-height:320px;object-fit:contain}
-.share-excerpt{margin:0;padding:0 24px 20px;color:${colors.muted};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+.share-card-body.is-clipped{-webkit-mask-image:linear-gradient(to bottom,${colors.background} calc(100% - 56px),transparent);mask-image:linear-gradient(to bottom,${colors.background} calc(100% - 56px),transparent)}
+.share-excerpt{margin:0;padding:8px 24px 0;color:${colors.muted};font-size:${lg.fontSize}px;line-height:${base.lineHeight}px;letter-spacing:2px}
+.image-print.is-unbranded{padding-bottom:24px}
 `
     : ''
 }
@@ -124,13 +126,13 @@ img.print-logo{width:${size(footer.logoSize)}px;height:${size(footer.logoSize)}p
 img.print-qr{width:${size(footer.qrCodeSize)}px;height:${size(footer.qrCodeSize)}px;image-rendering:pixelated}
 .print-secondary{font-size:${size(footer.secondarySize)}px;line-height:${size(footer.secondaryLineHeight)}px;opacity:${footer.secondaryOpacity}}
 ${
-  imageFrame?.excerptLabel
+  imageFrame?.layout === 'single'
     ? `
-.image-print .print-signature{border-top:1px solid ${colors.subtleBorder};padding:12px 24px;gap:12px}
+.image-print .print-signature{margin:24px 24px 0;border-top:1px solid ${colors.subtleBorder};padding:20px 0 24px;gap:16px;background:transparent;color:${colors.foreground}}
 .image-print .print-identity{gap:8px}
-.image-print .print-brand{font-size:15px;line-height:22px;letter-spacing:-.02em}
-.image-print .print-secondary{font-size:11px;line-height:16px;opacity:.56}
-.image-print img.print-logo{width:26px;height:26px}
+.image-print .print-brand{font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+.image-print .print-secondary{font-size:13px;line-height:18px;opacity:1;color:${colors.muted}}
+.image-print img.print-logo{width:28px;height:28px;border-radius:8px}
 .image-print img.print-qr{width:56px;height:56px}
 `
     : ''

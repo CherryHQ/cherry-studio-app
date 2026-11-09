@@ -1,4 +1,8 @@
-import { DocumentExportError, type ExportDocument } from '@/shared/contracts/documentExport';
+import {
+  DocumentExportError,
+  type ExportDocument,
+  type ExportPresentation,
+} from '@/shared/contracts/documentExport';
 
 import { DEFAULT_CONTENT_LABELS } from '../contentPresentation';
 import { normalizeDocument } from '../normalizeDocument';
@@ -31,7 +35,7 @@ const presentation = {
   },
 };
 
-test('message image cards excerpt before reading omitted assets while complete formats retain them', async () => {
+test('bounded message cards keep one quiet marker and skip omitted asset reads', async () => {
   const source = Array.from(
     { length: 100 },
     (_, index) => `Paragraph ${index}: ${'一段完整的正文。'.repeat(15)}`,
@@ -60,7 +64,8 @@ test('message image cards excerpt before reading omitted assets while complete f
     imageFrame: {
       background: '#ffffff',
       label: 'Message',
-      excerptLabel: 'Excerpt · Full content in HTML or Markdown',
+      layout: 'single' as const,
+      excerptLabel: 'Additional content omitted',
     },
   };
   const readImage = jest.fn(async () => new Uint8Array());
@@ -76,7 +81,7 @@ test('message image cards excerpt before reading omitted assets while complete f
   expect(preview).toBe(html);
   expect(html).toContain('Paragraph 0:');
   expect(html).not.toContain('Paragraph 99:');
-  expect(html).toContain('<p class="share-excerpt">Excerpt');
+  expect(html).toContain('<p class="share-excerpt" aria-label="Additional content omitted">…</p>');
   expect(renderMarkdown(document)).toContain('Paragraph 99:');
   const full = await renderHtml(
     document,
@@ -107,7 +112,12 @@ test('a short message card stays complete and does not claim it is an excerpt', 
     document,
     {
       ...presentation,
-      imageFrame: { background: '#ffffff', label: 'Message', excerptLabel: 'Excerpt' },
+      imageFrame: {
+        background: '#ffffff',
+        label: 'Message',
+        layout: 'single',
+        excerptLabel: 'Additional content omitted',
+      },
     },
     new Map(),
     jest.fn(),
@@ -115,7 +125,9 @@ test('a short message card stays complete and does not claim it is an excerpt', 
   );
   expect(html).toContain('<strong>complete</strong>');
   expect(html).toContain('<li>Second</li>');
-  expect(html).toContain('<p class="share-excerpt" hidden>');
+  expect(html).toContain(
+    '<p class="share-excerpt" aria-label="Additional content omitted" hidden>…</p>',
+  );
 });
 
 test('plain Markdown remains usable without chat, while the session owns its copied input', () => {
@@ -256,7 +268,12 @@ test('image and HTML exports include one brand and download footer after the con
     qrCodeDataUrl: 'data:image/png;base64,AQ==',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
-  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+  const frames: ExportPresentation['imageFrame'][] = [
+    undefined,
+    { background: '#eeeeee', label: 'Conversation' },
+    { background: '#eeeeee', label: 'Conversation', layout: 'single' },
+  ];
+  for (const imageFrame of frames) {
     const { html } = await renderHtml(
       document,
       { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
@@ -274,6 +291,12 @@ test('image and HTML exports include one brand and download footer after the con
     expect(footer).not.toContain('<brand>');
     expect(footer).not.toContain('AI-generated');
     expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
+    if (imageFrame?.layout === 'single') {
+      const endOfBody = html.indexOf('</article></div><p class="share-excerpt"');
+      expect(endOfBody).toBeGreaterThan(html.indexOf('class="share-card-body"'));
+      expect(endOfBody).toBeLessThan(html.indexOf('<footer'));
+      expect(html.match(/class="share-excerpt"/g)).toHaveLength(1);
+    }
   }
 });
 

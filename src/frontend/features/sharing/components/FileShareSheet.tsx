@@ -31,7 +31,7 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
   const { t } = useTranslation();
   const { toast } = useToast();
   const [format, setFormat] = useState<ShareFormat>('original');
-  const [watermark, setWatermark] = useState(request.watermark);
+  const watermark = request.watermark;
   const [index, setIndex] = useState(0);
   const canConvert =
     request.allowConversion &&
@@ -214,12 +214,6 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
               setFormat(next);
               setIndex(0);
             }}
-            watermark={watermark !== 'none'}
-            onWatermarkChange={
-              format !== 'original'
-                ? () => setWatermark((value) => (value === 'none' ? 'cherry' : 'none'))
-                : undefined
-            }
           />
         ) : undefined
       }

@@ -9,21 +9,27 @@ Sharing entry points accept `FileExportOptions`: `{ watermark?: 'cherry' | 'none
 Omitted styles follow the global Share watermark setting (`file.export.watermark_enabled`), which
 defaults to enabled and lives under Settings > General. `useExportWatermarkStyle` resolves this
 preference; explicit `cherry` or `none` options override it for that request.
-`appShell/sharing` freezes the resolved style for sharing and offers a request-local watermark menu
-for converted formats. Original bitmap sharing also uses that style; other original files retain
-their bytes. HTML conversion uses the selected style for shared PNG and PPTX. PPTX applies the
+`appShell/sharing` freezes the resolved style for sharing. Users choose watermark only in global
+settings, with no watermark controls in the sharing panels. Original bitmap sharing also uses that
+style; other original files retain their bytes. HTML conversion uses the selected style for shared
+PNG and PPTX. PPTX applies the
 footer only to the final captured slide, without adding a slide.
 
 `useExportWatermark` resolves the selected style into an `ExportWatermark` once per operation.
-The `cherry` variant carries the original artwork, constant white/black colors, Cherry brand color,
-localized download copy and the download QR code; `none` carries no rendering data.
-`shared/utils/exportSignature.ts` owns validation and footer geometry: one white row under a Cherry
+The `cherry` variant carries official app artwork, Cherry brand color, localized download copy
+and the download QR code; `none` carries no rendering data. Its default `white` surface uses
+constant white/black colors and the light icon. Message images request the `card` surface, which
+uses content colors, the matching light/dark icon and short scan copy. The document renderer owns
+the inset separator, whitespace and complete unclipped footer for that layout.
+`shared/utils/exportSignature.ts` owns validation and the default footer geometry: one white row under a Cherry
 red rule, with the logo, brand and scan copy on the left and a 48-point QR code on the right. At 360
 points wide it is 66 points tall; wrapped copy can increase the height. New styles extend the closed
 style/variant contract and its renderers, rather than adding booleans to feature pages. Markdown
 renders the brand and a download link without image bytes.
 
-`exportBrand.ts` owns `downloadUrl` and its matching embedded PNG `qrCodeDataUrl`, pointing to
+`exportBrand.ts` embeds proportional 96px derivatives of `assets/icon-light.png` and
+`assets/icon-dark.png`, preserving the official artwork for offline delivery. It also owns
+`downloadUrl` and its matching embedded PNG `qrCodeDataUrl`, pointing to
 `https://www.cherryai.com.cn/download?platform=mobile`. The recipient, not the sender, scans the
 code, so the sender's install channel cannot choose the store; the website owns per-device routing.
 The QR asset includes a four-module white quiet zone, is embedded for offline export and is sampled

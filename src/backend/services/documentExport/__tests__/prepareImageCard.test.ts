@@ -33,7 +33,13 @@ test('an oversized code fence stays code, has a safe closing fence and leaves th
   expect(tokens).toHaveLength(1);
   expect(tokens[0].type).toBe('fence');
   expect(tokens[0].content).toContain('const text = "```";');
-  expect(tokens[0].content).toContain('…');
+  expect(tokens[0].content).not.toContain('…');
+  expect(
+    tokens[0].content
+      .trimEnd()
+      .split('\n')
+      .every((line) => line === 'const text = "```";'),
+  ).toBe(true);
   expect(block.source).toMatch(/\n`{4,}$/);
   expect(input.sections[0].blocks[0]).toEqual({ kind: 'markdown', source });
 });
@@ -53,8 +59,8 @@ test('list excerpts retain complete items and never include a partially cut fina
   expect(retained).toEqual(items.slice(0, retained.length));
 });
 
-test('a conversation shares one larger budget across messages instead of truncating each message', () => {
-  const short = document('简短的问题');
+test('several answers share one larger budget instead of truncating each answer separately', () => {
+  const short = document('简短的第一条回答');
   const answer = document('一段回答。'.repeat(500)).sections[0];
   const result = prepareImageCard(
     { sections: [short.sections[0], { ...answer, id: 'reply' }] },
@@ -75,4 +81,68 @@ test('references defined after an omitted tail still work in the retained Markdo
   expect(parser.render(first.source)).toContain(
     '<a href="https://example.com" title="Title">Visible link</a>',
   );
+});
+
+test('a question and one answer keep the single-answer budget', () => {
+  const answer = document('A short answer.');
+  const question = {
+    ...document('A question.').sections[0],
+    id: 'question',
+    presentation: 'bubble' as const,
+  };
+  const result = prepareImageCard({ sections: [question, ...answer.sections] }, presentation);
+  expect(result.maxHeight).toBe(prepareImageCard(answer, presentation).maxHeight);
+  expect(result.maxHeight).toBe(1950);
+});
+
+test('a long plain paragraph ends at a sentence without baking an omission marker into the source', () => {
+  const text = '这是一句需要完整保留的正文。'.repeat(300);
+  const input: ExportDocument = {
+    sections: [{ id: 'answer', presentation: 'message', blocks: [{ kind: 'text', text }] }],
+  };
+  const result = prepareImageCard(input, presentation);
+  const block = result.document.sections[0].blocks[0];
+  if (block.kind !== 'text') throw new Error('Expected plain text');
+  expect(result.isExcerpt).toBe(true);
+  expect(text.startsWith(block.text)).toBe(true);
+  expect(block.text).toMatch(/。$/);
+  expect(block.text).not.toContain('…');
+  expect(input.sections[0].blocks[0]).toEqual({ kind: 'text', text });
+});
+
+test('table excerpts keep the header separator and complete rows', () => {
+  const rows = Array.from(
+    { length: 100 },
+    (_, index) => `| Row ${index} | [Read](https://example.com/${index}) |`,
+  );
+  const source = ['| Item | Link |', '| --- | --- |', ...rows].join('\n');
+  const result = prepareImageCard(document(source), presentation);
+  const block = result.document.sections[0].blocks[0];
+  if (block.kind !== 'markdown') throw new Error('Expected table Markdown');
+  expect(result.isExcerpt).toBe(true);
+  expect(parser.render(block.source)).toContain('<table>');
+  const retained = block.source.split('\n').slice(2);
+  expect(retained.length).toBeGreaterThan(0);
+  expect(retained).toEqual(rows.slice(0, retained.length));
+});
+
+test('a code block is omitted when the remaining budget cannot show any code', () => {
+  const text = 'Line\n'.repeat(51);
+  const result = prepareImageCard(
+    {
+      sections: [
+        {
+          id: 'answer',
+          presentation: 'message',
+          blocks: [
+            { kind: 'text', text },
+            { kind: 'markdown', source: '```js\n' + 'const value = 1;\n'.repeat(100) + '```' },
+          ],
+        },
+      ],
+    },
+    presentation,
+  );
+  expect(result.isExcerpt).toBe(true);
+  expect(result.document.sections[0].blocks).toEqual([{ kind: 'text', text }]);
 });

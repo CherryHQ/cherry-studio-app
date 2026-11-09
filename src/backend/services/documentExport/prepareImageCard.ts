@@ -13,7 +13,10 @@ export function prepareImageCard(
   document: ExportDocument,
   presentation: Pick<ExportPresentation, 'width' | 'typography'>,
 ) {
-  const budget = document.sections.length > 1 ? 3400 : 1500;
+  const answerCount = document.sections.filter(
+    (section) => section.presentation === 'message',
+  ).length;
+  const budget = answerCount > 1 ? 3600 : 1500;
   const parser = new MarkdownIt({ html: false, breaks: true, maxNesting: 20 });
   const { base, sm, lg, xl } = presentation.typography;
   const width = presentation.width - 48;
@@ -56,19 +59,33 @@ export function prepareImageCard(
     return Math.ceil(height * 1.1);
   };
   const takeText = (text: string, fontSize = base.fontSize, lineHeight = base.lineHeight + 2) => {
-    // Binary search only the final visible paragraph/code block, never the whole document.
+    // Find the final visible prefix; the card owns the single omission marker outside the body.
     let low = 0;
     let high = text.length;
     while (low < high) {
       const middle = Math.ceil((low + high) / 2);
-      if (textHeight(text.slice(0, middle) + '…', fontSize, lineHeight) + 12 <= remaining)
-        low = middle;
+      if (textHeight(text.slice(0, middle), fontSize, lineHeight) + 12 <= remaining) low = middle;
       else high = middle - 1;
     }
     const end = /[\uD800-\uDBFF]$/.test(text.slice(0, low)) ? low - 1 : low;
     remaining = 0;
     isExcerpt = true;
-    return text.slice(0, end).trimEnd() + '…';
+    return text.slice(0, end).trimEnd();
+  };
+  const takeProse = (text: string) => {
+    const prefix = takeText(text);
+    const boundary = [...prefix.matchAll(/[。！？；.!?;](?:\s|$)|[。！？；]/g)].at(-1);
+    if (boundary?.index !== undefined && boundary.index >= prefix.length / 2)
+      return prefix.slice(0, boundary.index + boundary[0].trimEnd().length);
+    const line = prefix.lastIndexOf('\n');
+    if (line >= prefix.length / 2) return prefix.slice(0, line).trimEnd();
+    const word = prefix.lastIndexOf(' ');
+    return word >= prefix.length / 2 ? prefix.slice(0, word).trimEnd() : prefix;
+  };
+  const takeCode = (text: string) => {
+    const prefix = takeText(text, sm.fontSize, sm.lineHeight);
+    const line = prefix.lastIndexOf('\n');
+    return line >= 0 ? prefix.slice(0, line).trimEnd() : prefix;
   };
   const takeMarkdown = (source: string): ExportBlock[] => {
     const lines = source.split('\n');
@@ -89,11 +106,12 @@ export function prepareImageCard(
       if (remaining < base.lineHeight * 2) break;
       if (token.type === 'fence' || token.type === 'code_block') {
         remaining = Math.max(0, remaining - 64);
-        const text = takeText(token.content, sm.fontSize, sm.lineHeight);
-        blocks.push({
-          kind: 'markdown',
-          source: createCodeBlockMarkdown(text, token.info.trim().split(/\s+/)[0]),
-        });
+        const text = takeCode(token.content);
+        if (text)
+          blocks.push({
+            kind: 'markdown',
+            source: createCodeBlockMarkdown(text, token.info.trim().split(/\s+/)[0]),
+          });
       } else if (
         token.type === 'bullet_list_open' ||
         token.type === 'ordered_list_open' ||
@@ -107,15 +125,17 @@ export function prepareImageCard(
             !((child.type === 'list_item_open' && child.level === 1) || child.type === 'tr_open')
           )
             continue;
-          const candidate = chunk.split('\n').slice(0, child.map[1]).join('\n');
+          const candidateEnd =
+            token.type === 'table_open' ? Math.max(2, child.map[1]) : child.map[1];
+          const candidate = chunk.split('\n').slice(0, candidateEnd).join('\n');
           if (markdownHeight(candidate) > remaining) break;
-          end = child.map[1];
+          end = candidateEnd;
         }
         if (end) retainedEnd = token.map[0] + end;
-        else blocks.push({ kind: 'text', text: takeText(stripMarkdownFormatting(chunk)) });
+        else blocks.push({ kind: 'text', text: takeProse(stripMarkdownFormatting(chunk)) });
       } else {
         const text = stripMarkdownFormatting(chunk);
-        if (text) blocks.push({ kind: 'text', text: takeText(text) });
+        if (text) blocks.push({ kind: 'text', text: takeProse(text) });
       }
       break;
     }
@@ -146,7 +166,7 @@ export function prepareImageCard(
           blocks.push(block);
           remaining -= cost;
         } else if (remaining >= base.lineHeight * 2)
-          blocks.push({ kind: 'text', text: takeText(block.text) });
+          blocks.push({ kind: 'text', text: takeProse(block.text) });
         else isExcerpt = true;
       } else if (block.kind === 'details') {
         remaining -= 56;
@@ -172,5 +192,5 @@ export function prepareImageCard(
     remaining -= overhead;
     sections.push({ ...section, blocks: takeBlocks(section.blocks) });
   }
-  return { document: { ...document, sections }, isExcerpt, maxHeight: Math.ceil(budget * 1.1) };
+  return { document: { ...document, sections }, isExcerpt, maxHeight: Math.ceil(budget * 1.3) };
 }

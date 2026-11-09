@@ -93,7 +93,7 @@ export function useDocumentExportPreview(
               format,
               presentation: outputPresentation,
               capture,
-              layout: outputPresentation.imageFrame?.excerptLabel ? 'single' : 'pages',
+              layout: outputPresentation.imageFrame?.layout ?? 'pages',
             }
           : format === 'html'
             ? { format, presentation: outputPresentation }

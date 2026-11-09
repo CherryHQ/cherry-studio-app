@@ -143,9 +143,9 @@ test('Markdown preview renders the exact prepared text with embedded images', as
 test('message card delivery produces one image and uses the same presentation as its prepared preview', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
-  const card = {
+  const card: ExportPresentation = {
     ...presentation,
-    imageFrame: { background: '#ffffff', label: 'Message', excerptLabel: 'Excerpt' },
+    imageFrame: { background: '#ffffff', label: 'Message', layout: 'single' },
   };
   await act(async () => {
     renderer = create(

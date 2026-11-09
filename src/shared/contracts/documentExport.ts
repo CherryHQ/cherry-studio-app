@@ -67,7 +67,9 @@ export type ExportImageLayout = 'pages' | 'single';
 export type ExportImageFrame = {
   background: string;
   label: string;
-  /** Enables a bounded message card; complete HTML/Markdown never use this treatment. */
+  /** Single layout uses a bounded message card; omitted layout uses paginated images. */
+  layout?: ExportImageLayout;
+  /** Accessible description for the visual omission marker on bounded message cards. */
   excerptLabel?: string;
 };
 export type ExportPresentation = {

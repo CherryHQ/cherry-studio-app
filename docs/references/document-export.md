@@ -46,15 +46,22 @@ preview does not require PNG generation. The foreground WebView keeps its identi
 background card slots do not mount additional browsers. The same semantic page plan positions the
 preview and capture slices.
 
-Message image sharing produces one card, 360 logical pixels wide. Before resource reads or HTML
-typesetting, the renderer selects a source prefix using a 1500-logical-pixel content budget for one
-message or a shared 3400 budget for multiple messages. Whole paragraphs, list items and table rows
-are preferred; a final oversized paragraph or code block is explicitly excerpted, with safe code
-fences. A localized notice identifies excerpts and points to complete HTML/Markdown. An additional
-110% layout ceiling trims the semantic tail after fonts/images settle if needed; preview and capture
-use the same script. Omitted pictures are not prepared. The preview scrolls at readable card width.
-When sharing watermark is enabled, the quiet message-card footer uses a subtle separator, Cherry
-identity and download QR. Local saved output omits that watermark footer.
+Message image sharing produces one bounded card, 360 logical pixels wide.
+`imageFrame.layout: 'single'` selects its presentation and capture. Before asset reads, the renderer
+selects an ordered prefix using a 1500-logical-pixel body budget for one answer or 3600 for several
+answers. Questions alone do not expand that budget. Paragraphs, complete list items/table rows and
+code-line boundaries are preferred, with sentence/word fallback for an oversized paragraph.
+A single small left-aligned ellipsis below the body marks an excerpt; its localized accessible
+label is separate from the visible glyph. Complete HTML and Markdown still use the full snapshot.
+After fonts and images settle, actual overflow beyond a 130% body-height ceiling gets a 56px fade.
+The measurement script toggles clipping and marker visibility without deleting body nodes. Marker
+and footer remain outside the clipped region. The preview scrolls at readable card width, and
+preview/capture share the same content and overflow treatment.
+Users choose watermark only in global settings. The sharing panel uses the resolved request style
+and contains no watermark control.
+When sharing watermark is enabled, the message-card footer follows the content surface and text
+colors, with an inset separator, official theme-appropriate app icon, short scan copy and download
+QR. Whitespace separates it from the body. Local saved output omits that watermark footer.
 
 Cards through 2000 logical pixels use 3x output density; taller cards use 2x. The capture owner keeps
 native snapshots within the available viewport, then joins tiles into one PNG. A single tile retains
@@ -63,8 +70,8 @@ pagination, with at most 480 content pixels plus 16 top spacing per page, 3x den
 Cuts avoid painted glyphs, images and the complete signature; indivisible objects fail explicitly.
 Complete HTML keeps scrollable code, and Markdown retains authored fences and tables.
 
-HTML uses a responsive column capped at 720 points. Export typography is frozen at opening; theme
-and watermark changes refresh previews until an active delivery holds its presentation. Generated
+HTML uses a responsive column capped at 720 points. Export typography and watermark style are
+frozen at opening; theme changes refresh previews until an active delivery holds its presentation. Generated
 cards use the semantic card surface. The shared Cherry footer remains together at the end of the
 document, not on every page. PNGs do not contain page-number footers.
 

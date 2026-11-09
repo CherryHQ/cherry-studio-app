@@ -73,9 +73,10 @@ function createHtmlRenderer(
       Object.entries(inputPresentation.typography).map(([key, value]) => [key, { ...value }]),
     ) as ExportPresentation['typography'],
   };
-  const card = presentation.imageFrame?.excerptLabel
-    ? prepareImageCard(inputDocument, presentation)
-    : undefined;
+  const card =
+    presentation.imageFrame?.layout === 'single'
+      ? prepareImageCard(inputDocument, presentation)
+      : undefined;
   const document = card?.document ?? inputDocument;
   const labels = document.labels ?? DEFAULT_CONTENT_LABELS;
   const isImage = Boolean(presentation.imageFrame);
@@ -259,12 +260,12 @@ function createHtmlRenderer(
       document.title && !isConversation
         ? `<h1 class="document-title">${escapeHtml(document.title)}</h1>`
         : '';
-    const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}${card ? ` data-share-card-max-height="${card.maxHeight}" style="max-height:${card.maxHeight}px;overflow:hidden"` : ''}>${title}${body}</article>`;
-    const excerpt = card
-      ? `<p class="share-excerpt"${card.isExcerpt ? '' : ' hidden'}>${escapeHtml(presentation.imageFrame!.excerptLabel!)}</p>`
-      : '';
+    const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}>${title}${body}</article>`;
+    const framedContent = card
+      ? `<div class="share-card-body" data-share-card-max-height="${card.maxHeight}" style="max-height:${card.maxHeight}px;overflow:hidden">${content}</div><p class="share-excerpt" aria-label="${escapeHtml(presentation.imageFrame!.excerptLabel ?? '…')}"${card.isExcerpt ? '' : ' hidden'}>…</p>`
+      : content;
     const footer = signature ? renderSignature(signature) : '';
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}">${content}${excerpt}${footer}</main></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}${card && !signature ? ' is-unbranded' : ''}">${framedContent}${footer}</main></body></html>`;
     return { html, issues };
   }
 }
@@ -303,6 +304,7 @@ function validatePresentation(value: ExportPresentation) {
     (frame &&
       (typeof frame.label !== 'string' ||
         frame.label.length > 256 ||
+        (frame.layout !== undefined && frame.layout !== 'single' && frame.layout !== 'pages') ||
         (frame.excerptLabel !== undefined &&
           (typeof frame.excerptLabel !== 'string' ||
             !frame.excerptLabel.trim() ||

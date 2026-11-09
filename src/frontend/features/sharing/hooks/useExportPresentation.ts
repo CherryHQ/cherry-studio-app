@@ -17,13 +17,16 @@ export function useExportPresentation(
 ) {
   const { t } = useTranslation();
   const label = t('documentExport.document');
-  const excerptLabel = isMessageCard ? t('sharing.imageExcerpt') : undefined;
+  const excerptLabel = t('sharing.imageExcerpt');
   const [fontStep] = usePreference('ui.font_size_step');
   const [typography] = useState(() => {
     const { base, sm, lg, xl } = resolveTypographyScale(fontStep);
     return { base, sm, lg, xl };
   });
-  const createWatermark = useExportWatermark(watermark);
+  const createWatermark = useExportWatermark(
+    watermark,
+    isImage && isMessageCard ? 'card' : 'white',
+  );
   const [
     background,
     foreground,
@@ -56,7 +59,9 @@ export function useExportPresentation(
       width: isImage ? IMAGE_LAYOUT_WIDTH : 720,
       typography,
       watermark: createWatermark(),
-      imageFrame: isImage ? { background, label, excerptLabel } : undefined,
+      imageFrame: isImage
+        ? { background, label, layout: isMessageCard ? 'single' : 'pages', excerptLabel }
+        : undefined,
       colors: {
         background,
         foreground,
@@ -83,6 +88,7 @@ export function useExportPresentation(
       inlineCode,
       inlineCodeForeground,
       isImage,
+      isMessageCard,
       label,
       link,
       muted,

@@ -10,15 +10,11 @@ export function ShareFormatMenu({
   format,
   disabled,
   onSelect,
-  watermark,
-  onWatermarkChange,
 }: {
   formats: readonly ShareFormat[];
   format: ShareFormat;
   disabled: boolean;
   onSelect(format: ShareFormat): void;
-  watermark?: boolean;
-  onWatermarkChange?: () => void;
 }) {
   const { t } = useTranslation();
   const label = (value: ShareFormat) =>
@@ -34,14 +30,6 @@ export function ShareFormatMenu({
     disabled,
     onPress: () => onSelect(value),
   }));
-  if (onWatermarkChange)
-    items.push({
-      id: 'watermark',
-      label: t('sharing.watermark'),
-      checked: watermark,
-      disabled,
-      onPress: onWatermarkChange,
-    });
   return (
     <ActionMenu items={items}>
       <Button

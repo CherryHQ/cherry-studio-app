@@ -25,35 +25,16 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
       }
     });
     var card=main.querySelector('[data-share-card-max-height]');
-    if(card&&card.scrollHeight>card.clientHeight+1){
-      var notice=main.querySelector('.share-excerpt');
-      if(notice)notice.hidden=false;
-      // Estimation is conservative; unusual fonts/formulas still end at a complete text boundary.
-      var limit=Number(card.getAttribute('data-share-card-max-height'));
-      function trimTail(element){
-        while(card.scrollHeight>limit+1&&element.lastChild){
-          var tail=element.lastChild;
-          if(tail.nodeType===Node.TEXT_NODE){
-            var text=tail.textContent,low=0,high=text.length;
-            while(low<high){
-              var middle=Math.ceil((low+high)/2);
-              tail.textContent=text.slice(0,middle)+'…';
-              if(card.scrollHeight<=limit+1)low=middle;else high=middle-1;
-            }
-            if(low&&/[\\uD800-\\uDBFF]/.test(text.charAt(low-1)))low--;
-            tail.textContent=low?text.slice(0,low).trimEnd()+'…':'';
-            if(!low)tail.remove();
-          }else if(tail.childNodes.length&&!tail.matches('svg,math,.resource-card,.message-heading,.references')){
-            trimTail(tail);
-            if(!tail.textContent.trim()&&!tail.querySelector('img,svg,math'))tail.remove();
-          }else tail.remove();
-        }
-      }
-      trimTail(card);
-    }
+    var notice=main.querySelector('.share-excerpt');
+    var isExcerpt=notice&&!notice.hidden;
     var previous=-1,stable=0,height=0;
     for(var frame=0;frame<120;frame++){
       await new Promise(requestAnimationFrame);
+      if(card){
+        var isClipped=card.scrollHeight>card.clientHeight+1;
+        card.classList.toggle('is-clipped',isClipped);
+        if(notice)notice.hidden=!(isExcerpt||isClipped);
+      }
       height=Math.ceil(main.getBoundingClientRect().height);
       stable=height===previous?stable+1:0;previous=height;
       if(stable>=3)break;

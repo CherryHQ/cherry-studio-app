@@ -28,12 +28,15 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
   const { t } = useTranslation();
   const { toast } = useToast();
   const [format, setFormat] = useState(request.initialFormat);
-  const [watermark, setWatermark] = useState(request.watermark);
   const [index, setIndex] = useState(0);
   const isMessageCard = request.session.document.sections.some((section) =>
     Boolean(section.presentation),
   );
-  const livePresentation = useExportPresentation(watermark, format === 'image', isMessageCard);
+  const livePresentation = useExportPresentation(
+    request.watermark,
+    format === 'image',
+    isMessageCard,
+  );
   const [deliveryPresentation, setDeliveryPresentation] = useState<ExportPresentation>();
   const presentation = deliveryPresentation ?? livePresentation;
   const { capture, surface, onCaptureLayout } = useDocumentExportHtmlCapture();
@@ -169,12 +172,6 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
             setFormat(value as ExportFormat);
             setIndex(0);
           }}
-          watermark={watermark !== 'none'}
-          onWatermarkChange={() => {
-            if (pending.current) return;
-            setWatermark((style) => (style === 'none' ? 'cherry' : 'none'));
-            setIndex(0);
-          }}
         />
       }
     >
@@ -229,7 +226,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
                     width={frame.width}
                     height={frame.height}
                     isImage={format === 'image'}
-                    layout={presentation.imageFrame?.excerptLabel ? 'single' : 'pages'}
+                    layout={presentation.imageFrame?.layout ?? 'pages'}
                     onPages={onPages}
                     onError={onPreviewError}
                   />
