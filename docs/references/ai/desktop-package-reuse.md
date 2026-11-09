@@ -1,9 +1,9 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.5` and
-`@cherrystudio/ai-sdk-provider@0.1.10` in place of local source packages; Expo and device acceptance
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.8` and
+`@cherrystudio/ai-sdk-provider@0.1.11` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.3.4` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.4.0` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -60,8 +60,9 @@ conversation consumer: that execution and context are owned by
 `src/backend/ai/agent/runtime/pi/`. New versions must still be reviewed against the consumed
 exports, patched AI SDK dependencies, Metro graph, and Mobile adapters.
 
-Version `2.4.5` adds an OpenRouter reranking-model factory. Its exports and dependency ranges
-remain unchanged.
+Version `2.4.8` includes the resolved model in non-streaming text and image plugin contexts,
+removes the unused provider-utils runtime dependency, and requires the GPT Image 2.6-capable
+OpenAI adapter. The existing OpenRouter reranking-model factory remains available.
 
 ### `@cherrystudio/ai-sdk-provider`
 
@@ -69,22 +70,23 @@ Mobile uses the published package for CherryIN and OpenAI-compatible provider be
 reranking, reasoning-model token conversion, and embedding. New versions require consumer and
 dependency review before the pinned version changes.
 
-Version `0.1.10` disables strict-tool declarations on CherryIN's Anthropic endpoint because its
-upstream rejects that field. Mobile's conversation tools remain on the Pi path.
+Version `0.1.11` requires the GPT Image 2.6-capable OpenAI adapter. CherryIN's Anthropic endpoint
+continues to omit the unsupported strict-tool field. Mobile's conversation tools remain on the Pi path.
 
 ### Dependency resolution
 
-The published `ai-core@2.4.5` and `ai-sdk-provider@0.1.10` require OpenAI SDK `3.0.109`; `ai-core`
-also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
-Both Cherry packages now require Google SDK `3.0.132`. Mobile pins it with its required
-`@ai-sdk/provider@3.0.18` and `@ai-sdk/provider-utils@4.0.58`, retaining the Google model-path and
-image-routing patch.
+The published `ai-core@2.4.8` and `ai-sdk-provider@0.1.11` require OpenAI SDK `3.0.137` or newer
+within AI SDK 6. Mobile pins `3.0.137` with Azure `3.0.148`, which uses that same OpenAI version,
+and carries the matching image-URL response patch across all four published JavaScript entries.
+The shared SDK dependencies are pinned to `@ai-sdk/provider@3.0.19` and
+`@ai-sdk/provider-utils@4.0.64`, as required by the OpenAI adapter. Google remains at `3.0.132`
+with the existing model-path and image-routing patch.
 Expo-specific dependency choices and Pi patches remain Mobile-owned. A later Desktop version bump
 by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.3.4` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.4.0` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -103,6 +105,14 @@ excludes `ultra` from selectable reasoning efforts and rejects
 
 The `0.3.4` update adds OpenRouter's optional reranker model-list URL. Mobile preserves this
 connection metadata but currently lists OpenRouter chat, embedding, and image models only.
+
+The `0.4.0` package includes GPT Image 2.6 scene complexity, animated GIF format, frame count,
+and frame duration, following the `0.3.5` model additions and `0.3.6` stable Hunyuan 4 metadata.
+Those new drawing controls are published on the upstream v4 stream with a Desktop `2.1.11`
+minimum. Mobile retains the v3 download lane and `2.1.4` semantic baseline: its image request
+adapters have not admitted the v4 controls. The new canonical keys have localized labels for
+type compatibility, but upgrading the package does not enable those controls or activate a newer
+saved snapshot. Adopting v4 remains separate work subject to the admission gates below.
 
 The `0.3.3` update includes LongCat-2.5 endpoint and reasoning declarations, Qwen 3.8 Flash Next
 effort inference, and corrected MiMo API model IDs. Model data still arrives through remote catalog
