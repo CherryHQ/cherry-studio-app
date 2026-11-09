@@ -73,6 +73,8 @@ export const DefaultUseCache: UseCacheSchema = {
  * observable as `undefined`; entries are not initialized from defaults.
  */
 export type BackendCacheSchema = {
+  // Successfully detected egress country; expires after ten minutes.
+  'region.egress_country': string;
   // Round-robin cursor for enabled provider API keys.
   'settings.provider.${providerId}.last_used_key_id': string;
 };
@@ -116,8 +118,6 @@ export const DefaultPersistCache: PersistCacheSchema = {
  * frontend persist cache.
  */
 export type BackendPersistCacheSchema = {
-  /** Last successful egress-IP country; null until a lookup succeeds. */
-  'region.last_country': string | null;
   // Local date (`YYYY-MM-DD`) of the last analytics activity ping, so cold starts
   // and foreground entries report at most once a day. Empty means never reported.
   'analytics.last_activity_date': string;
@@ -125,7 +125,6 @@ export type BackendPersistCacheSchema = {
 };
 
 export const DefaultBackendPersistCache: BackendPersistCacheSchema = {
-  'region.last_country': null,
   'analytics.last_activity_date': '',
   'internal.persist_probe': 0,
 };

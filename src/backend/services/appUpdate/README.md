@@ -34,7 +34,7 @@ The installed version/build comes from `expo-application`. OTA manifest versions
 Only positive version changes produce update actions; network and malformed-response errors never
 claim that the app is current.
 
-- **APK:** `apkRelease` uses the shared cold-start IP country to select GitCode's public
+- **APK:** `apkRelease` uses the shared IP country to select GitCode's public
   `/api/v5/repos/CherryHQ/cherry-studio-app/releases/latest?type=latest` endpoint in CN, or GitHub's
   `/repos/CherryHQ/cherry-studio-app/releases/latest` endpoint elsewhere. Both use a ten-second
   timeout, cancellation and a response cap. Both require a numeric stable tag and `prerelease: false`;
@@ -52,8 +52,8 @@ claim that the app is current.
   `nativeUnavailable` rather than up-to-date.
 - **App Store:** `appStoreRelease` queries Apple's public lookup by the installed bundle identifier,
   validates the returned identity, compares the numeric store version and constructs an official
-  `apps.apple.com` URL. The query uses the shared IP country, falling back to its last successful
-  country or US when no detection has succeeded; this is not
+  `apps.apple.com` URL. The query uses the shared IP country, with successful detections cached
+  for ten minutes and CN as the detection-failure fallback; this is not
   account-storefront detection, so an IP/account region mismatch can suppress a reminder. A
   missing regional listing is `noRelease`. This checks App Store publications, not new TestFlight
   builds. Store submission or TestFlight upload alone is never an availability signal.

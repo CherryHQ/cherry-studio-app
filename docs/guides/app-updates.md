@@ -53,9 +53,9 @@ Platform-specific channels in `eas.json` preserve existing build profile names a
 workflows. GitHub and GitCode distribute the same APK and use `production-apk`. Channels separate
 distribution configuration; matching runtime versions additionally enforce native compatibility.
 
-The shared package-update infrastructure uses cold-start IP country to select GitCode APK upgrades
-in CN or GitHub APK upgrades elsewhere, and uses that country for App Store lookup. Store update
-channels remain tied to the installed distribution.
+The shared package-update infrastructure uses the cached IP country to select GitCode APK upgrades
+in CN or GitHub APK upgrades elsewhere, and uses that country for App Store lookup. Failed country
+detection defaults to CN. Store update channels remain tied to the installed distribution.
 Its APK strategy compares the installed
 version from `expo-application`, rather than an OTA manifest's version, and packaged builds enable
 APK downloads only on the native channel `production-apk`, which an OTA cannot change. A development client

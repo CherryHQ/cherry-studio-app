@@ -10,10 +10,12 @@ jest.mock('@/backend/services/http', () => ({
 
 let cache: CacheService;
 let region: RegionService;
+let storage: ReturnType<typeof createInMemoryBackendCacheStorage>;
 
 beforeEach(async () => {
   mockRequest.mockReset();
-  cache = new CacheService(createInMemoryBackendCacheStorage());
+  storage = createInMemoryBackendCacheStorage();
+  cache = new CacheService(storage);
   await cache._doInit();
   await installTestHost({ CacheService: cache });
   region = new RegionService();
@@ -23,42 +25,71 @@ afterEach(async () => {
   await region._doStop();
   await uninstallTestHost();
   await cache._doStop();
+  jest.restoreAllMocks();
 });
 
-test('shares one cold-start lookup across consumers and stores only the country', async () => {
-  mockRequest.mockResolvedValue({ data: { country: 'CN', ip: '192.0.2.1' } });
+test('shares one Lite lookup across consumers and caches only the country in memory', async () => {
+  mockRequest.mockResolvedValue({ data: { country_code: 'CN', ip: '192.0.2.1' } });
   await expect(Promise.all([region.getCountry(), region.getCountry()])).resolves.toEqual([
     'CN',
     'CN',
   ]);
   await expect(region.getCountry()).resolves.toBe('CN');
   expect(mockRequest).toHaveBeenCalledTimes(1);
-  expect(cache.getPersist('region.last_country')).toBe('CN');
+  expect(cache.get('region.egress_country')).toBe('CN');
+  expect(storage.getAllKeys()).toEqual([]);
+  expect(mockRequest).toHaveBeenCalledWith(
+    expect.objectContaining({
+      method: 'GET',
+      path: '/lite/me',
+      query: { token: expect.any(String) },
+      maxResponseBytes: 4_096,
+    }),
+  );
 });
 
-test('each new cold start detects again instead of locking the previous country', async () => {
-  cache.setPersist('region.last_country', 'CN');
-  mockRequest.mockResolvedValue({ data: { country: 'US' } });
+test('refreshes the country after the ten-minute success cache expires', async () => {
+  let now = 0;
+  jest.spyOn(Date, 'now').mockImplementation(() => now);
+  mockRequest
+    .mockResolvedValueOnce({ data: { country_code: 'CN' } })
+    .mockResolvedValueOnce({ data: { country_code: 'US' } });
+  await expect(region.getCountry()).resolves.toBe('CN');
+  now = 10 * 60 * 1_000 - 1;
+  await expect(region.getCountry()).resolves.toBe('CN');
+  now += 2;
   await expect(region.getCountry()).resolves.toBe('US');
-  expect(cache.getPersist('region.last_country')).toBe('US');
+  expect(cache.get('region.egress_country')).toBe('US');
+  expect(mockRequest).toHaveBeenCalledTimes(2);
 });
 
-test.each(['CN', 'JP', null])(
-  'offline startup keeps country %s or the global default',
-  async (previous) => {
-    cache.setPersist('region.last_country', previous);
-    mockRequest.mockRejectedValue(new Error('offline'));
-    await expect(region.getCountry()).resolves.toBe(previous ?? 'US');
-    expect(cache.getPersist('region.last_country')).toBe(previous);
+test('failed detection defaults to CN and remains retryable', async () => {
+  mockRequest
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce({ data: { country_code: 'JP' } });
+  await expect(region.getCountry()).resolves.toBe('CN');
+  expect(cache.get('region.egress_country')).toBeUndefined();
+  await expect(region.getCountry()).resolves.toBe('JP');
+});
+
+test('an expired global country does not override the CN failure fallback', async () => {
+  let now = 0;
+  jest.spyOn(Date, 'now').mockImplementation(() => now);
+  cache.set('region.egress_country', 'US', 1);
+  now = 2;
+  mockRequest.mockRejectedValue(new Error('offline'));
+  await expect(region.getCountry()).resolves.toBe('CN');
+  expect(cache.get('region.egress_country')).toBeUndefined();
+});
+
+test.each([{ country_code: 'China' }, { country: 'US' }])(
+  'malformed Lite response %j uses CN without caching the fallback',
+  async (data) => {
+    mockRequest.mockResolvedValue({ data });
+    await expect(region.getCountry()).resolves.toBe('CN');
+    expect(cache.get('region.egress_country')).toBeUndefined();
   },
 );
-
-test('malformed location data cannot replace the last successful country', async () => {
-  cache.setPersist('region.last_country', 'CN');
-  mockRequest.mockResolvedValue({ data: { country: 'China' } });
-  await expect(region.getCountry()).resolves.toBe('CN');
-  expect(cache.getPersist('region.last_country')).toBe('CN');
-});
 
 test('disposal aborts a pending lookup and rejects its late country without caching it', async () => {
   let finish!: (value: unknown) => void;
@@ -71,8 +102,8 @@ test('disposal aborts a pending lookup and rejects its late country without cach
   const country = region.getCountry();
   const rejected = expect(country).rejects.toMatchObject({ name: 'AbortError' });
   const stopping = region._doStop();
-  finish({ data: { country: 'CN' } });
+  finish({ data: { country_code: 'CN' } });
   await Promise.all([rejected, stopping]);
   expect(mockRequest.mock.calls[0]![0].signal.aborted).toBe(true);
-  expect(cache.getPersist('region.last_country')).toBeNull();
+  expect(cache.get('region.egress_country')).toBeUndefined();
 });

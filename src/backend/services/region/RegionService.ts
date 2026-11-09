@@ -13,17 +13,22 @@ import {
 import { createHttpClient } from '@/backend/services/http';
 
 const logger = loggerService.withContext('RegionService');
+const CACHE_KEY = 'region.egress_country';
+const CACHE_TTL = 10 * 60 * 1_000;
+const DEFAULT_COUNTRY = 'CN';
+// Public project credential shared with Cherry Desktop's Lite integration.
+const IPINFO_TOKEN = '5aa4105b40adbc';
 const CountrySchema = z.string().regex(/^[A-Z]{2}$/);
-const IpRegionSchema = z.object({ country: CountrySchema });
-const ipinfo = createHttpClient({ baseUrl: 'https://ipinfo.io', timeoutMs: 5_000 });
+const IpRegionSchema = z.object({ country_code: CountrySchema });
+const ipinfo = createHttpClient({ baseUrl: 'https://api.ipinfo.io', timeoutMs: 5_000 });
 
-/** One egress-country lookup per app generation, shared by discovery and distribution. */
+/** Shared egress-country detection with Desktop's success-cache and CN fallback policy. */
 @Injectable('RegionService')
 @DependsOn(['CacheService'])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('not-applicable')
 export class RegionService extends BaseService {
-  private country: Promise<string> | undefined;
+  private inflight: Promise<string> | undefined;
   private readonly controller = new AbortController();
 
   protected onInit(signal?: AbortSignal): void {
@@ -38,8 +43,13 @@ export class RegionService extends BaseService {
 
   getCountry(): Promise<string> {
     this.controller.signal.throwIfAborted();
-    this.country ??= this.detectCountry();
-    return this.country;
+    const cached = application.get('CacheService').get(CACHE_KEY);
+    if (cached) return Promise.resolve(cached);
+
+    this.inflight ??= this.detectCountry().finally(() => {
+      this.inflight = undefined;
+    });
+    return this.inflight;
   }
 
   private async detectCountry(): Promise<string> {
@@ -48,24 +58,24 @@ export class RegionService extends BaseService {
     try {
       const { data } = await ipinfo.request<unknown>({
         method: 'GET',
-        path: '/json',
+        path: '/lite/me',
+        query: { token: IPINFO_TOKEN },
         maxResponseBytes: 4_096,
         signal,
       });
       signal.throwIfAborted();
-      const { country } = IpRegionSchema.parse(data);
-      cache.setPersist('region.last_country', country);
+      const { country_code: country } = IpRegionSchema.parse(data);
+      cache.set(CACHE_KEY, country, CACHE_TTL);
       return country;
     } catch (error) {
       signal.throwIfAborted();
-      logger.warn('IP region unavailable; using the last country or the global default', error);
-      const cached = CountrySchema.safeParse(cache.getPersist('region.last_country'));
-      return cached.success ? cached.data : 'US';
+      logger.warn('IP region unavailable; using the CN default', error);
+      return DEFAULT_COUNTRY;
     }
   }
 
   protected async onStop(): Promise<void> {
     this.controller.abort();
-    await this.country?.catch(() => {});
+    await this.inflight?.catch(() => {});
   }
 }

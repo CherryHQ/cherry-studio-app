@@ -166,7 +166,10 @@ development and preview builds cannot complete provider sign-in.
 
 ## Regional Discovery
 
-The shared cold-start IP country selects the new-provider catalog and recommendations from the
-bundled registry's edition labels. Saved providers keep their settings, visibility and runtime
-availability across region changes. Chat setup also lists saved presets absent from the current
-regional catalog beside custom connections, so travelling does not remove their setup path.
+The shared IP country selects the new-provider catalog and recommendations from the
+bundled registry's upstream edition labels, defaulting to CN when detection fails. Successful
+detections are cached for ten minutes. Mobile capability exclusions and the recommended-provider
+subset remain locally owned; model metadata is shared across editions. Saved providers keep their
+settings, visibility and runtime availability across region changes. Chat setup also lists saved
+presets absent from the current regional catalog beside custom connections, so travelling does not
+remove their setup path.
