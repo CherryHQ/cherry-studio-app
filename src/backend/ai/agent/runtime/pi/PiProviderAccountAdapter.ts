@@ -16,6 +16,7 @@ import { isHttpError } from '@/backend/services/http';
 import type { ProviderAccountAdapter } from '@/backend/services/providers/account/providerAccountAdapter';
 import { createProviderAccountFetch } from '@/backend/services/providers/account/providerAccountFetch';
 import { providerAccountStorage } from '@/backend/services/providers/account/providerAccountStorage';
+import { providerAccountError } from '@/backend/services/providers/account/providerOauth';
 import { createPkceChallenge } from '@/backend/utils/oauth';
 import {
   ProviderAccountError,
@@ -90,7 +91,7 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
       const provider = await this.providers!.get(providerId);
       const id = getPiOAuthProviderId(provider);
       if (!id) throw new ProviderAccountError('unsupported');
-      const credential = await FLOWS[id].login({
+      const attempt = FLOWS[id].login({
         signal,
         prompt: async (prompt) => {
           if (id === 'openai-codex' && prompt.type === 'select') return 'device_code';
@@ -121,6 +122,11 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
             interaction.notify({ type: 'progress' });
           }
         },
+      });
+      const credential = await attempt.catch((error: unknown) => {
+        const failure = piProviderAccountError(error);
+        // A rejected new attempt does not establish that the previous session expired.
+        throw failure.reason === 'authorization' ? new ProviderAccountError('request') : failure;
       });
       signal.throwIfAborted();
       await this.credentials(provider, id).modify(id, async () => credential, { signal });
@@ -186,7 +192,14 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
         this.lock(provider.id, async () => {
           options?.signal?.throwIfAborted();
           const current = (await this.read(provider, id))?.credential;
-          const next = await fn(current);
+          const next = await fn(current).catch(async (error: unknown) => {
+            const failure = piProviderAccountError(error);
+            if (current && failure.reason === 'authorization') {
+              // Refresh and invalidation share the lock, so an older failure cannot clear a new login.
+              await providerAccountStorage.writePiAccount(provider.id, null);
+            }
+            throw failure;
+          });
           options?.signal?.throwIfAborted();
           if (!next) return current;
           if (next.type !== 'oauth') throw new ProviderAccountError('configuration');
@@ -246,28 +259,7 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
       }
     } catch (error) {
       if (signal.aborted) throw new ProviderAccountError('cancelled');
-      // Upstream errors may contain server responses and tokens: expose a closed, safe reason only.
-      let cause: unknown = error;
-      for (let depth = 0; depth < 4; depth++) {
-        if (cause instanceof ProviderAccountError) throw cause;
-        if (isHttpError(cause)) {
-          throw new ProviderAccountError(
-            cause.kind === 'cancelled'
-              ? 'cancelled'
-              : cause.kind === 'network' || cause.kind === 'timeout'
-                ? 'network'
-                : cause.kind === 'internal'
-                  ? 'configuration'
-                  : 'request',
-          );
-        }
-        if (cause instanceof TypeError) throw new ProviderAccountError('network');
-        if (!(cause instanceof Error) || !cause.cause) break;
-        cause = cause.cause;
-      }
-      throw new ProviderAccountError(
-        error instanceof ModelsError && error.code === 'auth' ? 'storage' : 'authorization',
-      );
+      throw piProviderAccountError(error);
     } finally {
       active.delete(controller);
       if (!active.size) this.operations.delete(providerId);
@@ -286,6 +278,32 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
     });
     return result;
   }
+}
+
+function piProviderAccountError(error: unknown): ProviderAccountError {
+  // Upstream errors may contain server responses and tokens: expose a closed, safe reason only.
+  let cause: unknown = error;
+  for (let depth = 0; depth < 4; depth++) {
+    if (cause instanceof ProviderAccountError) return cause;
+    if (isHttpError(cause)) {
+      if (cause.kind === 'http') return providerAccountError(cause);
+      return new ProviderAccountError(
+        cause.kind === 'cancelled'
+          ? 'cancelled'
+          : cause.kind === 'network' || cause.kind === 'timeout'
+            ? 'network'
+            : cause.kind === 'internal'
+              ? 'configuration'
+              : 'request',
+      );
+    }
+    if (cause instanceof TypeError) return new ProviderAccountError('network');
+    if (!(cause instanceof Error) || !cause.cause) break;
+    cause = cause.cause;
+  }
+  return new ProviderAccountError(
+    error instanceof ModelsError && error.code === 'auth' ? 'storage' : 'request',
+  );
 }
 
 function requireBrowserUrl(value: string) {

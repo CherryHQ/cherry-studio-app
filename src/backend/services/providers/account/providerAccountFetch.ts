@@ -1,5 +1,7 @@
 import { createFetchBridge, HttpError } from '@/backend/services/http';
 
+import { ProviderOauthErrorSchema } from './providerOauth';
+
 const MAX_ACCOUNT_RESPONSE_BYTES = 1_048_576;
 
 function requireAccountEndpoint(value: string): URL {
@@ -17,7 +19,7 @@ function requireAccountEndpoint(value: string): URL {
 
 /** Fetch-shaped bridge for non-streaming account protocols; routes never own account credentials. */
 export function createProviderAccountFetch(): typeof globalThis.fetch {
-  return createFetchBridge({
+  const fetchAccount = createFetchBridge({
     assertUrl: requireAccountEndpoint,
     unsupportedMethodError: () =>
       new HttpError('Provider account request method is unsupported.', {
@@ -26,4 +28,24 @@ export function createProviderAccountFetch(): typeof globalThis.fetch {
       }),
     maxResponseBytes: MAX_ACCOUNT_RESPONSE_BYTES,
   });
+  return async (input, init) => {
+    const response = await fetchAccount(input, init);
+    if (response.ok || response.status === 429 || response.status >= 500) return response;
+    const failure = ProviderOauthErrorSchema.safeParse(
+      await response
+        .clone()
+        .json()
+        .catch(() => undefined),
+    );
+    // Preserve confirmed rejections before SDKs replace their structured fields with error text.
+    // Pending/slow-down responses still belong to the SDK's device-code polling loop.
+    if (failure.success || response.status === 401) {
+      throw new HttpError('Provider authorization rejected.', {
+        kind: 'http',
+        status: response.status,
+        code: failure.success ? failure.data.error : undefined,
+      });
+    }
+    return response;
+  };
 }
