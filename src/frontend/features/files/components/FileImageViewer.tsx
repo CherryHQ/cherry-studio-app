@@ -42,7 +42,11 @@ export function FileImageViewer({
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
   const { isSharing, share } = useShareFile(file);
-  const saveToPhotos = useSaveImageToPhotos({ uri: file.uri, provenance: file.entry.provenance });
+  const saveToPhotos = useSaveImageToPhotos({
+    uri: file.uri,
+    provenance: file.entry.provenance,
+    mediaType: file.entry.mediaType,
+  });
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);

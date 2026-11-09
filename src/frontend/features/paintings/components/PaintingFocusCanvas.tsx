@@ -1,8 +1,7 @@
 import { Image } from '@cherrystudio/ui/components';
-import { useImage } from 'expo-image';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -55,19 +54,9 @@ export function PaintingFocusCanvas({
   const [size, setSize] = useState<CanvasSize>({ height: 0, width: 0 });
   const [isZoomed, setIsZoomed] = useState(false);
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  // Decode once at screen resolution. Keyboard-driven layout changes only resize the same bitmap.
-  const screen = Dimensions.get('screen');
-  const decodeSize = Math.ceil(Math.max(screen.width, screen.height) * screen.scale);
-  const imageSource = useImage(
-    uri,
-    {
-      maxHeight: decodeSize,
-      maxWidth: decodeSize,
-      onError: () => setFailedUri(uri),
-    },
-    [decodeSize],
-  );
-  const sourceRatio = imageSource ? imageSource.width / imageSource.height : null;
+  // Read dimensions from the displayed source without flattening it into a decoded ImageRef.
+  const [loadedImage, setLoadedImage] = useState<{ ratio: number; uri: string } | null>(null);
+  const sourceRatio = loadedImage?.uri === uri ? loadedImage.ratio : null;
   const image = sourceRatio
     ? fitPaintingImage(size.width, size.height, sourceRatio)
     : { height: size.height, left: 0, top: 0, width: size.width };
@@ -242,11 +231,13 @@ export function PaintingFocusCanvas({
               </View>
             ) : (
               <Image
-                allowDownscaling={false}
                 cachePolicy="memory-disk"
                 contentFit="contain"
                 onError={() => setFailedUri(uri)}
-                source={imageSource}
+                onLoad={({ source }) =>
+                  setLoadedImage({ ratio: source.width / source.height, uri })
+                }
+                source={uri}
                 style={StyleSheet.absoluteFill}
                 transition={0}
               />
