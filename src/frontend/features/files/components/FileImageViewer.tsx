@@ -1,9 +1,9 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
-import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import {
+  Button,
   ContentState,
   ImageEditor,
-  ImagePreviewToolbar,
+  type MenuItem,
   useToast,
 } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
@@ -16,21 +16,26 @@ import { useUniwind } from 'uniwind';
 
 import { useSaveImageToPhotos } from '@/frontend/appShell/fileExport';
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { queryKeys } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { imageEditGeometry } from '@/shared/utils/imageEditGeometry';
 
+import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useFileImageEdit } from '../hooks/useFileImageEdit';
 import { readPngDimensions } from '../utils/readPngDimensions';
+import { FileViewerFooter } from './FileViewerFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileImageViewer({
   file: initialFile,
   imageEditRequestId,
+  sourceChat,
 }: {
   file: ResolvedFile;
   imageEditRequestId?: string;
+  sourceChat?: ChatTarget;
 }) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
@@ -40,6 +45,7 @@ export function FileImageViewer({
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
   const saveToPhotos = useSaveImageToPhotos({ uri: file.uri });
+  const addToChat = useAddFileToChat(file, sourceChat);
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);
@@ -62,19 +68,22 @@ export function FileImageViewer({
   });
   const dimensions = dimensionsQuery.data;
 
-  const toolbar =
-    editing.canEdit && (isDocument || stillImageUri === file.uri) ? (
-      <ImagePreviewToolbar>
-        <ImagePreviewToolbar.Action
-          icon={<PencilIcon className="size-5 text-foreground" />}
-          label={t('common.edit')}
-          onPress={() => {
-            setIsZoomed(false);
-            editing.start();
-          }}
-        />
-      </ImagePreviewToolbar>
-    ) : undefined;
+  const items: MenuItem[] = [];
+  if (editing.canEdit && (isDocument || stillImageUri === file.uri)) {
+    items.push({
+      id: 'edit',
+      label: t('common.edit'),
+      onPress: () => {
+        setIsZoomed(false);
+        editing.start();
+      },
+    });
+  }
+  items.push({
+    id: 'save',
+    label: t('sharing.saveToPhotos'),
+    onPress: () => void saveToPhotos(),
+  });
 
   if (editing.isEditing) {
     return (
@@ -139,18 +148,13 @@ export function FileImageViewer({
       {isInPane ? null : (
         <Stack.Screen options={{ gestureEnabled: !isZoomed, headerShown: true }} />
       )}
-      <FileViewerHeader
-        file={file}
-        items={[
-          {
-            id: 'save',
-            label: t('sharing.saveToPhotos'),
-            onPress: () => void saveToPhotos(),
-          },
-        ]}
-      />
+      <FileViewerHeader file={file} items={items} />
       <View
-        className="flex-1 bg-background px-safe pb-safe"
+        className={
+          addToChat.returnsToSourceChat
+            ? 'flex-1 bg-background px-safe'
+            : 'flex-1 bg-background px-safe pb-safe'
+        }
         onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
       >
         <View className="flex-1">
@@ -193,8 +197,14 @@ export function FileImageViewer({
             </View>
           )}
         </View>
-        {toolbar}
       </View>
+      {addToChat.returnsToSourceChat ? (
+        <FileViewerFooter>
+          <Button disabled={addToChat.isResolving} onPress={addToChat.add}>
+            {t('fileViewer.addToChat')}
+          </Button>
+        </FileViewerFooter>
+      ) : null}
     </>
   );
 }

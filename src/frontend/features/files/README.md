@@ -3,10 +3,12 @@
 `/files/[fileEntryId]` is the shared page for managed images, Markdown, text, HTML, PDF, and Office
 Open XML documents, and RTF. `FileViewerPane` renders the same viewer in the file pane beside chat;
 only the route sets native screen options, and Office references go to the chat beside the pane.
-Document and text previews opened from a chat, or from the file library opened beside one, offer
-Add to current chat: `useAddFileToChat` hands the whole file to that chat's composer once, keeping
-its draft text, and returns to it. The action appears in a footer, which owns the bottom safe area
-in place of the content.
+Image, document and text previews opened from a chat, or from the file library opened beside one,
+offer Add to current chat: `useAddFileToChat` hands the whole file to that chat's composer once,
+keeping its draft text, and returns to it. The action appears in a footer, which owns the bottom
+safe area in place of the content. The route and pane pass the same `sourceChat` to each viewer.
+The footer appears only while `returnsToSourceChat` is true and disables its text-only button
+while the source chat is resolving. Without it, the preview content owns the bottom safe area.
 A preview without a chat, or whose chat's Agent cannot take the file, does not offer it.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
 this page and system opening, and shares file export actions with the painting viewer.
@@ -18,8 +20,10 @@ actions or conversion progress layer. Capture scripts and temporary conversion l
 to `features/sharing`, using the shared HtmlCapture executor and Backend.documentExport.
 
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. Its
-  header offers sharing and saving to Photos in More, alongside system opening. A
-  caller-owned image editing request also supplies Edit. Cropping, rotation, mirroring,
+  flat More menu offers saving to Photos, sharing and system opening. Edit joins the same menu
+  only when the existing editing request allows it and the file is an exported-document PNG or
+  the loaded image is confirmed static. Edit exits zoom before opening the editor. The old bottom
+  image toolbar is replaced by the shared Add to current chat footer. Cropping, rotation, mirroring,
   straightening and perspective adjustments create a new managed image through
   `Backend.file.editImage`. Only an accepted source-matching callback replaces the caller's
   attachment. The source file and existing messages retain their
