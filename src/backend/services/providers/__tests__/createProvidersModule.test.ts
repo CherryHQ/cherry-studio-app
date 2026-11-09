@@ -14,6 +14,7 @@ function subject() {
     endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://example.test/v1' } },
   } as Provider;
   const dependencies: ProvidersModuleDependencies = {
+    getCountry: jest.fn(async () => 'US'),
     accounts: {
       getStatus: jest.fn(),
       begin: jest.fn(),
@@ -55,6 +56,49 @@ function subject() {
 }
 
 describe('explicit provider activation', () => {
+  it.each([
+    { country: 'CN', expected: ['deepseek'] },
+    { country: 'US', expected: ['deepseek', 'openai'] },
+  ])(
+    'selects discovery and recommendations from IP country $country',
+    async ({ country, expected }) => {
+      const { dependencies } = subject();
+      dependencies.getCountry = async () => country;
+      dependencies.catalog.list = () =>
+        [
+          { id: 'deepseek', name: 'DeepSeek', availableInEditions: ['global', 'cn'] },
+          { id: 'openai', name: 'OpenAI', availableInEditions: ['global'] },
+        ] as ReturnType<ProvidersModuleDependencies['catalog']['list']>;
+      jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+      const entries = await createProvidersModule(dependencies).listCatalog();
+      expect(entries.map((entry) => entry.id)).toEqual(expected);
+      expect(entries.every((entry) => entry.isRecommended)).toBe(true);
+    },
+  );
+
+  it('keeps an installed international provider usable after moving to China', async () => {
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => 'CN';
+    const installed = { id: 'openai', name: 'Saved OpenAI', isEnabled: true } as Provider;
+    jest.mocked(dependencies.providers.find).mockResolvedValue(installed);
+    const backend = createProvidersModule(dependencies);
+    await expect(backend.importPreset('openai')).resolves.toBe(installed);
+    expect(dependencies.providers.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new international preset in China without writing provider data', async () => {
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => 'CN';
+    dependencies.catalog.list = () =>
+      [{ id: 'openai', name: 'OpenAI', availableInEditions: ['global'] }] as ReturnType<
+        ProvidersModuleDependencies['catalog']['list']
+      >;
+    await expect(createProvidersModule(dependencies).importPreset('openai')).rejects.toThrow(
+      'unavailable',
+    );
+    expect(dependencies.providers.create).not.toHaveBeenCalled();
+  });
+
   it('marks only enabled providers as enabled in the catalog', async () => {
     const { dependencies } = subject();
     dependencies.catalog.list = () =>
