@@ -62,6 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         './scripts/withAppUpdates.js',
         {
+          domesticStoresEnabled: process.env.EAS_BUILD_PROFILE === 'production-domestic-stores',
           apkUpdatesEnabled:
             profile !== 'preview' &&
             apkUpdatesSetting === 'true' &&
@@ -69,7 +70,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
               process.env.EAS_BUILD_PROFILE ?? '',
             ),
         },
-      ] as [string, { apkUpdatesEnabled: boolean }],
+      ] as [string, { apkUpdatesEnabled: boolean; domesticStoresEnabled: boolean }],
       ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),
       ...(config.plugins ?? []),
       '@preeternal/react-native-file-hash',

@@ -12,4 +12,5 @@ They are used only for query callbacks; Cherry owns the prompt and explicit stor
 Retrieved 2026-11-02. Vendor SDKs remain subject to their respective vendor terms. When updating an
 archive, review the official API and privacy changes, update this table, and obtain authorization
 for the new native build and device verification. `scripts/withAppUpdates.js` registers this
-folder as a Gradle repository; the Expo module declares the named AAR dependencies.
+folder as a Gradle repository only for `production-domestic-stores`; the Expo module selects
+the named AAR dependencies and vendor source/manifest only for that distribution.

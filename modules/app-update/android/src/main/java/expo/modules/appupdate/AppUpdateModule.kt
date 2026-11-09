@@ -25,8 +25,8 @@ class AppUpdateModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AppUpdate")
     AsyncFunction("checkDomesticStoreUpdate") { id: String, store: String, promise: Promise ->
-      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
-      val updates = domesticUpdates ?: DomesticStoreUpdates(context.applicationContext).also { domesticUpdates = it }
+      check(domesticStoresEnabled()) { "Domestic stores are disabled for this distribution" }
+      val updates = domesticUpdates ?: createDomesticStoreUpdates(context.applicationContext).also { domesticUpdates = it }
       updates.check(id, store, promise)
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("cancelDomesticStoreUpdate") { id: String -> domesticUpdates?.cancel(id) }
@@ -37,11 +37,10 @@ class AppUpdateModule : Module() {
       Handler(Looper.getMainLooper()).post { updates?.dispose() }
     }
     Function("getDomesticStore") {
-      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
-      DomesticStores(context).resolve()
+      if (domesticStoresEnabled()) DomesticStores(context).resolve() else null
     }
     AsyncFunction("openDomesticStore") { store: String ->
-      check(nativeChannel() == "production-domestic-stores") { "Domestic stores are disabled for this distribution" }
+      check(domesticStoresEnabled()) { "Domestic stores are disabled for this distribution" }
       DomesticStores(context).open(store)
     }.runOnQueue(Queues.MAIN)
     Function("isApkInstallationEnabled") { apkInstallationEnabled() }
@@ -102,6 +101,9 @@ class AppUpdateModule : Module() {
         }
     }
   }
+
+  private fun domesticStoresEnabled(): Boolean =
+    BuildConfig.DOMESTIC_STORES_ENABLED && nativeChannel() == "production-domestic-stores"
 
   @Suppress("DEPRECATION")
   private fun apkInstallationEnabled(): Boolean {
