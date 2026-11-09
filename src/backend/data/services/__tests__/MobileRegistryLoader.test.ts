@@ -1,3 +1,4 @@
+import { ModelListSchema } from '@cherrystudio/provider-registry';
 import models from '@cherrystudio/provider-registry/data/models.json';
 import providerModels from '@cherrystudio/provider-registry/data/provider-models.json';
 
@@ -45,13 +46,15 @@ describe('remote catalog compatibility', () => {
     expect(
       isCatalogManifestCompatible({
         ...compatibleManifest,
-        minAppVersion: '2.1.5',
-        sourceAppVersion: '2.1.5',
+        minAppVersion: '2.1.12',
+        sourceAppVersion: '2.1.12',
       }),
     ).toBe(false);
-    expect(isCatalogManifestCompatible({ ...compatibleManifest, sourceAppVersion: '2.0.7' })).toBe(
-      false,
+    // v4 is published by Desktop 2.1.10 but requires the 2.1.11 reader semantics.
+    expect(isCatalogManifestCompatible({ ...compatibleManifest, sourceAppVersion: '2.1.10' })).toBe(
+      true,
     );
+    expect(isCatalogManifestCompatible(compatibleManifest, '2.1.10')).toBe(false);
   });
 
   it('rejects another schema lane and malformed semantic versions', () => {
@@ -64,12 +67,15 @@ describe('remote catalog compatibility', () => {
     expect(isCatalogManifestCompatible({ ...compatibleManifest, minAppVersion: 'next' })).toBe(
       false,
     );
+    expect(isCatalogManifestCompatible({ ...compatibleManifest, sourceAppVersion: 'next' })).toBe(
+      false,
+    );
     expect(isCatalogManifestCompatible({ ...compatibleManifest, schemaVersion: 0 })).toBe(false);
   });
 
-  it('admits v3 while keeping older cached schemas readable', () => {
-    expect(REGISTRY_SCHEMA_VERSION).toBe(3);
-    for (const schemaVersion of [1, 2, 3]) {
+  it('admits v4 while keeping older cached schemas readable', () => {
+    expect(REGISTRY_SCHEMA_VERSION).toBe(4);
+    for (const schemaVersion of [1, 2, 3, 4]) {
       expect(
         isCatalogManifestCompatible({
           ...compatibleManifest,
@@ -223,6 +229,49 @@ describe('MobileRegistryLoader', () => {
     expect(loader.findModel('gpt-4o')?.id).toBe('gpt-4o');
     expect(loader.loadProviderModels().length).toBeGreaterThan(0);
     expect(loader.getProviderModelsVersion()).toMatch(/^[a-f0-9]{16}$/);
+  });
+
+  it('admits GIF generation with SDK defaults while retaining static-image editing', () => {
+    const loader = downloadedLoader();
+    for (const modelId of ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst']) {
+      const support = loader.findModel(modelId)?.imageGeneration;
+      expect(support?.modes.generate?.supports).toMatchObject({
+        outputFormat: { type: 'enum', options: expect.arrayContaining(['gif']) },
+        complexity: { type: 'enum', options: ['low', 'medium', 'high'] },
+      });
+      for (const mode of ['generate', 'edit'] as const) {
+        expect(support?.modes[mode]?.supports.frameCount).toBeUndefined();
+        expect(support?.modes[mode]?.supports.frameDurationMs).toBeUndefined();
+      }
+      expect(support?.modes.edit?.supports.outputFormat).toMatchObject({
+        type: 'enum',
+        options: ['png', 'jpeg', 'webp'],
+      });
+    }
+  });
+
+  it('applies generation-only GIF admission to provider-model overrides too', () => {
+    const loader = new MobileRegistryLoader();
+    const imageGeneration = ModelListSchema.parse(models).models.find(
+      (model) => model.id === 'gpt-image-2-6-flare',
+    )?.imageGeneration;
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({
+        models: { version: 'v4', models: [] },
+        providerModels: {
+          version: 'v4',
+          overrides: [{ providerId: 'openai', modelId: 'gpt-image-2-6-flare', imageGeneration }],
+        },
+      }),
+    );
+    const support = loader.findOverride('openai', 'gpt-image-2.6-flare')?.imageGeneration;
+    expect(support?.modes.generate?.supports.outputFormat).toMatchObject({
+      options: expect.arrayContaining(['gif']),
+    });
+    expect(support?.modes.generate?.supports.frameCount).toBeUndefined();
+    expect(support?.modes.edit?.supports.outputFormat).toMatchObject({
+      options: ['png', 'jpeg', 'webp'],
+    });
   });
 
   it('resolves exact apiModelId before normalized fallback collisions', () => {

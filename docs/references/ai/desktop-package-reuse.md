@@ -5,7 +5,7 @@ Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.8` and
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
 Mobile consumes `@cherrystudio/provider-registry@0.4.0` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
-The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
+The registry compatibility baseline is `2.1.11`; device acceptance is separate from package
 and Metro checks.**
 
 This reference defines what Mobile may reuse from Cherry Desktop. A Desktop implementation is a
@@ -108,11 +108,20 @@ connection metadata but currently lists OpenRouter chat, embedding, and image mo
 
 The `0.4.0` package includes GPT Image 2.6 scene complexity, animated GIF format, frame count,
 and frame duration, following the `0.3.5` model additions and `0.3.6` stable Hunyuan 4 metadata.
-Those new drawing controls are published on the upstream v4 stream with a Desktop `2.1.11`
-minimum. Mobile retains the v3 download lane and `2.1.4` semantic baseline: its image request
-adapters have not admitted the v4 controls. The new canonical keys have localized labels for
-type compatibility, but upgrading the package does not enable those controls or activate a newer
-saved snapshot. Adopting v4 remains separate work subject to the admission gates below.
+Mobile downloads those controls from the upstream v4 stream with a Desktop `2.1.11` reader baseline.
+Older cached snapshots remain usable offline while startup attempts the v4 upgrade. The producer
+version records provenance and may predate the declared minimum reader; compatibility compares the
+reader baseline with `minAppVersion` independently.
+
+Mobile exposes GIF for generation using the pinned SDK's existing support and the API's default
+frame count and duration. Catalog projection omits custom frame controls and the GIF edit option;
+static-image editing retains PNG, JPEG and WebP. GIF controls use automatic sizing to stay within
+the default frame budget and exclude transparent backgrounds. Changing output format reconciles
+those dependent controls; shared request admission rejects incompatible explicit parameters.
+Native OpenAI adapters receive the SDK's
+`outputFormat` option, while compatible adapters receive the catalog's `output_format` wire name.
+No additional SDK patch is needed for this generation-only scope. GIF playback and original-file
+export remain Mobile-owned; execution and device acceptance of the v4 integration remain pending.
 
 The `0.3.3` update includes LongCat-2.5 endpoint and reasoning declarations, Qwen 3.8 Flash Next
 effort inference, and corrected MiMo API model IDs. Model data still arrives through remote catalog
@@ -161,7 +170,7 @@ check, platform exports, and device acceptance before the registry compatibility
 
 | Registry concern | Mobile state | Runtime scope |
 | --- | --- | --- |
-| Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older cached schemas remain readable offline; baseline `2.1.4` |
+| Remote manifest compatibility | Implemented with an independent registry compatibility version; v4 validation pending | Downloads v4; older cached schemas remain readable offline; baseline `2.1.11` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
 | Reasoning wire dialects | Implemented for Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
@@ -170,6 +179,7 @@ check, platform exports, and device acceptance before the registry compatibility
 | Server tools and model eligibility | Implemented for the Pi conversation path from the bundled declarations; live-provider validation pending | Downloaded catalogs cannot grant a native tool; endpoints without an adapter keep the application Web Search |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
 | V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
+| V4 image controls | Implemented; validation pending | GIF generation with API frame defaults and complexity; GIF editing and custom frame controls remain excluded |
 | Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; all model rows come from the remote snapshot |
 
 ### Remote catalog policy
@@ -187,7 +197,7 @@ definitions, base URLs, adapter families, headers, or credential behavior. Incom
 are rejected before download and activation. The Mobile-owned provider extensions affect connection metadata only; remote snapshots replace
 all model rows, including the `github` namespace.
 
-The current download lane is v3. Unknown capabilities and efforts are dropped at the smallest list
+The current download lane is v4. Unknown capabilities and efforts are dropped at the smallest list
 item; entries with an unsupported protocol are omitted. `serverTools` in a downloaded catalog and
 `ultra` have no Mobile consumer. The `adaptive-between-tools` model dialect is also excluded while the
 pinned Anthropic SDK lacks `between_tools`. Always-on adaptive reasoning uses the shared interpreter.

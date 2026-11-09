@@ -41,6 +41,7 @@ export function PaintingFocusChrome({
   const file = useResolvedFile(image?.fileEntryId as FileEntryId | undefined);
   const { isSharing, share } = useShareFile(file.data);
   const save = useSaveImageToPhotos({
+    mediaType: file.data?.entry.mediaType,
     provenance: file.data?.entry.provenance,
     uri: image?.uri ?? '',
   });

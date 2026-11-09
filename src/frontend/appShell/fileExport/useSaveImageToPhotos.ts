@@ -13,7 +13,11 @@ import { useExportWatermark } from './useExportWatermark';
 
 /** Shared add-only Photos permission flow for generated and managed images. */
 export function useSaveImageToPhotos(
-  { uri, provenance }: { uri: string; provenance?: FileEntryProvenance },
+  {
+    uri,
+    provenance,
+    mediaType,
+  }: { uri: string; provenance?: FileEntryProvenance; mediaType?: string },
   options: FileExportOptions = {},
 ) {
   const { t } = useTranslation();
@@ -28,7 +32,7 @@ export function useSaveImageToPhotos(
     saving.current = true;
     let exported: Awaited<ReturnType<typeof prepareImageExport>> | undefined;
     try {
-      exported = await prepareImageExport({ uri, provenance }, createWatermark());
+      exported = await prepareImageExport({ uri, provenance, mediaType }, createWatermark());
       await MediaLibrary.Asset.create(exported.uri);
       toast.show({ label: t('imageActions.saved'), variant: 'success' });
     } catch {
@@ -37,7 +41,7 @@ export function useSaveImageToPhotos(
       saving.current = false;
       exported?.release();
     }
-  }, [uri, provenance, createWatermark, t, toast]);
+  }, [uri, provenance, mediaType, createWatermark, t, toast]);
 
   const showOpenSettingsAlert = useCallback(() => {
     alert.confirm({

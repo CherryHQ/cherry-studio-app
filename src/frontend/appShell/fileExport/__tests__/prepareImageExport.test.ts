@@ -190,6 +190,70 @@ test('none preserves the source format and bytes without native image work', asy
   expect(mockResources).toHaveLength(0);
 });
 
+test.each(['image/gif', 'IMAGE/GIF', 'image/gif;charset=binary'])(
+  'GIF saving and sharing preserve the original with a watermark selected (%s)',
+  async (mediaType) => {
+    // The media type remains authoritative even when the URI has no GIF suffix.
+    const uri = 'file:///managed/animation';
+    const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    mockFiles.set(uri, original);
+    const entry = FileEntrySchema.parse({
+      id: '00000000-0000-7000-8000-000000000001',
+      filename: 'animation.gif',
+      mediaType,
+      provenance: 'generated',
+      createdAt: 1,
+      updatedAt: 1,
+      size: original.length,
+    });
+
+    const photo = await prepareImageExport(
+      { uri, provenance: entry.provenance, mediaType },
+      watermark,
+    );
+    const shared = await prepareFileExport({ entry, uri }, watermark);
+    expect(photo.uri).toBe(uri);
+    expect(shared).toMatchObject({ uri, filename: 'animation.gif', mediaType });
+    photo.release();
+    shared.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
+test.each(['image/gif; charset=binary', ' IMAGE/GIF ; charset=binary '])(
+  'GIF photo exports normalize media types with whitespace (%s)',
+  async (mediaType) => {
+    const uri = 'file:///managed/animation';
+    const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    mockFiles.set(uri, original);
+
+    const photo = await prepareImageExport({ uri, mediaType }, watermark);
+    expect(photo.uri).toBe(uri);
+    photo.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
+test.each([
+  'file:///managed/animation.GIF',
+  'file:///managed/animation.gif?revision=1',
+  'file:///managed/animation.gif#preview',
+])('URI-only GIF saving preserves the original with a watermark selected (%s)', async (uri) => {
+  const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+  mockFiles.set(uri, original);
+
+  const photo = await prepareImageExport({ uri }, watermark);
+  expect(photo.uri).toBe(uri);
+  photo.release();
+  expect(mockFiles.get(uri)).toBe(original);
+  expect(mockFiles.size).toBe(1);
+  expect(mockResources).toHaveLength(0);
+});
+
 test.each(['image/svg+xml', 'IMAGE/SVG+XML', 'image/svg+xml;charset=utf-8'])(
   'SVG delivery preserves the original file with a Cherry watermark requested (%s)',
   async (mediaType) => {

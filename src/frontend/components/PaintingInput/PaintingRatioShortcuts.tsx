@@ -26,7 +26,7 @@ export function PaintingRatioShortcuts({
 }) {
   const { t } = useTranslation();
   const isEditorPresented = useComposerExpansion()?.state.isPresented ?? false;
-  const choices = paintingResizeOptions(mode);
+  const choices = paintingResizeOptions(mode, values);
 
   return (
     <Composer.ExpansionMeasure>
