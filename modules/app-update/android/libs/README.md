@@ -13,3 +13,7 @@ Retrieved 2026-11-02. Vendor SDKs remain subject to their respective vendor term
 archive, review the official API and privacy changes, update this table, and obtain authorization
 for the new native build and device verification. `scripts/withAppUpdates.js` registers this
 folder as a Gradle repository; the Expo module declares the named AAR dependencies.
+
+The HONOR archive's HiAnalytics helper catches a missing analytics SDK and disables reporting.
+Cherry does not bundle that optional SDK. The module's `proguard-rules.pro` suppresses R8's
+missing-class warnings for only its three guarded HiAnalytics references.
