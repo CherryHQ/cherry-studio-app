@@ -36,9 +36,15 @@ export async function readReleaseNotes(
   release: AppUpdateRelease,
   language: string,
 ): Promise<string | null> {
-  if (release.channel !== 'apk') return release.notes;
+  if (
+    release.channel !== 'apk' &&
+    !(release.channel === 'domestic-stores' && release.notesSource === 'gitcode')
+  )
+    return release.notes;
   const wantsChinese = /^zh\b/i.test(language);
-  const hasChinese = new URL(release.downloadUrl).hostname === 'gitcode.com';
+  const hasChinese =
+    release.channel === 'domestic-stores' ||
+    new URL(release.downloadUrl).hostname === 'gitcode.com';
   if (wantsChinese === hasChinese) return release.notes;
   try {
     const { data } = await (wantsChinese ? gitcode : github).request<{ body?: string | null }>({

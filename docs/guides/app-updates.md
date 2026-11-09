@@ -1,8 +1,8 @@
 # Application Updates
 
 Cherry Mobile uses `expo-updates` and EAS Update for compatible JavaScript and ordinary asset
-changes on iOS, Google Play, and the public APK distributed through GitHub/GitCode. Existing
-installations must first install a new native package containing this client. Development and
+changes on iOS, Google Play, domestic Android stores, and the public APK distributed through
+GitHub/GitCode. Existing installations must first install a new native package containing this client. Development and
 Storybook disable automatic OTA updates and continue using Metro.
 
 ## Startup And Compatibility
@@ -46,6 +46,7 @@ OTA publication must comply with store review rules and cannot bypass review req
 | `preview`, Android/iOS | `preview` | `preview` | Disabled |
 | `production`, Android | `production-apk` | `production` | Enabled |
 | `production-google-play`, Android | `production-google-play` | `production` | Disabled |
+| `production-domestic-stores`, Android | `production-domestic-stores` | `production` | Disabled |
 | `production`, iOS | `production-ios` | `production` | Disabled |
 | `development` / `development-simulator` | None | `development` | Opt-in flag |
 
@@ -74,6 +75,7 @@ Run `eas channel:list`, then create any missing channels and their same-named br
 eas channel:create preview
 eas channel:create production-apk
 eas channel:create production-google-play
+eas channel:create production-domestic-stores
 eas channel:create production-ios
 ```
 
@@ -81,8 +83,8 @@ Keep `PROFILE`, `APK_UPDATES_ENABLED`, `ANDROID_COMPRESS_NATIVE_LIBS`, and
 `EXPO_PUBLIC_STORYBOOK_ENABLED` out of shared EAS environments; remote variables can otherwise
 override publication configuration. Build profiles in `eas.json` own `PROFILE` and
 `ANDROID_COMPRESS_NATIVE_LIBS`. `APK_UPDATES_ENABLED` additionally controls native APK installation permission: the APK build
-profile enables it and Play disables it. It remains an opt-in development switch at build and Metro
-time. `EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
+profile enables it and Play/domestic store profiles disable it. It remains an opt-in development
+switch at build and Metro time. `EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
 actions using the embedded native channel.
 Other service settings and credentials still come from the selected environment. Client/config
 values must be readable during both builds and updates; Secret-only values cannot be read by
@@ -109,9 +111,17 @@ JavaScript-only fixes between tags; branch pushes and tags never publish updates
    git push -u origin hotfix/v0.3.0-ota
    ```
 
-   Optionally run `pnpm update:check apk` (or `google-play`, `ios`) on the branch first.
+   Optionally run `pnpm update:check apk` (or `google-play`, `domestic-stores`, `ios`) on the branch
+   first.
 3. In GitHub Actions, run [OTA Update](../../.github/workflows/ota-update.yml) with the branch as
    `ref`, the targets (`all` by default), and a message.
+
+`all` includes `apk`, `google-play`, `domestic-stores`, and `ios`. Every selected channel must have
+a finished EAS build with the same runtime before anything publishes. Until the domestic channel
+has its first compatible build, select an existing target explicitly; `all` fails the receiving-build
+check. Stable tags create domestic builds; prerelease tags do not. Adding native vendor integrations
+requires a [native release](./cloud-releases.md#domestic-android-stores) before publishing compatible
+JavaScript-only fixes to that channel.
 
 The workflow pins the commit, then:
 
@@ -159,11 +169,12 @@ here. Evaluate it separately; do not claim a fixed reduction percentage.
 
 ## Acceptance
 
-Before the first production publish, cover newly built eligible clients on iOS, Google Play, and
-public APK:
+Before the first production publish, cover newly built eligible clients on iOS, Google Play,
+domestic Android stores, and public APK:
 
 - Download and activation on the subsequent launch, including offline and interrupted downloads.
-- Channel/runtime isolation; Play remains unable to open APK downloads even with an enabled OTA flag.
+- Channel/runtime isolation; Play and domestic store clients remain unable to open APK downloads
+  even with an enabled OTA flag.
 - No active-chat reload, and retained drafts/history through an update.
 - Native version/build display, diagnostic update ID/channel/runtime/embedded-launch status, and
   Sentry source-map matching for the exact published export.
@@ -173,6 +184,9 @@ public APK:
 Source regressions cover installed-version comparisons and distribution gates. Native activation,
 fingerprint parity, and measured savings require authorized builds and device/server
 checks; source changes and lint do not establish these outcomes.
+
+Domestic store checks use vendor client queries or the existing GitCode query as described in
+[Domestic Android Store Updates](./domestic-store-updates.md).
 
 ## References
 
