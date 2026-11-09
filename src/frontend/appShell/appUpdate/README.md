@@ -32,11 +32,11 @@ latest release, so a replaced or withdrawn package is not downloaded again. Inst
 that active tasks are interrupted; Android's install-source permission is requested from an alert
 after the dialog closes.
 
-The presentation stores `coldStart` or `manual` alongside the release. Only `coldStart` enables
-and renders the notes query, keyed by release and language with six-hour freshness. Cached notes
-are hidden for manual checks, retries and transfer reopen. Missing notes omit the region. Dialog
-children use a portal, so provider hooks remain outside it. GitCode-backed notes are Markdown;
-vendor notes are plain text. A second trigger cannot replace an open prompt.
+Every open dialog loads and displays release notes, including manual checks, retries and transfer
+reopen. The notes query is keyed by release and language with six-hour freshness, so reopening can
+reuse cached notes. Missing notes omit the region. Dialog children use a portal, so provider hooks
+remain outside it. GitCode-backed notes are Markdown; vendor notes are plain text. A second trigger
+cannot replace an open prompt.
 
 ## Entry
 

@@ -38,8 +38,8 @@ are supported. Opening a store does not claim installation success.
 ## Shared Presentation And Lifecycle
 
 Domestic checks reuse the normal channel query cache and six-hour stale time. Cold-start checks
-wait for privacy consent and foreground activation. Only a confirmed cold-start prompt reads and
-displays release notes; manual checks and transfer reopen hide cached notes. GitCode-backed notes
+wait for privacy consent and foreground activation. Every open update dialog reads and displays
+release notes, including manual checks and transfer reopen. GitCode-backed notes
 reuse the existing Chinese/English release-note reader. `notesSource` identifies GitCode or vendor
 notes explicitly; vendor build numbers stay inside backend comparison.
 

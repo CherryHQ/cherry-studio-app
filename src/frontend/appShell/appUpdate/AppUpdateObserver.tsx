@@ -71,7 +71,7 @@ export function AppUpdateObserver() {
       now - previous.remindedAt < REMINDER_INTERVAL_MS
     )
       return;
-    actions.open(data, 'coldStart');
+    actions.open(data);
   }, [
     active,
     coverVisible,

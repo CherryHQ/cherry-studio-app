@@ -2,15 +2,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
+import type {
+  ApkUpdateRelease,
+  AppUpdateDownload,
+  AppUpdateRelease,
+} from '@/shared/contracts/appUpdate';
 
-import { AppUpdateDialog, type AppUpdateOrigin } from '../AppUpdateDialog';
+import { AppUpdateDialog } from '../AppUpdateDialog';
 
 const mockIdle = { status: 'idle' } as const;
+let mockDownload: AppUpdateDownload = mockIdle;
 const mockUpdate = {
-  getDownload: () => mockIdle,
+  getDownload: () => mockDownload,
   subscribeDownload: () => () => {},
-  releaseNotes: jest.fn(async () => 'Cold-start-only notes'),
+  releaseNotes: jest.fn(async () => 'Release notes'),
 };
 jest.mock('@/frontend/data/BackendProvider', () => ({ useBackendModule: () => mockUpdate }));
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => [0] }));
@@ -22,6 +27,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@cherrystudio/ui/components', () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactNode }) => (open ? children : null),
   Button: ({ children }: { children: ReactNode }) => children,
+  MarkdownText: ({ markdown }: { markdown: string }) => markdown,
   Spinner: () => null,
 }));
 const release: AppUpdateRelease = {
@@ -31,7 +37,17 @@ const release: AppUpdateRelease = {
   currentVersion: '1.0.0',
   latestVersion: '2.0.0',
   notesSource: 'store',
-  notes: 'Cold-start-only notes',
+  notes: 'Release notes',
+};
+const apkRelease: ApkUpdateRelease = {
+  channel: 'apk',
+  id: 'apk:2.0.0',
+  currentVersion: '1.0.0',
+  latestVersion: '2.0.0',
+  notes: 'APK release notes',
+  downloadUrl:
+    'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v2.0.0/cherry-studio-2.0.0-android.apk',
+  checksumUrl: 'https://gitcode.com/CherryHQ/cherry-studio-app/releases/download/v2.0.0/SHA256SUMS',
 };
 const actions = {
   cancel: jest.fn(),
@@ -42,14 +58,16 @@ const actions = {
 };
 let client: QueryClient;
 let renderer: ReactTestRenderer;
-const tree = (origin: AppUpdateOrigin | null) => (
+const tree = (current: AppUpdateRelease | null) => (
   <QueryClientProvider client={client}>
-    <AppUpdateDialog actions={actions} origin={origin} release={origin ? release : null} />
+    <AppUpdateDialog actions={actions} release={current} />
   </QueryClientProvider>
 );
 const rendered = () => JSON.stringify(renderer.toJSON());
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDownload = mockIdle;
+  mockUpdate.releaseNotes.mockResolvedValue('Release notes');
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 afterEach(() => {
@@ -57,25 +75,46 @@ afterEach(() => {
   client.clear();
 });
 
-test('manual presentation neither requests nor displays release notes', async () => {
+test('an open update dialog requests and displays release notes', async () => {
   await act(async () => {
-    renderer = create(tree('manual'));
+    renderer = create(tree(release));
   });
-  expect(mockUpdate.releaseNotes).not.toHaveBeenCalled();
-  expect(rendered()).not.toContain('Cold-start-only notes');
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(mockUpdate.releaseNotes).toHaveBeenCalledWith(release, 'en-us');
+  expect(rendered()).toContain('Release notes');
   expect(rendered()).toContain('appUpdate.currentVersion');
   expect(rendered()).toContain('appUpdate.openStore');
 });
 
-test('cached cold-start notes do not leak into a later manual presentation', async () => {
+test('reopening an update dialog shows cached notes without another request', async () => {
   await act(async () => {
-    renderer = create(tree('coldStart'));
+    renderer = create(tree(release));
   });
   await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   expect(mockUpdate.releaseNotes).toHaveBeenCalledTimes(1);
-  expect(rendered()).toContain('Cold-start-only notes');
+  expect(rendered()).toContain('Release notes');
   act(() => renderer.update(tree(null)));
-  act(() => renderer.update(tree('manual')));
+  act(() => renderer.update(tree(release)));
   expect(mockUpdate.releaseNotes).toHaveBeenCalledTimes(1);
-  expect(rendered()).not.toContain('Cold-start-only notes');
+  expect(rendered()).toContain('Release notes');
+});
+
+test('a reopened transfer shows its own release notes', async () => {
+  mockDownload = {
+    status: 'downloading',
+    release: apkRelease,
+    receivedBytes: 50,
+    totalBytes: 100,
+  };
+  mockUpdate.releaseNotes.mockResolvedValue('APK release notes');
+  await act(async () => {
+    renderer = create(tree(null));
+  });
+  expect(mockUpdate.releaseNotes).not.toHaveBeenCalled();
+
+  await act(async () => renderer.update(tree(release)));
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(mockUpdate.releaseNotes).toHaveBeenCalledWith(apkRelease, 'en-us');
+  expect(rendered()).toContain('APK release notes');
+  expect(rendered()).toContain('appUpdate.downloadInBackground');
 });

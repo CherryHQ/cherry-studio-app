@@ -15,7 +15,7 @@ import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { cacheService } from '@/frontend/data/CacheService';
 import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
-import { AppUpdateDialog, type AppUpdateOrigin } from './AppUpdateDialog';
+import { AppUpdateDialog } from './AppUpdateDialog';
 import { appUpdateQueryOptions } from './appUpdateQueries';
 
 const UNAVAILABLE_KEYS = {
@@ -29,7 +29,7 @@ type AppUpdateActions = {
   /** A manual check: opens the dialog for a known or newly found update, otherwise reports why not. */
   check(): Promise<void>;
   /** Presents one release in the update dialog and records it as this release's reminder. */
-  open(release: AppUpdateRelease, origin?: AppUpdateOrigin): void;
+  open(release: AppUpdateRelease): void;
 };
 const AppUpdateActionsContext = createContext<AppUpdateActions | null>(null);
 
@@ -43,22 +43,19 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   const { alert } = useAlert();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const [presentation, setPresentation] = useState<{
-    release: AppUpdateRelease;
-    origin: AppUpdateOrigin;
-  } | null>(null);
+  const [release, setRelease] = useState<AppUpdateRelease | null>(null);
   const pendingCheck = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
-    if (!presentation) return;
+    if (!release) return;
     cacheService.setPersist('app_update.last_reminder', {
-      releaseId: presentation.release.id,
+      releaseId: release.id,
       remindedAt: Date.now(),
     });
-  }, [presentation]);
+  }, [release]);
 
   const dialog = useMemo(() => {
-    const close = () => setPresentation(null);
+    const close = () => setRelease(null);
 
     const install = async () => {
       try {
@@ -111,7 +108,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
           staleTime: 0,
         });
         if (result.status === 'available') {
-          setPresentation({ release: result, origin: 'manual' });
+          setRelease(result);
           start(result);
           return;
         }
@@ -131,9 +128,9 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   }, [appUpdate, queryClient, alert, toast, t]);
 
   const actions = useMemo<AppUpdateActions>(() => {
-    const open = (next: AppUpdateRelease, origin: AppUpdateOrigin = 'manual') => {
+    const open = (next: AppUpdateRelease) => {
       // Never replace a prompt already being read, including two opens in the same render.
-      setPresentation((current) => current ?? { release: next, origin });
+      setRelease((current) => current ?? next);
     };
 
     const check = async () => {
@@ -175,11 +172,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   return (
     <AppUpdateActionsContext value={actions}>
       {children}
-      <AppUpdateDialog
-        actions={dialog}
-        release={presentation?.release ?? null}
-        origin={presentation?.origin ?? null}
-      />
+      <AppUpdateDialog actions={dialog} release={release} />
     </AppUpdateActionsContext>
   );
 }

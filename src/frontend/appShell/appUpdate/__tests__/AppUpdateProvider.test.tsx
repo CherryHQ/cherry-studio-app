@@ -240,17 +240,16 @@ test('a failed manual check releases its guard so a later attempt can succeed', 
   expect(mockDialog.release).toMatchObject({ id: latestRelease.id });
 });
 
-test('only the cold-start presentation carries the log origin; reopening is manual', async () => {
-  act(() => actions.open(oldRelease, 'coldStart'));
-  expect(mockDialog.origin).toBe('coldStart');
+test('another trigger preserves the open prompt until it closes', async () => {
+  act(() => actions.open(oldRelease));
   act(() => actions.open(latestRelease));
   expect(mockDialog.release).toBe(oldRelease);
-  expect(mockDialog.origin).toBe('coldStart');
+  expect(mockSetPersist).toHaveBeenCalledTimes(1);
   act(() => mockDialog.actions.close());
   recordAvailable(oldRelease);
   await act(async () => actions.check());
-  expect(mockDialog.origin).toBe('manual');
   expect(mockDialog.release).toMatchObject({ id: oldRelease.id });
+  expect(mockSetPersist).toHaveBeenCalledTimes(2);
 });
 
 test('domestic updates use the existing dialog and only open the store after confirmation', async () => {

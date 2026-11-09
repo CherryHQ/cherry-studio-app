@@ -12,8 +12,6 @@ import type { AppUpdateDownload, AppUpdateRelease } from '@/shared/contracts/app
 
 import { appUpdateReleaseNotesQueryOptions, useAppUpdateDownload } from './appUpdateQueries';
 
-export type AppUpdateOrigin = 'coldStart' | 'manual';
-
 export type AppUpdateDialogActions = {
   cancel(): Promise<void>;
   close(): void;
@@ -35,11 +33,9 @@ const STORE_KEYS = {
 export function AppUpdateDialog({
   actions,
   release,
-  origin,
 }: {
   actions: AppUpdateDialogActions;
   release: AppUpdateRelease | null;
-  origin: AppUpdateOrigin | null;
 }) {
   const appUpdate = useBackendModule('appUpdate');
   const transfer = useAppUpdateDownload(appUpdate);
@@ -54,7 +50,6 @@ export function AppUpdateDialog({
       actions={actions}
       current={current}
       open={release !== null}
-      origin={origin}
       transfer={transfer}
     />
   );
@@ -68,13 +63,11 @@ function AppUpdateDialogContent({
   actions,
   current,
   open,
-  origin,
   transfer,
 }: {
   actions: AppUpdateDialogActions;
   current: AppUpdateRelease;
   open: boolean;
-  origin: AppUpdateOrigin | null;
   transfer: AppUpdateDownload;
 }) {
   const appUpdate = useBackendModule('appUpdate');
@@ -82,7 +75,7 @@ function AppUpdateDialogContent({
   const { t, i18n } = useTranslation();
   const notes = useQuery({
     ...appUpdateReleaseNotesQueryOptions(appUpdate, current, i18n.language),
-    enabled: open && origin === 'coldStart',
+    enabled: open,
   });
 
   return (
@@ -101,17 +94,15 @@ function AppUpdateDialogContent({
       <Text className="text-sm text-muted-foreground">
         {t('appUpdate.currentVersion', { version: current.currentVersion })}
       </Text>
-      {origin === 'coldStart' && (
-        <ReleaseNotes
-          markdown={
-            current.channel === 'apk' ||
-            (current.channel === 'domestic-stores' && current.notesSource === 'gitcode')
-          }
-          fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
-          loading={notes.isPending}
-          notes={notes.data ?? null}
-        />
-      )}
+      <ReleaseNotes
+        markdown={
+          current.channel === 'apk' ||
+          (current.channel === 'domestic-stores' && current.notesSource === 'gitcode')
+        }
+        fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
+        loading={notes.isPending}
+        notes={notes.data ?? null}
+      />
       <AppUpdateDialogActionsView actions={actions} release={current} transfer={transfer} />
     </Dialog>
   );

@@ -18,7 +18,7 @@ export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
   });
 }
 
-/** Notes may be corrected after publication; only the cold-start dialog requests them. */
+/** Notes may be corrected after publication, so refresh them after six hours. */
 export function appUpdateReleaseNotesQueryOptions(
   appUpdate: AppUpdateModule,
   release: AppUpdateRelease,

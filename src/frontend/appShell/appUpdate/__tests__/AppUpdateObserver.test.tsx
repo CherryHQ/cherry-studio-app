@@ -87,7 +87,7 @@ afterEach(() => {
 
 test('a cold start on the landing chat offers the release once', async () => {
   await launch();
-  expect(mockOpen).toHaveBeenCalledWith(available, 'coldStart');
+  expect(mockOpen).toHaveBeenCalledWith(available);
 
   await act(async () => {
     await queryClient.refetchQueries();

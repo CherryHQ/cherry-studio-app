@@ -76,8 +76,10 @@ selects the version for the UI language. A failed lookup returns what the releas
 - **App Store:** Apple's lookup `releaseNotes` for the queried region, as plain text.
 - **Google Play:** none; the in-app update API exposes only a version code.
 - **Domestic stores:** HONOR description and Xiaomi update log remain plain text; vivo supplies
-  no notes. The GitCode fallback uses the APK note reader above. Only cold-start presentation
-  invokes the notes reader.
+  no notes. The GitCode fallback uses the APK note reader above.
+
+Every open update dialog invokes the notes reader, including manual checks and transfer reopen;
+the frontend caches results by release and language for six hours.
 
 ## APK Transfer And Installation
 
