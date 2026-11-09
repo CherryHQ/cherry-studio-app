@@ -7,32 +7,49 @@ import { normalizeReleaseNotes } from './releaseNotes';
 import { compareReleaseVersions } from './releaseVersion';
 
 const REPOSITORY = 'CherryHQ/cherry-studio-app';
+export type ApkReleaseSource = 'gitcode' | 'github';
 const ReleaseSchema = z.object({
   tag_name: z.string().regex(/^v?\d+\.\d+\.\d+$/),
   prerelease: z.boolean(),
-  release_status: z.string(),
+  release_status: z.string().optional(),
+  draft: z.boolean().optional(),
   body: z.string().nullish(),
   assets: z.array(
-    z.object({ name: z.string(), type: z.string(), browser_download_url: z.string() }),
+    z.object({ name: z.string(), type: z.string().optional(), browser_download_url: z.string() }),
   ),
 });
-const gitcode = createHttpClient({
-  baseUrl: 'https://api.gitcode.com/api/v5',
-  headers: { Accept: 'application/json' },
-  timeoutMs: 10_000,
-});
-const attachments = createHttpClient({ baseUrl: 'https://gitcode.com', timeoutMs: 15_000 });
+const sources = {
+  gitcode: {
+    api: createHttpClient({
+      baseUrl: 'https://api.gitcode.com/api/v5',
+      headers: { Accept: 'application/json' },
+      timeoutMs: 10_000,
+    }),
+    attachments: createHttpClient({ baseUrl: 'https://gitcode.com', timeoutMs: 15_000 }),
+    origin: 'https://gitcode.com',
+  },
+  github: {
+    api: createHttpClient({
+      baseUrl: 'https://api.github.com',
+      headers: { Accept: 'application/vnd.github+json' },
+      timeoutMs: 10_000,
+    }),
+    attachments: createHttpClient({ baseUrl: 'https://github.com', timeoutMs: 15_000 }),
+    origin: 'https://github.com',
+  },
+} as const;
 
-export async function checkGitcodeRelease(
+export async function checkApkRelease(
   currentVersion: string,
+  source: ApkReleaseSource,
   signal?: AbortSignal,
 ): Promise<AppUpdateResult> {
   let data: unknown;
   try {
-    const response = await gitcode.request<unknown>({
+    const response = await sources[source].api.request<unknown>({
       method: 'GET',
       path: `/repos/${REPOSITORY}/releases/latest`,
-      query: { type: 'latest' },
+      ...(source === 'gitcode' ? { query: { type: 'latest' } } : {}),
       maxResponseBytes: 512_000,
       signal,
     });
@@ -44,15 +61,17 @@ export async function checkGitcodeRelease(
   }
   const release = ReleaseSchema.parse(data);
   const latestVersion = release.tag_name.replace(/^v/, '');
-  const urls = apkReleaseUrls(release.tag_name);
+  const urls = apkReleaseUrls(release.tag_name, source);
   const hasAttachment = (name: string, url: string) =>
     release.assets.some(
       (asset) =>
-        asset.name === name && asset.type === 'attach' && asset.browser_download_url === url,
+        asset.name === name &&
+        (source !== 'gitcode' || asset.type === 'attach') &&
+        asset.browser_download_url === url,
     );
   if (
     release.prerelease ||
-    release.release_status !== 'latest' ||
+    (source === 'gitcode' ? release.release_status !== 'latest' : release.draft !== false) ||
     !hasAttachment(`cherry-studio-${latestVersion}-android.apk`, urls.downloadUrl) ||
     !hasAttachment('SHA256SUMS', urls.checksumUrl)
   ) {
@@ -72,28 +91,36 @@ export async function checkGitcodeRelease(
 }
 
 export function assertApkRelease(release: ApkUpdateRelease, currentVersion: string): void {
+  getApkReleaseSource(release);
+  if (compareReleaseVersions(release.latestVersion, currentVersion) <= 0)
+    throw new Error('Invalid APK release');
+}
+
+function getApkReleaseSource(release: ApkUpdateRelease): ApkReleaseSource {
   const tag =
-    /^https:\/\/gitcode\.com\/CherryHQ\/cherry-studio-app\/releases\/download\/(v?\d+\.\d+\.\d+)\//.exec(
+    /^https:\/\/(?:gitcode\.com|github\.com)\/CherryHQ\/cherry-studio-app\/releases\/download\/(v?\d+\.\d+\.\d+)\//.exec(
       release.downloadUrl,
     )?.[1];
   if (!tag) throw new Error('Invalid APK download URL');
-  const urls = apkReleaseUrls(tag);
+  const source = new URL(release.downloadUrl).hostname === 'gitcode.com' ? 'gitcode' : 'github';
+  const urls = apkReleaseUrls(tag, source);
   const version = tag.replace(/^v/, '');
   if (
     release.downloadUrl !== urls.downloadUrl ||
     release.checksumUrl !== urls.checksumUrl ||
     release.latestVersion !== version ||
-    release.id !== `apk:${version}` ||
-    compareReleaseVersions(version, currentVersion) <= 0
+    release.id !== `apk:${version}`
   )
     throw new Error('Invalid APK release');
+  return source;
 }
 
 export async function readApkChecksum(
   release: ApkUpdateRelease,
   signal: AbortSignal,
 ): Promise<string> {
-  const { data } = await attachments.request<string>({
+  const source = getApkReleaseSource(release);
+  const { data } = await sources[source].attachments.request<string>({
     method: 'GET',
     path: new URL(release.checksumUrl).pathname,
     responseType: 'text',
@@ -109,8 +136,8 @@ export async function readApkChecksum(
   return matches[0]!;
 }
 
-function apkReleaseUrls(tag: string) {
-  const base = `https://gitcode.com/${REPOSITORY}/releases/download/${tag}`;
+function apkReleaseUrls(tag: string, source: ApkReleaseSource) {
+  const base = `${sources[source].origin}/${REPOSITORY}/releases/download/${tag}`;
   return {
     downloadUrl: `${base}/cherry-studio-${tag.replace(/^v/, '')}-android.apk`,
     checksumUrl: `${base}/SHA256SUMS`,

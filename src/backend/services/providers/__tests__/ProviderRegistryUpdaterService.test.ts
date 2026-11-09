@@ -13,15 +13,15 @@ import { ProviderRegistryUpdaterService } from '../ProviderRegistryUpdaterServic
 import { providerRegistryUpdates } from '../providerRegistryUpdates';
 
 const mockRequest = jest.fn();
+const mockGetCountry = jest.fn(async () => 'US');
+jest.mock('@/backend/core/application/Application', () => ({
+  application: { get: () => ({ getCountry: mockGetCountry }) },
+}));
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: ({ baseUrl }: { baseUrl: string }) => ({
     request: (request: unknown) => mockRequest(baseUrl, request),
   }),
   isHttpError: () => false,
-}));
-jest.mock('expo-localization', () => ({
-  getLocales: () => [{ regionCode: 'US' }],
-  getCalendars: () => [{ timeZone: 'UTC' }],
 }));
 jest.mock('../providerRegistrySnapshot', () => ({
   readProviderRegistrySnapshots: jest.fn(),
@@ -69,6 +69,7 @@ function serve(snapshotToServe: ReturnType<typeof snapshot>) {
 let updater: Updater;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetCountry.mockResolvedValue('US');
   providerRegistryService.clearRemoteSnapshot();
   providerRegistryUpdates.clear();
   jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([]);
@@ -77,6 +78,17 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await updater.stop();
+});
+
+it.each([
+  ['CN', 'raw.gitcode.com'],
+  ['US', 'raw.githubusercontent.com'],
+])('selects the registry mirror from the shared IP country %s', async (country, host) => {
+  mockGetCountry.mockResolvedValue(country);
+  serve(snapshot(1));
+  await updater.ensureReady();
+  expect(providerRegistryService.isReady()).toBe(true);
+  expect(new URL(mockRequest.mock.calls[0]![0]).hostname).toBe(host);
 });
 
 it('automatically downloads on first launch and shares it with concurrent model selection', async () => {

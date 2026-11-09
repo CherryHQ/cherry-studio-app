@@ -20,7 +20,7 @@ export type { CatalogManifest };
 export type ModelsBundle = ReturnType<typeof ModelListSchema.parse>;
 export type ProviderModelsBundle = ReturnType<typeof ProviderModelListSchema.parse>;
 
-/** Schema lane shared with the desktop-published remote registry. */
+/** Keep v3 until Mobile's image adapters admit the v4 drawing controls. */
 export const REGISTRY_SCHEMA_VERSION = 3;
 
 /**

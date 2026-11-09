@@ -267,7 +267,12 @@ for (const [id, extension] of Object.entries(mobileProviderExtensions)) {
   if (!provider) {
     providersById.set(id, {
       ...extension,
-      ...ProviderConfigSchema.parse({ ...extension, id }),
+      ...ProviderConfigSchema.parse({
+        ...extension,
+        id,
+        // Mobile-only presets require explicit admission to the domestic catalog.
+        availableInEditions: extension.availableInEditions ?? ['global'],
+      }),
     });
     continue;
   }

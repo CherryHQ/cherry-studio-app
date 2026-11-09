@@ -3,8 +3,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { hashLocalFile } from '@/backend/services/file/fileHash';
 import type { ApkUpdateRelease } from '@/shared/contracts/appUpdate';
 
+import { readApkChecksum } from '../apkRelease';
 import { createApkDownload } from '../createApkDownload';
-import { readApkChecksum } from '../gitcodeRelease';
 
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
@@ -15,7 +15,7 @@ jest.mock('expo-file-system/legacy', () => ({
   createDownloadResumable: jest.fn(),
 }));
 jest.mock('@/backend/services/file/fileHash', () => ({ hashLocalFile: jest.fn() }));
-jest.mock('../gitcodeRelease', () => ({ readApkChecksum: jest.fn() }));
+jest.mock('../apkRelease', () => ({ readApkChecksum: jest.fn() }));
 const hash = 'a'.repeat(64);
 const release: ApkUpdateRelease = {
   channel: 'apk',
