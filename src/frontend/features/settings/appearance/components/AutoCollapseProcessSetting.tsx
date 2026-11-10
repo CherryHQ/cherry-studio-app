@@ -25,7 +25,6 @@ export function AutoCollapseProcessSetting() {
 
   return (
     <Section.SwitchItem
-      description={t('settings.autoCollapseProcess.description')}
       disabled={isSaving}
       label={t('settings.autoCollapseProcess.title')}
       onValueChange={(value) => {

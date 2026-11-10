@@ -1,12 +1,62 @@
 import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
-import { formatMessageQuote, toRuntimeHistory, toRuntimeInputParts } from '../turnRuntimeInput';
+import {
+  formatMessageQuote,
+  runtimeUserText,
+  toRuntimeHistory,
+  toRuntimeInputParts,
+} from '../turnRuntimeInput';
 
 const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 const MODEL_ID = createUniqueModelId('provider-1', 'vision-model');
 const OTHER_MODEL_ID = createUniqueModelId('provider-1', 'other-model');
+
+test('expands adjacent Office and quote references without overwriting the inserted selection block', () => {
+  const selection = {
+    file_entry_id: '00000000-0000-7000-8000-000000000001',
+    anchor: { format: 'xlsx' as const, sheet: 'Sheet1', range: 'A1' },
+    excerpt: '12',
+  };
+  const result = runtimeUserText({
+    text: 'Cell“Q” note',
+    selectionReferences: [{ type: 'selection', label: 'Cell', offset: 0, selection }],
+    quotes: [
+      {
+        id: 'q',
+        sourceMessageId: '00000000-0000-7000-8000-000000000002',
+        text: 'Full quoted passage',
+        reference: { label: '“Q”', offset: 4 },
+      },
+    ],
+  });
+  expect(result).toContain(`Cell\n\`\`\`selection-ref\n${JSON.stringify(selection)}\n\`\`\``);
+  expect(result).toContain('\n\n> Full quoted passage\n\n note');
+  expect(result).not.toContain('“Q”');
+});
+
+test('expands each quote at its recorded position while keeping its comment outside the blockquote', () => {
+  const text = '“First…” reading\n“Second” swimming';
+  const quotes = [
+    {
+      id: 'first',
+      sourceMessageId: '00000000-0000-7000-8000-000000000001',
+      text: 'Full first passage\nSecond line',
+      reference: { label: '“First…”', offset: 0 },
+    },
+    {
+      id: 'second',
+      sourceMessageId: '00000000-0000-7000-8000-000000000002',
+      text: 'Full second passage',
+      reference: { label: '“Second”', offset: text.indexOf('“Second”') },
+    },
+  ];
+  expect(runtimeUserText({ text, quotes })).toBe(
+    '\n\n> Full first passage\n> Second line\n\n reading\n\n\n> Full second passage\n\n swimming',
+  );
+  expect(quotes[0].reference.offset).toBe(0);
+});
 
 function answer(
   id: string,

@@ -23,6 +23,8 @@ export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
 
 export type AgentSessionChatState = {
   isSubmitting?: boolean;
+  /** Unfinished answer displayed as pending until its replacement is reserved. */
+  pendingRetryMessageId?: string;
   activeTurn: AgentTurnView | null;
   queuedInputs: readonly AgentQueuedInput[];
   enteringUserMessageId?: string;
@@ -329,7 +331,7 @@ export class AgentSessionChatClient {
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
-    const submission = this.beginSubmission(entry, true);
+    const submission = this.beginSubmission(entry, { allowQueue: true });
     try {
       await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
@@ -349,8 +351,10 @@ export class AgentSessionChatClient {
 
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
     const entry = this.getEntry(input.sessionId);
-    // The original answer stays visible while the engine prepares its new branch.
-    const submission = this.beginSubmission(entry);
+    // Explicit model selection adds a branch and keeps the source answer visible.
+    const submission = this.beginSubmission(entry, {
+      pendingRetryMessageId: input.modelId === undefined ? input.messageId : undefined,
+    });
     try {
       await this.observe(input.sessionId);
       throwIfSubmissionCancelled(submission);
@@ -363,11 +367,12 @@ export class AgentSessionChatClient {
       }
       return session;
     } finally {
-      // Admission never replaces the source answer, whether a branch was created or rejected.
+      // Drop the display overlay; preparation never mutates the source answer.
       this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,
         isSubmitting: false,
+        pendingRetryMessageId: undefined,
       });
       if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
         this.stopObservation(entry);
@@ -378,11 +383,11 @@ export class AgentSessionChatClient {
 
   private beginSubmission(
     entry: SessionEntry,
-    allowQueue = false,
+    options: { allowQueue?: boolean; pendingRetryMessageId?: string } = {},
   ): NonNullable<SessionEntry['submission']> {
     if (
       entry.state.isSubmitting ||
-      (!allowQueue &&
+      (!options.allowQueue &&
         entry.state.activeTurn &&
         !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
     ) {
@@ -392,8 +397,12 @@ export class AgentSessionChatClient {
         retryable: false,
       });
     }
-    this.updateState(entry, { ...entry.state, isSubmitting: true });
     entry.submission = { isCancelled: false };
+    this.updateState(entry, {
+      ...entry.state,
+      isSubmitting: true,
+      pendingRetryMessageId: options.pendingRetryMessageId,
+    });
     return entry.submission;
   }
 
@@ -571,6 +580,12 @@ export class AgentSessionChatClient {
     }
     this.updateState(entry, {
       isSubmitting: entry.state.isSubmitting,
+      pendingRetryMessageId:
+        snapshot.streamingMessage &&
+        snapshot.streamingMessage.id === entry.state.pendingRetryMessageId &&
+        !isTerminalMessage(snapshot.streamingMessage)
+          ? undefined
+          : entry.state.pendingRetryMessageId,
       activeTurn: snapshot.activeTurn,
       queuedInputs: snapshot.queuedInputs,
       ...(snapshot.activeUserMessage
@@ -655,6 +670,10 @@ export class AgentSessionChatClient {
         entry.liveMessages.set(event.message.id, event.message);
         this.installToolInputPreviews(event.message);
         this.commitLiveMessages(entry, {
+          ...(event.message.id === entry.state.pendingRetryMessageId &&
+          !isTerminalMessage(event.message)
+            ? { pendingRetryMessageId: undefined }
+            : {}),
           ...(event.message.role === 'user' ? { enteringUserMessageId: event.message.id } : {}),
         });
         if (event.message.role === 'user') {

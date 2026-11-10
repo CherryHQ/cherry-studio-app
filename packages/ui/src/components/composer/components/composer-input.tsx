@@ -34,6 +34,7 @@ export function ComposerInput({
   onBlur,
   onFocus,
   onLayout,
+  onLinkPress,
   onPaste,
   onReturnSubmit,
   placeholder,
@@ -106,6 +107,24 @@ export function ComposerInput({
     [changeText],
   );
 
+  const handleLinkPress = useCallback(
+    (event: { url: string; x: number; y: number; width: number; height: number }) => {
+      if (!onLinkPress) return;
+      const draft = emitted.current;
+      inputRef.current?.measureInWindow((pageX, pageY) => {
+        if (emitted.current !== draft) return;
+        onLinkPress({
+          url: event.url,
+          pageX: pageX + event.x,
+          pageY: pageY + event.y,
+          width: event.width,
+          height: event.height,
+        });
+      });
+    },
+    [inputRef, onLinkPress],
+  );
+
   // Pushes a caller-side change — send clearing the draft, a failed send
   // restoring it — down into the field. Guarded on `emitted`, or every
   // keystroke would round-trip through here and fight the native input for the
@@ -145,6 +164,7 @@ export function ComposerInput({
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
         onLayout={onLayout}
+        onLinkPress={onLinkPress ? handleLinkPress : undefined}
         onSubmit={submitOnReturn ? onReturnSubmit : undefined}
         submitOnReturn={submitOnReturn && onReturnSubmit !== undefined}
         placeholder={placeholder}

@@ -31,5 +31,5 @@ export type TabsProps<TValue extends string> = {
   testID?: string;
   value: TValue;
   /** Omit for the existing platform control; explicit styles share one product rendering. */
-  variant?: 'segmented' | 'underline' | 'chips';
+  variant?: 'segmented' | 'underline' | 'chips' | 'floating';
 };

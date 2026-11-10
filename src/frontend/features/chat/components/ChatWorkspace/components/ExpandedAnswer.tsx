@@ -4,6 +4,7 @@ import {
   Button,
   ContextMenuExclusion,
   Skeleton,
+  useComposerExpansion,
 } from '@cherrystudio/ui/components';
 import { duration, easing, spring } from '@cherrystudio/ui/motion';
 import {
@@ -105,6 +106,15 @@ export function ExpandedAnswerProvider({
   // The region grows over the composer while an answer is open; the transcript keeps its size so
   // nothing under the layer moves.
   const [transcriptHeight, setTranscriptHeight] = useState<number>();
+  const fixedTranscriptHeight = request ? transcriptHeight : undefined;
+  const composerInset = useComposerExpansion()?.meta.contentInset;
+  // The elevated workspace also contains the transcript's background. Clip it above the composer
+  // so shrinking the answer reveals the input before the layer's closing spring has finished.
+  const transcriptClipStyle = useAnimatedStyle(() => ({
+    maxHeight: fixedTranscriptHeight
+      ? Math.max(0, fixedTranscriptHeight - (composerInset?.get() ?? 0))
+      : undefined,
+  }));
   const expand = useCallback((next: ExpandAnswerRequest) => {
     Keyboard.dismiss();
     setRequest((current) => current ?? next);
@@ -113,17 +123,20 @@ export function ExpandedAnswerProvider({
   return (
     <ExpandAnswerContextProvider value={expand}>
       {/* The transcript under an open answer leaves the accessibility tree. */}
-      <View
+      <Animated.View
         accessibilityElementsHidden={Boolean(request)}
+        className={request ? 'flex-1 overflow-hidden' : 'flex-1'}
         importantForAccessibility={request ? 'no-hide-descendants' : 'auto'}
         onLayout={(event) => {
           if (!request) setTranscriptHeight(event.nativeEvent.layout.height);
         }}
-        // A style alone, since a class would win over the fixed height.
-        style={request && transcriptHeight ? { height: transcriptHeight } : fillStyle}
+        style={transcriptClipStyle}
       >
-        {children}
-      </View>
+        {/* Clipping must not resize the list's viewport or move the card it returns to. */}
+        <View style={fixedTranscriptHeight ? { height: fixedTranscriptHeight } : fillStyle}>
+          {children}
+        </View>
+      </Animated.View>
       {request ? (
         <ExpandedAnswer
           messages={messages}

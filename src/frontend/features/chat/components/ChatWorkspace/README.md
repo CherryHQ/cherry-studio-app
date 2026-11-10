@@ -71,6 +71,9 @@ start and the header fades with the motion's progress on the UI thread; nothing 
 out mid-motion, and the region is released before the closed layer is removed. A new action takes
 over from the current progress. With reduced motion the layer fades in and out in place. The
 transcript keeps its size and header inset throughout, so nothing under the layer moves.
+While the workspace is elevated, the transcript is clipped above the measured composer footprint
+without resizing its viewport. The shrinking answer and fading scrim reveal the mounted composer
+during closing rather than leaving its area blank until the layer is released.
 
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions

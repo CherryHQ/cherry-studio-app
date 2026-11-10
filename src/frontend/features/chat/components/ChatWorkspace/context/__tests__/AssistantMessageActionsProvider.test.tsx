@@ -6,6 +6,10 @@ import { localConversationFailure } from '@/frontend/appShell/conversation/local
 import { AgentProtocolError, type AgentErrorView } from '@/shared/contracts/agent';
 
 import {
+  ChatShareSelectionStoreContext,
+  createChatShareSelectionStore,
+} from '../../../../share/chatShareSelection';
+import {
   AssistantMessageActionsProvider,
   ChatMessageActionsProvider,
   useAssistantMessageActions,
@@ -24,13 +28,8 @@ const mockShare = jest.fn();
 jest.mock('../../translation/MessageTranslationProvider', () => ({
   useMessageTranslationStore: () => null,
 }));
-let mockFocusEffect: (() => void) | undefined;
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
-  useFocusEffect: (effect: () => void) => {
-    mockFocusEffect = effect;
-    effect();
-  },
 }));
 const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
@@ -91,12 +90,19 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
 
 const sessionRef = { source: { kind: 'local' as const }, sessionId: 'session-1' };
 
-function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
+function ProviderHarness({
+  probeRef,
+  isSubmitting = false,
+}: {
+  probeRef: Ref<ContextProbeHandle>;
+  isSubmitting?: boolean;
+}) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
       onShare={mockShare}
       snapshot={{
+        isSubmitting,
         title: mockSourceTitle ?? '',
         freshness: { state: 'current' },
         liveMessages: [],
@@ -183,6 +189,16 @@ describe('AssistantMessageActionsProvider', () => {
     renderer = undefined;
   }
 
+  test('disables message mutations while a retry is being prepared without an active execution', () => {
+    renderProvider();
+    expect(probeRef.current!.state.isRetryDisabled).toBe(false);
+    act(() => renderer!.update(<ProviderHarness probeRef={probeRef} isSubmitting />));
+    expect(probeRef.current!.state.isRetryDisabled).toBe(true);
+    expect(probeRef.current!.state.isDeleteDisabled).toBe(true);
+    act(() => renderer!.update(<ProviderHarness probeRef={probeRef} />));
+    expect(probeRef.current!.state.isRetryDisabled).toBe(false);
+  });
+
   test('remote presentation exposes copy and share without local transcript mutations', async () => {
     const share = jest.fn();
     act(() => {
@@ -262,19 +278,42 @@ describe('AssistantMessageActionsProvider', () => {
     expect(mockRetryMessage).not.toHaveBeenCalled();
   });
 
-  test('ignores repeated share taps until the chat regains focus', () => {
-    renderProvider();
+  test('disables message actions during share selection and restores them on cancellation', () => {
+    const store = createChatShareSelectionStore();
+    mockShare
+      .mockImplementationOnce(store.beginSelection)
+      .mockImplementationOnce(store.beginSelection);
     act(() => {
-      probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-1' });
-      probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-2' });
+      renderer = create(
+        <ChatShareSelectionStoreContext value={store}>
+          <ProviderHarness probeRef={probeRef} />
+        </ChatShareSelectionStoreContext>,
+      );
+    });
+    expect(probeRef.current!.state.isAssistantToolbarEnabled).toBe(true);
+
+    act(() => probeRef.current!.actions.shareAssistantMessage({ messageId: 'answer-1' }));
+    expect(probeRef.current!.state).toMatchObject({
+      isAssistantToolbarEnabled: false,
+      isDeleteDisabled: true,
+      isRetryDisabled: true,
+    });
+    act(() =>
+      probeRef.current!.actions.deleteMessageTurn!({ turnId: 'turn-1', messageId: 'assistant-1' }),
+    );
+    expect(mockAlertConfirm).not.toHaveBeenCalled();
+
+    act(() => store.cancelSelection());
+    expect(probeRef.current!.state).toMatchObject({
+      isAssistantToolbarEnabled: true,
+      isDeleteDisabled: false,
+      isRetryDisabled: false,
     });
 
-    expect(mockShare).toHaveBeenCalledTimes(1);
-    expect(mockShare).toHaveBeenCalledWith('answer-1', undefined);
-
-    act(() => mockFocusEffect?.());
-    act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-3' }));
+    act(() => probeRef.current!.actions.shareAssistantMessage({ messageId: 'answer-2' }));
     expect(mockShare).toHaveBeenCalledTimes(2);
+    expect(mockShare).toHaveBeenLastCalledWith('answer-2', undefined);
+    expect(probeRef.current!.state.isAssistantToolbarEnabled).toBe(false);
   });
 
   test('shows copied feedback until it expires', async () => {

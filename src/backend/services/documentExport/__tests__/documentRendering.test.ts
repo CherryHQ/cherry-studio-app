@@ -1,8 +1,12 @@
-import { DocumentExportError, type ExportDocument } from '@/shared/contracts/documentExport';
+import {
+  DocumentExportError,
+  type ExportDocument,
+  type ExportPresentation,
+} from '@/shared/contracts/documentExport';
 
 import { DEFAULT_CONTENT_LABELS } from '../contentPresentation';
 import { normalizeDocument } from '../normalizeDocument';
-import { renderHtml, renderMarkdownPreview } from '../renderHtml';
+import { renderDocumentPreview, renderHtml, renderMarkdownPreview } from '../renderHtml';
 import { renderMarkdown } from '../renderMarkdown';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -30,6 +34,132 @@ const presentation = {
     inlineCodeForeground: '#111111',
   },
 };
+
+test('message cards retain complete source for measured clipping while complete formats remain unchanged', async () => {
+  const source = Array.from(
+    { length: 100 },
+    (_, index) => `Paragraph ${index}: ${'一段完整的正文。'.repeat(15)}`,
+  ).join('\n\n');
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [
+        {
+          id: 'answer',
+          presentation: 'message',
+          heading: 'Assistant',
+          blocks: [
+            { kind: 'markdown', source },
+            { kind: 'image', assetId: 'omitted', alt: 'Final image' },
+          ],
+        },
+      ],
+      assets: {
+        omitted: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000001' },
+      },
+    },
+  });
+  const card = {
+    ...presentation,
+    imageFrame: {
+      background: '#ffffff',
+      label: 'Message',
+      layout: 'single' as const,
+      excerptLabel: 'Additional content omitted',
+    },
+  };
+  const readImage = jest.fn(async () => new Uint8Array());
+  const preview = renderDocumentPreview(document, card);
+  const { html } = await renderHtml(
+    document,
+    card,
+    new Map(),
+    readImage,
+    new AbortController().signal,
+  );
+  expect(readImage).toHaveBeenCalledTimes(1);
+  expect(preview).toContain('Paragraph 99:');
+  expect(html).toContain('Paragraph 0:');
+  expect(html).toContain('Paragraph 99:');
+  expect(html).toContain('data-share-card-max-height="3600"');
+  expect(html).toContain('data-share-card-omission="Additional content omitted"');
+  expect(html).not.toContain('share-excerpt');
+  expect(renderMarkdown(document)).toContain('Paragraph 99:');
+  const full = await renderHtml(
+    document,
+    presentation,
+    new Map(),
+    readImage,
+    new AbortController().signal,
+  );
+  expect(full.html).toContain('Paragraph 99:');
+  expect(full.html).not.toContain('data-share-card-max-height');
+  expect(readImage).toHaveBeenCalledTimes(2);
+});
+
+test('a short message card stays complete and does not claim it is an excerpt', async () => {
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [
+        {
+          id: 'answer',
+          presentation: 'message',
+          blocks: [{ kind: 'markdown', source: 'A **complete** reply.\n\n- First\n- Second' }],
+        },
+      ],
+    },
+  });
+  const { html } = await renderHtml(
+    document,
+    {
+      ...presentation,
+      imageFrame: {
+        background: '#ffffff',
+        label: 'Message',
+        layout: 'single',
+        excerptLabel: 'Additional content omitted',
+      },
+    },
+    new Map(),
+    jest.fn(),
+    new AbortController().signal,
+  );
+  expect(html).toContain('<strong>complete</strong>');
+  expect(html).toContain('<li>Second</li>');
+  expect(html).not.toContain('share-excerpt');
+  expect(html).not.toContain('is-clipped');
+});
+
+test('message image headers are frozen, escaped and precede the question without repeating the first author', () => {
+  const header = { title: 'Assistant <name>', avatar: 'C', date: '2026/11/09' };
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      header,
+      sections: [
+        { id: 'question', presentation: 'bubble', blocks: [{ kind: 'text', text: 'Question?' }] },
+        {
+          id: 'answer',
+          presentation: 'message',
+          heading: header.title,
+          blocks: [{ kind: 'markdown', source: 'Answer.' }],
+        },
+      ],
+    },
+  });
+  header.title = 'Changed later';
+  const html = renderDocumentPreview(document, {
+    ...presentation,
+    imageFrame: { background: '#ffffff', label: 'Message', layout: 'single' },
+  });
+  expect(html).toContain('Assistant &lt;name&gt;');
+  expect(html).not.toContain('Changed later');
+  expect(html).toContain('2026/11/09');
+  expect(html.indexOf('class="share-card-meta"')).toBeLessThan(html.indexOf('class="bubble-row"'));
+  expect(html).not.toContain('<h2 class="message-heading">');
+  expect(Object.isFrozen(document.header)).toBe(true);
+});
 
 test('plain Markdown remains usable without chat, while the session owns its copied input', () => {
   const input = {
@@ -169,7 +299,12 @@ test('image and HTML exports include one brand and download footer after the con
     qrCodeDataUrl: 'data:image/png;base64,AQ==',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
-  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+  const frames: ExportPresentation['imageFrame'][] = [
+    undefined,
+    { background: '#eeeeee', label: 'Conversation' },
+    { background: '#eeeeee', label: 'Conversation', layout: 'single' },
+  ];
+  for (const imageFrame of frames) {
     const { html } = await renderHtml(
       document,
       { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
@@ -187,6 +322,12 @@ test('image and HTML exports include one brand and download footer after the con
     expect(footer).not.toContain('<brand>');
     expect(footer).not.toContain('AI-generated');
     expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
+    if (imageFrame?.layout === 'single') {
+      const endOfBody = html.indexOf('</article></div>');
+      expect(endOfBody).toBeGreaterThan(html.indexOf('class="share-card-body"'));
+      expect(endOfBody).toBeLessThan(html.indexOf('<footer'));
+      expect(html).not.toContain('share-excerpt');
+    }
   }
 });
 
@@ -356,7 +497,7 @@ test('repeated embedded images do not impose an output text budget', async () =>
     ).join('\n\n'),
   });
   const dataUrl = `data:image/png;base64,${'A'.repeat(1024 * 1024)}`;
-  const cache = new Map([['https://example.com/image.png', { dataUrl }]]);
+  const cache = new Map([['remote:https://example.com/image.png', { dataUrl }]]);
   const { html, issues } = await renderHtml(
     document,
     presentation,
@@ -443,6 +584,8 @@ test('images show labelled code previews alongside prose and inline code', async
   expect(html).toContain('Before.');
   expect(html).toContain('After.');
   expect(html).toContain('<pre><code>');
+  expect(html).toContain('.image-print .code-block{height:auto;overflow:visible;display:block}');
+  expect(html).toContain('white-space:pre-wrap;overflow-wrap:anywhere');
   const browser = await renderHtml(
     document,
     presentation,
@@ -487,7 +630,7 @@ test('four-column tables retain their rows, headers, alignment and media in imag
     '| Name | Link | Image | Note |\n| --- | :---: | --- | ---: |\n| Alpha | [Docs](https://example.com/docs) | ![Photo](https://example.com/photo.png) | **Keep me** |';
   const document = normalizeDocument({ kind: 'markdown', source });
   const cache = new Map([
-    ['https://example.com/photo.png', { dataUrl: 'data:image/png;base64,AA==' }],
+    ['remote:https://example.com/photo.png', { dataUrl: 'data:image/png;base64,AA==' }],
   ]);
   const read = jest.fn();
   const { html } = await renderHtml(

@@ -669,7 +669,7 @@ it('taking back a queued message puts its quote back in the composer, or clears 
   open();
   expect(text()).toContain('Cherry: Passage');
   await press('queue-take-back');
-  expect(composer.draft).toBe('Offline please');
+  expect(composer.draft).toBe('[“Passage”](quote://q)\nOffline please');
   expect(mockRestoreQuote).toHaveBeenCalledWith(
     expect.objectContaining({
       quotes: [quote],
@@ -688,6 +688,7 @@ it('asks before replacing a quote the composer already holds', async () => {
     quoteAuthor: { role: 'assistant' },
   };
   render();
+  act(() => actions.setDraft('[“Held”](quote://q)'));
   open();
   await press('queue-take-back');
   expect(alert().props.isOpen).toBe(true);

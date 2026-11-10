@@ -16,6 +16,7 @@ import { readableFilename } from '@/shared/data/types/file';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 import { normalizeDocument } from './normalizeDocument';
+import type { renderHtml as renderDocumentHtml } from './renderHtml';
 import { renderMarkdown, renderMarkdownWithImages } from './renderMarkdown';
 import type { PreparedAsset, ReadManagedImage } from './resolveDocumentAssets';
 
@@ -35,7 +36,8 @@ export function createDocumentExportSession(
   const directory = new Directory(Paths.cache, 'DocumentExport', randomUUID());
   const assets = new Map<string, PreparedAsset>();
   let operation: { controller: AbortController; promise: Promise<unknown> } | undefined;
-  let current: DocumentExportArtifact | undefined;
+  const artifacts = new Map<string, DocumentExportArtifact>();
+  const html = new Map<string, Awaited<ReturnType<typeof renderDocumentHtml>>>();
   const saved = new Map<string, ResolvedFile>();
   let disposed = false;
   let disposal: Promise<void> | undefined;
@@ -76,6 +78,24 @@ export function createDocumentExportSession(
       assertActive();
       onProgress?.(stage);
     };
+    const key = JSON.stringify(
+      target.format === 'markdown'
+        ? { format: target.format, watermark: target.watermark }
+        : {
+            format: target.format,
+            presentation: target.presentation,
+            layout: target.format === 'image' ? target.layout : undefined,
+          },
+    );
+    const cached = artifacts.get(key);
+    const cachedFiles =
+      cached?.format === 'image'
+        ? cached.pages.map((page) => page.file)
+        : cached
+          ? [cached.file]
+          : [];
+    if (cached && !cached.issues.length && cachedFiles.every((file) => new File(file.uri).exists))
+      return cached;
     let preparedMarkdown: Awaited<ReturnType<typeof renderMarkdownWithImages>> | undefined;
     if (target.format === 'markdown') {
       progress('resolving-assets');
@@ -90,13 +110,6 @@ export function createDocumentExportSession(
       target.format === 'markdown'
         ? preparedMarkdown!.text + renderMarkdownSignature(target.watermark)
         : markdown;
-    if (
-      target.format === 'markdown' &&
-      current?.format === 'markdown' &&
-      current.text === markdownText &&
-      new File(current.file.uri).exists
-    )
-      return current;
     const id = randomUUID();
     const outputDirectory = new Directory(directory, id);
     let didPublish = false;
@@ -124,13 +137,20 @@ export function createDocumentExportSession(
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
         const { renderHtml } = require('./renderHtml') as typeof import('./renderHtml');
         signal.throwIfAborted();
-        const result = await renderHtml(
-          document,
-          target.presentation,
-          assets,
-          dependencies.readManagedImage,
-          signal,
-        );
+        const presentationKey = JSON.stringify(target.presentation);
+        let result = html.get(presentationKey);
+        if (!result) {
+          result = await renderHtml(
+            document,
+            target.presentation,
+            assets,
+            dependencies.readManagedImage,
+            signal,
+          );
+          // Missing resources stay retryable rather than being cached as a successful render.
+          if (!result.issues.length) html.set(presentationKey, result);
+          if (html.size > 2) html.delete(html.keys().next().value!);
+        }
         if (target.format === 'html') {
           const filename = readableFilename(document.title ?? '', {
             extension: 'html',
@@ -205,14 +225,19 @@ export function createDocumentExportSession(
       }
       signal.throwIfAborted();
       assertActive();
-      if (current) removeDirectory(new Directory(directory, current.id));
       if (artifact.format !== 'image') Object.freeze(artifact.file);
       artifact = Object.freeze({
         ...artifact,
         issues: Object.freeze(artifact.issues.map((issue) => Object.freeze(issue))),
       });
-      current = artifact;
-      saved.clear();
+      if (cached) removeDirectory(new Directory(directory, cached.id));
+      artifacts.set(key, artifact);
+      if (artifacts.size > 3) {
+        const oldest = artifacts.keys().next().value!;
+        const evicted = artifacts.get(oldest)!;
+        artifacts.delete(oldest);
+        removeDirectory(new Directory(directory, evicted.id));
+      }
       didPublish = true;
       return artifact;
     } catch (error) {
@@ -227,6 +252,11 @@ export function createDocumentExportSession(
   const session: DocumentExportSession & { cancel(): void } = {
     document,
     markdown,
+    previewDocument: (presentation) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
+      const { renderDocumentPreview } = require('./renderHtml') as typeof import('./renderHtml');
+      return renderDocumentPreview(document, presentation);
+    },
     previewMarkdown: (text, presentation) => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
       const { renderMarkdownPreview } = require('./renderHtml') as typeof import('./renderHtml');
@@ -237,7 +267,8 @@ export function createDocumentExportSession(
     save: (artifact, signal) =>
       run(signal, async (operationSignal) => {
         operationSignal.throwIfAborted();
-        if (current !== artifact) throw new DocumentExportError('invalid-input');
+        if (![...artifacts.values()].includes(artifact))
+          throw new DocumentExportError('invalid-input');
         const files =
           artifact.format === 'image' ? artifact.pages.map((page) => page.file) : [artifact.file];
         const results: ResolvedFile[] = [];
@@ -263,7 +294,8 @@ export function createDocumentExportSession(
         } finally {
           removeDirectory(directory);
           assets.clear();
-          current = undefined;
+          artifacts.clear();
+          html.clear();
           saved.clear();
           onDisposed();
         }

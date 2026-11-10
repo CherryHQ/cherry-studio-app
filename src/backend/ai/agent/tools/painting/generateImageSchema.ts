@@ -148,6 +148,13 @@ export function buildGenerateImageToolDescription(strategy: PaintingGenerationSt
     );
   }
 
+  const outputFormat = strategy.resolveParameters(0)?.definition.supports.outputFormat;
+  if (outputFormat?.type === 'enum' && outputFormat.options.includes('gif')) {
+    instructions.push(
+      'GIF output is available for new-image generation only: omit image_ids, omit size or use auto, and omit background or use auto or opaque. Transparent backgrounds are unavailable for GIF output.',
+    );
+  }
+
   if (strategy.acceptsImages) {
     instructions.push(
       `Edit or use a user-uploaded image or an earlier generated image as a reference: pass its id in image_ids (attachment fileEntryId, generate_image result id, or artifact ref.fileEntryId). Never invent ids or ask the user for one; ask which image only when ambiguous, and ask to reattach one that is unavailable. Describe the changes and what to keep in prompt; never replace the reference with a text-only approximation. At most ${MAX_INPUT_IMAGES} reference image per call; if more are needed, ask which one. This tool reads the original itself; call read_file first only to inspect pixels no longer in context.`,

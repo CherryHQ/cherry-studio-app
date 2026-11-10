@@ -137,7 +137,7 @@ test.each(['native', 'web'])(
 );
 
 test.each(['none', 'cherry'] as const)(
-  'a completed document keeps its bytes when delivery requests %s',
+  'a saved document image follows the sharing watermark setting (%s)',
   async (style) => {
     const uri = 'file:///managed/conversation.png';
     const entry = FileEntrySchema.parse({
@@ -152,18 +152,27 @@ test.each(['none', 'cherry'] as const)(
     const original = new Uint8Array([1, 2, 3]);
     mockFiles.set(uri, original);
     const requestedWatermark: ExportWatermark = style === 'none' ? { kind: 'none' } : watermark;
-    const photo = await prepareImageExport(
-      { uri, provenance: entry.provenance },
-      requestedWatermark,
-    );
+    const photo = await prepareImageExport({ uri }, requestedWatermark);
     const shared = await prepareFileExport({ entry, uri }, requestedWatermark);
-    expect(photo.uri).toBe(uri);
-    expect(shared).toMatchObject({ uri, filename: entry.filename, mediaType: entry.mediaType });
+    if (style === 'none') {
+      expect(photo.uri).toBe(uri);
+      expect(shared).toMatchObject({ uri, filename: entry.filename, mediaType: entry.mediaType });
+      expect(mockResources).toHaveLength(0);
+    } else {
+      expect(photo.uri).not.toBe(uri);
+      expect(shared.uri).not.toBe(uri);
+      expect(mockFiles.get(shared.uri)).toEqual(mockEncodedImage);
+      expect(mockText.mock.calls).toEqual([
+        [signature.brandName],
+        [signature.downloadLabel],
+        [signature.brandName],
+        [signature.downloadLabel],
+      ]);
+    }
     // Neither operation owns the managed source, so releasing its export cannot remove it.
     photo.release();
     shared.release();
     expect(mockFiles.get(uri)).toBe(original);
-    expect(mockResources).toHaveLength(0);
   },
 );
 
@@ -187,6 +196,67 @@ test('none preserves the source format and bytes without native image work', asy
   photo.release();
   file.release();
   expect(mockFiles.get(uri)).toBe(original);
+  expect(mockResources).toHaveLength(0);
+});
+
+test.each(['image/gif', 'IMAGE/GIF', 'image/gif;charset=binary'])(
+  'GIF saving and sharing preserve the original with a watermark selected (%s)',
+  async (mediaType) => {
+    // The media type remains authoritative even when the URI has no GIF suffix.
+    const uri = 'file:///managed/animation';
+    const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    mockFiles.set(uri, original);
+    const entry = FileEntrySchema.parse({
+      id: '00000000-0000-7000-8000-000000000001',
+      filename: 'animation.gif',
+      mediaType,
+      provenance: 'generated',
+      createdAt: 1,
+      updatedAt: 1,
+      size: original.length,
+    });
+
+    const photo = await prepareImageExport({ uri, mediaType }, watermark);
+    const shared = await prepareFileExport({ entry, uri }, watermark);
+    expect(photo.uri).toBe(uri);
+    expect(shared).toMatchObject({ uri, filename: 'animation.gif', mediaType });
+    photo.release();
+    shared.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
+test.each(['image/gif; charset=binary', ' IMAGE/GIF ; charset=binary '])(
+  'GIF photo exports normalize media types with whitespace (%s)',
+  async (mediaType) => {
+    const uri = 'file:///managed/animation';
+    const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    mockFiles.set(uri, original);
+
+    const photo = await prepareImageExport({ uri, mediaType }, watermark);
+    expect(photo.uri).toBe(uri);
+    photo.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
+test.each([
+  'file:///managed/animation.GIF',
+  'file:///managed/animation.gif?revision=1',
+  'file:///managed/animation.gif#preview',
+])('URI-only GIF saving preserves the original with a watermark selected (%s)', async (uri) => {
+  const original = new Uint8Array([71, 73, 70, 56, 57, 97]);
+  mockFiles.set(uri, original);
+
+  const photo = await prepareImageExport({ uri }, watermark);
+  expect(photo.uri).toBe(uri);
+  photo.release();
+  expect(mockFiles.get(uri)).toBe(original);
+  expect(mockFiles.size).toBe(1);
   expect(mockResources).toHaveLength(0);
 });
 

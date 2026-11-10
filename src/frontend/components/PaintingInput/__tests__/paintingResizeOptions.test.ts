@@ -71,4 +71,25 @@ describe('painting resize admission', () => {
     ]);
     expect(paintingResizeOptions(undefined)).toEqual([]);
   });
+
+  it('does not offer still-image dimensions for GIF output', () => {
+    expect(
+      paintingResizeOptions(
+        {
+          mode: 'generate',
+          definition: {
+            supports: {
+              outputFormat: { type: 'enum', options: ['png', 'gif'] },
+              size: {
+                type: 'enum',
+                options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
+                default: '1024x1024',
+              },
+            },
+          },
+        },
+        { outputFormat: 'gif' },
+      ),
+    ).toEqual([]);
+  });
 });

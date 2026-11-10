@@ -1,3 +1,4 @@
+import type { ProviderEdition } from '@cherrystudio/provider-registry';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -14,6 +15,8 @@ import type { DatabaseSeeder } from '../types';
 export class PresetProviderSeeder implements DatabaseSeeder {
   readonly name = 'preset-provider';
   readonly description = 'Install recommended providers and refresh installed presets';
+
+  constructor(private readonly getEdition: () => Promise<ProviderEdition> = async () => 'global') {}
 
   get version() {
     return `${providerRegistryService.getProvidersVersion()}+installed-presets.2`;
@@ -38,11 +41,16 @@ export class PresetProviderSeeder implements DatabaseSeeder {
     // ever run. Once journaled, empty means the user deliberately removed all
     // providers and a registry-version refresh must preserve that choice.
     const isFreshInstall = existingRows.length === 0 && previousRuns.length === 0;
+    const edition = isFreshInstall ? await this.getEdition() : 'global';
     const catalog = providerRegistryService.loadProviders();
     const catalogById = new Map(catalog.map((provider) => [provider.id, provider]));
     const rows = isFreshInstall
       ? catalog
-          .filter((provider) => isRecommendedPresetProvider(provider.id))
+          .filter(
+            (provider) =>
+              isRecommendedPresetProvider(provider.id) &&
+              (!provider.availableInEditions || provider.availableInEditions.includes(edition)),
+          )
           .map(createPresetProviderInput)
       : existingRows.flatMap(({ providerId, presetProviderId }) => {
           if (!presetProviderId) return [];

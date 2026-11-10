@@ -72,9 +72,17 @@ export function createLocalConversationProjector(input: {
 }) {
   const { client, sessionId } = input;
   const cache = createAgentMessageListProjectionCache();
-  const messages = new WeakMap<AgentMessageView, { busy: boolean; message: ConversationMessage }>();
+  const messages = new WeakMap<
+    AgentMessageView,
+    { busy: boolean; retrying: boolean; message: ConversationMessage }
+  >();
   let history:
-    | { source: readonly AgentMessageView[]; busy: boolean; messages: ConversationMessage[] }
+    | {
+        source: readonly AgentMessageView[];
+        busy: boolean;
+        pendingRetryMessageId?: string;
+        messages: ConversationMessage[];
+      }
     | undefined;
   const isBusy = (state: AgentSessionChatState) =>
     isAgentSessionBusy(state) || state.status === 'error';
@@ -112,12 +120,17 @@ export function createLocalConversationProjector(input: {
   return {
     message(message: AgentMessageView, state: AgentSessionChatState): ConversationMessage {
       const busy = isBusy(state);
-      const cached = messages.get(message);
-      if (cached && cached.busy === busy) return cached.message;
       const isSettled = message.status !== 'pending' && message.status !== 'streaming';
-      const canModify = isSettled && message.role !== 'system';
+      const retrying =
+        isSettled && message.status !== 'success' && state.pendingRetryMessageId === message.id;
+      const cached = messages.get(message);
+      if (cached && cached.busy === busy && cached.retrying === retrying) return cached.message;
+      const canModify = isSettled && !retrying && message.role !== 'system';
       const projected: ConversationMessage = {
-        ...projectLocalTranscriptMessage(message, cache),
+        ...projectLocalTranscriptMessage(
+          retrying ? { ...message, status: 'pending', parts: [], stats: null } : message,
+          cache,
+        ),
         actions: {
           ...(message.role === 'assistant' &&
           message.status === 'success' &&
@@ -168,7 +181,7 @@ export function createLocalConversationProjector(input: {
             : {}),
         },
       };
-      messages.set(message, { busy, message: projected });
+      messages.set(message, { busy, retrying, message: projected });
       return projected;
     },
     /** Rows keep their array while only live state streams, so history consumers stay put. */
@@ -177,8 +190,17 @@ export function createLocalConversationProjector(input: {
       state: AgentSessionChatState,
     ): readonly ConversationMessage[] {
       const busy = isBusy(state);
-      if (history?.source !== source || history.busy !== busy)
-        history = { source, busy, messages: source.map((message) => this.message(message, state)) };
+      if (
+        history?.source !== source ||
+        history.busy !== busy ||
+        history.pendingRetryMessageId !== state.pendingRetryMessageId
+      )
+        history = {
+          source,
+          busy,
+          pendingRetryMessageId: state.pendingRetryMessageId,
+          messages: source.map((message) => this.message(message, state)),
+        };
       return history.messages;
     },
     snapshot(state: AgentSessionChatState, title: string | undefined): ConversationSnapshot {
@@ -246,6 +268,7 @@ export function createLocalConversationProjector(input: {
         });
       }
       return {
+        isSubmitting: state.isSubmitting,
         agentId: state.snapshot?.agent.id,
         title: state.snapshot?.session.name ?? title ?? '',
         freshness:
