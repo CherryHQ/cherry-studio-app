@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { setStringAsync } from 'expo-clipboard';
+import { useFocusEffect } from 'expo-router';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { queryKeys } from '@/frontend/data';
 import {
   ProviderAccountError,
   type ProviderAccountsModule,
@@ -20,6 +22,7 @@ const mockAccounts = {
     ReturnType<ProviderAccountsModule['signIn']>,
     [string, ProviderSignInInteraction]
   >(),
+  logout: jest.fn<ReturnType<ProviderAccountsModule['logout']>, [string]>(),
 };
 
 jest.mock('@/frontend/data', () => ({
@@ -61,7 +64,7 @@ const failureToast = {
   variant: 'danger',
 };
 
-describe('device verification code copy feedback', () => {
+describe('provider account interactions', () => {
   let queryClient: QueryClient;
   let renderer: ReactTestRenderer;
   let account: ReturnType<typeof useProviderAccount>;
@@ -96,6 +99,7 @@ describe('device verification code copy feedback', () => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mockAccounts.getStatus.mockResolvedValue(signedOut);
     mockAccounts.refresh.mockResolvedValue(signedOut);
+    mockAccounts.logout.mockResolvedValue(undefined);
     mockAccounts.signIn.mockImplementation((_providerId, nextInteraction) => {
       interaction = nextInteraction;
       return new Promise<void>((resolve) => {
@@ -119,6 +123,112 @@ describe('device verification code copy feedback', () => {
       renderer.unmount();
     });
     queryClient.clear();
+  });
+
+  it.each(['success', 'authorization'] as const)(
+    'keeps manual logout authoritative after an older refresh returns %s',
+    async (outcome) => {
+      const previous = { ...signedOut, signedIn: true, updatedAt: 100 };
+      await act(async () => {
+        queryClient.setQueryData(queryKeys.providers.account('copilot'), previous);
+      });
+      let resolveRefresh!: (status: ProviderAccountStatus) => void;
+      let rejectRefresh!: (error: Error) => void;
+      mockAccounts.refresh.mockImplementationOnce(
+        () =>
+          new Promise<ProviderAccountStatus>((resolve, reject) => {
+            resolveRefresh = resolve;
+            rejectRefresh = reject;
+          }),
+      );
+      let pendingRefresh!: Promise<void>;
+      await act(async () => {
+        pendingRefresh = account.refresh();
+      });
+      await act(async () => account.logout());
+      expect(account.status.data?.signedIn).toBe(false);
+
+      await act(async () => {
+        if (outcome === 'success') resolveRefresh(previous);
+        else rejectRefresh(new ProviderAccountError('authorization'));
+        await pendingRefresh;
+      });
+      expect(account.status.data?.signedIn).toBe(false);
+      expect(account.error).toBeNull();
+      expect(account.refreshing).toBe(false);
+    },
+  );
+
+  it('does not restore a stale status read after logout clears the account cache', async () => {
+    let resolveStatus!: (status: ProviderAccountStatus) => void;
+    mockAccounts.refresh.mockRejectedValueOnce(new ProviderAccountError('authorization'));
+    mockAccounts.getStatus.mockImplementationOnce(
+      () => new Promise<ProviderAccountStatus>((resolve) => (resolveStatus = resolve)),
+    );
+    let pendingRefresh!: Promise<void>;
+    await act(async () => {
+      pendingRefresh = account.refresh();
+    });
+    expect(account.error).toBe('authorization');
+
+    await act(async () => account.logout());
+    await act(async () => {
+      resolveStatus({ ...signedOut, signedIn: true, updatedAt: 100 });
+      await pendingRefresh;
+    });
+    expect(account.status.data?.signedIn).toBe(false);
+    expect(account.error).toBeNull();
+  });
+
+  it('cancels an outstanding account query before logout so it cannot restore cached state', async () => {
+    let resolveStatus!: (status: ProviderAccountStatus) => void;
+    let pendingStatus!: Promise<ProviderAccountStatus | undefined>;
+    await act(async () => {
+      pendingStatus = queryClient
+        .fetchQuery({
+          queryKey: queryKeys.providers.account('copilot'),
+          queryFn: () => new Promise<ProviderAccountStatus>((resolve) => (resolveStatus = resolve)),
+        })
+        .catch(() => undefined);
+    });
+    await act(async () => account.logout());
+    await act(async () => {
+      resolveStatus({ ...signedOut, signedIn: true, updatedAt: 100 });
+      await pendingStatus;
+    });
+    expect(account.status.data?.signedIn).toBe(false);
+    expect(account.error).toBeNull();
+  });
+
+  it('does not start a focus refresh while logout is clearing the account', async () => {
+    let finishLogout!: () => void;
+    mockAccounts.logout.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishLogout = resolve)),
+    );
+    let pendingLogout!: Promise<void>;
+    await act(async () => {
+      pendingLogout = account.logout();
+    });
+    await act(async () => {
+      jest.mocked(useFocusEffect).mock.calls.at(-1)![0]();
+      finishLogout();
+      await pendingLogout;
+    });
+    expect(mockAccounts.refresh).not.toHaveBeenCalled();
+    expect(account.status.data?.signedIn).toBe(false);
+  });
+
+  it('clears an expired-login error on logout and allows another device-code login', async () => {
+    mockAccounts.refresh.mockRejectedValueOnce(new ProviderAccountError('authorization'));
+    await act(async () => account.refresh());
+    expect(account.error).toBe('authorization');
+
+    await act(async () => account.logout());
+    expect(account.status.data?.signedIn).toBe(false);
+    expect(account.error).toBeNull();
+    await startLogin();
+    expect(account.loginEvent).toEqual(deviceCode);
+    expect(account.error).toBeNull();
   });
 
   it('copies the exact code and reports success only after the write settles', async () => {

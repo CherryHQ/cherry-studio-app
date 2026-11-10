@@ -3,6 +3,12 @@
 `BottomSheet` is Cherry Studio's only mobile sheet shell. It uses the same regulated card heights,
 bottom-attached surface, rounded top corners, drag handle, scrim, safe-area
 handling, gestures, Android back behavior, and accessibility behavior on iOS and Android.
+`BottomSheetProvider` supplies the sheet's portal host. Mount it at the app root; native modal
+routes that present sheets also mount a local provider inside their route (as `/share` and
+`/drawings/templates` do).
+This keeps controls above the modal's touch surface while retaining the page controller that UIKit
+menus need for presentation. Sheets stay in the provider's view hierarchy rather than a detached
+window overlay.
 
 Dark mode uses an opaque `popover` base with a neutral `secondary` overlay and a fine border to
 separate the sheet from the page. The header, body, and fixed footer share this fill.
@@ -18,10 +24,11 @@ content. Picker content measures its own available region instead of using the w
 </BottomSheet>
 ```
 
-The API is intentionally small: `open`, `onClose`, `title`, `children`, exactly one of `size`,
+The API is intentionally small: `open`, `onClose`, `children`, optional `title`, exactly one of `size`,
 `height`, or a non-empty `sizes` list; optional `testID`, optional `dismissible`, and an optional
 `headerAction` for one compact control beside the title. The title is a heading truncated after two lines;
-when it is a question or request the user must read in full, pass `titleVariant="prompt"` for a
+omitting the title and header actions removes the title row, leaving a 22-point handle region
+for preview-led panels. When the title is a question or request the user must read in full, pass `titleVariant="prompt"` for a
 body-sized title that is never truncated. An optional `footer` stays fixed below the
 flexible body and owns its divider, horizontal action inset, and bottom safe-area spacing; callers
 provide only the footer control. `size` accepts `compact`, `medium`, or `large`, resolving to 40%,

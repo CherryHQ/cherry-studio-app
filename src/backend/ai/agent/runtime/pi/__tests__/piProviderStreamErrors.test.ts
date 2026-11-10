@@ -1,10 +1,17 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { Api, AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
+import type {
+  Api,
+  AssistantMessage,
+  AssistantMessageEvent,
+  FetchFunction,
+  Model,
+} from '@earendil-works/pi-ai';
 import {
   stream as streamAnthropic,
   streamSimple as streamSimpleAnthropic,
 } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { stream as streamAzure } from '@earendil-works/pi-ai/api/azure-openai-responses';
+import { streamSimple as streamSimpleGoogle } from '@earendil-works/pi-ai/api/google-generative-ai';
 import {
   stream as streamCodex,
   streamSimple as streamSimpleCodex,
@@ -180,6 +187,12 @@ describe('Pi provider stream errors', () => {
 
   test.each([
     {
+      endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      adapterFamily: undefined,
+      streamSimple: streamSimpleGoogle,
+      message: '网络连接已中断。',
+    },
+    {
       endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
       adapterFamily: undefined,
       streamSimple: streamSimpleCompletions,
@@ -244,6 +257,12 @@ describe('Pi provider stream errors', () => {
   );
 
   test.each([
+    {
+      name: 'Gemini',
+      endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      adapterFamily: undefined,
+      streamSimple: streamSimpleGoogle,
+    },
     {
       name: 'OpenAI Chat',
       endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
@@ -447,5 +466,129 @@ describe('Pi provider stream errors', () => {
     expect(fallback).toHaveBeenCalledTimes(1);
     expect(events.map((event) => event.type)).toEqual(['start', 'done']);
     expect((await stream.result()).content).toEqual([{ type: 'text', text: 'Recovered' }]);
+  });
+});
+
+describe('Gemini injected transport', () => {
+  const context = normalizeContext({
+    messages: [{ role: 'user', content: 'Hello', timestamp: 1 }],
+  });
+  const googleModel = model('google-generative-ai');
+  const bind = (fetch: FetchFunction) =>
+    bindPiStream(
+      {
+        ...resolvePiApiAdapter(ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT),
+        loadStreamSimple: async () => streamSimpleGoogle as unknown as StreamFn,
+      },
+      {
+        apiKey: 'test-key',
+        fetch,
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 256,
+      },
+    );
+
+  test('keeps concurrent Gemini clients on their own fetch without touching global fetch', async () => {
+    const globalFetch = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('Unexpected global fetch'));
+    try {
+      const streams = await Promise.all(
+        ['first', 'second'].map(async (label) => {
+          const stream = await bind(
+            async () =>
+              new Response(
+                sse(undefined, {
+                  candidates: [
+                    { content: { role: 'model', parts: [{ text: label }] }, finishReason: 'STOP' },
+                  ],
+                }),
+                { headers: { 'Content-Type': 'text/event-stream' } },
+              ),
+          );
+          return (await stream(googleModel, context, {})).result();
+        }),
+      );
+      expect(streams.map((result) => result.content)).toEqual([
+        [{ type: 'text', text: 'first' }],
+        [{ type: 'text', text: 'second' }],
+      ]);
+      expect(streams.map((result) => result.stopReason)).toEqual(['stop', 'stop']);
+      expect(globalFetch).not.toHaveBeenCalled();
+    } finally {
+      globalFetch.mockRestore();
+    }
+  });
+
+  test('forwards cancellation during body reading without making it retryable', async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | null | undefined;
+    const fetch = jest.fn(async (_input: unknown, init?: RequestInit) => {
+      requestSignal = init?.signal;
+      return new Response(
+        new ReadableStream({
+          start: (body) => body.enqueue(new TextEncoder().encode(': ping\n\n')),
+          pull: (body) => {
+            controller.abort();
+            body.error(new Error('操作已取消。'));
+          },
+        }),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    });
+    const stream = await bind(fetch);
+    const result = await (
+      await stream(googleModel, context, { signal: controller.signal })
+    ).result();
+    expect(result.stopReason).toBe('aborted');
+    expect(requestSignal?.aborted).toBe(true);
+    expect(isRetryableAssistantError(result)).toBe(false);
+    expect(result.diagnostics?.at(-1)?.error?.code).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    { finishReason: 'SAFETY', category: 'content_filter' },
+    { finishReason: 'MALFORMED_FUNCTION_CALL', category: 'unknown' },
+    { finishReason: 'UNEXPECTED_TOOL_CALL', category: 'unknown' },
+  ])(
+    'retains the provider terminal reason $finishReason with category $category',
+    async ({ finishReason, category }) => {
+      const stream = await bind(
+        async () =>
+          new Response(
+            sse(undefined, {
+              candidates: [{ finishReason }],
+            }),
+            { headers: { 'Content-Type': 'text/event-stream' } },
+          ),
+      );
+      const result = await (await stream(googleModel, context, {})).result();
+      expect(result).toMatchObject({ stopReason: 'error', rawStopReason: finishReason });
+      expect(piModelTerminalErrorAttributes(result)).toMatchObject({
+        'error.category': category,
+        'error.retryable': false,
+      });
+    },
+  );
+
+  test('keeps an early end without a finish reason distinct from a provider rejection', async () => {
+    const stream = await bind(
+      async () =>
+        new Response(
+          sse(undefined, {
+            candidates: [{ content: { role: 'model', parts: [{ text: 'Partial' }] } }],
+          }),
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        ),
+    );
+    const result = await (await stream(googleModel, context, {})).result();
+    expect(result.stopReason).toBe('error');
+    expect(result.rawStopReason).toBeUndefined();
+    expect(result.errorMessage).toContain('without a finish reason');
+    expect(piModelTerminalErrorAttributes(result)['error.category']).toBe('unknown');
+    // Pi already retries incomplete streams; an absent provider reason must not disable that.
+    expect(isRetryableAssistantError(result)).toBe(true);
   });
 });

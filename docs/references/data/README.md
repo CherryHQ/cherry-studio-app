@@ -214,16 +214,26 @@ Enterprise profiles seed preferences only; their providers and models come from 
 synchronization. Keep this exception when adding seeders or import paths. See
 [Enterprise Edition](../enterprise.md) for profile scope and managed-resource write rules.
 
-`ProviderRegistryUpdaterService` restores the newest compatible saved model catalog after startup.
-When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
-in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with
-fallback to the other source. Startup also migrates an older schema snapshot to the current v3
-directory, retaining the old snapshot if offline or if the update fails. Once a v3 snapshot is
-saved, the later refresh trigger is opening a provider's model list. Applying a newer catalog while
-that list is visible shows a global success toast at the top of the screen. Offline or unchanged catalogs
-keep the saved snapshot without a toast. The app does not bundle these model files. Model selection,
-model editing, and model calls require a downloaded snapshot; welcome, provider configuration, and
-history remain accessible. Model workflows present a retry action when the initial download fails.
+Fresh-install recommendations and new-provider discovery share the same egress-country policy in
+all distributions, including domestic-store builds. A detected non-CN country permits global
+entries, including through an overseas VPN exit; detected CN selects domestic entries. An unknown
+country uses the device region (`getLocales()[0]?.regionCode`) for these two catalog decisions:
+CN selects domestic entries, other regions select global entries, and a missing region retains the
+domestic default. The unknown result remains `null` in region detection. Existing saved providers
+are preserved; mirror selection, Jina and voice retain their existing CN fallback.
+
+`ProviderRegistryUpdaterService` activates the newest complete compatible saved model catalog.
+When no saved snapshot is usable, model selection, editing and calls wait for a shared download of
+`models.json` and `provider-models.json`; failed first downloads expose the existing retry action.
+These model files are not bundled. Welcome, provider configuration and history remain accessible.
+Downloaded metadata passes Mobile capability admission before activation. Startup refreshes an
+absent or older-schema saved snapshot from v4 in the background. The detected IP country selects
+GitCode in CN or when unknown, and GitHub elsewhere, with fallback to the other source. GitCode
+uses `api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw/{encoded-file-path}` with
+`ref=x-files/provider-registry`; its preview raw host is not used for model metadata. A failed,
+partial or incompatible update retains any compatible local catalog. Once a v4 snapshot is saved, opening a
+provider's model list is the later refresh trigger; a successfully applied update refreshes mounted
+projections and can show the existing success toast.
 
 Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
 replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move
@@ -234,7 +244,7 @@ updates; unset preset fields inherit the current snapshot.
 `providers.json` remains bundled: the unsigned model channel cannot change provider API destinations,
 authentication modes, or importable providers. Schema and minimum-reader compatibility checks remain
 in place; newer readers can still use older compatible saved catalogs. Schema upgrades take priority
-over workflow revisions, and restoration prefers a valid v3 snapshot over an older-schema slot.
+over workflow revisions, and restoration prefers a valid v4 snapshot over an older-schema slot.
 Model metadata fixes and ordinary updates belong upstream, while Mobile owns interpretation and
 provider connection support.
 

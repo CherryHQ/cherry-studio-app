@@ -1,6 +1,8 @@
+import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
-import { StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
@@ -24,7 +26,9 @@ export function MainHeaderView({
   blurTarget,
   hidden,
   actions,
+  selection,
 }: MainHeaderViewProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
@@ -70,10 +74,31 @@ export function MainHeaderView({
             leading action to the sidebar button, or to none when the file pane or a fold
             holds the column. */}
         <View className="shrink-0 items-start">
-          <HeaderActionGroup actions={leadingAction ? [leadingAction] : []} placement="left" />
+          <HeaderActionGroup
+            actions={
+              selection
+                ? [
+                    {
+                      key: 'exit-selection',
+                      type: 'icon',
+                      accessibilityLabel: t('common.cancel'),
+                      icon: ArrowLeftIcon,
+                      onPress: selection.onExit,
+                    },
+                  ]
+                : leadingAction
+                  ? [leadingAction]
+                  : []
+            }
+            placement="left"
+          />
         </View>
         <View className="min-w-0 flex-1 flex-row items-center gap-2" pointerEvents="box-none">
-          {agent ? (
+          {selection ? (
+            <Text className="w-full text-center font-semibold text-base text-foreground">
+              {t('common.selection.count', { count: selection.selectedCount })}
+            </Text>
+          ) : agent ? (
             <View className="relative min-w-0 shrink rounded-full">
               {/* The header already blurs the chat underneath. Keep this tint
                   translucent so the capsule shares that blur without another pass. */}
@@ -81,14 +106,18 @@ export function MainHeaderView({
               <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
             </View>
           ) : null}
-          {agent && onAgentSwitch ? (
+          {!selection && agent && onAgentSwitch ? (
             <View className="shrink-0 rounded-full bg-card/70">
               <MainHeaderAgentSwitch onPress={onAgentSwitch} />
             </View>
           ) : null}
         </View>
         <View className="shrink-0 items-end">
-          <HeaderActionGroup actions={rightActions} placement="right" />
+          {selection ? (
+            <View className="w-12" />
+          ) : (
+            <HeaderActionGroup actions={rightActions} placement="right" />
+          )}
         </View>
       </View>
     </View>

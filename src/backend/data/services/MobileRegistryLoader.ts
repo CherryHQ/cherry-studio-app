@@ -20,8 +20,8 @@ export type { CatalogManifest };
 export type ModelsBundle = ReturnType<typeof ModelListSchema.parse>;
 export type ProviderModelsBundle = ReturnType<typeof ProviderModelListSchema.parse>;
 
-/** Keep v3 until Mobile's image adapters admit the v4 drawing controls. */
-export const REGISTRY_SCHEMA_VERSION = 3;
+/** Includes GPT Image complexity and animated GIF generation. */
+export const REGISTRY_SCHEMA_VERSION = 4;
 
 /**
  * Desktop registry semantic baseline supported by Mobile's consumed fields.
@@ -31,7 +31,7 @@ export const REGISTRY_SCHEMA_VERSION = 3;
  * Desktop registry behavior implemented here. Older cached schemas remain
  * readable while the updater migrates them to the current download lane.
  */
-export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.1.4';
+export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.1.11';
 
 /** Unsigned remote data may describe models, never provider routing or credentials. */
 export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
@@ -75,14 +75,37 @@ export function isCatalogManifestCompatible(
     return false;
   }
 
-  // New runtimes still read older snapshots from the same schema lane.
-  return compareVersionParts(runtime, minimum) >= 0 && compareVersionParts(minimum, source) <= 0;
+  // The producer version is provenance; only the reader minimum determines compatibility.
+  return compareVersionParts(runtime, minimum) >= 0;
 }
 
 export type MobileRemoteRegistrySnapshot = {
   models: ModelsBundle;
   providerModels: ProviderModelsBundle;
 };
+
+/** Admit GIF generation using SDK defaults, without extending the SDK's edit or frame controls. */
+function mobileImageGenerationSupport(support: ModelConfig['imageGeneration']) {
+  if (!support) return support;
+  const modes = { ...support.modes };
+  for (const mode of Object.keys(modes) as (keyof typeof modes)[]) {
+    const definition = modes[mode];
+    if (!definition) continue;
+    const supports = { ...definition.supports };
+    delete supports.frameCount;
+    delete supports.frameDurationMs;
+    const format = supports.outputFormat;
+    if (mode !== 'generate' && format?.type === 'enum') {
+      supports.outputFormat = {
+        ...format,
+        options: format.options.filter((option) => option !== 'gif'),
+        default: format.default === 'gif' ? undefined : format.default,
+      };
+    }
+    modes[mode] = { ...definition, supports };
+  }
+  return { ...support, modes };
+}
 
 /**
  * OAuth-only presets excluded from runtime reads, including saved providers.
@@ -184,18 +207,31 @@ export class MobileRegistryLoader {
     return {
       models: {
         ...models,
-        models: models.models.filter(
-          (model) => model.reasoning?.wireDialect !== 'adaptive-between-tools',
-        ),
+        models: models.models
+          .filter((model) => model.reasoning?.wireDialect !== 'adaptive-between-tools')
+          .map((model) =>
+            model.imageGeneration
+              ? { ...model, imageGeneration: mobileImageGenerationSupport(model.imageGeneration) }
+              : model,
+          ),
       },
       providerModels: {
         ...providerModels,
-        overrides: providerModels.overrides.filter(
-          (override) =>
-            !Object.values(override.reasoningContracts ?? {}).some(
-              (contract) => contract.support?.wireDialect === 'adaptive-between-tools',
-            ),
-        ),
+        overrides: providerModels.overrides
+          .filter(
+            (override) =>
+              !Object.values(override.reasoningContracts ?? {}).some(
+                (contract) => contract.support?.wireDialect === 'adaptive-between-tools',
+              ),
+          )
+          .map((override) =>
+            override.imageGeneration
+              ? {
+                  ...override,
+                  imageGeneration: mobileImageGenerationSupport(override.imageGeneration),
+                }
+              : override,
+          ),
       },
     };
   }

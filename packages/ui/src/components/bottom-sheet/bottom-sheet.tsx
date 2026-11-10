@@ -99,7 +99,8 @@ type BottomSheetBaseProps = {
   initialFocusRef?: RefObject<ViewInstance | null>;
   returnFocusRef?: RefObject<ViewInstance | null>;
   testID?: string;
-  title: string;
+  /** Omit for a preview-led sheet with only the drag handle above its content. */
+  title?: string;
   /** Title-only sheets may center their heading without reserving action slots. */
   titleAlign?: 'start' | 'center';
   /**
@@ -180,10 +181,11 @@ export function BottomSheet(props: BottomSheetProps) {
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
   const { height, size, sizes } = props;
+  const hasHeader = title != null || Boolean(backAction || closeAction || headerAction);
   const measuredHeight =
     size === 'content'
       ? contentHeight +
-        (isOverlay ? OVERLAY_HANDLE_HEIGHT : headerHeight + 16) +
+        (isOverlay ? OVERLAY_HANDLE_HEIGHT : hasHeader ? headerHeight + 16 : 22) +
         (footer ? footerHeight : insets.bottom)
       : height;
   const { cardHeight, minimumCardHeight, detents } = useMemo(
@@ -338,6 +340,8 @@ export function BottomSheet(props: BottomSheetProps) {
 
   return (
     <ModalBottomSheet
+      // UIKit menus need the presenting controller retained by the provider's view hierarchy.
+      nativeOverlay={false}
       // A keyboard-avoiding card animates its own height, which the content detent follows.
       animateContentHeight={!avoidKeyboard}
       detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
@@ -397,7 +401,7 @@ export function BottomSheet(props: BottomSheetProps) {
             accessibilityLabel={isOverlay ? title : undefined}
             accessibilityRole={isOverlay ? 'header' : undefined}
             accessible={isOverlay}
-            className={cn('items-center pt-3', isOverlay && 'h-8')}
+            className={cn('items-center pt-3', isOverlay ? 'h-8' : !hasHeader && 'pb-1.5')}
             pointerEvents="none"
             ref={headingRef}
           >
@@ -407,7 +411,7 @@ export function BottomSheet(props: BottomSheetProps) {
             />
           </View>
           {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
-          {!isOverlay ? (
+          {!isOverlay && hasHeader ? (
             <View
               className="min-h-14 flex-row items-start px-5 py-1.5"
               onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}

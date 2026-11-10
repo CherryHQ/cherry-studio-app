@@ -1,0 +1,1 @@
+export { useSharePaintingBoards } from './useSharePaintingBoards';

@@ -3,6 +3,7 @@ export * from './avatar';
 export * from './background-press';
 export * from './bottom-sheet';
 export * from './button';
+export * from './card-stack';
 export * from './chip';
 export * from './composer';
 export * from './content-state';

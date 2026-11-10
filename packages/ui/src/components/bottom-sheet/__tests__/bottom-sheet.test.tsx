@@ -153,6 +153,19 @@ describe('BottomSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  test('uses the provider host so native menu controls retain their presenting page controller', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} open size="large" title="Share">
+          <Text>Preview</Text>
+        </BottomSheet>,
+      );
+    });
+
+    // A window-level native overlay detaches controls from their view controller on iOS.
+    expect(mockBottomSheetProps.nativeOverlay).toBe(false);
+  });
+
   test('does not report a controlled close as a user dismissal', () => {
     const onClose = jest.fn();
     const onClosed = jest.fn();
@@ -513,6 +526,28 @@ describe('BottomSheet', () => {
     act(() => sheets[1].props.onSettle(0));
     expect(closeParent).not.toHaveBeenCalled();
     expect(closeChild).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps the footer inside the initial visible height of an expandable sheet', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          footer={<Text>Share</Text>}
+          onClose={jest.fn()}
+          open
+          sizes={['large', 'full']}
+          testID="share-sheet"
+          title="Share"
+        >
+          <Text>Preview</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const layout = mockAnimatedStyleFactories.at(-1)!;
+    const detents = mockBottomSheetProps.detents as number[];
+    expect(layout()).toEqual({ height: detents[1] });
+    expect(detents[1]).toBeLessThan(detents[2]);
   });
 
   test('uses a caller-provided fixed height on a bounded sheet with only top corners rounded', () => {

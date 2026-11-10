@@ -7,7 +7,7 @@ import {
 import type { ApiClient } from '@/shared/data/api/types';
 import type { AppLanguage } from '@/shared/utils/languages';
 
-import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
+import type { ChatShareTranslations } from '../../../share/chatShareTarget';
 import {
   messageTranslationSource,
   type MessageTranslationSource,

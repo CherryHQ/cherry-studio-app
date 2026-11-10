@@ -22,6 +22,8 @@ export function TabsContent<TValue extends string>({
         'flex-row',
         layout === 'hug' ? 'self-start' : 'w-full',
         variant === 'segmented' && 'gap-1 rounded-xl bg-secondary p-1',
+        variant === 'floating' &&
+          'gap-0.5 rounded-full bg-[var(--gray-200)]/82 p-[3px] dark:bg-[var(--gray-200)]/88 shadow-lg shadow-constant-black/10',
         variant === 'underline' && 'w-full gap-6 border-b border-border-subtle',
         variant === 'chips' && 'gap-1.5',
       )}
@@ -41,6 +43,8 @@ export function TabsContent<TValue extends string>({
               layout === 'fill' && 'min-w-0 flex-1',
               variant === 'segmented' && 'rounded-lg px-2 py-1.5',
               variant === 'segmented' && isSelected && 'bg-card',
+              variant === 'floating' && 'min-h-9 rounded-full px-3.5 py-2',
+              variant === 'floating' && isSelected && 'bg-card dark:bg-[var(--gray-500)]',
               variant === 'chips' && 'rounded-lg px-2 py-2',
               variant === 'chips' && (isSelected ? 'bg-foreground' : 'bg-secondary'),
               variant === 'underline' && 'border-b-2 py-2.5',

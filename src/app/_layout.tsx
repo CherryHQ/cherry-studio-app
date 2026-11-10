@@ -184,16 +184,17 @@ function RootStack() {
         options={{ headerTransparent: false }}
       />
       <Stack.Screen name="share-destination" options={{ headerTransparent: false }} />
-      <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
       <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
       <Stack.Screen name="uu-remote/callback" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen
-        name="document-export"
+        name="share"
         options={{
-          contentStyle: { backgroundColor },
+          contentStyle: { backgroundColor: 'transparent' },
           headerShown: false,
-          presentation: 'fullScreenModal',
+          presentation: 'transparentModal',
+          animation: 'none',
+          gestureEnabled: false,
         }}
       />
     </Stack>

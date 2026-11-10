@@ -1,4 +1,8 @@
-import { xaiOAuth, type OAuthCredential } from '@earendil-works/pi-ai/native-oauth';
+import {
+  openaiCodexOAuth,
+  xaiOAuth,
+  type OAuthCredential,
+} from '@earendil-works/pi-ai/native-oauth';
 
 import { HttpError } from '@/backend/services/http';
 import {
@@ -21,7 +25,12 @@ jest.mock('@earendil-works/pi-ai/native-oauth', () => {
     refresh: jest.fn(),
     toAuth: async (credential: OAuthCredential) => ({ apiKey: credential.access }),
   };
-  return { ...actual, configureOAuthPlatform: jest.fn(), xaiOAuth: flow };
+  return {
+    ...actual,
+    configureOAuthPlatform: jest.fn(),
+    xaiOAuth: flow,
+    openaiCodexOAuth: { ...flow, login: jest.fn(), refresh: jest.fn() },
+  };
 });
 
 function deferred<T>() {
@@ -100,16 +109,118 @@ it('uses Pi double-checked locking to refresh a rotated token once across concur
   expect(accounts.get('first')?.credential.refresh).toBe('rotated-refresh');
 });
 
-it('preserves stored credentials and hides upstream secrets when refresh fails', async () => {
+it('does not infer authorization failure from unstructured SDK error text', async () => {
   await login('first');
   accounts.get('first')!.credential.expires = 0;
   jest
     .mocked(xaiOAuth.refresh)
     .mockRejectedValueOnce(new Error('invalid_grant secret-server-response'));
   await expect(adapter.resolveAuth({ id: 'first', presetProviderId: 'grok' })).rejects.toEqual(
-    new ProviderAccountError('authorization'),
+    new ProviderAccountError('request'),
   );
   expect(accounts.get('first')?.credential.refresh).toBe('refresh-fixture');
+});
+
+it('clears an expired Codex grant on manual logout and permits a fresh login', async () => {
+  adapter.configure({
+    get: async (id) => ({ id, presetProviderId: 'openai-codex', name: id, createdAt }),
+  });
+  jest.mocked(openaiCodexOAuth.login).mockResolvedValueOnce({ ...credential, expires: 0 });
+  jest
+    .mocked(openaiCodexOAuth.refresh)
+    .mockRejectedValueOnce(new Error('invalid_grant secret-server-response'));
+  await login('first');
+  await expect(adapter.refresh('first')).rejects.toEqual(new ProviderAccountError('request'));
+
+  await adapter.logout('first');
+  expect(accounts.has('first')).toBe(false);
+  expect((await adapter.getStatus('first')).signedIn).toBe(false);
+  const provider = { id: 'first', presetProviderId: 'openai-codex' };
+  await expect(adapter.resolveAuth(provider)).resolves.toBeUndefined();
+
+  jest.mocked(openaiCodexOAuth.login).mockImplementationOnce(async () => {
+    expect(accounts.has('first')).toBe(false);
+    return { ...credential, access: 'new-access', refresh: 'new-refresh' };
+  });
+  await login('first');
+  expect((await adapter.getStatus('first')).signedIn).toBe(true);
+  expect((await adapter.resolveAuth(provider))?.auth.apiKey).toBe('new-access');
+  expect(openaiCodexOAuth.refresh).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  [400, 'invalid_grant', 'authorization', false],
+  [401, undefined, 'authorization', false],
+  [401, 'invalid_client', 'configuration', true],
+  [400, 'unauthorized_client', 'configuration', true],
+  [429, undefined, 'network', true],
+  [503, undefined, 'network', true],
+] as const)(
+  'invalidates only a confirmed rejected grant: %s %s',
+  async (status, code, reason, retained) => {
+    await login('first');
+    await login('second');
+    accounts.get('first')!.credential.expires = 0;
+    jest.mocked(xaiOAuth.refresh).mockRejectedValueOnce(
+      new Error('SDK wrapper', {
+        cause: new HttpError('secret-server-response', { kind: 'http', status, code }),
+      }),
+    );
+    await expect(adapter.refresh('first')).rejects.toEqual(new ProviderAccountError(reason));
+    expect(accounts.has('first')).toBe(retained);
+    expect((await adapter.getStatus('first')).signedIn).toBe(retained);
+    expect((await adapter.getStatus('second')).signedIn).toBe(true);
+    if (!retained) {
+      await expect(adapter.refresh('first')).resolves.toMatchObject({ signedIn: false });
+      expect(xaiOAuth.refresh).toHaveBeenCalledTimes(1);
+      await login('first');
+      expect((await adapter.getStatus('first')).signedIn).toBe(true);
+    }
+  },
+);
+
+it('retains the previous grant when a replacement login is rejected', async () => {
+  await login('first');
+  jest.mocked(xaiOAuth.login).mockRejectedValueOnce(
+    new HttpError('Authorization code rejected.', {
+      kind: 'http',
+      status: 400,
+      code: 'invalid_grant',
+    }),
+  );
+  await expect(login('first')).rejects.toEqual(new ProviderAccountError('request'));
+  expect(accounts.get('first')?.credential.access).toBe('access-fixture');
+});
+
+it('does not report an expired session when a fresh login is rejected without any stored grant', async () => {
+  jest
+    .mocked(xaiOAuth.login)
+    .mockRejectedValueOnce(new HttpError('Authorization rejected.', { kind: 'http', status: 401 }));
+  await expect(login('first')).rejects.toEqual(new ProviderAccountError('request'));
+  expect((await adapter.getStatus('first')).signedIn).toBe(false);
+});
+
+it('serializes invalidation before a concurrent replacement login saves its new grant', async () => {
+  await login('first');
+  accounts.get('first')!.credential.expires = 0;
+  const started = deferred<void>();
+  const finish = deferred<void>();
+  jest.mocked(xaiOAuth.refresh).mockImplementationOnce(async () => {
+    started.resolve();
+    await finish.promise;
+    throw new HttpError('Refresh rejected.', { kind: 'http', status: 400, code: 'invalid_grant' });
+  });
+  const request = adapter
+    .resolveAuth({ id: 'first', presetProviderId: 'grok' })
+    .catch((error: unknown) => error);
+  await started.promise;
+  jest.mocked(xaiOAuth.login).mockResolvedValueOnce({ ...credential, access: 'new-access' });
+  const replacement = login('first');
+  finish.resolve();
+  await replacement;
+  expect(await request).toEqual(new ProviderAccountError('cancelled'));
+  expect(accounts.get('first')?.credential.access).toBe('new-access');
+  expect((await adapter.getStatus('first')).signedIn).toBe(true);
 });
 
 it.each([

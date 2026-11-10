@@ -1,7 +1,7 @@
 import { ScrollInteractionBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -48,6 +48,8 @@ export function MessageList({
   onReady,
   onTargetRestored,
   renderMessage,
+  ref,
+  rowInsets,
 }: MessageListProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
@@ -87,6 +89,31 @@ export function MessageList({
   const contentHeight = useSharedValue({ dataKey, height: 0 });
   const viewportHeight = useSharedValue(0);
   const scrollOffset = useSharedValue(0);
+  useImperativeHandle(
+    ref,
+    () => ({
+      beginInteraction: handleScrollBeginDrag,
+      endInteraction: handleScrollEndDrag,
+      scrollBy(distance) {
+        const maximum = Math.max(
+          0,
+          contentHeight.get().height + (bottomAccessoryHeight?.get() ?? 0) - viewportHeight.get(),
+        );
+        listRef.current?.scrollToOffset({
+          offset: Math.max(0, Math.min(maximum, scrollOffset.get() + distance)),
+          animated: false,
+        });
+      },
+    }),
+    [
+      bottomAccessoryHeight,
+      contentHeight,
+      handleScrollBeginDrag,
+      handleScrollEndDrag,
+      scrollOffset,
+      viewportHeight,
+    ],
+  );
   const [bottomState, setBottomState] = useState({ dataKey, isAtBottom: true });
   const syncScrollButtonVisibility = useCallback((key: string | undefined, isAtBottom: boolean) => {
     setBottomState({ dataKey: key, isAtBottom });
@@ -182,9 +209,18 @@ export function MessageList({
   );
   const renderMessageRow = useCallback(
     ({ extraData: rowExtraData, item }: LegendListRenderItemProps<MessageListItem>) => (
-      <MessageListRow extraData={rowExtraData} message={item} renderMessage={renderMessage} />
+      <MessageListRow
+        extraData={rowExtraData}
+        message={item}
+        renderMessage={renderMessage}
+        insets={rowInsets}
+      />
     ),
-    [renderMessage],
+    [renderMessage, rowInsets],
+  );
+  const listExtraData = useMemo(
+    () => (rowInsets ? { content: extraData, rowInsets } : extraData),
+    [extraData, rowInsets],
   );
   const handleStartReached = useCallback(() => {
     if (!onLoadOlder) {
@@ -225,7 +261,7 @@ export function MessageList({
                 drawDistance={80}
                 estimatedItemSize={300}
                 estimatedHeaderSize={contentTopInset}
-                extraData={extraData}
+                extraData={listExtraData}
                 getItemType={getMessageRowType}
                 keyExtractor={messageKeyExtractor}
                 keyboardDismissMode="none"

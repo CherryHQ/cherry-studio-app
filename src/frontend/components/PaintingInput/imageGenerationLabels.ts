@@ -64,6 +64,11 @@ const OPTION_LABEL_KEYS: Partial<Record<CanonicalParamKey, Record<string, string
     opaque: 'painting.settings.option.opaque',
     transparent: 'painting.settings.option.transparent',
   },
+  complexity: {
+    high: 'painting.settings.option.high',
+    low: 'painting.settings.option.low',
+    medium: 'painting.settings.option.medium',
+  },
   imageResolution: { auto: 'painting.settings.option.auto' },
   moderation: {
     auto: 'painting.settings.option.auto',
