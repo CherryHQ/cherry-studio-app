@@ -243,6 +243,7 @@ export function ChatInputEffortOverlay({
     options.length > 0 ? (
       <ChatInputEffortGauge
         accessibilityLabel={`${t('chat.reasoning.title')}: ${currentLabel}`}
+        label={currentLabel}
         onPress={open}
         stopCount={options.length}
         valueIndex={valueIndex}

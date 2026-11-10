@@ -88,6 +88,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Models without selectable reasoning, including image models, reset it to `default`; loading model
   metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
   fallback ordering.
+  The resting gauge shows the active level as text beside its glyph and follows level changes
+  immediately.
 - The composer menu offers media, Plugins, and a separate Skills row. The Plugins row remains visible
   when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available

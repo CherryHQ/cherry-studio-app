@@ -1,19 +1,24 @@
 import GaugeIcon from '@cherrystudio/app-icons/icons/gauge';
 import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
-import { View, type ViewInstance } from 'react-native';
+import { Text, View, type ViewInstance } from 'react-native';
 
 import type { ChatInputEffortFrame } from '../utils/chatInputEffortLayout';
 
 type ChatInputEffortGaugeProps = {
   accessibilityLabel: string;
+  label: string;
   onPress: (frame: ChatInputEffortFrame) => void;
   stopCount: number;
   valueIndex: number;
 };
 
-/** Compact effort control using the same gauge glyph as desktop. */
-export function ChatInputEffortGauge({ accessibilityLabel, onPress }: ChatInputEffortGaugeProps) {
+/** Compact effort control showing the active level beside its gauge glyph. */
+export function ChatInputEffortGauge({
+  accessibilityLabel,
+  label,
+  onPress,
+}: ChatInputEffortGaugeProps) {
   const footprintRef = useRef<ViewInstance>(null);
 
   const handlePress = useCallback(() => {
@@ -25,16 +30,20 @@ export function ChatInputEffortGauge({ accessibilityLabel, onPress }: ChatInputE
   }, [onPress]);
 
   return (
-    <View ref={footprintRef} collapsable={false} style={gaugeFootprintStyle}>
-      <Composer.Action
+    <View ref={footprintRef} collapsable={false}>
+      <Composer.Pill
         accessibilityLabel={accessibilityLabel}
+        icon={<GaugeIcon className="size-3.5 text-foreground" />}
         onPress={handlePress}
         testID="chat-input-effort-gauge"
       >
-        <GaugeIcon className="size-3.5 text-foreground" />
-      </Composer.Action>
+        <Text
+          className="min-w-0 shrink text-xs font-medium text-muted-foreground"
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </Composer.Pill>
     </View>
   );
 }
-
-const gaugeFootprintStyle = { height: 32, width: 32 } as const;
