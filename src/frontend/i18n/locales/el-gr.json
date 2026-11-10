@@ -1843,6 +1843,7 @@
   "settings.mcp.toast.saveFailed": "Αποτυχία αποθήκευσης διακομιστή",
   "settings.mcp.tools.empty": "Αυτός ο διακομιστής δεν εκθέτει εργαλεία.",
   "settings.mcp.tools.enabledSummary": "{{enabled}} από {{total}} ενεργά",
+  "settings.mcp.tools.legacyFallbackFailed": "Η διαπραγμάτευση του πρωτοκόλλου MCP και η προσπάθεια σύνδεσης παλαιού τύπου απέτυχαν.",
   "settings.mcp.tools.loadFailed": "Αποτυχία φόρτωσης εργαλείων.",
   "settings.mcp.tools.loading": "Φόρτωση εργαλείων...",
   "settings.mcp.tools.retry": "Επανάληψη",

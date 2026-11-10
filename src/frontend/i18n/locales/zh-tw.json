@@ -1826,6 +1826,7 @@
   "settings.mcp.toast.saveFailed": "儲存服務器失敗",
   "settings.mcp.tools.empty": "該服務器未提供任何工具。",
   "settings.mcp.tools.enabledSummary": "已啟用 {{enabled}}/{{total}}",
+  "settings.mcp.tools.legacyFallbackFailed": "MCP 協定交涉和舊版連線嘗試皆失敗。",
   "settings.mcp.tools.loadFailed": "加載工具失敗。",
   "settings.mcp.tools.loading": "正在加載工具……",
   "settings.mcp.tools.retry": "重試",

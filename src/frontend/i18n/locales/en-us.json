@@ -1843,6 +1843,7 @@
   "settings.mcp.toast.saveFailed": "Failed to save server",
   "settings.mcp.tools.empty": "This server exposes no tools.",
   "settings.mcp.tools.enabledSummary": "{{enabled}} of {{total}} on",
+  "settings.mcp.tools.legacyFallbackFailed": "MCP protocol negotiation and the legacy connection attempt both failed.",
   "settings.mcp.tools.loadFailed": "Failed to load tools.",
   "settings.mcp.tools.loading": "Loading tools...",
   "settings.mcp.tools.retry": "Retry",

@@ -1843,6 +1843,7 @@
   "settings.mcp.toast.saveFailed": "Sunucu kaydedilemedi",
   "settings.mcp.tools.empty": "Bu sunucu hiçbir araç göstermez.",
   "settings.mcp.tools.enabledSummary": "{{total}} araçtan {{enabled}} açık",
+  "settings.mcp.tools.legacyFallbackFailed": "MCP protokolü anlaşması ve eski bağlantı girişimi başarısız oldu.",
   "settings.mcp.tools.loadFailed": "Araçlar yüklenemedi.",
   "settings.mcp.tools.loading": "Araçlar yükleniyor...",
   "settings.mcp.tools.retry": "Yeniden dene",
