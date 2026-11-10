@@ -1,4 +1,4 @@
-import { File } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
@@ -9,6 +9,12 @@ import type {
   ResolvedFile,
 } from '@/shared/contracts/file';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
+import type { ExportFile } from '@/shared/contracts/fileExport';
+import {
+  AiContentSchema,
+  type AiContentOperation,
+  type AiContent,
+} from '@/shared/data/types/aiContent';
 import {
   type FileEntry,
   type FileEntryId,
@@ -21,6 +27,7 @@ import {
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
+import { completeFileAiContent, readSourceAiContent } from './aiContentMetadata';
 import { readDocumentUriText } from './documentText';
 import { editFileImage } from './editFileImage';
 import { FileHashError, hashLocalFile } from './fileHash';
@@ -63,6 +70,8 @@ const createTextEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema,
   name: SafeNameSchema,
   provenance: FileEntryProvenanceSchema,
+  aiContent: AiContentSchema.nullish(),
+  aiOperation: z.enum(['generate', 'edit']).optional(),
 });
 
 const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true }).extend({
@@ -86,6 +95,28 @@ async function resolveCreatedEntry(entry: FileEntry): Promise<ResolvedFile> {
  * factory to inject.
  */
 export const fileContent = {
+  async completeExportFile(
+    input: ExportFile & { sourceFileEntryId?: FileEntryId },
+    signal?: AbortSignal,
+  ): Promise<ExportFile> {
+    const uri = new File(input.uri).uri;
+    const cache = new Directory(Paths.cache).uri.replace(/\/$/, '') + '/';
+    if (!uri.startsWith(cache)) throw new Error('Only temporary exports may be labeled');
+    let sourceFacts = input.aiContent;
+    if (!sourceFacts && input.sourceFileEntryId) {
+      const source = await resolveFileEntry(
+        fileEntryService,
+        FileEntryIdSchema.parse(input.sourceFileEntryId),
+      );
+      if (!source) throw new Error('Export source is unavailable');
+      sourceFacts = await readSourceAiContent({ ...source.entry, uri: source.uri }, signal);
+    }
+    const aiContent = await completeFileAiContent(
+      { uri, mediaType: input.mediaType, aiContent: sourceFacts },
+      signal,
+    );
+    return { uri, filename: input.filename, mediaType: input.mediaType, aiContent };
+  },
   observeFileOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
@@ -109,6 +140,7 @@ export const fileContent = {
       mediaType: source.entry.mediaType,
       folderId: folder.id,
       provenance: source.entry.provenance,
+      aiContent: source.entry.aiContent,
       source: 'uri',
     });
     return resolveCreatedEntry(entry);
@@ -157,6 +189,8 @@ export const fileContent = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiContent?: AiContent | null;
+      aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
   ) => {
@@ -173,6 +207,8 @@ export const fileContent = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiContent?: AiContent | null;
+      aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
   ) => {
@@ -241,6 +277,7 @@ export const fileContent = {
       name: source.entry.filename,
       mediaType: source.entry.mediaType,
       provenance: 'imported',
+      aiContent: source.entry.aiContent,
     });
     const snapshot = await resolveFileEntry(fileEntryService, entry.id);
     if (!snapshot) throw new Error('Upload snapshot is unavailable');
@@ -257,6 +294,7 @@ export const fileContent = {
       id: FileEntryId;
       workspaceFolderId?: string | null;
       baseUpdatedAt?: number;
+      aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
   ) =>

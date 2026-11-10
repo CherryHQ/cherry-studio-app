@@ -1,7 +1,7 @@
 import { Button, ContentState, type MenuItem, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -11,6 +11,7 @@ import { queryKeys } from '@/frontend/data';
 import { readFileText } from '@/frontend/utils/readFileText';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { aiContentMarkdownBody } from '@/shared/utils/aiContentText';
 
 import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { FileHtmlBody } from './FileHtmlBody';
@@ -50,6 +51,14 @@ export function FileTextViewer({
     staleTime: Infinity,
   });
   const content = textQuery.data;
+  const displayText = useMemo(() => {
+    if (!content || kind !== 'markdown') return content?.text;
+    try {
+      return aiContentMarkdownBody(content.text);
+    } catch {
+      return content.text;
+    }
+  }, [content, kind]);
   const isHtml = kind === 'html';
   const isPlainText = file.entry.mediaType.split(';')[0].trim().toLowerCase() === 'text/plain';
   const showHtml = isHtml && !isSourceVisible && !hasHtmlFailed && !content?.isTruncated;
@@ -107,7 +116,7 @@ export function FileTextViewer({
                   </Text>
                 </View>
               ) : null}
-              {content.text.length === 0 ? (
+              {displayText?.length === 0 ? (
                 <View className="flex-1 items-center justify-center p-6">
                   <ContentState.Empty title={t('fileViewer.empty')} />
                 </View>
@@ -118,7 +127,7 @@ export function FileTextViewer({
               ) : (
                 <FileTextBody
                   bottomInset={addToChat.returnsToSourceChat ? 0 : undefined}
-                  text={content.text}
+                  text={displayText ?? content.text}
                   variant={
                     kind === 'markdown' && !content.isTruncated
                       ? 'markdown'

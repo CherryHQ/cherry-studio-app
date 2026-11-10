@@ -16,6 +16,7 @@ import {
   type ChatTarget,
 } from '@/frontend/appShell/navigation/chat';
 import { useFilePane } from '@/frontend/appShell/pane/state';
+import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
@@ -35,6 +36,7 @@ export type FileEntryOpenTarget = 'pane' | 'route' | 'system';
 
 /** Shared by cards and the viewer's explicit system-open escape hatch. */
 export function useOpenFileEntry(options: FileExportOptions = {}) {
+  const fileModule = useBackendModule('file');
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams<ChatRouteParamsInput & { sourceChat?: string | string[] }>();
@@ -46,7 +48,11 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
 
   const openFileEntryWithSystem = async ({ entry, uri }: ResolvedFile) => {
     try {
-      const exported = await prepareFileExport({ entry, uri }, createWatermark());
+      const exported = await prepareFileExport(
+        { entry, uri },
+        createWatermark(),
+        fileModule.completeExportFile,
+      );
       // The recipient may read after the chooser closes; the OS owns this cache copy's lifetime.
       await openFilePreview({
         file: toFilePreviewFile(

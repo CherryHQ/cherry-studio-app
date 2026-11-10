@@ -128,7 +128,7 @@ describe('fileContent attachment boundary', () => {
     ).rejects.toThrow('disk full');
     expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
       {},
-      { ...normalized, provenance: 'imported', source: 'uri' },
+      { ...normalized, provenance: 'imported', aiContent: null, source: 'uri' },
       undefined,
     );
     expect(discardNormalizedImage).toHaveBeenCalledWith(normalized);

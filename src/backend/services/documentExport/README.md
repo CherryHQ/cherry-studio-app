@@ -11,7 +11,7 @@ signature: embedded images display without captions and remote references remain
 `session.previewDocument(presentation)` provides the structured image preview without resource reads.
 Markdown rendering applies the optional target watermark; reuse requires matching complete text.
 HTML and image rendering share the resolved watermark independently of the image-only frame.
-The `none` variant omits the brand footer. Watermark options do not add file metadata.
+The `none` variant omits the brand footer. AI source declarations are independent of watermark options.
 
 Markdown/HTML artifacts contain one immutable file descriptor and source text. Image artifacts
 contain ordered immutable pages, each with its PNG file and dimensions. The frontend capture
@@ -55,3 +55,11 @@ Images fit columns to the page width and wrap cell content. HTML/Markdown previe
 column widths with horizontal scrolling for wide tables. Markdown keeps authored
 content and represents resources explicitly. The chat adapter excludes thinking and process blocks
 from every format.
+
+Selected model-authored text or known AI assets establishes AI origin for the frozen export. One
+production identity is reused across its temporary Markdown/HTML/PNG outputs and retries. Metadata
+is completed before artifact publication; saving carries the same facts into managed storage.
+Labeled Markdown input inherits its declaration without displaying the AIGC header. HTML conversion
+restores input AI facts on final PNG/PPTX outputs and preview files after encoding. This adds no
+visible AI notice. Provider configuration and pending native acceptance are described in
+[AI Content Metadata](../../../../docs/references/ai-content-labeling-design.md).

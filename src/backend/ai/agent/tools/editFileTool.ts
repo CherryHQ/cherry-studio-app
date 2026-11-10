@@ -20,6 +20,7 @@ import {
 import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
+import { writeAiContentText } from '@/shared/utils/aiContentText';
 
 import type { ManagedFileFact, TurnResourceLedger } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
@@ -72,13 +73,14 @@ export type EditFileFiles = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiOperation?: 'generate' | 'edit';
     },
     signal: AbortSignal,
   ): Promise<FileEntry>;
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
   rewriteTextEntry(
-    input: { data: string; id: FileEntryId },
+    input: { data: string; id: FileEntryId; aiOperation?: 'generate' | 'edit' },
     signal: AbortSignal,
   ): Promise<FileEntry>;
 };
@@ -227,12 +229,38 @@ export function createEditFileTool(
     }
 
     const snippet = changeSnippet(editedText, decoded.text.indexOf(old_string), new_string.length);
+    const labeledSnippet = (entry: FileEntry) => {
+      const label = entry.aiContent?.label;
+      if (!label || !['text/markdown', 'text/html'].includes(entry.mediaType)) return snippet;
+      const finalText = writeAiContentText(data, entry.mediaType, label).replace(/^\uFEFF/, '');
+      let prefix = 0;
+      while (
+        prefix < editedText.length &&
+        prefix < finalText.length &&
+        editedText[prefix] === finalText[prefix]
+      )
+        prefix++;
+      let suffix = 0;
+      while (
+        suffix < editedText.length - prefix &&
+        suffix < finalText.length - prefix &&
+        editedText[editedText.length - suffix - 1] === finalText[finalText.length - suffix - 1]
+      )
+        suffix++;
+      const original = decoded.text.indexOf(old_string);
+      let position = original < prefix ? original : prefix;
+      if (original >= editedText.length - suffix)
+        position = original + finalText.length - editedText.length;
+      else if (new_string && finalText.indexOf(new_string, prefix) >= 0)
+        position = finalText.indexOf(new_string, prefix);
+      return changeSnippet(finalText, position, new_string.length);
+    };
 
     signal.throwIfAborted();
     if (rewritable) {
       const entry = await (access
         ? access.rewrite({ data, id: sourceFileEntryId, baseUpdatedAt: source.revision }, signal)
-        : files.rewriteTextEntry({ data, id: sourceFileEntryId }, signal));
+        : files.rewriteTextEntry({ data, id: sourceFileEntryId, aiOperation: 'edit' }, signal));
       recordWrite(source, entry);
       return {
         value: {
@@ -243,7 +271,7 @@ export function createEditFileTool(
           filename: entry.filename,
           size: entry.size,
           replacements: replacementCount,
-          ...snippet,
+          ...labeledSnippet(entry),
         },
         // The draft's artifact part already exists; a second one would show
         // the same file twice.
@@ -265,6 +293,7 @@ export function createEditFileTool(
             baseFileEntryId: sourceFileEntryId,
             baseUpdatedAt: source.revision,
             provenance: 'generated',
+            aiOperation: 'edit',
           },
           signal,
         );
@@ -281,7 +310,7 @@ export function createEditFileTool(
         filename: entry.filename,
         size: entry.size,
         replacements: replacementCount,
-        ...snippet,
+        ...labeledSnippet(entry),
       },
       artifacts: [
         {

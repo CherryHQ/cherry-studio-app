@@ -6,6 +6,7 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable, libraryFileTable } from '@/backend/data/db/schemas';
 import { monotonicUpdateTimestamp } from '@/backend/data/db/schemas/_columnHelpers';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { AiContentSchema, type AiContent } from '@/shared/data/types/aiContent';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import {
   FileEntryIdSchema,
@@ -24,6 +25,7 @@ const CreateFileEntrySchema = z.strictObject({
   // No default: every creation site states an origin, so a new one (a peer
   // transfer, a future import path) cannot silently inherit a wrong answer.
   provenance: FileEntryProvenanceSchema,
+  aiContent: AiContentSchema.nullish(),
   size: z.int().nonnegative(),
   folderId: z.uuid().nullable().optional(),
   baseFileEntryId: z.uuid().optional(),
@@ -156,11 +158,19 @@ export class FileEntryService {
    * model allows: a draft is rewritable by the turn that produced it and
    * immutable afterwards (docs/references/data/file-model.md).
    */
-  async updateSizeTx(tx: Database, id: FileEntryId, size: number): Promise<FileEntry> {
+  async updateSizeTx(
+    tx: Database,
+    id: FileEntryId,
+    size: number,
+    aiContent?: AiContent | null,
+  ): Promise<FileEntry> {
     const [row] = await tx
       .update(fileEntryTable)
       .set({
         size: z.int().nonnegative().parse(size),
+        ...(aiContent !== undefined
+          ? { aiContent: AiContentSchema.nullable().parse(aiContent) }
+          : {}),
         updatedAt: monotonicUpdateTimestamp(fileEntryTable.updatedAt),
       })
       .where(and(eq(fileEntryTable.id, id), isNull(fileEntryTable.deletedAt)))
@@ -232,6 +242,7 @@ export function rowToFileEntry(row: FileEntryRow): FileEntry {
     id: row.id,
     mediaType: row.mediaType,
     provenance: row.provenance,
+    aiContent: row.aiContent ?? null,
     size: row.size,
     updatedAt: row.updatedAt,
   });

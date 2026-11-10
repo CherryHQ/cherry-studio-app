@@ -82,7 +82,13 @@ export class WorkspaceFileAccess {
           'Select a workspace to write by path. Use edit_file to revise a referenced file.',
         );
       return this.content.createTextEntry(
-        { data: input.data, name: input.name, mediaType: input.mediaType, provenance: 'generated' },
+        {
+          data: input.data,
+          name: input.name,
+          mediaType: input.mediaType,
+          provenance: 'generated',
+          aiOperation: 'generate',
+        },
         signal,
       );
     }
@@ -106,6 +112,7 @@ export class WorkspaceFileAccess {
         mediaType: input.mediaType,
         name: target.file?.name ?? target.name,
         provenance: 'generated',
+        aiOperation: 'generate',
         folderId: target.folderId,
         baseFileEntryId: target.file?.currentEntryId,
         baseUpdatedAt: input.baseUpdatedAt,
@@ -132,6 +139,7 @@ export class WorkspaceFileAccess {
         ...input,
         name: file.name,
         provenance: 'generated',
+        aiOperation: 'edit',
         folderId: inDestination ? file.folderId : this.folderId,
         workspaceFolderId: this.folderId,
         ...(inDestination ? { baseFileEntryId: sourceId } : {}),
@@ -154,7 +162,10 @@ export class WorkspaceFileAccess {
       throw DataApiErrorFactory.conflict(
         'This draft moved outside the workspace. Read it again and create a new file.',
       );
-    return this.content.rewriteTextEntry({ ...input, workspaceFolderId: this.folderId }, signal);
+    return this.content.rewriteTextEntry(
+      { ...input, workspaceFolderId: this.folderId, aiOperation: 'edit' },
+      signal,
+    );
   }
 
   private async resolveReference(input: FileToolReference): Promise<FileEntryId> {

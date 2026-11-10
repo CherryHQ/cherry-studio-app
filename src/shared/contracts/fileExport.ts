@@ -1,3 +1,5 @@
+import type { AiContent } from '@/shared/data/types/aiContent';
+
 export type ExportWatermarkStyle = ExportWatermark['kind'];
 export const DEFAULT_EXPORT_WATERMARK_STYLE: ExportWatermarkStyle = 'cherry';
 export type FileExportOptions = { watermark?: ExportWatermarkStyle };
@@ -35,4 +37,5 @@ export type ExportFile = {
   uri: string;
   filename: string;
   mediaType: string;
+  aiContent?: AiContent | null;
 };

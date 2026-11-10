@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { completeFileAiContent, createGeneratedAiContent } from '@/backend/services/file';
 import {
   DocumentExportError,
   type DocumentExportArtifact,
@@ -12,7 +13,10 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportFile } from '@/shared/contracts/fileExport';
+import { inheritAiContent, type AiContent } from '@/shared/data/types/aiContent';
+import type { FileEntryId } from '@/shared/data/types/file';
 import { readableFilename } from '@/shared/data/types/file';
+import { aiContentMarkdownBody, readAiContentText } from '@/shared/utils/aiContentText';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 import { normalizeDocument } from './normalizeDocument';
@@ -21,6 +25,7 @@ import { renderMarkdown, renderMarkdownWithImages } from './renderMarkdown';
 import type { PreparedAsset, ReadManagedImage } from './resolveDocumentAssets';
 
 export type DocumentExportDependencies = {
+  hasAiAssets?(ids: readonly FileEntryId[], signal: AbortSignal): Promise<boolean>;
   readManagedImage: ReadManagedImage;
   saveFile(file: ExportFile, signal: AbortSignal): Promise<ResolvedFile>;
 };
@@ -31,7 +36,13 @@ export function createDocumentExportSession(
   assertActive: () => void,
   onDisposed: () => void,
 ): DocumentExportSession & { cancel(): void } {
-  const document = normalizeDocument(input);
+  const inheritedLabel =
+    input.kind === 'markdown' ? readAiContentText(input.source, 'text/markdown') : null;
+  const document = normalizeDocument(
+    input.kind === 'markdown' && inheritedLabel
+      ? { ...input, source: aiContentMarkdownBody(input.source) }
+      : input,
+  );
   const markdown = renderMarkdown(document);
   const directory = new Directory(Paths.cache, 'DocumentExport', randomUUID());
   const assets = new Map<string, PreparedAsset>();
@@ -39,6 +50,24 @@ export function createDocumentExportSession(
   const artifacts = new Map<string, DocumentExportArtifact>();
   const html = new Map<string, Awaited<ReturnType<typeof renderDocumentHtml>>>();
   const saved = new Map<string, ResolvedFile>();
+  let aiContent: AiContent | undefined = inheritedLabel
+    ? inheritAiContent(inheritedLabel)
+    : undefined;
+
+  async function labelFile(file: ExportFile, signal: AbortSignal): Promise<ExportFile> {
+    if (aiContent === undefined) {
+      // Successful materialization records only referenced assets, excluding unused/failed sources.
+      const ids = [...assets.keys()]
+        .filter((key) => key.startsWith('managed:'))
+        .map((key) => key.slice('managed:'.length));
+      const hasAiContent =
+        document.aiGenerated || (ids.length > 0 && (await dependencies.hasAiAssets?.(ids, signal)));
+      if (!hasAiContent) return file;
+      aiContent = createGeneratedAiContent();
+    }
+    const facts = await completeFileAiContent({ ...file, aiContent }, signal);
+    return { ...file, aiContent: facts };
+  }
   let disposed = false;
   let disposal: Promise<void> | undefined;
 
@@ -130,7 +159,7 @@ export function createDocumentExportSession(
           format: 'markdown',
           text: markdownText,
           issues: preparedMarkdown!.issues,
-          file: { uri: file.uri, filename, mediaType: 'text/markdown' },
+          file: await labelFile({ uri: file.uri, filename, mediaType: 'text/markdown' }, signal),
         };
       } else {
         progress('resolving-assets');
@@ -164,7 +193,7 @@ export function createDocumentExportSession(
             format: 'html',
             html: result.html,
             issues: result.issues,
-            file: { uri: file.uri, filename, mediaType: 'text/html' },
+            file: await labelFile({ uri: file.uri, filename, mediaType: 'text/html' }, signal),
           };
         } else {
           const pages: ExportImagePage[] = [];
@@ -203,11 +232,16 @@ export function createDocumentExportSession(
                 Object.freeze({
                   width: image.width,
                   height: image.height,
-                  file: Object.freeze({
-                    filename: pageFilename,
-                    mediaType: 'image/png',
-                    uri: file.uri,
-                  }),
+                  file: Object.freeze(
+                    await labelFile(
+                      {
+                        filename: pageFilename,
+                        mediaType: 'image/png',
+                        uri: file.uri,
+                      },
+                      signal,
+                    ),
+                  ),
                 }),
               );
             },

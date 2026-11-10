@@ -6,6 +6,35 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds nullable AI facts without relabeling or changing historical blobs', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0015_ai_content_metadata',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`INSERT INTO file_entry (id, filename, media_type, provenance, size, created_at, updated_at, deleted_at)
+        VALUES ('ai', 'report.md', 'text/markdown', 'generated', 5, 1, 2, NULL),
+               ('old', 'old.png', 'image/png', 'imported', 9, 1, 3, 123);`);
+      const previous = database.prepare('SELECT * FROM file_entry ORDER BY id').all();
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT * FROM file_entry ORDER BY id').all()).toEqual(
+        previous.map((row) => ({ ...row, ai_content: null })),
+      );
+      const facts = JSON.stringify({ version: 1, source: 'generated', label: null });
+      database.prepare('UPDATE file_entry SET ai_content = ? WHERE id = ?').run(facts, 'ai');
+      expect(
+        database
+          .prepare('SELECT ai_content, size, updated_at FROM file_entry WHERE id = ?')
+          .get('ai'),
+      ).toEqual({ ai_content: facts, size: 5, updated_at: 2 });
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds local device aliases without changing existing pairing data', () => {
     const database = new DatabaseSync(':memory:');
     try {

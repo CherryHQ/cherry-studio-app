@@ -10,7 +10,7 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import type { ResolvedFile } from '@/shared/contracts/file';
+import type { FileModule, ResolvedFile } from '@/shared/contracts/file';
 import {
   getExportSignature,
   type ExportFile,
@@ -143,6 +143,7 @@ export async function prepareImageExport(
 export async function prepareFileExport(
   { entry, uri }: ResolvedFile,
   watermark: ExportWatermark,
+  completeExportFile?: FileModule['completeExportFile'],
 ): Promise<ExportFile & { release(): void }> {
   const mediaType = entry.mediaType.split(';')[0].trim().toLowerCase();
   if (
@@ -151,14 +152,41 @@ export async function prepareFileExport(
     mediaType === 'image/svg+xml' ||
     watermark.kind === 'none'
   ) {
-    return { uri, filename: entry.filename, mediaType: entry.mediaType, release() {} };
+    return {
+      uri,
+      filename: entry.filename,
+      mediaType: entry.mediaType,
+      ...(entry.aiContent ? { aiContent: entry.aiContent } : {}),
+      release() {},
+    };
   }
   const image = await prepareImageExport({ uri, mediaType: entry.mediaType }, watermark);
   if (image.uri === uri) {
-    return { ...image, filename: entry.filename, mediaType: entry.mediaType };
+    return {
+      ...image,
+      filename: entry.filename,
+      mediaType: entry.mediaType,
+      ...(entry.aiContent ? { aiContent: entry.aiContent } : {}),
+    };
   }
   const stem = entry.filename.replace(/\.[^.]+$/, '');
-  return { ...image, filename: `${stem.slice(0, 251)}.png`, mediaType: 'image/png' };
+  const descriptor: ExportFile = {
+    uri: image.uri,
+    filename: `${stem.slice(0, 251)}.png`,
+    mediaType: 'image/png',
+    ...(entry.aiContent ? { aiContent: entry.aiContent } : {}),
+  };
+  try {
+    if (completeExportFile) {
+      const completed = await completeExportFile({ ...descriptor, sourceFileEntryId: entry.id });
+      return { ...completed, release: image.release };
+    }
+    if (entry.aiContent) throw new Error('AI image metadata finalizer is unavailable');
+    return { ...descriptor, release: image.release };
+  } catch (error) {
+    image.release();
+    throw error;
+  }
 }
 
 function createParagraph(

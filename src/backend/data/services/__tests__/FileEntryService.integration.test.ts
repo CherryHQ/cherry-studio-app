@@ -1,4 +1,5 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { createAiContent } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
@@ -44,6 +45,7 @@ describe('FileEntryService integration', () => {
         id: id(1),
         mediaType: 'application/pdf',
         provenance: 'imported',
+        aiContent: null,
         size: 12,
         updatedAt: now,
       }),
@@ -61,9 +63,34 @@ describe('FileEntryService integration', () => {
       library_file_id: id(1),
       trashed_with: null,
       provenance: 'imported',
+      ai_content: null,
       size: 12,
       updated_at: now,
     });
+  });
+
+  it('persists AI facts independently of provenance and replaces them with a draft revision', async () => {
+    const original = createAiContent('ProviderExample', 'content-1');
+    const entry = await createImported({
+      id: id(7),
+      filename: 'report.md',
+      mediaType: 'text/markdown',
+      size: 12,
+      aiContent: original,
+    });
+    expect((await service.getById(entry.id)).aiContent).toEqual(original);
+    const edited = createAiContent('ProviderExample', 'content-2');
+    const updated = await service.withWriteTx((tx) =>
+      service.updateSizeTx(tx, entry.id, 20, edited),
+    );
+    expect(updated.aiContent).toEqual(edited);
+    expect(updated.updatedAt).toBeGreaterThan(entry.updatedAt);
+    expect((await service.findAvailableByIds([entry.id]))[0].aiContent).toEqual(edited);
+    const stored = testDatabase.sqlite
+      .prepare('SELECT ai_content, size FROM file_entry WHERE id = ?')
+      .get(entry.id) as { ai_content: string; size: number };
+    expect(JSON.parse(stored.ai_content)).toEqual(edited);
+    expect(stored.size).toBe(20);
   });
 
   it('preserves an export source through creation, listing and reads', async () => {

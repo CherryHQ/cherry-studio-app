@@ -1,5 +1,6 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import type { AiContent } from '@/shared/data/types/aiContent';
 import type { FileEntryProvenance } from '@/shared/data/types/file';
 
 import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
@@ -50,6 +51,7 @@ export const fileEntryTable = sqliteTable(
     ...createUpdateDeleteTimestamps,
     // Writers supply the source when known; unspecified origins stay `unknown`.
     provenance: text().$type<FileEntryProvenance>().notNull().default('unknown'),
+    aiContent: text({ mode: 'json' }).$type<AiContent>(),
   },
   (t) => [
     index('fe_created_at_idx').on(t.createdAt),

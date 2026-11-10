@@ -80,6 +80,7 @@ export type WriteFileFiles = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiOperation?: 'generate' | 'edit';
     },
     signal: AbortSignal,
   ): Promise<FileEntry>;
@@ -152,6 +153,7 @@ export function createWriteFileTool(
               mediaType: mediaTypeForFilename(filename),
               name: filename,
               provenance: 'generated',
+              aiOperation: 'generate',
             },
             signal,
           );

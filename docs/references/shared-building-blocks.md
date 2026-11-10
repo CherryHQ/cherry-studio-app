@@ -36,6 +36,7 @@ it already exists.
 | Audio media-type classification, import-time type inference, and transcription source limits | `src/shared/utils/audioFileTypes.ts` |
 | Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `importManagedFile` in `src/backend/services/file/importManagedFile.ts`, used by `fileContent.createInternalEntry` and system share import |
+| AI file source facts and implicit metadata | `src/backend/services/file` public metadata capability; shared fields in `shared/data/types/aiContent.ts`, Markdown/HTML carriers and reading projection in `shared/utils/aiContentText.ts`; frontend derivatives use `FileModule.completeExportFile` |
 | Reading and writing ZIP archives | `readZipDirectory`, `extractZipEntries` in `src/backend/utils/zipReader.ts`; `writeZipFile` in `src/backend/utils/zipWriter.ts` |
 | Built-in tool display titles | `BUILT_IN_TOOL_TITLE_KEYS`, `getBuiltInToolTitleKey` in `src/shared/data/types/builtInToolTitles.ts`, read by the transcript and background activity |
 | Image request deadline for an Agent turn | `withImageGenerationDeadline` in `src/backend/ai/agent/host/agentImageGeneration.ts` |

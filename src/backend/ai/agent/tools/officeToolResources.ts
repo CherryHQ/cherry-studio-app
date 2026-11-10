@@ -33,6 +33,7 @@ export type OfficeFiles = Pick<ManagedFileResolver, 'resolveAvailable'> & {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiOperation?: 'generate' | 'edit';
     },
     signal: AbortSignal,
   ): Promise<FileEntry>;

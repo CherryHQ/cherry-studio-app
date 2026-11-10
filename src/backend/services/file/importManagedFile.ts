@@ -1,6 +1,10 @@
+import { File } from 'expo-file-system';
+
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { FileEntry } from '@/shared/data/types/file';
+import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
+import { readSourceAiContent } from './aiContentMetadata';
 import { createInternalEntryWithPreview } from './filePreviewStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 
@@ -15,6 +19,17 @@ export async function importManagedFile(
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
+  const source = new File(input.uri);
+  const aiContent = await readSourceAiContent(
+    {
+      uri: input.uri,
+      mediaType:
+        input.mediaType ||
+        source.type ||
+        imageMediaTypeFromExtension(source.extension?.replace(/^\./, '')),
+    },
+    signal,
+  );
   const normalized = await normalizeImportedImage(input);
   try {
     signal?.throwIfAborted();
@@ -24,6 +39,7 @@ export async function importManagedFile(
         ...input,
         ...normalized,
         provenance: 'imported',
+        aiContent,
         source: 'uri',
       },
       signal,

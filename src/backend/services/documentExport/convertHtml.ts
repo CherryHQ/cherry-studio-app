@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 
+import { completeFileAiContent } from '@/backend/services/file';
 import {
   DocumentExportError,
   HTML_CONVERSION_MAX_EDGE,
@@ -12,6 +13,7 @@ import {
   type ExportImagePage,
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { ExportFile } from '@/shared/contracts/fileExport';
 import { readableFilename } from '@/shared/data/types/file';
 
 import type { DocumentExportDependencies } from './createDocumentExportSession';
@@ -39,6 +41,7 @@ export async function convertHtml(
   let output: ReturnType<File['open']> | undefined;
   let presentation: ReturnType<typeof createImagePresentation> | undefined;
   const previews: ExportImagePage[] = [];
+  let aiContent = input.aiContent ?? null;
   let published = false;
   const release = () => {
     try {
@@ -109,8 +112,22 @@ export async function convertHtml(
             ? file
             : new File(directory, `page-${String(index + 1).padStart(3, '0')}.png`);
         if (input.format !== 'image') await image.copy(preview);
+        if (aiContent)
+          aiContent = await completeFileAiContent(
+            {
+              uri: preview.uri,
+              mediaType: 'image/png',
+              aiContent,
+            },
+            signal,
+          );
         previews.push({
-          file: { uri: preview.uri, filename: preview.name, mediaType: 'image/png' },
+          file: {
+            uri: preview.uri,
+            filename: preview.name,
+            mediaType: 'image/png',
+            ...(aiContent ? { aiContent } : {}),
+          },
           width: page.width,
           height: page.height,
         });
@@ -124,14 +141,17 @@ export async function convertHtml(
     output?.close();
     output = undefined;
     signal.throwIfAborted();
-    const preparedFile = {
+    const preparedFile: ExportFile = {
       filename,
       uri: file.uri,
       mediaType:
         input.format === 'image'
           ? 'image/png'
           : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ...(aiContent ? { aiContent } : {}),
     };
+    if (preparedFile.aiContent)
+      preparedFile.aiContent = await completeFileAiContent(preparedFile, signal);
     let saved: ResolvedFile | undefined;
     let saving: Promise<ResolvedFile> | undefined;
     let disposed = false;

@@ -181,6 +181,7 @@ export function createOfficeEditTools(
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
+              aiOperation: 'edit',
               folderId: access.folderId,
               workspaceFolderId: access.folderId,
             },

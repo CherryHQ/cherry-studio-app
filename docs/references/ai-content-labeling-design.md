@@ -1,8 +1,8 @@
-# AI Content Metadata Labeling Design
+# AI Content Metadata
 
-Status: **design; not implemented**.
+Status: **implemented; production identity and native acceptance pending**.
 
-This design adds implicit AI-content labels to file metadata when Cherry Mobile generates or
+The implementation adds implicit AI-content labels to file metadata when Cherry Mobile generates or
 AI-edits a file. The producing workflow declares the source, finishes the content, writes and
 reads back the metadata, and then publishes the file version. The metadata travels with the file.
 
@@ -22,9 +22,33 @@ this capability and its actual format coverage; it does not establish every stor
 - [Measures for Labeling AI-Generated and Synthetic Content](https://www.cac.gov.cn/2025-03/14/c_1743654684782215.htm),
   articles 5 and 7, cover file-metadata labels and store verification materials respectively.
 
-Use the final practice guides when implementing each adapter. HTML and future SVG adapters still
-need a precise encoding and independently readable samples. This design does not add a visible-label
+The adapters follow the final practice guides. HTML uses a proposed `head` meta property; its
+independent extraction compatibility still needs acceptance. SVG remains unimplemented. This design does not add a visible-label
 implementation or the agreement and logging workflow for delivery without visible labels.
+
+## Configuration And Validation
+
+Set `EXPO_PUBLIC_AI_CONTENT_PRODUCER` to the confirmed service-provider name or identifier in the
+deployment environment. GB 45438 Annex E allows a name or code; this field does not itself assert
+that a service name is a registered code. Values must satisfy the Annex E character ranges used by
+the shared schema. The app never substitutes a model name, user-defined provider nickname, or
+placeholder. Locally generated supported outputs fail through existing operation handling when
+configuration is missing. Raw unsupported formats still retain their bytes and internal source facts.
+A valid original model-image declaration can retain its upstream producer without local assignment.
+
+Implementation owners are `file/aiContentMetadata.ts`, `file/imageMetadata.ts`,
+`shared/utils/aiContentText.ts`, and `office/officeMetadata.ts`. Source declarations are explicit in
+Agent and painting producers and selected chat exports. Transformations inspect existing metadata
+when historical database facts are absent, without bulk backfilling or rewriting historical blobs. XMP, legacy PNG AIGC text, and EXIF
+ImageDescription/UserComment declarations are read before image normalization; canonical image
+writes use XMP. Metadata inspection is bounded, and image codec payloads are copied without decoding.
+
+Regression suites cover serialized facts, migration preservation, text carriers/projections, image
+containers/EXIF, Office custom properties and native-job lifetime, production/inheritance behavior,
+export retries, edit coordinates, and branding failure cleanup. These tests have been written but
+have not been executed for this change. Type checking, builds, device acceptance, independent
+extraction samples, and store evidence have not been performed. Container fixtures do not establish
+native image decoding, Office rendering fidelity, Photos retention, or recipient behavior.
 
 ## Source Facts
 
@@ -55,7 +79,7 @@ Use the seven Annex E fields, with string values and one canonical metadata labe
 | Field | Rule |
 | --- | --- |
 | `Label` | Use `"1"` for known AI generation or modification; when only inheriting an upstream declaration, retain valid `"1"` (AI-generated), `"2"` (possibly AI-generated), or `"3"` (suspected AI-generated) |
-| `ContentProducer` | The applicable service provider's formal name or approved identifier, never a user-editable provider nickname or model name |
+| `ContentProducer` | The applicable service provider's confirmed stable name or identifier, never a user-editable provider nickname or model name |
 | `ProduceID` | A unique content identifier assigned by the producer; reuse the existing UUID capability for locally assigned identifiers |
 | `ReservedCode1` | Empty string in the initial implementation |
 | `ContentPropagator` | For the generating service's first write, equal to `ContentProducer`; preserve inherited values otherwise |
@@ -65,7 +89,7 @@ Use the seven Annex E fields, with string values and one canonical metadata labe
 Each adapter owns serialization. XMP's `TC260:AIGC` property and the Office custom property named
 `AIGC` contain a JSON string of the seven fields. Markdown uses an `AIGC` mapping in its header.
 Do not add another `AIGC` wrapper indiscriminately inside properties already named `AIGC`.
-Validate character ranges against Annex E and prefer an approved ASCII provider identifier.
+Validate character ranges against Annex E and use a confirmed ASCII provider name or identifier.
 Placeholder provider values must never reach production files.
 
 - Assign a new production identifier for new AI content or a substantive AI edit, including a
@@ -108,7 +132,7 @@ do not establish that the original file carries metadata. Coverage reports must 
 
 ## Ownership And Persistence
 
-Add nullable `aiContent` JSON to `file_entry` through a database migration. Its minimal contents are
+Migration `0015_ai_content_metadata` adds nullable `aiContent` JSON to `file_entry`. Its minimal contents are
 a structure version, source mode (locally generated or inherited), and the canonical fields.
 Null means there are no established AI-source facts. Unsupported formats may still have internal
 facts; this field does not assert successful metadata embedding.
@@ -117,7 +141,7 @@ Do not add an `isLabeled` success flag. Actual file contents establish whether a
 Preserve source facts across versions, queries, workspace copies, upload snapshots, backups, and
 restores. Older backups or remote records without those facts map to null.
 
-| Existing owner | Proposed responsibility |
+| Existing owner | Responsibility |
 | --- | --- |
 | Shared file types and necessary existing contracts | Represent optional AI-source facts as pure data |
 | File schema, data service, and migrations | Persist source snapshots with file versions and preserve them in copies |
@@ -153,14 +177,14 @@ For generation or AI editing:
 
 A supported-format write or read-back failure fails that file operation before successful
 publication or workspace-version advancement. Preserve the original and previous successful
-versions, using existing rollback and cleanup ownership. If upstream generation succeeded, retain
-its result for a local labeling retry rather than paying for another generation.
+versions, using existing rollback and cleanup ownership. A failure does not trigger another model request automatically. Durable reuse of an upstream
+response after a labeling failure remains outside this change.
 
 Editing an imported original or historical file produces a new version. Same-turn drafts retain
 their controlled rewrite path. Prepare complete labeled bytes before replacing a draft, with
 content, source facts, size, and `updatedAt` updates serialized by the existing write queue.
-Filesystem writes and SQLite commits are not one atomic transaction; detect interrupted
-inconsistencies through file reading or repair rather than trusting a database success flag.
+Filesystem writes and SQLite commits are not one atomic transaction. No success flag is persisted;
+crash repair remains outside this change.
 
 For content with established AI-source facts, mechanical transformations first capture the source
 version and facts, then finish the last content encode before restoring metadata on the output.
@@ -190,8 +214,8 @@ copy and all processing before checking its metadata and handing it to existing 
 management. Checking a source file does not establish that a separate cached output is complete.
 
 Cache identity includes source revision, processing parameters, and metadata-format version.
-Only completed, checked artifacts enter the reusable cache; a path's existence alone is not
-evidence that an interrupted output is complete. Unchanged delivery of an already published file
+Metadata completion precedes artifact caching. Failed stable-copy operations remove their partial
+outputs; recovery of a cache copy interrupted by process termination remains separate. Unchanged delivery of an already published file
 does not require parsing on every share.
 
 Retain existing cancellation signals, operation leases, and cleanup owners. Native work keeps its
@@ -214,7 +238,7 @@ backfilling all message records.
 Identify formats using structure and existing media-type rules. Bound metadata, XML, and
 decompression work on untrusted files; do not execute scripts or macros to read labels. Preserve
 unrelated metadata, and do not present an upstream signature as valid for newly changed content.
-Logs retain only necessary identifiers, formats, format versions, and error categories.
+Metadata values are not deliberately logged; existing operation error handling owns failures.
 
 ## Evidence And Implementation Sequence
 
@@ -249,9 +273,8 @@ Office-part preservation, verify text-edit coordinates, and extract labels from 
 uploaded samples independently. Record platform-specific behavior, including Photos and sharing
 when iOS is included. These are planned acceptance criteria, not completed results.
 
-Implementation still needs the formal provider identity and division of responsibility with
-upstream model services, precise adapter encodings for proposed carriers, and target-store evidence
-templates. Unsupported raw-data and source-code carriers remain outside the claimed coverage
+Production deployment still needs the formal provider identity and division of responsibility with
+upstream model services, independent HTML carrier acceptance, and target-store evidence templates. Unsupported raw-data and source-code carriers remain outside the claimed coverage
 without becoming a reason to disable existing features.
 
 ## Related Owners

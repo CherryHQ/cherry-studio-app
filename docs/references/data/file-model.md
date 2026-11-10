@@ -49,7 +49,7 @@ hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
 ## Schema
 
 `file_entry`: `id`, `filename` (including extension), `mediaType`, `size`, `createdAt`,
-`updatedAt`, `deletedAt`, `provenance`, `libraryFileId`, `trashedWith`.
+`updatedAt`, `deletedAt`, `provenance`, `aiContent`, `libraryFileId`, `trashedWith`.
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
   extension-derived `File.type` second, `application/octet-stream` last. Import fills an absent or
@@ -72,6 +72,10 @@ hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
   recording them as `imported` would state something the data does not support. The library's
   Sharing tab selects `document-export`; exported images/documents remain in their media-type tabs.
   This value extends the existing text column without a database migration or changes to old rows.
+- `aiContent` stores nullable versioned AI-source facts separately from provenance. Explicit AI
+  producers finish supported file metadata before committing; copies and mechanical transformations
+  inherit production identity. Legacy entries remain unknown. Unsupported formats keep their bytes
+  and internal source facts. See [AI Content Metadata](../ai-content-labeling-design.md).
 - `deletedAt` is the time a user moved the file to trash. Library listing, attachment admission,
   Agent reads/edits, and previews exclude marked rows. Restore clears it. Trash and restore preserve
   `updatedAt`, which identifies the existing content/preview revision.
@@ -289,7 +293,8 @@ not to `file_entry`.
 
 ## Lifecycle
 
-**Create** — write bytes to `Data/Files`, then insert the row. A failed insert unlinks the bytes it
+**Create** — write pending bytes to `Data/Files`, complete and read back supported AI metadata,
+then insert the row with the final size and source facts. A failed insert unlinks the bytes it
 just wrote. A crash between the two leaves an orphan blob, reclaimable by the future cache-cleanup
 sweep.
 
@@ -299,8 +304,8 @@ after insertion; rejected creation rolls back the row and discards its unregiste
 creation passes its final transaction check, cancellation may leave the committed entry in place.
 Storage does not discard bytes for a successful commit.
 
-**Rewrite** — `rewriteInternalTextEntry` overwrites a draft's bytes at the same path, then records
-the new `size`. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
+**Rewrite** — `rewriteInternalTextEntry` prepares content and metadata in a temporary file before
+replacing a draft at the same path, then records the new `size` and AI facts. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
 held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.

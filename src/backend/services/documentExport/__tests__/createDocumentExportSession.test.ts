@@ -1,6 +1,8 @@
 import type { CaptureExportHtml } from '@/shared/contracts/documentExport';
-import type { ExportWatermark } from '@/shared/contracts/fileExport';
+import type { ExportFile, ExportWatermark } from '@/shared/contracts/fileExport';
+import { createAiContent } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
+import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
 
 import { createDocumentExportSession } from '../createDocumentExportSession';
 
@@ -14,6 +16,7 @@ const mockCopy = jest.fn(async (source: string, destination: string) => {
 });
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => `export-${++mockNextId}` }));
+jest.mock('uuid', () => ({ v7: () => `label-${++mockNextId}`, v4: () => 'unused' }));
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('expo-file-system', () => {
   const uri = (parts: (string | { uri: string })[]) =>
@@ -41,6 +44,7 @@ jest.mock('expo-file-system', () => {
   }
   return {
     Directory,
+    FileMode: { ReadOnly: 'r' },
     File: class {
       uri: string;
       constructor(...parts: (string | { uri: string })[]) {
@@ -52,6 +56,22 @@ jest.mock('expo-file-system', () => {
       get exists() {
         return mockFiles.has(this.uri);
       }
+      get size() {
+        return new TextEncoder().encode(mockFiles.get(this.uri) ?? '').length;
+      }
+      async text() {
+        return mockFiles.get(this.uri)!;
+      }
+      async bytes() {
+        return new TextEncoder().encode(mockFiles.get(this.uri));
+      }
+      open() {
+        const bytes = new TextEncoder().encode(mockFiles.get(this.uri));
+        return { readBytesSync: (length: number) => bytes.slice(0, length), close() {} };
+      }
+      delete() {
+        mockFiles.delete(this.uri);
+      }
       writeSync(text: string) {
         mockFiles.set(this.uri, text);
       }
@@ -61,6 +81,77 @@ jest.mock('expo-file-system', () => {
     },
     Paths: { cache: 'file:///cache' },
   };
+});
+
+test('labels only declared AI exports, retaining one identity across retries and saved copies', async () => {
+  const previous = process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
+  process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER = 'ProviderExample';
+  try {
+    const saveFile = jest.fn(async (_file: ExportFile) => savedFile);
+    const session = createDocumentExportSession(
+      {
+        kind: 'document',
+        document: {
+          aiGenerated: true,
+          sections: [{ id: 'answer', blocks: [{ kind: 'text', text: 'Model answer' }] }],
+        },
+      },
+      { readManagedImage: jest.fn(), saveFile },
+      () => {},
+      () => {},
+    );
+    const artifact = await session.render({ format: 'markdown' });
+    if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
+    expect(artifact.text).toBe('Model answer\n');
+    const label = readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown');
+    expect(label?.ContentProducer).toBe('ProviderExample');
+    expect(artifact.file.aiContent?.label).toEqual(label);
+    expect(await session.render({ format: 'markdown' })).toBe(artifact);
+    await session.save(artifact);
+    expect(saveFile.mock.calls[0]?.[0]).toMatchObject({ aiContent: artifact.file.aiContent });
+    await session.dispose();
+  } finally {
+    if (previous === undefined) delete process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
+    else process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER = previous;
+  }
+});
+
+test('converts labeled Markdown without displaying its AIGC header or inventing another producer', async () => {
+  const facts = createAiContent('UpstreamExample', 'upstream-1');
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: writeAiContentText('Body', 'text/markdown', facts.label!) },
+    { readManagedImage: jest.fn(), saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  expect(session.markdown).toBe('Body\n');
+  const artifact = await session.render({ format: 'html', presentation });
+  if (artifact.format !== 'html') throw new Error('Expected HTML');
+  expect(artifact.html).not.toContain('ContentProducer');
+  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/html')).toEqual(facts.label);
+  await session.dispose();
+});
+
+test('unused asset declarations do not label ordinary exported text as AI-generated', async () => {
+  const session = createDocumentExportSession(
+    {
+      kind: 'document',
+      document: {
+        sections: [{ id: 'user', blocks: [{ kind: 'text', text: 'User text' }] }],
+        assets: {
+          unused: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000001' },
+        },
+      },
+    },
+    { readManagedImage: jest.fn(), hasAiAssets: async () => true, saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  const artifact = await session.render({ format: 'markdown' });
+  if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(artifact.file.aiContent).toBeUndefined();
+  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
+  await session.dispose();
 });
 jest.mock('../renderHtml', () => ({
   renderHtml: async () => ({ html: '<main>Content</main>', issues: [] }),

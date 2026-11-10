@@ -6,6 +6,7 @@ import type { FileEntryService } from '@/backend/data/services/FileEntryService'
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { AiContent } from '@/shared/data/types/aiContent';
 import {
   FALLBACK_MEDIA_TYPE,
   type FileEntry,
@@ -23,6 +24,7 @@ import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
+import { completeFileAiContent, type AiContentWrite } from './aiContentMetadata';
 import { deleteFilePreview } from './filePreviewCache';
 import { deleteFileTextCache } from './fileTextCache';
 
@@ -30,7 +32,8 @@ const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 
-export type CreateInternalEntryInput = FilePlacement & { provenance: FileEntryProvenance } & (
+export type CreateInternalEntryInput = FilePlacement &
+  AiContentWrite & { provenance: FileEntryProvenance } & (
     | {
         /** Authoritative media type from the picker; extension inference is the fallback. */
         mediaType?: string;
@@ -60,6 +63,7 @@ type WrittenInternalFile = {
   id: FileEntryId;
   mediaType: string;
   provenance: FileEntryProvenance;
+  aiContent: AiContent | null;
   size: number;
 };
 
@@ -118,7 +122,10 @@ function resolveMediaType(...candidates: (string | null | undefined)[]): string 
   return FALLBACK_MEDIA_TYPE;
 }
 
-async function writeInternalFile(input: CreateInternalEntryInput): Promise<WrittenInternalFile> {
+async function writeInternalFile(
+  input: CreateInternalEntryInput,
+  signal?: AbortSignal,
+): Promise<WrittenInternalFile> {
   const id = createOrderedUuid();
   let filename: string;
   let mediaType: string;
@@ -150,6 +157,16 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
 
   try {
     await write(destination);
+    signal?.throwIfAborted();
+    const aiContent = await completeFileAiContent(
+      {
+        uri: destination.uri,
+        mediaType,
+        aiContent: input.aiContent,
+        aiOperation: input.aiOperation,
+      },
+      signal,
+    );
 
     if (!destination.exists) {
       throw new Error(`Internal file does not exist after write: ${destination.uri}`);
@@ -160,7 +177,7 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
       throw new Error(`Internal file has an invalid size: ${destination.uri}`);
     }
 
-    return { filename, id, mediaType, provenance: input.provenance, size };
+    return { filename, id, mediaType, provenance: input.provenance, aiContent, size };
   } catch (error) {
     try {
       if (destination.exists) {
@@ -186,7 +203,7 @@ export async function createInternalEntry(
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const written = await writeInternalFile(input);
+  const written = await writeInternalFile(input, signal);
   try {
     signal?.throwIfAborted();
     const entry = await entries.create(
@@ -255,6 +272,7 @@ export async function rewriteInternalTextEntry(
   input: {
     data: string;
     id: FileEntryId;
+    aiOperation?: AiContentWrite['aiOperation'];
     workspaceFolderId?: string | null;
     baseUpdatedAt?: number;
   },
@@ -277,12 +295,33 @@ export async function rewriteInternalTextEntry(
     signal?.throwIfAborted();
     // Availability, synchronous bytes and metadata share the deletion write queue.
     // Once bytes change, complete bookkeeping even if the caller cancels.
-    file.writeSync(input.data);
+    const pending = new File(fileDirectory(), createOrderedUuid() + '.draft');
+    let aiContent: AiContent | null;
+    try {
+      pending.writeSync(input.data);
+      aiContent = await completeFileAiContent(
+        {
+          uri: pending.uri,
+          mediaType: entry.mediaType,
+          aiContent: entry.aiContent,
+          aiOperation: input.aiOperation,
+        },
+        signal,
+      );
+      signal?.throwIfAborted();
+      await pending.copy(file, { overwrite: true });
+    } finally {
+      try {
+        if (pending.exists) pending.delete();
+      } catch (error) {
+        logger.warn('Failed to discard draft preparation file', error as Error, { id: entry.id });
+      }
+    }
     const size = file.size;
     if (!Number.isSafeInteger(size) || size < 0) {
       throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
     }
-    return entries.updateSizeTx(tx, entry.id, size);
+    return entries.updateSizeTx(tx, entry.id, size, aiContent);
   });
   publishFileEntryChanges([updatedEntry.id]);
   return updatedEntry;

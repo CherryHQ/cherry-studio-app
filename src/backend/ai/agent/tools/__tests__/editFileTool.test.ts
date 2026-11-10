@@ -1,6 +1,8 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { createAiContent, type AiContent } from '@/shared/data/types/aiContent';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
+import { writeAiContentText } from '@/shared/utils/aiContentText';
 
 import type { ManagedFileFact } from '../../resources/managedFileResolver';
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
@@ -47,6 +49,7 @@ describe('editFileTool', () => {
         baseFileEntryId: SOURCE_ID,
         baseUpdatedAt: undefined,
         provenance: 'generated',
+        aiOperation: 'edit',
       },
       expect.any(AbortSignal),
     );
@@ -83,7 +86,7 @@ describe('editFileTool', () => {
     });
 
     expect(files.rewriteTextEntry).toHaveBeenCalledWith(
-      { data: 'Hello Cherry\n', id: SOURCE_ID },
+      { data: 'Hello Cherry\n', id: SOURCE_ID, aiOperation: 'edit' },
       expect.any(AbortSignal),
     );
     expect(files.createTextEntry).not.toHaveBeenCalled();
@@ -117,6 +120,27 @@ describe('editFileTool', () => {
     });
   });
 
+  test('returns coordinates in the final file when a first AI edit inserts Markdown metadata', async () => {
+    const facts = createAiContent('ProviderExample', 'content-1');
+    const files = createFiles('l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n', undefined, facts);
+    const output = await execute(createEditFileTool(files), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'old',
+      new_string: 'new',
+    });
+    const available = await files.resolveAvailable([EDITED_ID]);
+    const stored = new TextDecoder().decode(await files.readAsBytes(available.get(EDITED_ID)!));
+    const { snippet, snippetStartLine } = output.value as {
+      snippet: string;
+      snippetStartLine: number;
+    };
+    const lines = stored.split('\n');
+    expect(snippetStartLine).toBe(lines.indexOf('l2') + 1);
+    expect(snippetStartLine).toBeGreaterThan(2);
+    expect(lines.slice(snippetStartLine - 1, snippetStartLine + 4).join('\n') + '\n').toBe(snippet);
+    expect(snippet).toContain('l4 new');
+  });
+
   test('caps the snippet when the replacement itself is long', async () => {
     const files = createFiles('x');
     const output = await execute(createEditFileTool(files), {
@@ -147,6 +171,7 @@ describe('editFileTool', () => {
       {
         data: 'ALPHA\nbeta\n',
         id: SOURCE_ID,
+        aiOperation: 'edit',
       },
       expect.any(AbortSignal),
     );
@@ -155,6 +180,7 @@ describe('editFileTool', () => {
       {
         data: 'ALPHA\nBETA\n',
         id: SOURCE_ID,
+        aiOperation: 'edit',
       },
       expect.any(AbortSignal),
     );
@@ -187,6 +213,7 @@ describe('editFileTool', () => {
       {
         data: 'ALPHA\nBETA\nGAMMA\n',
         id: EDITED_ID,
+        aiOperation: 'edit',
       },
       expect.any(AbortSignal),
     );
@@ -209,7 +236,7 @@ describe('editFileTool', () => {
 
     expect(files.createTextEntry).toHaveBeenCalledTimes(1);
     expect(files.rewriteTextEntry).toHaveBeenCalledWith(
-      { data: 'ALPHA\nBETA\n', id: EDITED_ID },
+      { data: 'ALPHA\nBETA\n', id: EDITED_ID, aiOperation: 'edit' },
       expect.any(AbortSignal),
     );
     expect(first.artifacts).toHaveLength(1);
@@ -651,7 +678,7 @@ describe('editFileTool', () => {
   });
 });
 
-function createFiles(content: string | Uint8Array, declaredSize?: number) {
+function createFiles(content: string | Uint8Array, declaredSize?: number, aiContent?: AiContent) {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   const source: ManagedFileFact = {
     fileEntryId: SOURCE_ID,
@@ -677,7 +704,11 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
   const createTextEntry = jest.fn(
     async (input: Parameters<EditFileFiles['createTextEntry']>[0]) => {
       const id = `00000000-0000-7000-8000-00000000000${nextId++}` as FileEntryId;
-      const data = new TextEncoder().encode(input.data);
+      const data = new TextEncoder().encode(
+        aiContent?.label
+          ? writeAiContentText(input.data, input.mediaType, aiContent.label)
+          : input.data,
+      );
       facts.set(id, {
         fileEntryId: id,
         mediaType: input.mediaType,
@@ -691,6 +722,7 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
         id,
         mediaType: input.mediaType,
         provenance: input.provenance,
+        ...(aiContent ? { aiContent } : {}),
         size: data.byteLength,
         updatedAt: 2,
       });

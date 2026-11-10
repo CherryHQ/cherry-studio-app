@@ -163,6 +163,7 @@ test.each([null, WORKSPACE_ID])(
         name: 'copy.docx',
         mediaType: OFFICE_MEDIA_TYPES.docx,
         provenance: 'generated',
+        aiOperation: 'edit',
         folderId,
         workspaceFolderId: folderId,
       },

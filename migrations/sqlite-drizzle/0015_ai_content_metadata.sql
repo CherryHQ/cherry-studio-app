@@ -1,0 +1,1 @@
+ALTER TABLE `file_entry` ADD `ai_content` text;
