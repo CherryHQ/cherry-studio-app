@@ -3259,6 +3259,22 @@ describe('quoted requests through durable execution', () => {
         }),
       ).rejects.toThrow();
       expect(jest.mocked(state.conversations.submit)).toHaveBeenCalledTimes(2);
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [
+            {
+              type: 'text',
+              text: 'A valid first source must not hide a foreign second source',
+              ...quoted,
+              quotes: [...quoted.quotes, { ...fields.quotes[0], id: 'foreign-second' }],
+            },
+          ],
+        }),
+      ).rejects.toThrow();
+      expect(jest.mocked(state.conversations.submit)).toHaveBeenCalledTimes(2);
       expect(() =>
         state.host.startSession({
           agentId: state.agentId,

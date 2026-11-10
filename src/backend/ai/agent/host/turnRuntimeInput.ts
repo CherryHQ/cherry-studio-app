@@ -188,7 +188,7 @@ function contextAnchor(
 /** Preserve message-scoped composer intent as user content, without changing the stored text. */
 export function runtimeUserText(part: {
   text: string;
-  quotes?: [MessageQuote];
+  quotes?: MessageQuote[];
   pluginReferences?: PluginTextReference[];
   selectionReferences?: SelectionTextReference[];
   skillReferences?: SkillTextReference[];
@@ -196,35 +196,58 @@ export function runtimeUserText(part: {
   AgentInputPartSchema.parse({
     type: 'text',
     text: part.text,
+    ...(part.quotes ? { quotes: part.quotes, quoteAuthor: { role: 'assistant' } } : {}),
     ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
     ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
     ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
   });
   let text = part.text;
-  // A selection chip reaches the model as the fenced block desktop sends, right after its label.
-  for (const reference of [...(part.selectionReferences ?? [])].sort(
-    (left, right) => right.offset - left.offset,
+  // Expand recorded ranges from the end so quote and Office references cannot shift each other.
+  const expansions = [
+    ...(part.selectionReferences ?? []).map((reference) => ({
+      start: reference.offset + reference.label.length,
+      end: reference.offset + reference.label.length,
+      text: `\n${createCodeBlockMarkdown(JSON.stringify(reference.selection), 'selection-ref')}\n`,
+    })),
+    ...(part.quotes ?? []).flatMap((quote) =>
+      quote.reference
+        ? [
+            {
+              start: quote.reference.offset,
+              end: quote.reference.offset + quote.reference.label.length,
+              text: `\n\n${quoteBlock(quote.text)}\n\n`,
+            },
+          ]
+        : [],
+    ),
+  ];
+  for (const expansion of expansions.sort(
+    (left, right) => right.start - left.start || right.end - left.end,
   )) {
-    const end = reference.offset + reference.label.length;
-    const block = createCodeBlockMarkdown(JSON.stringify(reference.selection), 'selection-ref');
-    text = `${text.slice(0, end)}\n${block}\n${text.slice(end)}`;
+    text = `${text.slice(0, expansion.start)}${expansion.text}${text.slice(expansion.end)}`;
   }
   if (part.pluginReferences?.length) {
     const pluginIds = [...new Set(part.pluginReferences.map((reference) => reference.pluginId))];
     text = `${text}\n\nFor this message, use the plugins explicitly selected in the composer: ${JSON.stringify(pluginIds)}. Other connected plugins remain available if needed.`;
   }
-  return formatMessageQuote(text, part.quotes);
+  return formatMessageQuote(
+    text,
+    part.quotes?.filter((quote) => !quote.reference),
+  );
 }
 
 export function formatMessageQuote(
   expandedRequest: string,
-  quotes?: readonly [MessageQuote],
+  quotes?: readonly MessageQuote[],
 ): string {
-  if (!quotes) return expandedRequest;
+  if (!quotes?.length) return expandedRequest;
   // The quoted passage leads as a Markdown blockquote, the way chat apps send a selection.
-  const quoted = quotes[0].text
+  return `${quotes.map((quote) => quoteBlock(quote.text)).join('\n\n')}\n\n${expandedRequest}`;
+}
+
+function quoteBlock(text: string): string {
+  return text
     .split('\n')
     .map((line) => (line ? `> ${line}` : '>'))
     .join('\n');
-  return `${quoted}\n\n${expandedRequest}`;
 }

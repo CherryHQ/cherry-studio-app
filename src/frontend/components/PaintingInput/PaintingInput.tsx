@@ -1,6 +1,6 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
-import { Button, Composer } from '@cherrystudio/ui/components';
+import { Button, Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -66,6 +66,7 @@ type PaintingInputProps = {
   initialParamValues?: ImageParamDraft;
   modelSelection?: PaintingModelSelection;
   onCancel: () => void;
+  onLinkPress?: ComposerInputProps['onLinkPress'];
   onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
   preparePrompt?: PaintingPromptPreparation;
   onSubmissionSettled?: () => void;
@@ -92,6 +93,7 @@ function PaintingInputControls({
   modelSelection,
   onCancel,
   onGenerate,
+  onLinkPress,
   onRatioChange,
   preparePrompt,
   onSubmissionSettled,
@@ -137,7 +139,7 @@ function PaintingInputControls({
   const visibleAttachments = isReferenceVisible
     ? input.attachments
     : input.attachments.filter((item) => item.id !== input.referenceAttachment?.id);
-  const paramFields = getImageParamFields(input.resolvedMode);
+  const paramFields = getImageParamFields(input.resolvedMode, input.paramValues);
   const settingsSummary = imageParamSummary(t, paramFields, input.paramValues);
   const modelLabel =
     selectedModel?.name ?? historicalModelLabel(painting) ?? t('settings.model.painting.title');
@@ -212,7 +214,7 @@ function PaintingInputControls({
               />
             </View>
           ) : null}
-          <ComposerField placeholder={t('painting.input.placeholder')} />
+          <ComposerField onLinkPress={onLinkPress} placeholder={t('painting.input.placeholder')} />
           <Composer.Toolbar>
             <ComposerMenu media="images" />
             {input.resolvedMode && paramFields.length > 0 ? (

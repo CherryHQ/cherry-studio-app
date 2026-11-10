@@ -21,9 +21,11 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsGroupedSeparator, SettingsServiceRow } from '../../components/SettingsServiceRow';
 import { ProviderAccountBadge } from '../components/ProviderAccountBadge';
+import { getSavedProviderCatalogEntries } from './savedProviderCatalogEntries';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 56;
 const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider' as const;
+const EMPTY_CATALOG_ENTRIES: ProviderCatalogEntry[] = [];
 
 type ProviderCatalogEntryItem =
   | { id: typeof CUSTOM_PROVIDER_ITEM_ID; type: 'custom' }
@@ -184,7 +186,7 @@ export default function ProviderCatalogScreen({
     queryKey: queryKeys.providers.catalog(),
     staleTime: 0,
   });
-  const entries = catalogQuery.data ?? [];
+  const entries = catalogQuery.data ?? EMPTY_CATALOG_ENTRIES;
   const {
     query,
     results: listedEntries,
@@ -262,16 +264,9 @@ export default function ProviderCatalogScreen({
       {
         data:
           intent === 'chat'
-            ? (savedProviders.data ?? [])
-                .filter(
-                  (provider) =>
-                    !provider.presetProviderId &&
-                    (!query ||
-                      `${provider.name} ${provider.id}`
-                        .toLowerCase()
-                        .includes(query.toLowerCase())),
-                )
-                .map((provider) => ({ ...provider, type: 'saved' as const }))
+            ? getSavedProviderCatalogEntries(savedProviders.data ?? [], entries, query).map(
+                (provider) => ({ ...provider, type: 'saved' as const }),
+              )
             : [],
         title: t('onboarding.provider.saved'),
       },
@@ -296,7 +291,7 @@ export default function ProviderCatalogScreen({
           isLast: index === section.data.length - 1,
         })),
       }));
-  }, [intent, listedEntries, query, savedProviders.data, showsAllProviders, t]);
+  }, [entries, intent, listedEntries, query, savedProviders.data, showsAllProviders, t]);
   const renderProviderRow = useCallback(
     ({ item }: { item: ProviderCatalogItem }) => {
       const supportsSavedSignIn = item.type === 'saved' && accounts.getCapabilities(item).signIn;

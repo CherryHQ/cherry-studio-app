@@ -212,6 +212,39 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
+  test('adds the required empty properties map only to model-facing parameterless object tools', () => {
+    const inputSchema = { type: 'object', additionalProperties: false };
+    const referenced = {
+      type: 'object',
+      $ref: '#/$defs/Input',
+      $defs: { Input: { type: 'object', properties: { query: { type: 'string' } } } },
+    };
+    const declared = { type: 'object', properties: { query: { type: 'string' } } };
+    const extension = capabilityExtension({
+      name: 'schema-compatibility',
+      approve: async () => true,
+      tools: [
+        capability({
+          providerName: 'empty',
+          ref: { source: 'mcp', serverId: 'server', rawToolName: 'empty' },
+          inputSchema,
+        }),
+        capability({ providerName: 'referenced', inputSchema: referenced }),
+        capability({ providerName: 'declared', inputSchema: declared }),
+      ],
+    });
+    expect(extension.tools?.find((tool) => tool.name === 'empty')?.parameters).toEqual({
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    });
+    expect(inputSchema).toEqual({ type: 'object', additionalProperties: false });
+    expect(extension.tools?.find((tool) => tool.name === 'referenced')?.parameters).toEqual(
+      referenced,
+    );
+    expect(extension.tools?.find((tool) => tool.name === 'declared')?.parameters).toEqual(declared);
+  });
+
   test('approval and execution receive the same coerced JSON Schema input, including extra properties', async () => {
     const execute = jest.fn<ReturnType<RuntimeTool['execute']>, Parameters<RuntimeTool['execute']>>(
       async () => ({ value: 'ok', artifacts: [] }),

@@ -844,9 +844,12 @@ output, and retry does not promise byte-level continuation.
 Retry reads history through the same checkpoint path as a submission, skipping the checkpoint on
 the answer it replaces: a retry in a compacted Session neither rereads the summarized transcript
 nor resumes from a summary of content it is discarding. Admission is therefore as slow as a
-submission's, and it has no new rows to show for it. The frontend renders the answer as empty and
-pending from the press until the reserved one arrives — the same state a just-sent message shows —
-so a rejected admission simply restores the untouched answer.
+submission's, and it has no new rows to show for it. When retrying an unfinished answer without
+choosing a model, the frontend renders it as empty and pending from the press until the reserved
+one arrives — the same state a just-sent message shows — so a rejected admission restores the
+untouched answer. A successful answer or an explicit model selection keeps the original answer
+visible while its sibling is prepared. Admission makes the Session busy immediately and remains
+cancellable before a turn is reserved.
 
 ## Editing a question
 

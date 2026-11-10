@@ -383,7 +383,7 @@ export function toAgentMessageListItem(
             key: `answers:${message.parentId}`,
             siblings: message.siblings.map((sibling) => ({
               id: sibling.id,
-              status: toDisplayStatus(sibling.status),
+              status: toDisplayStatus(sibling.id === message.id ? message.status : sibling.status),
               modelId: sibling.modelId,
             })),
           },

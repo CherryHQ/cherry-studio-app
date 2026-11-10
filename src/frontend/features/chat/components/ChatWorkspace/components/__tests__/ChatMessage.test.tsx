@@ -12,6 +12,7 @@ const mockDeleteMessageTurn = jest.fn();
 const mockEditMessage = jest.fn();
 const mockSelectBranch = jest.fn();
 const mockShareMessage = jest.fn();
+const mockPreserveReadingPosition = jest.fn();
 jest.mock('../../../../quotes/MessageQuoteHighlight', () => ({
   MessageQuoteHighlight: () => null,
 }));
@@ -30,6 +31,11 @@ jest.mock('@cherrystudio/ui/components', () => ({
 let mockCanSelectBranch = false;
 let mockEditableMessageIds: ReadonlySet<string> = new Set();
 let mockIsEditDisabled = false;
+let mockAreCardsEnabled = true;
+
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [mockAreCardsEnabled],
+}));
 
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
@@ -46,7 +52,7 @@ jest.mock('../../context/AssistantMessageActionsProvider', () => ({
 }));
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ i18n: { language: 'en-US' }, t: (key: string) => key }),
 }));
 
 jest.mock('@/frontend/components/Avatar', () => {
@@ -64,6 +70,7 @@ jest.mock('@/frontend/components/Message', () => {
     AssistantMessage: ({ children, ...props }: { children: ReactNode }) =>
       createElement('AssistantMessage', props, children),
     UserMessage: () => createElement('UserMessage', null),
+    useMessageListDisclosureToggle: () => mockPreserveReadingPosition,
   };
 });
 
@@ -99,6 +106,11 @@ jest.mock('../MessageAnswerCards', () => {
         ),
       ),
     MessageAnswerCards: (props: object) => createElement('MessageAnswerCards', props),
+    useAnswerGroup: (message: MessageListItem) => ({
+      models: [],
+      names: (message.branch?.siblings ?? []).map((sibling) => sibling.modelId),
+      siblings: message.branch?.siblings ?? [],
+    }),
   };
 });
 
@@ -114,6 +126,8 @@ describe('ChatMessage', () => {
     mockCanSelectBranch = false;
     mockEditableMessageIds = new Set();
     mockIsEditDisabled = false;
+    mockAreCardsEnabled = true;
+    mockSelectBranch.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -400,6 +414,30 @@ describe('ChatMessage', () => {
     expect(renderer!.root.findByType('MessageAnswerCards' as never).props.message).toBe(branched);
     expect(renderer!.root.findAllByType('AssistantMessage' as never)).toHaveLength(0);
   });
+
+  test.each([
+    ['next', 'assistant-1', 'assistant-2'],
+    ['previous', 'assistant-2', 'assistant-1'],
+  ] as const)(
+    'leaves live-edge following before selecting the %s answer',
+    (direction, from, to) => {
+      mockCanSelectBranch = true;
+      mockAreCardsEnabled = false;
+      act(() => {
+        renderer = create(renderMessage({ ...branchedMessage(), id: from }));
+      });
+
+      act(() => {
+        renderer!.root.findByProps({ testID: `message-answer-${direction}` }).props.onPress();
+      });
+
+      expect(mockPreserveReadingPosition).toHaveBeenCalledTimes(1);
+      expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: from, targetId: to });
+      expect(mockPreserveReadingPosition.mock.invocationCallOrder[0]).toBeLessThan(
+        mockSelectBranch.mock.invocationCallOrder[0]!,
+      );
+    },
+  );
 
   test('shows only the selected answer where answers cannot be switched', () => {
     act(() => {

@@ -4,6 +4,7 @@ import MarkdownIt from 'markdown-it';
 
 import {
   DocumentExportError,
+  DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
   type DocumentExportIssue,
   type ExportBlock,
   type ExportContentLabels,
@@ -50,8 +51,12 @@ export function renderMarkdownPreview(
   ).render(new Map(), []).html;
 }
 
+export function renderDocumentPreview(document: ExportDocument, presentation: ExportPresentation) {
+  return createHtmlRenderer(document, presentation, 'links').render(new Map(), []).html;
+}
+
 function createHtmlRenderer(
-  document: ExportDocument,
+  inputDocument: ExportDocument,
   inputPresentation: ExportPresentation,
   imagePresentation: 'embedded' | 'links',
 ) {
@@ -68,6 +73,8 @@ function createHtmlRenderer(
       Object.entries(inputPresentation.typography).map(([key, value]) => [key, { ...value }]),
     ) as ExportPresentation['typography'],
   };
+  const card = presentation.imageFrame?.layout === 'single';
+  const document = inputDocument;
   const labels = document.labels ?? DEFAULT_CONTENT_LABELS;
   const isImage = Boolean(presentation.imageFrame);
   const sources = new Map<string, NonNullable<ExportDocument['assets']>[string]>();
@@ -209,8 +216,11 @@ function createHtmlRenderer(
           }
         })
         .join('\n');
+    const firstAnswerIndex = document.sections.findIndex(
+      (section) => section.presentation === 'message',
+    );
     const body = document.sections
-      .map((section) => {
+      .map((section, index) => {
         const references = new Set(
           section.blocks.flatMap((block) =>
             block.kind === 'links'
@@ -236,11 +246,13 @@ function createHtmlRenderer(
           return `<section class="bubble-row" aria-label="${escapeHtml(section.heading ?? '')}"><div class="bubble-column">${attachments.length ? `<div class="attachments">${renderBlocks(attachments, references)}</div>` : ''}${content.length || metadata ? `<div class="bubble">${metadata}${renderBlocks(content, references)}</div>` : ''}</div></section>`;
         }
         const isMessage = section.presentation === 'message';
-        const heading = !section.heading
-          ? ''
-          : isMessage
-            ? `<h2 class="message-heading">${section.avatar ? `<span class="message-avatar" aria-hidden="true">${escapeHtml(section.avatar)}</span>` : ''}<span class="message-name">${escapeHtml(section.heading)}</span>${section.model ? `<span class="message-model">${escapeHtml(section.model)}</span>` : ''}</h2>`
-            : `<h2 class="section-heading">${escapeHtml(section.heading)}</h2>`;
+        const isFirstAnswer = index === firstAnswerIndex;
+        const heading =
+          !section.heading || (card && document.header && isFirstAnswer)
+            ? ''
+            : isMessage
+              ? `<h2 class="message-heading">${section.avatar ? `<span class="message-avatar" aria-hidden="true">${escapeHtml(section.avatar)}</span>` : ''}<span class="message-name">${escapeHtml(section.heading)}</span>${section.model ? `<span class="message-model">${escapeHtml(section.model)}</span>` : ''}</h2>`
+              : `<h2 class="section-heading">${escapeHtml(section.heading)}</h2>`;
         return `<section class="${isMessage ? 'message-row' : 'document-section'}">${heading}<div class="message-content">${metadata}${renderBlocks(section.blocks, references)}</div></section>`;
       })
       .join('\n');
@@ -250,9 +262,16 @@ function createHtmlRenderer(
       document.title && !isConversation
         ? `<h1 class="document-title">${escapeHtml(document.title)}</h1>`
         : '';
-    const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}>${title}${body}</article>`;
+    const header =
+      card && document.header
+        ? `<div class="share-card-meta">${document.header.avatar ? `<span class="message-avatar" aria-hidden="true">${escapeHtml(document.header.avatar)}</span>` : ''}<span class="share-card-author">${escapeHtml(document.header.title)}</span>${document.header.date ? `<span class="share-card-date">${escapeHtml(document.header.date)}</span>` : ''}</div>`
+        : '';
+    const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}>${header}${title}${body}</article>`;
+    const framedContent = card
+      ? `<div class="share-card-body" data-share-card-max-height="${DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT}" data-share-card-omission="${escapeHtml(presentation.imageFrame!.excerptLabel ?? '…')}">${content}</div>`
+      : content;
     const footer = signature ? renderSignature(signature) : '';
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}">${content}${footer}</main></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}${card && !signature ? ' is-unbranded' : ''}">${framedContent}${footer}</main></body></html>`;
     return { html, issues };
   }
 }
@@ -288,7 +307,14 @@ function validatePresentation(value: ExportPresentation) {
       );
     }) ||
     colors.some((color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color)) ||
-    (frame && (typeof frame.label !== 'string' || frame.label.length > 256))
+    (frame &&
+      (typeof frame.label !== 'string' ||
+        frame.label.length > 256 ||
+        (frame.layout !== undefined && frame.layout !== 'single' && frame.layout !== 'pages') ||
+        (frame.excerptLabel !== undefined &&
+          (typeof frame.excerptLabel !== 'string' ||
+            !frame.excerptLabel.trim() ||
+            frame.excerptLabel.length > 256))))
   )
     throw new DocumentExportError('invalid-input');
 }

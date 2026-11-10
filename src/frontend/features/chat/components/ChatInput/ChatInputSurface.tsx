@@ -1,5 +1,5 @@
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import { Composer } from '@cherrystudio/ui/components';
+import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import { type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type StyleProp, type TextStyle, View } from 'react-native';
@@ -43,6 +43,7 @@ type ChatInputSurfaceProps = {
   streaming: boolean;
   onStop?: () => void;
   fieldStyle?: StyleProp<TextStyle>;
+  onLinkPress?: ComposerInputProps['onLinkPress'];
   placeholder?: string;
   attachmentMode?: 'images' | 'text-only';
   /** Voice input takes the send slot while there is nothing to send. */
@@ -94,6 +95,7 @@ function ChatInputLayout({
   streaming,
   onStop,
   fieldStyle,
+  onLinkPress,
   placeholder,
   attachmentMode = 'images',
   status,
@@ -119,6 +121,7 @@ function ChatInputLayout({
       active={isEditing || draft.length > 0 || attachments.length > 0}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
+      onLinkPress={onLinkPress}
       onReturnSubmit={submit}
       placeholder={placeholder}
       submitOnReturn={submitOnReturn}

@@ -452,7 +452,7 @@ export function useAgentChatControls(input: {
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
     editMessage,
-    isBusy: isComposerBusy || isSubmitting,
+    isBusy: isAdmitting || isComposerBusy || isSubmitting,
     sendMessage: send,
   };
 }

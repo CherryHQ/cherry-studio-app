@@ -581,9 +581,11 @@ export class DurableAgentHost implements AgentProtocol {
   ) {
     const quote = parsed.parts.find((part) => part.type === 'text' && part.quotes);
     if (quote?.type === 'text' && quote.quotes) {
-      const source = await this.store.getMessage(parsed.sessionId, quote.quotes[0].sourceMessageId);
-      if (source?.role !== 'assistant')
-        fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
+      for (const sourceMessageId of new Set(quote.quotes.map((item) => item.sourceMessageId))) {
+        const source = await this.store.getMessage(parsed.sessionId, sourceMessageId);
+        if (source?.role !== 'assistant')
+          fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
+      }
     }
     const answers = replyTargets(parsed);
     const busy = this.busyLanes(parsed.sessionId);

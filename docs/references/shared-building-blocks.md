@@ -13,12 +13,15 @@ it already exists.
 | Need | Owner |
 | --- | --- |
 | Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
+| IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; IPinfo Lite lookup independent of data-collection consent, ten-minute success cache and explicit unknown-country result |
+| Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress country, then device region, retaining the domestic default only when both are unavailable |
 | Non-streaming HTTP requests | `createHttpClient` in `src/backend/services/http`, the only transport; its README lists the streaming exceptions |
 | Verified remote file downloads | `downloadFile` in `src/backend/services/download`; native streaming, progress, cancellation and SHA-256 for APK updates and offline models |
 | Fetch-shaped adapter for a protocol SDK | `createFetchBridge` in `src/backend/services/http` |
 | Remote web-search provider protocols and metadata | `@cherrystudio/web-search`; mobile transport and policy adapters in `src/backend/services/webSearch` |
 | Identifying outbound headers | `defaultAppHeaders` in `src/backend/utils/defaultAppHeaders.ts` |
 | Combining abort signals | `linkAbortSignals` in `src/backend/utils/linkAbortSignals.ts` |
+| Cancelling a caller's wait without cancelling shared work | `raceAbort` in `src/backend/utils/raceAbort.ts` |
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
@@ -47,7 +50,7 @@ it already exists.
 | Text translation | The translation module in `src/backend/services/translation` |
 | Dictation, reading aloud, offline audio-file transcription, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |
-| Quoted answer text on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquote in `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
+| Quoted answer snapshots and inline positions on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquotes in `runtimeUserText` and `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
 | Editable assistant reply prose | `editableReplyParts` and `applyReplyEdits` in `src/shared/utils/assistantReply.ts`; every non-empty text part is editable, reasoning and tool receipts are not |
 | Safe Markdown code fences | `createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` |
@@ -73,7 +76,11 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | --- | --- |
 | Model selection and chat capability filtering | `ModelPickerDrawer` in `src/frontend/components/ModelPicker`; use its existing `chat` variant for the filter menu and capability badges |
 | Provider selection | `ProviderPickerDrawer` in `src/frontend/components/ProviderPicker`; caller-owned candidates/search, matching model-picker sheet and row visuals |
+| Outgoing sharing, ordered previews and export lifetime | `src/frontend/appShell/sharing` and `src/frontend/features/sharing`; file delivery remains in `appShell/fileExport` |
+| Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
+| Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
 | Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
 | Window size classes and the docked-sidebar rule | `useWindowClass` and `useCanDockSidebar` in `src/frontend/appShell/layout` |
@@ -85,7 +92,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Readable message detail content and full-text copy | `MessageDetail` in `src/frontend/components/MessageDetail`, composing CherryUI `MessagePart.TextBody` and the full-source `CodeBlock` |
 | Message and individual-call usage details | `AiUsageDetail` in `src/frontend/components/AiUsageDetail`; callers own measurement/query semantics, and `src/frontend/utils/aiUsage` owns precise cost formatting |
 | Bounded plain-text reader blocks | `splitTextBlocks` from `@cherrystudio/ui/utils`, shared by message details and the file reader |
-| Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
+| Anchored informational text | `InfoPopover` for a measured trigger, `AnchoredInfoPopover` for caller-measured text ranges, from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |

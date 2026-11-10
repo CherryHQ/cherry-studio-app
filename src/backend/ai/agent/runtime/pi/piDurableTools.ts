@@ -218,7 +218,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       defineTool({
         name: tool.providerName,
         description: tool.description,
-        parameters: z.record(z.string(), RuntimeJsonValueSchema).parse(tool.inputSchema),
+        parameters: toolParameters(tool),
         structuredOutputSchema: {
           type: 'object',
           properties: {
@@ -451,6 +451,16 @@ function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolEx
       : {}),
     details: JSON.parse(JSON.stringify(details)) as JsonValue,
   };
+}
+
+function toolParameters(tool: RuntimeTool) {
+  const parameters = z.record(z.string(), RuntimeJsonValueSchema).parse(tool.inputSchema);
+  // Some compatible endpoints require properties even for a parameterless MCP tool.
+  return parameters.type === 'object' &&
+    parameters.$ref === undefined &&
+    !Object.hasOwn(parameters, 'properties')
+    ? { ...parameters, properties: {} }
+    : parameters;
 }
 
 function sameCapability(left: RuntimeTool, right: RuntimeTool): boolean {

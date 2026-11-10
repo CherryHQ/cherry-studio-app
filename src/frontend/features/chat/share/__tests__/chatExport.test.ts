@@ -12,13 +12,10 @@ import {
 
 const options: ChatExportOptions = {
   title: 'Conversation',
-  includeProcess: false,
   labels: {
     user: 'You',
     assistant: 'Assistant',
-    process: (seconds) => `Took ${seconds}s`,
     sources: (count) => `${count} sources`,
-    reasoning: 'Reasoning',
     file: 'File',
     status: 'Status',
     translation: (language) => `Translation (${language})`,
@@ -68,32 +65,24 @@ const question = message('a', 'user', [
   { id: 'question', type: 'text', text: 'Question?', state: 'done' },
 ]);
 
-test.each([false, true])(
-  'expanded translations follow selected messages independently of process visibility (%s)',
-  (includeProcess) => {
-    const document = toChatExportDocument([question, answer], {
-      ...options,
-      includeProcess,
-      translations: {
-        b: {
-          sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
-          language: 'zh-CN',
-          content: '当前语言译文',
-        },
-        unselected: { sourceHash: 'a'.repeat(64), language: 'fr-FR', content: 'Unselected' },
+test('expanded translations follow only selected messages, without exporting reasoning', () => {
+  const document = toChatExportDocument([question, answer], {
+    ...options,
+    translations: {
+      b: {
+        sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
+        language: 'zh-CN',
+        content: '当前语言译文',
       },
-    });
-    expect(document.sections).toHaveLength(2);
-    expect(document.sections[1].blocks).toEqual(
-      expect.arrayContaining([
-        { kind: 'markdown', source: 'Final answer' },
-        { kind: 'markdown', source: '---\n\n### Translation (zh-CN)\n\n当前语言译文' },
-      ]),
-    );
-    expect(JSON.stringify(document.sections[0])).not.toContain('当前语言译文');
-    expect(JSON.stringify(document)).not.toContain('Unselected');
-  },
-);
+      unselected: { sourceHash: 'a'.repeat(64), language: 'fr-FR', content: 'Unselected' },
+    },
+  });
+  expect(document.sections).toHaveLength(2);
+  expect(JSON.stringify(document.sections[1])).toContain('当前语言译文');
+  expect(JSON.stringify(document.sections[0])).not.toContain('当前语言译文');
+  expect(JSON.stringify(document)).not.toContain('Unselected');
+  expect(JSON.stringify(document)).not.toContain('Private reasoning');
+});
 
 test('saved translations stay out of sharing when folded, and stale translations never accompany changed text', () => {
   const saved: AgentMessageView = {
@@ -172,21 +161,11 @@ test('answers carry the Cherry avatar and their own model; questions stay plain 
   expect(document.sections[2]).not.toHaveProperty('model');
 });
 
-test('process includes the visible reasoning and intermediate text without timestamps', () => {
-  const document = toChatExportDocument([answer], {
-    ...options,
-    includeProcess: true,
-  });
-  expect(JSON.stringify(document)).toContain('Private reasoning');
-  expect(JSON.stringify(document)).toContain('Let me check.');
-  expect(document.sections[0].blocks[0]).toMatchObject({
-    kind: 'details',
-    presentation: 'process',
-    summary: 'Took 1s',
-    blocks: expect.arrayContaining([
-      expect.objectContaining({ kind: 'details', presentation: 'reasoning', summary: 'Reasoning' }),
-    ]),
-  });
+test('process, reasoning and intermediate prose never enter the share document', () => {
+  const document = toChatExportDocument([answer], options);
+  expect(JSON.stringify(document)).not.toContain('Private reasoning');
+  expect(JSON.stringify(document)).not.toContain('Let me check.');
+  expect(document.sections[0].blocks.some((block) => block.kind === 'details')).toBe(false);
   expect(document.sections[0].metadata).toEqual([]);
 });
 

@@ -4,7 +4,7 @@ import { downloadFile, FileDownloadError } from '@/backend/services/download';
 import type { ApkUpdateRelease, AppUpdateDownload } from '@/shared/contracts/appUpdate';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { readApkChecksum } from './gitcodeRelease';
+import { readApkChecksum } from './apkRelease';
 
 const MAX_APK_BYTES = 1024 * 1024 * 1024;
 const logger = loggerService.withContext('AppUpdate');

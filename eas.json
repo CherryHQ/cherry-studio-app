@@ -51,6 +51,7 @@
       "pnpm": "12.2.1",
       "env": {
         "PROFILE": "production",
+        "DOMESTIC_STORES_ENABLED": "false",
         "SENTRY_URL": "https://sentry.io/"
       },
       "android": {
@@ -63,6 +64,13 @@
       },
       "ios": {
         "channel": "production-ios"
+      }
+    },
+    "production-domestic-stores": {
+      "extends": "production",
+      "android": {
+        "channel": "production-domestic-stores",
+        "env": { "APK_UPDATES_ENABLED": "false", "DOMESTIC_STORES_ENABLED": "true" }
       }
     },
     "production-google-play": {

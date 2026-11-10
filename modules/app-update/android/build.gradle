@@ -4,10 +4,31 @@ plugins {
 }
 group = 'expo.modules.appupdate'
 version = '1.0.0'
+def domesticStoresEnabled = providers.gradleProperty('cherry.appUpdate.domesticStoresEnabled')
+  .map { it.toBoolean() }.getOrElse(false)
 android {
   namespace 'expo.modules.appupdate'
-  defaultConfig { versionCode 1; versionName '1.0.0' }
+  buildFeatures { buildConfig true }
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+    buildConfigField 'boolean', 'DOMESTIC_STORES_ENABLED', domesticStoresEnabled.toString()
+    if (domesticStoresEnabled) {
+      consumerProguardFiles 'proguard-rules.pro'
+    }
+  }
+  sourceSets {
+    main.java.srcDir(domesticStoresEnabled ? 'src/domestic/java' : 'src/standard/java')
+    if (domesticStoresEnabled) {
+      debug.manifest.srcFile 'src/domestic/AndroidManifest.xml'
+      release.manifest.srcFile 'src/domestic/AndroidManifest.xml'
+    }
+  }
 }
 dependencies {
   implementation 'com.google.android.play:app-update:2.1.0'
+  if (domesticStoresEnabled) {
+    implementation(name: 'appmarket-updater-open-16.0.18.301', ext: 'aar')
+    implementation(name: 'xiaomi-update-sdk-4.2.4', ext: 'aar')
+  }
 }

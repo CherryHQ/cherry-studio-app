@@ -72,6 +72,40 @@ describe('AiService.listModels', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('uses the injected catalog endpoint preference for a copied Poe provider', async () => {
+    const provider = createProvider({
+      id: 'poe-copy',
+      presetProviderId: 'poe',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+    });
+    const registered = createModel('registered-bot', {
+      providerId: provider.id,
+      apiModelId: 'wire-bot',
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: 'wire-bot', supported_endpoints: ['/v1/chat/completions', '/v1/responses'] },
+            { id: 'community' },
+          ],
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await new AiService(
+      createServices({ provider, registryModels: [registered] }),
+    ).listModels({
+      providerId: provider.id,
+      throwOnError: true,
+    });
+    expect(result.map((model) => [model.apiModelId, model.endpointTypes])).toEqual([
+      ['wire-bot', [ENDPOINT_TYPE.OPENAI_RESPONSES]],
+      ['community', [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]],
+    ]);
+  });
+
   it('appends registry-only models and deduplicates publisher-prefixed twins', async () => {
     const provider = createProvider({ id: 'ppio', presetProviderId: 'ppio' });
     const registryTwin = createModel('qwen/qwen3', {

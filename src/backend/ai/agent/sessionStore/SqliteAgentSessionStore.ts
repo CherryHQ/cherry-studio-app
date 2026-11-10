@@ -436,14 +436,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
               part.type === 'text' && part.quotes
                 ? {
                     ...part,
-                    quotes: [
-                      {
-                        ...part.quotes[0],
-                        sourceMessageId:
-                          copiedIds.get(part.quotes[0].sourceMessageId) ??
-                          part.quotes[0].sourceMessageId,
-                      },
-                    ] as [(typeof part.quotes)[0]],
+                    quotes: part.quotes.map((quote) => ({
+                      ...quote,
+                      sourceMessageId:
+                        copiedIds.get(quote.sourceMessageId) ?? quote.sourceMessageId,
+                    })),
                   }
                 : part,
             ),

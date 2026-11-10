@@ -16,7 +16,7 @@ working tree. The superseded Controller entry and its agent-version gate are rem
 flowchart TB
   subgraph Frontend[Mobile frontend]
     Local[Local ChatScreen]
-    Share[ChatShareScreen: local and desktop routes]
+    Share[Original chat-list selection: local and desktop]
     UI[ChatWorkspace / ConversationApprovals: shared read model]
     LocalRuntime[features/chat/runtime: client, local history, projection]
     Catalog[appShell/conversation: shared contract and catalog sources]
@@ -24,9 +24,11 @@ flowchart TB
     Remote[RemoteChatScreen]
     Sidebar[Shared local and remote sidebar]
     Settings[Pairing and configuration UI]
-    Export[Share preparation / export preview]
+    Export[Share preparation / common share panel]
     Local --> LocalRuntime --> UI
     Remote --> RemoteAdapter --> UI
+    Local --> Share
+    Remote --> Share
     Share --> LocalRuntime
     Share --> RemoteAdapter
     Sidebar --> Catalog
@@ -53,7 +55,7 @@ flowchart TB
   Channel --> PC[Desktop: grants, execution, transcript and command receipts]
 ```
 
-The desktop chat, sidebar and share routes now use the new consumer. Local regression checks cover
+The desktop chat, sidebar and source-list sharing use the new consumer. Local regression checks cover
 contract behavior; these routes still require device acceptance with the desktop.
 MCP here means the mobile MCP capability; desktop tool execution belongs to the desktop.
 
@@ -63,15 +65,15 @@ MCP here means the mobile MCP capability; desktop tool execution belongs to the 
 | --- | --- | --- |
 | `ConversationProvider` | Catalog source factory lifetime and desktop catalog eviction | Installed in root layout. Does not dial desktops at construction or own reconnect. |
 | `createConversationSources` | Local catalog and retained desktop source wrappers | The only source-kind dispatch. Route encoding can still inspect source kind. |
-| `features/chat/runtime` (`ChatProvider`, `useLocalConversation`) | Local observation client, foreground refresh, Query invalidation, Session-keyed history and projection into the shared read model | Local chat and the local share route. Local execution settles in-process; no session lifecycle, revisioned window or operation journal exists on this side. |
-| `remote/useConversation` | One remote route's source/session acquisition, activation and cleanup | Used by remote chat and the desktop share route. Offline opening failures retain demand and retry after backend reconnection. Cleanup aborts reads and releases observation, not admitted execution. |
+| `features/chat/runtime` (`ChatProvider`, `useLocalConversation`) | Local observation client, foreground refresh, Query invalidation, Session-keyed history and projection into the shared read model | Local chat; sharing reads a selected-ID snapshot through the local API. Local execution settles in-process; no session lifecycle, revisioned window or operation journal exists on this side. |
+| `remote/useConversation` | One remote route's source/session acquisition, activation and cleanup | Remote chat owns the session also used for source-list sharing. Offline opening failures retain demand and retry after backend reconnection. Cleanup aborts reads and releases observation, not admitted execution. |
 | `ConversationSourceBoundary` | Source acquisition and replacement after retirement for catalog consumers | Used by both sidebars, the Agent picker and remote chat. Each retains its own consumer handle. |
 | Remote adapter | Capabilities, freshness, bound actions, revisioned history windows and deferred resource reads | Wraps the credential-free remote module. Does not start another execution engine. |
-| `remote/useConversationHistory` and deferred `ResourceRead` values | Scoped Query keys, read cancellation, window lifetime and retirement eviction | Remote chat and the desktop share route. Fixed history versions cannot silently mix; retired bindings cannot reuse old resources. |
+| `remote/useConversationHistory` and deferred `ResourceRead` values | Scoped Query keys, read cancellation, window lifetime and retirement eviction | Remote chat and its selected-ID sharing snapshot. Fixed history versions cannot silently mix; retired bindings cannot reuse old resources. |
 | `ChatWorkspace` / `ConversationPresenter` | History/live display reconciliation, stable message rows and presentation | Local and remote chat are connected. Presenter retains live rows through history installation; it does not persist or recover commands. |
 | `ConversationApprovals` / message action provider | UI for bound response/retry/fork/remove operations | Local and remote chat are connected. The adapter checks authoritative target/freshness again at invocation. |
 | `ChatProvider` / `ChatInput` | Local rich composer, pending first-send rows and navigation handoff | Transitional client extension remains for local admission/model/attachment behavior. They borrow the app-shell client. |
-| Chat sharing | Selected IDs, complete immutable transcript preparation, document variants and prepared snapshot release | Both route sources share this path. Underlying local image bytes are not yet pinned. |
+| Chat sharing | Original-list circular selection, complete immutable transcript preparation and final-only document projection | Local and desktop chats share this path and open the common `/share` panel. Underlying local image bytes are not yet pinned. |
 | Remote chat/sidebar | Route, source selection and presentation; common catalogs, session/draft actions and operation views | The old Controller provider, queries, polling/resource loaders and gate are removed. |
 
 The common consumption contracts belong in frontend because they describe UI observation and

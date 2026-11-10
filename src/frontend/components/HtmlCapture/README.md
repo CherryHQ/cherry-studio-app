@@ -11,6 +11,8 @@ stable document layout, then post a request-tagged measurement. The shared surfa
 frame, waits for native layout, injects the frame script and accepts its matching `ready` message
 before taking a screenshot. Document export owns semantic pagination and document presentation; files owns
 desktop HTML measurement, authored slides, geometric pagination and conversion limits.
+Image capture pins the document layout width and waits for the visual viewport to adopt each native
+tile size. This avoids Android font boosting and stale pixels when moving between narrow edge tiles.
 
 The session holds one shared capture lease across both consumers. Active competing requests fail
 with `busy`; a request arriving after cancellation waits for the previous physical work to drain.
@@ -22,6 +24,8 @@ overall timeout, or both.
 
 The WebView disables local file access, shared cookies and new windows and permits only its blank
 document navigation. Request ids and bounded messages isolate the measurement/ready protocol.
-`frontend/utils/capturePng` owns temporary PNG capture, header dimension checks and idempotent native
-file release. This family does not own document rendering, watermark policy, persistence, format
+`frontend/utils/capturePng` owns temporary PNG capture, header dimension checks, normalized file URIs
+for image consumers and idempotent native file release using the original capture path. Capture
+surfaces hide native scroll indicators so they cannot appear in exported pixels. This family does not
+own document rendering, watermark policy, persistence, format
 fallback, previews or the system share sheet.

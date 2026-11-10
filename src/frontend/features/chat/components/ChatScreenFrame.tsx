@@ -6,6 +6,7 @@ import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-na
 
 import { ReadingContentFrame } from '@/frontend/appShell/layout';
 
+import { ChatShareSelectionScope, useChatShareHeaderSelection } from '../share/chatShareSelection';
 import {
   FullScreenLayerProvider,
   useFullScreenLayerProgress,
@@ -19,14 +20,16 @@ export function ChatScreenFrame({
   children,
   header: Header,
 }: PropsWithChildren<{
-  header: ComponentType<{ blurTarget: RefObject<ViewInstance | null>; hidden?: boolean }>;
+  header: ComponentType<ChatHeaderProps>;
 }>) {
   return (
-    <Composer.Expansion>
-      <FullScreenLayerProvider>
-        <ChatScreenContent header={Header}>{children}</ChatScreenContent>
-      </FullScreenLayerProvider>
-    </Composer.Expansion>
+    <ChatShareSelectionScope>
+      <Composer.Expansion>
+        <FullScreenLayerProvider>
+          <ChatScreenContent header={Header}>{children}</ChatScreenContent>
+        </FullScreenLayerProvider>
+      </Composer.Expansion>
+    </ChatShareSelectionScope>
   );
 }
 
@@ -34,7 +37,7 @@ function ChatScreenContent({
   children,
   header: Header,
 }: PropsWithChildren<{
-  header: ComponentType<{ blurTarget: RefObject<ViewInstance | null>; hidden?: boolean }>;
+  header: ComponentType<ChatHeaderProps>;
 }>) {
   const blurTarget = useRef<ViewInstance>(null);
   const expansion = useComposerExpansion();
@@ -64,11 +67,33 @@ function ChatScreenContent({
           pointerEvents={isLayerPresented ? 'none' : 'box-none'}
           style={headerFadeStyle}
         >
-          <Header blurTarget={blurTarget} hidden={expansion?.state.isPresented} />
+          <ChatHeader
+            header={Header}
+            blurTarget={blurTarget}
+            hidden={expansion?.state.isPresented}
+          />
         </Animated.View>
       ) : (
-        <Header blurTarget={blurTarget} hidden={expansion?.state.isPresented || isLayerPresented} />
+        <ChatHeader
+          header={Header}
+          blurTarget={blurTarget}
+          hidden={expansion?.state.isPresented || isLayerPresented}
+        />
       )}
     </>
   );
+}
+
+type ChatHeaderProps = {
+  blurTarget: RefObject<ViewInstance | null>;
+  hidden?: boolean;
+  selection?: { selectedCount: number; onExit(): void };
+};
+
+function ChatHeader({
+  header: Header,
+  ...props
+}: ChatHeaderProps & { header: ComponentType<ChatHeaderProps> }) {
+  const selection = useChatShareHeaderSelection();
+  return <Header {...props} selection={selection} />;
 }

@@ -1,5 +1,5 @@
 import type { ParamValues } from '@cherrystudio/provider-registry';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -62,6 +62,9 @@ export type MessageListItem = Readonly<{
 }>;
 
 export type MessageListProps = {
+  ref?: Ref<MessageListHandle>;
+  /** The list frame owns row gutters and spacing, including selection layouts. */
+  rowInsets?: { horizontal: number; user: number; assistant: number };
   /** Floating content reserved through the keyboard adapter without resizing the viewport. */
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
@@ -84,6 +87,13 @@ export type MessageListProps = {
   onReady?: () => void;
   onTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
   renderMessage: MessageRenderer;
+};
+
+/** Controlled direct manipulation without exposing the virtualized-list implementation. */
+export type MessageListHandle = {
+  beginInteraction(): void;
+  scrollBy(distance: number): void;
+  endInteraction(): void;
 };
 
 export type MessageRenderer = (message: MessageListItem) => ReactNode;
