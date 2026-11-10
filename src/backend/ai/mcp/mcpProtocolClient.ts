@@ -3,6 +3,8 @@ import {
   ProtocolError,
   ProtocolErrorCode,
   SdkHttpError,
+  SdkError,
+  SdkErrorCode,
   StreamableHTTPClientTransport,
   type ListToolsResult,
   type McpSubscription,
@@ -15,6 +17,7 @@ import type { PluginClient } from '@/backend/services/builtInMcp';
 import type { McpOAuthRuntime } from '@/backend/services/mcp';
 import {
   McpAuthorizationError,
+  McpLegacyFallbackError,
   McpRedirectError,
   type McpConnectionConfig,
   type McpProtocolInfo,
@@ -123,7 +126,7 @@ export type McpRuntimeClient = Pick<
 };
 
 /** One SDK instance per connection/grant; no cache is shared across authorities. */
-export async function createRemoteMcpClient(input: {
+type RemoteMcpClientInput = {
   config: McpConnectionConfig;
   signal: AbortSignal;
   foreground: boolean;
@@ -133,15 +136,72 @@ export async function createRemoteMcpClient(input: {
   ) => Promise<import('@/shared/contracts/mcpInteraction').McpElicitationResponse>;
   authorization: Pick<McpOAuthRuntime, 'token' | 'rejected'>;
   onCatalogChanged?: () => void;
-}): Promise<
-  McpRuntimeClient & {
-    callTool: (input: {
-      name: string;
-      args: Record<string, unknown>;
-      options: { abortSignal: AbortSignal };
-    }) => Promise<unknown>;
+  shouldUseLegacyProtocol?: boolean;
+  onLegacyFallback?: () => void;
+};
+
+type RemoteMcpRuntimeClient = McpRuntimeClient & {
+  callTool: (input: {
+    name: string;
+    args: Record<string, unknown>;
+    options: { abortSignal: AbortSignal };
+  }) => Promise<unknown>;
+};
+
+export async function createRemoteMcpClient(
+  input: RemoteMcpClientInput,
+): Promise<RemoteMcpRuntimeClient> {
+  input.signal.throwIfAborted();
+  if (input.shouldUseLegacyProtocol) return connectRemoteMcpClient(input, 'legacy');
+  try {
+    return await connectRemoteMcpClient(input, 'auto');
+  } catch (error) {
+    if (
+      input.signal.aborted ||
+      error instanceof McpAuthorizationError ||
+      error instanceof McpRedirectError ||
+      !SdkError.isInstance(error) ||
+      error.code !== SdkErrorCode.EraNegotiationFailed
+    )
+      throw error;
+    let client: RemoteMcpRuntimeClient;
+    try {
+      client = await connectRemoteMcpClient(input, 'legacy');
+    } catch (legacyError) {
+      if (
+        input.signal.aborted ||
+        legacyError instanceof McpAuthorizationError ||
+        legacyError instanceof McpRedirectError ||
+        (legacyError instanceof Error && legacyError.name === 'AbortError') ||
+        (SdkError.isInstance(legacyError) &&
+          [
+            SdkErrorCode.RequestTimeout,
+            SdkErrorCode.ClientHttpAuthentication,
+            SdkErrorCode.ClientHttpForbidden,
+          ].includes(legacyError.code))
+      )
+        throw legacyError;
+      throw new McpLegacyFallbackError(error, legacyError);
+    }
+    if (input.signal.aborted) {
+      await client.close().catch(() => undefined);
+      input.signal.throwIfAborted();
+    }
+    try {
+      input.onLegacyFallback?.();
+    } catch (publicationError) {
+      await client.close().catch(() => undefined);
+      throw publicationError;
+    }
+    return client;
   }
-> {
+}
+
+async function connectRemoteMcpClient(
+  input: RemoteMcpClientInput,
+  mode: 'auto' | 'legacy',
+): Promise<RemoteMcpRuntimeClient> {
+  input.signal.throwIfAborted();
   let foreground = input.foreground;
   let closed = false;
   let eventsAbort = new AbortController();
@@ -168,7 +228,10 @@ export async function createRemoteMcpClient(input: {
   const client = new Client(
     { name: 'Cherry Studio', version: Constants.expoConfig?.version ?? 'unknown' },
     {
-      versionNegotiation: { mode: 'auto', probe: { maxRetries: 0, timeoutMs: 15_000 } },
+      versionNegotiation:
+        mode === 'auto'
+          ? { mode: 'auto', probe: { maxRetries: 0, timeoutMs: 15_000 } }
+          : { mode: 'legacy' },
       capabilities: {
         extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } },
         ...(input.elicit ? { elicitation: { form: {}, url: {} } } : {}),
@@ -339,6 +402,7 @@ export async function createRemoteMcpClient(input: {
         if (subscription === opened) subscription = undefined;
       });
     if (!foreground) stopSubscription();
+    input.signal.throwIfAborted();
   } catch (error) {
     closed = true;
     connectionAbort.abort();

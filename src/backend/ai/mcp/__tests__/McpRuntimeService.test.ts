@@ -7,6 +7,7 @@ import { agentToolBindingService } from '@/backend/data/services/AgentToolBindin
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { McpOAuthRuntime } from '@/backend/services/mcp';
 import type { McpPromptEntry, McpProtocolInfo } from '@/shared/contracts/mcp';
+import { McpLegacyFallbackError } from '@/shared/contracts/mcp';
 import { PluginError } from '@/shared/contracts/plugins';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -38,18 +39,26 @@ jest.mock('../mcpProtocolClient', () => ({
     config,
     elicit,
     signal,
+    shouldUseLegacyProtocol,
+    onLegacyFallback,
   }: {
+    shouldUseLegacyProtocol?: boolean;
+    onLegacyFallback?: () => void;
     config: { endpointUrl: string; headers?: Record<string, string> };
     elicit?: MockElicit;
     signal: AbortSignal;
   }) => {
     mockElicit = elicit;
+    mockProtocolControls.push({ shouldUseLegacyProtocol, onLegacyFallback });
     return mockSdkInitContract({
       initializationOptions: { signal },
       transport: { type: 'http', url: config.endpointUrl, headers: config.headers },
     });
   },
 }));
+
+const mockProtocolControls: { shouldUseLegacyProtocol?: boolean; onLegacyFallback?: () => void }[] =
+  [];
 
 type MockElicit = (params: unknown, signal: AbortSignal) => Promise<{ action: string }>;
 /** The question handler the service gave its most recent remote client. */
@@ -246,6 +255,7 @@ function makeService(servers: McpServer[], traces?: TraceRecorder) {
 beforeEach(() => {
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   mockCreateMCPClient.mockReset();
+  mockProtocolControls.length = 0;
   storedFiles.clear();
 });
 
@@ -740,6 +750,86 @@ describe('Runtime tool adapter', () => {
 });
 
 describe('runtime lifecycle', () => {
+  it('preserves the safe combined fallback message in runtime summaries', async () => {
+    mockCreateMCPClient.mockRejectedValue(
+      new McpLegacyFallbackError(new Error('probe'), new Error('legacy')),
+    );
+    const server = makeServer();
+    const { service } = makeService([server]);
+    try {
+      await expect(service.getRuntimeSummaries([server])).resolves.toEqual({
+        [server.id]: {
+          state: 'error',
+          lastError: 'MCP protocol negotiation and the legacy connection attempt both failed.',
+        },
+      });
+      expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('keeps a successful fallback preference isolated from a second server', async () => {
+    mockCreateMCPClient
+      .mockImplementationOnce(() => {
+        mockProtocolControls[0]!.onLegacyFallback?.();
+        return Promise.resolve(makeClient([]));
+      })
+      .mockResolvedValue(makeClient([]));
+    const first = makeServer();
+    const second = makeServer({ id: 'server-2', endpointUrl: 'https://b.example/mcp' });
+    const { service } = makeService([first, second]);
+    try {
+      await service.listTools(first.id);
+      expect(mockProtocolControls[0]!.shouldUseLegacyProtocol).toBe(false);
+      await service.listTools(second.id);
+      expect(mockProtocolControls).toHaveLength(2);
+      expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(false);
+      expect(mockCreateMCPClient.mock.calls[1]![0].transport.url).toBe(second.endpointUrl);
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('does not learn a legacy preference from a failed fallback', async () => {
+    const failure = new McpLegacyFallbackError(new Error('probe'), new Error('legacy'));
+    mockCreateMCPClient.mockRejectedValue(failure);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    try {
+      await expect(service.listTools(server.id)).rejects.toBe(failure);
+      expect(mockProtocolControls).toHaveLength(2);
+      expect(mockProtocolControls[0]!.shouldUseLegacyProtocol).toBe(false);
+      expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(false);
+      mockCreateMCPClient.mockResolvedValue(makeClient([]));
+      await expect(service.listTools(server.id)).resolves.toEqual([]);
+      expect(mockProtocolControls).toHaveLength(3);
+      expect(mockProtocolControls[2]!.shouldUseLegacyProtocol).toBe(false);
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('retains a successful fallback across a reset and discards it on invalidation', async () => {
+    const first = makeClient([]);
+    first.listTools.mockRejectedValueOnce(new Error('disconnected'));
+    mockCreateMCPClient
+      .mockImplementationOnce(() => {
+        mockProtocolControls[0]!.onLegacyFallback?.();
+        return Promise.resolve(first);
+      })
+      .mockResolvedValue(makeClient([]));
+    const server = makeServer();
+    const { service } = makeService([server]);
+    await service.listTools(server.id);
+    expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(true);
+    mockProtocolControls[1]!.onLegacyFallback?.();
+    service.invalidateServer(server.id);
+    await service.listTools(server.id);
+    expect(mockProtocolControls[2]!.shouldUseLegacyProtocol).toBe(false);
+    await service._doStop();
+  });
+
   it('connects runnable servers before returning settings summaries', async () => {
     const client = makeClient(makeRawTools(['search']));
     mockCreateMCPClient.mockResolvedValue(client);
