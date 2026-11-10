@@ -101,7 +101,7 @@ export class AccountRuntime implements AccountModule {
   private isPrivateSessionClosed = false;
   private callback: { url: string; result: Promise<boolean> } | undefined;
   private redirectRouted = false;
-  private communityRevision = 0;
+  private sessionRevision = 0;
   private isCloudSessionClosing = false;
 
   constructor(private readonly options: AccountRuntimeOptions) {
@@ -242,7 +242,7 @@ export class AccountRuntime implements AccountModule {
           target = this.options.profiles.resolve(target.identity, target.address, organization);
       }
       if (target.id === this.options.active.id && target.address === this.options.active.address) {
-        this.communityRevision++;
+        this.sessionRevision++;
         this.update({ needsSignIn: false });
         this.updateCloudSession(session);
         return true;
@@ -264,6 +264,7 @@ export class AccountRuntime implements AccountModule {
   readonly signOut = async () => {
     this.callback = undefined;
     await this.busy(async () => {
+      this.sessionRevision++;
       if (this.state.privateAddress) {
         // An in-flight rotation must finish before deletion, so it cannot restore signed-out tokens.
         this.isPrivateSessionClosed = true;
@@ -319,7 +320,7 @@ export class AccountRuntime implements AccountModule {
         session.profile.profileId,
         context.cloudApiOrigin,
         context.cloudWebUrl,
-        this.communityRevision,
+        this.sessionRevision,
       ]),
       profileId: session.profile.profileId,
       apiOrigin: context.cloudApiOrigin,
@@ -334,27 +335,52 @@ export class AccountRuntime implements AccountModule {
     return tokens;
   };
 
+  /** Captures one login for an enterprise attempt, including its later rejection callbacks. */
+  readonly createEnterpriseSession = (): Required<EnterpriseSession> => {
+    const revision = this.sessionRevision;
+    return {
+      getProductToken: async () => {
+        if (revision !== this.sessionRevision) throw new AccountError('rejected');
+        return this.getProductToken();
+      },
+      refuseProductToken: async (token) => {
+        if (revision === this.sessionRevision) await this.refuseProductToken(token);
+      },
+      reportRejected: () => {
+        if (revision === this.sessionRevision) this.reportRejected();
+      },
+    };
+  };
+
   /** A token for the active enterprise profile; private tokens rotate on an API's 401 response. */
   readonly getProductToken = async (): Promise<string> => {
     const { identity, address } = this.options.active;
     if (!identity) throw new AccountError('rejected');
+    const revision = this.sessionRevision;
     try {
       if ('authentication' in identity) {
         const credentials = await this.readPrivateCredentials();
-        if (this.state.needsSignIn || this.isPrivateSessionClosed)
+        if (
+          revision !== this.sessionRevision ||
+          this.state.needsSignIn ||
+          this.isPrivateSessionClosed
+        )
           throw new AccountError('rejected');
         return credentials.accessToken;
       }
       const portal = this.requirePortal();
       await portal.ready;
+      if (revision !== this.sessionRevision) throw new AccountError('rejected');
       this.assertCloudSession(portal.getState());
       const choice: ProfileChoice = { product: 'enterprise', profileId: identity.productProfileId };
       const token = await portal.getProductToken(address, choice);
       // A product entry can finish after the installation has switched accounts.
+      if (revision !== this.sessionRevision) throw new AccountError('rejected');
       this.assertCloudSession(portal.getState());
       return token;
     } catch (error) {
-      if (isAuthenticationRejection(error)) this.reportRejected();
+      if (revision === this.sessionRevision && isAuthenticationRejection(error))
+        this.reportRejected();
       throw error;
     }
   };
@@ -366,9 +392,11 @@ export class AccountRuntime implements AccountModule {
    */
   readonly refuseProductToken = async (rejectedToken: string): Promise<void> => {
     if (!this.state.privateAddress) return this.reportRejected();
+    const revision = this.sessionRevision;
     this.privateRefresh ??= this.refreshPrivateCredentials(rejectedToken)
       .catch((error: unknown) => {
-        if (isAuthenticationRejection(error)) this.reportRejected();
+        if (revision === this.sessionRevision && isAuthenticationRejection(error))
+          this.reportRejected();
         throw error;
       })
       .finally(() => {
@@ -437,13 +465,10 @@ export class AccountRuntime implements AccountModule {
       // A matching local credential permits offline use; network verification is independent
       // of the initial restoration gate and must not turn storage errors into offline access.
       try {
-        const api = this.options.createApi(active.address, {
-          getProductToken: this.getProductToken,
-          refuseProductToken: this.refuseProductToken,
-          reportRejected: this.reportRejected,
-        });
+        const api = this.options.createApi(active.address, this.createEnterpriseSession());
         const user = PrivateUserSchema.safeParse(await api.getUser());
         const server = ServerIdentitySchema.safeParse(await api.getConfiguration());
+        if (revision !== this.credentialRevision) return;
         if (!user.success) throw new AccountError('response', { cause: user.error });
         if (!server.success) throw new AccountError('response', { cause: server.error });
         if (
@@ -456,6 +481,7 @@ export class AccountRuntime implements AccountModule {
           privateUsername: user.data.username || undefined,
         });
       } catch (error) {
+        if (revision !== this.credentialRevision) return;
         // The API's own refusals already reached the session through its interceptor.
         if (error instanceof AccountError && error.code === 'rejected') this.reportRejected();
         else logger.warn('Could not verify the private session', error as Error);
@@ -522,8 +548,7 @@ export class AccountRuntime implements AccountModule {
       isSignedIn,
       name: isSignedIn ? (session.account?.displayName ?? session.name) : undefined,
       maskedIdentifier: isSignedIn ? session.account?.maskedIdentifier : undefined,
-      // Reauthentication reloads the profile. A later SDK notification cannot clear a rejection
-      // or reopen the old profile while sign-in admission is still in progress.
+      // Only completed sign-in admission can clear a rejection; SDK notifications cannot.
       ...(this.state.isEnterprise && !matchesProfile && { needsSignIn: true }),
     });
   }
@@ -575,6 +600,7 @@ export class AccountRuntime implements AccountModule {
       this.dismissPrompt();
       if (profile.id === this.options.active.id) {
         // The open deployment signed in again: keep the running profile instead of reloading.
+        this.sessionRevision++;
         this.privateCredentials = Promise.resolve(credentials);
         this.isPrivateSessionClosed = false;
         this.update({

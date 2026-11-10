@@ -175,7 +175,10 @@ profile, only a community session counts as signed in.
   its HTTP error interceptor decides whether the server refused the session. Only a 401, or a 403 on
   `/configurations`, refuses it. A 403 on any other path denies one resource, such as an Agent setup
   or Skill package the user's role cannot read, and stays that request's failure. Callers such as
-  the sync never interpret authentication errors.
+  the sync never interpret authentication errors. Each sync attempt captures its login session;
+  after successful reauthentication, that attempt cannot use new credentials or reject the new
+  session with a late response. Pending token reads and private-session verification follow the
+  same login boundary.
 - **Private refresh:** on a 401 the interceptor rotates credentials through `/auth/refresh` and the
   client replays the request once. Concurrent rejections share one rotation. Refresh cannot change
   the user or server identity. Sign-out waits for pending rotation and deletes that profile's
