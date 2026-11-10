@@ -115,11 +115,11 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
     preference = new PreferenceService(db.dbService);
     await preference._doInit();
     service = new EnterpriseSyncService(db.dbService, preference, mcp);
-    service.configure({
+    service.configure(() => ({
       getProductToken: async () => 'token',
       refuseProductToken: async () => {},
       reportRejected,
-    });
+    }));
   });
 
   afterEach(async () => {

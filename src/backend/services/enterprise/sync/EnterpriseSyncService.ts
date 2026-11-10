@@ -70,7 +70,7 @@ const SETUP_CONCURRENCY = 4;
 @AppStatePolicy('foreground-refresh')
 @DependsOn(['DbService', 'PreferenceService', 'McpRuntimeService'])
 export class EnterpriseSyncService extends BaseService {
-  private session: Required<EnterpriseSession> | undefined;
+  private createSession: (() => Required<EnterpriseSession>) | undefined;
   private running: Promise<void> | undefined;
   private readonly lifetime = new AbortController();
   private readonly pendingInvalidations = new Set<string>();
@@ -86,8 +86,8 @@ export class EnterpriseSyncService extends BaseService {
     super();
   }
 
-  configure(session: Required<EnterpriseSession>): void {
-    this.session = session;
+  configure(createSession: () => Required<EnterpriseSession>): void {
+    this.createSession = createSession;
   }
 
   /** Whether this profile has ever completed a sync; the app waits for the first one. */
@@ -168,9 +168,9 @@ export class EnterpriseSyncService extends BaseService {
   private async run(installSkills: boolean): Promise<void> {
     const profile = getActiveProfile();
     const { identity } = profile;
-    if (!identity || !this.session) return;
+    if (!identity || !this.createSession) return;
     this.lastAttempt = Date.now();
-    const session = this.session;
+    const session = this.createSession();
     const api = createEnterpriseApi({ baseUrl: profile.address, session });
     this.invalidateServers();
     const skipped: SkipLog = [];

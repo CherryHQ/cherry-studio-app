@@ -33,6 +33,7 @@ const mockEnterpriseAccount = {
   kind: 'enterprise-account',
   verify: jest.fn(async () => {}),
   admit: jest.fn(async () => {}),
+  createEnterpriseSession: jest.fn(),
   getState: () => mockAccountState,
   subscribe: (listener: () => void) => {
     mockAccountListeners.add(listener);
