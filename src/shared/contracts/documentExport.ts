@@ -4,6 +4,8 @@ import type { ResolvedFile } from './file';
 import type { ExportFile, ExportWatermark } from './fileExport';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
+/** Whole message image, including its author row, insets and optional brand footer. */
+export const DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT = 3600;
 
 /** Resolved product copy travels with the snapshot, including portable text fallbacks. */
 export type ExportContentLabels = {
@@ -37,6 +39,8 @@ export type ExportBlock =
 
 export type ExportDocument = {
   title?: string;
+  /** Source-owned author and already-formatted date for a message image's first row. */
+  header?: { title: string; avatar?: string; date?: string };
   labels?: ExportContentLabels;
   sections: readonly {
     id: string;
@@ -67,6 +71,10 @@ export type ExportImageLayout = 'pages' | 'single';
 export type ExportImageFrame = {
   background: string;
   label: string;
+  /** Single layout uses a bounded message card; omitted layout uses paginated images. */
+  layout?: ExportImageLayout;
+  /** Accessible description for the visual omission marker on bounded message cards. */
+  excerptLabel?: string;
 };
 export type ExportPresentation = {
   width: number;
@@ -144,6 +152,12 @@ export type HtmlConversionContext = {
     total: number;
   }) => void;
 };
+export type HtmlConversionArtifact = {
+  readonly file: ExportFile;
+  readonly pages: readonly ExportImagePage[];
+  save(signal?: AbortSignal): Promise<ResolvedFile>;
+  dispose(): Promise<void>;
+};
 export const HTML_CONVERSION_MAX_PAGES = 64;
 export const HTML_CONVERSION_MAX_PIXELS = 16_000_000;
 export const HTML_CONVERSION_MAX_EDGE = 8192;
@@ -186,6 +200,8 @@ export interface DocumentExportSession {
   readonly document: ExportDocument;
   /** Lightweight fallback Markdown without embedded assets or signatures; no files or resource reads. */
   readonly markdown: string;
+  /** Immediate structured card without resource reads; delivery resolves the retained images. */
+  previewDocument(presentation: ExportPresentation): string;
   /** Styled view of prepared Markdown: embedded pictures display, remote links need no network read. */
   previewMarkdown(text: string, presentation: ExportPresentation): string;
   render(
@@ -202,6 +218,9 @@ export interface DocumentExportSession {
 
 export interface DocumentExportModule {
   createSession(input: DocumentExportInput): DocumentExportSession;
-  /** Explicit conversion creates a managed file, with temporary output owned by the runtime. */
-  convertHtml(input: HtmlConversionInput, context?: HtmlConversionContext): Promise<ResolvedFile>;
+  /** Conversion remains temporary until the caller explicitly saves the prepared result. */
+  convertHtml(
+    input: HtmlConversionInput,
+    context?: HtmlConversionContext,
+  ): Promise<HtmlConversionArtifact>;
 }

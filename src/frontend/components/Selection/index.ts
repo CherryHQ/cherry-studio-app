@@ -1,5 +1,5 @@
 export { useListBottomInset } from './hooks/useListBottomInset';
-export { areAllSelected, toggleSelection } from './selection';
+export { areAllSelected, orderedSelection, toggleSelection } from './selection';
 export { SelectionControls } from './SelectionControls';
 export {
   SelectionProvider,

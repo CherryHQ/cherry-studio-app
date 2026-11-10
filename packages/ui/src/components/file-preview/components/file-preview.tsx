@@ -19,6 +19,7 @@ export function FilePreview({
   onError,
   onPress,
   size = defaultSize,
+  iconSize,
   variant = 'thumbnail',
 }: FilePreviewProps) {
   const resolvedSize = Math.max(1, size);
@@ -44,11 +45,12 @@ export function FilePreview({
         <FileCardPreview
           badge={badge}
           file={metadata}
+          iconSize={iconSize}
           variant={variant === 'thumbnail' ? 'attachment' : variant}
         />
       ) : file && Preview ? (
         variant !== 'thumbnail' && file.kind !== 'image' ? (
-          <FileCardPreview badge={badge} file={file} variant={variant} />
+          <FileCardPreview badge={badge} file={file} iconSize={iconSize} variant={variant} />
         ) : (
           <>
             {createElement(Preview, { file, onError, size: resolvedSize })}

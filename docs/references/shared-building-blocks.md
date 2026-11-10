@@ -76,6 +76,9 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | --- | --- |
 | Model selection and chat capability filtering | `ModelPickerDrawer` in `src/frontend/components/ModelPicker`; use its existing `chat` variant for the filter menu and capability badges |
 | Provider selection | `ProviderPickerDrawer` in `src/frontend/components/ProviderPicker`; caller-owned candidates/search, matching model-picker sheet and row visuals |
+| Outgoing sharing, ordered previews and export lifetime | `src/frontend/appShell/sharing` and `src/frontend/features/sharing`; file delivery remains in `appShell/fileExport` |
+| Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
+| Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
